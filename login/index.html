@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FURIA MOTOR COMPANY - Sistema de Gestión</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Panel izquierdo - Azul profundo elegante -->
+        <div class="hero-panel">
+            <div class="hero-content">
+                <!-- Logo y marca -->
+                <div class="brand">
+                    <img src="../img/logoblanco.jpeg" alt="FURIA MOTOR COMPANY" class="brand-logo">
+                    <div class="brand-text">
+                        <h1>FURIA MOTOR</h1>
+                        <span>COMPANY</span>
+                    </div>
+                </div>
+
+                <!-- Título principal -->
+                <h2 class="hero-title">
+                    Gestión Inteligente<br>para Talleres Mecánicos
+                </h2>
+
+                <p class="hero-description">
+                    Control total de recepción, diagnóstico, inventario y finanzas en una plataforma moderna y fácil de
+                    usar.
+                </p>
+
+                <!-- Stats modernas -->
+                <div class="hero-stats">
+                    <div class="stat-card">
+                        <span class="stat-value">12</span>
+                        <span class="stat-label">Bahías</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value">8+</span>
+                        <span class="stat-label">Técnicos</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value">500+</span>
+                        <span class="stat-label">Clientes</span>
+                    </div>
+                </div>
+
+                <!-- Feature Cards -->
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <i class="fas fa-car"></i>
+                        <span>Recepción digital</span>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-microphone"></i>
+                        <span>Grabación voz</span>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-camera"></i>
+                        <span>Fotos del vehículo</span>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-chart-pie"></i>
+                        <span>Reportes en tiempo real</span>
+                    </div>
+                </div>
+
+                <!-- Separador elegante -->
+                <div class="separator">
+                    <span class="separator-text">Confianza y tecnología</span>
+                </div>
+
+                <!-- Trust badges -->
+                <div class="trust-badges">
+                    <div class="badge">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Datos seguros</span>
+                    </div>
+                    <div class="badge">
+                        <i class="fas fa-clock"></i>
+                        <span>Soporte 24/7</span>
+                    </div>
+                    <div class="badge">
+                        <i class="fas fa-mobile-alt"></i>
+                        <span>App incluida</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel derecho - Login -->
+        <div class="login-panel">
+            <div class="login-container">
+                <!-- Logo para móvil -->
+                <div class="mobile-brand">
+                    <img src="../img/logonegro.jpeg" alt="FURIA MOTOR" class="mobile-logo">
+                </div>
+
+                <!-- Tabs de acceso -->
+                <div class="access-tabs">
+                    <button class="tab-btn active" data-type="staff">
+                        <i class="fas fa-users"></i>
+                        Personal Taller
+                    </button>
+                    <button class="tab-btn" data-type="client">
+                        <i class="fas fa-user"></i>
+                        Cliente
+                    </button>
+                </div>
+
+                <!-- Formulario de login -->
+                <div class="login-form-container">
+                    <div class="form-header">
+                        <h3 id="welcomeTitle">Acceso Personal Taller</h3>
+                        <p id="welcomeSubtitle">Ingresa con tu correo institucional</p>
+                    </div>
+
+                    <form id="loginForm" class="modern-form">
+                        <!-- Campo para personal (email) -->
+                        <div class="input-group" id="emailGroup">
+                            <div class="input-icon">
+                                <i class="fas fa-envelope"></i>
+                            </div>
+                            <input type="email" id="email" placeholder="correo@furia.com" autocomplete="email">
+                            <label for="email">Correo electrónico</label>
+                        </div>
+
+                        <!-- Campo para clientes (placa) -->
+                        <div class="input-group" id="plateGroup" style="display: none;">
+                            <div class="input-icon">
+                                <i class="fas fa-id-card"></i>
+                            </div>
+                            <input type="text" id="plate" placeholder="ABC123" maxlength="8"
+                                style="text-transform: uppercase;">
+                            <label for="plate">Número de placa</label>
+                        </div>
+
+                        <!-- Campo contraseña -->
+                        <div class="input-group">
+                            <div class="input-icon">
+                                <i class="fas fa-lock"></i>
+                            </div>
+                            <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+                            <label for="password">Contraseña</label>
+                            <button type="button" class="password-toggle" onclick="togglePassword()">
+                                <i class="fas fa-eye" id="toggleIcon"></i>
+                            </button>
+                        </div>
+
+                        <!-- Opciones extra -->
+                        <div class="form-extra">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="remember">
+                                <span class="checkmark"></span>
+                                <span class="checkbox-text">Recordar acceso</span>
+                            </label>
+                            <a href="#" class="forgot-link">¿Olvidaste tu contraseña?</a>
+                        </div>
+
+                        <!-- Botón de acceso -->
+                        <button type="submit" class="submit-btn" id="loginBtn">
+                            <span>Ingresar al sistema</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </form>
+
+                    <!-- Mensaje para clientes -->
+                    <div class="client-quick-access" id="clientQuickAccess" style="display: none;">
+                        <p class="quick-title">¿Primera vez?</p>
+                        <button class="quick-register-btn" onclick="quickRegister()">
+                            <i class="fas fa-clipboard-list"></i>
+                            Regístrate en recepción del taller
+                        </button>
+                    </div>
+
+                    <!-- Demo credentials -->
+                    <div class="demo-section" id="demoSection">
+                        <div class="demo-header">
+                            <i class="fas fa-flask"></i>
+                            <span>Accesos de prueba</span>
+                            <i class="fas fa-chevron-down" id="demoArrow"></i>
+                        </div>
+                        <div class="demo-content" id="demoContent">
+                            <!-- Se llena con JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="login-footer">
+                    <p>© 2026 FURIA MOTOR COMPANY. Todos los derechos reservados.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="js/login.js"></script>
+</body>
+
+</html>

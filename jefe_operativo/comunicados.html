@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jefe Operativo - Comunicados | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Quill.js para editor de texto enriquecido -->
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/comunicados.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- SIDEBAR INCLUIDO -->
+        <div id="sidebar-container"></div>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1>Comunicados</h1>
+                    <p>Gestión de comunicaciones internas del taller</p>
+                </div>
+
+                <div class="top-actions">
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge">3</span>
+                    </div>
+
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- CONTENT -->
+            <div class="content">
+                <!-- Botón Nuevo Comunicado -->
+                <div class="action-bar">
+                    <button class="btn-nuevo-comunicado" id="btnNuevoComunicado">
+                        <i class="fas fa-plus-circle"></i>
+                        Nuevo Comunicado
+                    </button>
+                    <div class="filter-tabs">
+                        <button class="filter-tab active" data-filter="todos">Todos</button>
+                        <button class="filter-tab" data-filter="activos">Activos</button>
+                        <button class="filter-tab" data-filter="inactivos">Inactivos</button>
+                    </div>
+                </div>
+
+                <!-- Grid de dos columnas: Editor y Lista -->
+                <div class="comunicados-grid">
+                    <!-- Columna Izquierda: Editor de Comunicado -->
+                    <div class="editor-column" id="editorColumn">
+                        <div class="editor-card">
+                            <div class="editor-header">
+                                <h2 id="editorTitle">Nuevo Comunicado</h2>
+                                <button class="btn-cerrar-editor" id="btnCerrarEditor">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+
+                            <div class="editor-form">
+                                <div class="form-group">
+                                    <label for="comunicadoTitulo">Título <span class="required">*</span></label>
+                                    <input type="text" id="comunicadoTitulo" class="form-control"
+                                        placeholder="Ej: Reunión de personal, Permisos, Cambios de horario...">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="comunicadoDestinatarios">Destinatarios</label>
+                                    <div class="destinatarios-selector">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="destTodos" checked>
+                                            <span class="checkbox-custom"></span>
+                                            Todos los roles
+                                        </label>
+                                        <div class="destinatarios-grid" id="destinatariosGrid">
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" class="dest-rol" value="jefe_operativo" checked>
+                                                <span class="checkbox-custom"></span>
+                                                Jefe Operativo
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" class="dest-rol" value="jefe_taller" checked>
+                                                <span class="checkbox-custom"></span>
+                                                Jefe de Taller
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" class="dest-rol" value="tecnico" checked>
+                                                <span class="checkbox-custom"></span>
+                                                Técnicos
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" class="dest-rol" value="encargado_repuestos"
+                                                    checked>
+                                                <span class="checkbox-custom"></span>
+                                                Encargado Repuestos
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" class="dest-rol" value="admin_general">
+                                                <span class="checkbox-custom"></span>
+                                                Administrador General
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="comunicadoPrioridad">Prioridad</label>
+                                    <select id="comunicadoPrioridad" class="form-control">
+                                        <option value="normal">Normal</option>
+                                        <option value="importante">Importante</option>
+                                        <option value="urgente">Urgente</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="comunicadoEstado">Estado</label>
+                                    <div class="estado-toggle">
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="comunicadoEstado" checked>
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                        <span class="toggle-label" id="estadoLabel">Activo</span>
+                                    </div>
+                                </div>
+
+                                <div class="form-group full-width">
+                                    <label>Contenido del comunicado <span class="required">*</span></label>
+                                    <div id="editorQuill" class="quill-editor"></div>
+                                </div>
+
+                                <div class="form-actions">
+                                    <button class="btn-cancelar" id="btnCancelar">Cancelar</button>
+                                    <button class="btn-guardar" id="btnGuardarComunicado">
+                                        <i class="fas fa-paper-plane"></i>
+                                        Publicar Comunicado
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Columna Derecha: Lista de Comunicados -->
+                    <div class="lista-column" id="listaColumn">
+                        <div class="lista-header">
+                            <h3>Todos los Comunicados</h3>
+                            <span class="comunicados-count" id="comunicadosCount">0</span>
+                        </div>
+
+                        <div class="comunicados-list" id="comunicadosList">
+                            <!-- Los comunicados se cargarán dinámicamente aquí -->
+                            <div class="loading-comunicados">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Cargando comunicados...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal de confirmación -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>Confirmar acción</h2>
+                <button class="modal-close" onclick="cerrarConfirmModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage">¿Estás seguro de que deseas realizar esta acción?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarConfirmModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmActionBtn">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/include.js"></script>
+    <script src="js/comunicados.js"></script>
+</body>
+
+</html>

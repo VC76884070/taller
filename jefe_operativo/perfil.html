@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jefe Operativo - Mi Perfil | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/perfil.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- SIDEBAR INCLUIDO -->
+        <div id="sidebar-container"></div>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1>Mi Perfil</h1>
+                    <p>Información personal y configuración de cuenta</p>
+                </div>
+
+                <div class="top-actions">
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge">3</span>
+                    </div>
+
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- CONTENT -->
+            <div class="content">
+                <div class="perfil-container">
+                    <!-- Tarjeta de perfil principal -->
+                    <div class="perfil-card">
+                        <!-- Cabecera con gradiente -->
+                        <div class="perfil-header">
+                            <div class="header-gradient"></div>
+                        </div>
+
+                        <!-- Contenido del perfil -->
+                        <div class="perfil-body">
+                            <!-- Avatar con upload -->
+                            <div class="avatar-container">
+                                <div class="avatar-wrapper">
+                                    <img src="../img/avatars/default-avatar.jpg" alt="Foto de perfil" class="avatar-img"
+                                        id="avatarImg">
+                                    <div class="avatar-overlay" id="changeAvatarBtn">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Cambiar foto</span>
+                                    </div>
+                                </div>
+                                <input type="file" id="avatarInput" accept="image/*" style="display: none;">
+                            </div>
+
+                            <!-- Información personal -->
+                            <div class="info-section">
+                                <h2 class="user-name" id="userNameDisplay">María González</h2>
+                                <span class="user-role-badge" id="userRoleDisplay">Jefe Operativo</span>
+
+                                <div class="info-grid">
+                                    <!-- Teléfono -->
+                                    <div class="info-item">
+                                        <div class="info-icon">
+                                            <i class="fas fa-phone-alt"></i>
+                                        </div>
+                                        <div class="info-content">
+                                            <span class="info-label">Teléfono</span>
+                                            <span class="info-value" id="userPhone">+591 77712345</span>
+                                        </div>
+                                        <button class="info-edit" onclick="editarCampo('telefono')">
+                                            <i class="fas fa-pen"></i>
+                                        </button>
+                                    </div>
+
+                                    <!-- Correo electrónico -->
+                                    <div class="info-item">
+                                        <div class="info-icon">
+                                            <i class="fas fa-envelope"></i>
+                                        </div>
+                                        <div class="info-content">
+                                            <span class="info-label">Correo electrónico</span>
+                                            <span class="info-value" id="userEmail">maria.gonzalez@furia.com</span>
+                                        </div>
+                                        <button class="info-edit" onclick="editarCampo('email')">
+                                            <i class="fas fa-pen"></i>
+                                        </button>
+                                    </div>
+
+                                    <!-- Documento de identidad -->
+                                    <div class="info-item">
+                                        <div class="info-icon">
+                                            <i class="fas fa-id-card"></i>
+                                        </div>
+                                        <div class="info-content">
+                                            <span class="info-label">Documento</span>
+                                            <span class="info-value" id="userDocument">12345678</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Fecha de registro -->
+                                    <div class="info-item">
+                                        <div class="info-icon">
+                                            <i class="fas fa-calendar-check"></i>
+                                        </div>
+                                        <div class="info-content">
+                                            <span class="info-label">Miembro desde</span>
+                                            <span class="info-value" id="userMemberSince">15 enero, 2025</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Ubicación -->
+                                    <div class="info-item">
+                                        <div class="info-icon">
+                                            <i class="fas fa-map-marker-alt"></i>
+                                        </div>
+                                        <div class="info-content">
+                                            <span class="info-label">Ubicación</span>
+                                            <span class="info-value" id="userLocation">Santa Cruz, Bolivia</span>
+                                        </div>
+                                        <button class="info-edit" onclick="editarCampo('ubicacion')">
+                                            <i class="fas fa-pen"></i>
+                                        </button>
+                                    </div>
+
+                                    <!-- Último acceso -->
+                                    <div class="info-item">
+                                        <div class="info-icon">
+                                            <i class="fas fa-clock"></i>
+                                        </div>
+                                        <div class="info-content">
+                                            <span class="info-label">Último acceso</span>
+                                            <span class="info-value" id="userLastLogin">18 marzo, 2026 08:30</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Acciones -->
+                            <div class="perfil-actions">
+                                <button class="btn-change-password" id="changePasswordBtn">
+                                    <i class="fas fa-lock"></i>
+                                    Cambiar contraseña
+                                </button>
+                                <button class="btn-save-changes" id="saveChangesBtn" style="display: none;">
+                                    <i class="fas fa-save"></i>
+                                    Guardar cambios
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tarjeta de actividad reciente (opcional) -->
+                    <div class="activity-card">
+                        <h3 class="activity-title">
+                            <i class="fas fa-history"></i>
+                            Actividad reciente
+                        </h3>
+                        <div class="activity-list" id="activityList">
+                            <!-- Se cargará dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal para cambiar contraseña -->
+    <div class="modal" id="passwordModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>Cambiar contraseña</h2>
+                <button class="modal-close" onclick="cerrarPasswordModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="passwordForm">
+                    <div class="form-group">
+                        <label for="currentPassword">Contraseña actual</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="currentPassword" class="form-control" required>
+                            <button type="button" class="password-toggle" onclick="togglePassword('currentPassword')">
+                                <i class="far fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newPassword">Nueva contraseña</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="newPassword" class="form-control" required>
+                            <button type="button" class="password-toggle" onclick="togglePassword('newPassword')">
+                                <i class="far fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirmar nueva contraseña</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="confirmPassword" class="form-control" required>
+                            <button type="button" class="password-toggle" onclick="togglePassword('confirmPassword')">
+                                <i class="far fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="password-requirements">
+                        <p class="requirements-title">La contraseña debe contener:</p>
+                        <ul class="requirements-list">
+                            <li class="requirement" id="reqLength">✓ Mínimo 8 caracteres</li>
+                            <li class="requirement" id="reqUpper">✓ Al menos una mayúscula</li>
+                            <li class="requirement" id="reqLower">✓ Al menos una minúscula</li>
+                            <li class="requirement" id="reqNumber">✓ Al menos un número</li>
+                        </ul>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarPasswordModal()">Cancelar</button>
+                <button class="btn-primary" onclick="cambiarContrasena()">Actualizar contraseña</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para editar campo -->
+    <div class="modal" id="editModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2 id="editModalTitle">Editar</h2>
+                <button class="modal-close" onclick="cerrarEditModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="editField" id="editFieldLabel">Valor</label>
+                    <input type="text" id="editField" class="form-control">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarEditModal()">Cancelar</button>
+                <button class="btn-primary" onclick="guardarCampoEditado()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/include.js"></script>
+    <script src="js/perfil.js"></script>
+</body>
+
+</html>

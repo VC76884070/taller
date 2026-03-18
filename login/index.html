@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FURIA MOTOR COMPANY - Sistema de Gestión</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="/login/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
@@ -119,23 +119,24 @@
                 <div class="login-form-container">
                     <div class="form-header">
                         <h3 id="welcomeTitle">Acceso Personal Taller</h3>
-                        <p id="welcomeSubtitle">Ingresa con tu correo institucional</p>
+                        <p id="welcomeSubtitle">Ingresa con tu número de documento</p>
                     </div>
 
                     <form id="loginForm" class="modern-form">
-                        <!-- Campo para personal (email) -->
-                        <div class="input-group" id="emailGroup">
+                        <!-- Campo para personal (NÚMERO DE DOCUMENTO) -->
+                        <div class="input-group" id="documentGroup">
                             <div class="input-icon">
-                                <i class="fas fa-envelope"></i>
+                                <i class="fas fa-id-card"></i>
                             </div>
-                            <input type="email" id="email" placeholder="correo@furia.com" autocomplete="email">
-                            <label for="email">Correo electrónico</label>
+                            <input type="text" id="document" placeholder="1234567" autocomplete="off" pattern="\d*"
+                                inputmode="numeric">
+                            <label for="document">Número de documento (CI)</label>
                         </div>
 
                         <!-- Campo para clientes (placa) -->
                         <div class="input-group" id="plateGroup" style="display: none;">
                             <div class="input-icon">
-                                <i class="fas fa-id-card"></i>
+                                <i class="fas fa-car"></i>
                             </div>
                             <input type="text" id="plate" placeholder="ABC123" maxlength="8"
                                 style="text-transform: uppercase;">
@@ -204,7 +205,7 @@
     <!-- Toast notifications -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="js/login.js"></script>
+    <script src="/login/js/login.js"></script>
 </body>
 
 </html>

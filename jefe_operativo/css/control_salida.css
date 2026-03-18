@@ -1,0 +1,429 @@
+/* =====================================================
+   CONTROL DE SALIDAS - ESTILOS ESPECÍFICOS
+   ===================================================== */
+
+/* Filtros */
+.filters-bar {
+    background: var(--blanco);
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius-lg);
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.filters-bar .search-box {
+    width: 300px;
+    margin: 0;
+}
+
+.filter-group {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.filter-select {
+    padding: 0.5rem 1rem;
+    border: 2px solid var(--gris-claro);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    color: var(--negro);
+    background: var(--blanco);
+    cursor: pointer;
+    transition: var(--transition);
+    min-width: 140px;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: var(--rojo-primario);
+}
+
+/* Tabla de salidas */
+.table-container {
+    background: var(--blanco);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    overflow-x: auto;
+    margin-bottom: 1.5rem;
+}
+
+.salidas-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.salidas-table th {
+    text-align: left;
+    padding: 1rem 0.75rem;
+    color: var(--gris-medio);
+    font-weight: 500;
+    font-size: 0.85rem;
+    border-bottom: 2px solid var(--gris-claro);
+}
+
+.salidas-table td {
+    padding: 1rem 0.75rem;
+    border-bottom: 1px solid var(--gris-claro);
+    color: var(--negro);
+    font-size: 0.95rem;
+}
+
+.salidas-table tbody tr {
+    transition: var(--transition);
+}
+
+.salidas-table tbody tr:hover {
+    background: rgba(193, 18, 31, 0.02);
+}
+
+.salidas-table tbody tr.entregado {
+    background: rgba(16, 185, 129, 0.05);
+    opacity: 0.8;
+}
+
+.salidas-table tbody tr.entregado td {
+    color: var(--gris-medio);
+}
+
+/* Estados */
+.estado-badge {
+    padding: 0.3rem 0.8rem;
+    border-radius: var(--radius-full);
+    font-size: 0.8rem;
+    font-weight: 500;
+    display: inline-block;
+}
+
+.estado-badge.finalizado {
+    background: rgba(193, 18, 31, 0.1);
+    color: var(--rojo-primario);
+}
+
+.estado-badge.entregado {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--verde-exito);
+}
+
+/* Botones de acción */
+.btn-confirmar {
+    background: var(--verde-exito);
+    color: var(--blanco);
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: var(--transition);
+    width: 100%;
+    justify-content: center;
+}
+
+.btn-confirmar:hover {
+    background: #0f9e6a;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+}
+
+.btn-confirmar:disabled {
+    background: var(--gris-claro);
+    color: var(--gris-medio);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-ver {
+    background: var(--gris-claro);
+    color: var(--gris-medio);
+    border: none;
+    padding: 0.5rem;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-ver:hover {
+    background: var(--gris-medio);
+    color: var(--blanco);
+}
+
+/* Panel de estadísticas */
+.stats-panel {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.stat-item {
+    background: var(--blanco);
+    border-radius: var(--radius-lg);
+    padding: 1.2rem;
+    box-shadow: var(--shadow-sm);
+    text-align: center;
+    border-left: 4px solid var(--rojo-primario);
+}
+
+.stat-label {
+    display: block;
+    color: var(--gris-medio);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.stat-value {
+    display: block;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--negro);
+}
+
+/* Modal de entrega */
+.modal-lg {
+    max-width: 700px !important;
+}
+
+.entrega-info {
+    background: var(--gris-claro);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+}
+
+.info-row {
+    display: flex;
+    flex-direction: column;
+}
+
+.info-row .label {
+    font-size: 0.75rem;
+    color: var(--gris-medio);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.25rem;
+}
+
+.info-row .value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--negro);
+}
+
+.info-row .value i {
+    color: var(--rojo-primario);
+    margin-right: 0.5rem;
+}
+
+/* Sección de firma */
+.signature-section {
+    margin-bottom: 1.5rem;
+}
+
+.signature-section h3 {
+    font-size: 1rem;
+    color: var(--negro);
+    margin-bottom: 1rem;
+}
+
+.signature-container {
+    background: var(--blanco);
+    border: 2px solid var(--gris-claro);
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+#signatureCanvas {
+    width: 100%;
+    height: auto;
+    background: var(--blanco);
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.signature-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+/* Observaciones */
+.observaciones-section {
+    margin-bottom: 1.5rem;
+}
+
+.observaciones-section h3 {
+    font-size: 1rem;
+    color: var(--negro);
+    margin-bottom: 1rem;
+}
+
+#observacionesEntrega {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid var(--gris-claro);
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: 0.95rem;
+    resize: vertical;
+}
+
+#observacionesEntrega:focus {
+    outline: none;
+    border-color: var(--rojo-primario);
+}
+
+/* Documentos */
+.documentos-section {
+    margin-bottom: 1.5rem;
+}
+
+.documentos-section h3 {
+    font-size: 1rem;
+    color: var(--negro);
+    margin-bottom: 1rem;
+}
+
+.documentos-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: var(--negro);
+}
+
+.checkbox-container input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+}
+
+.checkmark {
+    position: relative;
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    background: var(--blanco);
+    border: 2px solid var(--gris-claro);
+    border-radius: 4px;
+    transition: var(--transition);
+}
+
+.checkbox-container:hover .checkmark {
+    border-color: var(--rojo-primario);
+}
+
+.checkbox-container input:checked ~ .checkmark {
+    background: var(--rojo-primario);
+    border-color: var(--rojo-primario);
+}
+
+.checkmark::after {
+    content: '';
+    position: absolute;
+    display: none;
+    left: 6px;
+    top: 2px;
+    width: 4px;
+    height: 8px;
+    border: solid var(--blanco);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.checkbox-container input:checked ~ .checkmark::after {
+    display: block;
+}
+
+.checkbox-text {
+    flex: 1;
+}
+
+/* Modal de PDF */
+#pdfPreview {
+    min-height: 400px;
+    background: var(--gris-claro);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pdf-placeholder {
+    text-align: center;
+    color: var(--gris-medio);
+}
+
+.pdf-placeholder i {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.3;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .stats-panel {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .filters-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .filters-bar .search-box {
+        width: 100%;
+    }
+    
+    .filter-group {
+        flex-direction: column;
+    }
+    
+    .filter-select {
+        width: 100%;
+    }
+    
+    .stats-panel {
+        grid-template-columns: 1fr;
+    }
+    
+    .documentos-list {
+        grid-template-columns: 1fr;
+    }
+    
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .signature-actions {
+        flex-direction: column;
+    }
+}

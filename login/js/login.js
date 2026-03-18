@@ -1,109 +1,41 @@
-// Simulación de consultas a la BD (luego serán llamadas API)
-const DB_SIMULATION = {
-    // Personal del taller - Tabla Usuario
-    staff: [
-        {
-            email: 'admin@furia.com',
-            password: 'admin123',
-            id_rol: 1,
-            nombre: 'Carlos Rodríguez',
-            rol: 'admin_general',
-            redirect: '../admin_general/dashboard.html'
-        },
-        {
-            email: 'operativo@furia.com',
-            password: 'operativo123',
-            id_rol: 2,
-            nombre: 'María González',
-            rol: 'jefe_operativo',
-            redirect: '../jefe_operativo/dashboard.html'
-        },
-        {
-            email: 'taller@furia.com',
-            password: 'taller123',
-            id_rol: 3,
-            nombre: 'Juan Pérez',
-            rol: 'jefe_taller',
-            redirect: '../jefe_taller/dashboard.html'
-        },
-        {
-            email: 'tecnico1@furia.com',
-            password: 'tecnico123',
-            id_rol: 4,
-            nombre: 'Luis Mamani',
-            rol: 'tecnico_mecanico',
-            redirect: '../tecnico_mecanico/dashboard.html'
-        },
-        {
-            email: 'repuestos@furia.com',
-            password: 'repuestos123',
-            id_rol: 5,
-            nombre: 'Ana López',
-            rol: 'encargado_rep_almacen',
-            redirect: '../encargado_rep_almacen/dashboard.html'
-        }
-    ],
-    
-    // Clientes con sus vehículos - JOIN Cliente + Vehiculo
-    clients: [
-        {
-            placa: 'ABC123',
-            password: 'cliente123', // En BD sería un acceso temporal
-            id_cliente: 1,
-            nombre: 'Pedro Sánchez',
-            vehiculo: {
-                marca: 'Toyota',
-                modelo: 'Corolla',
-                anio: 2020
-            },
-            redirect: '../cliente/dashboard.html'
-        },
-        {
-            placa: 'XYZ789',
-            password: 'cliente123',
-            id_cliente: 2,
-            nombre: 'Laura Flores',
-            vehiculo: {
-                marca: 'Honda',
-                modelo: 'Civic',
-                anio: 2022
-            },
-            redirect: '../cliente/dashboard.html'
-        },
-        {
-            placa: 'DEF456',
-            password: 'cliente123',
-            id_cliente: 3,
-            nombre: 'Roberto Méndez',
-            vehiculo: {
-                marca: 'Suzuki',
-                modelo: 'Swift',
-                anio: 2021
-            },
-            redirect: '../cliente/dashboard.html'
-        }
-    ]
-};
+// Configuración
+const API_URL = 'http://localhost:5000/api';
 
 // Elementos DOM
 const tabBtns = document.querySelectorAll('.tab-btn');
-const emailGroup = document.getElementById('emailGroup');
+const documentGroup = document.getElementById('documentGroup');
 const plateGroup = document.getElementById('plateGroup');
 const welcomeTitle = document.getElementById('welcomeTitle');
 const welcomeSubtitle = document.getElementById('welcomeSubtitle');
 const clientQuickAccess = document.getElementById('clientQuickAccess');
 const loginForm = document.getElementById('loginForm');
-const emailInput = document.getElementById('email');
+const documentInput = document.getElementById('document');
 const plateInput = document.getElementById('plate');
 const passwordInput = document.getElementById('password');
 const loginBtn = document.getElementById('loginBtn');
 const rememberCheck = document.getElementById('remember');
-const demoSection = document.querySelector('.demo-section');
+const demoSection = document.getElementById('demoSection');
 const demoContent = document.getElementById('demoContent');
 const demoArrow = document.getElementById('demoArrow');
 const toastContainer = document.getElementById('toastContainer');
 
 let selectedType = 'staff';
+
+// Credenciales de prueba para mostrar en el demo
+const DEMO_CREDENTIALS = {
+    staff: [
+        { documento: '1234567', nombre: 'Carlos Rodríguez', rol: 'Admin General', password: 'admin123' },
+        { documento: '7654321', nombre: 'María González', rol: 'Jefe Operativo', password: 'admin123' },
+        { documento: '9876543', nombre: 'Juan Pérez', rol: 'Jefe Taller', password: 'admin123' },
+        { documento: '1357924', nombre: 'Luis Mamani', rol: 'Técnico', password: 'admin123' },
+        { documento: '2468135', nombre: 'Ana López', rol: 'Enc. Repuestos', password: 'admin123' }
+    ],
+    client: [
+        { placa: 'ABC123', nombre: 'Pedro Sánchez', vehiculo: 'Toyota Corolla 2020', password: 'cliente123' },
+        { placa: 'XYZ789', nombre: 'Laura Flores', vehiculo: 'Honda Civic 2022', password: 'cliente123' },
+        { placa: 'DEF456', nombre: 'Roberto Méndez', vehiculo: 'Suzuki Swift 2021', password: 'cliente123' }
+    ]
+};
 
 // Inicialización
 document.addEventListener('DOMContentLoaded', () => {
@@ -117,6 +49,7 @@ function init() {
 }
 
 function setupEventListeners() {
+    // Tabs
     tabBtns.forEach(btn => {
         btn.addEventListener('click', (e) => {
             tabBtns.forEach(b => b.classList.remove('active'));
@@ -127,32 +60,58 @@ function setupEventListeners() {
         });
     });
 
-    demoSection?.addEventListener('click', toggleDemoSection);
-    loginForm.addEventListener('submit', handleLogin);
-    
-    window.togglePassword = togglePassword;
-    window.quickRegister = quickRegister;
+    // Demo section toggle
+    if (demoSection) {
+        demoSection.addEventListener('click', toggleDemoSection);
+    }
+
+    // Login form
+    if (loginForm) {
+        loginForm.addEventListener('submit', handleLogin);
+    }
+
+    // Restringir solo números para documento
+    if (documentInput) {
+        documentInput.addEventListener('keypress', (e) => {
+            if (!/^\d$/.test(e.key)) {
+                e.preventDefault();
+            }
+        });
+    }
+
+    // Convertir placa a mayúsculas
+    if (plateInput) {
+        plateInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.toUpperCase();
+        });
+    }
 }
 
 function toggleLoginFields() {
     if (selectedType === 'staff') {
-        emailGroup.style.display = 'block';
+        documentGroup.style.display = 'block';
         plateGroup.style.display = 'none';
         welcomeTitle.textContent = 'Acceso Personal Taller';
-        welcomeSubtitle.textContent = 'Ingresa con tu correo institucional';
+        welcomeSubtitle.textContent = 'Ingresa con tu número de documento';
         clientQuickAccess.style.display = 'none';
         
         if (plateInput) plateInput.value = '';
-        if (emailInput) emailInput.focus();
+        if (documentInput) {
+            documentInput.focus();
+            documentInput.removeAttribute('readonly');
+        }
     } else {
-        emailGroup.style.display = 'none';
+        documentGroup.style.display = 'none';
         plateGroup.style.display = 'block';
         welcomeTitle.textContent = 'Acceso Cliente';
         welcomeSubtitle.textContent = 'Ingresa con la placa de tu vehículo';
         clientQuickAccess.style.display = 'block';
         
-        if (emailInput) emailInput.value = '';
-        if (plateInput) plateInput.focus();
+        if (documentInput) documentInput.value = '';
+        if (plateInput) {
+            plateInput.focus();
+            plateInput.removeAttribute('readonly');
+        }
     }
 }
 
@@ -162,54 +121,37 @@ function loadDemoCredentials() {
     let credentials = [];
     
     if (selectedType === 'staff') {
-        credentials = DB_SIMULATION.staff.map(user => ({
-            identifier: user.email,
-            password: user.password,
-            name: user.nombre,
-            role: user.rol,
-            icon: getRoleIcon(user.rol),
-            detail: user.email
-        }));
-    } else {
-        credentials = DB_SIMULATION.clients.map(client => ({
-            identifier: client.placa,
-            password: client.password,
-            name: client.nombre,
-            vehicle: `${client.vehiculo.marca} ${client.vehiculo.modelo} ${client.vehiculo.anio}`,
-            icon: 'fa-car',
-            detail: `Placa: ${client.placa}`
-        }));
-    }
-
-    demoContent.innerHTML = credentials.map(cred => `
-        <div class="demo-credential-item" onclick="setCredentials('${cred.identifier}', '${cred.password}')">
-            <i class="fas ${cred.icon}"></i>
-            <div class="demo-credential-info">
-                <strong>${cred.name}</strong>
-                <small>${cred.detail}</small>
-                ${cred.vehicle ? `<small class="vehicle-info">${cred.vehicle}</small>` : ''}
+        credentials = DEMO_CREDENTIALS.staff;
+        demoContent.innerHTML = credentials.map(cred => `
+            <div class="demo-credential-item" onclick="setCredentials('${cred.documento}', '${cred.password}', 'staff')">
+                <i class="fas fa-id-card"></i>
+                <div class="demo-credential-info">
+                    <strong>${cred.nombre}</strong>
+                    <small>${cred.rol}</small>
+                    <small class="documento">Doc: ${cred.documento}</small>
+                </div>
             </div>
-        </div>
-    `).join('');
+        `).join('');
+    } else {
+        credentials = DEMO_CREDENTIALS.client;
+        demoContent.innerHTML = credentials.map(cred => `
+            <div class="demo-credential-item" onclick="setCredentials('${cred.placa}', '${cred.password}', 'client')">
+                <i class="fas fa-car"></i>
+                <div class="demo-credential-info">
+                    <strong>${cred.nombre}</strong>
+                    <small>${cred.vehiculo}</small>
+                    <small class="placa">Placa: ${cred.placa}</small>
+                </div>
+            </div>
+        `).join('');
+    }
 }
 
-function getRoleIcon(role) {
-    const icons = {
-        'admin_general': 'fa-user-cog',
-        'jefe_operativo': 'fa-user-tie',
-        'jefe_taller': 'fa-user-gear',
-        'tecnico_mecanico': 'fa-user-wrench',
-        'encargado_rep_almacen': 'fa-boxes',
-        'cliente': 'fa-user'
-    };
-    return icons[role] || 'fa-user';
-}
-
-window.setCredentials = (identifier, password) => {
-    if (selectedType === 'staff') {
-        if (emailInput) {
-            emailInput.value = identifier;
-            emailInput.dispatchEvent(new Event('input'));
+window.setCredentials = (identifier, password, type) => {
+    if (type === 'staff') {
+        if (documentInput) {
+            documentInput.value = identifier;
+            documentInput.dispatchEvent(new Event('input'));
         }
     } else {
         if (plateInput) {
@@ -229,7 +171,7 @@ async function handleLogin(e) {
     e.preventDefault();
     
     const identifier = selectedType === 'staff' 
-        ? emailInput?.value.trim() 
+        ? documentInput?.value.trim() 
         : plateInput?.value.trim().toUpperCase();
         
     const password = passwordInput?.value;
@@ -240,91 +182,64 @@ async function handleLogin(e) {
         return;
     }
     
-    if (selectedType === 'staff' && !validateEmail(identifier)) {
-        showToast('Correo electrónico inválido', 'error');
+    if (selectedType === 'staff' && !/^\d+$/.test(identifier)) {
+        showToast('El número de documento debe contener solo dígitos', 'error');
+        documentInput.focus();
         return;
     }
     
-    if (selectedType === 'client' && !validatePlate(identifier)) {
+    if (selectedType === 'client' && !/^[A-Z0-9]{3,8}$/.test(identifier)) {
         showToast('Formato de placa inválido (ej: ABC123)', 'error');
+        plateInput.focus();
         return;
     }
     
-    // Buscar en la "BD" correspondiente
-    let user = null;
-    
-    if (selectedType === 'staff') {
-        user = DB_SIMULATION.staff.find(u => u.email === identifier && u.password === password);
-    } else {
-        user = DB_SIMULATION.clients.find(c => c.placa === identifier && c.password === password);
-    }
-    
-    if (!user) {
-        showToast('Credenciales incorrectas', 'error');
-        passwordInput.value = '';
-        passwordInput.focus();
-        return;
-    }
-    
-    // Login exitoso
+    // Mostrar loading
     setLoadingState(true);
     
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Guardar sesión
-    const session = {
-        user: {
-            identifier: identifier,
-            name: user.nombre || user.name,
-            role: user.rol || 'cliente',
-            type: selectedType,
-            ...(selectedType === 'client' && { 
-                id_cliente: user.id_cliente,
-                vehiculo: user.vehiculo 
+    try {
+        const response = await fetch(`${API_URL}/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                type: selectedType,
+                identifier: identifier,
+                password: password
             })
-        },
-        token: generateToken(),
-        timestamp: Date.now()
-    };
-    
-    localStorage.setItem('furia_session', JSON.stringify(session));
-    
-    if (rememberCheck?.checked) {
-        localStorage.setItem('furia_remembered', identifier);
-        localStorage.setItem('furia_remembered_type', selectedType);
-    } else {
-        localStorage.removeItem('furia_remembered');
-        localStorage.removeItem('furia_remembered_type');
-    }
-    
-    showToast(`¡Bienvenido ${user.nombre || user.name}!`, 'success');
-    
-    setTimeout(() => {
-        if (selectedType === 'staff') {
-            const roleMap = {
-                'admin_general': '../admin_general/dashboard.html',
-                'jefe_operativo': '../jefe_operativo/dashboard.html',
-                'jefe_taller': '../jefe_taller/dashboard.html',
-                'tecnico_mecanico': '../tecnico_mecanico/dashboard.html',
-                'encargado_rep_almacen': '../encargado_rep_almacen/dashboard.html'
-            };
-            window.location.href = roleMap[user.rol] || '../dashboard.html';
-        } else {
-            window.location.href = '../cliente/dashboard.html';
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error en el login');
         }
-    }, 1500);
-}
-
-function validateEmail(email) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function validatePlate(plate) {
-    return /^[A-Z0-9]{3,8}$/.test(plate);
-}
-
-function generateToken() {
-    return Math.random().toString(36).substring(2) + Date.now().toString(36);
+        
+        // Login exitoso
+        if (data.success) {
+            // Guardar token y usuario
+            localStorage.setItem('furia_token', data.token);
+            localStorage.setItem('furia_user', JSON.stringify(data.user));
+            
+            if (rememberCheck?.checked) {
+                localStorage.setItem('furia_remembered', identifier);
+                localStorage.setItem('furia_remembered_type', selectedType);
+            }
+            
+            showToast(`¡Bienvenido ${data.user.nombre}!`, 'success');
+            
+            // Redirigir
+            setTimeout(() => {
+                window.location.href = data.redirect;
+            }, 1500);
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showToast(error.message || 'Error al conectar con el servidor', 'error');
+        setLoadingState(false);
+    }
 }
 
 function setLoadingState(loading) {
@@ -362,9 +277,11 @@ function showToast(message, type = 'info') {
 
 function toggleDemoSection() {
     demoSection.classList.toggle('expanded');
-    demoArrow.className = demoSection.classList.contains('expanded') 
-        ? 'fas fa-chevron-up' 
-        : 'fas fa-chevron-down';
+    if (demoSection.classList.contains('expanded')) {
+        demoArrow.className = 'fas fa-chevron-up';
+    } else {
+        demoArrow.className = 'fas fa-chevron-down';
+    }
 }
 
 function togglePassword() {
@@ -377,10 +294,30 @@ function togglePassword() {
 function checkSavedSession() {
     const remembered = localStorage.getItem('furia_remembered');
     const rememberedType = localStorage.getItem('furia_remembered_type');
+    const token = localStorage.getItem('furia_token');
     
+    // Si hay token y estamos en login, verificar si es válido
+    if (token && window.location.pathname === '/') {
+        verifyToken().then(user => {
+            if (user) {
+                // Redirigir según rol
+                const redirects = {
+                    'admin_general': '/admin_general/dashboard.html',
+                    'jefe_operativo': '/jefe_operativo/dashboard.html',
+                    'jefe_taller': '/jefe_taller/dashboard.html',
+                    'tecnico_mecanico': '/tecnico_mecanico/dashboard.html',
+                    'encargado_rep_almacen': '/encargado_rep_almacen/dashboard.html',
+                    'cliente': '/cliente/dashboard.html'
+                };
+                window.location.href = redirects[user.rol] || '/';
+            }
+        });
+    }
+    
+    // Cargar credenciales recordadas
     if (remembered && rememberedType) {
-        if (rememberedType === 'staff' && emailInput) {
-            emailInput.value = remembered;
+        if (rememberedType === 'staff' && documentInput) {
+            documentInput.value = remembered;
         } else if (rememberedType === 'client' && plateInput) {
             plateInput.value = remembered;
         }
@@ -391,6 +328,68 @@ function checkSavedSession() {
     }
 }
 
-function quickRegister() {
-    showToast('Dirígete a recepción para registrar tu vehículo', 'info');
+async function verifyToken() {
+    const token = localStorage.getItem('furia_token');
+    
+    if (!token) return null;
+    
+    try {
+        const response = await fetch(`${API_URL}/verify-token`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.valid) {
+            localStorage.removeItem('furia_token');
+            localStorage.removeItem('furia_user');
+            return null;
+        }
+        
+        return data.user;
+        
+    } catch (error) {
+        console.error('Error verificando token:', error);
+        localStorage.removeItem('furia_token');
+        localStorage.removeItem('furia_user');
+        return null;
+    }
 }
+
+function quickRegister() {
+    showToast('Dirígete a recepción del taller para registrar tu vehículo', 'info');
+}
+
+// Logout function (para usar en dashboards)
+window.logout = () => {
+    showToast('Cerrando sesión...', 'info');
+    
+    setTimeout(() => {
+        localStorage.removeItem('furia_token');
+        localStorage.removeItem('furia_user');
+        localStorage.removeItem('furia_remembered');
+        localStorage.removeItem('furia_remembered_type');
+        window.location.href = '/';
+    }, 1000);
+};
+
+// Proteger rutas (para usar en dashboards)
+window.checkAuth = (allowedRoles = []) => {
+    const token = localStorage.getItem('furia_token');
+    const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
+    
+    if (!token) {
+        window.location.href = '/';
+        return false;
+    }
+    
+    if (allowedRoles.length > 0 && !allowedRoles.includes(user.rol)) {
+        window.location.href = '/';
+        return false;
+    }
+    
+    return user;
+};

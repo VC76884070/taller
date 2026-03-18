@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jefe Operativo - Dashboard | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/dashboard.css">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+    <div class="app">
+        <!-- SIDEBAR INCLUIDO AQUÍ -->
+        <div id="sidebar-container"></div>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1>Dashboard</h1>
+                    <p>Bienvenido de nuevo, <span id="welcomeName">María</span></p>
+                </div>
+
+                <div class="top-actions">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Buscar vehículo, cliente...">
+                    </div>
+
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge">3</span>
+                    </div>
+
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- CONTENT -->
+            <div class="content">
+                <!-- KPI CARDS -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Vehículos ingresados hoy</span>
+                            <i class="fas fa-car kpi-icon-small"></i>
+                        </div>
+                        <div class="kpi-value" id="ingresadosHoy">12</div>
+                        <div class="kpi-footer">
+                            <span class="kpi-trend positive">
+                                <i class="fas fa-arrow-up"></i> +3 respecto ayer
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Vehículos en proceso</span>
+                            <i class="fas fa-wrench kpi-icon-small"></i>
+                        </div>
+                        <div class="kpi-value" id="enProceso">24</div>
+                        <div class="kpi-footer">
+                            <span class="kpi-trend">12 bahías ocupadas</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Trabajos en pausa</span>
+                            <i class="fas fa-pause-circle kpi-icon-small"></i>
+                        </div>
+                        <div class="kpi-value" id="enPausa">3</div>
+                        <div class="kpi-footer">
+                            <span class="kpi-trend negative">
+                                <i class="fas fa-exclamation-triangle"></i> Requieren atención
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Ingresos del día</span>
+                            <i class="fas fa-dollar-sign kpi-icon-small"></i>
+                        </div>
+                        <div class="kpi-value" id="ingresosHoy">Bs 4.250</div>
+                        <div class="kpi-footer">
+                            <span class="kpi-trend positive">
+                                <i class="fas fa-arrow-up"></i> +12% vs ayer
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CHARTS ROW -->
+                <div class="charts-row">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <h3>Ingresos diarios (últimos 7 días)</h3>
+                            <select class="chart-filter">
+                                <option>Esta semana</option>
+                                <option>Este mes</option>
+                            </select>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="incomeChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- NOTIFICATIONS PANEL -->
+                    <div class="notifications-card">
+                        <div class="notifications-header">
+                            <h3>Notificaciones recientes</h3>
+                            <span class="notifications-count">3 nuevas</span>
+                        </div>
+                        <div class="notifications-list" id="notificationsList"></div>
+                        <div class="notifications-footer">
+                            <a href="#">Ver todas las notificaciones</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ÚLTIMOS INGRESOS TABLE -->
+                <div class="table-card">
+                    <div class="table-header">
+                        <h3>Últimos ingresos</h3>
+                        <div class="table-actions">
+                            <button class="btn-outline" onclick="window.location.href='recepcion.html'">
+                                <i class="fas fa-plus"></i> Nuevo ingreso
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Hora</th>
+                                    <th>Placa</th>
+                                    <th>Vehículo</th>
+                                    <th>Cliente</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ultimosIngresos"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/include.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+
+</html>

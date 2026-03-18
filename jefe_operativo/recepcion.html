@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jefe Operativo - Recepción | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/recepcion.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- SIDEBAR INCLUIDO AQUÍ -->
+        <div id="sidebar-container"></div>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1>Recepción de Vehículo</h1>
+                    <p>Complete todos los datos para generar el código de trabajo</p>
+                </div>
+
+                <div class="top-actions">
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge">3</span>
+                    </div>
+
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- CONTENT (solo el formulario, sin sidebar) -->
+            <div class="content">
+                <form id="recepcionForm" class="recepcion-form">
+                    <!-- 1️⃣ DATOS DEL CLIENTE -->
+                    <div class="form-card">
+                        <div class="card-header">
+                            <div class="card-icon">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <h2>Datos del Cliente</h2>
+                        </div>
+
+                        <div class="card-body">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="clienteNombre">
+                                        <i class="fas fa-user"></i>
+                                        Nombre completo
+                                    </label>
+                                    <input type="text" id="clienteNombre" placeholder="Ej: Juan Pérez" required>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="clienteTelefono">
+                                        <i class="fas fa-phone"></i>
+                                        Teléfono
+                                    </label>
+                                    <input type="tel" id="clienteTelefono" placeholder="Ej: 77712345" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="clienteUbicacion">
+                                        <i class="fas fa-map-marker-alt"></i>
+                                        Ubicación
+                                    </label>
+                                    <input type="text" id="clienteUbicacion" placeholder="Ej: Zona Sur, Calle 5"
+                                        required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2️⃣ DATOS DEL VEHÍCULO -->
+                    <div class="form-card">
+                        <div class="card-header">
+                            <div class="card-icon">
+                                <i class="fas fa-car"></i>
+                            </div>
+                            <h2>Datos del Vehículo</h2>
+                        </div>
+
+                        <div class="card-body">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="vehiculoPlaca">
+                                        <i class="fas fa-id-card"></i>
+                                        Placa
+                                    </label>
+                                    <input type="text" id="vehiculoPlaca" placeholder="Ej: ABC123" maxlength="8"
+                                        style="text-transform: uppercase;" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="vehiculoMarca">
+                                        <i class="fas fa-tag"></i>
+                                        Marca
+                                    </label>
+                                    <input type="text" id="vehiculoMarca" placeholder="Ej: Toyota" required>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="vehiculoModelo">
+                                        <i class="fas fa-car-side"></i>
+                                        Modelo
+                                    </label>
+                                    <input type="text" id="vehiculoModelo" placeholder="Ej: Corolla" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="vehiculoAnio">
+                                        <i class="fas fa-calendar"></i>
+                                        Año
+                                    </label>
+                                    <input type="number" id="vehiculoAnio" placeholder="Ej: 2020" min="1900" max="2026"
+                                        required>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="vehiculoKilometraje">
+                                        <i class="fas fa-tachometer-alt"></i>
+                                        Kilometraje
+                                    </label>
+                                    <input type="number" id="vehiculoKilometraje" placeholder="Ej: 45000" required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3️⃣ REGISTRO FOTOGRÁFICO -->
+                    <div class="form-card">
+                        <div class="card-header">
+                            <div class="card-icon">
+                                <i class="fas fa-camera"></i>
+                            </div>
+                            <h2>Registro Fotográfico</h2>
+                            <span class="card-badge">6 vistas requeridas</span>
+                        </div>
+
+                        <div class="card-body">
+                            <div class="photo-grid" id="photoGrid">
+                                <!-- Las 6 fotos se generan con JS -->
+                            </div>
+                            <p class="photo-hint">* Toma o sube una foto para cada vista del vehículo</p>
+                        </div>
+                    </div>
+
+                    <!-- 4️⃣ DESCRIPCIÓN DEL PROBLEMA -->
+                    <div class="form-card">
+                        <div class="card-header">
+                            <div class="card-icon">
+                                <i class="fas fa-pencil-alt"></i>
+                            </div>
+                            <h2>Descripción del Problema</h2>
+                        </div>
+
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="descripcionProblema">
+                                    <i class="fas fa-align-left"></i>
+                                    Describa el problema reportado por el cliente
+                                </label>
+                                <textarea id="descripcionProblema" rows="5"
+                                    placeholder="Ej: El vehículo hace un ruido extraño al frenar, también vibra a alta velocidad..."></textarea>
+                            </div>
+
+                            <div class="audio-recorder">
+                                <button type="button" class="btn-audio" id="btnGrabarAudio">
+                                    <i class="fas fa-microphone"></i>
+                                    <span>Grabar Audio</span>
+                                </button>
+                                <span class="audio-status" id="audioStatus"></span>
+                                <audio id="audioPreview" controls style="display: none;"></audio>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BOTÓN PRINCIPAL -->
+                    <div class="form-actions">
+                        <button type="submit" class="btn-generar" id="btnGenerar">
+                            <i class="fas fa-qrcode"></i>
+                            Generar Código de Trabajo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal de código generado -->
+    <div class="modal" id="codigoModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-check-circle" style="color: var(--verde-exito);"></i> Vehículo Registrado</h2>
+                <button class="modal-close" onclick="cerrarModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>El vehículo ha sido registrado exitosamente.</p>
+
+                <div class="codigo-card">
+                    <div class="codigo-label">Código de Trabajo</div>
+                    <div class="codigo-valor" id="codigoGenerado">OT-2024-0001</div>
+
+                    <!-- QR Code -->
+                    <div class="qr-container" id="qrContainer"></div>
+                </div>
+
+                <div class="resumen-datos" id="resumenDatos"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal()">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+                <button class="btn-primary" onclick="imprimirCodigo()">
+                    <i class="fas fa-print"></i> Imprimir
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="js/include.js"></script>
+    <script src="js/recepcion.js"></script>
+</body>
+
+</html>

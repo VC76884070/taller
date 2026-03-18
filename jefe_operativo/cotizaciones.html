@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jefe Operativo - Cotizaciones | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Custom CSS - ORDEN CORRECTO: primero dashboard.css (sidebar), luego cotizaciones.css -->
+    <link rel="stylesheet" href="/jefe_operativo/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_operativo/css/cotizaciones.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- SIDEBAR INCLUIDO -->
+        <div id="sidebar-container"></div>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1>Cotizaciones</h1>
+                    <p>Registro de cotizaciones y aprobación de servicios</p>
+                </div>
+
+                <div class="top-actions">
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge">3</span>
+                    </div>
+
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- CONTENT -->
+            <div class="content">
+                <!-- Filtros -->
+                <div class="filters-bar">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Buscar por código, cliente o vehículo..." id="searchInput">
+                    </div>
+
+                    <div class="filter-group">
+                        <select id="estadoFilter" class="filter-select">
+                            <option value="">Todos los estados</option>
+                            <option value="pendiente">Pendiente</option>
+                            <option value="aprobada">Aprobada</option>
+                            <option value="rechazada">Rechazada</option>
+                            <option value="diagnostico">Solo diagnóstico</option>
+                        </select>
+
+                        <select id="fechaFilter" class="filter-select">
+                            <option value="hoy">Hoy</option>
+                            <option value="semana">Esta semana</option>
+                            <option value="mes">Este mes</option>
+                            <option value="todo">Todo</option>
+                        </select>
+
+                        <button class="btn-primary" onclick="nuevaCotizacion()">
+                            <i class="fas fa-plus"></i>
+                            Nueva Cotización
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Layout de dos columnas -->
+                <div class="cotizaciones-layout">
+                    <!-- Columna izquierda: Tabla de cotizaciones -->
+                    <div class="cotizaciones-table-container">
+                        <table class="cotizaciones-table">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Cliente</th>
+                                    <th>Vehículo</th>
+                                    <th>Total</th>
+                                    <th>Estado</th>
+                                    <th>Fecha</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cotizacionesTableBody">
+                                <!-- Datos dinámicos -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Columna derecha: Panel de detalle -->
+                    <div class="cotizacion-detalle-panel" id="detallePanel">
+                        <div class="detalle-header">
+                            <h3>Detalle de Cotización</h3>
+                            <button class="btn-icon" onclick="cerrarDetalle()" id="cerrarDetalleBtn"
+                                style="display: none;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+
+                        <div class="detalle-content" id="detalleVacio">
+                            <div class="empty-state">
+                                <i class="fas fa-file-invoice"></i>
+                                <p>Selecciona una cotización para ver su detalle</p>
+                            </div>
+                        </div>
+
+                        <div class="detalle-content" id="detalleCotizacion" style="display: none;">
+                            <!-- Información de la cotización -->
+                            <div class="info-cotizacion">
+                                <div class="info-row">
+                                    <span class="info-label">Código:</span>
+                                    <span class="info-value" id="detalleCodigo">COT-001</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Cliente:</span>
+                                    <span class="info-value" id="detalleCliente">Juan Pérez</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Vehículo:</span>
+                                    <span class="info-value" id="detalleVehiculo">Toyota Corolla (ABC123)</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Fecha:</span>
+                                    <span class="info-value" id="detalleFecha">17/03/2026</span>
+                                </div>
+                            </div>
+
+                            <!-- Lista de servicios -->
+                            <div class="servicios-section">
+                                <h4>Servicios</h4>
+                                <div class="servicios-list" id="serviciosList">
+                                    <!-- Servicios dinámicos con checkbox -->
+                                </div>
+                            </div>
+
+                            <!-- Resumen de costos -->
+                            <div class="resumen-costos">
+                                <div class="resumen-row">
+                                    <span>Subtotal:</span>
+                                    <span id="subtotal">Bs 0</span>
+                                </div>
+                                <div class="resumen-row">
+                                    <span>Diagnóstico:</span>
+                                    <span id="diagnosticoCosto">Bs 200</span>
+                                </div>
+                                <div class="resumen-row total">
+                                    <span>Total:</span>
+                                    <span id="totalCotizacion">Bs 0</span>
+                                </div>
+                            </div>
+
+                            <!-- Mensaje automático de diagnóstico -->
+                            <div class="diagnostico-mensaje" id="diagnosticoMensaje">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Diagnóstico Bs. 200 aplicado</span>
+                            </div>
+
+                            <!-- Acciones -->
+                            <div class="detalle-acciones">
+                                <button class="btn-outline" onclick="enviarCotizacion()">
+                                    <i class="fas fa-paper-plane"></i>
+                                    Enviar al Cliente
+                                </button>
+                                <button class="btn-primary" onclick="generarPDF()">
+                                    <i class="fas fa-file-pdf"></i>
+                                    PDF
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal para nueva cotización -->
+    <div class="modal" id="nuevaCotizacionModal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2>Nueva Cotización</h2>
+                <button class="modal-close" onclick="cerrarModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="nuevaCotizacionForm">
+                    <!-- Selección de orden de trabajo -->
+                    <div class="form-group">
+                        <label for="ordenTrabajo">Orden de Trabajo</label>
+                        <select id="ordenTrabajo" class="form-select" required>
+                            <option value="">Seleccionar orden de trabajo</option>
+                        </select>
+                    </div>
+
+                    <!-- Servicios predefinidos -->
+                    <div class="servicios-predeterminados">
+                        <h4>Servicios disponibles</h4>
+                        <div class="servicios-grid">
+                            <div class="servicio-item">
+                                <input type="checkbox" id="servicio1" value="150">
+                                <label for="servicio1">
+                                    <strong>Cambio de aceite</strong>
+                                    <span>Bs 150</span>
+                                </label>
+                            </div>
+                            <div class="servicio-item">
+                                <input type="checkbox" id="servicio2" value="250">
+                                <label for="servicio2">
+                                    <strong>Frenos (pastillas)</strong>
+                                    <span>Bs 250</span>
+                                </label>
+                            </div>
+                            <div class="servicio-item">
+                                <input type="checkbox" id="servicio3" value="450">
+                                <label for="servicio3">
+                                    <strong>Alineación y balanceo</strong>
+                                    <span>Bs 450</span>
+                                </label>
+                            </div>
+                            <div class="servicio-item">
+                                <input type="checkbox" id="servicio4" value="600">
+                                <label for="servicio4">
+                                    <strong>Cambio de batería</strong>
+                                    <span>Bs 600</span>
+                                </label>
+                            </div>
+                            <div class="servicio-item">
+                                <input type="checkbox" id="servicio5" value="350">
+                                <label for="servicio5">
+                                    <strong>Sistema de refrigeración</strong>
+                                    <span>Bs 350</span>
+                                </label>
+                            </div>
+                            <div class="servicio-item">
+                                <input type="checkbox" id="servicio6" value="800">
+                                <label for="servicio6">
+                                    <strong>Diagnóstico computarizado</strong>
+                                    <span>Bs 800</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Campo para servicio personalizado -->
+                    <div class="servicio-personalizado">
+                        <h4>Servicio personalizado</h4>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <input type="text" placeholder="Descripción del servicio" id="servicioCustomDesc">
+                            </div>
+                            <div class="form-group">
+                                <input type="number" placeholder="Precio" id="servicioCustomPrecio">
+                            </div>
+                            <button type="button" class="btn-secondary" onclick="agregarServicioCustom()">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Total dinámico -->
+                    <div class="total-preview">
+                        <span>Total cotización:</span>
+                        <span class="total-valor" id="previewTotal">Bs 0</span>
+                    </div>
+
+                    <!-- Mensaje de diagnóstico -->
+                    <div class="diagnostico-preview" id="diagnosticoPreview">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Si no se selecciona ningún servicio, se cobrará Bs 200 por diagnóstico</span>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal()">Cancelar</button>
+                <button class="btn-primary" onclick="guardarCotizacion()">Guardar Cotización</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/jefe_operativo/js/include.js"></script>
+    <script src="/jefe_operativo/js/cotizaciones.js"></script>
+</body>
+
+</html>

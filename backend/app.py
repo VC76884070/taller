@@ -58,7 +58,8 @@ def serve_html(path):
         'jefe_operativo/dashboard': '../jefe_operativo/dashboard.html',
         'jefe_operativo/recepcion': '../jefe_operativo/recepcion.html',
         'jefe_taller': '../jefe_taller/dashboard.html',
-        'tecnico_mecanico': '../tecnico_mecanico/dashboard.html',
+        'tecnico_mecanico': '../tecnico_mecanico/misvehiculos.html',
+        'tecnico_mecanico/misvehiculos': '../tecnico_mecanico/misvehiculos.html', 
         'encargado_rep_almacen': '../encargado_rep_almacen/dashboard.html',
         'cliente': '../cliente/dashboard.html'
     }

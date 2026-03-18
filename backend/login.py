@@ -114,7 +114,7 @@ def login():
                 'admin_general': '/admin_general/dashboard.html',
                 'jefe_operativo': '/jefe_operativo/dashboard.html',
                 'jefe_taller': '/jefe_taller/dashboard.html',
-                'tecnico_mecanico': '/tecnico_mecanico/dashboard.html',
+                'tecnico_mecanico': '/tecnico_mecanico/misvehiculos.html',
                 'encargado_rep_almacen': '/encargado_rep_almacen/dashboard.html'
             }
             

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encargado Repuestos - Dashboard | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- SIDEBAR -->
+        <div id="sidebar-container"></div>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1>Dashboard Inventario</h1>
+                    <p>Control y gestión de repuestos y proveedores</p>
+                </div>
+
+                <div class="top-actions">
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificacionesBadge">5</span>
+                    </div>
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- CONTENT -->
+            <div class="content">
+                <!-- KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-icon" style="background: rgba(33, 150, 243, 0.1);">
+                            <i class="fas fa-cubes" style="color: #2196F3;"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Total repuestos en stock</span>
+                            <span class="kpi-value" id="totalRepuestos">1,284</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card warning">
+                        <div class="kpi-icon" style="background: rgba(193, 18, 31, 0.1);">
+                            <i class="fas fa-exclamation-triangle" style="color: #C1121F;"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Stock bajo</span>
+                            <span class="kpi-value" id="stockBajo">23</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-icon" style="background: rgba(76, 175, 80, 0.1);">
+                            <i class="fas fa-shopping-cart" style="color: #4CAF50;"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Compras del mes</span>
+                            <span class="kpi-value" id="comprasMes">Bs. 12,450</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-icon" style="background: rgba(255, 152, 0, 0.1);">
+                            <i class="fas fa-truck" style="color: #FF9800;"></i>
+                        </div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Proveedores activos</span>
+                            <span class="kpi-value" id="proveedoresActivos">8</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Grid de dos columnas -->
+                <div class="dashboard-grid">
+                    <!-- Columna Izquierda - Alertas -->
+                    <div class="left-column">
+                        <div class="card alertas-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-exclamation-circle" style="color: #FF3B30;"></i> Alertas Urgentes
+                                </h3>
+                                <span class="badge-danger" id="alertasCount">3</span>
+                            </div>
+                            <div class="alertas-list" id="alertasList">
+                                <!-- Se llena dinámicamente -->
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-clock"></i> Últimas Compras</h3>
+                                <a href="compras.html" class="card-link">Ver todas</a>
+                            </div>
+                            <div class="compras-list" id="comprasList">
+                                <!-- Se llena dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Columna Derecha - Gráfico -->
+                    <div class="right-column">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-chart-pie"></i> Distribución por Categoría</h3>
+                                <div class="chart-legend" id="chartLegend"></div>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="categoriasChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-tag"></i> Repuestos con Stock Crítico</h3>
+                                <span class="badge-danger" id="criticosCount">8</span>
+                            </div>
+                            <div class="criticos-list" id="criticosList">
+                                <!-- Se llena dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/include.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+
+</html>

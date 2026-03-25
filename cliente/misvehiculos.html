@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cliente - Mis Vehículos | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/misvehiculos.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- SIDEBAR -->
+        <div id="sidebar-container"></div>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1>Mis Vehículos</h1>
+                    <p>Gestión y seguimiento de tus vehículos en el taller</p>
+                </div>
+
+                <div class="top-actions">
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge">2</span>
+                    </div>
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- CONTENT -->
+            <div class="content">
+                <!-- Mensaje de bienvenida -->
+                <div class="welcome-card">
+                    <div class="welcome-icon">
+                        <i class="fas fa-hand-wave"></i>
+                    </div>
+                    <div class="welcome-content">
+                        <h2>¡Bienvenido de vuelta!</h2>
+                        <p>Aquí puedes ver el estado actual de tus vehículos en el taller</p>
+                    </div>
+                </div>
+
+                <!-- Grid de vehículos -->
+                <div class="vehiculos-grid" id="vehiculosGrid">
+                    <!-- Se llena dinámicamente -->
+                </div>
+
+                <!-- Estado de carga -->
+                <div class="loading-container" id="loadingContainer">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando tus vehículos...</p>
+                </div>
+
+                <!-- Estado vacío -->
+                <div class="empty-state" id="emptyState" style="display: none;">
+                    <div class="empty-icon">
+                        <i class="fas fa-car"></i>
+                    </div>
+                    <h3>No tienes vehículos registrados</h3>
+                    <p>Agrega tu primer vehículo para comenzar</p>
+                    <button class="btn-agregar" onclick="agregarVehiculo()">
+                        <i class="fas fa-plus-circle"></i>
+                        Agregar vehículo
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal de detalle -->
+    <div class="modal" id="detalleModal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2>Detalle del Vehículo</h2>
+                <button class="modal-close" onclick="cerrarDetalleModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="detalleModalBody">
+                <!-- Se llena dinámicamente -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarDetalleModal()">Cerrar</button>
+                <button class="btn-primary" id="btnVerCotizacion" onclick="verCotizacion()">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                    Ver cotización
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/include.js"></script>
+    <script src="js/misvehiculos.js"></script>
+</body>
+
+</html>

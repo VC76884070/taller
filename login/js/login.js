@@ -1,3 +1,8 @@
+// =====================================================
+// LOGIN - FURIA MOTOR COMPANY
+// Funcionalidades: Login, Recuperar contraseña, Registro
+// =====================================================
+
 // Configuración
 const API_URL = 'http://localhost:5000/api';
 
@@ -14,38 +19,34 @@ const plateInput = document.getElementById('plate');
 const passwordInput = document.getElementById('password');
 const loginBtn = document.getElementById('loginBtn');
 const rememberCheck = document.getElementById('remember');
-const demoSection = document.getElementById('demoSection');
-const demoContent = document.getElementById('demoContent');
-const demoArrow = document.getElementById('demoArrow');
 const toastContainer = document.getElementById('toastContainer');
 
+// Modales
+const recoverModal = document.getElementById('recoverModal');
+const registerModal = document.getElementById('registerModal');
+const vehicleRegisterModal = document.getElementById('vehicleRegisterModal');
+
+// Variables de estado
 let selectedType = 'staff';
+let recoveryEmail = '';
+let recoveryUserType = '';
+let registerData = {};
+let recoveryTimer = null;
+let registerTimer = null;
+let recoveryTimeLeft = 0;
+let registerTimeLeft = 0;
 
-// Credenciales de prueba para mostrar en el demo
-const DEMO_CREDENTIALS = {
-    staff: [
-        { documento: '1234567', nombre: 'Carlos Rodríguez', rol: 'Admin General', password: 'admin123' },
-        { documento: '7654321', nombre: 'María González', rol: 'Jefe Operativo', password: 'admin123' },
-        { documento: '9876543', nombre: 'Juan Pérez', rol: 'Jefe Taller', password: 'admin123' },
-        { documento: '1357924', nombre: 'Luis Mamani', rol: 'Técnico', password: 'admin123' },
-        { documento: '2468135', nombre: 'Ana López', rol: 'Enc. Repuestos', password: 'admin123' }
-    ],
-    client: [
-        { placa: 'ABC123', nombre: 'Pedro Sánchez', vehiculo: 'Toyota Corolla 2020', password: 'cliente123' },
-        { placa: 'XYZ789', nombre: 'Laura Flores', vehiculo: 'Honda Civic 2022', password: 'cliente123' },
-        { placa: 'DEF456', nombre: 'Roberto Méndez', vehiculo: 'Suzuki Swift 2021', password: 'cliente123' }
-    ]
-};
-
-// Inicialización
+// =====================================================
+// INICIALIZACIÓN
+// =====================================================
 document.addEventListener('DOMContentLoaded', () => {
     init();
 });
 
 function init() {
-    loadDemoCredentials();
     setupEventListeners();
     checkSavedSession();
+    setupCodeInputs();
 }
 
 function setupEventListeners() {
@@ -56,26 +57,18 @@ function setupEventListeners() {
             btn.classList.add('active');
             selectedType = btn.dataset.type;
             toggleLoginFields();
-            loadDemoCredentials();
         });
     });
-
-    // Demo section toggle
-    if (demoSection) {
-        demoSection.addEventListener('click', toggleDemoSection);
-    }
 
     // Login form
     if (loginForm) {
         loginForm.addEventListener('submit', handleLogin);
     }
 
-    // Restringir solo números para documento
+    // Permitir email o documento en personal
     if (documentInput) {
         documentInput.addEventListener('keypress', (e) => {
-            if (!/^\d$/.test(e.key)) {
-                e.preventDefault();
-            }
+            // No restringimos, puede ser email o documento
         });
     }
 
@@ -92,81 +85,30 @@ function toggleLoginFields() {
         documentGroup.style.display = 'block';
         plateGroup.style.display = 'none';
         welcomeTitle.textContent = 'Acceso Personal Taller';
-        welcomeSubtitle.textContent = 'Ingresa con tu número de documento';
+        welcomeSubtitle.textContent = 'Ingresa con tu número de documento o correo electrónico';
         clientQuickAccess.style.display = 'none';
         
         if (plateInput) plateInput.value = '';
         if (documentInput) {
             documentInput.focus();
-            documentInput.removeAttribute('readonly');
         }
     } else {
         documentGroup.style.display = 'none';
         plateGroup.style.display = 'block';
         welcomeTitle.textContent = 'Acceso Cliente';
-        welcomeSubtitle.textContent = 'Ingresa con la placa de tu vehículo';
+        welcomeSubtitle.textContent = 'Ingresa con tu correo electrónico o placa';
         clientQuickAccess.style.display = 'block';
         
         if (documentInput) documentInput.value = '';
         if (plateInput) {
             plateInput.focus();
-            plateInput.removeAttribute('readonly');
         }
     }
 }
 
-function loadDemoCredentials() {
-    if (!demoContent) return;
-    
-    let credentials = [];
-    
-    if (selectedType === 'staff') {
-        credentials = DEMO_CREDENTIALS.staff;
-        demoContent.innerHTML = credentials.map(cred => `
-            <div class="demo-credential-item" onclick="setCredentials('${cred.documento}', '${cred.password}', 'staff')">
-                <i class="fas fa-id-card"></i>
-                <div class="demo-credential-info">
-                    <strong>${cred.nombre}</strong>
-                    <small>${cred.rol}</small>
-                    <small class="documento">Doc: ${cred.documento}</small>
-                </div>
-            </div>
-        `).join('');
-    } else {
-        credentials = DEMO_CREDENTIALS.client;
-        demoContent.innerHTML = credentials.map(cred => `
-            <div class="demo-credential-item" onclick="setCredentials('${cred.placa}', '${cred.password}', 'client')">
-                <i class="fas fa-car"></i>
-                <div class="demo-credential-info">
-                    <strong>${cred.nombre}</strong>
-                    <small>${cred.vehiculo}</small>
-                    <small class="placa">Placa: ${cred.placa}</small>
-                </div>
-            </div>
-        `).join('');
-    }
-}
-
-window.setCredentials = (identifier, password, type) => {
-    if (type === 'staff') {
-        if (documentInput) {
-            documentInput.value = identifier;
-            documentInput.dispatchEvent(new Event('input'));
-        }
-    } else {
-        if (plateInput) {
-            plateInput.value = identifier;
-            plateInput.dispatchEvent(new Event('input'));
-        }
-    }
-    
-    if (passwordInput) {
-        passwordInput.value = password;
-    }
-    
-    showToast('Credenciales cargadas', 'success');
-};
-
+// =====================================================
+// LOGIN
+// =====================================================
 async function handleLogin(e) {
     e.preventDefault();
     
@@ -179,18 +121,6 @@ async function handleLogin(e) {
     // Validaciones
     if (!identifier || !password) {
         showToast('Por favor completa todos los campos', 'warning');
-        return;
-    }
-    
-    if (selectedType === 'staff' && !/^\d+$/.test(identifier)) {
-        showToast('El número de documento debe contener solo dígitos', 'error');
-        documentInput.focus();
-        return;
-    }
-    
-    if (selectedType === 'client' && !/^[A-Z0-9]{3,8}$/.test(identifier)) {
-        showToast('Formato de placa inválido (ej: ABC123)', 'error');
-        plateInput.focus();
         return;
     }
     
@@ -218,7 +148,6 @@ async function handleLogin(e) {
         
         // Login exitoso
         if (data.success) {
-            // Guardar token y usuario
             localStorage.setItem('furia_token', data.token);
             localStorage.setItem('furia_user', JSON.stringify(data.user));
             
@@ -229,7 +158,6 @@ async function handleLogin(e) {
             
             showToast(`¡Bienvenido ${data.user.nombre}!`, 'success');
             
-            // Redirigir
             setTimeout(() => {
                 window.location.href = data.redirect;
             }, 1500);
@@ -252,6 +180,587 @@ function setLoadingState(loading) {
     }
 }
 
+// =====================================================
+// RECUPERAR CONTRASEÑA
+// =====================================================
+function openRecoverModal(e) {
+    if (e) e.preventDefault();
+    document.getElementById('recoverStep1').style.display = 'block';
+    document.getElementById('recoverStep2').style.display = 'none';
+    document.getElementById('recoverEmail').value = '';
+    document.getElementById('recoverUserType').value = selectedType;
+    document.getElementById('newPassword').value = '';
+    document.getElementById('confirmPassword').value = '';
+    
+    // Limpiar códigos
+    document.querySelectorAll('#recoverStep2 .code-digit').forEach(input => {
+        input.value = '';
+    });
+    
+    // Detener timer si existe
+    if (recoveryTimer) {
+        clearInterval(recoveryTimer);
+        recoveryTimer = null;
+    }
+    document.getElementById('timerText').innerHTML = '';
+    
+    recoverModal.classList.add('show');
+}
+
+function closeRecoverModal() {
+    recoverModal.classList.remove('show');
+    if (recoveryTimer) {
+        clearInterval(recoveryTimer);
+        recoveryTimer = null;
+    }
+}
+
+function goBackToStep1() {
+    document.getElementById('recoverStep1').style.display = 'block';
+    document.getElementById('recoverStep2').style.display = 'none';
+    if (recoveryTimer) {
+        clearInterval(recoveryTimer);
+        recoveryTimer = null;
+    }
+    document.getElementById('timerText').innerHTML = '';
+}
+
+async function sendRecoveryCode() {
+    const email = document.getElementById('recoverEmail').value.trim();
+    const userType = document.getElementById('recoverUserType').value;
+    
+    if (!email) {
+        showToast('Ingresa tu correo electrónico', 'warning');
+        return;
+    }
+    
+    if (!email.includes('@') || !email.includes('.')) {
+        showToast('Ingresa un correo válido', 'warning');
+        return;
+    }
+    
+    setModalLoading(true);
+    
+    try {
+        const response = await fetch(`${API_URL}/recuperar/solicitar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email: email,
+                tipo: userType
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error al enviar el código');
+        }
+        
+        recoveryEmail = email;
+        recoveryUserType = userType;
+        
+        showToast('Código enviado a tu correo electrónico', 'success');
+        
+        // Mostrar email en el paso 2
+        document.getElementById('recoverEmailDisplay').textContent = email;
+        
+        // Limpiar inputs de código
+        document.querySelectorAll('#recoverStep2 .code-digit').forEach(input => {
+            input.value = '';
+        });
+        
+        document.getElementById('recoverStep1').style.display = 'none';
+        document.getElementById('recoverStep2').style.display = 'block';
+        
+        // Iniciar timer para reenvío
+        startRecoveryTimer();
+        
+        // Enfocar primer input de código
+        document.querySelector('#recoverStep2 .code-digit')?.focus();
+        
+    } catch (error) {
+        showToast(error.message, 'error');
+    } finally {
+        setModalLoading(false);
+    }
+}
+
+function startRecoveryTimer() {
+    recoveryTimeLeft = 60; // 60 segundos
+    const timerText = document.getElementById('timerText');
+    const resendBtn = document.getElementById('resendCodeBtn');
+    
+    if (recoveryTimer) clearInterval(recoveryTimer);
+    
+    resendBtn.disabled = true;
+    resendBtn.style.opacity = '0.5';
+    
+    recoveryTimer = setInterval(() => {
+        if (recoveryTimeLeft <= 0) {
+            clearInterval(recoveryTimer);
+            resendBtn.disabled = false;
+            resendBtn.style.opacity = '1';
+            timerText.innerHTML = '';
+        } else {
+            const minutos = Math.floor(recoveryTimeLeft / 60);
+            const segundos = recoveryTimeLeft % 60;
+            timerText.innerHTML = `Puedes reenviar el código en ${minutos}:${segundos.toString().padStart(2, '0')}`;
+            recoveryTimeLeft--;
+        }
+    }, 1000);
+}
+
+async function resendRecoveryCode() {
+    if (!recoveryEmail) return;
+    
+    setModalLoading(true);
+    
+    try {
+        const response = await fetch(`${API_URL}/recuperar/solicitar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email: recoveryEmail,
+                tipo: recoveryUserType
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error al reenviar el código');
+        }
+        
+        showToast('Código reenviado a tu correo', 'success');
+        
+        // Reiniciar timer
+        if (recoveryTimer) clearInterval(recoveryTimer);
+        startRecoveryTimer();
+        
+    } catch (error) {
+        showToast(error.message, 'error');
+    } finally {
+        setModalLoading(false);
+    }
+}
+
+async function verifyAndChangePassword() {
+    const codigo = getCodeFromInputs('#recoverStep2 .code-digit');
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    if (codigo.length !== 6) {
+        showToast('Ingresa el código de 6 dígitos', 'warning');
+        return;
+    }
+    
+    if (!newPassword || newPassword.length < 6) {
+        showToast('La contraseña debe tener al menos 6 caracteres', 'warning');
+        return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+        showToast('Las contraseñas no coinciden', 'error');
+        return;
+    }
+    
+    setModalLoading(true);
+    
+    try {
+        const response = await fetch(`${API_URL}/recuperar/cambiar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email: recoveryEmail,
+                codigo: codigo,
+                nueva_contrasena: newPassword
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error al cambiar la contraseña');
+        }
+        
+        showToast('Contraseña actualizada correctamente', 'success');
+        closeRecoverModal();
+        
+    } catch (error) {
+        showToast(error.message, 'error');
+    } finally {
+        setModalLoading(false);
+    }
+}
+
+// =====================================================
+// REGISTRO DE CLIENTE
+// =====================================================
+function openRegisterModal() {
+    registerData = {};
+    document.getElementById('registerStep1').style.display = 'block';
+    document.getElementById('registerStep2').style.display = 'none';
+    document.getElementById('regNombre').value = '';
+    document.getElementById('regEmail').value = '';
+    document.getElementById('regTelefono').value = '';
+    document.getElementById('regDireccion').value = '';
+    document.getElementById('regPassword').value = '';
+    document.getElementById('regConfirmPassword').value = '';
+    
+    // Limpiar códigos
+    document.querySelectorAll('#registerStep2 .code-digit').forEach(input => {
+        input.value = '';
+    });
+    
+    // Detener timer si existe
+    if (registerTimer) {
+        clearInterval(registerTimer);
+        registerTimer = null;
+    }
+    document.getElementById('registerTimerText').innerHTML = '';
+    
+    registerModal.classList.add('show');
+}
+
+function closeRegisterModal() {
+    registerModal.classList.remove('show');
+    if (registerTimer) {
+        clearInterval(registerTimer);
+        registerTimer = null;
+    }
+}
+
+function goBackToRegisterStep1() {
+    document.getElementById('registerStep1').style.display = 'block';
+    document.getElementById('registerStep2').style.display = 'none';
+    if (registerTimer) {
+        clearInterval(registerTimer);
+        registerTimer = null;
+    }
+    document.getElementById('registerTimerText').innerHTML = '';
+}
+
+async function sendRegisterCode() {
+    const nombre = document.getElementById('regNombre').value.trim();
+    const email = document.getElementById('regEmail').value.trim();
+    const telefono = document.getElementById('regTelefono').value.trim();
+    const direccion = document.getElementById('regDireccion').value.trim();
+    const password = document.getElementById('regPassword').value;
+    const confirmPassword = document.getElementById('regConfirmPassword').value;
+    
+    if (!nombre || !email || !telefono || !direccion || !password) {
+        showToast('Todos los campos son requeridos', 'warning');
+        return;
+    }
+    
+    if (!email.includes('@') || !email.includes('.')) {
+        showToast('Ingresa un correo válido', 'warning');
+        return;
+    }
+    
+    if (password.length < 6) {
+        showToast('La contraseña debe tener al menos 6 caracteres', 'warning');
+        return;
+    }
+    
+    if (password !== confirmPassword) {
+        showToast('Las contraseñas no coinciden', 'error');
+        return;
+    }
+    
+    registerData = { nombre, email, telefono, direccion, password };
+    
+    setModalLoading(true);
+    
+    try {
+        const response = await fetch(`${API_URL}/registro/solicitar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                nombre: nombre,
+                email: email,
+                telefono: telefono,
+                direccion: direccion,
+                password: password
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error al enviar el código');
+        }
+        
+        showToast('Código de verificación enviado a tu correo', 'success');
+        
+        // Mostrar email en el paso 2
+        document.getElementById('registerEmailDisplay').textContent = email;
+        
+        document.getElementById('registerStep1').style.display = 'none';
+        document.getElementById('registerStep2').style.display = 'block';
+        
+        // Iniciar timer para reenvío
+        startRegisterTimer();
+        
+        // Limpiar inputs de código
+        document.querySelectorAll('#registerStep2 .code-digit').forEach(input => {
+            input.value = '';
+        });
+        
+        document.querySelector('#registerStep2 .code-digit')?.focus();
+        
+    } catch (error) {
+        showToast(error.message, 'error');
+    } finally {
+        setModalLoading(false);
+    }
+}
+
+function startRegisterTimer() {
+    registerTimeLeft = 60;
+    const timerText = document.getElementById('registerTimerText');
+    const resendBtn = document.getElementById('resendRegisterCodeBtn');
+    
+    if (registerTimer) clearInterval(registerTimer);
+    
+    resendBtn.disabled = true;
+    resendBtn.style.opacity = '0.5';
+    
+    registerTimer = setInterval(() => {
+        if (registerTimeLeft <= 0) {
+            clearInterval(registerTimer);
+            resendBtn.disabled = false;
+            resendBtn.style.opacity = '1';
+            timerText.innerHTML = '';
+        } else {
+            const minutos = Math.floor(registerTimeLeft / 60);
+            const segundos = registerTimeLeft % 60;
+            timerText.innerHTML = `Puedes reenviar el código en ${minutos}:${segundos.toString().padStart(2, '0')}`;
+            registerTimeLeft--;
+        }
+    }, 1000);
+}
+
+async function resendRegisterCode() {
+    if (!registerData.email) return;
+    
+    setModalLoading(true);
+    
+    try {
+        const response = await fetch(`${API_URL}/registro/solicitar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                nombre: registerData.nombre,
+                email: registerData.email,
+                telefono: registerData.telefono,
+                direccion: registerData.direccion,
+                password: registerData.password
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error al reenviar el código');
+        }
+        
+        showToast('Código reenviado a tu correo', 'success');
+        
+        // Reiniciar timer
+        if (registerTimer) clearInterval(registerTimer);
+        startRegisterTimer();
+        
+    } catch (error) {
+        showToast(error.message, 'error');
+    } finally {
+        setModalLoading(false);
+    }
+}
+
+async function verifyRegisterCode() {
+    const codigo = getCodeFromInputs('#registerStep2 .code-digit');
+    
+    if (codigo.length !== 6) {
+        showToast('Ingresa el código de 6 dígitos', 'warning');
+        return;
+    }
+    
+    setModalLoading(true);
+    
+    try {
+        const response = await fetch(`${API_URL}/registro/confirmar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email: registerData.email,
+                codigo: codigo
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error al verificar el código');
+        }
+        
+        showToast('Registro completado exitosamente. Ahora puedes iniciar sesión.', 'success');
+        closeRegisterModal();
+        
+        // Cambiar a tab cliente
+        document.querySelector('.tab-btn[data-type="client"]').click();
+        
+    } catch (error) {
+        showToast(error.message, 'error');
+    } finally {
+        setModalLoading(false);
+    }
+}
+
+// =====================================================
+// REGISTRO DE VEHÍCULO EXISTENTE
+// =====================================================
+function openVehicleRegisterModal() {
+    document.getElementById('vehPlaca').value = '';
+    document.getElementById('vehMarca').value = '';
+    document.getElementById('vehModelo').value = '';
+    document.getElementById('vehAnio').value = '';
+    document.getElementById('vehColor').value = '';
+    vehicleRegisterModal.classList.add('show');
+}
+
+function closeVehicleRegisterModal() {
+    vehicleRegisterModal.classList.remove('show');
+}
+
+async function registerVehicle() {
+    const email = localStorage.getItem('register_email') || prompt('Para registrar tu vehículo, ingresa tu correo electrónico:');
+    const placa = document.getElementById('vehPlaca').value.trim().toUpperCase();
+    const marca = document.getElementById('vehMarca').value.trim();
+    const modelo = document.getElementById('vehModelo').value.trim();
+    const anio = document.getElementById('vehAnio').value.trim();
+    const color = document.getElementById('vehColor').value.trim();
+    
+    if (!email) {
+        showToast('Necesitas un correo electrónico registrado', 'warning');
+        return;
+    }
+    
+    if (!placa || !marca || !modelo) {
+        showToast('Placa, marca y modelo son requeridos', 'warning');
+        return;
+    }
+    
+    setModalLoading(true);
+    
+    try {
+        const response = await fetch(`${API_URL}/registro/vehiculo`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email: email,
+                placa: placa,
+                marca: marca,
+                modelo: modelo,
+                anio: anio,
+                color: color
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error al registrar el vehículo');
+        }
+        
+        showToast('Vehículo registrado exitosamente', 'success');
+        closeVehicleRegisterModal();
+        
+        // Cambiar a tab cliente y precargar placa
+        document.querySelector('.tab-btn[data-type="client"]').click();
+        if (plateInput) {
+            plateInput.value = placa;
+        }
+        
+    } catch (error) {
+        showToast(error.message, 'error');
+    } finally {
+        setModalLoading(false);
+    }
+}
+
+// =====================================================
+// UTILIDADES
+// =====================================================
+function togglePassword() {
+    const type = passwordInput.type === 'password' ? 'text' : 'password';
+    passwordInput.type = type;
+    document.getElementById('toggleIcon').className = 
+        type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
+}
+
+function setupCodeInputs() {
+    document.addEventListener('input', (e) => {
+        if (e.target.classList.contains('code-digit')) {
+            const inputs = document.querySelectorAll(e.target.closest('.code-inputs') ? '.code-digit' : '.code-digit');
+            const index = parseInt(e.target.dataset.index);
+            
+            if (e.target.value.length === 1 && index < inputs.length - 1) {
+                inputs[index + 1].focus();
+            }
+        }
+    });
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.target.classList.contains('code-digit') && e.key === 'Backspace') {
+            const inputs = document.querySelectorAll(e.target.closest('.code-inputs') ? '.code-digit' : '.code-digit');
+            const index = parseInt(e.target.dataset.index);
+            
+            if (e.target.value === '' && index > 0) {
+                inputs[index - 1].focus();
+            }
+        }
+    });
+}
+
+function getCodeFromInputs(selector) {
+    let code = '';
+    document.querySelectorAll(selector).forEach(input => {
+        code += input.value;
+    });
+    return code;
+}
+
+function setModalLoading(loading) {
+    const buttons = document.querySelectorAll('.modal .btn-primary, .modal .btn-secondary, .modal button');
+    buttons.forEach(btn => {
+        if (loading) {
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+            btn.style.cursor = 'not-allowed';
+        } else {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+        }
+    });
+}
+
 function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
@@ -272,23 +781,7 @@ function showToast(message, type = 'info') {
     
     setTimeout(() => {
         toast.remove();
-    }, 3000);
-}
-
-function toggleDemoSection() {
-    demoSection.classList.toggle('expanded');
-    if (demoSection.classList.contains('expanded')) {
-        demoArrow.className = 'fas fa-chevron-up';
-    } else {
-        demoArrow.className = 'fas fa-chevron-down';
-    }
-}
-
-function togglePassword() {
-    const type = passwordInput.type === 'password' ? 'text' : 'password';
-    passwordInput.type = type;
-    document.getElementById('toggleIcon').className = 
-        type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
+    }, 4000);
 }
 
 function checkSavedSession() {
@@ -300,14 +793,13 @@ function checkSavedSession() {
     if (token && window.location.pathname === '/') {
         verifyToken().then(user => {
             if (user) {
-                // Redirigir según rol
                 const redirects = {
                     'admin_general': '/admin_general/dashboard.html',
                     'jefe_operativo': '/jefe_operativo/dashboard.html',
                     'jefe_taller': '/jefe_taller/dashboard.html',
-                    'tecnico_mecanico': '/tecnico_mecanico/dashboard.html',
+                    'tecnico_mecanico': '/tecnico_mecanico/misvehiculos.html',
                     'encargado_rep_almacen': '/encargado_rep_almacen/dashboard.html',
-                    'cliente': '/cliente/dashboard.html'
+                    'cliente': '/cliente/misvehiculos.html'
                 };
                 window.location.href = redirects[user.rol] || '/';
             }
@@ -324,6 +816,11 @@ function checkSavedSession() {
         
         if (rememberCheck) {
             rememberCheck.checked = true;
+        }
+        
+        // Cambiar al tab correcto
+        if (rememberedType !== selectedType) {
+            document.querySelector(`.tab-btn[data-type="${rememberedType}"]`)?.click();
         }
     }
 }
@@ -359,37 +856,27 @@ async function verifyToken() {
     }
 }
 
-function quickRegister() {
-    showToast('Dirígete a recepción del taller para registrar tu vehículo', 'info');
-}
-
-// Logout function (para usar en dashboards)
+// Funciones globales
+window.togglePassword = togglePassword;
+window.openRecoverModal = openRecoverModal;
+window.closeRecoverModal = closeRecoverModal;
+window.goBackToStep1 = goBackToStep1;
+window.sendRecoveryCode = sendRecoveryCode;
+window.resendRecoveryCode = resendRecoveryCode;
+window.verifyAndChangePassword = verifyAndChangePassword;
+window.openRegisterModal = openRegisterModal;
+window.closeRegisterModal = closeRegisterModal;
+window.goBackToRegisterStep1 = goBackToRegisterStep1;
+window.sendRegisterCode = sendRegisterCode;
+window.resendRegisterCode = resendRegisterCode;
+window.verifyRegisterCode = verifyRegisterCode;
+window.openVehicleRegisterModal = openVehicleRegisterModal;
+window.closeVehicleRegisterModal = closeVehicleRegisterModal;
+window.registerVehicle = registerVehicle;
 window.logout = () => {
-    showToast('Cerrando sesión...', 'info');
-    
-    setTimeout(() => {
-        localStorage.removeItem('furia_token');
-        localStorage.removeItem('furia_user');
-        localStorage.removeItem('furia_remembered');
-        localStorage.removeItem('furia_remembered_type');
-        window.location.href = '/';
-    }, 1000);
-};
-
-// Proteger rutas (para usar en dashboards)
-window.checkAuth = (allowedRoles = []) => {
-    const token = localStorage.getItem('furia_token');
-    const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
-    
-    if (!token) {
-        window.location.href = '/';
-        return false;
-    }
-    
-    if (allowedRoles.length > 0 && !allowedRoles.includes(user.rol)) {
-        window.location.href = '/';
-        return false;
-    }
-    
-    return user;
+    localStorage.removeItem('furia_token');
+    localStorage.removeItem('furia_user');
+    localStorage.removeItem('furia_remembered');
+    localStorage.removeItem('furia_remembered_type');
+    window.location.href = '/';
 };

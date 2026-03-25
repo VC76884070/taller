@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro Personal - FURIA MOTOR</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+        }
+
+        .registro-container {
+            max-width: 550px;
+            width: 100%;
+            margin: 2rem;
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--gris-medio);
+            text-decoration: none;
+            margin-bottom: 1rem;
+            transition: var(--transition);
+        }
+
+        .back-link:hover {
+            color: var(--rojo-primario);
+        }
+
+        .registro-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+        }
+
+        .registro-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .registro-header i {
+            font-size: 3rem;
+            color: var(--rojo-primario);
+            margin-bottom: 1rem;
+        }
+
+        .registro-header h2 {
+            color: var(--blanco);
+            margin-bottom: 0.5rem;
+        }
+
+        .registro-header p {
+            color: var(--gris-medio);
+            font-size: 0.85rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.85rem;
+            color: var(--gris-medio);
+        }
+
+        .form-group label .required {
+            color: var(--rojo-primario);
+            margin-left: 2px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-md);
+            font-size: 0.95rem;
+            color: var(--blanco);
+            transition: var(--transition);
+        }
+
+        /* Estilo para el select (scroll negro) */
+        select.form-control {
+            cursor: pointer;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: var(--blanco);
+        }
+
+        select.form-control option {
+            background-color: #1a1a1a;
+            color: var(--blanco);
+            padding: 10px;
+        }
+
+        select.form-control option:hover {
+            background-color: var(--rojo-primario);
+        }
+
+        /* Estilo para el scrollbar del select */
+        select.form-control::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        select.form-control::-webkit-scrollbar-track {
+            background: #1a1a1a;
+            border-radius: 4px;
+        }
+
+        select.form-control::-webkit-scrollbar-thumb {
+            background: var(--rojo-primario);
+            border-radius: 4px;
+        }
+
+        select.form-control::-webkit-scrollbar-thumb:hover {
+            background: var(--rojo-oscuro);
+        }
+
+        /* Input con ícono de ojo */
+        .password-wrapper {
+            position: relative;
+        }
+
+        .password-wrapper input {
+            padding-right: 3rem;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--gris-medio);
+            cursor: pointer;
+            z-index: 1;
+            transition: var(--transition);
+            font-size: 1rem;
+        }
+
+        .password-toggle:hover {
+            color: var(--rojo-primario);
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--rojo-primario);
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 0 4px rgba(193, 18, 31, 0.1);
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 0.9rem;
+            background: linear-gradient(135deg, var(--rojo-primario), var(--rojo-acento));
+            color: var(--blanco);
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            cursor: pointer;
+            transition: var(--transition);
+            margin-top: 1rem;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .info-message {
+            background: rgba(30, 58, 95, 0.3);
+            border-left: 4px solid var(--azul-profundo);
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            color: var(--gris-claro);
+        }
+
+        .info-message i {
+            color: var(--azul-profundo);
+            margin-right: 0.5rem;
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 10000;
+        }
+
+        .toast {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.5rem;
+            margin-bottom: 0.5rem;
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            animation: slideInRight 0.3s ease;
+            max-width: 350px;
+            border-left: 4px solid transparent;
+            color: var(--blanco);
+        }
+
+        .toast.success {
+            border-left-color: var(--verde-exito);
+        }
+
+        .toast.error {
+            border-left-color: var(--rojo-primario);
+        }
+
+        .toast.warning {
+            border-left-color: var(--ambar-alerta);
+        }
+
+        .toast.info {
+            border-left-color: var(--azul-profundo);
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .role-description {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 0.25rem;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Formas abstractas de fondo -->
+    <div class="shape-1"></div>
+    <div class="shape-2"></div>
+    <div class="shape-3"></div>
+    <div class="shape-4"></div>
+
+    <div class="registro-container">
+        <a href="/" class="back-link">
+            <i class="fas fa-arrow-left"></i>
+            Volver al inicio
+        </a>
+
+        <div class="registro-card">
+            <div class="registro-header">
+                <i class="fas fa-user-tie"></i>
+                <h2>Solicitar acceso como personal</h2>
+                <p>Completa el formulario para solicitar tu registro en el sistema</p>
+            </div>
+
+            <form id="registroForm">
+                <div class="form-group">
+                    <label>Nombre completo <span class="required">*</span></label>
+                    <input type="text" id="nombre" class="form-control" placeholder="Juan Pérez" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Correo electrónico <span class="required">*</span></label>
+                    <input type="email" id="email" class="form-control" placeholder="juan@ejemplo.com" required>
+                    <div class="role-description">Usaremos este correo para notificarte sobre tu solicitud</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Número de documento (CI) <span class="required">*</span></label>
+                    <input type="text" id="documento" class="form-control" placeholder="1234567" pattern="\d*" required>
+                    <div class="role-description">Solo números, sin puntos ni espacios</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Teléfono / Celular</label>
+                    <input type="tel" id="telefono" class="form-control" placeholder="77712345">
+                </div>
+
+                <div class="form-group">
+                    <label>Dirección</label>
+                    <input type="text" id="direccion" class="form-control" placeholder="Av. Principal #123">
+                </div>
+
+                <div class="form-group">
+                    <label>Rol solicitado <span class="required">*</span></label>
+                    <select id="id_rol" class="form-control" required>
+                        <option value="">Selecciona un rol</option>
+                        <option value="1">Administrador General</option>
+                        <option value="2">Jefe Operativo</option>
+                        <option value="3">Jefe de Taller</option>
+                        <option value="4">Técnico Mecánico</option>
+                        <option value="5">Encargado de Repuestos/Almacén</option>
+                    </select>
+                    <div class="role-description" id="roleDescription"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Contraseña <span class="required">*</span></label>
+                    <div class="password-wrapper">
+                        <input type="password" id="password" class="form-control" placeholder="••••••••" required>
+                        <button type="button" class="password-toggle"
+                            onclick="togglePassword('password', 'toggleIcon1')">
+                            <i class="fas fa-eye" id="toggleIcon1"></i>
+                        </button>
+                    </div>
+                    <div class="role-description">Mínimo 6 caracteres</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Confirmar contraseña <span class="required">*</span></label>
+                    <div class="password-wrapper">
+                        <input type="password" id="confirmPassword" class="form-control" placeholder="••••••••"
+                            required>
+                        <button type="button" class="password-toggle"
+                            onclick="togglePassword('confirmPassword', 'toggleIcon2')">
+                            <i class="fas fa-eye" id="toggleIcon2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    <span>Enviar solicitud</span>
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </form>
+
+            <div class="info-message">
+                <i class="fas fa-info-circle"></i>
+                <strong>¿Cómo funciona?</strong>
+                <p style="margin-top: 0.5rem;">Tu solicitud será enviada al administrador
+                    (vaniacarrasco68056530@gmail.com). Recibirás un correo de confirmación cuando tu cuenta sea
+                    aprobada. El proceso puede tomar hasta 24 horas hábiles.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        const API_URL = 'http://localhost:5000/api';
+        const toastContainer = document.getElementById('toastContainer');
+
+        // Descripciones de roles
+        const roleDescriptions = {
+            1: 'Acceso total al sistema. Gestiona usuarios, finanzas, reportes y configuración general.',
+            2: 'Gestiona recepción de vehículos, cotizaciones, asignaciones y control de salidas.',
+            3: 'Supervisa diagnósticos técnicos, observaciones y calidad del trabajo.',
+            4: 'Realiza diagnósticos, reporta avances y utiliza herramientas del taller.',
+            5: 'Gestiona inventario de repuestos, compras y control de stock.'
+        };
+
+        // Función para toggle de contraseña
+        function togglePassword(inputId, iconId) {
+            const input = document.getElementById(inputId);
+            const icon = document.getElementById(iconId);
+
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+
+        // Mostrar descripción al seleccionar rol
+        document.getElementById('id_rol').addEventListener('change', (e) => {
+            const roleId = e.target.value;
+            const descriptionDiv = document.getElementById('roleDescription');
+            if (roleId && roleDescriptions[roleId]) {
+                descriptionDiv.innerHTML = `<i class="fas fa-info-circle"></i> ${roleDescriptions[roleId]}`;
+            } else {
+                descriptionDiv.innerHTML = '';
+            }
+        });
+
+        document.getElementById('registroForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const nombre = document.getElementById('nombre').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const documento = document.getElementById('documento').value.trim();
+            const telefono = document.getElementById('telefono').value.trim();
+            const direccion = document.getElementById('direccion').value.trim();
+            const id_rol = document.getElementById('id_rol').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            // Validaciones
+            if (!nombre || !email || !documento || !id_rol || !password) {
+                showToast('Por favor completa todos los campos requeridos', 'warning');
+                return;
+            }
+
+            if (!documento.match(/^\d+$/)) {
+                showToast('El número de documento debe contener solo dígitos', 'error');
+                return;
+            }
+
+            if (documento.length < 5 || documento.length > 15) {
+                showToast('El número de documento debe tener entre 5 y 15 dígitos', 'warning');
+                return;
+            }
+
+            if (!email.includes('@') || !email.includes('.')) {
+                showToast('Ingresa un correo electrónico válido', 'error');
+                return;
+            }
+
+            if (password.length < 6) {
+                showToast('La contraseña debe tener al menos 6 caracteres', 'warning');
+                return;
+            }
+
+            if (password !== confirmPassword) {
+                showToast('Las contraseñas no coinciden', 'error');
+                return;
+            }
+
+            // Mostrar loading
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando solicitud...';
+
+            try {
+                const response = await fetch(`${API_URL}/registro/personal/solicitar`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        nombre: nombre,
+                        email: email,
+                        documento: documento,
+                        telefono: telefono,
+                        direccion: direccion,
+                        id_rol: parseInt(id_rol),
+                        password: password
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Error al enviar la solicitud');
+                }
+
+                showToast(data.message || '✅ Solicitud enviada exitosamente. Revisa tu correo para confirmación.', 'success');
+
+                // Limpiar formulario
+                document.getElementById('registroForm').reset();
+                document.getElementById('roleDescription').innerHTML = '';
+
+                // Mostrar mensaje de éxito con redirección
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 4000);
+
+            } catch (error) {
+                console.error('Error:', error);
+                showToast(error.message || 'Error al conectar con el servidor', 'error');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<span>Enviar solicitud</span><i class="fas fa-paper-plane"></i>';
+            }
+        });
+
+        // Restringir solo números en documento
+        document.getElementById('documento').addEventListener('keypress', (e) => {
+            if (!/^\d$/.test(e.key)) {
+                e.preventDefault();
+            }
+        });
+
+        // Validar longitud de documento
+        document.getElementById('documento').addEventListener('input', (e) => {
+            if (e.target.value.length > 15) {
+                e.target.value = e.target.value.slice(0, 15);
+            }
+        });
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-exclamation-circle',
+                warning: 'fa-exclamation-triangle',
+                info: 'fa-info-circle'
+            };
+
+            toast.innerHTML = `
+                <i class="fas ${icons[type]}"></i>
+                <span>${message}</span>
+            `;
+
+            toastContainer.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 5000);
+        }
+
+        // Exponer función togglePassword globalmente
+        window.togglePassword = togglePassword;
+    </script>
+</body>
+
+</html>

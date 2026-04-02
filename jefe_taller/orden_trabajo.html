@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jefe Taller - Órdenes de Trabajo | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Estilos globales y específicos -->
+    <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_taller/css/orden_trabajo.css">
+
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-clipboard-list"></i> Órdenes de Trabajo</h1>
+                    <p>Gestión de órdenes, asignación de técnicos, planificación y diagnóstico inicial</p>
+                </div>
+                <div class="top-actions">
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificacionesCount">0</span>
+                    </div>
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content">
+                <!-- Pestañas de navegación - Solo 2 -->
+                <div class="tabs-container">
+                    <button class="tab-btn active" data-tab="activas">
+                        <i class="fas fa-tasks"></i> Órdenes Activas
+                        <span class="badge" id="activasCount">0</span>
+                    </button>
+                    <button class="tab-btn" data-tab="finalizadas">
+                        <i class="fas fa-check-circle"></i> Finalizadas
+                        <span class="badge" id="finalizadasCount">0</span>
+                    </button>
+                </div>
+
+                <!-- Panel de Órdenes Activas -->
+                <div class="tab-panel active" id="panel-activas">
+                    <div class="filtros-section">
+                        <div class="filtros-header">
+                            <i class="fas fa-filter"></i>
+                            <h3>Filtros</h3>
+                        </div>
+                        <div class="filtros-grid">
+                            <div class="filtro-grupo">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="searchActivas"
+                                    placeholder="Buscar por código, placa o cliente..." class="filtro-input">
+                            </div>
+                            <div class="filtro-grupo">
+                                <i class="fas fa-user-cog"></i>
+                                <select id="tecnicoFiltro" class="filtro-select">
+                                    <option value="">Todos los técnicos</option>
+                                </select>
+                            </div>
+                            <div class="filtro-grupo">
+                                <i class="fas fa-chart-line"></i>
+                                <select id="estadoFiltroActivas" class="filtro-select">
+                                    <option value="">Todos los estados</option>
+                                    <option value="EnRecepcion">En Recepción</option>
+                                    <option value="EnProceso">En Proceso</option>
+                                    <option value="EnPausa">En Pausa</option>
+                                </select>
+                            </div>
+                            <button class="btn-refresh" id="refreshActivas" title="Actualizar">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="ordenes-list" id="ordenesActivasList">
+                        <div class="loading-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Cargando órdenes activas...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel de Órdenes Finalizadas -->
+                <div class="tab-panel" id="panel-finalizadas">
+                    <div class="filtros-section">
+                        <div class="filtros-header">
+                            <i class="fas fa-filter"></i>
+                            <h3>Filtros</h3>
+                        </div>
+                        <div class="filtros-grid">
+                            <div class="filtro-grupo">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="searchFinalizadas"
+                                    placeholder="Buscar por código, placa o cliente..." class="filtro-input">
+                            </div>
+                            <div class="filtro-grupo">
+                                <i class="fas fa-calendar"></i>
+                                <input type="date" id="fechaDesdeFinalizadas" class="filtro-input">
+                            </div>
+                            <div class="filtro-grupo">
+                                <i class="fas fa-calendar-alt"></i>
+                                <input type="date" id="fechaHastaFinalizadas" class="filtro-input">
+                            </div>
+                            <button class="btn-refresh" id="refreshFinalizadas" title="Actualizar">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="ordenes-list" id="ordenesFinalizadasList">
+                        <div class="loading-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Cargando órdenes finalizadas...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal UNIFICADO para gestión de orden (técnicos, planificación, diagnóstico con audio) -->
+    <div class="modal" id="modalGestionOrden">
+        <div class="modal-content modal-xl">
+            <div class="modal-header">
+                <h2><i class="fas fa-clipboard-list"></i> Gestionar Orden de Trabajo</h2>
+                <button class="modal-close" onclick="cerrarModalGestionOrden()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalGestionOrdenBody">
+                <!-- Contenido dinámico cargado por JS -->
+            </div>
+            <div class="modal-footer" id="modalGestionOrdenFooter">
+                <!-- Botones dinámicos -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver detalle de orden (solo lectura) -->
+    <div class="modal" id="modalDetalleOrden">
+        <div class="modal-content modal-xl">
+            <div class="modal-header">
+                <h2><i class="fas fa-file-alt"></i> Detalle de Orden de Trabajo</h2>
+                <button class="modal-close" onclick="cerrarModalDetalleOrden()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalDetalleOrdenBody">
+                <!-- Contenido dinámico -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver historial de diagnóstico técnico -->
+    <div class="modal" id="modalHistorialDiagnostico">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-history"></i> Historial de Diagnóstico Técnico</h2>
+                <button class="modal-close" onclick="cerrarModalHistorialDiagnostico()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalHistorialDiagnosticoBody">
+                <!-- Contenido dinámico -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/jefe_taller/js/include.js"></script>
+    <script src="/jefe_taller/js/orden_trabajo.js"></script>
+</body>
+
+</html>

@@ -12,31 +12,377 @@
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
+    <!-- Librerías para exportación -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
+        integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+    <style>
+        /* =====================================================
+           ESTILOS CORREGIDOS - NOTIFICACIONES CON ANCHO LIMITADO
+           ===================================================== */
+
+        /* NOTIFICACIONES TOAST - CORREGIDAS */
+        .toast-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            min-width: 280px;
+            max-width: 350px;
+            width: auto;
+            background: #1C1C1E;
+            backdrop-filter: blur(10px);
+            padding: 12px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            border-left: 4px solid transparent;
+            color: #FFFFFF;
+            font-size: 14px;
+            line-height: 1.4;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .toast-notification i {
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .toast-notification span {
+            flex: 1;
+            word-break: break-word;
+        }
+
+        .toast-notification.success {
+            border-left-color: #10B981;
+        }
+
+        .toast-notification.success i {
+            color: #10B981;
+        }
+
+        .toast-notification.error {
+            border-left-color: #C1121F;
+        }
+
+        .toast-notification.error i {
+            color: #C1121F;
+        }
+
+        .toast-notification.warning {
+            border-left-color: #F59E0B;
+        }
+
+        .toast-notification.warning i {
+            color: #F59E0B;
+        }
+
+        .toast-notification.info {
+            border-left-color: #2563eb;
+        }
+
+        .toast-notification.info i {
+            color: #2563eb;
+        }
+
+        /* Animaciones */
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
+        /* =====================================================
+           ESTILOS ADICIONALES
+           ===================================================== */
+
+        /* Botones de acciones para recepciones */
+        .recepcion-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn-editar-recepcion {
+            background: linear-gradient(135deg, #FFB347, #FF8C00);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-editar-recepcion:hover {
+            background: linear-gradient(135deg, #FFA033, #FF7A00);
+            transform: translateY(-2px);
+        }
+
+        .btn-eliminar-recepcion {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-eliminar-recepcion:hover {
+            background: linear-gradient(135deg, #c82333, #bd2130);
+            transform: translateY(-2px);
+        }
+
+        .btn-ver-detalle {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-ver-detalle:hover {
+            background: linear-gradient(135deg, #5a67d8, #6b46a0);
+            transform: translateY(-2px);
+        }
+
+        /* Botón limpiar descripción */
+        .btn-limpiar {
+            background: linear-gradient(135deg, #6c757d, #5a6268);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+        }
+
+        .btn-limpiar:hover {
+            background: linear-gradient(135deg, #5a6268, #4e555b);
+            transform: translateY(-2px);
+        }
+
+        /* Modal de confirmación */
+        .modal-confirmacion {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+        }
+
+        .modal-confirmacion-content {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 400px;
+            text-align: center;
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        .modal-confirmacion-content i {
+            font-size: 48px;
+            color: #dc3545;
+            margin-bottom: 16px;
+        }
+
+        .modal-confirmacion-content h3 {
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .modal-confirmacion-content p {
+            margin-bottom: 24px;
+            color: #666;
+        }
+
+        .modal-confirmacion-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .btn-confirmar-cancelar {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .btn-cancelar-cancelar {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Estilos para el formulario en modo edición */
+        .modo-edicion-badge {
+            background: #FFB347;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: 12px;
+        }
+
+        .form-card.editing {
+            border-left: 4px solid #FFB347;
+        }
+
+        /* Botón peligro (eliminar) */
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        /* Modal de imagen ampliada */
+        .modal-imagen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .modal-imagen-content {
+            max-width: 90vw;
+            max-height: 90vh;
+            position: relative;
+        }
+
+        .modal-imagen-content img {
+            max-width: 100%;
+            max-height: 85vh;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        .modal-imagen-close {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 30px;
+            cursor: pointer;
+        }
+
+        .modal-imagen-content p {
+            text-align: center;
+            color: white;
+            margin-top: 10px;
+        }
+    </style>
+
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="css/dashboard.css">
-    <link rel="stylesheet" href="css/recepcion.css">
+    <link rel="stylesheet" href="/jefe_operativo/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_operativo/css/recepcion.css">
 </head>
 
 <body>
     <div class="app">
-        <!-- SIDEBAR INCLUIDO AQUÍ -->
         <div id="sidebar-container"></div>
 
-        <!-- MAIN CONTENT -->
         <main class="main-content">
-            <!-- Top Bar -->
             <header class="top-bar">
                 <div class="page-title">
                     <h1>Recepción de Vehículo</h1>
-                    <p>Complete todos los datos para generar el código de trabajo</p>
+                    <p>Trabajo colaborativo en tiempo real</p>
                 </div>
-
                 <div class="top-actions">
                     <div class="notification-icon">
                         <i class="fas fa-bell"></i>
-                        <span class="notification-badge">3</span>
+                        <span class="notification-badge" id="notificacionesCount">0</span>
                     </div>
-
                     <div class="date-display">
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
@@ -44,192 +390,404 @@
                 </div>
             </header>
 
-            <!-- CONTENT (solo el formulario, sin sidebar) -->
             <div class="content">
-                <form id="recepcionForm" class="recepcion-form">
+                <!-- Panel de Sesiones Activas -->
+                <div class="sesiones-activas-panel" id="sesionesActivasPanel">
+                    <div class="panel-header">
+                        <i class="fas fa-users-viewfinder"></i>
+                        <h3>Sesiones Activas en Tiempo Real</h3>
+                        <span class="badge" id="sesionesCount">0</span>
+                    </div>
+                    <div class="sesiones-actions-buttons">
+                        <button class="btn-crear-sesion" id="btnCrearSesion">
+                            <i class="fas fa-plus-circle"></i> Crear nueva sesión
+                        </button>
+                        <button class="btn-unirse-codigo" id="btnUnirsePorCodigo">
+                            <i class="fas fa-qrcode"></i> Unirse por código
+                        </button>
+                    </div>
+                    <div class="sesiones-list" id="sesionesList">
+                        <div class="empty-state">
+                            <i class="fas fa-inbox"></i>
+                            <p>No hay sesiones activas</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel de Control de Sesión Actual -->
+                <div class="session-panel" id="sessionPanel" style="display: none;">
+                    <div class="session-info">
+                        <div class="status-indicator" id="statusIndicator">
+                            <i class="fas fa-circle"></i>
+                            <span>Sesión activa</span>
+                        </div>
+                        <div class="codigo-actual">
+                            <span class="label">Código:</span>
+                            <span class="codigo" id="codigoActivo">-</span>
+                            <button class="btn-copy" id="btnCopiarCodigoSesion" title="Copiar código">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                        <div class="colaboradores-info">
+                            <i class="fas fa-users"></i>
+                            <span id="colaboradoresCount">1</span> colaboradores
+                        </div>
+                    </div>
+                    <div class="session-actions">
+                        <button type="button" class="btn-cancelar-sesion" id="btnCancelarSesion">
+                            <i class="fas fa-trash-alt"></i>
+                            Cancelar Sesión
+                        </button>
+                        <button type="button" class="btn-finalizar" id="btnFinalizar" disabled>
+                            <i class="fas fa-check-circle"></i>
+                            Finalizar Recepción
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel de Colaboradores en la sesión actual -->
+                <div class="colaboradores-panel" id="colaboradoresPanel" style="display: none;">
+                    <div class="colaboradores-header">
+                        <i class="fas fa-users"></i>
+                        <span>Equipo trabajando</span>
+                        <span class="badge" id="colaboradoresCountDetail">0</span>
+                    </div>
+                    <div class="colaboradores-list" id="colaboradoresList"></div>
+                </div>
+
+                <form id="recepcionForm" class="recepcion-form" style="display: none;">
                     <!-- 1️⃣ DATOS DEL CLIENTE -->
-                    <div class="form-card">
+                    <div class="form-card" data-seccion="cliente">
                         <div class="card-header">
                             <div class="card-icon">
                                 <i class="fas fa-user"></i>
                             </div>
                             <h2>Datos del Cliente</h2>
+                            <div class="seccion-status">
+                                <span class="status-badge" id="statusCliente">○ Pendiente</span>
+                            </div>
+                            <span class="colaborador-editando" id="editandoCliente" style="display: none;">
+                                <i class="fas fa-pen"></i> Alguien está editando...
+                            </span>
                         </div>
-
                         <div class="card-body">
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="clienteNombre">
                                         <i class="fas fa-user"></i>
-                                        Nombre completo
+                                        Nombre completo *
                                     </label>
-                                    <input type="text" id="clienteNombre" placeholder="Ej: Juan Pérez" required>
+                                    <input type="text" id="clienteNombre" placeholder="Ej: Juan Pérez">
                                 </div>
                             </div>
-
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="clienteTelefono">
                                         <i class="fas fa-phone"></i>
-                                        Teléfono
+                                        Teléfono *
                                     </label>
-                                    <input type="tel" id="clienteTelefono" placeholder="Ej: 77712345" required>
+                                    <input type="tel" id="clienteTelefono" placeholder="Ej: 77712345">
                                 </div>
-
                                 <div class="form-group">
                                     <label for="clienteUbicacion">
                                         <i class="fas fa-map-marker-alt"></i>
                                         Ubicación
                                     </label>
-                                    <input type="text" id="clienteUbicacion" placeholder="Ej: Zona Sur, Calle 5"
-                                        required>
+                                    <input type="text" id="clienteUbicacion" placeholder="Ej: Zona Sur, Calle 5">
                                 </div>
+                            </div>
+                            <div class="form-actions-seccion">
+                                <button type="button" class="btn-guardar-seccion" data-seccion="cliente">
+                                    <i class="fas fa-save"></i> Guardar Cliente
+                                </button>
+                                <span class="guardado-indicator" id="guardadoCliente" style="display: none;">
+                                    <i class="fas fa-check-circle"></i> Guardado
+                                </span>
                             </div>
                         </div>
                     </div>
 
                     <!-- 2️⃣ DATOS DEL VEHÍCULO -->
-                    <div class="form-card">
+                    <div class="form-card" data-seccion="vehiculo">
                         <div class="card-header">
                             <div class="card-icon">
                                 <i class="fas fa-car"></i>
                             </div>
                             <h2>Datos del Vehículo</h2>
+                            <div class="seccion-status">
+                                <span class="status-badge" id="statusVehiculo">○ Pendiente</span>
+                            </div>
+                            <span class="colaborador-editando" id="editandoVehiculo" style="display: none;">
+                                <i class="fas fa-pen"></i> Alguien está editando...
+                            </span>
                         </div>
-
                         <div class="card-body">
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="vehiculoPlaca">
                                         <i class="fas fa-id-card"></i>
-                                        Placa
+                                        Placa *
                                     </label>
                                     <input type="text" id="vehiculoPlaca" placeholder="Ej: ABC123" maxlength="8"
-                                        style="text-transform: uppercase;" required>
+                                        style="text-transform: uppercase;">
                                 </div>
-
                                 <div class="form-group">
                                     <label for="vehiculoMarca">
                                         <i class="fas fa-tag"></i>
-                                        Marca
+                                        Marca *
                                     </label>
-                                    <input type="text" id="vehiculoMarca" placeholder="Ej: Toyota" required>
+                                    <input type="text" id="vehiculoMarca" placeholder="Ej: Toyota">
                                 </div>
                             </div>
-
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="vehiculoModelo">
                                         <i class="fas fa-car-side"></i>
-                                        Modelo
+                                        Modelo *
                                     </label>
-                                    <input type="text" id="vehiculoModelo" placeholder="Ej: Corolla" required>
+                                    <input type="text" id="vehiculoModelo" placeholder="Ej: Corolla">
                                 </div>
-
                                 <div class="form-group">
                                     <label for="vehiculoAnio">
                                         <i class="fas fa-calendar"></i>
                                         Año
                                     </label>
-                                    <input type="number" id="vehiculoAnio" placeholder="Ej: 2020" min="1900" max="2026"
-                                        required>
+                                    <input type="number" id="vehiculoAnio" placeholder="Ej: 2020" min="1900" max="2026">
                                 </div>
                             </div>
-
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="vehiculoKilometraje">
                                         <i class="fas fa-tachometer-alt"></i>
                                         Kilometraje
                                     </label>
-                                    <input type="number" id="vehiculoKilometraje" placeholder="Ej: 45000" required>
+                                    <input type="number" id="vehiculoKilometraje" placeholder="Ej: 45000">
                                 </div>
+                            </div>
+                            <div class="form-actions-seccion">
+                                <button type="button" class="btn-guardar-seccion" data-seccion="vehiculo">
+                                    <i class="fas fa-save"></i> Guardar Vehículo
+                                </button>
+                                <span class="guardado-indicator" id="guardadoVehiculo" style="display: none;">
+                                    <i class="fas fa-check-circle"></i> Guardado
+                                </span>
                             </div>
                         </div>
                     </div>
 
                     <!-- 3️⃣ REGISTRO FOTOGRÁFICO -->
-                    <div class="form-card">
+                    <div class="form-card" data-seccion="fotos">
                         <div class="card-header">
                             <div class="card-icon">
                                 <i class="fas fa-camera"></i>
                             </div>
                             <h2>Registro Fotográfico</h2>
-                            <span class="card-badge">6 vistas requeridas</span>
-                        </div>
-
-                        <div class="card-body">
-                            <div class="photo-grid" id="photoGrid">
-                                <!-- Las 6 fotos se generan con JS -->
+                            <span class="card-badge">7 vistas requeridas</span>
+                            <div class="seccion-status">
+                                <span class="status-badge" id="statusFotos">○ Pendiente</span>
                             </div>
-                            <p class="photo-hint">* Toma o sube una foto para cada vista del vehículo</p>
+                        </div>
+                        <div class="card-body">
+                            <div class="photo-grid" id="photoGrid"></div>
+                            <p class="photo-hint">* Selecciona las fotos y presiona "Guardar Fotos"</p>
+                            <div class="form-actions-seccion">
+                                <button type="button" class="btn-guardar-seccion" data-seccion="fotos">
+                                    <i class="fas fa-save"></i> Guardar Fotos
+                                </button>
+                                <span class="guardado-indicator" id="guardadoFotos" style="display: none;">
+                                    <i class="fas fa-check-circle"></i> Guardado
+                                </span>
+                            </div>
                         </div>
                     </div>
 
                     <!-- 4️⃣ DESCRIPCIÓN DEL PROBLEMA -->
-                    <div class="form-card">
+                    <div class="form-card" data-seccion="descripcion">
                         <div class="card-header">
                             <div class="card-icon">
                                 <i class="fas fa-pencil-alt"></i>
                             </div>
                             <h2>Descripción del Problema</h2>
+                            <div class="seccion-status">
+                                <span class="status-badge" id="statusDescripcion">○ Pendiente</span>
+                            </div>
+                            <span class="colaborador-editando" id="editandoDescripcion" style="display: none;">
+                                <i class="fas fa-pen"></i> Alguien está editando...
+                            </span>
                         </div>
-
                         <div class="card-body">
                             <div class="form-group">
                                 <label for="descripcionProblema">
                                     <i class="fas fa-align-left"></i>
-                                    Describa el problema reportado por el cliente
+                                    Describa el problema reportado por el cliente *
                                 </label>
                                 <textarea id="descripcionProblema" rows="5"
-                                    placeholder="Ej: El vehículo hace un ruido extraño al frenar, también vibra a alta velocidad..."></textarea>
+                                    placeholder="Ej: El vehículo hace un ruido extraño al frenar..."></textarea>
                             </div>
-
-                            <div class="audio-recorder">
-                                <button type="button" class="btn-audio" id="btnGrabarAudio">
-                                    <i class="fas fa-microphone"></i>
-                                    <span>Grabar Audio</span>
+                            <div class="audio-controls">
+                                <div class="audio-buttons">
+                                    <button type="button" class="btn-audio" id="btnGrabarAudio">
+                                        <i class="fas fa-microphone"></i>
+                                        <span>Grabar Audio</span>
+                                    </button>
+                                    <button type="button" class="btn-eliminar-audio" id="btnEliminarAudio"
+                                        style="display: none;">
+                                        <i class="fas fa-trash-alt"></i>
+                                        <span>Eliminar Grabación</span>
+                                    </button>
+                                    <button type="button" class="btn-transcribir" id="btnTranscribirAudio"
+                                        style="display: none;">
+                                        <i class="fas fa-language"></i>
+                                        <span>Transcribir Audio</span>
+                                    </button>
+                                </div>
+                                <div class="audio-status-container">
+                                    <span class="audio-status" id="audioStatus"></span>
+                                    <audio id="audioPreview" controls style="display: none;"></audio>
+                                </div>
+                            </div>
+                            <div id="transcripcionLoading" style="display: none;">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <span>Procesando transcripción...</span>
+                            </div>
+                            <div class="form-actions-seccion">
+                                <button type="button" class="btn-limpiar" id="btnLimpiarDescripcion">
+                                    <i class="fas fa-trash-alt"></i> Limpiar Descripción
                                 </button>
-                                <span class="audio-status" id="audioStatus"></span>
-                                <audio id="audioPreview" controls style="display: none;"></audio>
+                                <button type="button" class="btn-guardar-seccion" data-seccion="descripcion">
+                                    <i class="fas fa-save"></i> Guardar Descripción
+                                </button>
+                                <span class="guardado-indicator" id="guardadoDescripcion" style="display: none;">
+                                    <i class="fas fa-check-circle"></i> Guardado
+                                </span>
                             </div>
                         </div>
                     </div>
+                </form>
 
-                    <!-- BOTÓN PRINCIPAL -->
-                    <div class="form-actions">
-                        <button type="submit" class="btn-generar" id="btnGenerar">
-                            <i class="fas fa-qrcode"></i>
-                            Generar Código de Trabajo
+                <!-- =====================================================
+                   PANEL DE RECEPCIONES GUARDADAS
+                   ===================================================== -->
+                <div class="recepciones-guardadas-panel" id="recepcionesGuardadasPanel">
+                    <div class="panel-header">
+                        <i class="fas fa-archive"></i>
+                        <h3>Recepciones Guardadas</h3>
+                        <button class="btn-refresh" id="btnRefreshRecepciones" title="Actualizar lista">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <span class="badge" id="recepcionesCount">0</span>
+                    </div>
+
+                    <!-- Filtros de búsqueda -->
+                    <div class="filtros-recepciones">
+                        <div class="filtro-grupo">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchRecepcion" placeholder="Buscar por código, placa o cliente..."
+                                class="filtro-input">
+                        </div>
+                        <div class="filtro-grupo">
+                            <i class="fas fa-calendar"></i>
+                            <input type="date" id="fechaDesde" class="filtro-input">
+                        </div>
+                        <div class="filtro-grupo">
+                            <i class="fas fa-calendar-alt"></i>
+                            <input type="date" id="fechaHasta" class="filtro-input">
+                        </div>
+                        <div class="filtro-grupo">
+                            <select id="estadoFiltro" class="filtro-select">
+                                <option value="todos">Todos los estados</option>
+                                <option value="EnRecepcion">En Recepción</option>
+                                <option value="EnTaller">En Taller</option>
+                                <option value="Finalizado">Finalizado</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Lista de recepciones -->
+                    <div class="recepciones-list" id="recepcionesList">
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Cargando recepciones...</p>
+                        </div>
+                    </div>
+
+                    <!-- Paginación -->
+                    <div class="paginacion" id="paginacion">
+                        <button class="btn-pagina" id="btnPaginaAnterior" disabled>
+                            <i class="fas fa-chevron-left"></i> Anterior
+                        </button>
+                        <span class="pagina-info" id="paginaInfo">Página 1 de 1</span>
+                        <button class="btn-pagina" id="btnPaginaSiguiente" disabled>
+                            Siguiente <i class="fas fa-chevron-right"></i>
                         </button>
                     </div>
-                </form>
+                </div>
             </div>
         </main>
     </div>
 
-    <!-- Modal de código generado -->
+    <!-- Modal para unirse por código -->
+    <div class="modal" id="modalUnirsePorCodigo">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-sign-in-alt"></i> Unirse a sesión</h2>
+                <button class="modal-close" id="btnCerrarModalUnirse">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Ingresa el código de la sesión a la que deseas unirte:</p>
+                <div class="form-group">
+                    <input type="text" id="codigoUnirseInput" placeholder="Ej: S-ABC123" class="codigo-input"
+                        autocomplete="off" style="text-transform: uppercase;">
+                </div>
+                <p class="modal-hint">* Máximo 2 colaboradores por sesión</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnCerrarModalUnirseFooter">Cancelar</button>
+                <button class="btn-primary" id="btnConfirmarUnirse">
+                    <i class="fas fa-sign-in-alt"></i> Unirse
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de código generado (sesión creada) -->
     <div class="modal" id="codigoModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2><i class="fas fa-check-circle" style="color: var(--verde-exito);"></i> Vehículo Registrado</h2>
+                <h2><i class="fas fa-qrcode"></i> Sesión Creada</h2>
                 <button class="modal-close" onclick="cerrarModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <p>El vehículo ha sido registrado exitosamente.</p>
+                <p>Comparte este código con otros técnicos para trabajar juntos:</p>
+                <div class="codigo-sesion" id="codigoSesionModal">S-XXXXXX</div>
+                <button class="btn-copy" id="btnCopiarCodigoModal">
+                    <i class="fas fa-copy"></i> Copiar código
+                </button>
+                <p class="modal-hint">* Los cambios se guardan manualmente con los botones "Guardar"</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" onclick="cerrarModal()">Empezar a trabajar</button>
+            </div>
+        </div>
+    </div>
 
+    <!-- Modal de código generado (para orden finalizada) -->
+    <div class="modal" id="codigoOrdenModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-check-circle" style="color: var(--verde-exito);"></i> Vehículo Registrado</h2>
+                <button class="modal-close" onclick="cerrarModalOrden()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>El vehículo ha sido registrado exitosamente.</p>
                 <div class="codigo-card">
                     <div class="codigo-label">Código de Trabajo</div>
                     <div class="codigo-valor" id="codigoGenerado">OT-2024-0001</div>
-
-                    <!-- QR Code -->
-                    <div class="qr-container" id="qrContainer"></div>
                 </div>
-
                 <div class="resumen-datos" id="resumenDatos"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal()">
+                <button class="btn-secondary" onclick="cerrarModalOrden()">
                     <i class="fas fa-times"></i> Cerrar
                 </button>
                 <button class="btn-primary" onclick="imprimirCodigo()">
@@ -239,10 +797,57 @@
         </div>
     </div>
 
-    <!-- Scripts -->
+    <!-- Modal para ver detalles de la recepción -->
+    <div class="modal modal-detalle" id="modalDetalleRecepcion">
+        <div class="modal-content modal-detalle-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-file-alt"></i> Detalle de Recepción</h2>
+                <button class="modal-close" onclick="cerrarModalDetalle()">&times;</button>
+            </div>
+            <div class="modal-body" id="detalleRecepcionBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalDetalle()">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+                <button class="btn-primary" id="btnExportarWord">
+                    <i class="fas fa-file-word"></i> Exportar a Word
+                </button>
+                <button class="btn-primary" id="btnExportarPDF">
+                    <i class="fas fa-file-pdf"></i> Exportar a PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para confirmar eliminación -->
+    <div class="modal" id="modalConfirmarEliminar">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i> Confirmar Eliminación</h2>
+                <button class="modal-close" onclick="cerrarModalEliminar()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas eliminar esta recepción?</p>
+                <p><strong>Esta acción no se puede deshacer.</strong></p>
+                <div id="eliminarInfo"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalEliminar()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button class="btn-danger" id="btnConfirmarEliminar">
+                    <i class="fas fa-trash-alt"></i> Sí, Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <script src="js/include.js"></script>
-    <script src="js/recepcion.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="/jefe_operativo/js/include.js"></script>
+    <script src="/jefe_operativo/js/recepcion.js"></script>
 </body>
 
 </html>

@@ -12,14 +12,14 @@
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <!-- Custom CSS - ORDEN CORRECTO: primero dashboard.css (sidebar), luego cotizaciones.css -->
+    <!-- Custom CSS -->
     <link rel="stylesheet" href="/jefe_operativo/css/dashboard.css">
     <link rel="stylesheet" href="/jefe_operativo/css/cotizaciones.css">
 </head>
 
 <body>
     <div class="app">
-        <!-- SIDEBAR INCLUIDO -->
+        <!-- SIDEBAR -->
         <div id="sidebar-container"></div>
 
         <!-- MAIN CONTENT -->
@@ -28,15 +28,14 @@
             <header class="top-bar">
                 <div class="page-title">
                     <h1>Cotizaciones</h1>
-                    <p>Registro de cotizaciones y aprobación de servicios</p>
+                    <p>Gestión de cotizaciones y aprobación de servicios</p>
                 </div>
 
                 <div class="top-actions">
                     <div class="notification-icon">
                         <i class="fas fa-bell"></i>
-                        <span class="notification-badge">3</span>
+                        <span class="notification-badge" id="notificacionesCount">0</span>
                     </div>
-
                     <div class="date-display">
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
@@ -63,13 +62,13 @@
                         </select>
 
                         <select id="fechaFilter" class="filter-select">
+                            <option value="todo">Todo</option>
                             <option value="hoy">Hoy</option>
                             <option value="semana">Esta semana</option>
                             <option value="mes">Este mes</option>
-                            <option value="todo">Todo</option>
                         </select>
 
-                        <button class="btn-primary" onclick="nuevaCotizacion()">
+                        <button class="btn-primary" id="btnNuevaCotizacion">
                             <i class="fas fa-plus"></i>
                             Nueva Cotización
                         </button>
@@ -80,30 +79,48 @@
                 <div class="cotizaciones-layout">
                     <!-- Columna izquierda: Tabla de cotizaciones -->
                     <div class="cotizaciones-table-container">
-                        <table class="cotizaciones-table">
-                            <thead>
-                                <tr>
-                                    <th>Código</th>
-                                    <th>Cliente</th>
-                                    <th>Vehículo</th>
-                                    <th>Total</th>
-                                    <th>Estado</th>
-                                    <th>Fecha</th>
-                                    <th>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody id="cotizacionesTableBody">
-                                <!-- Datos dinámicos -->
-                            </tbody>
-                        </table>
+                        <div class="table-header">
+                            <h3>Lista de Cotizaciones</h3>
+                            <span class="table-count" id="cotizacionesCount">0 registros</span>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="cotizaciones-table">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Cliente</th>
+                                        <th>Vehículo</th>
+                                        <th>Total</th>
+                                        <th>Estado</th>
+                                        <th>Fecha</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cotizacionesTableBody">
+                                    <tr>
+                                        <td colspan="7" class="loading-cell">
+                                            <i class="fas fa-spinner fa-spin"></i> Cargando cotizaciones...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="pagination" id="pagination">
+                            <button class="btn-pagination" id="btnPaginaAnterior" disabled>
+                                <i class="fas fa-chevron-left"></i> Anterior
+                            </button>
+                            <span class="pagination-info" id="paginationInfo">Página 1 de 1</span>
+                            <button class="btn-pagination" id="btnPaginaSiguiente" disabled>
+                                Siguiente <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Columna derecha: Panel de detalle -->
                     <div class="cotizacion-detalle-panel" id="detallePanel">
                         <div class="detalle-header">
-                            <h3>Detalle de Cotización</h3>
-                            <button class="btn-icon" onclick="cerrarDetalle()" id="cerrarDetalleBtn"
-                                style="display: none;">
+                            <h3><i class="fas fa-file-invoice"></i> Detalle de Cotización</h3>
+                            <button class="btn-icon" id="cerrarDetalleBtn" style="display: none;">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
@@ -120,27 +137,31 @@
                             <div class="info-cotizacion">
                                 <div class="info-row">
                                     <span class="info-label">Código:</span>
-                                    <span class="info-value" id="detalleCodigo">COT-001</span>
+                                    <span class="info-value" id="detalleCodigo">-</span>
                                 </div>
                                 <div class="info-row">
                                     <span class="info-label">Cliente:</span>
-                                    <span class="info-value" id="detalleCliente">Juan Pérez</span>
+                                    <span class="info-value" id="detalleCliente">-</span>
                                 </div>
                                 <div class="info-row">
                                     <span class="info-label">Vehículo:</span>
-                                    <span class="info-value" id="detalleVehiculo">Toyota Corolla (ABC123)</span>
+                                    <span class="info-value" id="detalleVehiculo">-</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Orden de Trabajo:</span>
+                                    <span class="info-value" id="detalleOrden">-</span>
                                 </div>
                                 <div class="info-row">
                                     <span class="info-label">Fecha:</span>
-                                    <span class="info-value" id="detalleFecha">17/03/2026</span>
+                                    <span class="info-value" id="detalleFecha">-</span>
                                 </div>
                             </div>
 
                             <!-- Lista de servicios -->
                             <div class="servicios-section">
-                                <h4>Servicios</h4>
+                                <h4><i class="fas fa-tools"></i> Servicios</h4>
                                 <div class="servicios-list" id="serviciosList">
-                                    <!-- Servicios dinámicos con checkbox -->
+                                    <!-- Servicios dinámicos -->
                                 </div>
                             </div>
 
@@ -150,7 +171,7 @@
                                     <span>Subtotal:</span>
                                     <span id="subtotal">Bs 0</span>
                                 </div>
-                                <div class="resumen-row">
+                                <div class="resumen-row diagnostico-row" id="diagnosticoRow" style="display: none;">
                                     <span>Diagnóstico:</span>
                                     <span id="diagnosticoCosto">Bs 200</span>
                                 </div>
@@ -161,20 +182,28 @@
                             </div>
 
                             <!-- Mensaje automático de diagnóstico -->
-                            <div class="diagnostico-mensaje" id="diagnosticoMensaje">
+                            <div class="diagnostico-mensaje" id="diagnosticoMensaje" style="display: none;">
                                 <i class="fas fa-info-circle"></i>
-                                <span>Diagnóstico Bs. 200 aplicado</span>
+                                <span>Diagnóstico Bs. 200 aplicado (sin servicios seleccionados)</span>
                             </div>
 
                             <!-- Acciones -->
                             <div class="detalle-acciones">
-                                <button class="btn-outline" onclick="enviarCotizacion()">
+                                <button class="btn-outline" id="btnEditarCotizacion" style="display: none;">
+                                    <i class="fas fa-edit"></i>
+                                    Editar
+                                </button>
+                                <button class="btn-outline" id="btnEliminarCotizacion" style="display: none;">
+                                    <i class="fas fa-trash-alt"></i>
+                                    Eliminar
+                                </button>
+                                <button class="btn-outline" id="btnEnviarCliente">
                                     <i class="fas fa-paper-plane"></i>
                                     Enviar al Cliente
                                 </button>
-                                <button class="btn-primary" onclick="generarPDF()">
+                                <button class="btn-primary" id="btnGenerarPDF">
                                     <i class="fas fa-file-pdf"></i>
-                                    PDF
+                                    Generar PDF
                                 </button>
                             </div>
                         </div>
@@ -184,83 +213,53 @@
         </main>
     </div>
 
-    <!-- Modal para nueva cotización -->
-    <div class="modal" id="nuevaCotizacionModal">
+    <!-- Modal para nueva/editar cotización -->
+    <div class="modal" id="cotizacionModal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h2>Nueva Cotización</h2>
-                <button class="modal-close" onclick="cerrarModal()">&times;</button>
+                <h2 id="modalTitle"><i class="fas fa-plus-circle"></i> Nueva Cotización</h2>
+                <button class="modal-close" id="btnCerrarModal">&times;</button>
             </div>
             <div class="modal-body">
-                <form id="nuevaCotizacionForm">
-                    <!-- Selección de orden de trabajo -->
-                    <div class="form-group">
-                        <label for="ordenTrabajo">Orden de Trabajo</label>
+                <form id="cotizacionForm">
+                    <!-- Selección de orden de trabajo (solo para nueva) -->
+                    <div class="form-group" id="ordenTrabajoGroup">
+                        <label for="ordenTrabajo">Orden de Trabajo *</label>
                         <select id="ordenTrabajo" class="form-select" required>
                             <option value="">Seleccionar orden de trabajo</option>
                         </select>
                     </div>
 
+                    <!-- Diagnóstico existente -->
+                    <div class="diagnostico-existente" id="diagnosticoExistente" style="display: none;">
+                        <div class="info-box">
+                            <i class="fas fa-stethoscope"></i>
+                            <div>
+                                <strong>Diagnóstico existente:</strong>
+                                <p id="diagnosticoTexto">-</p>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Servicios predefinidos -->
                     <div class="servicios-predeterminados">
-                        <h4>Servicios disponibles</h4>
-                        <div class="servicios-grid">
-                            <div class="servicio-item">
-                                <input type="checkbox" id="servicio1" value="150">
-                                <label for="servicio1">
-                                    <strong>Cambio de aceite</strong>
-                                    <span>Bs 150</span>
-                                </label>
-                            </div>
-                            <div class="servicio-item">
-                                <input type="checkbox" id="servicio2" value="250">
-                                <label for="servicio2">
-                                    <strong>Frenos (pastillas)</strong>
-                                    <span>Bs 250</span>
-                                </label>
-                            </div>
-                            <div class="servicio-item">
-                                <input type="checkbox" id="servicio3" value="450">
-                                <label for="servicio3">
-                                    <strong>Alineación y balanceo</strong>
-                                    <span>Bs 450</span>
-                                </label>
-                            </div>
-                            <div class="servicio-item">
-                                <input type="checkbox" id="servicio4" value="600">
-                                <label for="servicio4">
-                                    <strong>Cambio de batería</strong>
-                                    <span>Bs 600</span>
-                                </label>
-                            </div>
-                            <div class="servicio-item">
-                                <input type="checkbox" id="servicio5" value="350">
-                                <label for="servicio5">
-                                    <strong>Sistema de refrigeración</strong>
-                                    <span>Bs 350</span>
-                                </label>
-                            </div>
-                            <div class="servicio-item">
-                                <input type="checkbox" id="servicio6" value="800">
-                                <label for="servicio6">
-                                    <strong>Diagnóstico computarizado</strong>
-                                    <span>Bs 800</span>
-                                </label>
-                            </div>
+                        <h4><i class="fas fa-cogs"></i> Servicios disponibles</h4>
+                        <div class="servicios-grid" id="serviciosGrid">
+                            <!-- Servicios cargados dinámicamente -->
                         </div>
                     </div>
 
                     <!-- Campo para servicio personalizado -->
                     <div class="servicio-personalizado">
-                        <h4>Servicio personalizado</h4>
-                        <div class="form-row">
+                        <h4><i class="fas fa-plus-circle"></i> Servicio personalizado</h4>
+                        <div class="form-row-custom">
                             <div class="form-group">
                                 <input type="text" placeholder="Descripción del servicio" id="servicioCustomDesc">
                             </div>
                             <div class="form-group">
-                                <input type="number" placeholder="Precio" id="servicioCustomPrecio">
+                                <input type="number" placeholder="Precio (Bs)" id="servicioCustomPrecio">
                             </div>
-                            <button type="button" class="btn-secondary" onclick="agregarServicioCustom()">
+                            <button type="button" class="btn-secondary" id="btnAgregarCustom">
                                 <i class="fas fa-plus"></i>
                             </button>
                         </div>
@@ -280,8 +279,31 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal()">Cancelar</button>
-                <button class="btn-primary" onclick="guardarCotizacion()">Guardar Cotización</button>
+                <button class="btn-secondary" id="btnCancelarModal">Cancelar</button>
+                <button class="btn-primary" id="btnGuardarCotizacion">Guardar Cotización</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de confirmación para eliminar -->
+    <div class="modal" id="modalConfirmarEliminar">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i> Confirmar Eliminación</h2>
+                <button class="modal-close" onclick="cerrarModalEliminar()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas eliminar esta cotización?</p>
+                <p><strong>Esta acción no se puede deshacer.</strong></p>
+                <div id="eliminarInfo"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalEliminar()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button class="btn-danger" id="btnConfirmarEliminar">
+                    <i class="fas fa-trash-alt"></i> Sí, Eliminar
+                </button>
             </div>
         </div>
     </div>

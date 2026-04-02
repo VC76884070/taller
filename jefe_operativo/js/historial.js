@@ -1,5 +1,6 @@
 // =====================================================
-// HISTORIAL - JEFE OPERATIVO (ESTILO ERP)
+// HISTORIAL - JEFE OPERATIVO
+// CONEXIÓN REAL A BASE DE DATOS
 // =====================================================
 
 // Configuración
@@ -8,7 +9,7 @@ let historialData = [];
 let filteredData = [];
 let currentPage = 1;
 let itemsPerPage = 10;
-let currentSort = { field: 'fechaIngreso', direction: 'desc' };
+let currentSort = { field: 'fecha_ingreso', direction: 'desc' };
 let activeFilters = {
     search: '',
     dateFrom: '',
@@ -17,6 +18,7 @@ let activeFilters = {
     estado: '',
     vehiculo: ''
 };
+let userInfo = null;
 
 // Elementos DOM
 const searchInput = document.getElementById('searchInput');
@@ -44,6 +46,7 @@ const nextPage = document.getElementById('nextPage');
 const paginationPages = document.getElementById('paginationPages');
 const exportBtn = document.getElementById('exportData');
 const currentDateSpan = document.getElementById('currentDate');
+const notificacionesCount = document.getElementById('notificacionesCount');
 
 // Modal
 const detalleModal = document.getElementById('detalleModal');
@@ -53,19 +56,23 @@ const detalleModalBody = document.getElementById('detalleModalBody');
 // INICIALIZACIÓN
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    await checkAuth();
+    const autenticado = await checkAuth();
+    if (!autenticado) return;
+    
     initPage();
     initDatePickers();
+    await loadClientes();
     await loadHistorial();
     setupEventListeners();
+    iniciarPollingNotificaciones();
 });
 
 // Verificar autenticación
 async function checkAuth() {
     const token = localStorage.getItem('furia_token');
-    const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
+    userInfo = JSON.parse(localStorage.getItem('furia_user') || '{}');
     
-    if (!token || user.rol !== 'jefe_operativo') {
+    if (!token || (userInfo.rol !== 'jefe_operativo' && userInfo.id_rol !== 2)) {
         window.location.href = '/';
         return false;
     }
@@ -105,169 +112,90 @@ function initDatePickers() {
     });
 }
 
-// Configurar event listeners
-function setupEventListeners() {
-    // Búsqueda
-    searchInput.addEventListener('input', (e) => {
-        activeFilters.search = e.target.value;
-        updateFiltersBadge();
-        applyFiltersAction();
-    });
-    
-    clearSearch.addEventListener('click', () => {
-        searchInput.value = '';
-        activeFilters.search = '';
-        updateFiltersBadge();
-        applyFiltersAction();
-    });
-    
-    // Toggle filtros
-    toggleFilters.addEventListener('click', () => {
-        filtersPanel.classList.toggle('visible');
-        toggleFilters.classList.toggle('active');
-    });
-    
-    // Limpiar filtros
-    clearFilters.addEventListener('click', () => {
-        dateFrom._flatpickr.clear();
-        dateTo._flatpickr.clear();
-        filterCliente.value = '';
-        filterEstado.value = '';
-        filterVehiculo.value = '';
-        
-        activeFilters = {
-            search: activeFilters.search,
-            dateFrom: '',
-            dateTo: '',
-            cliente: '',
-            estado: '',
-            vehiculo: ''
-        };
-        
-        updateFiltersBadge();
-        applyFiltersAction();
-    });
-    
-    // Aplicar filtros
-    applyFilters.addEventListener('click', applyFiltersAction);
-    
-    // Ordenamiento
-    document.querySelectorAll('.sortable').forEach(header => {
-        header.addEventListener('click', () => {
-            const field = header.dataset.sort;
-            toggleSort(field);
-        });
-    });
-    
-    // Vista tabla/tarjetas
-    viewOptions.forEach(option => {
-        option.addEventListener('click', () => {
-            viewOptions.forEach(opt => opt.classList.remove('active'));
-            option.classList.add('active');
-            
-            if (option.dataset.view === 'table') {
-                tableView.style.display = 'block';
-                cardsView.style.display = 'none';
-            } else {
-                tableView.style.display = 'none';
-                cardsView.style.display = 'grid';
-                renderCardsView();
+// Cargar clientes para el filtro
+async function loadClientes() {
+    try {
+        const response = await fetch(`${API_URL}/jefe-operativo/clientes`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
             }
         });
-    });
-    
-    // Paginación
-    prevPage.addEventListener('click', () => {
-        if (currentPage > 1) {
-            currentPage--;
-            renderTableView();
+        
+        const result = await response.json();
+        
+        if (response.ok && result.data) {
+            filterCliente.innerHTML = '<option value="">Todos los clientes</option>';
+            result.data.forEach(cliente => {
+                filterCliente.innerHTML += `<option value="${cliente.nombre}">${cliente.nombre}</option>`;
+            });
         }
-    });
-    
-    nextPage.addEventListener('click', () => {
-        const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-        if (currentPage < totalPages) {
-            currentPage++;
-            renderTableView();
-        }
-    });
-    
-    // Exportar
-    exportBtn.addEventListener('click', exportData);
+    } catch (error) {
+        console.error('Error cargando clientes:', error);
+    }
 }
 
 // =====================================================
-// CARGAR DATOS
+// CARGAR HISTORIAL DESDE API
 // =====================================================
 async function loadHistorial() {
     try {
         showLoading();
         
-        // Simulación - Reemplazar con llamada real a la API
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        const params = new URLSearchParams();
+        if (activeFilters.search) params.append('search', activeFilters.search);
+        if (activeFilters.dateFrom) params.append('fecha_desde', activeFilters.dateFrom);
+        if (activeFilters.dateTo) params.append('fecha_hasta', activeFilters.dateTo);
+        if (activeFilters.cliente) params.append('cliente', activeFilters.cliente);
+        if (activeFilters.estado) params.append('estado', activeFilters.estado);
+        if (activeFilters.vehiculo) params.append('vehiculo', activeFilters.vehiculo);
+        params.append('sort', currentSort.field);
+        params.append('order', currentSort.direction);
         
-        // Datos de ejemplo
-        historialData = generateMockData(50);
+        const response = await fetch(`${API_URL}/jefe-operativo/historial?${params}`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.error || 'Error al cargar historial');
+        }
+        
+        historialData = result.data || [];
         filteredData = [...historialData];
         
         renderTableView();
         
     } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion('Error al cargar el historial', 'error');
-    }
-}
-
-// Generar datos de ejemplo
-function generateMockData(count) {
-    const clientes = ['Juan Pérez', 'María López', 'Carlos Ruiz', 'Ana Flores', 'Roberto Méndez', 'Laura Sánchez', 'Pedro Gómez', 'Sofia Castro'];
-    const vehiculos = ['Toyota Corolla', 'Honda Civic', 'Chevrolet Spark', 'Nissan Versa', 'Suzuki Swift', 'Ford Fiesta', 'Volkswagen Gol', 'Renault Logan'];
-    const placas = ['ABC123', 'XYZ789', 'JKL012', 'GHI789', 'DEF456', 'MNO345', 'PQR678', 'STU901'];
-    const estados = ['entregado', 'finalizado', 'cancelado'];
-    
-    const data = [];
-    
-    for (let i = 1; i <= count; i++) {
-        const fechaIngreso = new Date();
-        fechaIngreso.setDate(fechaIngreso.getDate() - Math.floor(Math.random() * 90));
+        console.error('Error cargando historial:', error);
+        mostrarNotificacion('Error al cargar el historial: ' + error.message, 'error');
         
-        const fechaSalida = new Date(fechaIngreso);
-        fechaSalida.setDate(fechaSalida.getDate() + Math.floor(Math.random() * 7) + 1);
-        
-        const estado = estados[Math.floor(Math.random() * estados.length)];
-        const clienteIndex = Math.floor(Math.random() * clientes.length);
-        
-        data.push({
-            id: i,
-            codigo: `OT-${String(240301 + i).slice(-6)}`,
-            vehiculo: vehiculos[Math.floor(Math.random() * vehiculos.length)],
-            placa: placas[Math.floor(Math.random() * placas.length)],
-            cliente: clientes[clienteIndex],
-            fechaIngreso: fechaIngreso.toISOString(),
-            fechaSalida: fechaSalida.toISOString(),
-            totalFacturado: Math.floor(Math.random() * 2000) + 200,
-            estado: estado,
-            servicios: generarServiciosAleatorios(),
-            tecnico: ['Luis Mamani', 'Carlos Rodríguez', 'Juan Pérez', 'María González'][Math.floor(Math.random() * 4)]
-        });
-    }
-    
-    return data;
-}
-
-function generarServiciosAleatorios() {
-    const servicios = ['Cambio de aceite', 'Frenos (pastillas)', 'Alineación', 'Balanceo', 'Diagnóstico', 'Batería', 'Filtros', 'Suspensión'];
-    const count = Math.floor(Math.random() * 3) + 1;
-    const seleccionados = [];
-    
-    for (let i = 0; i < count; i++) {
-        const servicio = servicios[Math.floor(Math.random() * servicios.length)];
-        if (!seleccionados.includes(servicio)) {
-            seleccionados.push(servicio);
+        if (historialTableBody) {
+            historialTableBody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align: center; padding: 3rem;">
+                        <i class="fas fa-exclamation-circle" style="color: var(--rojo-primario); font-size: 2rem;"></i>
+                        <p style="margin-top: 1rem;">Error al cargar datos</p>
+                    </td>
+                </tr>
+            `;
         }
     }
-    
-    return seleccionados;
+}
+
+function showLoading() {
+    if (historialTableBody) {
+        historialTableBody.innerHTML = `
+            <tr>
+                <td colspan="8" style="text-align: center; padding: 3rem;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--rojo-primario);"></i>
+                    <p style="margin-top: 1rem;">Cargando historial...</p>
+                </td>
+            </tr>
+        `;
+    }
 }
 
 // =====================================================
@@ -302,37 +230,41 @@ function applyFiltersAction() {
         if (activeFilters.search) {
             const searchTerm = activeFilters.search.toLowerCase();
             const matchesSearch = 
-                item.codigo.toLowerCase().includes(searchTerm) ||
-                item.placa.toLowerCase().includes(searchTerm) ||
-                item.cliente.toLowerCase().includes(searchTerm) ||
-                item.vehiculo.toLowerCase().includes(searchTerm);
+                (item.codigo_unico || '').toLowerCase().includes(searchTerm) ||
+                (item.placa || '').toLowerCase().includes(searchTerm) ||
+                (item.cliente_nombre || '').toLowerCase().includes(searchTerm) ||
+                (item.vehiculo_marca || '').toLowerCase().includes(searchTerm) ||
+                (item.vehiculo_modelo || '').toLowerCase().includes(searchTerm);
             
             if (!matchesSearch) return false;
         }
         
         // Filtro por cliente
-        if (activeFilters.cliente && item.cliente !== activeFilters.cliente) {
+        if (activeFilters.cliente && item.cliente_nombre !== activeFilters.cliente) {
             return false;
         }
         
         // Filtro por estado
-        if (activeFilters.estado && item.estado !== activeFilters.estado) {
+        if (activeFilters.estado && item.estado_global !== activeFilters.estado) {
             return false;
         }
         
         // Filtro por vehículo
-        if (activeFilters.vehiculo && !item.vehiculo.toLowerCase().includes(activeFilters.vehiculo)) {
-            return false;
+        if (activeFilters.vehiculo) {
+            const vehiculoStr = `${item.vehiculo_marca} ${item.vehiculo_modelo}`.toLowerCase();
+            if (!vehiculoStr.includes(activeFilters.vehiculo)) {
+                return false;
+            }
         }
         
         // Filtro por fecha
         if (activeFilters.dateFrom) {
-            const fechaItem = new Date(item.fechaIngreso).toISOString().split('T')[0];
+            const fechaItem = new Date(item.fecha_ingreso).toISOString().split('T')[0];
             if (fechaItem < activeFilters.dateFrom) return false;
         }
         
         if (activeFilters.dateTo) {
-            const fechaItem = new Date(item.fechaIngreso).toISOString().split('T')[0];
+            const fechaItem = new Date(item.fecha_ingreso).toISOString().split('T')[0];
             if (fechaItem > activeFilters.dateTo) return false;
         }
         
@@ -392,13 +324,13 @@ function applySorting() {
         let bVal = b[currentSort.field];
         
         // Manejar fechas
-        if (currentSort.field === 'fechaIngreso') {
+        if (currentSort.field === 'fecha_ingreso') {
             aVal = new Date(aVal).getTime();
             bVal = new Date(bVal).getTime();
         }
         
         // Manejar montos
-        if (currentSort.field === 'totalFacturado') {
+        if (currentSort.field === 'total') {
             aVal = Number(aVal);
             bVal = Number(bVal);
         }
@@ -435,7 +367,7 @@ function renderTableView() {
         historialTableBody.innerHTML = `
             <tr>
                 <td colspan="8" style="text-align: center; padding: 3rem;">
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem; color: var(--gray-500);">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem; color: var(--gris-texto);">
                         <i class="fas fa-history" style="font-size: 3rem; opacity: 0.3;"></i>
                         <p>No se encontraron registros</p>
                     </div>
@@ -446,18 +378,20 @@ function renderTableView() {
     }
     
     historialTableBody.innerHTML = pageData.map(item => {
-        const fechaIngreso = new Date(item.fechaIngreso).toLocaleDateString('es-ES');
-        const fechaSalida = new Date(item.fechaSalida).toLocaleDateString('es-ES');
+        const fechaIngreso = new Date(item.fecha_ingreso).toLocaleDateString('es-ES');
+        const fechaSalida = item.fecha_salida ? new Date(item.fecha_salida).toLocaleDateString('es-ES') : '-';
+        const total = item.total || 0;
+        const estado = item.estado_global || 'EnRecepcion';
         
         return `
             <tr>
-                <td><strong>${item.codigo}</strong></td>
-                <td>${item.vehiculo}<br><small style="color: var(--gray-500);">${item.placa}</small></td>
-                <td>${item.cliente}</td>
+                <td><strong>${item.codigo_unico || '-'}</strong></td>
+                <td>${item.vehiculo_marca || ''} ${item.vehiculo_modelo || ''}<br><small style="color: var(--gris-texto);">${item.placa || '-'}</small></td>
+                <td>${item.cliente_nombre || '-'}</td>
                 <td>${fechaIngreso}</td>
                 <td>${fechaSalida}</td>
-                <td class="monto-cell">Bs. ${item.totalFacturado.toFixed(2)}</td>
-                <td><span class="estado-badge ${item.estado}">${getEstadoTexto(item.estado)}</span></td>
+                <td class="monto-cell">Bs. ${total.toLocaleString()}</td>
+                <td><span class="estado-badge ${estado}">${getEstadoTexto(estado)}</span></td>
                 <td>
                     <button class="btn-detalle" onclick="verDetalle(${item.id})">
                         <i class="fas fa-eye"></i>
@@ -492,23 +426,25 @@ function renderPagination(totalPages) {
 
 function renderCardsView() {
     cardsView.innerHTML = filteredData.map(item => {
-        const fechaIngreso = new Date(item.fechaIngreso).toLocaleDateString('es-ES');
-        const fechaSalida = new Date(item.fechaSalida).toLocaleDateString('es-ES');
+        const fechaIngreso = new Date(item.fecha_ingreso).toLocaleDateString('es-ES');
+        const fechaSalida = item.fecha_salida ? new Date(item.fecha_salida).toLocaleDateString('es-ES') : '-';
+        const total = item.total || 0;
+        const estado = item.estado_global || 'EnRecepcion';
         
         return `
             <div class="historial-card">
                 <div class="card-header">
-                    <span class="card-codigo">${item.codigo}</span>
-                    <span class="estado-badge ${item.estado}">${getEstadoTexto(item.estado)}</span>
+                    <span class="card-codigo">${item.codigo_unico || '-'}</span>
+                    <span class="estado-badge ${estado}">${getEstadoTexto(estado)}</span>
                 </div>
                 <div class="card-body">
                     <div class="card-row">
                         <span class="card-label">Vehículo:</span>
-                        <span class="card-value">${item.vehiculo} (${item.placa})</span>
+                        <span class="card-value">${item.vehiculo_marca || ''} ${item.vehiculo_modelo || ''} (${item.placa || '-'})</span>
                     </div>
                     <div class="card-row">
                         <span class="card-label">Cliente:</span>
-                        <span class="card-value">${item.cliente}</span>
+                        <span class="card-value">${item.cliente_nombre || '-'}</span>
                     </div>
                     <div class="card-row">
                         <span class="card-label">Ingreso:</span>
@@ -520,11 +456,11 @@ function renderCardsView() {
                     </div>
                     <div class="card-row">
                         <span class="card-label">Total:</span>
-                        <span class="card-value monto-cell">Bs. ${item.totalFacturado.toFixed(2)}</span>
+                        <span class="card-value monto-cell">Bs. ${total.toLocaleString()}</span>
                     </div>
                     <div class="card-row">
-                        <span class="card-label">Técnico:</span>
-                        <span class="card-value">${item.tecnico}</span>
+                        <span class="card-label">Jefe Operativo:</span>
+                        <span class="card-value">${item.jefe_nombre || '-'}</span>
                     </div>
                 </div>
                 <div class="card-footer">
@@ -540,9 +476,14 @@ function renderCardsView() {
 
 function getEstadoTexto(estado) {
     const map = {
+        'Entregado': 'Entregado',
         'entregado': 'Entregado',
+        'Finalizado': 'Finalizado',
         'finalizado': 'Finalizado',
-        'cancelado': 'Cancelado'
+        'EnTaller': 'En Taller',
+        'en_taller': 'En Taller',
+        'EnRecepcion': 'En Recepción',
+        'en_recepcion': 'En Recepción'
     };
     return map[estado] || estado;
 }
@@ -552,123 +493,99 @@ function getEstadoTexto(estado) {
 // =====================================================
 window.goToPage = (page) => {
     currentPage = page;
-    renderTableView();
+    const activeView = document.querySelector('.view-option.active').dataset.view;
+    if (activeView === 'table') {
+        renderTableView();
+    } else {
+        renderCardsView();
+    }
 };
 
 // =====================================================
-// DETALLE - VERSIÓN CORREGIDA
+// DETALLE - CON DATOS REALES
 // =====================================================
-window.verDetalle = (id) => {
-    console.log('Ver detalle llamado para ID:', id); // Para debugging
-    
-    const item = historialData.find(i => i.id === id);
-    if (!item) {
-        console.error('Item no encontrado:', id);
-        mostrarNotificacion('No se encontró el registro', 'error');
-        return;
-    }
-    
+window.verDetalle = async (id) => {
     try {
-        const fechaIngreso = new Date(item.fechaIngreso).toLocaleDateString('es-ES', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
+        mostrarNotificacion('Cargando detalles...', 'info');
+        
+        const response = await fetch(`${API_URL}/jefe-operativo/historial/${id}`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            }
         });
         
-        const fechaSalida = new Date(item.fechaSalida).toLocaleDateString('es-ES', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+        const result = await response.json();
         
-        const serviciosHtml = item.servicios.map(s => `
+        if (!response.ok) {
+            throw new Error(result.error || 'Error al cargar detalle');
+        }
+        
+        const item = result.data;
+        
+        const fechaIngreso = new Date(item.fecha_ingreso).toLocaleString('es-ES');
+        const fechaSalida = item.fecha_salida ? new Date(item.fecha_salida).toLocaleString('es-ES') : 'No registrada';
+        
+        const serviciosHtml = (item.servicios || []).map(s => `
             <li>
-                <i class="fas fa-check-circle" style="color: var(--verde-exito);"></i>
-                <span>${s}</span>
+                <i class="fas fa-check-circle"></i>
+                <span>${s.descripcion || s}</span>
+                <span style="margin-left: auto; color: var(--verde-exito); font-weight: 600;">Bs ${(s.precio || 0).toLocaleString()}</span>
             </li>
         `).join('');
         
         detalleModalBody.innerHTML = `
             <div class="detalle-grid">
                 <div class="detalle-seccion">
-                    <h3><i class="fas fa-info-circle" style="margin-right: 0.5rem;"></i>Información General</h3>
+                    <h3><i class="fas fa-info-circle"></i> Información General</h3>
                     <table class="detalle-tabla">
-                        <tr>
-                            <td>Código:</td>
-                            <td><strong>${item.codigo}</strong></td>
-                        </tr>
-                        <tr>
-                            <td>Cliente:</td>
-                            <td>${item.cliente}</td>
-                        </tr>
-                        <tr>
-                            <td>Vehículo:</td>
-                            <td>${item.vehiculo} <span class="plate-badge" style="margin-left: 0.5rem;">${item.placa}</span></td>
-                        </tr>
-                        <tr>
-                            <td>Técnico:</td>
-                            <td>${item.tecnico || 'No asignado'}</td>
-                        </tr>
-                        <tr>
-                            <td>Ingreso:</td>
-                            <td>${fechaIngreso}</td>
-                        </tr>
-                        <tr>
-                            <td>Salida:</td>
-                            <td>${fechaSalida}</td>
-                        </tr>
+                        <tr><td>Código:</td><td><strong>${item.codigo_unico || '-'}</strong></td></tr>
+                        <tr><td>Cliente:</td><td>${item.cliente_nombre || '-'}</td></tr>
+                        <tr><td>Vehículo:</td><td>${item.vehiculo_marca || ''} ${item.vehiculo_modelo || ''} <span style="background: var(--gris-oscuro); padding: 0.2rem 0.5rem; border-radius: 4px;">${item.placa || '-'}</span></td></tr>
+                        <tr><td>Jefe Operativo:</td><td>${item.jefe_nombre || '-'}</td></tr>
+                        <tr><td>Fecha Ingreso:</td><td>${fechaIngreso}</td></tr>
+                        <tr><td>Fecha Salida:</td><td>${fechaSalida}</td></tr>
+                        <tr><td>Estado:</td><td><span class="estado-badge ${item.estado_global}">${getEstadoTexto(item.estado_global)}</span></td></tr>
                     </table>
                 </div>
                 
                 <div class="detalle-seccion">
-                    <h3><i class="fas fa-tools" style="margin-right: 0.5rem;"></i>Servicios Realizados</h3>
+                    <h3><i class="fas fa-tools"></i> Servicios Realizados</h3>
                     <ul class="servicios-lista">
                         ${serviciosHtml || '<li>No hay servicios registrados</li>'}
                     </ul>
                     
                     <div class="total-card">
                         <span class="total-label">Total Facturado:</span>
-                        <span class="total-value">Bs. ${item.totalFacturado.toFixed(2)}</span>
+                        <span class="total-value">Bs. ${(item.total || 0).toLocaleString()}</span>
                     </div>
                 </div>
             </div>
             
-            <div style="margin-top: 2rem; padding: 1rem; background: #F8F9FA; border-radius: 8px;">
-                <p style="margin: 0; color: var(--gris-medio); font-size: 0.9rem;">
+            <div style="margin-top: 1rem; padding: 1rem; background: var(--gris-oscuro); border-radius: 8px; border-left: 4px solid var(--rojo-primario);">
+                <p style="margin: 0; color: var(--gris-texto); font-size: 0.85rem;">
                     <i class="fas fa-info-circle" style="margin-right: 0.5rem;"></i>
-                    Esta orden fue ${item.estado === 'entregado' ? 'entregada al cliente' : 
-                                    item.estado === 'finalizado' ? 'finalizada y lista para entrega' : 
-                                    'cancelada'} el ${fechaSalida}.
+                    Esta orden fue ${item.estado_global === 'Entregado' ? 'entregada al cliente' : 
+                                    item.estado_global === 'Finalizado' ? 'finalizada y lista para entrega' : 
+                                    'procesada'} el ${fechaSalida}.
                 </p>
             </div>
         `;
         
-        // Mostrar el modal
         detalleModal.classList.add('show');
-        console.log('Modal mostrado'); // Para debugging
         
     } catch (error) {
-        console.error('Error al mostrar detalle:', error);
-        mostrarNotificacion('Error al cargar el detalle', 'error');
+        console.error('Error:', error);
+        mostrarNotificacion(error.message, 'error');
     }
 };
 
-// Función para cerrar el modal
+// Funciones del modal
 window.cerrarDetalleModal = () => {
-    if (detalleModal) {
-        detalleModal.classList.remove('show');
-    }
+    if (detalleModal) detalleModal.classList.remove('show');
 };
 
-// Función para imprimir
 window.imprimirDetalle = () => {
-    const contenidoOriginal = document.body.innerHTML;
     const contenidoDetalle = detalleModalBody.innerHTML;
-    
     const ventanaImpresion = window.open('', '_blank');
     ventanaImpresion.document.write(`
         <html>
@@ -676,9 +593,11 @@ window.imprimirDetalle = () => {
                 <title>Detalle de Orden</title>
                 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
                 <style>
-                    body { font-family: 'Plus Jakarta Sans', sans-serif; padding: 2rem; }
+                    body { font-family: 'Plus Jakarta Sans', sans-serif; padding: 2rem; background: white; }
                     h1 { color: #C1121F; }
                     .detalle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+                    .estado-badge { padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem; }
+                    .total-card { margin-top: 2rem; padding: 1rem; background: #f5f5f5; border-radius: 8px; display: flex; justify-content: space-between; }
                     @media print { .no-print { display: none; } }
                 </style>
             </head>
@@ -696,7 +615,6 @@ window.imprimirDetalle = () => {
     ventanaImpresion.print();
 };
 
-// Función para exportar a PDF
 window.exportarDetalle = () => {
     mostrarNotificacion('Generando PDF...', 'info');
     setTimeout(() => {
@@ -711,69 +629,165 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Cerrar modal haciendo clic fuera del contenido
+// Cerrar modal haciendo clic fuera
 if (detalleModal) {
     detalleModal.addEventListener('click', (e) => {
-        if (e.target === detalleModal) {
-            cerrarDetalleModal();
+        if (e.target === detalleModal) cerrarDetalleModal();
+    });
+}
+
+// =====================================================
+// CONFIGURAR EVENT LISTENERS
+// =====================================================
+function setupEventListeners() {
+    // Búsqueda
+    searchInput.addEventListener('input', (e) => {
+        activeFilters.search = e.target.value;
+        updateFiltersBadge();
+        applyFiltersAction();
+    });
+    
+    clearSearch.addEventListener('click', () => {
+        searchInput.value = '';
+        activeFilters.search = '';
+        updateFiltersBadge();
+        applyFiltersAction();
+    });
+    
+    // Toggle filtros
+    toggleFilters.addEventListener('click', () => {
+        filtersPanel.classList.toggle('visible');
+        toggleFilters.classList.toggle('active');
+    });
+    
+    // Limpiar filtros
+    clearFilters.addEventListener('click', () => {
+        dateFrom._flatpickr?.clear();
+        dateTo._flatpickr?.clear();
+        filterCliente.value = '';
+        filterEstado.value = '';
+        filterVehiculo.value = '';
+        
+        activeFilters = {
+            search: activeFilters.search,
+            dateFrom: '',
+            dateTo: '',
+            cliente: '',
+            estado: '',
+            vehiculo: ''
+        };
+        
+        updateFiltersBadge();
+        applyFiltersAction();
+    });
+    
+    // Aplicar filtros
+    applyFilters.addEventListener('click', applyFiltersAction);
+    
+    // Ordenamiento
+    document.querySelectorAll('.sortable').forEach(header => {
+        header.addEventListener('click', () => {
+            const field = header.dataset.sort;
+            toggleSort(field);
+        });
+    });
+    
+    // Vista tabla/tarjetas
+    viewOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            viewOptions.forEach(opt => opt.classList.remove('active'));
+            option.classList.add('active');
+            
+            if (option.dataset.view === 'table') {
+                tableView.style.display = 'block';
+                cardsView.style.display = 'none';
+                renderTableView();
+            } else {
+                tableView.style.display = 'none';
+                cardsView.style.display = 'grid';
+                renderCardsView();
+            }
+        });
+    });
+    
+    // Paginación
+    prevPage.addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage--;
+            const activeView = document.querySelector('.view-option.active').dataset.view;
+            if (activeView === 'table') renderTableView();
+            else renderCardsView();
         }
     });
+    
+    nextPage.addEventListener('click', () => {
+        const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+        if (currentPage < totalPages) {
+            currentPage++;
+            const activeView = document.querySelector('.view-option.active').dataset.view;
+            if (activeView === 'table') renderTableView();
+            else renderCardsView();
+        }
+    });
+    
+    // Exportar
+    exportBtn.addEventListener('click', exportData);
 }
 
 // =====================================================
 // EXPORTAR DATOS
 // =====================================================
 function exportData() {
-    mostrarNotificacion('Preparando exportación...', 'info');
+    const dataStr = JSON.stringify(filteredData, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+    const exportFileDefaultName = `historial_${new Date().toISOString().split('T')[0]}.json`;
     
-    setTimeout(() => {
-        // Simular descarga
-        const dataStr = JSON.stringify(filteredData, null, 2);
-        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-        
-        const exportFileDefaultName = `historial_${new Date().toISOString().split('T')[0]}.json`;
-        
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportFileDefaultName);
-        linkElement.click();
-        
-        mostrarNotificacion(`${filteredData.length} registros exportados`, 'success');
-    }, 1000);
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+    
+    mostrarNotificacion(`${filteredData.length} registros exportados`, 'success');
 }
 
 // =====================================================
-// UTILIDADES
+// NOTIFICACIONES
 // =====================================================
-function showLoading() {
-    historialTableBody.innerHTML = `
-        <tr>
-            <td colspan="8" style="text-align: center; padding: 3rem;">
-                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--rojo-primario);"></i>
-                <p style="margin-top: 1rem;">Cargando historial...</p>
-            </td>
-        </tr>
-    `;
+let notificacionesInterval = null;
+
+function iniciarPollingNotificaciones() {
+    if (notificacionesInterval) clearInterval(notificacionesInterval);
+    notificacionesInterval = setInterval(cargarNotificaciones, 30000);
+}
+
+async function cargarNotificaciones() {
+    try {
+        const response = await fetch(`${API_URL}/jefe-operativo/notificaciones`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+        });
+        const result = await response.json();
+        if (response.ok && result.data) {
+            const noLeidas = result.data.filter(n => !n.leida).length;
+            if (notificacionesCount) {
+                notificacionesCount.textContent = noLeidas;
+                notificacionesCount.style.display = noLeidas > 0 ? 'inline-block' : 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Error cargando notificaciones:', error);
+    }
 }
 
 function mostrarNotificacion(mensaje, tipo = 'info') {
     let toastContainer = document.querySelector('.toast-container');
-    
     if (!toastContainer) {
         toastContainer = document.createElement('div');
         toastContainer.className = 'toast-container';
-        toastContainer.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-        `;
         document.body.appendChild(toastContainer);
     }
     
     const toast = document.createElement('div');
     toast.className = `toast-notification ${tipo}`;
-    
     const iconos = {
         success: 'fa-check-circle',
         error: 'fa-exclamation-circle',
@@ -781,33 +795,13 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
         info: 'fa-info-circle'
     };
     
-    toast.innerHTML = `
-        <i class="fas ${iconos[tipo] || iconos.info}"></i>
-        <span>${mensaje}</span>
-    `;
-    
-    toast.style.cssText = `
-        background: white;
-        padding: 1rem 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        margin-bottom: 0.5rem;
-        animation: slideIn 0.3s ease;
-        border-left: 4px solid ${tipo === 'success' ? '#10B981' : tipo === 'error' ? '#C1121F' : tipo === 'warning' ? '#F59E0B' : '#2C3E50'};
-        min-width: 300px;
-    `;
-    
+    toast.innerHTML = `<i class="fas ${iconos[tipo] || iconos.info}"></i><span>${mensaje}</span>`;
     toastContainer.appendChild(toast);
     
     setTimeout(() => {
         toast.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => {
-            if (toastContainer.contains(toast)) {
-                toastContainer.removeChild(toast);
-            }
+            if (toastContainer.contains(toast)) toastContainer.removeChild(toast);
         }, 300);
     }, 3000);
 }
@@ -816,9 +810,18 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
 // LOGOUT
 // =====================================================
 window.logout = () => {
+    if (notificacionesInterval) clearInterval(notificacionesInterval);
     localStorage.removeItem('furia_token');
     localStorage.removeItem('furia_user');
     localStorage.removeItem('furia_remembered');
     localStorage.removeItem('furia_remembered_type');
     window.location.href = '/';
 };
+
+// Exportar funciones globales
+window.goToPage = goToPage;
+window.verDetalle = verDetalle;
+window.cerrarDetalleModal = cerrarDetalleModal;
+window.imprimirDetalle = imprimirDetalle;
+window.exportarDetalle = exportarDetalle;
+window.logout = logout;

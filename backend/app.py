@@ -1,9 +1,12 @@
-from flask import Flask, send_from_directory, jsonify
+from flask import Flask, send_from_directory, jsonify, request
 from flask_cors import CORS
 import os
-from login import login_bp
-from jefe_operativo import jefe_operativo_bp
+import logging
 from config import config
+
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Crear aplicación Flask
 app = Flask(__name__, 
@@ -17,37 +20,90 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 # Habilitar CORS
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-# Registrar blueprints
+# =====================================================
+# IMPORTAR BLUEPRINTS POR ROL
+# =====================================================
+
+# Login (público)
+from login import login_bp
 app.register_blueprint(login_bp)
-app.register_blueprint(jefe_operativo_bp)
+
+# Jefe Operativo - Módulos
+from jefe_operativo.recepcion import jefe_operativo_recepcion_bp
+from jefe_operativo.cotizacion import jefe_operativo_cotizacion_bp
+from jefe_operativo.comunicados import jefe_operativo_comunicados_bp
+from jefe_operativo.historial import jefe_operativo_historial_bp
+from jefe_operativo.perfil import jefe_operativo_perfil_bp
+
+# Jefe Taller - Módulos
+from jefe_taller.orden_trabajo import jefe_taller_ordenes_bp
+
+# Registrar blueprints
+app.register_blueprint(jefe_operativo_recepcion_bp)
+app.register_blueprint(jefe_operativo_cotizacion_bp)
+app.register_blueprint(jefe_operativo_comunicados_bp)
+app.register_blueprint(jefe_operativo_historial_bp)
+app.register_blueprint(jefe_operativo_perfil_bp)
+app.register_blueprint(jefe_taller_ordenes_bp)  # ← AGREGAR EL BLUEPRINT DEL JEFE TALLER
 
 # =====================================================
-# RUTAS ESPECÍFICAS PARA ARCHIVOS ESTÁTICOS DEL LOGIN
+# RUTAS ESPECÍFICAS PARA ARCHIVOS ESTÁTICOS
 # =====================================================
 
 @app.route('/css/<path:filename>')
 def serve_css(filename):
-    """Servir archivos CSS desde login/css"""
-    try:
+    """Servir archivos CSS"""
+    # Buscar en login/css
+    login_path = os.path.join('../login/css', filename)
+    if os.path.exists(login_path):
         return send_from_directory('../login/css', filename)
-    except:
-        return send_from_directory('../login/css', filename)
+    # Buscar en jefe_operativo/css
+    jefe_operativo_path = os.path.join('../jefe_operativo/css', filename)
+    if os.path.exists(jefe_operativo_path):
+        return send_from_directory('../jefe_operativo/css', filename)
+    # Buscar en jefe_taller/css
+    jefe_taller_path = os.path.join('../jefe_taller/css', filename)
+    if os.path.exists(jefe_taller_path):
+        return send_from_directory('../jefe_taller/css', filename)
+    # Buscar en otras carpetas
+    roles = ['admin_general', 'tecnico_mecanico', 'encargado_rep_almacen', 'cliente']
+    for role in roles:
+        role_path = os.path.join(f'../{role}/css', filename)
+        if os.path.exists(role_path):
+            return send_from_directory(f'../{role}/css', filename)
+    return send_from_directory('../login/css', filename)
 
 @app.route('/js/<path:filename>')
 def serve_js(filename):
-    """Servir archivos JS desde login/js"""
-    try:
+    """Servir archivos JS"""
+    # Buscar en login/js
+    login_path = os.path.join('../login/js', filename)
+    if os.path.exists(login_path):
         return send_from_directory('../login/js', filename)
-    except:
-        return send_from_directory('../login/js', filename)
+    # Buscar en jefe_operativo/js
+    jefe_operativo_path = os.path.join('../jefe_operativo/js', filename)
+    if os.path.exists(jefe_operativo_path):
+        return send_from_directory('../jefe_operativo/js', filename)
+    # Buscar en jefe_taller/js
+    jefe_taller_path = os.path.join('../jefe_taller/js', filename)
+    if os.path.exists(jefe_taller_path):
+        return send_from_directory('../jefe_taller/js', filename)
+    # Buscar en otras carpetas
+    roles = ['admin_general', 'tecnico_mecanico', 'encargado_rep_almacen', 'cliente']
+    for role in roles:
+        role_path = os.path.join(f'../{role}/js', filename)
+        if os.path.exists(role_path):
+            return send_from_directory(f'../{role}/js', filename)
+    return send_from_directory('../login/js', filename)
 
 @app.route('/img/<path:filename>')
 def serve_img(filename):
-    """Servir imágenes desde la carpeta img"""
-    try:
+    """Servir imágenes"""
+    # Buscar en img
+    img_path = os.path.join('../img', filename)
+    if os.path.exists(img_path):
         return send_from_directory('../img', filename)
-    except:
-        return send_from_directory('../img', filename)
+    return send_from_directory('../img', filename)
 
 # =====================================================
 # RUTAS PARA SERVIR EL FRONTEND DE CADA ROL
@@ -58,35 +114,46 @@ def serve_login():
     """Página principal - Login"""
     return send_from_directory('../login', 'index.html')
 
+@app.route('/login.html')
+def serve_login_html():
+    """Redirigir a login"""
+    return send_from_directory('../login', 'index.html')
+
 @app.route('/registro-personal.html')
 def serve_registro_personal():
     """Página de registro de personal"""
     try:
         return send_from_directory('../login', 'registro-personal.html')
     except:
-        # Si no está en login, buscar en la raíz
         return send_from_directory('..', 'registro-personal.html')
+
+@app.route('/recuperar-contrasena.html')
+def serve_recuperar_contrasena():
+    """Página de recuperación de contraseña"""
+    return send_from_directory('../login', 'recuperar-contrasena.html')
 
 @app.route('/login/<path:path>')
 def serve_login_files(path):
     """Servir archivos estáticos desde login"""
     return send_from_directory('../login', path)
 
-# Rutas para cada rol
-@app.route('/admin_general/<path:path>')
-def serve_admin_general(path):
-    """Servir archivos de Administrador General"""
-    return send_from_directory('../admin_general', path)
-
+# Rutas para Jefe Operativo
 @app.route('/jefe_operativo/<path:path>')
 def serve_jefe_operativo(path):
     """Servir archivos de Jefe Operativo"""
     return send_from_directory('../jefe_operativo', path)
 
+# Rutas para Jefe Taller (NUEVO)
 @app.route('/jefe_taller/<path:path>')
 def serve_jefe_taller(path):
-    """Servir archivos de Jefe de Taller"""
+    """Servir archivos de Jefe Taller"""
     return send_from_directory('../jefe_taller', path)
+
+# Rutas para otros roles
+@app.route('/admin_general/<path:path>')
+def serve_admin_general(path):
+    """Servir archivos de Administrador General"""
+    return send_from_directory('../admin_general', path)
 
 @app.route('/tecnico_mecanico/<path:path>')
 def serve_tecnico_mecanico(path):
@@ -104,9 +171,19 @@ def serve_cliente(path):
     return send_from_directory('../cliente', path)
 
 # =====================================================
+# RUTA PARA FAVICON (evita error 404/500)
+# =====================================================
+@app.route('/favicon.ico')
+def favicon():
+    """Servir favicon (evita error)"""
+    favicon_path = os.path.join('../img', 'favicon.ico')
+    if os.path.exists(favicon_path):
+        return send_from_directory('../img', 'favicon.ico')
+    return '', 204  # No content
+
+# =====================================================
 # RUTA PARA ARCHIVOS ESTÁTICOS GENERALES
 # =====================================================
-
 @app.route('/<path:path>')
 def serve_static(path):
     """Servir cualquier otro archivo estático"""
@@ -135,7 +212,10 @@ def serve_html(path):
     # Mapeo de rutas de acceso directo
     html_routes = {
         'registro-personal.html': '../login/registro-personal.html',
-        'admin_general': '../admin_general/dashboard.html',
+        'recuperar-contrasena.html': '../login/recuperar-contrasena.html',
+        
+        # Jefe Operativo
+        'jefe_operativo': '../jefe_operativo/dashboard.html',
         'jefe_operativo/dashboard': '../jefe_operativo/dashboard.html',
         'jefe_operativo/recepcion': '../jefe_operativo/recepcion.html',
         'jefe_operativo/cotizaciones': '../jefe_operativo/cotizaciones.html',
@@ -145,11 +225,31 @@ def serve_html(path):
         'jefe_operativo/comunicados': '../jefe_operativo/comunicados.html',
         'jefe_operativo/historial': '../jefe_operativo/historial.html',
         'jefe_operativo/perfil': '../jefe_operativo/perfil.html',
+        
+        # Jefe Taller (NUEVO)
         'jefe_taller': '../jefe_taller/dashboard.html',
-        'tecnico_mecanico': '../tecnico_mecanico/misvehiculos.html',
-        'tecnico_mecanico/misvehiculos': '../tecnico_mecanico/misvehiculos.html',
+        'jefe_taller/dashboard': '../jefe_taller/dashboard.html',
+        'jefe_taller/orden_trabajo': '../jefe_taller/orden_trabajo.html',
+        'jefe_taller/diagnosticos': '../jefe_taller/diagnosticos.html',
+        'jefe_taller/planificacion': '../jefe_taller/planificacion.html',
+        'jefe_taller/control_calidad': '../jefe_taller/control_calidad.html',
+        'jefe_taller/perfil': '../jefe_taller/perfil.html',
+        
+        # Admin General
+        'admin_general': '../admin_general/dashboard.html',
+        'admin_general/dashboard': '../admin_general/dashboard.html',
+        
+        # Técnico Mecánico
+        'tecnico_mecanico': '../tecnico_mecanico/dashboard.html',
+        'tecnico_mecanico/dashboard': '../tecnico_mecanico/dashboard.html',
+        
+        # Encargado Repuestos
         'encargado_rep_almacen': '../encargado_rep_almacen/dashboard.html',
-        'cliente': '../cliente/misvehiculos.html'
+        'encargado_rep_almacen/dashboard': '../encargado_rep_almacen/dashboard.html',
+        
+        # Cliente
+        'cliente': '../cliente/dashboard.html',
+        'cliente/dashboard': '../cliente/dashboard.html'
     }
     
     # Verificar si es una ruta mapeada
@@ -181,6 +281,7 @@ def serve_html(path):
 
 @app.route('/api/test', methods=['GET'])
 def test_api():
+    """Endpoint de prueba para verificar que la API funciona"""
     return jsonify({
         'status': 'ok',
         'message': 'API de FURIA MOTOR funcionando correctamente',
@@ -194,6 +295,9 @@ def test_api():
 @app.errorhandler(404)
 def not_found(error):
     """Manejo de errores 404"""
+    # Importar request dentro de la función para evitar NameError
+    from flask import request
+    logger.warning(f"404 error: {request.path}")
     try:
         return send_from_directory('../login', 'index.html')
     except:
@@ -202,12 +306,8 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     """Manejo de errores 500"""
+    logger.error(f"500 error: {str(error)}")
     return jsonify({'error': 'Error interno del servidor'}), 500
-
-@app.route('/recuperar-contrasena.html')
-def serve_recuperar_contrasena():
-    """Página de recuperación de contraseña"""
-    return send_from_directory('../login', 'recuperar-contrasena.html')
 
 # =====================================================
 # INICIALIZACIÓN
@@ -220,21 +320,56 @@ if __name__ == '__main__':
     print(f"📡 Servidor iniciado en: http://localhost:5000")
     print("="*60)
     print("✅ Endpoints disponibles:")
-    print("   • http://localhost:5000/ - Login")
-    print("   • http://localhost:5000/registro-personal.html - Registro Personal")
-    print("   • http://localhost:5000/api/test - Test API")
-    print("   • http://localhost:5000/api/login - Login")
-    print("   • http://localhost:5000/api/recuperar/solicitar - Recuperar contraseña")
-    print("   • http://localhost:5000/api/recuperar/verificar - Verificar código")
-    print("   • http://localhost:5000/api/recuperar/cambiar - Cambiar contraseña")
-    print("   • http://localhost:5000/api/registro/solicitar - Solicitar registro cliente")
-    print("   • http://localhost:5000/api/registro/confirmar - Confirmar registro cliente")
-    print("   • http://localhost:5000/api/registro/vehiculo - Registrar vehículo")
-    print("   • http://localhost:5000/api/registro/personal/solicitar - Solicitar registro personal")
-    print("   • http://localhost:5000/api/roles - Obtener roles disponibles")
-    print("   • http://localhost:5000/api/jefe-operativo/dashboard - Dashboard Jefe Operativo")
-    print("   • http://localhost:5000/api/jefe-operativo/recepcion - Recepción de vehículos")
-    print("   • http://localhost:5000/api/jefe-operativo/cotizaciones - Cotizaciones")
+    print("   📄 http://localhost:5000/ - Login")
+    print("   📄 http://localhost:5000/registro-personal.html - Registro Personal")
+    print("   📄 http://localhost:5000/recuperar-contrasena.html - Recuperar Contraseña")
+    print("")
+    print("🔌 API Endpoints Jefe Operativo:")
+    print("   • GET  /api/jefe-operativo/servicios-disponibles - Servicios disponibles")
+    print("   • GET  /api/jefe-operativo/ordenes-para-cotizar - Órdenes sin cotizar")
+    print("   • GET  /api/jefe-operativo/cotizaciones - Listar cotizaciones")
+    print("   • POST /api/jefe-operativo/cotizaciones - Crear cotización")
+    print("   • GET  /api/jefe-operativo/cotizaciones/<id> - Detalle cotización")
+    print("   • PUT  /api/jefe-operativo/cotizaciones/<id> - Actualizar cotización")
+    print("   • DELETE /api/jefe-operativo/cotizaciones/<id> - Eliminar cotización")
+    print("   • POST /api/jefe-operativo/cotizaciones/<id>/enviar - Enviar cotización")
+    print("   • POST /api/jefe-operativo/cotizaciones/<id>/aprobar - Aprobar cotización")
+    print("   • GET  /api/jefe-operativo/notificaciones - Notificaciones")
+    print("")
+    print("🔌 API Endpoints Jefe Operativo - Recepción:")
+    print("   • POST /api/jefe-operativo/iniciar-sesion - Crear sesión")
+    print("   • POST /api/jefe-operativo/unirse-sesion - Unirse a sesión")
+    print("   • POST /api/jefe-operativo/guardar-seccion - Guardar sección")
+    print("   • GET  /api/jefe-operativo/obtener-sesion/<codigo> - Obtener sesión")
+    print("   • POST /api/jefe-operativo/finalizar-sesion - Finalizar sesión")
+    print("   • GET  /api/jefe-operativo/sesiones-activas - Sesiones activas")
+    print("   • GET  /api/jefe-operativo/listar-recepciones - Listar recepciones")
+    print("   • GET  /api/jefe-operativo/detalle-recepcion/<id> - Detalle recepción")
+    print("   • DELETE /api/jefe-operativo/eliminar-recepcion/<id> - Eliminar recepción")
+    print("   • PUT  /api/jefe-operativo/actualizar-recepcion/<id> - Editar recepción")
+    print("   • GET  /api/jefe-operativo/verificar-placa/<placa> - Verificar placa")
+    print("   • POST /api/jefe-operativo/transcribir-audio - Transcribir audio")
+    print("")
+    print("🔌 API Endpoints Jefe Taller (NUEVO):")
+    print("   • GET  /api/jefe-taller/tecnicos - Listar técnicos")
+    print("   • GET  /api/jefe-taller/recepciones-pendientes - Recepciones pendientes")
+    print("   • GET  /api/jefe-taller/detalle-recepcion/<id> - Detalle recepción")
+    print("   • POST /api/jefe-taller/crear-orden - Crear orden de trabajo")
+    print("   • GET  /api/jefe-taller/ordenes-activas - Órdenes activas")
+    print("   • GET  /api/jefe-taller/ordenes-finalizadas - Órdenes finalizadas")
+    print("   • POST /api/jefe-taller/asignar-tecnicos - Asignar técnicos")
+    print("   • POST /api/jefe-taller/diagnostico-inicial - Guardar diagnóstico inicial")
+    print("   • POST /api/jefe-taller/planificar - Planificar trabajo")
+    print("   • GET  /api/jefe-taller/bahias - Estado de bahías")
+    print("   • GET  /api/jefe-taller/carga-tecnicos - Carga de técnicos")
+    print("   • POST /api/jefe-taller/reanudar-orden - Reanudar orden")
+    print("   • GET  /api/jefe-taller/detalle-orden/<id> - Detalle orden")
+    print("   • GET  /api/jefe-taller/historial-diagnosticos/<id> - Historial diagnósticos")
+    print("   • POST /api/jefe-taller/aprobar-diagnostico - Aprobar/rechazar diagnóstico")
+    print("")
+    print("📁 Frontend accesible en:")
+    print("   • Jefe Operativo: http://localhost:5000/jefe_operativo")
+    print("   • Jefe Taller:    http://localhost:5000/jefe_taller")
     print("="*60)
     
     app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)

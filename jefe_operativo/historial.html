@@ -18,8 +18,8 @@
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="css/dashboard.css">
-    <link rel="stylesheet" href="css/historial.css">
+    <link rel="stylesheet" href="/jefe_operativo/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_operativo/css/historial.css">
 </head>
 
 <body>
@@ -39,7 +39,7 @@
                 <div class="top-actions">
                     <div class="notification-icon">
                         <i class="fas fa-bell"></i>
-                        <span class="notification-badge">3</span>
+                        <span class="notification-badge" id="notificacionesCount">0</span>
                     </div>
 
                     <div class="date-display">
@@ -94,11 +94,6 @@
                                 </label>
                                 <select id="filterCliente" class="filter-select">
                                     <option value="">Todos los clientes</option>
-                                    <option value="Juan Pérez">Juan Pérez</option>
-                                    <option value="María López">María López</option>
-                                    <option value="Carlos Ruiz">Carlos Ruiz</option>
-                                    <option value="Ana Flores">Ana Flores</option>
-                                    <option value="Roberto Méndez">Roberto Méndez</option>
                                 </select>
                             </div>
 
@@ -110,9 +105,10 @@
                                 </label>
                                 <select id="filterEstado" class="filter-select">
                                     <option value="">Todos los estados</option>
-                                    <option value="entregado">Entregado</option>
-                                    <option value="finalizado">Finalizado</option>
-                                    <option value="cancelado">Cancelado</option>
+                                    <option value="EnRecepcion">En Recepción</option>
+                                    <option value="EnTaller">En Taller</option>
+                                    <option value="Finalizado">Finalizado</option>
+                                    <option value="Entregado">Entregado</option>
                                 </select>
                             </div>
 
@@ -166,7 +162,7 @@
                     <table class="historial-table">
                         <thead>
                             <tr>
-                                <th class="sortable" data-sort="codigo">
+                                <th class="sortable" data-sort="codigo_unico">
                                     Código
                                     <i class="fas fa-sort"></i>
                                 </th>
@@ -175,12 +171,12 @@
                                     <i class="fas fa-sort"></i>
                                 </th>
                                 <th>Cliente</th>
-                                <th class="sortable" data-sort="fechaIngreso">
+                                <th class="sortable" data-sort="fecha_ingreso">
                                     Fecha ingreso
                                     <i class="fas fa-sort"></i>
                                 </th>
                                 <th>Fecha salida</th>
-                                <th class="sortable" data-sort="totalFacturado">
+                                <th class="sortable" data-sort="total">
                                     Total facturado
                                     <i class="fas fa-sort"></i>
                                 </th>
@@ -189,23 +185,26 @@
                             </tr>
                         </thead>
                         <tbody id="historialTableBody">
-                            <!-- Datos dinámicos -->
+                            <tr>
+                                <td colspan="8" style="text-align: center; padding: 3rem;">
+                                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem;"></i>
+                                    <p>Cargando historial...</p>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
 
                     <!-- Paginación -->
                     <div class="pagination-container">
                         <div class="pagination-info">
-                            Mostrando <span id="startRecord">1</span> - <span id="endRecord">10</span> de
+                            Mostrando <span id="startRecord">0</span> - <span id="endRecord">0</span> de
                             <span id="totalRecords">0</span> registros
                         </div>
                         <div class="pagination-controls">
                             <button class="pagination-btn" id="prevPage" disabled>
                                 <i class="fas fa-chevron-left"></i>
                             </button>
-                            <div class="pagination-pages" id="paginationPages">
-                                <!-- Números de página dinámicos -->
-                            </div>
+                            <div class="pagination-pages" id="paginationPages"></div>
                             <button class="pagination-btn" id="nextPage" disabled>
                                 <i class="fas fa-chevron-right"></i>
                             </button>
@@ -214,9 +213,7 @@
                 </div>
 
                 <!-- Vista de tarjetas (alternativa) -->
-                <div class="cards-view" id="cardsView" style="display: none;">
-                    <!-- Las tarjetas se generarán dinámicamente -->
-                </div>
+                <div class="cards-view" id="cardsView" style="display: none;"></div>
             </div>
         </main>
     </div>
@@ -245,8 +242,8 @@
         </div>
     </div>
 
-    <script src="js/include.js"></script>
-    <script src="js/historial.js"></script>
+    <script src="/jefe_operativo/js/include.js"></script>
+    <script src="/jefe_operativo/js/historial.js"></script>
 </body>
 
 </html>

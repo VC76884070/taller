@@ -6,3 +6,7 @@ werkzeug==3.0.0
 PyJWT==2.8.0
 cloudinary==1.36.0
 requests==2.31.0
+openai-whisper==20231117
+torch==2.1.2
+torchaudio==2.1.2
+pip install ffmpeg-python

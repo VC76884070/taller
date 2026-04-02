@@ -1,27 +1,29 @@
 // =====================================================
 // PERFIL - JEFE OPERATIVO
+// CONEXIÓN REAL A BASE DE DATOS
 // =====================================================
 
 // Configuración
 const API_URL = 'http://localhost:5000/api';
 let currentEditField = null;
+let userData = null;
 
 // Elementos DOM
 const currentDateSpan = document.getElementById('currentDate');
+const notificacionesCount = document.getElementById('notificacionesCount');
+const avatarWrapper = document.getElementById('avatarWrapper');
 const avatarImg = document.getElementById('avatarImg');
+const avatarPlaceholder = document.getElementById('avatarPlaceholder');
 const avatarInput = document.getElementById('avatarInput');
 const changeAvatarBtn = document.getElementById('changeAvatarBtn');
 const userNameDisplay = document.getElementById('userNameDisplay');
 const userRoleDisplay = document.getElementById('userRoleDisplay');
 const userPhone = document.getElementById('userPhone');
 const userEmail = document.getElementById('userEmail');
-const userDocument = document.getElementById('userDocument');
-const userMemberSince = document.getElementById('userMemberSince');
 const userLocation = document.getElementById('userLocation');
-const userLastLogin = document.getElementById('userLastLogin');
+const userMemberSince = document.getElementById('userMemberSince');
 const changePasswordBtn = document.getElementById('changePasswordBtn');
 const saveChangesBtn = document.getElementById('saveChangesBtn');
-const activityList = document.getElementById('activityList');
 
 // Modales
 const passwordModal = document.getElementById('passwordModal');
@@ -39,15 +41,24 @@ const reqUpper = document.getElementById('reqUpper');
 const reqLower = document.getElementById('reqLower');
 const reqNumber = document.getElementById('reqNumber');
 
+// Campos editables y sus valores originales
+let camposEditados = {
+    telefono: null,
+    email: null,
+    ubicacion: null
+};
+
 // =====================================================
 // INICIALIZACIÓN
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    await checkAuth();
+    const autenticado = await checkAuth();
+    if (!autenticado) return;
+    
     initPage();
     await loadUserData();
-    loadActivityData();
     setupEventListeners();
+    iniciarPollingNotificaciones();
 });
 
 // Verificar autenticación
@@ -55,7 +66,7 @@ async function checkAuth() {
     const token = localStorage.getItem('furia_token');
     const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
     
-    if (!token || user.rol !== 'jefe_operativo') {
+    if (!token || (user.rol !== 'jefe_operativo' && user.id_rol !== 2)) {
         window.location.href = '/';
         return false;
     }
@@ -85,14 +96,9 @@ function setupEventListeners() {
         avatarInput.click();
     });
     
-    avatarInput.addEventListener('change', (e) => {
+    avatarInput.addEventListener('change', async (e) => {
         if (e.target.files && e.target.files[0]) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                avatarImg.src = e.target.result;
-                mostrarNotificacion('Foto de perfil actualizada', 'success');
-            };
-            reader.readAsDataURL(e.target.files[0]);
+            await subirAvatar(e.target.files[0]);
         }
     });
     
@@ -108,90 +114,117 @@ function setupEventListeners() {
 }
 
 // =====================================================
-// CARGAR DATOS DEL USUARIO
+// CARGAR DATOS DEL USUARIO DESDE API
 // =====================================================
 async function loadUserData() {
     try {
-        // Simulación - Reemplazar con llamada real a la API
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Obtener usuario de localStorage
         const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
+        const userId = user.id;
         
-        // Datos de ejemplo (reemplazar con datos reales de la API)
-        const userData = {
-            nombre: user.nombre || 'María González',
-            rol: 'Jefe Operativo',
-            telefono: '+591 77712345',
-            email: 'maria.gonzalez@furia.com',
-            documento: '12345678',
-            memberSince: '15 enero, 2025',
-            ubicacion: 'Santa Cruz, Bolivia',
-            lastLogin: '18 marzo, 2026 08:30'
-        };
+        if (!userId) {
+            throw new Error('ID de usuario no encontrado');
+        }
+        
+        const response = await fetch(`${API_URL}/jefe-operativo/perfil/${userId}`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.error || 'Error al cargar perfil');
+        }
+        
+        userData = result.data;
         
         // Actualizar UI
-        userNameDisplay.textContent = userData.nombre;
-        userRoleDisplay.textContent = userData.rol;
-        userPhone.textContent = userData.telefono;
-        userEmail.textContent = userData.email;
-        userDocument.textContent = userData.documento;
-        userMemberSince.textContent = userData.memberSince;
-        userLocation.textContent = userData.ubicacion;
-        userLastLogin.textContent = userData.lastLogin;
+        userNameDisplay.textContent = userData.nombre || '-';
+        userRoleDisplay.textContent = 'Jefe Operativo';
+        userPhone.textContent = userData.contacto || '-';
+        userEmail.textContent = userData.email || '-';
+        userLocation.textContent = userData.ubicacion || '-';
+        
+        // Formatear fecha de registro
+        if (userData.fecha_registro) {
+            const fecha = new Date(userData.fecha_registro);
+            userMemberSince.textContent = fecha.toLocaleDateString('es-ES', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
+        }
+        
+        // Cargar avatar si existe
+        if (userData.avatar_url && userData.avatar_url !== 'null') {
+            avatarImg.src = userData.avatar_url;
+            avatarImg.style.display = 'block';
+            avatarPlaceholder.style.display = 'none';
+            avatarWrapper.classList.add('has-image');
+        } else {
+            avatarImg.style.display = 'none';
+            avatarPlaceholder.style.display = 'flex';
+            avatarWrapper.classList.remove('has-image');
+        }
+        
+        // Guardar valores originales
+        camposEditados.telefono = userData.contacto;
+        camposEditados.email = userData.email;
+        camposEditados.ubicacion = userData.ubicacion;
         
     } catch (error) {
         console.error('Error cargando datos del usuario:', error);
-        mostrarNotificacion('Error al cargar datos del perfil', 'error');
+        mostrarNotificacion('Error al cargar datos del perfil: ' + error.message, 'error');
     }
 }
 
-// Cargar actividad reciente
-function loadActivityData() {
-    const actividades = [
-        {
-            icon: 'fa-check-circle',
-            desc: 'Entrega de vehículo - Toyota Corolla (ABC123)',
-            time: 'Hace 15 minutos',
-            color: 'var(--verde-exito)'
-        },
-        {
-            icon: 'fa-file-invoice',
-            desc: 'Cotización generada para Juan Pérez',
-            time: 'Hace 1 hora',
-            color: 'var(--azul-info)'
-        },
-        {
-            icon: 'fa-car',
-            desc: 'Nueva recepción - Honda Civic',
-            time: 'Hace 2 horas',
-            color: 'var(--rojo-primario)'
-        },
-        {
-            icon: 'fa-users',
-            desc: 'Reunión de personal programada',
-            time: 'Hace 3 horas',
-            color: '#F59E0B'
-        },
-        {
-            icon: 'fa-file-pdf',
-            desc: 'Reporte diario generado',
-            time: 'Hace 5 horas',
-            color: '#EF4444'
-        }
-    ];
+// =====================================================
+// SUBIR AVATAR A CLOUDINARY
+// =====================================================
+async function subirAvatar(file) {
+    if (!file) return;
     
-    activityList.innerHTML = actividades.map(act => `
-        <div class="activity-item">
-            <div class="activity-icon" style="color: ${act.color};">
-                <i class="fas ${act.icon}"></i>
-            </div>
-            <div class="activity-content">
-                <div class="activity-desc">${act.desc}</div>
-                <div class="activity-time">${act.time}</div>
-            </div>
-        </div>
-    `).join('');
+    if (file.size > 2 * 1024 * 1024) {
+        mostrarNotificacion('La imagen no debe superar los 2MB', 'warning');
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const base64 = e.target.result;
+        
+        try {
+            mostrarNotificacion('Subiendo imagen...', 'info');
+            
+            const response = await fetch(`${API_URL}/jefe-operativo/perfil/avatar`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                },
+                body: JSON.stringify({ avatar: base64 })
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.error || 'Error al subir avatar');
+            }
+            
+            avatarImg.src = base64;
+            avatarImg.style.display = 'block';
+            avatarPlaceholder.style.display = 'none';
+            avatarWrapper.classList.add('has-image');
+            
+            mostrarNotificacion('Foto de perfil actualizada', 'success');
+            
+        } catch (error) {
+            console.error('Error:', error);
+            mostrarNotificacion(error.message, 'error');
+        }
+    };
+    reader.readAsDataURL(file);
 }
 
 // =====================================================
@@ -226,7 +259,7 @@ window.editarCampo = (campo) => {
     }
 };
 
-window.guardarCampoEditado = () => {
+window.guardarCampoEditado = async () => {
     const nuevoValor = editField.value.trim();
     
     if (!nuevoValor) {
@@ -234,24 +267,71 @@ window.guardarCampoEditado = () => {
         return;
     }
     
-    // Actualizar el campo correspondiente
-    switch (currentEditField) {
-        case 'telefono':
-            userPhone.textContent = nuevoValor;
-            break;
-        case 'email':
-            userEmail.textContent = nuevoValor;
-            break;
-        case 'ubicacion':
-            userLocation.textContent = nuevoValor;
-            break;
+    // Validar email
+    if (currentEditField === 'email') {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(nuevoValor)) {
+            mostrarNotificacion('Ingrese un correo electrónico válido', 'warning');
+            return;
+        }
     }
     
-    mostrarNotificacion('Campo actualizado correctamente', 'success');
-    cerrarEditModal();
+    // Validar teléfono
+    if (currentEditField === 'telefono') {
+        const telefonoRegex = /^[0-9+\-\s]{8,}$/;
+        if (!telefonoRegex.test(nuevoValor)) {
+            mostrarNotificacion('Ingrese un número de teléfono válido', 'warning');
+            return;
+        }
+    }
     
-    // Mostrar botón de guardar cambios
-    saveChangesBtn.style.display = 'inline-flex';
+    try {
+        const data = {};
+        if (currentEditField === 'telefono') data.contacto = nuevoValor;
+        if (currentEditField === 'email') data.email = nuevoValor;
+        if (currentEditField === 'ubicacion') data.ubicacion = nuevoValor;
+        
+        const response = await fetch(`${API_URL}/jefe-operativo/perfil/actualizar`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.error || 'Error al actualizar');
+        }
+        
+        // Actualizar UI
+        switch (currentEditField) {
+            case 'telefono':
+                userPhone.textContent = nuevoValor;
+                camposEditados.telefono = nuevoValor;
+                break;
+            case 'email':
+                userEmail.textContent = nuevoValor;
+                camposEditados.email = nuevoValor;
+                break;
+            case 'ubicacion':
+                userLocation.textContent = nuevoValor;
+                camposEditados.ubicacion = nuevoValor;
+                break;
+        }
+        
+        mostrarNotificacion('Campo actualizado correctamente', 'success');
+        cerrarEditModal();
+        
+        // Mostrar botón de guardar cambios
+        saveChangesBtn.style.display = 'inline-flex';
+        
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion(error.message, 'error');
+    }
 };
 
 window.cerrarEditModal = () => {
@@ -261,11 +341,69 @@ window.cerrarEditModal = () => {
 };
 
 // =====================================================
+// GUARDAR CAMBIOS GENERALES
+// =====================================================
+saveChangesBtn.addEventListener('click', async () => {
+    const cambios = {};
+    
+    if (camposEditados.telefono !== userPhone.textContent) {
+        cambios.contacto = userPhone.textContent;
+    }
+    if (camposEditados.email !== userEmail.textContent) {
+        cambios.email = userEmail.textContent;
+    }
+    if (camposEditados.ubicacion !== userLocation.textContent) {
+        cambios.ubicacion = userLocation.textContent;
+    }
+    
+    if (Object.keys(cambios).length === 0) {
+        mostrarNotificacion('No hay cambios para guardar', 'info');
+        return;
+    }
+    
+    try {
+        mostrarNotificacion('Guardando cambios...', 'info');
+        
+        const response = await fetch(`${API_URL}/jefe-operativo/perfil/actualizar`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            },
+            body: JSON.stringify(cambios)
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.error || 'Error al guardar cambios');
+        }
+        
+        // Actualizar valores originales
+        camposEditados.telefono = userPhone.textContent;
+        camposEditados.email = userEmail.textContent;
+        camposEditados.ubicacion = userLocation.textContent;
+        
+        // Actualizar localStorage
+        const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
+        if (cambios.email) user.email = cambios.email;
+        if (cambios.contacto) user.contacto = cambios.contacto;
+        localStorage.setItem('furia_user', JSON.stringify(user));
+        
+        mostrarNotificacion('Cambios guardados correctamente', 'success');
+        saveChangesBtn.style.display = 'none';
+        
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion(error.message, 'error');
+    }
+});
+
+// =====================================================
 // FUNCIONES DE CONTRASEÑA
 // =====================================================
 function validatePassword() {
     const password = newPassword.value;
-    const confirm = confirmPassword.value;
     
     // Validar longitud
     if (password.length >= 8) {
@@ -304,7 +442,7 @@ function validatePassword() {
     }
     
     // Validar coincidencia
-    if (confirm && password !== confirm) {
+    if (confirmPassword.value && password !== confirmPassword.value) {
         confirmPassword.setCustomValidity('Las contraseñas no coinciden');
     } else {
         confirmPassword.setCustomValidity('');
@@ -316,7 +454,8 @@ window.togglePassword = (inputId) => {
     const type = input.type === 'password' ? 'text' : 'password';
     input.type = type;
     
-    const icon = input.nextElementSibling.querySelector('i');
+    const toggleBtn = input.nextElementSibling;
+    const icon = toggleBtn.querySelector('i');
     if (type === 'text') {
         icon.classList.remove('fa-eye');
         icon.classList.add('fa-eye-slash');
@@ -326,14 +465,14 @@ window.togglePassword = (inputId) => {
     }
 };
 
-window.cambiarContrasena = () => {
-    // Validar que todos los campos estén llenos
+window.cambiarContrasena = async () => {
+    // Validar campos
     if (!currentPassword.value || !newPassword.value || !confirmPassword.value) {
         mostrarNotificacion('Todos los campos son requeridos', 'warning');
         return;
     }
     
-    // Validar que la nueva contraseña cumpla los requisitos
+    // Validar nueva contraseña
     if (newPassword.value.length < 8 || 
         !/[A-Z]/.test(newPassword.value) || 
         !/[a-z]/.test(newPassword.value) || 
@@ -342,19 +481,40 @@ window.cambiarContrasena = () => {
         return;
     }
     
-    // Validar que coincidan
+    // Validar coincidencia
     if (newPassword.value !== confirmPassword.value) {
         mostrarNotificacion('Las contraseñas no coinciden', 'error');
         return;
     }
     
-    // Simular cambio de contraseña
-    mostrarNotificacion('Cambiando contraseña...', 'info');
-    
-    setTimeout(() => {
+    try {
+        mostrarNotificacion('Cambiando contraseña...', 'info');
+        
+        const response = await fetch(`${API_URL}/jefe-operativo/perfil/cambiar-contrasena`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            },
+            body: JSON.stringify({
+                current_password: currentPassword.value,
+                new_password: newPassword.value
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.error || 'Error al cambiar contraseña');
+        }
+        
         mostrarNotificacion('Contraseña actualizada correctamente', 'success');
         cerrarPasswordModal();
-    }, 1500);
+        
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion(error.message, 'error');
+    }
 };
 
 function resetPasswordForm() {
@@ -379,52 +539,43 @@ window.cerrarPasswordModal = () => {
 };
 
 // =====================================================
-// GUARDAR CAMBIOS GENERALES
-// =====================================================
-document.getElementById('saveChangesBtn').addEventListener('click', () => {
-    mostrarNotificacion('Guardando cambios...', 'info');
-    
-    setTimeout(() => {
-        mostrarNotificacion('Cambios guardados correctamente', 'success');
-        saveChangesBtn.style.display = 'none';
-    }, 1000);
-});
-
-// =====================================================
-// CERRAR MODALES CON ESC
-// =====================================================
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        if (passwordModal.classList.contains('show')) {
-            cerrarPasswordModal();
-        }
-        if (editModal.classList.contains('show')) {
-            cerrarEditModal();
-        }
-    }
-});
-
-// =====================================================
 // NOTIFICACIONES
 // =====================================================
+let notificacionesInterval = null;
+
+function iniciarPollingNotificaciones() {
+    if (notificacionesInterval) clearInterval(notificacionesInterval);
+    notificacionesInterval = setInterval(cargarNotificaciones, 30000);
+}
+
+async function cargarNotificaciones() {
+    try {
+        const response = await fetch(`${API_URL}/jefe-operativo/notificaciones`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+        });
+        const result = await response.json();
+        if (response.ok && result.data) {
+            const noLeidas = result.data.filter(n => !n.leida).length;
+            if (notificacionesCount) {
+                notificacionesCount.textContent = noLeidas;
+                notificacionesCount.style.display = noLeidas > 0 ? 'inline-block' : 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Error cargando notificaciones:', error);
+    }
+}
+
 function mostrarNotificacion(mensaje, tipo = 'info') {
     let toastContainer = document.querySelector('.toast-container');
-    
     if (!toastContainer) {
         toastContainer = document.createElement('div');
         toastContainer.className = 'toast-container';
-        toastContainer.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-        `;
         document.body.appendChild(toastContainer);
     }
     
     const toast = document.createElement('div');
     toast.className = `toast-notification ${tipo}`;
-    
     const iconos = {
         success: 'fa-check-circle',
         error: 'fa-exclamation-circle',
@@ -432,41 +583,44 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
         info: 'fa-info-circle'
     };
     
-    toast.innerHTML = `
-        <i class="fas ${iconos[tipo] || iconos.info}"></i>
-        <span>${mensaje}</span>
-    `;
-    
-    toast.style.cssText = `
-        background: white;
-        padding: 1rem 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        margin-bottom: 0.5rem;
-        animation: slideIn 0.3s ease;
-        border-left: 4px solid ${tipo === 'success' ? '#10B981' : tipo === 'error' ? '#C1121F' : tipo === 'warning' ? '#F59E0B' : '#2C3E50'};
-        min-width: 300px;
-    `;
-    
+    toast.innerHTML = `<i class="fas ${iconos[tipo] || iconos.info}"></i><span>${mensaje}</span>`;
     toastContainer.appendChild(toast);
     
     setTimeout(() => {
         toast.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => {
-            if (toastContainer.contains(toast)) {
-                toastContainer.removeChild(toast);
-            }
+            if (toastContainer.contains(toast)) toastContainer.removeChild(toast);
         }, 300);
     }, 3000);
 }
 
 // =====================================================
+// CERRAR MODALES CON ESC
+// =====================================================
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        if (passwordModal?.classList.contains('show')) cerrarPasswordModal();
+        if (editModal?.classList.contains('show')) cerrarEditModal();
+    }
+});
+
+// Cerrar modal haciendo clic fuera
+[passwordModal, editModal].forEach(modal => {
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                if (modal === passwordModal) cerrarPasswordModal();
+                if (modal === editModal) cerrarEditModal();
+            }
+        });
+    }
+});
+
+// =====================================================
 // LOGOUT
 // =====================================================
 window.logout = () => {
+    if (notificacionesInterval) clearInterval(notificacionesInterval);
     localStorage.removeItem('furia_token');
     localStorage.removeItem('furia_user');
     localStorage.removeItem('furia_remembered');

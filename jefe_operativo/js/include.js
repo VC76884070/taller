@@ -118,7 +118,7 @@ function crearSidebarRespaldo(container) {
                 <!-- BOTTOM MENU -->
                 <ul class="sidebar-bottom">
                     <li class="nav-item">
-                        <a href="#" onclick="logout()" class="nav-link">
+                        <a href="#" onclick="window.logout()" class="nav-link">
                             <i class="fas fa-sign-out-alt"></i>
                             <span>Cerrar Sesión</span>
                         </a>
@@ -253,7 +253,7 @@ function configurarLogout() {
             localStorage.removeItem('furia_remembered_type');
             
             // Redirigir al login
-            window.location.href = '/login.html';
+            window.location.href = '/';
         }
     };
 }
@@ -327,6 +327,7 @@ function agregarEstilosSidebar() {
             align-items: center;
             justify-content: center;
             font-size: 1.5rem;
+            color: var(--blanco, #FFFFFF);
         }
         
         .user-info {
@@ -338,12 +339,13 @@ function agregarEstilosSidebar() {
             font-weight: 600;
             font-size: 1rem;
             margin-bottom: 0.25rem;
+            color: var(--blanco, #FFFFFF);
         }
         
         .user-role {
             display: block;
             font-size: 0.8rem;
-            color: var(--gris-medio, #6B7280);
+            color: rgba(255, 255, 255, 0.8);
         }
         
         .sidebar-nav {
@@ -372,19 +374,25 @@ function agregarEstilosSidebar() {
             align-items: center;
             gap: 1rem;
             padding: 0.75rem 1.5rem;
-            color: var(--gris-medio, #6B7280);
+            color: rgba(255, 255, 255, 0.85);
             text-decoration: none;
             transition: all 0.3s ease;
             border-left: 4px solid transparent;
+            font-weight: 500;
         }
         
         .nav-link i {
             width: 20px;
             font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.85);
         }
         
         .nav-link:hover {
             background: rgba(193, 18, 31, 0.1);
+            color: var(--blanco, #FFFFFF);
+        }
+        
+        .nav-link:hover i {
             color: var(--blanco, #FFFFFF);
         }
         
@@ -394,6 +402,10 @@ function agregarEstilosSidebar() {
             border-left-color: var(--rojo-primario, #C1121F);
         }
         
+        .nav-item.active .nav-link i {
+            color: var(--rojo-primario, #C1121F);
+        }
+        
         .badge {
             background: var(--rojo-primario, #C1121F);
             color: var(--blanco, #FFFFFF);
@@ -401,6 +413,7 @@ function agregarEstilosSidebar() {
             border-radius: 12px;
             font-size: 0.7rem;
             margin-left: auto;
+            font-weight: 600;
         }
         
         .sidebar-bottom {
@@ -436,32 +449,9 @@ function agregarEstilosSidebar() {
 }
 
 // =====================================================
-// VERIFICAR AUTENTICACIÓN (OPCIONAL)
-// =====================================================
-function verificarAutenticacion() {
-    const token = localStorage.getItem('furia_token');
-    const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
-    
-    // Si no hay token o no es jefe operativo, redirigir
-    if (!token || user.rol !== 'jefe_operativo') {
-        // No redirigir si ya estamos en login
-        if (!window.location.pathname.includes('login.html')) {
-            console.warn('⚠️ Usuario no autenticado, redirigiendo a login');
-            window.location.href = '/login.html';
-            return false;
-        }
-    }
-    
-    return true;
-}
-
-// =====================================================
 // INICIALIZAR TODO
 // =====================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // Verificar autenticación (opcional - comentar si no quieres redirección automática)
-    // verificarAutenticacion();
-    
     // Cargar sidebar
     includeSidebar();
 });
@@ -469,6 +459,5 @@ document.addEventListener('DOMContentLoaded', () => {
 // =====================================================
 // EXPORTAR FUNCIONES PARA USO GLOBAL
 // =====================================================
-// Estas funciones estarán disponibles globalmente
 window.obtenerUsuarioActual = obtenerUsuarioActual;
 window.actualizarNombreUsuario = actualizarNombreUsuario;

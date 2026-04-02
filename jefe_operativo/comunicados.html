@@ -17,8 +17,8 @@
     <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="css/dashboard.css">
-    <link rel="stylesheet" href="css/comunicados.css">
+    <link rel="stylesheet" href="/jefe_operativo/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_operativo/css/comunicados.css">
 </head>
 
 <body>
@@ -38,7 +38,7 @@
                 <div class="top-actions">
                     <div class="notification-icon">
                         <i class="fas fa-bell"></i>
-                        <span class="notification-badge">3</span>
+                        <span class="notification-badge" id="notificacionesCount">0</span>
                     </div>
 
                     <div class="date-display">
@@ -165,7 +165,6 @@
                         </div>
 
                         <div class="comunicados-list" id="comunicadosList">
-                            <!-- Los comunicados se cargarán dinámicamente aquí -->
                             <div class="loading-comunicados">
                                 <i class="fas fa-spinner fa-spin"></i>
                                 <p>Cargando comunicados...</p>
@@ -194,8 +193,8 @@
         </div>
     </div>
 
-    <script src="js/include.js"></script>
-    <script src="js/comunicados.js"></script>
+    <script src="/jefe_operativo/js/include.js"></script>
+    <script src="/jefe_operativo/js/comunicados.js"></script>
 </body>
 
 </html>

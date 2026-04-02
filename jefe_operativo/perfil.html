@@ -13,8 +13,8 @@
         rel="stylesheet">
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="css/dashboard.css">
-    <link rel="stylesheet" href="css/perfil.css">
+    <link rel="stylesheet" href="/jefe_operativo/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_operativo/css/perfil.css">
 </head>
 
 <body>
@@ -34,7 +34,7 @@
                 <div class="top-actions">
                     <div class="notification-icon">
                         <i class="fas fa-bell"></i>
-                        <span class="notification-badge">3</span>
+                        <span class="notification-badge" id="notificacionesCount">0</span>
                     </div>
 
                     <div class="date-display">
@@ -58,9 +58,12 @@
                         <div class="perfil-body">
                             <!-- Avatar con upload -->
                             <div class="avatar-container">
-                                <div class="avatar-wrapper">
-                                    <img src="../img/avatars/default-avatar.jpg" alt="Foto de perfil" class="avatar-img"
-                                        id="avatarImg">
+                                <div class="avatar-wrapper" id="avatarWrapper">
+                                    <img src="" alt="Foto de perfil" class="avatar-img" id="avatarImg"
+                                        style="display: none;">
+                                    <div class="avatar-placeholder" id="avatarPlaceholder">
+                                        <i class="fas fa-user-tie"></i>
+                                    </div>
                                     <div class="avatar-overlay" id="changeAvatarBtn">
                                         <i class="fas fa-camera"></i>
                                         <span>Cambiar foto</span>
@@ -71,7 +74,7 @@
 
                             <!-- Información personal -->
                             <div class="info-section">
-                                <h2 class="user-name" id="userNameDisplay">María González</h2>
+                                <h2 class="user-name" id="userNameDisplay">Cargando...</h2>
                                 <span class="user-role-badge" id="userRoleDisplay">Jefe Operativo</span>
 
                                 <div class="info-grid">
@@ -82,7 +85,7 @@
                                         </div>
                                         <div class="info-content">
                                             <span class="info-label">Teléfono</span>
-                                            <span class="info-value" id="userPhone">+591 77712345</span>
+                                            <span class="info-value" id="userPhone">-</span>
                                         </div>
                                         <button class="info-edit" onclick="editarCampo('telefono')">
                                             <i class="fas fa-pen"></i>
@@ -96,33 +99,11 @@
                                         </div>
                                         <div class="info-content">
                                             <span class="info-label">Correo electrónico</span>
-                                            <span class="info-value" id="userEmail">maria.gonzalez@furia.com</span>
+                                            <span class="info-value" id="userEmail">-</span>
                                         </div>
                                         <button class="info-edit" onclick="editarCampo('email')">
                                             <i class="fas fa-pen"></i>
                                         </button>
-                                    </div>
-
-                                    <!-- Documento de identidad -->
-                                    <div class="info-item">
-                                        <div class="info-icon">
-                                            <i class="fas fa-id-card"></i>
-                                        </div>
-                                        <div class="info-content">
-                                            <span class="info-label">Documento</span>
-                                            <span class="info-value" id="userDocument">12345678</span>
-                                        </div>
-                                    </div>
-
-                                    <!-- Fecha de registro -->
-                                    <div class="info-item">
-                                        <div class="info-icon">
-                                            <i class="fas fa-calendar-check"></i>
-                                        </div>
-                                        <div class="info-content">
-                                            <span class="info-label">Miembro desde</span>
-                                            <span class="info-value" id="userMemberSince">15 enero, 2025</span>
-                                        </div>
                                     </div>
 
                                     <!-- Ubicación -->
@@ -132,21 +113,21 @@
                                         </div>
                                         <div class="info-content">
                                             <span class="info-label">Ubicación</span>
-                                            <span class="info-value" id="userLocation">Santa Cruz, Bolivia</span>
+                                            <span class="info-value" id="userLocation">-</span>
                                         </div>
                                         <button class="info-edit" onclick="editarCampo('ubicacion')">
                                             <i class="fas fa-pen"></i>
                                         </button>
                                     </div>
 
-                                    <!-- Último acceso -->
+                                    <!-- Fecha de registro -->
                                     <div class="info-item">
                                         <div class="info-icon">
-                                            <i class="fas fa-clock"></i>
+                                            <i class="fas fa-calendar-check"></i>
                                         </div>
                                         <div class="info-content">
-                                            <span class="info-label">Último acceso</span>
-                                            <span class="info-value" id="userLastLogin">18 marzo, 2026 08:30</span>
+                                            <span class="info-label">Miembro desde</span>
+                                            <span class="info-value" id="userMemberSince">-</span>
                                         </div>
                                     </div>
                                 </div>
@@ -163,17 +144,6 @@
                                     Guardar cambios
                                 </button>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Tarjeta de actividad reciente (opcional) -->
-                    <div class="activity-card">
-                        <h3 class="activity-title">
-                            <i class="fas fa-history"></i>
-                            Actividad reciente
-                        </h3>
-                        <div class="activity-list" id="activityList">
-                            <!-- Se cargará dinámicamente -->
                         </div>
                     </div>
                 </div>
@@ -223,10 +193,10 @@
                     <div class="password-requirements">
                         <p class="requirements-title">La contraseña debe contener:</p>
                         <ul class="requirements-list">
-                            <li class="requirement" id="reqLength">✓ Mínimo 8 caracteres</li>
-                            <li class="requirement" id="reqUpper">✓ Al menos una mayúscula</li>
-                            <li class="requirement" id="reqLower">✓ Al menos una minúscula</li>
-                            <li class="requirement" id="reqNumber">✓ Al menos un número</li>
+                            <li class="requirement" id="reqLength">✗ Mínimo 8 caracteres</li>
+                            <li class="requirement" id="reqUpper">✗ Al menos una mayúscula</li>
+                            <li class="requirement" id="reqLower">✗ Al menos una minúscula</li>
+                            <li class="requirement" id="reqNumber">✗ Al menos un número</li>
                         </ul>
                     </div>
                 </form>
@@ -258,8 +228,8 @@
         </div>
     </div>
 
-    <script src="js/include.js"></script>
-    <script src="js/perfil.js"></script>
+    <script src="/jefe_operativo/js/include.js"></script>
+    <script src="/jefe_operativo/js/perfil.js"></script>
 </body>
 
 </html>

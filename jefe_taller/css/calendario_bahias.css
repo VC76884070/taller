@@ -1,0 +1,582 @@
+/* =====================================================
+   📅 CALENDARIO Y BAHÍAS - ESTILOS ESPECÍFICOS
+   FURIA MOTOR - PLANIFICACIÓN OPERATIVA
+   ===================================================== */
+
+/* Layout de dos columnas */
+.planificacion-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 1.5rem;
+}
+
+/* ========== COLUMNA IZQUIERDA - CALENDARIO ========== */
+.calendario-container {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+.calendario-header {
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, rgba(193, 18, 31, 0.08), transparent);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.calendario-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.calendario-nav button {
+    background: var(--gris-oscuro);
+    border: 1px solid var(--border-color);
+    color: var(--blanco);
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.calendario-nav button:hover {
+    background: var(--rojo-primario);
+    border-color: var(--rojo-primario);
+    transform: translateY(-1px);
+}
+
+.calendario-fecha {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--blanco);
+    background: var(--gris-oscuro);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+}
+
+.calendario-vistas {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.vista-btn {
+    background: var(--gris-oscuro);
+    border: 1px solid var(--border-color);
+    color: var(--gris-texto);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.vista-btn.active {
+    background: var(--rojo-primario);
+    color: var(--blanco);
+    border-color: var(--rojo-primario);
+}
+
+.vista-btn:hover:not(.active) {
+    background: var(--gris-medio);
+    color: var(--blanco);
+}
+
+/* Vista Semana - Grid */
+.calendario-semana {
+    overflow-x: auto;
+    max-height: calc(100vh - 300px);
+    overflow-y: auto;
+}
+
+.semana-grid {
+    display: grid;
+    grid-template-columns: 80px repeat(7, 1fr);
+    min-width: 900px;
+}
+
+.hora-columna {
+    border-right: 1px solid var(--border-color);
+    background: var(--gris-oscuro);
+    position: sticky;
+    left: 0;
+    z-index: 10;
+}
+
+.hora-fila {
+    height: 60px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+    font-weight: 500;
+}
+
+.dia-columna {
+    border-right: 1px solid var(--border-color);
+    position: relative;
+}
+
+.dia-header {
+    padding: 0.75rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--gris-oscuro);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+
+.dia-nombre {
+    font-weight: 600;
+    color: var(--blanco);
+    font-size: 0.85rem;
+}
+
+.dia-fecha {
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+}
+
+.dia-header.actual {
+    background: rgba(193, 18, 31, 0.15);
+    border-bottom: 2px solid var(--rojo-primario);
+}
+
+.celda-horaria {
+    height: 60px;
+    border-bottom: 1px solid var(--border-color);
+    transition: var(--transition);
+    cursor: pointer;
+    position: relative;
+}
+
+.celda-horaria:hover {
+    background: rgba(193, 18, 31, 0.05);
+}
+
+/* Eventos en el calendario */
+.evento-orden {
+    position: absolute;
+    background: linear-gradient(135deg, var(--rojo-primario), var(--rojo-oscuro));
+    border-radius: var(--radius-sm);
+    padding: 0.25rem 0.5rem;
+    margin: 2px;
+    font-size: 0.7rem;
+    color: var(--blanco);
+    cursor: pointer;
+    transition: var(--transition);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    z-index: 20;
+    box-shadow: var(--shadow-sm);
+}
+
+.evento-orden:hover {
+    transform: scale(1.02);
+    box-shadow: var(--shadow-md);
+    z-index: 30;
+}
+
+.evento-orden .evento-codigo {
+    font-weight: 600;
+}
+
+.evento-orden .evento-hora {
+    font-size: 0.6rem;
+    opacity: 0.8;
+}
+
+/* Vista Día */
+.calendario-vista-dia {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+}
+
+.dia-detalle {
+    padding: 1rem;
+}
+
+.dia-timeline {
+    position: relative;
+}
+
+.timeline-hora {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    min-height: 60px;
+}
+
+.timeline-hora-label {
+    width: 80px;
+    padding: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+    border-right: 1px solid var(--border-color);
+    background: var(--gris-oscuro);
+}
+
+.timeline-hora-contenido {
+    flex: 1;
+    padding: 0.5rem;
+    position: relative;
+}
+
+/* ========== COLUMNA DERECHA - PANEL DE BAHÍAS ========== */
+.panel-derecho {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.bahias-container {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+.bahias-header {
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, rgba(193, 18, 31, 0.08), transparent);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.bahias-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.bahias-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    padding: 1.5rem;
+}
+
+.bahia-card {
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    padding: 1rem;
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+}
+
+.bahia-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--rojo-primario);
+}
+
+.bahia-numero {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--blanco);
+}
+
+.bahia-estado {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-full);
+    display: inline-block;
+    margin-top: 0.5rem;
+}
+
+.bahia-estado.ocupado {
+    background: rgba(193, 18, 31, 0.15);
+    color: var(--rojo-primario);
+}
+
+.bahia-estado.libre {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--verde-exito);
+}
+
+.bahia-estado.mantenimiento {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--ambar-alerta);
+}
+
+.bahia-orden {
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+    margin-top: 0.5rem;
+    font-family: monospace;
+}
+
+/* Panel de carga de técnicos */
+.tecnicos-carga-container {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+.tecnicos-carga-header {
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, rgba(193, 18, 31, 0.08), transparent);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tecnicos-carga-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-refresh {
+    background: var(--gris-oscuro);
+    border: 1px solid var(--border-color);
+    color: var(--gris-texto);
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-refresh:hover {
+    background: var(--rojo-primario);
+    color: var(--blanco);
+}
+
+.tecnicos-carga-lista {
+    padding: 1rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.tecnico-carga-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    transition: var(--transition);
+}
+
+.tecnico-carga-item:hover {
+    background: rgba(193, 18, 31, 0.05);
+}
+
+.tecnico-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.tecnico-nombre {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--blanco);
+}
+
+.tecnico-contacto {
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+}
+
+.carga-bar-container {
+    width: 100px;
+    height: 6px;
+    background: var(--gris-medio);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+
+.carga-bar {
+    height: 100%;
+    border-radius: var(--radius-full);
+    transition: width 0.3s ease;
+}
+
+.carga-bar.bajo {
+    background: var(--verde-exito);
+}
+
+.carga-bar.medio {
+    background: var(--ambar-alerta);
+}
+
+.carga-bar.alto {
+    background: var(--rojo-primario);
+}
+
+.carga-texto {
+    font-size: 0.7rem;
+    font-weight: 600;
+    min-width: 40px;
+    text-align: right;
+}
+
+.carga-texto.bajo {
+    color: var(--verde-exito);
+}
+
+.carga-texto.medio {
+    color: var(--ambar-alerta);
+}
+
+.carga-texto.alto {
+    color: var(--rojo-primario);
+}
+
+/* Leyenda */
+.leyenda-container {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    padding: 1rem 1.5rem;
+}
+
+.leyenda-container h4 {
+    font-size: 0.85rem;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.leyenda-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.leyenda-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+}
+
+.estado-badge {
+    width: 12px;
+    height: 12px;
+    border-radius: var(--radius-full);
+}
+
+.estado-badge.ocupado {
+    background: var(--rojo-primario);
+    box-shadow: 0 0 4px var(--rojo-primario);
+}
+
+.estado-badge.libre {
+    background: var(--verde-exito);
+}
+
+.estado-badge.mantenimiento {
+    background: var(--ambar-alerta);
+}
+
+.carga-bajo {
+    width: 12px;
+    height: 12px;
+    border-radius: var(--radius-full);
+    background: var(--verde-exito);
+}
+
+.carga-medio {
+    width: 12px;
+    height: 12px;
+    border-radius: var(--radius-full);
+    background: var(--ambar-alerta);
+}
+
+.carga-alto {
+    width: 12px;
+    height: 12px;
+    border-radius: var(--radius-full);
+    background: var(--rojo-primario);
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .planificacion-layout {
+        grid-template-columns: 1fr;
+    }
+    
+    .panel-derecho {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+    
+    .bahias-container,
+    .tecnicos-carga-container,
+    .leyenda-container {
+        flex: 1;
+        min-width: 250px;
+    }
+}
+
+@media (max-width: 768px) {
+    .bahias-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .calendario-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .calendario-nav {
+        justify-content: center;
+    }
+    
+    .calendario-vistas {
+        justify-content: center;
+    }
+}
+
+/* Scrollbar personalizado */
+.calendario-semana::-webkit-scrollbar,
+.tecnicos-carga-lista::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+/* Animaciones */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 0.5;
+        transform: scale(0.9);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+}
+
+.bahia-card.ocupado {
+    border-left: 3px solid var(--rojo-primario);
+}
+
+.tecnico-carga-item.carga-alta {
+    background: rgba(193, 18, 31, 0.05);
+    border-left: 2px solid var(--rojo-primario);
+}

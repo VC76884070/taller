@@ -35,8 +35,11 @@ from jefe_operativo.comunicados import jefe_operativo_comunicados_bp
 from jefe_operativo.historial import jefe_operativo_historial_bp
 from jefe_operativo.perfil import jefe_operativo_perfil_bp
 
+
 # Jefe Taller - Módulos
 from jefe_taller.orden_trabajo import jefe_taller_ordenes_bp
+from jefe_taller.calendario_bahias import calendario_bahias_bp
+from jefe_taller.historial_vehiculos import historial_vehiculos_bp  
 
 # Registrar blueprints
 app.register_blueprint(jefe_operativo_recepcion_bp)
@@ -44,7 +47,11 @@ app.register_blueprint(jefe_operativo_cotizacion_bp)
 app.register_blueprint(jefe_operativo_comunicados_bp)
 app.register_blueprint(jefe_operativo_historial_bp)
 app.register_blueprint(jefe_operativo_perfil_bp)
+
 app.register_blueprint(jefe_taller_ordenes_bp)  # ← AGREGAR EL BLUEPRINT DEL JEFE TALLER
+app.register_blueprint(calendario_bahias_bp)
+app.register_blueprint(historial_vehiculos_bp)   
+
 
 # =====================================================
 # RUTAS ESPECÍFICAS PARA ARCHIVOS ESTÁTICOS
@@ -226,10 +233,12 @@ def serve_html(path):
         'jefe_operativo/historial': '../jefe_operativo/historial.html',
         'jefe_operativo/perfil': '../jefe_operativo/perfil.html',
         
-        # Jefe Taller (NUEVO)
+        # Jefe Taller
         'jefe_taller': '../jefe_taller/dashboard.html',
         'jefe_taller/dashboard': '../jefe_taller/dashboard.html',
         'jefe_taller/orden_trabajo': '../jefe_taller/orden_trabajo.html',
+        'jefe_taller/calendario_bahias': '../jefe_taller/calendario_bahias.html',
+        'jefe_taller/historial_vehiculos': '../jefe_taller/historial_vehiculos.html',
         'jefe_taller/diagnosticos': '../jefe_taller/diagnosticos.html',
         'jefe_taller/planificacion': '../jefe_taller/planificacion.html',
         'jefe_taller/control_calidad': '../jefe_taller/control_calidad.html',

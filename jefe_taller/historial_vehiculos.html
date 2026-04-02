@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial de Vehículos | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Estilos -->
+    <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_taller/css/historial_vehiculos.css">
+
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-history"></i> Historial de Vehículos</h1>
+                    <p>Consulta el historial completo de servicios por vehículo</p>
+                </div>
+                <div class="top-actions">
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificacionesCount">0</span>
+                    </div>
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content">
+                <div class="historial-container">
+
+                    <!-- Panel de Búsqueda -->
+                    <div class="busqueda-panel">
+                        <div class="busqueda-grid">
+                            <div class="form-group">
+                                <label><i class="fas fa-search"></i> Buscar por placa</label>
+                                <input type="text" id="searchPlaca" class="form-input" placeholder="Ej: 123ABC, 456DEF"
+                                    autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-filter"></i> Filtrar por estado</label>
+                                <select id="filterEstado" class="form-select">
+                                    <option value="">Todos</option>
+                                    <option value="Entregado">Entregados</option>
+                                    <option value="Finalizado">Finalizados</option>
+                                    <option value="EnProceso">En Proceso</option>
+                                    <option value="EnRecepcion">En Recepción</option>
+                                    <option value="EnPausa">En Pausa</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-calendar"></i> Desde</label>
+                                <input type="date" id="fechaDesde" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-calendar"></i> Hasta</label>
+                                <input type="date" id="fechaHasta" class="form-input">
+                            </div>
+                            <button class="btn-buscar" id="btnBuscar">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                            <button class="btn-limpiar" id="btnLimpiar">
+                                <i class="fas fa-eraser"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Resultados -->
+                    <div id="resultadosContainer">
+                        <div class="loading-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Ingresa una placa para buscar el historial</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal para ver detalle de orden -->
+    <div class="modal" id="modalDetalleOrden">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-clipboard-list"></i> Detalle de Orden</h2>
+                <button class="modal-close" onclick="cerrarModalDetalle()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalDetalleBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalDetalle()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver fotos -->
+    <div class="modal" id="modalFotos">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2><i class="fas fa-images"></i> Fotos de la Orden</h2>
+                <button class="modal-close" onclick="cerrarModalFotos()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalFotosBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalFotos()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/jefe_taller/js/include.js"></script>
+    <script src="/jefe_taller/js/historial_vehiculos.js"></script>
+</body>
+
+</html>

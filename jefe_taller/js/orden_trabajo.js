@@ -229,17 +229,17 @@ function renderOrdenesActivas(ordenes) {
                 ` : ''}
             </div>
             <div class="orden-card-footer">
+                <!-- SOLO BOTÓN GESTIONAR - JEFE TALLER -->
                 <button class="btn-accion-orden btn-gestionar" onclick="abrirModalGestionOrden(${orden.id})">
                     <i class="fas fa-edit"></i> Gestionar Orden
                 </button>
+                
+                <!-- Botón Ver Detalle -->
                 <button class="btn-accion-orden btn-ver-detalle-orden" onclick="verDetalleOrden(${orden.id})">
                     <i class="fas fa-eye"></i> Ver Detalle
                 </button>
-                ${orden.estado_global === 'EnPausa' ? `
-                    <button class="btn-accion-orden btn-reanudar" onclick="reanudarOrden(${orden.id})">
-                        <i class="fas fa-play"></i> Reanudar
-                    </button>
-                ` : ''}
+                
+                <!-- Botón Ver Diagnósticos -->
                 <button class="btn-accion-orden btn-ver-diagnosticos" onclick="verHistorialDiagnosticos(${orden.id})">
                     <i class="fas fa-history"></i> Ver Diagnósticos
                 </button>
@@ -306,6 +306,7 @@ async function abrirModalGestionOrden(idOrden) {
     try {
         mostrarNotificacion('Cargando datos de la orden...', 'info');
         
+        // Cargar detalle de la orden
         const response = await fetch(`${API_URL}/jefe-taller/detalle-orden/${idOrden}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
         });
@@ -314,6 +315,20 @@ async function abrirModalGestionOrden(idOrden) {
         if (!response.ok || !data.detalle) throw new Error(data.error || 'Error cargando datos');
         
         ordenEnGestion = data.detalle;
+        
+        // Cargar bahías ocupadas actualmente
+        let bahiasOcupadas = [];
+        try {
+            const bahiasResponse = await fetch(`${API_URL}/jefe-taller/bahias-ocupadas`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+            });
+            const bahiasData = await bahiasResponse.json();
+            if (bahiasData.success) {
+                bahiasOcupadas = bahiasData.bahias_ocupadas || [];
+            }
+        } catch (error) {
+            console.error('Error cargando bahías ocupadas:', error);
+        }
         
         const modal = document.getElementById('modalGestionOrden');
         const body = document.getElementById('modalGestionOrdenBody');
@@ -331,6 +346,37 @@ async function abrirModalGestionOrden(idOrden) {
         // Obtener URL del audio de diagnóstico si existe
         const diagnosticoAudioUrl = ordenEnGestion.diagnostico_audio_url || null;
         
+        // Constantes
+        const MAX_ORDENES_POR_TECNICO = 2;
+        const bahiaActual = planificacionExistente.bahia_asignada;
+        
+        // Generar opciones de bahías (1-12) con estado de ocupación
+        const opcionesBahias = Array.from({length: 12}, (_, i) => {
+            const num = i + 1;
+            const bahiaOcupada = bahiasOcupadas.find(b => b.bahia_asignada === num);
+            const estaOcupada = bahiaOcupada?.esta_ocupada === true;
+            const esLaActual = bahiaActual === num;
+            const ordenQueOcupa = bahiaOcupada?.codigo_unico || '';
+            
+            // Si está ocupada por OTRA orden (no la actual), se deshabilita
+            const deshabilitar = estaOcupada && !esLaActual;
+            const tooltip = deshabilitar ? `title="Ocupada por orden ${ordenQueOcupa}"` : '';
+            
+            let estadoIcono = '🟢';
+            let estadoTexto = 'Disponible';
+            if (deshabilitar) {
+                estadoIcono = '🔴';
+                estadoTexto = `Ocupada por ${ordenQueOcupa}`;
+            } else if (esLaActual) {
+                estadoIcono = '🟡';
+                estadoTexto = 'Actual';
+            }
+            
+            return `<option value="${num}" ${bahiaActual === num ? 'selected' : ''} ${deshabilitar ? 'disabled' : ''} ${tooltip} style="${deshabilitar ? 'color: #ff6b6b; background-color: rgba(193,18,31,0.1);' : ''}">
+                ${estadoIcono} Bahía ${num} - ${estadoTexto}
+            </option>`;
+        }).join('');
+        
         body.innerHTML = `
             <div class="gestion-orden">
                 <!-- Sección: Asignación de Técnicos -->
@@ -343,17 +389,43 @@ async function abrirModalGestionOrden(idOrden) {
                     </div>
                     <div class="gestion-section-body">
                         <div class="tecnicos-grid" id="tecnicosGrid">
-                            ${tecnicosDisponibles.map(t => `
-                                <div class="tecnico-option ${tecnicosSeleccionados.includes(t.id) ? 'selected' : ''}" data-id="${t.id}">
-                                    <input type="checkbox" value="${t.id}" ${tecnicosSeleccionados.includes(t.id) ? 'checked' : ''}>
-                                    <div class="tecnico-info">
-                                        <div class="tecnico-nombre">${escapeHtml(t.nombre)}</div>
-                                        <div class="tecnico-carga">${t.ordenes_activas || 0}/${t.max_vehiculos || 2} vehículos</div>
+                            ${tecnicosDisponibles.map(t => {
+                                const ordenesActivas = t.ordenes_activas || 0;
+                                const estaCompleto = ordenesActivas >= MAX_ORDENES_POR_TECNICO;
+                                const estaSeleccionado = tecnicosSeleccionados.includes(t.id);
+                                const puedeSeleccionar = !estaCompleto || estaSeleccionado;
+                                const disabledAttr = !puedeSeleccionar ? 'disabled' : '';
+                                const disabledClass = !puedeSeleccionar ? 'tecnico-disabled' : '';
+                                
+                                let cargaMensaje = `${ordenesActivas}/${MAX_ORDENES_POR_TECNICO} vehículos`;
+                                let cargaColor = '';
+                                if (estaCompleto) {
+                                    cargaColor = 'style="color: #ef4444;"';
+                                    cargaMensaje += ' (Completo)';
+                                } else if (ordenesActivas === 1) {
+                                    cargaColor = 'style="color: #f59e0b;"';
+                                    cargaMensaje += ' (1 cupo)';
+                                } else {
+                                    cargaColor = 'style="color: #10b981;"';
+                                    cargaMensaje += ' (Disponible)';
+                                }
+                                
+                                return `
+                                    <div class="tecnico-option ${estaSeleccionado ? 'selected' : ''} ${disabledClass}" data-id="${t.id}" style="${!puedeSeleccionar ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
+                                        <input type="checkbox" value="${t.id}" ${estaSeleccionado ? 'checked' : ''} ${disabledAttr}>
+                                        <div class="tecnico-info">
+                                            <div class="tecnico-nombre">${escapeHtml(t.nombre)}</div>
+                                            <div class="tecnico-carga" ${cargaColor}>${cargaMensaje}</div>
+                                        </div>
+                                        ${!puedeSeleccionar ? '<div class="tecnico-bloqueado" title="Este técnico ya tiene 2 órdenes activas"><i class="fas fa-lock"></i></div>' : ''}
                                     </div>
-                                </div>
-                            `).join('')}
+                                `;
+                            }).join('')}
                         </div>
-                        <p class="modal-hint">* Máximo 2 técnicos por orden</p>
+                        <p class="modal-hint">
+                            <i class="fas fa-info-circle"></i> 
+                            * Máximo 2 técnicos por orden | Cada técnico puede tener hasta ${MAX_ORDENES_POR_TECNICO} órdenes activas simultáneamente
+                        </p>
                     </div>
                 </div>
                 
@@ -370,13 +442,12 @@ async function abrirModalGestionOrden(idOrden) {
                             <div class="form-group">
                                 <label class="form-label"><i class="fas fa-warehouse"></i> Bahía asignada</label>
                                 <select id="bahiaSelect" class="form-select">
-                                    <option value="">Seleccionar bahía</option>
-                                    ${Array.from({length: 12}, (_, i) => i + 1).map(num => `
-                                        <option value="${num}" ${planificacionExistente.bahia_asignada == num ? 'selected' : ''}>
-                                            Bahía ${num}
-                                        </option>
-                                    `).join('')}
+                                    <option value="">-- Seleccionar bahía --</option>
+                                    ${opcionesBahias}
                                 </select>
+                                <small class="form-hint" style="color: var(--gris-texto); font-size: 0.7rem;">
+                                    <i class="fas fa-info-circle"></i> Las bahías en 🔴 están ocupadas en el horario seleccionado
+                                </small>
                             </div>
                             <div class="form-group">
                                 <label class="form-label"><i class="fas fa-calendar"></i> Fecha y hora inicio</label>
@@ -429,7 +500,7 @@ async function abrirModalGestionOrden(idOrden) {
             </div>
         `;
         
-        // Footer con solo botón Guardar
+        // Footer con botón Guardar
         footer.innerHTML = `
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModalGestionOrden()">Cancelar</button>
@@ -443,6 +514,53 @@ async function abrirModalGestionOrden(idOrden) {
         configurarSeleccionTecnicos();
         configurarAudioDiagnostico(diagnosticoAudioUrl);
         
+        // Agregar validación en tiempo real cuando cambia fecha/hora o bahía
+        const bahiaSelect = document.getElementById('bahiaSelect');
+        const fechaInicioInput = document.getElementById('fechaInicio');
+        const horasEstimadasInput = document.getElementById('horasEstimadas');
+        
+        const validarDisponibilidadBahia = async () => {
+            const bahia = bahiaSelect?.value;
+            const fechaInicioVal = fechaInicioInput?.value;
+            const horasEstimadasVal = parseFloat(horasEstimadasInput?.value);
+            
+            if (bahia && fechaInicioVal && horasEstimadasVal > 0) {
+                try {
+                    const response = await fetch(`${API_URL}/jefe-taller/verificar-bahia`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                        },
+                        body: JSON.stringify({
+                            bahia: parseInt(bahia),
+                            fecha_inicio: fechaInicioVal,
+                            horas_estimadas: horasEstimadasVal,
+                            id_orden_actual: ordenEnGestion.id
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!data.disponible) {
+                        bahiaSelect.style.borderColor = '#ef4444';
+                        bahiaSelect.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                        mostrarNotificacion(`⚠️ Bahía ${bahia} no disponible en este horario`, 'warning');
+                    } else {
+                        bahiaSelect.style.borderColor = '';
+                        bahiaSelect.style.backgroundColor = '';
+                    }
+                } catch (error) {
+                    console.error('Error validando bahía:', error);
+                }
+            }
+        };
+        
+        // Escuchar cambios en fecha y horas
+        fechaInicioInput?.addEventListener('change', validarDisponibilidadBahia);
+        horasEstimadasInput?.addEventListener('change', validarDisponibilidadBahia);
+        bahiaSelect?.addEventListener('change', validarDisponibilidadBahia);
+        
         modal.classList.add('show');
         
     } catch (error) {
@@ -454,13 +572,39 @@ async function abrirModalGestionOrden(idOrden) {
 function configurarSeleccionTecnicos() {
     const checkboxes = document.querySelectorAll('#tecnicosGrid input[type="checkbox"]');
     const maxTecnicos = 2;
+    const MAX_ORDENES_POR_TECNICO = 2;
+    const tecnicosActualizados = tecnicosDisponibles;
+    
+    checkboxes.forEach(checkbox => {
+        const tecnicoId = parseInt(checkbox.value);
+        const tecnicoData = tecnicosActualizados.find(t => t.id === tecnicoId);
+        const ordenesActivas = tecnicoData?.ordenes_activas || 0;
+        const estaCompleto = ordenesActivas >= MAX_ORDENES_POR_TECNICO;
+        const estaSeleccionado = checkbox.checked;
+        
+        if (estaCompleto && !estaSeleccionado) {
+            checkbox.disabled = true;
+        }
+    });
     
     checkboxes.forEach(checkbox => {
         checkbox.addEventListener('change', (e) => {
-            const seleccionados = Array.from(checkboxes).filter(cb => cb.checked).length;
+            if (checkbox.disabled) {
+                e.preventDefault();
+                const tecnicoId = parseInt(checkbox.value);
+                const tecnicoData = tecnicosActualizados.find(t => t.id === tecnicoId);
+                mostrarNotificacion(
+                    `El técnico ${tecnicoData?.nombre || 'seleccionado'} ya tiene ${MAX_ORDENES_POR_TECNICO} órdenes activas. No se puede asignar.`,
+                    'warning'
+                );
+                return;
+            }
+            
+            const seleccionados = Array.from(checkboxes).filter(cb => cb.checked && !cb.disabled).length;
+            
             if (seleccionados > maxTecnicos) {
                 checkbox.checked = false;
-                mostrarNotificacion('Máximo 2 técnicos por orden', 'warning');
+                mostrarNotificacion(`Máximo ${maxTecnicos} técnicos por orden`, 'warning');
                 return;
             }
             
@@ -472,8 +616,8 @@ function configurarSeleccionTecnicos() {
             }
             
             const sectionHeader = checkbox.closest('.gestion-section').querySelector('.section-status');
-            const nuevosSeleccionados = Array.from(checkboxes).filter(cb => cb.checked).length;
-            sectionHeader.textContent = nuevosSeleccionados > 0 ? `${nuevosSeleccionados}/2 técnicos` : 'Pendiente';
+            const nuevosSeleccionados = Array.from(checkboxes).filter(cb => cb.checked && !cb.disabled).length;
+            sectionHeader.textContent = nuevosSeleccionados > 0 ? `${nuevosSeleccionados}/${maxTecnicos} técnicos` : 'Pendiente';
             sectionHeader.className = `section-status ${nuevosSeleccionados > 0 ? 'completado' : 'pendiente'}`;
         });
     });
@@ -491,7 +635,6 @@ function configurarAudioDiagnostico(existingAudioUrl) {
     let audioBlobLocal = null;
     let audioChunksLocal = [];
     
-    // Si hay audio existente, mostrar controles
     if (existingAudioUrl) {
         btnTranscribir.style.display = 'flex';
         btnEliminar.style.display = 'flex';
@@ -598,53 +741,89 @@ async function guardarGestionOrden() {
     try {
         mostrarNotificacion('Guardando cambios...', 'info');
         
-        // Obtener técnicos seleccionados
-        const tecnicosSeleccionados = Array.from(document.querySelectorAll('#tecnicosGrid input:checked')).map(cb => parseInt(cb.value));
+        // Obtener datos del formulario
+        const checkboxes = document.querySelectorAll('#tecnicosGrid input[type="checkbox"]');
+        const tecnicosSeleccionados = Array.from(checkboxes)
+            .filter(cb => cb.checked && !cb.disabled)
+            .map(cb => parseInt(cb.value));
         
-        // Obtener planificación
-        const bahia = document.getElementById('bahiaSelect').value;
-        const fechaInicio = document.getElementById('fechaInicio').value;
-        const horasEstimadas = parseFloat(document.getElementById('horasEstimadas').value);
+        const bahia = document.getElementById('bahiaSelect')?.value;
+        const fechaInicio = document.getElementById('fechaInicio')?.value;
+        const horasEstimadas = parseFloat(document.getElementById('horasEstimadas')?.value);
         
-        // Obtener diagnóstico y audio
-        const diagnostico = document.getElementById('diagnosticoTexto').value;
-        let audioUrl = null;
+        const diagnostico = document.getElementById('diagnosticoTexto')?.value || '';
+        let audioUrl = ordenEnGestion.diagnostico_audio_url || null;
         
-        // Si hay audio grabado, subirlo a Cloudinary
-        const audioPreview = document.getElementById('audioPreviewDiagnostico');
-        if (audioPreview && audioPreview.src && audioPreview.src.startsWith('blob:')) {
-            // Hay un nuevo audio grabado (blob)
-            const response = await fetch(audioPreview.src);
-            const blob = await response.blob();
-            const audioBase64 = await getAudioBase64FromBlob(blob);
-            
-            const audioResponse = await fetch(`${API_URL}/jefe-taller/subir-audio-diagnostico`, {
+        // =====================================================
+        // VALIDAR DISPONIBILIDAD DE BAHÍA ANTES DE GUARDAR
+        // =====================================================
+        if (bahia && fechaInicio && horasEstimadas > 0) {
+            const disponibilidadResponse = await fetch(`${API_URL}/jefe-taller/verificar-bahia`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
                 },
-                body: JSON.stringify({ audio: audioBase64, id_orden: ordenEnGestion.id })
+                body: JSON.stringify({
+                    bahia: parseInt(bahia),
+                    fecha_inicio: fechaInicio,
+                    horas_estimadas: horasEstimadas,
+                    id_orden_actual: ordenEnGestion.id
+                })
             });
-            const audioData = await audioResponse.json();
-            if (audioResponse.ok) {
-                audioUrl = audioData.url;
+            
+            const disponibilidadData = await disponibilidadResponse.json();
+            
+            if (!disponibilidadData.disponible) {
+                throw new Error(`La Bahía ${bahia} no está disponible en el horario seleccionado. Por favor elige otra bahía u otro horario.`);
             }
-        } else if (ordenEnGestion.diagnostico_audio_url && audioPreview && !audioPreview.src.startsWith('blob:')) {
-            // Mantener el audio existente
-            audioUrl = ordenEnGestion.diagnostico_audio_url;
+        }
+        
+        // Procesar audio si hay nuevo
+        const audioPreview = document.getElementById('audioPreviewDiagnostico');
+        if (audioPreview && audioPreview.src && audioPreview.src.startsWith('blob:')) {
+            try {
+                const response = await fetch(audioPreview.src);
+                const blob = await response.blob();
+                const audioBase64 = await getAudioBase64FromBlob(blob);
+                
+                const audioResponse = await fetch(`${API_URL}/jefe-taller/subir-audio-diagnostico`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                    },
+                    body: JSON.stringify({ audio: audioBase64, id_orden: ordenEnGestion.id })
+                });
+                
+                const audioData = await audioResponse.json();
+                if (audioResponse.ok && audioData.url) {
+                    audioUrl = audioData.url;
+                }
+            } catch (audioError) {
+                console.error('Error subiendo audio:', audioError);
+            }
         }
         
         // Guardar técnicos
-        if (tecnicosSeleccionados.length > 0) {
-            await fetch(`${API_URL}/jefe-taller/asignar-tecnicos`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-                },
-                body: JSON.stringify({ id_orden: ordenEnGestion.id, tecnicos: tecnicosSeleccionados })
-            });
+        const tecnicosResponse = await fetch(`${API_URL}/jefe-taller/asignar-tecnicos`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            },
+            body: JSON.stringify({ 
+                id_orden: ordenEnGestion.id, 
+                tecnicos: tecnicosSeleccionados 
+            })
+        });
+        
+        const tecnicosData = await tecnicosResponse.json();
+        if (!tecnicosResponse.ok) {
+            if (tecnicosData.detalles) {
+                throw new Error(tecnicosData.detalles.join(', '));
+            }
+            throw new Error(tecnicosData.error || 'Error al asignar técnicos');
         }
         
         // Guardar planificación
@@ -664,7 +843,7 @@ async function guardarGestionOrden() {
             });
         }
         
-        // Guardar diagnóstico con audio
+        // Guardar diagnóstico
         await fetch(`${API_URL}/jefe-taller/diagnostico-inicial`, {
             method: 'POST',
             headers: {
@@ -678,20 +857,26 @@ async function guardarGestionOrden() {
             })
         });
         
-        mostrarNotificacion('Cambios guardados correctamente', 'success');
         cerrarModalGestionOrden();
-        await cargarOrdenesActivas();
+        mostrarNotificacion('Cambios guardados correctamente', 'success');
+        
+        // Recargar datos
+        await Promise.all([
+            cargarTecnicos(),
+            cargarOrdenesActivas()
+        ]);
         
     } catch (error) {
         console.error('Error guardando cambios:', error);
-        mostrarNotificacion(error.message, 'error');
+        mostrarNotificacion(error.message || 'Error al guardar los cambios', 'error');
     }
 }
 
 function getAudioBase64FromBlob(blob) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Error al leer el audio'));
         reader.readAsDataURL(blob);
     });
 }
@@ -703,8 +888,37 @@ function cerrarModalGestionOrden() {
 }
 
 // =====================================================
-// OTRAS FUNCIONES
+// ACCIONES DEL JEFE DE TALLER
 // =====================================================
+
+async function iniciarTrabajo(idOrden) {
+    if (!confirm('¿Estás seguro de que deseas INICIAR el trabajo? La bahía quedará ocupada.')) return;
+    
+    try {
+        mostrarNotificacion('Iniciando trabajo...', 'info');
+        
+        const response = await fetch(`${API_URL}/jefe-taller/iniciar-trabajo`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            },
+            body: JSON.stringify({ id_orden: idOrden })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            mostrarNotificacion(data.message, 'success');
+            await cargarOrdenesActivas();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion(error.message, 'error');
+    }
+}
 
 async function reanudarOrden(idOrden) {
     try {
@@ -733,6 +947,54 @@ async function reanudarOrden(idOrden) {
     }
 }
 
+async function aprobarEntrega(idOrden, aprobado) {
+    const mensaje = aprobado ? 
+        '¿Confirmas que el trabajo está correcto y se puede liberar la bahía?' :
+        '¿Rechazas el trabajo? Deberás indicar el motivo para que el técnico lo corrija.';
+    
+    if (!confirm(mensaje)) return;
+    
+    let observaciones = '';
+    if (!aprobado) {
+        observaciones = prompt('Indica el motivo del rechazo y qué debe corregir el técnico:');
+        if (!observaciones) return;
+    }
+    
+    try {
+        mostrarNotificacion(aprobado ? 'Aprobando trabajo...' : 'Rechazando trabajo...', 'info');
+        
+        const response = await fetch(`${API_URL}/jefe-taller/aprobar-entrega`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            },
+            body: JSON.stringify({ 
+                id_orden: idOrden, 
+                aprobado: aprobado,
+                observaciones: observaciones
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            mostrarNotificacion(data.message, 'success');
+            await cargarOrdenesActivas();
+            await cargarOrdenesFinalizadas();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion(error.message, 'error');
+    }
+}
+
+// =====================================================
+// OTRAS FUNCIONES
+// =====================================================
+
 async function verDetalleOrden(idOrden) {
     try {
         mostrarNotificacion('Cargando detalle de orden...', 'info');
@@ -748,32 +1010,26 @@ async function verDetalleOrden(idOrden) {
         const modal = document.getElementById('modalDetalleOrden');
         const body = document.getElementById('modalDetalleOrdenBody');
         
-        // Generar HTML para las fotos de recepción
         const fotosHtml = detalle.fotos ? renderFotosDetalle(detalle.fotos) : '';
         
-        // Generar HTML para el audio de recepción
         const audioRecepcionHtml = detalle.audio_url ? `
             <div class="detalle-seccion">
                 <h4><i class="fas fa-microphone"></i> Grabación del Problema (Recepción)</h4>
                 <audio controls style="width: 100%;">
                     <source src="${detalle.audio_url}" type="audio/mpeg">
-                    Tu navegador no soporta audio
                 </audio>
             </div>
         ` : '';
         
-        // Generar HTML para el audio del diagnóstico inicial
         const audioDiagnosticoHtml = detalle.diagnostico_audio_url ? `
             <div class="detalle-seccion">
                 <h4><i class="fas fa-microphone"></i> Grabación del Diagnóstico Inicial</h4>
                 <audio controls style="width: 100%;">
                     <source src="${detalle.diagnostico_audio_url}" type="audio/mpeg">
-                    Tu navegador no soporta audio
                 </audio>
             </div>
         ` : '';
         
-        // Generar HTML para la planificación
         let planificacionHtml = '';
         if (detalle.planificacion && (detalle.planificacion.bahia_asignada || detalle.planificacion.fecha_hora_inicio_estimado)) {
             planificacionHtml = `
@@ -803,25 +1059,20 @@ async function verDetalleOrden(idOrden) {
             `;
         }
         
-        // Generar HTML para los jefes operativos
         let jefesHtml = '';
-        
         if (detalle.jefe_operativo && detalle.jefe_operativo.nombre) {
             jefesHtml += `
                 <div class="detalle-item">
                     <span class="detalle-label">Jefe Principal</span>
                     <span class="detalle-value">${escapeHtml(detalle.jefe_operativo.nombre)}</span>
-                    ${detalle.jefe_operativo.contacto ? `<span class="detalle-value-small">📞 ${escapeHtml(detalle.jefe_operativo.contacto)}</span>` : ''}
                 </div>
             `;
         }
-        
         if (detalle.jefe_operativo_2 && detalle.jefe_operativo_2.nombre) {
             jefesHtml += `
                 <div class="detalle-item">
                     <span class="detalle-label">Jefe Secundario</span>
                     <span class="detalle-value">${escapeHtml(detalle.jefe_operativo_2.nombre)}</span>
-                    ${detalle.jefe_operativo_2.contacto ? `<span class="detalle-value-small">📞 ${escapeHtml(detalle.jefe_operativo_2.contacto)}</span>` : ''}
                 </div>
             `;
         }
@@ -854,10 +1105,8 @@ async function verDetalleOrden(idOrden) {
                 
                 ${jefesHtml ? `
                     <div class="detalle-seccion">
-                        <h4><i class="fas fa-user-tie"></i> Jefes Operativos que registraron</h4>
-                        <div class="detalle-grid">
-                            ${jefesHtml}
-                        </div>
+                        <h4><i class="fas fa-user-tie"></i> Jefes Operativos</h4>
+                        <div class="detalle-grid">${jefesHtml}</div>
                     </div>
                 ` : ''}
                 
@@ -871,10 +1120,6 @@ async function verDetalleOrden(idOrden) {
                         <div class="detalle-item">
                             <span class="detalle-label">Teléfono</span>
                             <span class="detalle-value">${escapeHtml(detalle.cliente?.telefono || 'No registrado')}</span>
-                        </div>
-                        <div class="detalle-item">
-                            <span class="detalle-label">Ubicación</span>
-                            <span class="detalle-value">${escapeHtml(detalle.cliente?.ubicacion || 'No registrada')}</span>
                         </div>
                     </div>
                 </div>
@@ -891,10 +1136,6 @@ async function verDetalleOrden(idOrden) {
                             <span class="detalle-value">${escapeHtml(detalle.marca)} ${escapeHtml(detalle.modelo)}</span>
                         </div>
                         <div class="detalle-item">
-                            <span class="detalle-label">Año</span>
-                            <span class="detalle-value">${detalle.anio || 'N/A'}</span>
-                        </div>
-                        <div class="detalle-item">
                             <span class="detalle-label">Kilometraje</span>
                             <span class="detalle-value">${detalle.kilometraje?.toLocaleString() || '0'} km</span>
                         </div>
@@ -902,23 +1143,18 @@ async function verDetalleOrden(idOrden) {
                 </div>
                 
                 <div class="detalle-seccion">
-                    <h4><i class="fas fa-pencil-alt"></i> Descripción del Problema (Recepción)</h4>
-                    <div class="detalle-descripcion">
-                        ${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción del problema')}
-                    </div>
+                    <h4><i class="fas fa-pencil-alt"></i> Descripción del Problema</h4>
+                    <div class="detalle-descripcion">${escapeHtml(detalle.transcripcion_problema || 'No registrada')}</div>
                 </div>
                 
                 ${audioRecepcionHtml}
                 ${fotosHtml}
-                
                 ${planificacionHtml}
                 
                 ${detalle.diagnostico_inicial ? `
                     <div class="detalle-seccion">
                         <h4><i class="fas fa-stethoscope"></i> Diagnóstico Inicial</h4>
-                        <div class="detalle-descripcion">
-                            ${escapeHtml(detalle.diagnostico_inicial)}
-                        </div>
+                        <div class="detalle-descripcion">${escapeHtml(detalle.diagnostico_inicial)}</div>
                     </div>
                 ` : ''}
                 
@@ -952,7 +1188,6 @@ function cerrarModalDetalleOrden() {
 function renderFotosDetalle(fotos) {
     if (!fotos) return '';
     
-    const fotosList = [];
     const camposMap = {
         'url_lateral_izquierda': 'Lateral Izquierdo',
         'url_lateral_derecha': 'Lateral Derecho',
@@ -965,28 +1200,20 @@ function renderFotosDetalle(fotos) {
     
     const fotosConUrl = Object.entries(fotos)
         .filter(([key, url]) => url && camposMap[key])
-        .map(([key, url]) => ({
-            url: url,
-            nombre: camposMap[key],
-            key: key
-        }));
+        .map(([key, url]) => ({ url, nombre: camposMap[key] }));
     
     if (fotosConUrl.length === 0) return '';
-    
-    fotosConUrl.forEach(foto => {
-        fotosList.push(`
-            <div class="detalle-foto-item" onclick="verImagenAmpliada('${foto.url}')">
-                <img src="${foto.url}" alt="${foto.nombre}" onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%25%22%20height%3D%22100%25%22%20viewBox%3D%220%200%20200%20200%22%3E%3Crect%20width%3D%22200%22%20height%3D%22200%22%20fill%3D%22%23333%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dy%3D%22.3em%22%20fill%3D%22%23999%22%3ESin%20imagen%3C%2Ftext%3E%3C%2Fsvg%3E'">
-                <span class="detalle-foto-label">${foto.nombre}</span>
-            </div>
-        `);
-    });
     
     return `
         <div class="detalle-seccion">
             <h4><i class="fas fa-camera"></i> Fotos de Recepción (${fotosConUrl.length}/7)</h4>
-            <div class="detalle-fotos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 1rem;">
-                ${fotosList.join('')}
+            <div class="detalle-fotos-grid">
+                ${fotosConUrl.map(foto => `
+                    <div class="detalle-foto-item" onclick="verImagenAmpliada('${foto.url}')">
+                        <img src="${foto.url}" alt="${foto.nombre}">
+                        <span class="detalle-foto-label">${foto.nombre}</span>
+                    </div>
+                `).join('')}
             </div>
         </div>
     `;
@@ -1015,19 +1242,17 @@ async function verHistorialDiagnosticos(idOrden) {
                             <div class="diagnostico-version">Versión ${d.version}</div>
                             <div class="diagnostico-fecha">
                                 <i class="far fa-calendar-alt"></i> ${new Date(d.fecha_envio).toLocaleString()}
-                                <span class="badge" style="margin-left: 0.5rem;">${escapeHtml(d.tecnico_nombre)}</span>
+                                <span class="badge">${escapeHtml(d.tecnico_nombre)}</span>
                             </div>
-                            <div class="diagnostico-informe">
-                                ${escapeHtml(d.informe || 'Sin informe detallado')}
-                            </div>
+                            <div class="diagnostico-informe">${escapeHtml(d.informe || 'Sin informe detallado')}</div>
                             ${d.fotos && d.fotos.length > 0 ? `
                                 <div class="diagnostico-fotos">
                                     ${d.fotos.map(f => `<div class="diagnostico-foto" style="background-image: url('${f.url_foto}')" onclick="verImagenAmpliada('${f.url_foto}')"></div>`).join('')}
                                 </div>
                             ` : ''}
                             ${d.observaciones ? `
-                                <div class="observacion" style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(245,158,11,0.1); border-radius: 8px;">
-                                    <i class="fas fa-comment"></i> <strong>Observación del Jefe Taller:</strong><br>
+                                <div class="observacion">
+                                    <i class="fas fa-comment"></i> <strong>Observación:</strong><br>
                                     ${escapeHtml(d.observaciones)}
                                 </div>
                             ` : ''}
@@ -1037,7 +1262,7 @@ async function verHistorialDiagnosticos(idOrden) {
                                     <button class="btn-danger" onclick="abrirModalObservacionRechazo(${d.id})">Rechazar</button>
                                 </div>
                             ` : d.aprobado ? `
-                                <div class="badge-success" style="margin-top: 0.5rem;"><i class="fas fa-check-circle"></i> Aprobado</div>
+                                <div class="badge-success">✓ Aprobado</div>
                             ` : ''}
                         </div>
                     `).join('')}
@@ -1153,7 +1378,6 @@ function filtrarOrdenesFinalizadas() {
 
 function iniciarPolling() {
     if (pollingInterval) clearInterval(pollingInterval);
-    
     pollingInterval = setInterval(() => {
         cargarOrdenesActivas();
     }, 10000);
@@ -1166,7 +1390,6 @@ function verImagenAmpliada(url) {
         <div class="modal-imagen-content">
             <button class="modal-imagen-close" onclick="this.parentElement.parentElement.remove()">&times;</button>
             <img src="${url}" alt="Imagen ampliada">
-            <p style="text-align: center; margin-top: 10px;">Haz clic fuera para cerrar</p>
         </div>
     `;
     document.body.appendChild(modal);
@@ -1201,21 +1424,24 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
     document.body.appendChild(toast);
     
     setTimeout(() => {
-        if (toast && document.body.contains(toast)) {
-            toast.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => { if (document.body.contains(toast)) document.body.removeChild(toast); }, 300);
-        }
+        toast.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => { if (document.body.contains(toast)) document.body.removeChild(toast); }, 300);
     }, 3000);
 }
 
-// Exponer funciones globales
+// =====================================================
+// EXPONER FUNCIONES GLOBALES
+// =====================================================
+
+window.iniciarTrabajo = iniciarTrabajo;
 window.reanudarOrden = reanudarOrden;
-window.aprobarDiagnosticoTecnico = aprobarDiagnosticoTecnico;
+window.aprobarEntrega = aprobarEntrega;
 window.verDetalleOrden = verDetalleOrden;
 window.verHistorialDiagnosticos = verHistorialDiagnosticos;
 window.verImagenAmpliada = verImagenAmpliada;
 window.abrirModalGestionOrden = abrirModalGestionOrden;
 window.abrirModalObservacionRechazo = abrirModalObservacionRechazo;
+window.aprobarDiagnosticoTecnico = aprobarDiagnosticoTecnico;
 window.cerrarModalGestionOrden = cerrarModalGestionOrden;
 window.cerrarModalDetalleOrden = cerrarModalDetalleOrden;
 window.cerrarModalHistorialDiagnostico = cerrarModalHistorialDiagnostico;

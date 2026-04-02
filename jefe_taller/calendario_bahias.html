@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario y Bahías | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Estilos -->
+    <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_taller/css/calendario_bahias.css">
+
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-calendar-alt"></i> Calendario y Bahías</h1>
+                    <p>Planificación operativa, asignación de bahías y control de carga de trabajo</p>
+                </div>
+                <div class="top-actions">
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificacionesCount">0</span>
+                    </div>
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content">
+                <!-- CALENDARIO - OCUPA TODO EL ANCHO -->
+                <div class="calendario-container">
+                    <div class="calendario-header">
+                        <div class="calendario-nav">
+                            <button id="prevSemanaBtn" title="Semana anterior">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <button id="hoyBtn" title="Hoy">
+                                <i class="fas fa-calendar-day"></i>
+                            </button>
+                            <button id="nextSemanaBtn" title="Semana siguiente">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        <div class="calendario-fecha" id="rangoSemana">
+                            Cargando...
+                        </div>
+                        <div class="calendario-vistas">
+                            <button class="vista-btn active" data-vista="semana">
+                                <i class="fas fa-calendar-week"></i> Semana
+                            </button>
+                            <button class="vista-btn" data-vista="dia">
+                                <i class="fas fa-calendar-day"></i> Día
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Vista Semana -->
+                    <div class="calendario-vista-semana" id="vistaSemana">
+                        <div class="calendario-semana">
+                            <div class="semana-grid" id="semanaGrid">
+                                <!-- Generado por JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vista Día (oculta por defecto) -->
+                    <div class="calendario-vista-dia" id="vistaDia" style="display: none;">
+                        <div class="dia-detalle" id="diaDetalle">
+                            <!-- Generado por JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PANEL INFERIOR: BAHÍAS + TÉCNICOS + LEYENDA -->
+                <div class="panel-inferior">
+
+                    <!-- Panel de Bahías (12 bahías en grid) -->
+                    <div class="bahias-container">
+                        <div class="bahias-header">
+                            <h3><i class="fas fa-warehouse"></i> Bahías de Trabajo</h3>
+                            <span class="badge-info" id="bahiasOcupadas">0/12 ocupadas</span>
+                            <button class="btn-refresh" id="refreshBahiasBtn" title="Actualizar">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="bahias-grid" id="bahiasGrid">
+                            <!-- Generado por JS -->
+                        </div>
+                    </div>
+
+                    <!-- Panel Inferior Derecho: Técnicos + Leyenda -->
+                    <div class="panel-inferior-derecho">
+
+                        <!-- Panel de Carga de Técnicos -->
+                        <div class="tecnicos-carga-container">
+                            <div class="tecnicos-carga-header">
+                                <h3><i class="fas fa-users"></i> Carga de Técnicos</h3>
+                                <button class="btn-refresh" id="refreshCargaBtn" title="Actualizar">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                            <div class="tecnicos-carga-lista" id="tecnicosCargaLista">
+                                <!-- Generado por JS -->
+                            </div>
+                        </div>
+
+                        <!-- Leyenda de Estados -->
+                        <div class="leyenda-container">
+                            <h4><i class="fas fa-info-circle"></i> Leyenda</h4>
+                            <div class="leyenda-items">
+                                <div class="leyenda-item">
+                                    <span class="estado-badge ocupado"></span>
+                                    <span>Bahía ocupada</span>
+                                </div>
+                                <div class="leyenda-item">
+                                    <span class="estado-badge libre"></span>
+                                    <span>Bahía libre</span>
+                                </div>
+                                <div class="leyenda-item">
+                                    <span class="carga-bajo"></span>
+                                    <span>Carga baja (0-1)</span>
+                                </div>
+                                <div class="leyenda-item">
+                                    <span class="carga-medio"></span>
+                                    <span>Carga media (2)</span>
+                                </div>
+                                <div class="leyenda-item">
+                                    <span class="carga-alto"></span>
+                                    <span>Carga máxima (2)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal para ver detalle de bahía -->
+    <div class="modal" id="modalDetalleBahia">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2><i class="fas fa-warehouse"></i> Detalle de Bahía</h2>
+                <button class="modal-close" onclick="cerrarModalBahia()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBahiaBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalBahia()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver detalle de orden desde el calendario -->
+    <div class="modal" id="modalDetalleOrdenCalendario">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-clipboard-list"></i> Detalle de Orden</h2>
+                <button class="modal-close" onclick="cerrarModalDetalleOrden()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalDetalleOrdenBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalDetalleOrden()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/jefe_taller/js/include.js"></script>
+    <script src="/jefe_taller/js/calendario_bahias.js"></script>
+</body>
+
+</html>

@@ -1618,3 +1618,68 @@
         box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
     }
 }
+
+
+/* Estilo para técnicos con carga completa */
+.tecnico-option.tecnico-disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: #f3f4f6;
+}
+
+.tecnico-option.tecnico-disabled:hover {
+    background-color: #f3f4f6;
+    transform: none;
+}
+
+.tecnico-carga span {
+    font-size: 0.7rem;
+    margin-left: 0.25rem;
+}
+
+/* En tu archivo orden_trabajo.css */
+.btn-warning {
+    background: var(--ambar-alerta);
+    color: var(--blanco);
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-warning:hover {
+    background: #d97706;
+    transform: translateY(-1px);
+}
+
+.btn-success {
+    background: var(--verde-exito);
+    color: var(--blanco);
+}
+
+.btn-success:hover {
+    background: #059669;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: var(--blanco);
+}
+
+.btn-danger:hover {
+    background: #c82333;
+}
+
+/* Estilo para opciones de bahía ocupada */
+select option.bahia-ocupada {
+    background-color: rgba(193, 18, 31, 0.2);
+    color: #ff6b6b;
+    font-style: italic;
+}
+
+select option.bahia-ocupada::before {
+    content: "🔴 ";
+}

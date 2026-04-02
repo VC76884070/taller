@@ -1,0 +1,780 @@
+/* =====================================================
+   🎨 PALETA DE COLORES FURIA MOTOR
+   ===================================================== */
+:root {
+    /* 🔴 COLOR PRIMARIO - ROJO ACENTO */
+    --rojo-primario: #C1121F;
+    --rojo-oscuro: #8B0F1A;
+    --rojo-acento: #FF4D4D;
+    
+    /* ⚫ COLORES NEUTRALES - BASE OSCURA */
+    --negro: #0F0F10;
+    --gris-oscuro: #1A1A1C;
+    --gris-medio: #2C2C2E;
+    --gris-claro: #3A3A3C;
+    --gris-texto: #8E8E93;
+    --blanco: #FFFFFF;
+    
+    /* 🔵 COLORES SECUNDARIOS */
+    --azul-profundo: #1E3A5F;
+    --azul-acento: #2563EB;
+    
+    /* 🟢 COLORES DE ESTADO */
+    --verde-exito: #10B981;
+    --ambar-alerta: #F59E0B;
+    
+    /* 🎨 SOMBRAS */
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.4);
+    --shadow-lg: 0 10px 25px rgba(0,0,0,0.5);
+    --shadow-red: 0 4px 12px rgba(193,18,31,0.25);
+    
+    /* 🔘 RADIOS */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+    --radius-full: 9999px;
+    
+    /* ⚡ TRANSICIONES */
+    --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* 🖼️ FONDOS */
+    --bg-primary: #0A0A0C;
+    --bg-secondary: #121214;
+    --bg-card: #1C1C1E;
+    --border-color: #2C2C2E;
+}
+
+/* =====================================================
+   ESTILOS GENERALES
+   ===================================================== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background: var(--bg-primary);
+    color: var(--blanco);
+}
+
+/* Layout de la app */
+.app {
+    display: flex;
+    min-height: 100vh;
+}
+
+.main-content {
+    flex: 1;
+    margin-left: 280px;
+    padding: 1.5rem;
+    overflow-x: auto;
+}
+
+/* Top Bar */
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.page-title h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--blanco);
+    margin-bottom: 0.25rem;
+}
+
+.page-title p {
+    font-size: 0.85rem;
+    color: var(--gris-texto);
+}
+
+.top-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.notification-icon {
+    position: relative;
+    cursor: pointer;
+    font-size: 1.2rem;
+    color: var(--gris-texto);
+    transition: var(--transition);
+}
+
+.notification-icon:hover {
+    color: var(--rojo-primario);
+}
+
+.notification-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: var(--rojo-primario);
+    color: var(--blanco);
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 0.2rem 0.4rem;
+    border-radius: var(--radius-full);
+    min-width: 18px;
+    text-align: center;
+}
+
+.date-display {
+    font-size: 0.85rem;
+    color: var(--gris-texto);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Content */
+.content {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+}
+
+/* =====================================================
+   HISTORIAL DE VEHÍCULOS - ESTILOS ESPECÍFICOS
+   ===================================================== */
+
+.historial-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Panel de búsqueda */
+.busqueda-panel {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    padding: 1.5rem;
+}
+
+.busqueda-grid {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.busqueda-grid .form-group {
+    flex: 1;
+    min-width: 180px;
+    margin-bottom: 0;
+}
+
+.busqueda-grid .form-group label {
+    margin-bottom: 0.5rem;
+    display: block;
+    font-size: 0.8rem;
+    color: var(--gris-texto);
+}
+
+.form-input, .form-select {
+    width: 100%;
+    padding: 0.7rem 1rem;
+    background: var(--gris-oscuro);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    color: var(--blanco);
+    transition: var(--transition);
+}
+
+.form-input:focus, .form-select:focus {
+    outline: none;
+    border-color: var(--rojo-primario);
+    box-shadow: 0 0 0 3px rgba(193,18,31,0.2);
+}
+
+.btn-buscar {
+    background: var(--rojo-primario);
+    color: var(--blanco);
+    border: none;
+    padding: 0.7rem 1.5rem;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-buscar:hover {
+    background: var(--rojo-oscuro);
+    transform: translateY(-2px);
+}
+
+.btn-limpiar {
+    background: var(--gris-oscuro);
+    color: var(--gris-texto);
+    border: 1px solid var(--border-color);
+    padding: 0.7rem 1.5rem;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-limpiar:hover {
+    background: var(--gris-medio);
+    color: var(--blanco);
+}
+
+/* Tarjeta de información del vehículo */
+.vehiculo-info-card {
+    background: linear-gradient(135deg, rgba(193, 18, 31, 0.08), transparent);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.vehiculo-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.vehiculo-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.vehiculo-info-label {
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.vehiculo-info-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--blanco);
+}
+
+.vehiculo-placa {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--rojo-primario);
+    font-family: monospace;
+}
+
+/* Resumen de estadísticas */
+.resumen-stats {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+}
+
+.stat-card {
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.5rem;
+    flex: 1;
+    min-width: 120px;
+    text-align: center;
+    border: 1px solid var(--border-color);
+}
+
+.stat-number {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--rojo-primario);
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+    margin-top: 0.25rem;
+}
+
+/* Lista de órdenes */
+.ordenes-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.orden-historial-card {
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    transition: var(--transition);
+}
+
+.orden-historial-card:hover {
+    border-color: var(--rojo-primario);
+    transform: translateX(4px);
+}
+
+.orden-card-header {
+    padding: 1rem 1.5rem;
+    background: rgba(0, 0, 0, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.orden-codigo {
+    font-family: monospace;
+    font-weight: 700;
+    color: var(--rojo-primario);
+    font-size: 1rem;
+}
+
+.orden-estado {
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-full);
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.orden-estado.Entregado, .orden-estado.Finalizado {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--verde-exito);
+}
+
+.orden-estado.EnProceso {
+    background: rgba(37, 99, 235, 0.15);
+    color: var(--azul-acento);
+}
+
+.orden-estado.EnRecepcion {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--ambar-alerta);
+}
+
+.orden-estado.EnPausa {
+    background: rgba(193, 18, 31, 0.15);
+    color: var(--rojo-primario);
+}
+
+.orden-fecha {
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+}
+
+.orden-card-body {
+    padding: 1rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.orden-info-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+}
+
+.orden-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.orden-info-label {
+    font-size: 0.65rem;
+    color: var(--gris-texto);
+    text-transform: uppercase;
+}
+
+.orden-info-value {
+    font-size: 0.85rem;
+    color: var(--blanco);
+}
+
+.orden-card-footer {
+    padding: 0.75rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.btn-accion {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--gris-texto);
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-accion:hover {
+    border-color: var(--rojo-primario);
+    color: var(--rojo-primario);
+}
+
+.btn-ver-fotos {
+    background: transparent;
+    border: 1px solid var(--azul-acento);
+    color: var(--azul-acento);
+}
+
+.btn-ver-fotos:hover {
+    background: var(--azul-acento);
+    color: var(--blanco);
+}
+
+/* Diagnósticos dentro de la orden */
+.diagnosticos-preview {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed var(--border-color);
+}
+
+.diagnostico-item {
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+    padding: 0.25rem 0;
+}
+
+.diagnostico-tecnico {
+    color: var(--ambar-alerta);
+    font-weight: 500;
+}
+
+/* Modal de fotos */
+.fotos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+}
+
+.foto-item {
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.foto-item:hover {
+    transform: scale(1.02);
+    border-color: var(--rojo-primario);
+}
+
+.foto-item img {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+}
+
+.foto-label {
+    padding: 0.5rem;
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+    text-align: center;
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal.show {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+}
+
+.modal-content.modal-lg {
+    max-width: 900px;
+}
+
+.modal-content.modal-md {
+    max-width: 600px;
+}
+
+.modal-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h2 {
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    color: var(--gris-texto);
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.modal-close:hover {
+    color: var(--rojo-primario);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+.btn-secondary {
+    background: var(--gris-oscuro);
+    color: var(--blanco);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-secondary:hover {
+    background: var(--gris-medio);
+}
+
+/* Detalle de orden en modal */
+.detalle-seccion {
+    margin-bottom: 1.5rem;
+}
+
+.detalle-seccion h4 {
+    font-size: 0.9rem;
+    color: var(--rojo-primario);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.detalle-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.detalle-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.detalle-label {
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+}
+
+.detalle-value {
+    font-size: 0.9rem;
+    color: var(--blanco);
+    font-weight: 500;
+}
+
+.detalle-descripcion {
+    background: var(--gris-oscuro);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    color: var(--gris-texto);
+    line-height: 1.5;
+}
+
+.tecnico-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: var(--gris-medio);
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-full);
+    font-size: 0.7rem;
+    color: var(--blanco);
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--gris-texto);
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.loading-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--gris-texto);
+}
+
+/* Notificaciones toast */
+.toast-notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--bg-card);
+    border-left: 4px solid;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    z-index: 1100;
+    animation: slideIn 0.3s ease;
+    box-shadow: var(--shadow-lg);
+}
+
+.toast-notification.success {
+    border-left-color: var(--verde-exito);
+}
+
+.toast-notification.error {
+    border-left-color: var(--rojo-primario);
+}
+
+.toast-notification.warning {
+    border-left-color: var(--ambar-alerta);
+}
+
+.toast-notification.info {
+    border-left-color: var(--azul-acento);
+}
+
+/* Animaciones */
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--gris-oscuro);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--gris-medio);
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--rojo-primario);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .main-content {
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 768px) {
+    .busqueda-grid {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .busqueda-grid .form-group {
+        min-width: auto;
+    }
+    
+    .btn-buscar, .btn-limpiar {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .orden-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .vehiculo-info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .resumen-stats {
+        flex-direction: column;
+    }
+    
+    .top-bar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

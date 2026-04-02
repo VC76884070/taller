@@ -67,7 +67,7 @@ def jefe_taller_required(f):
 @jefe_taller_ordenes_bp.route('/tecnicos', methods=['GET'])
 @jefe_taller_required
 def listar_tecnicos(current_user):
-    """Listar técnicos disponibles para asignación"""
+    """Listar técnicos disponibles para asignación con su carga actual"""
     try:
         resultado = supabase.table('usuario') \
             .select('id, nombre, contacto') \
@@ -75,8 +75,10 @@ def listar_tecnicos(current_user):
             .execute()
         
         tecnicos = []
+        MAX_ORDENES = 2
+        
         for tecnico in (resultado.data or []):
-            # Contar órdenes activas del técnico
+            # Contar órdenes activas del técnico (sin fecha_hora_final)
             asignaciones = supabase.table('asignaciontecnico') \
                 .select('id_orden_trabajo') \
                 .eq('id_tecnico', tecnico['id']) \
@@ -90,7 +92,9 @@ def listar_tecnicos(current_user):
                 'nombre': tecnico['nombre'],
                 'contacto': tecnico.get('contacto', ''),
                 'ordenes_activas': ordenes_activas,
-                'max_vehiculos': 2
+                'max_vehiculos': MAX_ORDENES,
+                'disponible': ordenes_activas < MAX_ORDENES,
+                'cupo_restante': MAX_ORDENES - ordenes_activas
             })
         
         return jsonify({'success': True, 'tecnicos': tecnicos}), 200
@@ -98,7 +102,7 @@ def listar_tecnicos(current_user):
     except Exception as e:
         logger.error(f"Error listando técnicos: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
+    
 
 @jefe_taller_ordenes_bp.route('/ordenes-activas', methods=['GET'])
 @jefe_taller_required
@@ -298,11 +302,42 @@ def asignar_tecnicos(current_user):
         if not id_orden:
             return jsonify({'error': 'ID de orden requerido'}), 400
         
-        if not tecnicos_ids or len(tecnicos_ids) == 0:
-            return jsonify({'error': 'Debe asignar al menos un técnico'}), 400
-        
+        # Validar que no se exceda el máximo de técnicos por orden
         if len(tecnicos_ids) > 2:
             return jsonify({'error': 'Máximo 2 técnicos por orden'}), 400
+        
+        # =====================================================
+        # VALIDAR CARGA DE TÉCNICOS (excluyendo la orden actual)
+        # =====================================================
+        MAX_ORDENES_POR_TECNICO = 2
+        tecnicos_con_error = []
+        
+        for tecnico_id in tecnicos_ids:
+            # Contar órdenes activas del técnico (excluyendo la orden actual)
+            asignaciones_activas = supabase.table('asignaciontecnico') \
+                .select('id_orden_trabajo') \
+                .eq('id_tecnico', tecnico_id) \
+                .is_('fecha_hora_final', 'null') \
+                .neq('id_orden_trabajo', id_orden) \
+                .execute()
+            
+            ordenes_activas = len(asignaciones_activas.data) if asignaciones_activas.data else 0
+            
+            if ordenes_activas >= MAX_ORDENES_POR_TECNICO:
+                tecnico_info = supabase.table('usuario') \
+                    .select('nombre') \
+                    .eq('id', tecnico_id) \
+                    .single() \
+                    .execute()
+                
+                nombre_tecnico = tecnico_info.data.get('nombre', f"ID {tecnico_id}") if tecnico_info.data else f"ID {tecnico_id}"
+                tecnicos_con_error.append(f"{nombre_tecnico} ya tiene {ordenes_activas}/{MAX_ORDENES_POR_TECNICO} órdenes activas")
+        
+        if tecnicos_con_error:
+            return jsonify({
+                'error': 'No se pueden asignar los técnicos seleccionados',
+                'detalles': tecnicos_con_error
+            }), 400
         
         # Verificar que la orden existe
         orden = supabase.table('ordentrabajo') \
@@ -314,14 +349,18 @@ def asignar_tecnicos(current_user):
         if not orden.data:
             return jsonify({'error': 'Orden no encontrada'}), 404
         
-        # Eliminar asignaciones previas activas
+        # =====================================================
+        # ELIMINAR ASIGNACIONES PREVIAS (cerrar las activas)
+        # =====================================================
         supabase.table('asignaciontecnico') \
             .update({'fecha_hora_final': datetime.datetime.now().isoformat()}) \
             .eq('id_orden_trabajo', id_orden) \
             .is_('fecha_hora_final', 'null') \
             .execute()
         
-        # Crear nuevas asignaciones
+        # =====================================================
+        # CREAR NUEVAS ASIGNACIONES
+        # =====================================================
         for tecnico_id in tecnicos_ids:
             supabase.table('asignaciontecnico').insert({
                 'id_orden_trabajo': id_orden,
@@ -329,8 +368,8 @@ def asignar_tecnicos(current_user):
                 'fecha_hora_inicio': datetime.datetime.now().isoformat()
             }).execute()
         
-        # Si la orden estaba en Recepción, cambiar a EnProceso
-        if orden.data['estado_global'] == 'EnRecepcion':
+        # Cambiar estado de la orden si es necesario
+        if orden.data['estado_global'] == 'EnRecepcion' and len(tecnicos_ids) > 0:
             supabase.table('ordentrabajo') \
                 .update({'estado_global': 'EnProceso'}) \
                 .eq('id', id_orden) \
@@ -342,14 +381,13 @@ def asignar_tecnicos(current_user):
                 'fecha_hora_cambio': datetime.datetime.now().isoformat()
             }).execute()
         
-        logger.info(f"Técnicos asignados a orden {id_orden} por {current_user.get('nombre')}")
+        logger.info(f"Técnicos asignados a orden {id_orden}: {tecnicos_ids}")
         
         return jsonify({'success': True, 'message': 'Técnicos asignados correctamente'}), 200
         
     except Exception as e:
         logger.error(f"Error asignando técnicos: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
 
 @jefe_taller_ordenes_bp.route('/diagnostico-inicial', methods=['POST'])
 @jefe_taller_required
@@ -941,4 +979,378 @@ def subir_audio_diagnostico(current_user):
         
     except Exception as e:
         logger.error(f"Error subiendo audio: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# NUEVOS ENDPOINTS PARA CONTROL DE BAHÍAS Y APROBACIÓN
+# =====================================================
+
+@jefe_taller_ordenes_bp.route('/bahias/estado', methods=['GET'])
+@jefe_taller_required
+def get_estado_bahias(current_user):
+    """Obtener estado actual de todas las bahías (1-12)"""
+    try:
+        # Obtener planificaciones activas (con inicio real pero sin fin real)
+        planificaciones_activas = supabase.table('planificacion') \
+            .select('bahia_asignada, id_orden_trabajo, ordentrabajo!inner(codigo_unico, estado_global)') \
+            .not_.is_('fecha_hora_inicio_real', 'null') \
+            .is_('fecha_hora_fin_real', 'null') \
+            .execute()
+        
+        # Mapear bahías ocupadas
+        bahias_ocupadas = {}
+        for p in (planificaciones_activas.data or []):
+            bahia = p.get('bahia_asignada')
+            if bahia:
+                orden = p.get('ordentrabajo', {})
+                bahias_ocupadas[bahia] = {
+                    'codigo': orden.get('codigo_unico'),
+                    'estado': orden.get('estado_global')
+                }
+        
+        # Generar lista de 12 bahías
+        bahias = []
+        for i in range(1, 13):
+            if i in bahias_ocupadas:
+                bahias.append({
+                    'numero': i,
+                    'estado': 'ocupado',
+                    'orden_codigo': bahias_ocupadas[i]['codigo'],
+                    'orden_estado': bahias_ocupadas[i]['estado']
+                })
+            else:
+                bahias.append({
+                    'numero': i,
+                    'estado': 'libre',
+                    'orden_codigo': None,
+                    'orden_estado': None
+                })
+        
+        ocupadas = len([b for b in bahias if b['estado'] == 'ocupado'])
+        
+        return jsonify({
+            'success': True,
+            'bahias': bahias,
+            'resumen': {
+                'total': 12,
+                'ocupadas': ocupadas,
+                'libres': 12 - ocupadas
+            }
+        }), 200
+    except Exception as e:
+        logger.error(f"Error obteniendo estado de bahías: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@jefe_taller_ordenes_bp.route('/iniciar-trabajo', methods=['POST'])
+@jefe_taller_required
+def iniciar_trabajo_orden(current_user):
+    """Marcar inicio real de trabajo en una orden (ocupa la bahía)"""
+    try:
+        data = request.get_json()
+        id_orden = data.get('id_orden')
+        
+        if not id_orden:
+            return jsonify({'error': 'ID de orden requerido'}), 400
+        
+        # Verificar que la orden existe
+        orden = supabase.table('ordentrabajo') \
+            .select('id, estado_global') \
+            .eq('id', id_orden) \
+            .single() \
+            .execute()
+        
+        if not orden.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        # Verificar que tenga planificación
+        planificacion = supabase.table('planificacion') \
+            .select('id, bahia_asignada') \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
+        if not planificacion.data:
+            return jsonify({'error': 'La orden no tiene planificación (bahía asignada)'}), 400
+        
+        # Verificar que no haya empezado ya
+        if orden.data['estado_global'] not in ['EnRecepcion', 'EnPausa']:
+            return jsonify({'error': f'No se puede iniciar trabajo en estado {orden.data["estado_global"]}'}), 400
+        
+        ahora = datetime.datetime.now().isoformat()
+        
+        # Actualizar inicio real en planificación
+        supabase.table('planificacion') \
+            .update({'fecha_hora_inicio_real': ahora}) \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
+        # Cambiar estado de la orden
+        supabase.table('ordentrabajo') \
+            .update({'estado_global': 'EnProceso'}) \
+            .eq('id', id_orden) \
+            .execute()
+        
+        # Registrar en seguimiento
+        supabase.table('seguimientoorden').insert({
+            'id_orden_trabajo': id_orden,
+            'estado': 'EnProceso',
+            'fecha_hora_cambio': ahora
+        }).execute()
+        
+        bahia = planificacion.data[0].get('bahia_asignada', 'desconocida')
+        logger.info(f"🔧 Trabajo iniciado en bahía {bahia} para orden {id_orden}")
+        
+        return jsonify({'success': True, 'message': f'Trabajo iniciado en bahía {bahia}'}), 200
+        
+    except Exception as e:
+        logger.error(f"Error iniciando trabajo: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@jefe_taller_ordenes_bp.route('/completar-trabajo', methods=['POST'])
+@jefe_taller_required
+def completar_trabajo_orden(current_user):
+    """Técnico marca trabajo como completado (pendiente de aprobación)"""
+    try:
+        data = request.get_json()
+        id_orden = data.get('id_orden')
+        observaciones = data.get('observaciones', '')
+        
+        if not id_orden:
+            return jsonify({'error': 'ID de orden requerido'}), 400
+        
+        # Verificar que la orden existe y está en proceso
+        orden = supabase.table('ordentrabajo') \
+            .select('id, estado_global') \
+            .eq('id', id_orden) \
+            .single() \
+            .execute()
+        
+        if not orden.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        if orden.data['estado_global'] != 'EnProceso':
+            return jsonify({'error': f'Solo se pueden completar órdenes en estado EnProceso (actual: {orden.data["estado_global"]})'}), 400
+        
+        ahora = datetime.datetime.now().isoformat()
+        
+        # Cambiar estado a PendienteAprobacion
+        supabase.table('ordentrabajo') \
+            .update({'estado_global': 'PendienteAprobacion'}) \
+            .eq('id', id_orden) \
+            .execute()
+        
+        # Registrar en seguimiento
+        supabase.table('seguimientoorden').insert({
+            'id_orden_trabajo': id_orden,
+            'estado': 'PendienteAprobacion',
+            'fecha_hora_cambio': ahora
+        }).execute()
+        
+        # Guardar observaciones del técnico si hay
+        if observaciones:
+            supabase.table('avancetrabajo').insert({
+                'id_orden_trabajo': id_orden,
+                'id_tecnico': current_user['id'],
+                'descripcion': observaciones,
+                'tipo_avance': 'finalizacion',
+                'fecha_hora': ahora
+            }).execute()
+        
+        logger.info(f"✅ Trabajo completado para orden {id_orden}, pendiente aprobación")
+        
+        return jsonify({'success': True, 'message': 'Trabajo completado. Pendiente de aprobación por Jefe de Taller'}), 200
+        
+    except Exception as e:
+        logger.error(f"Error completando trabajo: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@jefe_taller_ordenes_bp.route('/aprobar-entrega', methods=['POST'])
+@jefe_taller_required
+def aprobar_entrega_orden(current_user):
+    """Jefe de Taller aprueba trabajo y libera bahía"""
+    try:
+        data = request.get_json()
+        id_orden = data.get('id_orden')
+        aprobado = data.get('aprobado', True)
+        observaciones = data.get('observaciones', '')
+        
+        if not id_orden:
+            return jsonify({'error': 'ID de orden requerido'}), 400
+        
+        # Verificar que la orden existe
+        orden = supabase.table('ordentrabajo') \
+            .select('id, estado_global') \
+            .eq('id', id_orden) \
+            .single() \
+            .execute()
+        
+        if not orden.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        ahora = datetime.datetime.now().isoformat()
+        
+        if aprobado:
+            # APROBADO - Liberar bahía y entregar
+            
+            # 1. Liberar bahía (fecha_hora_fin_real)
+            supabase.table('planificacion') \
+                .update({'fecha_hora_fin_real': ahora}) \
+                .eq('id_orden_trabajo', id_orden) \
+                .execute()
+            
+            # 2. Actualizar orden a Entregado
+            supabase.table('ordentrabajo') \
+                .update({'estado_global': 'Entregado', 'fecha_salida': ahora}) \
+                .eq('id', id_orden) \
+                .execute()
+            
+            # 3. Cerrar asignaciones de técnicos
+            supabase.table('asignaciontecnico') \
+                .update({'fecha_hora_final': ahora}) \
+                .eq('id_orden_trabajo', id_orden) \
+                .is_('fecha_hora_final', 'null') \
+                .execute()
+            
+            mensaje = "Trabajo aprobado y bahía liberada"
+            
+        else:
+            # RECHAZADO - Vuelve a técnico, bahía sigue ocupada
+            
+            supabase.table('ordentrabajo') \
+                .update({'estado_global': 'EnProceso'}) \
+                .eq('id', id_orden) \
+                .execute()
+            
+            # Guardar observaciones del rechazo
+            if observaciones:
+                supabase.table('avancetrabajo').insert({
+                    'id_orden_trabajo': id_orden,
+                    'id_tecnico': current_user['id'],
+                    'descripcion': f'RECHAZO: {observaciones}',
+                    'tipo_avance': 'rechazo',
+                    'fecha_hora': ahora
+                }).execute()
+            
+            mensaje = "Trabajo rechazado. Se enviaron observaciones al técnico"
+        
+        # Registrar en seguimiento
+        supabase.table('seguimientoorden').insert({
+            'id_orden_trabajo': id_orden,
+            'estado': 'Entregado' if aprobado else 'EnProceso',
+            'fecha_hora_cambio': ahora
+        }).execute()
+        
+        logger.info(f"{'✅' if aprobado else '❌'} Orden {id_orden} {'aprobada' if aprobado else 'rechazada'}")
+        
+        return jsonify({'success': True, 'message': mensaje, 'aprobado': aprobado}), 200
+        
+    except Exception as e:
+        logger.error(f"Error aprobando entrega: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@jefe_taller_ordenes_bp.route('/tecnicos/carga', methods=['GET'])
+@jefe_taller_required
+def get_carga_tecnicos(current_user):
+    """Obtener carga de trabajo de técnicos para el panel derecho"""
+    try:
+        resultado = supabase.table('usuario') \
+            .select('id, nombre, contacto') \
+            .eq('id_rol', 4) \
+            .execute()
+        
+        tecnicos = []
+        MAX_ORDENES = 2
+        
+        for tecnico in (resultado.data or []):
+            # Contar órdenes activas
+            asignaciones = supabase.table('asignaciontecnico') \
+                .select('id_orden_trabajo') \
+                .eq('id_tecnico', tecnico['id']) \
+                .is_('fecha_hora_final', 'null') \
+                .execute()
+            
+            ordenes_activas = len(asignaciones.data) if asignaciones.data else 0
+            porcentaje = (ordenes_activas / MAX_ORDENES) * 100
+            
+            tecnicos.append({
+                'id': tecnico['id'],
+                'nombre': tecnico['nombre'],
+                'contacto': tecnico.get('contacto', ''),
+                'ordenes_activas': ordenes_activas,
+                'max_vehiculos': MAX_ORDENES,
+                'porcentaje': porcentaje
+            })
+        
+        return jsonify({'success': True, 'tecnicos': tecnicos}), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo carga de técnicos: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@jefe_taller_ordenes_bp.route('/verificar-bahia', methods=['POST'])
+@jefe_taller_required
+def verificar_bahia(current_user):
+    """Verificar si una bahía está disponible en un horario específico"""
+    try:
+        data = request.get_json()
+        bahia = data.get('bahia')
+        fecha_inicio = data.get('fecha_inicio')
+        horas_estimadas = data.get('horas_estimadas', 1)
+        id_orden_actual = data.get('id_orden_actual')  # Para edición, excluir esta orden
+        
+        if not bahia or not fecha_inicio:
+            return jsonify({'error': 'Bahía y fecha de inicio requeridas'}), 400
+        
+        fecha_inicio_dt = datetime.datetime.fromisoformat(fecha_inicio)
+        fecha_fin_dt = fecha_inicio_dt + datetime.timedelta(hours=float(horas_estimadas))
+        
+        # Llamar a la función SQL
+        resultado = supabase.rpc(
+            'bahia_disponible_en_horario',
+            {
+                'p_bahia': bahia,
+                'p_fecha_inicio': fecha_inicio_dt.isoformat(),
+                'p_fecha_fin': fecha_fin_dt.isoformat(),
+                'p_excluir_orden': id_orden_actual
+            }
+        ).execute()
+        
+        disponible = resultado.data if resultado.data else False
+        
+        return jsonify({
+            'success': True,
+            'disponible': disponible,
+            'bahia': bahia,
+            'fecha_inicio': fecha_inicio_dt.isoformat(),
+            'fecha_fin': fecha_fin_dt.isoformat()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error verificando bahía: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@jefe_taller_ordenes_bp.route('/bahias-ocupadas', methods=['GET'])
+@jefe_taller_required
+def get_bahias_ocupadas(current_user):
+    """Obtener lista de bahías actualmente ocupadas"""
+    try:
+        resultado = supabase.table('vista_bahias_ocupadas') \
+            .select('*') \
+            .execute()
+        
+        bahias_ocupadas = resultado.data if resultado.data else []
+        
+        return jsonify({
+            'success': True,
+            'bahias_ocupadas': bahias_ocupadas
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo bahías ocupadas: {str(e)}")
         return jsonify({'error': str(e)}), 500

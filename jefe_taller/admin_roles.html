@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administración de Roles | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Estilos -->
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/admin_roles.css">
+
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-user-shield"></i> Administración de Roles</h1>
+                    <p>Gestiona los roles y permisos de los usuarios del sistema</p>
+                </div>
+                <div class="top-actions">
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificacionesCount">0</span>
+                    </div>
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content">
+                <!-- Tarjeta de Estadísticas -->
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-users"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="totalUsuarios">0</span>
+                            <span class="stat-label">Total Usuarios</span>
+                        </div>
+                    </div>
+                    <div class="stat-card" id="statJefeOperativo">
+                        <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="totalJefeOperativo">0</span>
+                            <span class="stat-label">Jefes Operativos</span>
+                        </div>
+                    </div>
+                    <div class="stat-card" id="statJefeTaller">
+                        <div class="stat-icon"><i class="fas fa-tools"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="totalJefeTaller">0</span>
+                            <span class="stat-label">Jefes de Taller</span>
+                        </div>
+                    </div>
+                    <div class="stat-card" id="statTecnico">
+                        <div class="stat-icon"><i class="fas fa-wrench"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="totalTecnico">0</span>
+                            <span class="stat-label">Técnicos</span>
+                        </div>
+                    </div>
+                    <div class="stat-card" id="statRepuestos">
+                        <div class="stat-icon"><i class="fas fa-boxes"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="totalRepuestos">0</span>
+                            <span class="stat-label">Enc. Repuestos</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla de Usuarios -->
+                <div class="usuarios-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-list"></i> Usuarios del Sistema</h3>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchInput" placeholder="Buscar por nombre, email o documento...">
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="usuarios-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nombre</th>
+                                    <th>Email</th>
+                                    <th>Documento</th>
+                                    <th>Roles Actuales</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usuariosTableBody">
+                                <tr>
+                                    <td colspan="6" class="loading-row">
+                                        <i class="fas fa-spinner fa-spin"></i> Cargando usuarios...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal de Edición de Roles -->
+    <div id="rolesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-tags"></i> Gestionar Roles</h3>
+                <button class="modal-close" onclick="closeRolesModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="user-info-modal">
+                    <p><strong>Usuario:</strong> <span id="modalUserName"></span></p>
+                    <p><strong>Email:</strong> <span id="modalUserEmail"></span></p>
+                    <p><strong>Documento:</strong> <span id="modalUserDocumento"></span></p>
+                </div>
+                <div class="roles-checkbox-group" id="rolesCheckboxGroup">
+                    <!-- Roles se cargarán dinámicamente -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeRolesModal()">Cancelar</button>
+                <button class="btn-primary" onclick="saveRoles()">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/include.js"></script>
+    <script src="js/admin_roles.js"></script>
+</body>
+
+</html>

@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function init() {
     setupEventListeners();
-    checkSavedSession();
+    checkSavedSession();  // Esto verificará si ya hay sesión
     setupCodeInputs();
 }
 
@@ -154,6 +154,9 @@ async function handleLogin(e) {
             if (rememberCheck?.checked) {
                 localStorage.setItem('furia_remembered', identifier);
                 localStorage.setItem('furia_remembered_type', selectedType);
+            } else {
+                localStorage.removeItem('furia_remembered');
+                localStorage.removeItem('furia_remembered_type');
             }
             
             showToast(`¡Bienvenido ${data.user.nombre}!`, 'success');
@@ -710,8 +713,10 @@ async function registerVehicle() {
 function togglePassword() {
     const type = passwordInput.type === 'password' ? 'text' : 'password';
     passwordInput.type = type;
-    document.getElementById('toggleIcon').className = 
-        type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
+    const toggleIcon = document.getElementById('toggleIcon');
+    if (toggleIcon) {
+        toggleIcon.className = type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
+    }
 }
 
 function setupCodeInputs() {
@@ -784,29 +789,71 @@ function showToast(message, type = 'info') {
     }, 4000);
 }
 
-function checkSavedSession() {
-    const remembered = localStorage.getItem('furia_remembered');
-    const rememberedType = localStorage.getItem('furia_remembered_type');
+async function checkSavedSession() {
     const token = localStorage.getItem('furia_token');
+    const currentPath = window.location.pathname;
     
-    // Si hay token y estamos en login, verificar si es válido
-    if (token && window.location.pathname === '/') {
-        verifyToken().then(user => {
-            if (user) {
-                const redirects = {
-                    'admin_general': '/admin_general/dashboard.html',
-                    'jefe_operativo': '/jefe_operativo/dashboard.html',
-                    'jefe_taller': '/jefe_taller/dashboard.html',
-                    'tecnico_mecanico': '/tecnico_mecanico/misvehiculos.html',
-                    'encargado_rep_almacen': '/encargado_rep_almacen/dashboard.html',
-                    'cliente': '/cliente/misvehiculos.html'
-                };
-                window.location.href = redirects[user.rol] || '/';
+    // Si no hay token, no hacer nada
+    if (!token) return;
+    
+    // Si ya estamos en la página de login, verificar token y redirigir si es válido
+    if (currentPath === '/' || currentPath === '/login.html') {
+        try {
+            const response = await fetch(`${API_URL}/verify-token`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.valid && data.user) {
+                const user = data.user;
+                let redirect = '/';
+                
+                // Determinar redirección basada en roles
+                if (user.type === 'client') {
+                    redirect = '/cliente/misvehiculos.html';
+                } else if (user.roles && user.roles.length > 0) {
+                    const roleRedirects = {
+                        'jefe_operativo': '/jefe_operativo/dashboard.html',
+                        'jefe_taller': '/jefe_taller/dashboard.html',
+                        'tecnico': '/tecnico_mecanico/misvehiculos.html',
+                        'encargado_repuestos': '/encargado_rep_almacen/dashboard.html'
+                    };
+                    
+                    // Buscar el primer rol que tenga redirección
+                    for (const rol of user.roles) {
+                        if (roleRedirects[rol]) {
+                            redirect = roleRedirects[rol];
+                            break;
+                        }
+                    }
+                }
+                
+                // Solo redirigir si no estamos ya en la página destino
+                if (redirect !== '/' && !window.location.pathname.includes(redirect)) {
+                    window.location.href = redirect;
+                }
+            } else {
+                // Token inválido, limpiar
+                localStorage.removeItem('furia_token');
+                localStorage.removeItem('furia_user');
+                localStorage.removeItem('furia_remembered');
+                localStorage.removeItem('furia_remembered_type');
             }
-        });
+        } catch (error) {
+            console.error('Error verificando token:', error);
+            localStorage.removeItem('furia_token');
+            localStorage.removeItem('furia_user');
+        }
     }
     
-    // Cargar credenciales recordadas
+    // Cargar credenciales recordadas para el formulario
+    const remembered = localStorage.getItem('furia_remembered');
+    const rememberedType = localStorage.getItem('furia_remembered_type');
+    
     if (remembered && rememberedType) {
         if (rememberedType === 'staff' && documentInput) {
             documentInput.value = remembered;
@@ -820,39 +867,9 @@ function checkSavedSession() {
         
         // Cambiar al tab correcto
         if (rememberedType !== selectedType) {
-            document.querySelector(`.tab-btn[data-type="${rememberedType}"]`)?.click();
+            const tabBtn = document.querySelector(`.tab-btn[data-type="${rememberedType}"]`);
+            if (tabBtn) tabBtn.click();
         }
-    }
-}
-
-async function verifyToken() {
-    const token = localStorage.getItem('furia_token');
-    
-    if (!token) return null;
-    
-    try {
-        const response = await fetch(`${API_URL}/verify-token`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok || !data.valid) {
-            localStorage.removeItem('furia_token');
-            localStorage.removeItem('furia_user');
-            return null;
-        }
-        
-        return data.user;
-        
-    } catch (error) {
-        console.error('Error verificando token:', error);
-        localStorage.removeItem('furia_token');
-        localStorage.removeItem('furia_user');
-        return null;
     }
 }
 

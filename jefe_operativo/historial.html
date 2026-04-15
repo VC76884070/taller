@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jefe Operativo - Historial | FURIA MOTOR</title>
+    <title>Historial de Vehículos | FURIA MOTOR</title>
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -12,36 +12,27 @@
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <!-- Flatpickr para selector de fechas -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
-
-    <!-- Custom CSS -->
+    <!-- Estilos -->
     <link rel="stylesheet" href="/jefe_operativo/css/dashboard.css">
     <link rel="stylesheet" href="/jefe_operativo/css/historial.css">
+
 </head>
 
 <body>
     <div class="app">
-        <!-- SIDEBAR INCLUIDO -->
         <div id="sidebar-container"></div>
 
-        <!-- MAIN CONTENT -->
         <main class="main-content">
-            <!-- Top Bar -->
             <header class="top-bar">
                 <div class="page-title">
-                    <h1>Historial</h1>
-                    <p>Consulta de órdenes de trabajo finalizadas</p>
+                    <h1><i class="fas fa-history"></i> Historial de Vehículos</h1>
+                    <p>Consulta el historial completo de servicios por vehículo</p>
                 </div>
-
                 <div class="top-actions">
                     <div class="notification-icon">
                         <i class="fas fa-bell"></i>
                         <span class="notification-badge" id="notificacionesCount">0</span>
                     </div>
-
                     <div class="date-display">
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
@@ -49,195 +40,87 @@
                 </div>
             </header>
 
-            <!-- CONTENT -->
             <div class="content">
-                <!-- Barra de búsqueda y filtros -->
-                <div class="search-filters-card">
-                    <!-- Buscador principal -->
-                    <div class="search-main">
-                        <div class="search-wrapper">
-                            <i class="fas fa-search search-icon"></i>
-                            <input type="text" class="search-input" id="searchInput"
-                                placeholder="Buscar por código, placa, cliente, vehículo...">
-                            <button class="search-clear" id="clearSearch">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <button class="btn-filter-toggle" id="toggleFilters">
-                            <i class="fas fa-sliders-h"></i>
-                            Filtros
-                            <span class="filter-badge" id="activeFiltersCount">0</span>
-                        </button>
-                    </div>
+                <div class="historial-container">
 
-                    <!-- Panel de filtros expandible -->
-                    <div class="filters-panel" id="filtersPanel">
-                        <div class="filters-grid">
-                            <!-- Filtro por fecha -->
-                            <div class="filter-group">
-                                <label class="filter-label">
-                                    <i class="far fa-calendar-alt"></i>
-                                    Rango de fechas
-                                </label>
-                                <div class="date-range">
-                                    <input type="text" id="dateFrom" class="filter-input" placeholder="Desde">
-                                    <span class="date-separator">-</span>
-                                    <input type="text" id="dateTo" class="filter-input" placeholder="Hasta">
-                                </div>
+                    <!-- Panel de Búsqueda -->
+                    <div class="busqueda-panel">
+                        <div class="busqueda-grid">
+                            <div class="form-group">
+                                <label><i class="fas fa-search"></i> Buscar por placa</label>
+                                <input type="text" id="searchPlaca" class="form-input" placeholder="Ej: 123ABC, 456DEF"
+                                    autocomplete="off">
                             </div>
-
-                            <!-- Filtro por cliente -->
-                            <div class="filter-group">
-                                <label class="filter-label">
-                                    <i class="far fa-user"></i>
-                                    Cliente
-                                </label>
-                                <select id="filterCliente" class="filter-select">
-                                    <option value="">Todos los clientes</option>
-                                </select>
-                            </div>
-
-                            <!-- Filtro por estado -->
-                            <div class="filter-group">
-                                <label class="filter-label">
-                                    <i class="fas fa-tag"></i>
-                                    Estado final
-                                </label>
-                                <select id="filterEstado" class="filter-select">
-                                    <option value="">Todos los estados</option>
+                            <div class="form-group">
+                                <label><i class="fas fa-filter"></i> Filtrar por estado</label>
+                                <select id="filterEstado" class="form-select">
+                                    <option value="">Todos</option>
+                                    <option value="Entregado">Entregados</option>
+                                    <option value="Finalizado">Finalizados</option>
+                                    <option value="EnProceso">En Proceso</option>
                                     <option value="EnRecepcion">En Recepción</option>
-                                    <option value="EnTaller">En Taller</option>
-                                    <option value="Finalizado">Finalizado</option>
-                                    <option value="Entregado">Entregado</option>
+                                    <option value="EnPausa">En Pausa</option>
                                 </select>
                             </div>
-
-                            <!-- Filtro por vehículo -->
-                            <div class="filter-group">
-                                <label class="filter-label">
-                                    <i class="fas fa-car"></i>
-                                    Vehículo
-                                </label>
-                                <input type="text" id="filterVehiculo" class="filter-input"
-                                    placeholder="Marca o modelo">
+                            <div class="form-group">
+                                <label><i class="fas fa-calendar"></i> Desde</label>
+                                <input type="date" id="fechaDesde" class="form-input">
                             </div>
-                        </div>
-
-                        <div class="filters-actions">
-                            <button class="btn-clear-filters" id="clearFilters">
-                                <i class="fas fa-eraser"></i>
-                                Limpiar filtros
+                            <div class="form-group">
+                                <label><i class="fas fa-calendar"></i> Hasta</label>
+                                <input type="date" id="fechaHasta" class="form-input">
+                            </div>
+                            <button class="btn-buscar" id="btnBuscar">
+                                <i class="fas fa-search"></i> Buscar
                             </button>
-                            <button class="btn-apply-filters" id="applyFilters">
-                                <i class="fas fa-check"></i>
-                                Aplicar filtros
+                            <button class="btn-limpiar" id="btnLimpiar">
+                                <i class="fas fa-eraser"></i> Limpiar
                             </button>
                         </div>
                     </div>
+
+                    <!-- Resultados -->
+                    <div id="resultadosContainer">
+                        <div class="loading-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Ingresa una placa para buscar el historial</p>
+                        </div>
+                    </div>
+
                 </div>
-
-                <!-- Resumen de resultados -->
-                <div class="results-summary">
-                    <div class="results-info">
-                        <span class="results-count" id="resultsCount">0</span> resultados encontrados
-                    </div>
-                    <div class="results-actions">
-                        <button class="btn-export" id="exportData">
-                            <i class="fas fa-download"></i>
-                            Exportar
-                        </button>
-                        <div class="view-options">
-                            <button class="view-option active" data-view="table">
-                                <i class="fas fa-table"></i>
-                            </button>
-                            <button class="view-option" data-view="cards">
-                                <i class="fas fa-th-large"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Vista de tabla -->
-                <div class="table-container" id="tableView">
-                    <table class="historial-table">
-                        <thead>
-                            <tr>
-                                <th class="sortable" data-sort="codigo_unico">
-                                    Código
-                                    <i class="fas fa-sort"></i>
-                                </th>
-                                <th class="sortable" data-sort="vehiculo">
-                                    Vehículo
-                                    <i class="fas fa-sort"></i>
-                                </th>
-                                <th>Cliente</th>
-                                <th class="sortable" data-sort="fecha_ingreso">
-                                    Fecha ingreso
-                                    <i class="fas fa-sort"></i>
-                                </th>
-                                <th>Fecha salida</th>
-                                <th class="sortable" data-sort="total">
-                                    Total facturado
-                                    <i class="fas fa-sort"></i>
-                                </th>
-                                <th>Estado final</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="historialTableBody">
-                            <tr>
-                                <td colspan="8" style="text-align: center; padding: 3rem;">
-                                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem;"></i>
-                                    <p>Cargando historial...</p>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-
-                    <!-- Paginación -->
-                    <div class="pagination-container">
-                        <div class="pagination-info">
-                            Mostrando <span id="startRecord">0</span> - <span id="endRecord">0</span> de
-                            <span id="totalRecords">0</span> registros
-                        </div>
-                        <div class="pagination-controls">
-                            <button class="pagination-btn" id="prevPage" disabled>
-                                <i class="fas fa-chevron-left"></i>
-                            </button>
-                            <div class="pagination-pages" id="paginationPages"></div>
-                            <button class="pagination-btn" id="nextPage" disabled>
-                                <i class="fas fa-chevron-right"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Vista de tarjetas (alternativa) -->
-                <div class="cards-view" id="cardsView" style="display: none;"></div>
             </div>
         </main>
     </div>
 
-    <!-- Modal de detalle -->
-    <div class="modal" id="detalleModal">
+    <!-- Modal para ver detalle de orden (UNIFICADO) -->
+    <div class="modal" id="modalDetalleOrden">
         <div class="modal-content modal-xl">
             <div class="modal-header">
-                <h2>Detalle de Orden</h2>
-                <button class="modal-close" onclick="cerrarDetalleModal()">&times;</button>
+                <h2><i class="fas fa-clipboard-list"></i> Detalle Completo de Orden</h2>
+                <button class="modal-close" onclick="window.cerrarModalDetalle()">&times;</button>
             </div>
-            <div class="modal-body" id="detalleModalBody">
+            <div class="modal-body" id="modalDetalleBody">
                 <!-- Contenido dinámico -->
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarDetalleModal()">Cerrar</button>
-                <button class="btn-primary" onclick="imprimirDetalle()">
-                    <i class="fas fa-print"></i>
-                    Imprimir
-                </button>
-                <button class="btn-outline" onclick="exportarDetalle()">
-                    <i class="fas fa-file-pdf"></i>
-                    Exportar PDF
-                </button>
+                <button class="btn-secondary" onclick="window.cerrarModalDetalle()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver imágenes ampliadas -->
+    <div class="modal" id="modalImagen">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2><i class="fas fa-image"></i> <span id="imagenTitulo">Imagen</span></h2>
+                <button class="modal-close" onclick="window.cerrarModalImagen()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalImagenBody">
+                <img id="imagenAmpliada" src="" alt="Imagen ampliada"
+                    style="width: 100%; border-radius: var(--radius-md);">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="window.cerrarModalImagen()">Cerrar</button>
             </div>
         </div>
     </div>

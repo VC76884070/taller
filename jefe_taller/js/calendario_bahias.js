@@ -1,28 +1,46 @@
 // =====================================================
-// CALENDARIO Y BAHÍAS - JEFE TALLER
-// PLANIFICACIÓN OPERATIVA
+// CALENDARIO Y BAHÍAS - JEFE TALLER (CORREGIDO)
+// CALENDARIO MENSUAL CON DETALLE POR DÍA
 // =====================================================
 
 const API_URL = 'http://localhost:5000/api';
 let userInfo = null;
+let currentUserRoles = [];
 let pollingInterval = null;
 
 // Variables de estado
 let fechaActual = new Date();
-let vistaActual = 'semana'; // 'semana' o 'dia'
-let ordenesPlanificadas = [];
+let ordenesPorDia = {};  // { "YYYY-MM-DD": [ordenes] }
 let bahiasEstado = [];
 let tecnicosCarga = [];
-let eventosCalendario = [];
+let statsGenerales = {
+    total: 0,
+    enProceso: 0,
+    enPausa: 0,
+    finalizadas: 0
+};
+let diagnosticoStats = {
+    pendiente: 0,
+    aprobado: 0,
+    rechazado: 0
+};
 
-// Elementos DOM
-const semanaGrid = document.getElementById('semanaGrid');
-const rangoSemana = document.getElementById('rangoSemana');
-const vistaSemana = document.getElementById('vistaSemana');
-const vistaDia = document.getElementById('vistaDia');
-const bahiasGrid = document.getElementById('bahiasGrid');
-const tecnicosCargaLista = document.getElementById('tecnicosCargaLista');
-const bahiasOcupadasSpan = document.getElementById('bahiasOcupadas');
+// Mapeo de estados a colores y texto
+const ESTADOS_ORDEN = {
+    'EnRecepcion': { texto: 'En Recepción', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.15)' },
+    'EnProceso': { texto: 'En Proceso', color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.15)' },
+    'EnPausa': { texto: 'En Pausa', color: '#EF4444', bg: 'rgba(239, 68, 68, 0.15)' },
+    'PendienteAprobacion': { texto: 'Pendiente Aprobación', color: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.15)' },
+    'Finalizado': { texto: 'Finalizado', color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)' },
+    'Entregado': { texto: 'Entregado', color: '#059669', bg: 'rgba(5, 150, 105, 0.15)' }
+};
+
+const ESTADOS_DIAGNOSTICO = {
+    'borrador': { texto: 'Borrador', color: '#6B7280', bg: 'rgba(107, 114, 128, 0.15)' },
+    'pendiente': { texto: 'Pendiente', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.15)' },
+    'aprobado': { texto: 'Aprobado', color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)' },
+    'rechazado': { texto: 'Rechazado', color: '#EF4444', bg: 'rgba(239, 68, 68, 0.15)' }
+};
 
 // =====================================================
 // INICIALIZACIÓN
@@ -34,21 +52,67 @@ document.addEventListener('DOMContentLoaded', async () => {
     initPage();
     setupEventListeners();
     
-    await cargarDatosIniciales();
-    await renderizarTodo();
+    await cargarTodosLosDatos();
+    renderizarCalendario();
     
     iniciarPolling();
 });
 
 async function checkAuth() {
     const token = localStorage.getItem('furia_token');
-    userInfo = JSON.parse(localStorage.getItem('furia_user') || '{}');
+    const userData = localStorage.getItem('furia_user');
     
-    if (!token || (userInfo.rol !== 'jefe_taller' && userInfo.id_rol !== 3)) {
+    if (!token) {
         window.location.href = '/';
         return false;
     }
-    return true;
+    
+    try {
+        // Decodificar token para obtener información del usuario
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        userInfo = payload.user;
+        
+        // Obtener roles del usuario
+        if (userInfo && userInfo.roles && Array.isArray(userInfo.roles)) {
+            currentUserRoles = userInfo.roles;
+        } else if (userData) {
+            const user = JSON.parse(userData);
+            currentUserRoles = user.roles || [];
+            if (userInfo) userInfo.roles = currentUserRoles;
+        }
+        
+        // Si no hay roles en el token, intentar obtener de userData
+        if (currentUserRoles.length === 0 && userData) {
+            const user = JSON.parse(userData);
+            currentUserRoles = user.roles || [];
+            if (userInfo) userInfo.roles = currentUserRoles;
+        }
+        
+        // Verificar si tiene rol de jefe_taller (usando el nuevo sistema)
+        const tieneRolJefeTaller = currentUserRoles.includes('jefe_taller') || 
+                                    (userInfo && userInfo.rol_principal === 'jefe_taller') ||
+                                    (userInfo && userInfo.rol === 'jefe_taller');
+        
+        // Compatibilidad con sistema antiguo (por si acaso)
+        const tieneIdRolAntiguo = userInfo && (userInfo.id_rol === 2 || userInfo.id_rol === 3);
+        
+        if (!tieneRolJefeTaller && !tieneIdRolAntiguo) {
+            console.warn('Usuario no tiene permisos de jefe_taller', currentUserRoles);
+            mostrarNotificacion('No tienes permisos para acceder a esta sección', 'error');
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 2000);
+            return false;
+        }
+        
+        console.log('✅ Autenticación exitosa - Roles:', currentUserRoles);
+        return true;
+        
+    } catch (error) {
+        console.error('Error verificando autenticación:', error);
+        window.location.href = '/';
+        return false;
+    }
 }
 
 function initPage() {
@@ -60,35 +124,58 @@ function initPage() {
     if (dateDisplay) {
         dateDisplay.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
     }
+    
+    // Mostrar nombre de usuario
+    const userNameElement = document.getElementById('userNombre');
+    if (userNameElement && userInfo) {
+        userNameElement.textContent = userInfo.nombre || 'Usuario';
+    }
+    
+    // Mostrar badge de roles si tiene múltiples
+    if (currentUserRoles.length > 1) {
+        const userContainer = document.querySelector('.user-info');
+        if (userContainer && !document.querySelector('.user-roles-badge')) {
+            const rolesBadge = document.createElement('span');
+            rolesBadge.className = 'user-roles-badge';
+            rolesBadge.style.cssText = `
+                font-size: 0.7rem;
+                background: var(--gris-200);
+                padding: 0.2rem 0.5rem;
+                border-radius: 12px;
+                margin-left: 0.5rem;
+            `;
+            const nombresRoles = currentUserRoles.map(r => {
+                const nombres = {
+                    'jefe_taller': 'Jefe Taller',
+                    'jefe_operativo': 'Jefe Operativo',
+                    'tecnico': 'Técnico',
+                    'encargado_repuestos': 'Repuestos'
+                };
+                return nombres[r] || r;
+            }).join(', ');
+            rolesBadge.textContent = nombresRoles;
+            const userNameSpan = document.getElementById('userNombre');
+            if (userNameSpan && userNameSpan.parentElement) {
+                userNameSpan.parentElement.appendChild(rolesBadge);
+            }
+        }
+    }
 }
 
 function setupEventListeners() {
-    document.getElementById('prevSemanaBtn')?.addEventListener('click', () => {
-        fechaActual.setDate(fechaActual.getDate() - 7);
-        renderizarTodo();
+    document.getElementById('prevMesBtn')?.addEventListener('click', () => {
+        fechaActual.setMonth(fechaActual.getMonth() - 1);
+        renderizarCalendario();
     });
     
-    document.getElementById('nextSemanaBtn')?.addEventListener('click', () => {
-        fechaActual.setDate(fechaActual.getDate() + 7);
-        renderizarTodo();
+    document.getElementById('nextMesBtn')?.addEventListener('click', () => {
+        fechaActual.setMonth(fechaActual.getMonth() + 1);
+        renderizarCalendario();
     });
     
     document.getElementById('hoyBtn')?.addEventListener('click', () => {
         fechaActual = new Date();
-        renderizarTodo();
-    });
-    
-    document.querySelectorAll('.vista-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const vista = btn.dataset.vista;
-            cambiarVista(vista);
-        });
-    });
-    
-    document.getElementById('refreshCargaBtn')?.addEventListener('click', async () => {
-        await cargarDatosIniciales();
-        renderizarTodo();
-        mostrarNotificacion('Datos actualizados', 'success');
+        renderizarCalendario();
     });
     
     document.getElementById('refreshBahiasBtn')?.addEventListener('click', async () => {
@@ -96,26 +183,45 @@ function setupEventListeners() {
         renderizarBahias();
         mostrarNotificacion('Bahías actualizadas', 'success');
     });
+    
+    // Logout
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) logoutBtn.addEventListener('click', logout);
+    
+    // Cambio de pestaña
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const tabId = btn.dataset.tab;
+            cambiarPestana(tabId);
+        });
+    });
 }
 
-function cambiarVista(vista) {
-    vistaActual = vista;
-    
-    document.querySelectorAll('.vista-btn').forEach(btn => {
+function logout() {
+    localStorage.removeItem('furia_token');
+    localStorage.removeItem('furia_user');
+    window.location.href = '/';
+}
+
+function cambiarPestana(tabId) {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('active');
-        if (btn.dataset.vista === vista) {
+        if (btn.dataset.tab === tabId) {
             btn.classList.add('active');
         }
     });
     
-    if (vista === 'semana') {
-        vistaSemana.style.display = 'block';
-        vistaDia.style.display = 'none';
-        renderizarCalendarioSemana();
-    } else {
-        vistaSemana.style.display = 'none';
-        vistaDia.style.display = 'block';
-        renderizarCalendarioDia();
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.remove('active');
+        if (panel.id === `panel-${tabId}`) {
+            panel.classList.add('active');
+        }
+    });
+    
+    if (tabId === 'bahias') {
+        renderizarBahias();
+    } else if (tabId === 'estadisticas') {
+        renderizarEstadisticas();
     }
 }
 
@@ -123,12 +229,14 @@ function cambiarVista(vista) {
 // CARGA DE DATOS
 // =====================================================
 
-async function cargarDatosIniciales() {
+async function cargarTodosLosDatos() {
     try {
         await Promise.all([
-            cargarOrdenesPlanificadas(),
+            cargarOrdenesConPlanificacion(),
             cargarBahias(),
-            cargarCargaTecnicos()
+            cargarCargaTecnicos(),
+            cargarEstadisticas(),
+            cargarDiagnosticosStats()
         ]);
     } catch (error) {
         console.error('Error cargando datos:', error);
@@ -136,20 +244,49 @@ async function cargarDatosIniciales() {
     }
 }
 
-async function cargarOrdenesPlanificadas() {
+async function cargarOrdenesConPlanificacion() {
     try {
-        const response = await fetch(`${API_URL}/jefe-taller/ordenes-planificadas`, {
+        const response = await fetch(`${API_URL}/jefe-taller/ordenes-con-planificacion`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
         });
         
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
         const data = await response.json();
         if (response.ok && data.ordenes) {
-            ordenesPlanificadas = data.ordenes;
-            generarEventosCalendario();
+            ordenesPorDia = {};
+            
+            data.ordenes.forEach(orden => {
+                if (orden.fecha_hora_inicio_estimado) {
+                    const fecha = new Date(orden.fecha_hora_inicio_estimado);
+                    const fechaKey = fecha.toISOString().split('T')[0];
+                    
+                    if (!ordenesPorDia[fechaKey]) {
+                        ordenesPorDia[fechaKey] = [];
+                    }
+                    
+                    ordenesPorDia[fechaKey].push({
+                        id: orden.id,
+                        codigo_unico: orden.codigo_unico,
+                        estado_global: orden.estado_global,
+                        bahia_asignada: orden.bahia_asignada,
+                        horas_estimadas: orden.horas_estimadas,
+                        placa: orden.placa,
+                        marca: orden.marca,
+                        modelo: orden.modelo,
+                        cliente_nombre: orden.cliente_nombre,
+                        tecnicos: orden.tecnicos || [],
+                        fecha_inicio: orden.fecha_hora_inicio_estimado
+                    });
+                }
+            });
         }
     } catch (error) {
-        console.error('Error cargando órdenes planificadas:', error);
-        ordenesPlanificadas = [];
+        console.error('Error cargando órdenes:', error);
+        ordenesPorDia = {};
     }
 }
 
@@ -159,10 +296,16 @@ async function cargarBahias() {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
         });
         
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
         const data = await response.json();
         if (response.ok && data.bahias) {
             bahiasEstado = data.bahias;
             const ocupadas = bahiasEstado.filter(b => b.estado === 'ocupado').length;
+            const bahiasOcupadasSpan = document.getElementById('bahiasOcupadas');
             if (bahiasOcupadasSpan) {
                 bahiasOcupadasSpan.textContent = `${ocupadas}/12 ocupadas`;
             }
@@ -172,8 +315,7 @@ async function cargarBahias() {
         bahiasEstado = Array.from({ length: 12 }, (_, i) => ({
             numero: i + 1,
             estado: 'libre',
-            orden_codigo: null,
-            orden_estado: null
+            orden_codigo: null
         }));
     }
 }
@@ -194,340 +336,257 @@ async function cargarCargaTecnicos() {
     }
 }
 
-function generarEventosCalendario() {
-    eventosCalendario = [];
-    
-    ordenesPlanificadas.forEach(orden => {
-        if (orden.fecha_hora_inicio_estimado && orden.horas_estimadas) {
-            const inicio = new Date(orden.fecha_hora_inicio_estimado);
-            const fin = new Date(inicio.getTime() + (orden.horas_estimadas * 60 * 60 * 1000));
-            
-            eventosCalendario.push({
-                id: orden.id,
-                codigo: orden.codigo_unico,
-                titulo: orden.codigo_unico,
-                inicio: inicio,
-                fin: fin,
-                bahia: orden.bahia_asignada,
-                tecnicos: orden.tecnicos || [],
-                cliente: orden.cliente_nombre,
-                vehiculo: `${orden.marca} ${orden.modelo} (${orden.placa})`
-            });
+async function cargarEstadisticas() {
+    try {
+        const response = await fetch(`${API_URL}/jefe-taller/estadisticas-ordenes`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            statsGenerales = data;
         }
-    });
+    } catch (error) {
+        console.error('Error cargando estadísticas:', error);
+    }
+}
+
+async function cargarDiagnosticosStats() {
+    try {
+        const response = await fetch(`${API_URL}/jefe-taller/diagnosticos-stats`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+        });
+        
+        const data = await response.json();
+        if (response.ok && data.stats) {
+            diagnosticoStats = data.stats;
+        }
+    } catch (error) {
+        console.error('Error cargando estadísticas de diagnósticos:', error);
+    }
 }
 
 // =====================================================
-// RENDERIZADO PRINCIPAL
+// RENDERIZADO DEL CALENDARIO MENSUAL
 // =====================================================
 
-async function renderizarTodo() {
-    await cargarDatosIniciales();
+function renderizarCalendario() {
+    const grid = document.getElementById('calendarioGrid');
+    const mesTitulo = document.getElementById('mesActual');
+    if (!grid) return;
     
-    if (vistaActual === 'semana') {
-        renderizarCalendarioSemana();
-    } else {
-        renderizarCalendarioDia();
+    const año = fechaActual.getFullYear();
+    const mes = fechaActual.getMonth();
+    
+    // Actualizar título
+    const nombreMes = fechaActual.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    if (mesTitulo) {
+        mesTitulo.textContent = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
     }
     
-    renderizarBahias();
-    renderizarCargaTecnicos();
-}
-
-function renderizarCalendarioSemana() {
-    if (!semanaGrid) return;
+    // Primer día del mes y último día
+    const primerDia = new Date(año, mes, 1);
+    const ultimoDia = new Date(año, mes + 1, 0);
     
-    const dias = obtenerDiasSemana(fechaActual);
-    const horas = obtenerHorasDia();
+    // Día de la semana del primer día (0 = domingo, ajustar a lunes = 0)
+    let diaInicioSemana = primerDia.getDay();
+    diaInicioSemana = diaInicioSemana === 0 ? 6 : diaInicioSemana - 1;
     
-    // Actualizar rango de semana
-    const inicioSemana = dias[0];
-    const finSemana = dias[6];
-    rangoSemana.textContent = `${inicioSemana.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} - ${finSemana.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    const totalDias = ultimoDia.getDate();
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
     
-    // Construir grid
-    let html = `
-        <div class="hora-columna">
-            <div class="dia-header"></div>
-            ${horas.map(hora => `<div class="hora-fila">${hora}</div>`).join('')}
-        </div>
-    `;
+    let html = '';
     
-    dias.forEach((dia, idx) => {
-        const esHoy = dia.toDateString() === new Date().toDateString();
+    // Días vacíos al inicio
+    for (let i = 0; i < diaInicioSemana; i++) {
+        html += `<div class="celda-dia vacio"></div>`;
+    }
+    
+    // Días del mes
+    for (let dia = 1; dia <= totalDias; dia++) {
+        const fechaDia = new Date(año, mes, dia);
+        const fechaKey = fechaDia.toISOString().split('T')[0];
+        const ordenesDelDia = ordenesPorDia[fechaKey] || [];
+        const esHoy = fechaDia.toDateString() === hoy.toDateString();
+        
+        // Contar órdenes por estado
+        const estados = {
+            EnProceso: 0,
+            EnPausa: 0,
+            EnRecepcion: 0,
+            PendienteAprobacion: 0,
+            Finalizado: 0,
+            Entregado: 0
+        };
+        
+        ordenesDelDia.forEach(orden => {
+            if (estados[orden.estado_global] !== undefined) {
+                estados[orden.estado_global]++;
+            }
+        });
         
         html += `
-            <div class="dia-columna">
-                <div class="dia-header ${esHoy ? 'actual' : ''}">
-                    <div class="dia-nombre">${dia.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase()}</div>
-                    <div class="dia-fecha">${dia.getDate()}</div>
+            <div class="celda-dia ${esHoy ? 'hoy' : ''} ${ordenesDelDia.length > 0 ? 'con-ordenes' : ''}" 
+                 onclick="abrirDetalleDia('${fechaKey}', ${dia}, ${mes + 1}, ${año})">
+                <div class="dia-numero">${dia}</div>
+                <div class="dia-eventos">
+                    ${ordenesDelDia.slice(0, 3).map(orden => `
+                        <div class="evento-mini ${orden.estado_global}" title="${orden.codigo_unico} - ${ESTADOS_ORDEN[orden.estado_global]?.texto || orden.estado_global}">
+                            ${orden.codigo_unico}
+                        </div>
+                    `).join('')}
+                    ${ordenesDelDia.length > 3 ? `<div class="evento-mas">+${ordenesDelDia.length - 3} más</div>` : ''}
                 </div>
+                ${ordenesDelDia.length > 0 ? `
+                    <div class="dia-resumen">
+                        ${estados.EnProceso > 0 ? `<span class="resumen-badge proceso" title="En Proceso"><i class="fas fa-tools"></i> ${estados.EnProceso}</span>` : ''}
+                        ${estados.EnPausa > 0 ? `<span class="resumen-badge pausa" title="En Pausa"><i class="fas fa-pause"></i> ${estados.EnPausa}</span>` : ''}
+                        ${estados.Finalizado > 0 ? `<span class="resumen-badge finalizado" title="Finalizado"><i class="fas fa-check"></i> ${estados.Finalizado}</span>` : ''}
+                    </div>
+                ` : ''}
+            </div>
         `;
-        
-        horas.forEach((hora, horaIdx) => {
-            const horaNum = parseInt(hora.split(':')[0]);
-            const fechaHora = new Date(dia);
-            fechaHora.setHours(horaNum, 0, 0);
-            
-            // Buscar eventos en esta celda
-            const eventosEnCelda = eventosCalendario.filter(evento => {
-                const eventInicio = new Date(evento.inicio);
-                return eventInicio.toDateString() === dia.toDateString() && 
-                       eventInicio.getHours() === horaNum;
-            });
-            
-            html += `
-                <div class="celda-horaria" data-fecha="${fechaHora.toISOString()}" onclick="abrirModalAsignarOrden('${fechaHora.toISOString()}')">
-                    ${eventosEnCelda.map(evento => `
-                        <div class="evento-orden" onclick="event.stopPropagation(); verDetalleOrden(${evento.id})" style="top: 2px; left: 2px; right: 2px;">
-                            <div class="evento-codigo">${escapeHtml(evento.codigo)}</div>
-                            <div class="evento-hora">Bahía ${evento.bahia || '?'}</div>
+    }
+    
+    // Completar grid (6 filas x 7 columnas = 42 celdas)
+    const celdasTotales = diaInicioSemana + totalDias;
+    const celdasFaltantes = 42 - celdasTotales;
+    for (let i = 0; i < celdasFaltantes; i++) {
+        html += `<div class="celda-dia vacio"></div>`;
+    }
+    
+    grid.innerHTML = html;
+}
+
+// =====================================================
+// MODAL DE DETALLE DEL DÍA
+// =====================================================
+
+async function abrirDetalleDia(fechaKey, dia, mes, año) {
+    const modal = document.getElementById('modalDetalleDia');
+    const titulo = document.getElementById('modalDiaTitulo');
+    const body = document.getElementById('modalDiaBody');
+    
+    const fecha = new Date(año, mes - 1, dia);
+    const nombreDia = fecha.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    if (titulo) titulo.innerHTML = `<i class="fas fa-calendar-day"></i> Órdenes del ${nombreDia}`;
+    
+    const ordenes = ordenesPorDia[fechaKey] || [];
+    
+    if (body) {
+        if (ordenes.length === 0) {
+            body.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-calendar-check"></i>
+                    <p>No hay órdenes programadas para este día</p>
+                </div>
+            `;
+        } else {
+            body.innerHTML = `
+                <div class="ordenes-dia-lista">
+                    ${ordenes.map(orden => `
+                        <div class="orden-dia-card" onclick="verDetalleOrden(${orden.id})">
+                            <div class="orden-card-header">
+                                <span class="orden-codigo">${escapeHtml(orden.codigo_unico)}</span>
+                                <span class="orden-estado ${orden.estado_global}" style="background: ${ESTADOS_ORDEN[orden.estado_global]?.bg}; color: ${ESTADOS_ORDEN[orden.estado_global]?.color}">
+                                    <i class="fas ${getEstadoIcono(orden.estado_global)}"></i>
+                                    ${ESTADOS_ORDEN[orden.estado_global]?.texto || orden.estado_global}
+                                </span>
+                            </div>
+                            <div class="orden-card-body">
+                                <div class="orden-info">
+                                    <i class="fas fa-car"></i>
+                                    <span>${escapeHtml(orden.marca || '')} ${escapeHtml(orden.modelo || '')} (${escapeHtml(orden.placa || 'N/A')})</span>
+                                </div>
+                                <div class="orden-info">
+                                    <i class="fas fa-user"></i>
+                                    <span>${escapeHtml(orden.cliente_nombre || 'N/A')}</span>
+                                </div>
+                                <div class="orden-info">
+                                    <i class="fas fa-warehouse"></i>
+                                    <span>Bahía ${orden.bahia_asignada || 'No asignada'}</span>
+                                </div>
+                                <div class="orden-info">
+                                    <i class="fas fa-clock"></i>
+                                    <span>${new Date(orden.fecha_inicio).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - ${orden.horas_estimadas || '?'} horas estimadas</span>
+                                </div>
+                                <div class="orden-info">
+                                    <i class="fas fa-users"></i>
+                                    <span>Técnicos: ${orden.tecnicos?.map(t => t.nombre).join(', ') || 'Sin asignar'}</span>
+                                </div>
+                            </div>
+                            <div class="orden-card-footer">
+                                <button class="btn-ver-detalle" onclick="event.stopPropagation(); verDetalleOrden(${orden.id})">
+                                    <i class="fas fa-eye"></i> Ver detalle completo
+                                </button>
+                            </div>
                         </div>
                     `).join('')}
                 </div>
             `;
-        });
-        
-        html += `</div>`;
-    });
+        }
+    }
     
-    semanaGrid.innerHTML = html;
+    if (modal) modal.classList.add('show');
 }
 
-function renderizarCalendarioDia() {
-    const diaDetalle = document.getElementById('diaDetalle');
-    if (!diaDetalle) return;
-    
-    const fecha = fechaActual;
-    const horas = obtenerHorasDia();
-    
-    rangoSemana.textContent = fecha.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    
-    let html = `<div class="dia-timeline">`;
-    
-    horas.forEach(hora => {
-        const horaNum = parseInt(hora.split(':')[0]);
-        const fechaHora = new Date(fecha);
-        fechaHora.setHours(horaNum, 0, 0);
-        
-        const eventosEnHora = eventosCalendario.filter(evento => {
-            const eventInicio = new Date(evento.inicio);
-            return eventInicio.toDateString() === fecha.toDateString() && 
-                   eventInicio.getHours() === horaNum;
-        });
-        
-        html += `
-            <div class="timeline-hora">
-                <div class="timeline-hora-label">${hora}</div>
-                <div class="timeline-hora-contenido">
-                    ${eventosEnHora.map(evento => `
-                        <div class="evento-orden" style="position: relative; margin-bottom: 0.5rem;" onclick="verDetalleOrden(${evento.id})">
-                            <div class="evento-codigo">${escapeHtml(evento.codigo)}</div>
-                            <div class="evento-hora">Bahía ${evento.bahia || '?'} | ${escapeHtml(evento.cliente || 'Sin cliente')}</div>
-                        </div>
-                    `).join('')}
-                    ${eventosEnHora.length === 0 ? '<span class="text-small" style="color: var(--gris-texto);">Sin órdenes planificadas</span>' : ''}
-                </div>
-            </div>
-        `;
-    });
-    
-    html += `</div>`;
-    diaDetalle.innerHTML = html;
+function cerrarModalDetalleDia() {
+    const modal = document.getElementById('modalDetalleDia');
+    if (modal) modal.classList.remove('show');
 }
+
+function getEstadoIcono(estado) {
+    const iconos = {
+        'EnRecepcion': 'fa-clipboard-list',
+        'EnProceso': 'fa-tools',
+        'EnPausa': 'fa-pause-circle',
+        'PendienteAprobacion': 'fa-hourglass-half',
+        'Finalizado': 'fa-check-circle',
+        'Entregado': 'fa-check-double'
+    };
+    return iconos[estado] || 'fa-question-circle';
+}
+
+// =====================================================
+// RENDERIZADO DE BAHÍAS
+// =====================================================
 
 function renderizarBahias() {
-    if (!bahiasGrid) return;
+    const grid = document.getElementById('bahiasGrid');
+    if (!grid) return;
     
-    bahiasGrid.innerHTML = bahiasEstado.map(bahia => {
+    grid.innerHTML = bahiasEstado.map(bahia => {
         let estadoClass = '';
         let estadoTexto = '';
+        let bgColor = '';
         
         switch (bahia.estado) {
             case 'ocupado':
                 estadoClass = 'ocupado';
                 estadoTexto = 'Ocupado';
-                break;
-            case 'libre':
-                estadoClass = 'libre';
-                estadoTexto = 'Libre';
+                bgColor = 'rgba(239, 68, 68, 0.15)';
                 break;
             case 'mantenimiento':
                 estadoClass = 'mantenimiento';
                 estadoTexto = 'Mantenimiento';
+                bgColor = 'rgba(245, 158, 11, 0.15)';
                 break;
             default:
                 estadoClass = 'libre';
                 estadoTexto = 'Libre';
+                bgColor = 'rgba(16, 185, 129, 0.15)';
         }
         
         return `
             <div class="bahia-card ${bahia.estado}" onclick="verDetalleBahia(${bahia.numero})">
                 <div class="bahia-numero">Bahía ${bahia.numero}</div>
-                <div class="bahia-estado ${estadoClass}">${estadoTexto}</div>
+                <div class="bahia-estado ${estadoClass}" style="background: ${bgColor}">${estadoTexto}</div>
                 ${bahia.orden_codigo ? `<div class="bahia-orden">${escapeHtml(bahia.orden_codigo)}</div>` : ''}
+                ${bahia.orden_estado ? `<div class="bahia-orden-estado">${escapeHtml(bahia.orden_estado)}</div>` : ''}
             </div>
         `;
     }).join('');
-}
-
-function renderizarCargaTecnicos() {
-    if (!tecnicosCargaLista) return;
-    
-    if (tecnicosCarga.length === 0) {
-        tecnicosCargaLista.innerHTML = '<div class="empty-state"><p>No hay técnicos registrados</p></div>';
-        return;
-    }
-    
-    tecnicosCargaLista.innerHTML = tecnicosCarga.map(tecnico => {
-        const porcentaje = (tecnico.ordenes_activas / tecnico.max_vehiculos) * 100;
-        let cargaClass = '';
-        let textoClass = '';
-        
-        if (porcentaje >= 100) {
-            cargaClass = 'alto';
-            textoClass = 'alto';
-        } else if (porcentaje >= 50) {
-            cargaClass = 'medio';
-            textoClass = 'medio';
-        } else {
-            cargaClass = 'bajo';
-            textoClass = 'bajo';
-        }
-        
-        return `
-            <div class="tecnico-carga-item">
-                <div class="tecnico-info">
-                    <div class="tecnico-nombre">${escapeHtml(tecnico.nombre)}</div>
-                    <div class="tecnico-contacto"><i class="fas fa-phone"></i> ${escapeHtml(tecnico.contacto || 'Sin contacto')}</div>
-                </div>
-                <div class="carga-info">
-                    <div class="carga-bar-container">
-                        <div class="carga-bar ${cargaClass}" style="width: ${porcentaje}%"></div>
-                    </div>
-                    <div class="carga-texto ${textoClass}">
-                        ${tecnico.ordenes_activas}/${tecnico.max_vehiculos}
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-// =====================================================
-// FUNCIONES AUXILIARES
-// =====================================================
-
-function obtenerDiasSemana(fecha) {
-    const dia = fecha.getDay();
-    const diff = fecha.getDate() - dia + (dia === 0 ? -6 : 1);
-    const lunes = new Date(fecha);
-    lunes.setDate(diff);
-    
-    const dias = [];
-    for (let i = 0; i < 7; i++) {
-        const diaSemana = new Date(lunes);
-        diaSemana.setDate(lunes.getDate() + i);
-        dias.push(diaSemana);
-    }
-    return dias;
-}
-
-function obtenerHorasDia() {
-    const horas = [];
-    for (let i = 7; i <= 19; i++) {
-        horas.push(`${i.toString().padStart(2, '0')}:00`);
-    }
-    return horas;
-}
-
-function iniciarPolling() {
-    if (pollingInterval) clearInterval(pollingInterval);
-    
-    pollingInterval = setInterval(async () => {
-        await cargarDatosIniciales();
-        if (vistaActual === 'semana') {
-            renderizarCalendarioSemana();
-        } else {
-            renderizarCalendarioDia();
-        }
-        renderizarBahias();
-        renderizarCargaTecnicos();
-    }, 30000);
-}
-
-// =====================================================
-// MODALES Y ACCIONES
-// =====================================================
-
-async function verDetalleOrden(idOrden) {
-    try {
-        const response = await fetch(`${API_URL}/jefe-taller/detalle-orden/${idOrden}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
-        });
-        
-        const data = await response.json();
-        if (!response.ok || !data.detalle) throw new Error(data.error || 'Error cargando detalle');
-        
-        const detalle = data.detalle;
-        const modal = document.getElementById('modalDetalleOrdenCalendario');
-        const body = document.getElementById('modalDetalleOrdenBody');
-        
-        body.innerHTML = `
-            <div class="detalle-orden">
-                <div class="detalle-seccion">
-                    <h4><i class="fas fa-info-circle"></i> Información General</h4>
-                    <div class="detalle-grid">
-                        <div class="detalle-item">
-                            <span class="detalle-label">Código</span>
-                            <span class="detalle-value">${escapeHtml(detalle.codigo_unico)}</span>
-                        </div>
-                        <div class="detalle-item">
-                            <span class="detalle-label">Estado</span>
-                            <span class="detalle-value ${detalle.estado_global}">${escapeHtml(detalle.estado_global)}</span>
-                        </div>
-                        <div class="detalle-item">
-                            <span class="detalle-label">Bahía</span>
-                            <span class="detalle-value">${detalle.planificacion?.bahia_asignada || 'No asignada'}</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="detalle-seccion">
-                    <h4><i class="fas fa-car"></i> Vehículo</h4>
-                    <div class="detalle-grid">
-                        <div class="detalle-item">
-                            <span class="detalle-label">Placa</span>
-                            <span class="detalle-value">${escapeHtml(detalle.placa)}</span>
-                        </div>
-                        <div class="detalle-item">
-                            <span class="detalle-label">Cliente</span>
-                            <span class="detalle-value">${escapeHtml(detalle.cliente?.nombre || 'N/A')}</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="detalle-seccion">
-                    <h4><i class="fas fa-users"></i> Técnicos Asignados</h4>
-                    <div class="orden-tecnicos">
-                        ${detalle.tecnicos && detalle.tecnicos.length > 0 ? 
-                            detalle.tecnicos.map(t => `<span class="tecnico-badge"><i class="fas fa-user"></i> ${escapeHtml(t.nombre)}</span>`).join('') :
-                            '<span>Sin técnicos asignados</span>'}
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        modal.classList.add('show');
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion(error.message || 'Error cargando detalle', 'error');
-    }
-}
-
-function cerrarModalDetalleOrden() {
-    const modal = document.getElementById('modalDetalleOrdenCalendario');
-    if (modal) modal.classList.remove('show');
 }
 
 function verDetalleBahia(numero) {
@@ -542,26 +601,37 @@ function verDetalleBahia(numero) {
         default: estadoTexto = 'Libre';
     }
     
-    body.innerHTML = `
-        <div class="detalle-bahia">
-            <div class="detalle-item">
-                <span class="detalle-label">Bahía</span>
-                <span class="detalle-value">Bahía ${numero}</span>
-            </div>
-            <div class="detalle-item">
-                <span class="detalle-label">Estado</span>
-                <span class="detalle-value ${bahia?.estado}">${estadoTexto}</span>
-            </div>
-            ${bahia?.orden_codigo ? `
+    if (body) {
+        body.innerHTML = `
+            <div class="detalle-bahia">
                 <div class="detalle-item">
-                    <span class="detalle-label">Orden Actual</span>
-                    <span class="detalle-value">${escapeHtml(bahia.orden_codigo)}</span>
+                    <span class="detalle-label">Bahía</span>
+                    <span class="detalle-value">Bahía ${numero}</span>
                 </div>
-            ` : ''}
-        </div>
-    `;
+                <div class="detalle-item">
+                    <span class="detalle-label">Estado</span>
+                    <span class="detalle-value ${bahia?.estado}">${estadoTexto}</span>
+                </div>
+                ${bahia?.orden_codigo ? `
+                    <div class="detalle-item">
+                        <span class="detalle-label">Orden Actual</span>
+                        <span class="detalle-value">${escapeHtml(bahia.orden_codigo)}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Estado Orden</span>
+                        <span class="detalle-value">${escapeHtml(bahia.orden_estado || 'Desconocido')}</span>
+                    </div>
+                ` : bahia?.estado === 'mantenimiento' ? `
+                    <div class="detalle-item">
+                        <span class="detalle-label">Nota</span>
+                        <span class="detalle-value">Bahía en mantenimiento</span>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
     
-    modal.classList.add('show');
+    if (modal) modal.classList.add('show');
 }
 
 function cerrarModalBahia() {
@@ -569,13 +639,155 @@ function cerrarModalBahia() {
     if (modal) modal.classList.remove('show');
 }
 
-function abrirModalAsignarOrden(fechaISO) {
-    mostrarNotificacion('Para asignar una orden, ve a la pestaña "Órdenes de Trabajo" y edita la planificación', 'info');
+// =====================================================
+// RENDERIZADO DE ESTADÍSTICAS
+// =====================================================
+
+function renderizarEstadisticas() {
+    const totalElement = document.getElementById('totalOrdenes');
+    const enProcesoElement = document.getElementById('enProcesoCount');
+    const enPausaElement = document.getElementById('enPausaCount');
+    const finalizadasElement = document.getElementById('finalizadasCount');
+    
+    if (totalElement) totalElement.textContent = statsGenerales.total || 0;
+    if (enProcesoElement) enProcesoElement.textContent = statsGenerales.enProceso || 0;
+    if (enPausaElement) enPausaElement.textContent = statsGenerales.enPausa || 0;
+    if (finalizadasElement) finalizadasElement.textContent = statsGenerales.finalizadas || 0;
+    
+    const diagPendientes = document.getElementById('diagPendientes');
+    const diagAprobados = document.getElementById('diagAprobados');
+    const diagRechazados = document.getElementById('diagRechazados');
+    
+    if (diagPendientes) diagPendientes.textContent = diagnosticoStats.pendiente || 0;
+    if (diagAprobados) diagAprobados.textContent = diagnosticoStats.aprobado || 0;
+    if (diagRechazados) diagRechazados.textContent = diagnosticoStats.rechazado || 0;
+}
+
+// =====================================================
+// DETALLE DE ORDEN
+// =====================================================
+
+async function verDetalleOrden(idOrden) {
+    try {
+        const response = await fetch(`${API_URL}/jefe-taller/detalle-orden/${idOrden}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+        });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
+        const data = await response.json();
+        if (!response.ok || !data.detalle) throw new Error(data.error || 'Error cargando detalle');
+        
+        const detalle = data.detalle;
+        const modal = document.getElementById('modalDetalleOrden');
+        const body = document.getElementById('modalDetalleOrdenBody');
+        
+        if (body) {
+            body.innerHTML = `
+                <div class="detalle-orden">
+                    <div class="detalle-seccion">
+                        <h4><i class="fas fa-info-circle"></i> Información General</h4>
+                        <div class="detalle-grid">
+                            <div class="detalle-item">
+                                <span class="detalle-label">Código</span>
+                                <span class="detalle-value">${escapeHtml(detalle.codigo_unico)}</span>
+                            </div>
+                            <div class="detalle-item">
+                                <span class="detalle-label">Estado</span>
+                                <span class="detalle-value ${detalle.estado_global}">${ESTADOS_ORDEN[detalle.estado_global]?.texto || detalle.estado_global}</span>
+                            </div>
+                            <div class="detalle-item">
+                                <span class="detalle-label">Fecha Ingreso</span>
+                                <span class="detalle-value">${new Date(detalle.fecha_ingreso).toLocaleString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detalle-seccion">
+                        <h4><i class="fas fa-car"></i> Vehículo y Cliente</h4>
+                        <div class="detalle-grid">
+                            <div class="detalle-item">
+                                <span class="detalle-label">Placa</span>
+                                <span class="detalle-value">${escapeHtml(detalle.placa)}</span>
+                            </div>
+                            <div class="detalle-item">
+                                <span class="detalle-label">Vehículo</span>
+                                <span class="detalle-value">${escapeHtml(detalle.marca)} ${escapeHtml(detalle.modelo)} (${detalle.anio || 'N/A'})</span>
+                            </div>
+                            <div class="detalle-item">
+                                <span class="detalle-label">Cliente</span>
+                                <span class="detalle-value">${escapeHtml(detalle.cliente?.nombre || 'N/A')}</span>
+                            </div>
+                            <div class="detalle-item">
+                                <span class="detalle-label">Teléfono</span>
+                                <span class="detalle-value">${escapeHtml(detalle.cliente?.telefono || 'N/A')}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detalle-seccion">
+                        <h4><i class="fas fa-calendar-alt"></i> Planificación</h4>
+                        <div class="detalle-grid">
+                            <div class="detalle-item">
+                                <span class="detalle-label">Bahía</span>
+                                <span class="detalle-value">${detalle.planificacion?.bahia_asignada || 'No asignada'}</span>
+                            </div>
+                            <div class="detalle-item">
+                                <span class="detalle-label">Inicio Estimado</span>
+                                <span class="detalle-value">${detalle.planificacion?.fecha_hora_inicio_estimado ? new Date(detalle.planificacion.fecha_hora_inicio_estimado).toLocaleString() : 'No programado'}</span>
+                            </div>
+                            <div class="detalle-item">
+                                <span class="detalle-label">Horas Estimadas</span>
+                                <span class="detalle-value">${detalle.planificacion?.horas_estimadas || 'N/A'} horas</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detalle-seccion">
+                        <h4><i class="fas fa-users"></i> Técnicos Asignados</h4>
+                        <div class="orden-tecnicos">
+                            ${detalle.tecnicos && detalle.tecnicos.length > 0 ? 
+                                detalle.tecnicos.map(t => `<span class="tecnico-badge"><i class="fas fa-user"></i> ${escapeHtml(t.nombre)}</span>`).join('') :
+                                '<span>Sin técnicos asignados</span>'}
+                        </div>
+                    </div>
+                    
+                    ${detalle.diagnostico_inicial ? `
+                        <div class="detalle-seccion">
+                            <h4><i class="fas fa-stethoscope"></i> Diagnóstico Inicial</h4>
+                            <div class="detalle-descripcion">${escapeHtml(detalle.diagnostico_inicial)}</div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        if (modal) modal.classList.add('show');
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion(error.message || 'Error cargando detalle', 'error');
+    }
+}
+
+function cerrarModalDetalleOrden() {
+    const modal = document.getElementById('modalDetalleOrden');
+    if (modal) modal.classList.remove('show');
 }
 
 // =====================================================
 // FUNCIONES AUXILIARES
 // =====================================================
+
+function iniciarPolling() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    pollingInterval = setInterval(async () => {
+        await cargarOrdenesConPlanificacion();
+        renderizarCalendario();
+    }, 30000);
+}
 
 function escapeHtml(text) {
     if (!text) return '';
@@ -614,4 +826,6 @@ window.verDetalleOrden = verDetalleOrden;
 window.cerrarModalDetalleOrden = cerrarModalDetalleOrden;
 window.verDetalleBahia = verDetalleBahia;
 window.cerrarModalBahia = cerrarModalBahia;
-window.abrirModalAsignarOrden = abrirModalAsignarOrden;
+window.abrirDetalleDia = abrirDetalleDia;
+window.cerrarModalDetalleDia = cerrarModalDetalleDia;
+window.logout = logout;

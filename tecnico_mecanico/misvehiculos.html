@@ -33,12 +33,16 @@
                 <div class="top-actions">
                     <div class="notification-icon">
                         <i class="fas fa-bell"></i>
-                        <span class="notification-badge" id="notificacionesBadge">2</span>
+                        <span class="notification-badge" id="notificacionesBadge">0</span>
                     </div>
                     <div class="date-display">
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
                     </div>
+                    <button class="btn-logout" onclick="cerrarSesion()">
+                        <i class="fas fa-sign-out-alt"></i>
+                        Cerrar Sesión
+                    </button>
                 </div>
             </header>
 
@@ -79,25 +83,63 @@
         </main>
     </div>
 
-    <!-- Modal de confirmación para entrar al vehículo -->
-    <div class="modal" id="entrarModal">
+    <!-- Modal de PAUSA -->
+    <div class="modal" id="pausaModal">
         <div class="modal-content modal-sm">
             <div class="modal-header">
-                <h2>Iniciar Trabajo</h2>
-                <button class="modal-close" onclick="cerrarModal()">&times;</button>
+                <h2><i class="fas fa-pause-circle"></i> Pausar Trabajo</h2>
+                <button class="modal-close" onclick="cerrarPausaModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <p id="modalMessage">¿Estás listo para comenzar a trabajar en este vehículo?</p>
-                <div class="modal-info" id="modalInfo">
-                    <!-- Se llena dinámicamente -->
-                </div>
+                <p>¿Por qué necesitas pausar este trabajo?</p>
+                <textarea id="motivoPausa" class="form-textarea" rows="3"
+                    placeholder="Ej: Esperando repuestos, falta herramienta especial, cliente no autorizó, etc."></textarea>
+                <input type="hidden" id="ordenIdPausa">
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal()">Cancelar</button>
-                <button class="btn-primary" id="confirmarEntrarBtn">Comenzar</button>
+                <button class="btn-secondary" onclick="cerrarPausaModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmarPausaBtn">Confirmar Pausa</button>
             </div>
         </div>
     </div>
+
+    <!-- Modal de REANUDAR -->
+    <div class="modal" id="reanudarModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2><i class="fas fa-play-circle"></i> Reanudar Trabajo</h2>
+                <button class="modal-close" onclick="cerrarReanudarModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás listo para continuar con este trabajo?</p>
+                <div class="modal-info" id="reanudarInfo"></div>
+                <input type="hidden" id="ordenIdReanudar">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarReanudarModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmarReanudarBtn">Reanudar Trabajo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de DETALLE DEL VEHÍCULO -->
+    <div class="modal" id="detalleModal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-info-circle"></i> Detalle del Vehículo</h2>
+                <button class="modal-close" onclick="cerrarDetalleModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="detalleBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarDetalleModal()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
 
     <script src="js/include.js"></script>
     <script src="js/misvehiculos.js"></script>

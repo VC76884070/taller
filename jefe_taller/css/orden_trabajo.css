@@ -1683,3 +1683,90 @@ select option.bahia-ocupada {
 select option.bahia-ocupada::before {
     content: "🔴 ";
 }
+/* =====================================================
+   DETALLE DE ORDEN - FOTOS GRID
+   ===================================================== */
+
+.detalle-fotos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.detalle-foto-item {
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    cursor: pointer;
+    transition: var(--transition);
+    border: 1px solid var(--border-color);
+}
+
+.detalle-foto-item:hover {
+    transform: translateY(-4px);
+    border-color: var(--rojo-primario);
+    box-shadow: var(--shadow-red);
+}
+
+.detalle-foto-item img {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    background: var(--gris-medio);
+}
+
+.detalle-foto-label {
+    display: block;
+    padding: 0.5rem;
+    font-size: 0.7rem;
+    text-align: center;
+    color: var(--gris-texto);
+    background: var(--gris-oscuro);
+    border-top: 1px solid var(--border-color);
+}
+
+/* Modal para imagen ampliada */
+.modal-imagen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 2000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.modal-imagen-content {
+    position: relative;
+    max-width: 90%;
+    max-height: 90%;
+}
+
+.modal-imagen-content img {
+    max-width: 100%;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+}
+
+.modal-imagen-close {
+    position: absolute;
+    top: -40px;
+    right: 0;
+    background: none;
+    border: none;
+    font-size: 2rem;
+    color: var(--blanco);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.modal-imagen-close:hover {
+    color: var(--rojo-primario);
+}

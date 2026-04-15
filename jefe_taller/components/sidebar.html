@@ -1,7 +1,7 @@
-<!-- SIDEBAR - JEFE DE TALLER -->
+<!-- SIDEBAR - JEFE DE TALLER (CON 3 NUEVAS PESTAÑAS) -->
 <aside class="sidebar">
     <div class="sidebar-header">
-        <img src="../../img/logoblanco.jpeg" alt="FURIA MOTOR" class="sidebar-logo">
+        <img src="../img/logoblanco.jpeg" alt="FURIA MOTOR" class="sidebar-logo">
         <span class="sidebar-brand">FURIA MOTOR</span>
     </div>
 
@@ -17,39 +17,64 @@
 
     <nav class="sidebar-nav">
         <ul>
+            <!-- PESTAÑAS EXISTENTES -->
             <li class="nav-item" data-page="dashboard">
                 <a href="dashboard.html" class="nav-link">
                     <i class="fas fa-chart-line"></i>
                     <span>Dashboard Técnico</span>
                 </a>
             </li>
-            <li class="nav-item" data-page="ordenes">
+            <li class="nav-item" data-page="orden_trabajo">
                 <a href="orden_trabajo.html" class="nav-link">
                     <i class="fas fa-clipboard-list"></i>
                     <span>Órdenes de Trabajo</span>
-                    <span class="badge">12</span>
                 </a>
             </li>
-            <li class="nav-item" data-page="calendario">
+            <li class="nav-item" data-page="calendario_bahias">
                 <a href="calendario_bahias.html" class="nav-link">
                     <i class="fas fa-calendar-alt"></i>
                     <span>Calendario y Bahías</span>
                 </a>
             </li>
             <li class="nav-item" data-page="diagnosticos">
-                <a href="diagnosticos.html" class="nav-link">
+                <a href="diagnostico.html" class="nav-link">
                     <i class="fas fa-stethoscope"></i>
                     <span>Diagnósticos</span>
-                    <span class="badge">3</span>
                 </a>
             </li>
-            <li class="nav-item" data-page="calidad">
-                <a href="calidad.html" class="nav-link">
+
+            <!-- 🔥 NUEVA PESTAÑA 1: COTIZACIONES -->
+            <li class="nav-item" data-page="cotizaciones">
+                <a href="cotizaciones.html" class="nav-link">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                    <span>Cotizaciones</span>
+                </a>
+            </li>
+
+            <!-- 🔥 NUEVA PESTAÑA 2: RESERVAS Y SOLICITUDES -->
+            <li class="nav-item" data-page="reservas_solicitudes">
+                <a href="reservas_solicitudes.html" class="nav-link">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Reservas y Solicitudes</span>
+                </a>
+            </li>
+
+            <!-- 🔥 NUEVA PESTAÑA 3: ADMINISTRACIÓN DE ROLES -->
+            <li class="nav-item" data-page="admin_roles">
+                <a href="admin_roles.html" class="nav-link">
+                    <i class="fas fa-users-gear"></i>
+                    <span>Administración de Roles</span>
+                </a>
+            </li>
+
+            <!-- PESTAÑAS EXISTENTES (continúan) -->
+            <li class="nav-item" data-page="control_calidad">
+                <a href="control_calidad.html" class="nav-link">
                     <i class="fas fa-check-double"></i>
                     <span>Control de Calidad</span>
                 </a>
             </li>
-            <li class="nav-item" data-page="historial">
+            <li class="nav-item" data-page="historial_vehiculos">
                 <a href="historial_vehiculos.html" class="nav-link">
                     <i class="fas fa-history"></i>
                     <span>Historial</span>
@@ -65,7 +90,7 @@
 
         <ul class="sidebar-bottom">
             <li class="nav-item">
-                <a href="#" onclick="logout()" class="nav-link">
+                <a href="#" onclick="cerrarSesion()" class="nav-link">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Cerrar Sesión</span>
                 </a>

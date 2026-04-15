@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Diagnósticos | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Estilos -->
+    <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_taller/css/diagnostico.css">
+
+    <style>
+        /* Estilos adicionales para asegurar que los modales funcionen */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(4px);
+            z-index: 1100;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex !important;
+        }
+
+        .modal-imagen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .modal-imagen-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+        }
+
+        .modal-imagen-close {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 30px;
+            cursor: pointer;
+        }
+
+        .modal-imagen img {
+            max-width: 100%;
+            max-height: 90vh;
+            object-fit: contain;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-clipboard-list"></i> Gestión de Diagnósticos Técnicos</h1>
+                    <p>Revisa, aprueba o rechaza los diagnósticos enviados por los técnicos</p>
+                </div>
+                <div class="top-actions">
+                    <button class="btn-refresh" id="refreshBtn">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificacionesCount">0</span>
+                    </div>
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content">
+                <div class="diagnostico-container">
+
+                    <!-- Stats Cards -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon pending">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="pendientesCount">0</h3>
+                                <p>Pendientes</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon approved">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="aprobadosCount">0</h3>
+                                <p>Aprobados</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon rejected">
+                                <i class="fas fa-times-circle"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="rechazadosCount">0</h3>
+                                <p>Rechazados</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon draft">
+                                <i class="fas fa-file-alt"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="borradoresCount">0</h3>
+                                <p>Borradores</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Panel de Búsqueda y Filtros -->
+                    <div class="filtros-panel">
+                        <div class="filtros-grid">
+                            <div class="form-group">
+                                <label><i class="fas fa-filter"></i> Estado</label>
+                                <select id="filterEstado" class="form-select">
+                                    <option value="todos">Todos</option>
+                                    <option value="pendiente">Pendientes de revisión</option>
+                                    <option value="aprobado">Aprobados</option>
+                                    <option value="rechazado">Rechazados</option>
+                                    <option value="borrador">Borradores</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-search"></i> Buscar</label>
+                                <input type="text" id="searchInput" class="form-input"
+                                    placeholder="Código, técnico o placa..." autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-calendar"></i> Desde</label>
+                                <input type="date" id="fechaDesde" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-calendar"></i> Hasta</label>
+                                <input type="date" id="fechaHasta" class="form-input">
+                            </div>
+                            <button class="btn-buscar" id="btnBuscar">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                            <button class="btn-limpiar" id="btnLimpiar">
+                                <i class="fas fa-eraser"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Resultados -->
+                    <div id="resultadosContainer">
+                        <div class="loading-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Cargando diagnósticos...</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal para ver detalle del diagnóstico -->
+    <div class="modal" id="modalDiagnostico">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-stethoscope"></i> Detalle del Diagnóstico</h2>
+                <button class="modal-close" onclick="window.cerrarModalDiagnostico()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalDiagnosticoBody">
+                <div class="loading-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando detalles...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="window.cerrarModalDiagnostico()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para solicitar cotización de repuestos -->
+    <div class="modal" id="modalSolicitarRepuesto">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2><i class="fas fa-shopping-cart"></i> Solicitar Cotización</h2>
+                <button class="modal-close" onclick="window.cerrarModalSolicitud()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="formSolicitarRepuesto">
+                    <input type="hidden" id="solicitudOrdenId">
+                    <input type="hidden" id="solicitudServicioId">
+
+                    <div class="form-group">
+                        <label><i class="fas fa-tools"></i> Pieza / Herramienta / Líquido</label>
+                        <textarea id="descripcionPieza" class="form-textarea" rows="3" required
+                            placeholder="Ej: Aceite de motor 5W-30 (4 litros), Filtro de aire, Bujías NGK..."></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-hashtag"></i> Cantidad</label>
+                            <input type="number" id="cantidad" class="form-input" value="1" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-exclamation-triangle"></i> Urgencia</label>
+                            <select id="urgencia" class="form-select">
+                                <option value="normal">Normal</option>
+                                <option value="urgente">Urgente</option>
+                                <option value="inmediata">Inmediata</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-comment"></i> Observaciones</label>
+                        <textarea id="obsJefeTaller" class="form-textarea" rows="2"
+                            placeholder="Marca específica, proveedor preferido, nota de urgencia..."></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary"
+                            onclick="window.cerrarModalSolicitud()">Cancelar</button>
+                        <button type="submit" class="btn-primary">Enviar Solicitud</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para observación/rechazo -->
+    <div class="modal" id="modalObservacion">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2 id="modalObsTitle"><i class="fas fa-comment-dots"></i> Rechazar Diagnóstico</h2>
+                <button class="modal-close" onclick="window.cerrarModalObservacion()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="formObservacion">
+                    <input type="hidden" id="obsDiagnosticoId">
+
+                    <div class="form-group">
+                        <label><i class="fas fa-edit"></i> Observaciones / Instrucciones</label>
+                        <textarea id="observacionTexto" class="form-textarea" rows="5" required
+                            placeholder="Indica qué correcciones debe realizar el técnico, qué falta agregar, o por qué se rechaza el diagnóstico..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-microphone"></i> Grabar observación (opcional)</label>
+                        <div class="audio-recorder">
+                            <button type="button" id="startRecordBtn" class="btn-outline">
+                                <i class="fas fa-microphone"></i> Grabar
+                            </button>
+                            <button type="button" id="stopRecordBtn" class="btn-outline" disabled>
+                                <i class="fas fa-stop"></i> Detener
+                            </button>
+                            <audio id="audioPreview" controls style="display: none; margin-top: 10px;"></audio>
+                            <input type="hidden" id="grabacionUrl">
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary"
+                            onclick="window.cerrarModalObservacion()">Cancelar</button>
+                        <button type="submit" class="btn-danger">Rechazar Diagnóstico</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver fotos del diagnóstico -->
+    <div class="modal" id="modalFotos">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2><i class="fas fa-images"></i> Fotos del Diagnóstico</h2>
+                <button class="modal-close" onclick="window.cerrarModalFotos()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalFotosBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="window.cerrarModalFotos()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="/jefe_taller/js/include.js"></script>
+    <script src="/jefe_taller/js/diagnostico.js"></script>
+</body>
+
+</html>

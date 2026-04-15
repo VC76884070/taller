@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Técnico - Mi Perfil | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/perfil.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- SIDEBAR -->
+        <div id="sidebar-container"></div>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-user-circle"></i> Mi Perfil</h1>
+                    <p>Gestiona tu información personal y configuración de cuenta</p>
+                </div>
+
+                <div class="top-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                    <button class="btn-logout" onclick="cerrarSesion()">
+                        <i class="fas fa-sign-out-alt"></i>
+                        Cerrar Sesión
+                    </button>
+                </div>
+            </header>
+
+            <!-- CONTENT -->
+            <div class="content">
+                <div class="profile-container">
+                    <!-- Tarjeta de Perfil -->
+                    <div class="profile-card">
+                        <div class="profile-avatar">
+                            <div class="avatar-container" id="avatarContainer">
+                                <img id="avatarImg" src="" alt="Avatar">
+                                <div class="avatar-overlay" id="avatarOverlay">
+                                    <i class="fas fa-camera"></i>
+                                    <span>Cambiar foto</span>
+                                </div>
+                                <input type="file" id="avatarInput" accept="image/*" style="display: none;">
+                            </div>
+                            <h2 id="nombreUsuario">Cargando...</h2>
+                            <p class="rol-usuario" id="rolUsuario">Técnico Mecánico</p>
+                        </div>
+
+                        <div class="profile-stats">
+                            <div class="stat-item">
+                                <i class="fas fa-tasks"></i>
+                                <div class="stat-info">
+                                    <span class="stat-value" id="totalTrabajos">0</span>
+                                    <span class="stat-label">Trabajos Realizados</span>
+                                </div>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fas fa-check-circle"></i>
+                                <div class="stat-info">
+                                    <span class="stat-value" id="trabajosCompletados">0</span>
+                                    <span class="stat-label">Completados</span>
+                                </div>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fas fa-clock"></i>
+                                <div class="stat-info">
+                                    <span class="stat-value" id="trabajosActivos">0</span>
+                                    <span class="stat-label">En Proceso</span>
+                                </div>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fas fa-calendar-alt"></i>
+                                <div class="stat-info">
+                                    <span class="stat-value" id="fechaRegistro">-</span>
+                                    <span class="stat-label">Miembro desde</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Formulario de Edición -->
+                    <div class="profile-form-container">
+                        <div class="form-tabs">
+                            <button class="tab-btn active" data-tab="datos">
+                                <i class="fas fa-user-edit"></i> Datos Personales
+                            </button>
+                            <button class="tab-btn" data-tab="password">
+                                <i class="fas fa-lock"></i> Cambiar Contraseña
+                            </button>
+                            <button class="tab-btn" data-tab="info">
+                                <i class="fas fa-info-circle"></i> Información de Cuenta
+                            </button>
+                        </div>
+
+                        <!-- Tab Datos Personales -->
+                        <div class="tab-content active" id="tab-datos">
+                            <form id="formDatosPersonales">
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label><i class="fas fa-user"></i> Nombre Completo *</label>
+                                        <input type="text" id="nombre" class="form-input"
+                                            placeholder="Tu nombre completo">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-envelope"></i> Correo Electrónico *</label>
+                                        <input type="email" id="email" class="form-input" placeholder="tu@email.com">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-phone"></i> Teléfono de Contacto</label>
+                                        <input type="tel" id="contacto" class="form-input"
+                                            placeholder="Número de teléfono">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-map-marker-alt"></i> Ubicación</label>
+                                        <input type="text" id="ubicacion" class="form-input"
+                                            placeholder="Dirección o ubicación">
+                                    </div>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="button" id="btnCancelarDatos" class="btn-secondary">
+                                        <i class="fas fa-undo-alt"></i> Cancelar
+                                    </button>
+                                    <button type="submit" id="btnGuardarDatos" class="btn-primary">
+                                        <i class="fas fa-save"></i> Guardar Cambios
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Tab Cambiar Contraseña -->
+                        <div class="tab-content" id="tab-password">
+                            <form id="formCambiarPassword">
+                                <div class="form-grid">
+                                    <div class="form-group full-width">
+                                        <label><i class="fas fa-lock"></i> Contraseña Actual *</label>
+                                        <input type="password" id="passwordActual" class="form-input"
+                                            placeholder="Ingresa tu contraseña actual">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-key"></i> Nueva Contraseña *</label>
+                                        <input type="password" id="nuevaPassword" class="form-input"
+                                            placeholder="Mínimo 6 caracteres">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-check-circle"></i> Confirmar Nueva Contraseña *</label>
+                                        <input type="password" id="confirmarPassword" class="form-input"
+                                            placeholder="Repite la nueva contraseña">
+                                    </div>
+                                </div>
+                                <div class="password-requirements">
+                                    <p><i class="fas fa-shield-alt"></i> Requisitos de contraseña:</p>
+                                    <ul>
+                                        <li id="req-length"><i class="fas fa-circle"></i> Mínimo 6 caracteres</li>
+                                        <li id="req-number"><i class="fas fa-circle"></i> Al menos un número</li>
+                                        <li id="req-match"><i class="fas fa-circle"></i> Las contraseñas coinciden</li>
+                                    </ul>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="button" id="btnCancelarPassword" class="btn-secondary">
+                                        <i class="fas fa-undo-alt"></i> Cancelar
+                                    </button>
+                                    <button type="submit" id="btnCambiarPassword" class="btn-primary">
+                                        <i class="fas fa-sync-alt"></i> Cambiar Contraseña
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Tab Información de Cuenta -->
+                        <div class="tab-content" id="tab-info">
+                            <div class="info-grid-detail">
+                                <div class="info-card">
+                                    <i class="fas fa-id-badge"></i>
+                                    <div class="info-content">
+                                        <span class="info-label">ID de Usuario</span>
+                                        <span class="info-value" id="infoId">-</span>
+                                    </div>
+                                </div>
+                                <div class="info-card">
+                                    <i class="fas fa-user-tag"></i>
+                                    <div class="info-content">
+                                        <span class="info-label">Rol</span>
+                                        <span class="info-value" id="infoRol">-</span>
+                                    </div>
+                                </div>
+                                <div class="info-card">
+                                    <i class="fas fa-calendar-plus"></i>
+                                    <div class="info-content">
+                                        <span class="info-label">Fecha de Registro</span>
+                                        <span class="info-value" id="infoFechaRegistro">-</span>
+                                    </div>
+                                </div>
+                                <div class="info-card">
+                                    <i class="fas fa-clock"></i>
+                                    <div class="info-content">
+                                        <span class="info-label">Última Actividad</span>
+                                        <span class="info-value" id="infoUltimaActividad">-</span>
+                                    </div>
+                                </div>
+                                <div class="info-card full-width">
+                                    <i class="fas fa-envelope"></i>
+                                    <div class="info-content">
+                                        <span class="info-label">Correo Electrónico</span>
+                                        <span class="info-value" id="infoEmail">-</span>
+                                    </div>
+                                </div>
+                                <div class="info-card full-width">
+                                    <i class="fas fa-phone"></i>
+                                    <div class="info-content">
+                                        <span class="info-label">Teléfono</span>
+                                        <span class="info-value" id="infoContacto">-</span>
+                                    </div>
+                                </div>
+                                <div class="info-card full-width">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                    <div class="info-content">
+                                        <span class="info-label">Ubicación</span>
+                                        <span class="info-value" id="infoUbicacion">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal de Confirmación -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2><i class="fas fa-question-circle"></i> Confirmar Cambios</h2>
+                <button class="modal-close" onclick="cerrarConfirmModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas guardar los cambios?</p>
+                <p class="modal-warning">Los cambios se aplicarán inmediatamente a tu cuenta.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarConfirmModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmarGuardarBtn">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Cambio de Contraseña -->
+    <div class="modal" id="passwordModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2><i class="fas fa-key"></i> Cambiar Contraseña</h2>
+                <button class="modal-close" onclick="cerrarPasswordModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas cambiar tu contraseña?</p>
+                <p class="modal-warning">Deberás usar la nueva contraseña en tu próximo inicio de sesión.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarPasswordModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmarPasswordBtn">Cambiar Contraseña</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <script src="js/include.js"></script>
+    <script src="js/perfil.js"></script>
+</body>
+
+</html>

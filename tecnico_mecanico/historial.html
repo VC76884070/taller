@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Técnico - Historial de Trabajos | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/historial.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- SIDEBAR -->
+        <div id="sidebar-container"></div>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-history"></i> Historial de Trabajos</h1>
+                    <p>Consulta el historial de vehículos que has atendido</p>
+                </div>
+
+                <div class="top-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                    <button class="btn-logout" onclick="cerrarSesion()">
+                        <i class="fas fa-sign-out-alt"></i>
+                        Cerrar Sesión
+                    </button>
+                </div>
+            </header>
+
+            <!-- CONTENT -->
+            <div class="content">
+                <!-- Filtros -->
+                <div class="filtros-container">
+                    <div class="filtros-header">
+                        <h3><i class="fas fa-filter"></i> Filtros de Búsqueda</h3>
+                        <button class="btn-limpiar-filtros" id="btnLimpiarFiltros">
+                            <i class="fas fa-eraser"></i> Limpiar Filtros
+                        </button>
+                    </div>
+                    <div class="filtros-grid">
+                        <div class="filtro-group">
+                            <label><i class="fas fa-search"></i> Buscar</label>
+                            <input type="text" id="searchInput" class="filtro-input"
+                                placeholder="Código, placa, marca, modelo o cliente...">
+                        </div>
+                        <div class="filtro-group">
+                            <label><i class="fas fa-calendar-alt"></i> Desde</label>
+                            <input type="date" id="fechaDesde" class="filtro-input">
+                        </div>
+                        <div class="filtro-group">
+                            <label><i class="fas fa-calendar-alt"></i> Hasta</label>
+                            <input type="date" id="fechaHasta" class="filtro-input">
+                        </div>
+                        <div class="filtro-group">
+                            <label><i class="fas fa-chart-line"></i> Estado</label>
+                            <select id="estadoFiltro" class="filtro-select">
+                                <option value="todos">Todos</option>
+                                <option value="Finalizado">Finalizado</option>
+                                <option value="Entregado">Entregado</option>
+                                <option value="EnProceso">En Proceso</option>
+                                <option value="EnPausa">En Pausa</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Estadísticas -->
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <i class="fas fa-tasks"></i>
+                        <div class="stat-info">
+                            <span class="stat-value" id="totalTrabajos">0</span>
+                            <span class="stat-label">Total Trabajos</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-check-circle"></i>
+                        <div class="stat-info">
+                            <span class="stat-value" id="trabajosFinalizados">0</span>
+                            <span class="stat-label">Finalizados/Entregados</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-clock"></i>
+                        <div class="stat-info">
+                            <span class="stat-value" id="trabajosEnProceso">0</span>
+                            <span class="stat-label">En Proceso</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-pause-circle"></i>
+                        <div class="stat-info">
+                            <span class="stat-value" id="trabajosEnPausa">0</span>
+                            <span class="stat-label">En Pausa</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lista de Trabajos -->
+                <div class="trabajos-container">
+                    <div class="trabajos-header">
+                        <h3><i class="fas fa-list"></i> Historial de Trabajos</h3>
+                        <div class="pagination-info">
+                            <span id="paginacionInfo"></span>
+                        </div>
+                    </div>
+
+                    <div id="trabajosList" class="trabajos-list">
+                        <div class="loading-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Cargando historial...</p>
+                        </div>
+                    </div>
+
+                    <!-- Paginación -->
+                    <div class="pagination-container" id="paginationContainer" style="display: none;">
+                        <button class="btn-paginacion" id="btnPaginaAnterior" disabled>
+                            <i class="fas fa-chevron-left"></i> Anterior
+                        </button>
+                        <span class="paginacion-paginas" id="paginasInfo"></span>
+                        <button class="btn-paginacion" id="btnPaginaSiguiente" disabled>
+                            Siguiente <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal de Detalle -->
+    <div class="modal" id="modalDetalle">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-info-circle"></i> Detalle del Trabajo</h2>
+                <button class="modal-close" onclick="cerrarModalDetalle()">&times;</button>
+            </div>
+            <div class="modal-body" id="detalleBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalDetalle()">Cerrar</button>
+                <button class="btn-primary" id="btnExportarDetalle" onclick="exportarDetalle()">
+                    <i class="fas fa-download"></i> Exportar Detalle
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <script src="js/include.js"></script>
+    <script src="js/historial.js"></script>
+</body>
+
+</html>

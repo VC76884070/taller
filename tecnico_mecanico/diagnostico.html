@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Técnico - Diagnóstico Técnico | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/diagnostico.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- SIDEBAR -->
+        <div id="sidebar-container"></div>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-stethoscope"></i> Diagnóstico Técnico</h1>
+                    <p>Registra el diagnóstico detallado de los vehículos asignados</p>
+                </div>
+
+                <div class="top-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                    <button class="btn-logout" onclick="cerrarSesion()">
+                        <i class="fas fa-sign-out-alt"></i>
+                        Cerrar Sesión
+                    </button>
+                </div>
+            </header>
+
+            <!-- CONTENT -->
+            <div class="content">
+                <!-- Selector de Orden -->
+                <div class="selector-container">
+                    <label class="selector-label">
+                        <i class="fas fa-clipboard-list"></i>
+                        Seleccionar Orden de Trabajo:
+                    </label>
+                    <select id="ordenSelect" class="orden-select">
+                        <option value="">-- Seleccione una orden --</option>
+                    </select>
+                    <div id="estadoDiagnostico" class="estado-diagnostico"></div>
+                </div>
+
+                <!-- Formulario de Diagnóstico -->
+                <div id="diagnosticoForm" class="diagnostico-form" style="display: none;">
+                    <div class="form-grid">
+                        <!-- Información del Vehículo -->
+                        <div class="form-section">
+                            <h3><i class="fas fa-car"></i> Información del Vehículo</h3>
+                            <div class="info-grid" id="vehiculoInfo">
+                                <div><span>Placa:</span> <strong id="vehiculoPlaca">-</strong></div>
+                                <div><span>Marca/Modelo:</span> <strong id="vehiculoModelo">-</strong></div>
+                                <div><span>Año:</span> <strong id="vehiculoAnio">-</strong></div>
+                                <div><span>Kilometraje:</span> <strong id="vehiculoKm">-</strong></div>
+                            </div>
+                        </div>
+
+                        <!-- LISTA DE SERVICIOS -->
+                        <div class="form-section">
+                            <h3><i class="fas fa-tools"></i> Servicios Realizados / Recomendados</h3>
+
+                            <div class="servicios-input-group">
+                                <input type="text" id="nuevoServicioInput" class="servicio-input"
+                                    placeholder="Ej: Cambio de bujías, Cambio de aceite, Alineación de dirección..."
+                                    onkeypress="if(event.key === 'Enter') agregarServicio()">
+                                <button type="button" id="btnAgregarServicio" class="btn-agregar"
+                                    onclick="agregarServicio()">
+                                    <i class="fas fa-plus"></i> Agregar
+                                </button>
+                            </div>
+
+                            <div id="serviciosList" class="servicios-list">
+                                <div class="servicios-empty">
+                                    <i class="fas fa-clipboard-list"></i>
+                                    <p>No hay servicios agregados aún.<br>Escribe un servicio y presiona "Agregar"</p>
+                                </div>
+                            </div>
+                            <small class="form-hint"><i class="fas fa-info-circle"></i> Lista de servicios que
+                                recomiendas realizar (mínimo 1)</small>
+                        </div>
+
+                        <!-- Diagnóstico - Audio y Transcripción -->
+                        <div class="form-section">
+                            <h3><i class="fas fa-microphone-alt"></i> Diagnóstico Técnico</h3>
+
+                            <div class="form-group">
+                                <label><i class="fas fa-microphone"></i> Grabación de Diagnóstico</label>
+                                <div class="audio-recorder">
+                                    <button type="button" id="btnGrabarAudio" class="btn-audio">
+                                        <i class="fas fa-microphone"></i> Grabar Audio
+                                    </button>
+                                    <button type="button" id="btnEliminarAudio" class="btn-audio-eliminar"
+                                        style="display: none;">
+                                        <i class="fas fa-trash-alt"></i> Eliminar Audio
+                                    </button>
+                                    <div id="grabacionStatus" class="grabacion-status"></div>
+                                    <input type="hidden" id="audioUrl" name="audio_url">
+                                    <audio id="audioPreview" controls
+                                        style="display: none; margin-top: 0.5rem;"></audio>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label><i class="fas fa-robot"></i> Transcripción Automática</label>
+                                <textarea id="transcripcionDiagnostico" class="form-textarea" rows="4"
+                                    placeholder="La grabación se transcribirá automáticamente al detener la grabación..."
+                                    readonly></textarea>
+                                <small class="form-hint"><i class="fas fa-magic"></i> La transcripción se genera
+                                    automáticamente al finalizar la grabación</small>
+                            </div>
+                        </div>
+
+                        <!-- Fotos del Diagnóstico (Máximo 2 - Mínimo 1) -->
+                        <div class="form-section">
+                            <h3><i class="fas fa-images"></i> Evidencia Fotográfica <span class="foto-limit">(Máximo 2
+                                    fotos - Mínimo 1 obligatoria)</span></h3>
+
+                            <div class="fotos-container">
+                                <div class="foto-upload-card" id="fotoUpload1">
+                                    <div class="upload-area" data-foto-idx="0">
+                                        <i class="fas fa-cloud-upload-alt"></i>
+                                        <p>Foto 1/2</p>
+                                        <small>Haz clic para subir</small>
+                                        <input type="file" class="foto-input" accept="image/*" style="display: none;">
+                                    </div>
+                                    <div class="foto-preview" style="display: none;">
+                                        <img src="" alt="Preview">
+                                        <button class="btn-eliminar-foto" type="button"><i
+                                                class="fas fa-trash-alt"></i></button>
+                                    </div>
+                                </div>
+
+                                <div class="foto-upload-card" id="fotoUpload2">
+                                    <div class="upload-area" data-foto-idx="1">
+                                        <i class="fas fa-cloud-upload-alt"></i>
+                                        <p>Foto 2/2</p>
+                                        <small>Haz clic para subir</small>
+                                        <input type="file" class="foto-input" accept="image/*" style="display: none;">
+                                    </div>
+                                    <div class="foto-preview" style="display: none;">
+                                        <img src="" alt="Preview">
+                                        <button class="btn-eliminar-foto" type="button"><i
+                                                class="fas fa-trash-alt"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="fotos-info" id="fotosInfo">
+                                <i class="fas fa-info-circle"></i> Debes subir al menos 1 foto del diagnóstico
+                            </div>
+                        </div>
+
+                        <!-- Botones de Acción -->
+                        <div class="form-actions">
+                            <button type="button" id="btnGuardarBorrador" class="btn-secondary">
+                                <i class="fas fa-save"></i> Guardar Borrador
+                            </button>
+                            <button type="button" id="btnEnviarDiagnostico" class="btn-primary">
+                                <i class="fas fa-paper-plane"></i> Enviar a Jefe de Taller
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Historial de Observaciones -->
+                <div id="historialContainer" class="historial-container" style="display: none;">
+                    <h3><i class="fas fa-history"></i> Historial de Observaciones</h3>
+                    <div id="historialList" class="historial-list"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal de Confirmación Envío -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2><i class="fas fa-question-circle"></i> Confirmar Envío</h2>
+                <button class="modal-close" onclick="cerrarConfirmModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas enviar este diagnóstico al Jefe de Taller?</p>
+                <p class="modal-warning">⚠️ Una vez enviado, no podrás modificarlo hasta que sea revisado.</p>
+                <div id="validacionErrores" class="validacion-errores" style="display: none;">
+                    <p><i class="fas fa-exclamation-triangle"></i> Por favor corrige:</p>
+                    <ul></ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarConfirmModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmarEnvioBtn">Enviar Diagnóstico</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <script src="js/include.js"></script>
+    <script src="js/diagnostico.js"></script>
+</body>
+
+</html>

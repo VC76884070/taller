@@ -1,10 +1,11 @@
 // =====================================================
-// ÓRDENES DE TRABAJO - JEFE TALLER
+// ÓRDENES DE TRABAJO - JEFE TALLER (CORREGIDO)
 // =====================================================
 
 const API_URL = 'http://localhost:5000/api';
 let userInfo = null;
 let pollingInterval = null;
+let rolesUsuario = [];
 
 // Variables de estado
 let ordenesActivas = [];
@@ -15,10 +16,6 @@ let audioBlob = null;
 let audioChunks = [];
 let isRecording = false;
 let mediaRecorder = null;
-
-// Elementos DOM
-const tabs = document.querySelectorAll('.tab-btn');
-const panels = document.querySelectorAll('.tab-panel');
 
 // =====================================================
 // INICIALIZACIÓN
@@ -39,13 +36,53 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function checkAuth() {
     const token = localStorage.getItem('furia_token');
-    userInfo = JSON.parse(localStorage.getItem('furia_user') || '{}');
+    const userData = localStorage.getItem('furia_user');
     
-    if (!token || (userInfo.rol !== 'jefe_taller' && userInfo.id_rol !== 3)) {
+    if (!token) {
         window.location.href = '/';
         return false;
     }
-    return true;
+    
+    try {
+        // Decodificar token para obtener información del usuario
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        userInfo = payload.user;
+        
+        // Obtener roles del usuario
+        if (userInfo.roles && Array.isArray(userInfo.roles)) {
+            rolesUsuario = userInfo.roles;
+        } else if (userData) {
+            const user = JSON.parse(userData);
+            rolesUsuario = user.roles || [];
+            userInfo.roles = rolesUsuario;
+        }
+        
+        // Verificar si tiene rol de jefe_taller o jefe_operativo
+        const tieneRolPermitido = rolesUsuario.includes('jefe_taller') || 
+                                   rolesUsuario.includes('jefe_operativo') ||
+                                   userInfo.rol === 'jefe_taller' ||
+                                   userInfo.id_rol === 2 || 
+                                   userInfo.id_rol === 3;
+        
+        if (!tieneRolPermitido) {
+            console.warn('Usuario no tiene permisos de jefe_taller o jefe_operativo');
+            window.location.href = '/';
+            return false;
+        }
+        
+        // Actualizar localStorage con roles si es necesario
+        if (userInfo && !userInfo.roles) {
+            userInfo.roles = rolesUsuario;
+            localStorage.setItem('furia_user', JSON.stringify(userInfo));
+        }
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error verificando autenticación:', error);
+        window.location.href = '/';
+        return false;
+    }
 }
 
 function initPage() {
@@ -57,9 +94,40 @@ function initPage() {
     if (dateDisplay) {
         dateDisplay.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
     }
+    
+    // Mostrar nombre de usuario y roles
+    const userNombreSpan = document.getElementById('userNombre');
+    if (userNombreSpan && userInfo) {
+        userNombreSpan.textContent = userInfo.nombre || userInfo.email || 'Usuario';
+        
+        // Agregar badge de roles si tiene múltiples
+        if (rolesUsuario.length > 1) {
+            const rolesBadge = document.createElement('span');
+            rolesBadge.className = 'user-roles-badge';
+            rolesBadge.style.cssText = `
+                font-size: 0.7rem;
+                background: var(--gris-200);
+                padding: 0.2rem 0.5rem;
+                border-radius: 12px;
+                margin-left: 0.5rem;
+            `;
+            const nombresRoles = rolesUsuario.map(r => {
+                const nombres = {
+                    'jefe_taller': 'Jefe Taller',
+                    'jefe_operativo': 'Jefe Operativo',
+                    'tecnico': 'Técnico',
+                    'encargado_repuestos': 'Repuestos'
+                };
+                return nombres[r] || r;
+            }).join(', ');
+            rolesBadge.textContent = nombresRoles;
+            userNombreSpan.parentElement?.appendChild(rolesBadge);
+        }
+    }
 }
 
 function setupEventListeners() {
+    const tabs = document.querySelectorAll('.tab-btn');
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
             const tabId = tab.dataset.tab;
@@ -67,19 +135,36 @@ function setupEventListeners() {
         });
     });
     
-    document.getElementById('refreshActivas')?.addEventListener('click', cargarOrdenesActivas);
-    document.getElementById('refreshFinalizadas')?.addEventListener('click', cargarOrdenesFinalizadas);
+    document.getElementById('refreshActivas')?.addEventListener('click', () => {
+        cargarOrdenesActivas();
+    });
+    document.getElementById('refreshFinalizadas')?.addEventListener('click', () => {
+        cargarOrdenesFinalizadas();
+    });
     
-    document.getElementById('searchActivas')?.addEventListener('input', filtrarOrdenesActivas);
-    document.getElementById('tecnicoFiltro')?.addEventListener('change', filtrarOrdenesActivas);
-    document.getElementById('estadoFiltroActivas')?.addEventListener('change', filtrarOrdenesActivas);
+    // Filtros para activas
+    const searchActivas = document.getElementById('searchActivas');
+    const tecnicoFiltro = document.getElementById('tecnicoFiltro');
+    const estadoFiltroActivas = document.getElementById('estadoFiltroActivas');
     
-    document.getElementById('searchFinalizadas')?.addEventListener('input', filtrarOrdenesFinalizadas);
-    document.getElementById('fechaDesdeFinalizadas')?.addEventListener('change', filtrarOrdenesFinalizadas);
-    document.getElementById('fechaHastaFinalizadas')?.addEventListener('change', filtrarOrdenesFinalizadas);
+    if (searchActivas) searchActivas.addEventListener('input', () => filtrarOrdenesActivas());
+    if (tecnicoFiltro) tecnicoFiltro.addEventListener('change', () => filtrarOrdenesActivas());
+    if (estadoFiltroActivas) estadoFiltroActivas.addEventListener('change', () => filtrarOrdenesActivas());
+    
+    // Filtros para finalizadas
+    const searchFinalizadas = document.getElementById('searchFinalizadas');
+    const fechaDesdeFinalizadas = document.getElementById('fechaDesdeFinalizadas');
+    const fechaHastaFinalizadas = document.getElementById('fechaHastaFinalizadas');
+    
+    if (searchFinalizadas) searchFinalizadas.addEventListener('input', () => filtrarOrdenesFinalizadas());
+    if (fechaDesdeFinalizadas) fechaDesdeFinalizadas.addEventListener('change', () => filtrarOrdenesFinalizadas());
+    if (fechaHastaFinalizadas) fechaHastaFinalizadas.addEventListener('change', () => filtrarOrdenesFinalizadas());
 }
 
 function cambiarPestana(tabId) {
+    const tabs = document.querySelectorAll('.tab-btn');
+    const panels = document.querySelectorAll('.tab-panel');
+    
     tabs.forEach(tab => {
         if (tab.dataset.tab === tabId) {
             tab.classList.add('active');
@@ -114,7 +199,7 @@ async function cargarTecnicos() {
             const selectTecnico = document.getElementById('tecnicoFiltro');
             if (selectTecnico) {
                 selectTecnico.innerHTML = '<option value="">Todos los técnicos</option>' +
-                    tecnicosDisponibles.map(t => `<option value="${t.id}">${t.nombre}</option>`).join('');
+                    tecnicosDisponibles.map(t => `<option value="${t.id}">${escapeHtml(t.nombre)}</option>`).join('');
             }
         }
     } catch (error) {
@@ -177,7 +262,7 @@ function renderOrdenesActivas(ordenes) {
     container.innerHTML = ordenes.map(orden => `
         <div class="orden-card" data-id="${orden.id}">
             <div class="orden-card-header">
-                <span class="orden-codigo">${orden.codigo_unico}</span>
+                <span class="orden-codigo">${escapeHtml(orden.codigo_unico)}</span>
                 <span class="orden-estado ${orden.estado_global}">${orden.estado_global}</span>
                 <span class="recepcion-fecha">
                     <i class="far fa-calendar-alt"></i>
@@ -229,19 +314,11 @@ function renderOrdenesActivas(ordenes) {
                 ` : ''}
             </div>
             <div class="orden-card-footer">
-                <!-- SOLO BOTÓN GESTIONAR - JEFE TALLER -->
-                <button class="btn-accion-orden btn-gestionar" onclick="abrirModalGestionOrden(${orden.id})">
+                <button class="btn-accion-orden btn-gestionar" onclick="window.abrirModalGestionOrden(${orden.id})">
                     <i class="fas fa-edit"></i> Gestionar Orden
                 </button>
-                
-                <!-- Botón Ver Detalle -->
-                <button class="btn-accion-orden btn-ver-detalle-orden" onclick="verDetalleOrden(${orden.id})">
+                <button class="btn-accion-orden btn-ver-detalle-orden" onclick="window.verDetalleOrden(${orden.id})">
                     <i class="fas fa-eye"></i> Ver Detalle
-                </button>
-                
-                <!-- Botón Ver Diagnósticos -->
-                <button class="btn-accion-orden btn-ver-diagnosticos" onclick="verHistorialDiagnosticos(${orden.id})">
-                    <i class="fas fa-history"></i> Ver Diagnósticos
                 </button>
             </div>
         </div>
@@ -265,7 +342,7 @@ function renderOrdenesFinalizadas(ordenes) {
     container.innerHTML = ordenes.map(orden => `
         <div class="orden-card" data-id="${orden.id}">
             <div class="orden-card-header">
-                <span class="orden-codigo">${orden.codigo_unico}</span>
+                <span class="orden-codigo">${escapeHtml(orden.codigo_unico)}</span>
                 <span class="orden-estado ${orden.estado_global}">${orden.estado_global}</span>
                 <span class="recepcion-fecha">
                     <i class="far fa-calendar-alt"></i>
@@ -287,15 +364,69 @@ function renderOrdenesFinalizadas(ordenes) {
                 </div>
             </div>
             <div class="orden-card-footer">
-                <button class="btn-accion-orden btn-ver-detalle-orden" onclick="verDetalleOrden(${orden.id})">
+                <button class="btn-accion-orden btn-ver-detalle-orden" onclick="window.verDetalleOrden(${orden.id})">
                     <i class="fas fa-eye"></i> Ver Detalle
-                </button>
-                <button class="btn-accion-orden btn-ver-diagnosticos" onclick="verHistorialDiagnosticos(${orden.id})">
-                    <i class="fas fa-history"></i> Ver Diagnósticos
                 </button>
             </div>
         </div>
     `).join('');
+}
+
+// =====================================================
+// FUNCIONES DE FILTRADO
+// =====================================================
+
+function filtrarOrdenesActivas() {
+    const searchTerm = document.getElementById('searchActivas')?.value?.toLowerCase() || '';
+    const tecnicoFiltro = document.getElementById('tecnicoFiltro')?.value || '';
+    const estadoFiltro = document.getElementById('estadoFiltroActivas')?.value || '';
+    
+    let filtradas = [...ordenesActivas];
+    
+    if (searchTerm) {
+        filtradas = filtradas.filter(o => 
+            (o.codigo_unico?.toLowerCase().includes(searchTerm)) ||
+            (o.placa?.toLowerCase().includes(searchTerm)) ||
+            (o.cliente_nombre?.toLowerCase().includes(searchTerm))
+        );
+    }
+    
+    if (tecnicoFiltro) {
+        filtradas = filtradas.filter(o => 
+            o.tecnicos && o.tecnicos.some(t => t.id == tecnicoFiltro)
+        );
+    }
+    
+    if (estadoFiltro) {
+        filtradas = filtradas.filter(o => o.estado_global === estadoFiltro);
+    }
+    
+    renderOrdenesActivas(filtradas);
+}
+
+function filtrarOrdenesFinalizadas() {
+    const searchTerm = document.getElementById('searchFinalizadas')?.value?.toLowerCase() || '';
+    const fechaDesde = document.getElementById('fechaDesdeFinalizadas')?.value || '';
+    const fechaHasta = document.getElementById('fechaHastaFinalizadas')?.value || '';
+    
+    let filtradas = [...ordenesFinalizadas];
+    
+    if (searchTerm) {
+        filtradas = filtradas.filter(o => 
+            (o.codigo_unico?.toLowerCase().includes(searchTerm)) ||
+            (o.placa?.toLowerCase().includes(searchTerm)) ||
+            (o.cliente_nombre?.toLowerCase().includes(searchTerm))
+        );
+    }
+    
+    if (fechaDesde) {
+        filtradas = filtradas.filter(o => o.fecha_ingreso >= fechaDesde);
+    }
+    if (fechaHasta) {
+        filtradas = filtradas.filter(o => o.fecha_ingreso <= fechaHasta + 'T23:59:59');
+    }
+    
+    renderOrdenesFinalizadas(filtradas);
 }
 
 // =====================================================
@@ -306,7 +437,6 @@ async function abrirModalGestionOrden(idOrden) {
     try {
         mostrarNotificacion('Cargando datos de la orden...', 'info');
         
-        // Cargar detalle de la orden
         const response = await fetch(`${API_URL}/jefe-taller/detalle-orden/${idOrden}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
         });
@@ -316,7 +446,7 @@ async function abrirModalGestionOrden(idOrden) {
         
         ordenEnGestion = data.detalle;
         
-        // Cargar bahías ocupadas actualmente
+        // Cargar bahías ocupadas
         let bahiasOcupadas = [];
         try {
             const bahiasResponse = await fetch(`${API_URL}/jefe-taller/bahias-ocupadas`, {
@@ -334,32 +464,23 @@ async function abrirModalGestionOrden(idOrden) {
         const body = document.getElementById('modalGestionOrdenBody');
         const footer = document.getElementById('modalGestionOrdenFooter');
         
-        // Cargar técnicos seleccionados actualmente
         const tecnicosSeleccionados = ordenEnGestion.tecnicos?.map(t => t.id) || [];
-        
-        // Cargar planificación existente
         const planificacionExistente = ordenEnGestion.planificacion || {};
         const hoy = new Date().toISOString().slice(0, 16);
         const fechaInicio = planificacionExistente.fecha_hora_inicio_estimado ? 
             planificacionExistente.fecha_hora_inicio_estimado.slice(0, 16) : hoy;
         
-        // Obtener URL del audio de diagnóstico si existe
         const diagnosticoAudioUrl = ordenEnGestion.diagnostico_audio_url || null;
-        
-        // Constantes
         const MAX_ORDENES_POR_TECNICO = 2;
         const bahiaActual = planificacionExistente.bahia_asignada;
         
-        // Generar opciones de bahías (1-12) con estado de ocupación
         const opcionesBahias = Array.from({length: 12}, (_, i) => {
             const num = i + 1;
             const bahiaOcupada = bahiasOcupadas.find(b => b.bahia_asignada === num);
             const estaOcupada = bahiaOcupada?.esta_ocupada === true;
             const esLaActual = bahiaActual === num;
-            const ordenQueOcupa = bahiaOcupada?.codigo_unico || '';
-            
-            // Si está ocupada por OTRA orden (no la actual), se deshabilita
             const deshabilitar = estaOcupada && !esLaActual;
+            const ordenQueOcupa = bahiaOcupada?.codigo_unico || '';
             const tooltip = deshabilitar ? `title="Ocupada por orden ${ordenQueOcupa}"` : '';
             
             let estadoIcono = '🟢';
@@ -390,41 +511,35 @@ async function abrirModalGestionOrden(idOrden) {
                     <div class="gestion-section-body">
                         <div class="tecnicos-grid" id="tecnicosGrid">
                             ${tecnicosDisponibles.map(t => {
-                                const ordenesActivas = t.ordenes_activas || 0;
-                                const estaCompleto = ordenesActivas >= MAX_ORDENES_POR_TECNICO;
+                                const ordenesActivasTec = t.ordenes_activas || 0;
+                                const estaCompleto = ordenesActivasTec >= MAX_ORDENES_POR_TECNICO;
                                 const estaSeleccionado = tecnicosSeleccionados.includes(t.id);
                                 const puedeSeleccionar = !estaCompleto || estaSeleccionado;
                                 const disabledAttr = !puedeSeleccionar ? 'disabled' : '';
-                                const disabledClass = !puedeSeleccionar ? 'tecnico-disabled' : '';
                                 
-                                let cargaMensaje = `${ordenesActivas}/${MAX_ORDENES_POR_TECNICO} vehículos`;
-                                let cargaColor = '';
+                                let cargaMensaje = `${ordenesActivasTec}/${MAX_ORDENES_POR_TECNICO} vehículos`;
                                 if (estaCompleto) {
-                                    cargaColor = 'style="color: #ef4444;"';
                                     cargaMensaje += ' (Completo)';
-                                } else if (ordenesActivas === 1) {
-                                    cargaColor = 'style="color: #f59e0b;"';
+                                } else if (ordenesActivasTec === 1) {
                                     cargaMensaje += ' (1 cupo)';
                                 } else {
-                                    cargaColor = 'style="color: #10b981;"';
                                     cargaMensaje += ' (Disponible)';
                                 }
                                 
                                 return `
-                                    <div class="tecnico-option ${estaSeleccionado ? 'selected' : ''} ${disabledClass}" data-id="${t.id}" style="${!puedeSeleccionar ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
+                                    <div class="tecnico-option ${estaSeleccionado ? 'selected' : ''}" data-id="${t.id}" style="${!puedeSeleccionar ? 'opacity: 0.6;' : ''}">
                                         <input type="checkbox" value="${t.id}" ${estaSeleccionado ? 'checked' : ''} ${disabledAttr}>
                                         <div class="tecnico-info">
                                             <div class="tecnico-nombre">${escapeHtml(t.nombre)}</div>
-                                            <div class="tecnico-carga" ${cargaColor}>${cargaMensaje}</div>
+                                            <div class="tecnico-carga">${cargaMensaje}</div>
                                         </div>
-                                        ${!puedeSeleccionar ? '<div class="tecnico-bloqueado" title="Este técnico ya tiene 2 órdenes activas"><i class="fas fa-lock"></i></div>' : ''}
                                     </div>
                                 `;
                             }).join('')}
                         </div>
                         <p class="modal-hint">
                             <i class="fas fa-info-circle"></i> 
-                            * Máximo 2 técnicos por orden | Cada técnico puede tener hasta ${MAX_ORDENES_POR_TECNICO} órdenes activas simultáneamente
+                            * Máximo 2 técnicos por orden | Cada técnico puede tener hasta ${MAX_ORDENES_POR_TECNICO} órdenes activas
                         </p>
                     </div>
                 </div>
@@ -445,9 +560,6 @@ async function abrirModalGestionOrden(idOrden) {
                                     <option value="">-- Seleccionar bahía --</option>
                                     ${opcionesBahias}
                                 </select>
-                                <small class="form-hint" style="color: var(--gris-texto); font-size: 0.7rem;">
-                                    <i class="fas fa-info-circle"></i> Las bahías en 🔴 están ocupadas en el horario seleccionado
-                                </small>
                             </div>
                             <div class="form-group">
                                 <label class="form-label"><i class="fas fa-calendar"></i> Fecha y hora inicio</label>
@@ -462,7 +574,7 @@ async function abrirModalGestionOrden(idOrden) {
                     </div>
                 </div>
                 
-                <!-- Sección: Diagnóstico Inicial con Audio -->
+                <!-- Sección: Diagnóstico Inicial -->
                 <div class="gestion-section">
                     <div class="gestion-section-header">
                         <h3><i class="fas fa-stethoscope"></i> Diagnóstico Inicial</h3>
@@ -500,66 +612,17 @@ async function abrirModalGestionOrden(idOrden) {
             </div>
         `;
         
-        // Footer con botón Guardar
         footer.innerHTML = `
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalGestionOrden()">Cancelar</button>
-                <button class="btn-primary" onclick="guardarGestionOrden()">
+                <button class="btn-secondary" onclick="window.cerrarModalGestionOrden()">Cancelar</button>
+                <button class="btn-primary" onclick="window.guardarGestionOrden()">
                     <i class="fas fa-save"></i> Guardar Cambios
                 </button>
             </div>
         `;
         
-        // Configurar eventos de la interfaz
         configurarSeleccionTecnicos();
         configurarAudioDiagnostico(diagnosticoAudioUrl);
-        
-        // Agregar validación en tiempo real cuando cambia fecha/hora o bahía
-        const bahiaSelect = document.getElementById('bahiaSelect');
-        const fechaInicioInput = document.getElementById('fechaInicio');
-        const horasEstimadasInput = document.getElementById('horasEstimadas');
-        
-        const validarDisponibilidadBahia = async () => {
-            const bahia = bahiaSelect?.value;
-            const fechaInicioVal = fechaInicioInput?.value;
-            const horasEstimadasVal = parseFloat(horasEstimadasInput?.value);
-            
-            if (bahia && fechaInicioVal && horasEstimadasVal > 0) {
-                try {
-                    const response = await fetch(`${API_URL}/jefe-taller/verificar-bahia`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-                        },
-                        body: JSON.stringify({
-                            bahia: parseInt(bahia),
-                            fecha_inicio: fechaInicioVal,
-                            horas_estimadas: horasEstimadasVal,
-                            id_orden_actual: ordenEnGestion.id
-                        })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (!data.disponible) {
-                        bahiaSelect.style.borderColor = '#ef4444';
-                        bahiaSelect.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-                        mostrarNotificacion(`⚠️ Bahía ${bahia} no disponible en este horario`, 'warning');
-                    } else {
-                        bahiaSelect.style.borderColor = '';
-                        bahiaSelect.style.backgroundColor = '';
-                    }
-                } catch (error) {
-                    console.error('Error validando bahía:', error);
-                }
-            }
-        };
-        
-        // Escuchar cambios en fecha y horas
-        fechaInicioInput?.addEventListener('change', validarDisponibilidadBahia);
-        horasEstimadasInput?.addEventListener('change', validarDisponibilidadBahia);
-        bahiaSelect?.addEventListener('change', validarDisponibilidadBahia);
         
         modal.classList.add('show');
         
@@ -573,33 +636,9 @@ function configurarSeleccionTecnicos() {
     const checkboxes = document.querySelectorAll('#tecnicosGrid input[type="checkbox"]');
     const maxTecnicos = 2;
     const MAX_ORDENES_POR_TECNICO = 2;
-    const tecnicosActualizados = tecnicosDisponibles;
-    
-    checkboxes.forEach(checkbox => {
-        const tecnicoId = parseInt(checkbox.value);
-        const tecnicoData = tecnicosActualizados.find(t => t.id === tecnicoId);
-        const ordenesActivas = tecnicoData?.ordenes_activas || 0;
-        const estaCompleto = ordenesActivas >= MAX_ORDENES_POR_TECNICO;
-        const estaSeleccionado = checkbox.checked;
-        
-        if (estaCompleto && !estaSeleccionado) {
-            checkbox.disabled = true;
-        }
-    });
     
     checkboxes.forEach(checkbox => {
         checkbox.addEventListener('change', (e) => {
-            if (checkbox.disabled) {
-                e.preventDefault();
-                const tecnicoId = parseInt(checkbox.value);
-                const tecnicoData = tecnicosActualizados.find(t => t.id === tecnicoId);
-                mostrarNotificacion(
-                    `El técnico ${tecnicoData?.nombre || 'seleccionado'} ya tiene ${MAX_ORDENES_POR_TECNICO} órdenes activas. No se puede asignar.`,
-                    'warning'
-                );
-                return;
-            }
-            
             const seleccionados = Array.from(checkboxes).filter(cb => cb.checked && !cb.disabled).length;
             
             if (seleccionados > maxTecnicos) {
@@ -741,7 +780,6 @@ async function guardarGestionOrden() {
     try {
         mostrarNotificacion('Guardando cambios...', 'info');
         
-        // Obtener datos del formulario
         const checkboxes = document.querySelectorAll('#tecnicosGrid input[type="checkbox"]');
         const tecnicosSeleccionados = Array.from(checkboxes)
             .filter(cb => cb.checked && !cb.disabled)
@@ -750,13 +788,10 @@ async function guardarGestionOrden() {
         const bahia = document.getElementById('bahiaSelect')?.value;
         const fechaInicio = document.getElementById('fechaInicio')?.value;
         const horasEstimadas = parseFloat(document.getElementById('horasEstimadas')?.value);
-        
         const diagnostico = document.getElementById('diagnosticoTexto')?.value || '';
         let audioUrl = ordenEnGestion.diagnostico_audio_url || null;
         
-        // =====================================================
-        // VALIDAR DISPONIBILIDAD DE BAHÍA ANTES DE GUARDAR
-        // =====================================================
+        // Validar disponibilidad de bahía
         if (bahia && fechaInicio && horasEstimadas > 0) {
             const disponibilidadResponse = await fetch(`${API_URL}/jefe-taller/verificar-bahia`, {
                 method: 'POST',
@@ -773,13 +808,12 @@ async function guardarGestionOrden() {
             });
             
             const disponibilidadData = await disponibilidadResponse.json();
-            
             if (!disponibilidadData.disponible) {
-                throw new Error(`La Bahía ${bahia} no está disponible en el horario seleccionado. Por favor elige otra bahía u otro horario.`);
+                throw new Error(`La Bahía ${bahia} no está disponible en el horario seleccionado`);
             }
         }
         
-        // Procesar audio si hay nuevo
+        // Procesar audio
         const audioPreview = document.getElementById('audioPreviewDiagnostico');
         if (audioPreview && audioPreview.src && audioPreview.src.startsWith('blob:')) {
             try {
@@ -806,25 +840,14 @@ async function guardarGestionOrden() {
         }
         
         // Guardar técnicos
-        const tecnicosResponse = await fetch(`${API_URL}/jefe-taller/asignar-tecnicos`, {
+        await fetch(`${API_URL}/jefe-taller/asignar-tecnicos`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
             },
-            body: JSON.stringify({ 
-                id_orden: ordenEnGestion.id, 
-                tecnicos: tecnicosSeleccionados 
-            })
+            body: JSON.stringify({ id_orden: ordenEnGestion.id, tecnicos: tecnicosSeleccionados })
         });
-        
-        const tecnicosData = await tecnicosResponse.json();
-        if (!tecnicosResponse.ok) {
-            if (tecnicosData.detalles) {
-                throw new Error(tecnicosData.detalles.join(', '));
-            }
-            throw new Error(tecnicosData.error || 'Error al asignar técnicos');
-        }
         
         // Guardar planificación
         if (bahia && fechaInicio && horasEstimadas > 0) {
@@ -860,7 +883,6 @@ async function guardarGestionOrden() {
         cerrarModalGestionOrden();
         mostrarNotificacion('Cambios guardados correctamente', 'success');
         
-        // Recargar datos
         await Promise.all([
             cargarTecnicos(),
             cargarOrdenesActivas()
@@ -888,111 +910,7 @@ function cerrarModalGestionOrden() {
 }
 
 // =====================================================
-// ACCIONES DEL JEFE DE TALLER
-// =====================================================
-
-async function iniciarTrabajo(idOrden) {
-    if (!confirm('¿Estás seguro de que deseas INICIAR el trabajo? La bahía quedará ocupada.')) return;
-    
-    try {
-        mostrarNotificacion('Iniciando trabajo...', 'info');
-        
-        const response = await fetch(`${API_URL}/jefe-taller/iniciar-trabajo`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-            },
-            body: JSON.stringify({ id_orden: idOrden })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            mostrarNotificacion(data.message, 'success');
-            await cargarOrdenesActivas();
-        } else {
-            throw new Error(data.error);
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion(error.message, 'error');
-    }
-}
-
-async function reanudarOrden(idOrden) {
-    try {
-        mostrarNotificacion('Reanudando orden...', 'info');
-        
-        const response = await fetch(`${API_URL}/jefe-taller/reanudar-orden`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-            },
-            body: JSON.stringify({ id_orden: idOrden })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            mostrarNotificacion('Orden reanudada correctamente', 'success');
-            await cargarOrdenesActivas();
-        } else {
-            throw new Error(data.error || 'Error al reanudar orden');
-        }
-    } catch (error) {
-        console.error('Error reanudando orden:', error);
-        mostrarNotificacion(error.message, 'error');
-    }
-}
-
-async function aprobarEntrega(idOrden, aprobado) {
-    const mensaje = aprobado ? 
-        '¿Confirmas que el trabajo está correcto y se puede liberar la bahía?' :
-        '¿Rechazas el trabajo? Deberás indicar el motivo para que el técnico lo corrija.';
-    
-    if (!confirm(mensaje)) return;
-    
-    let observaciones = '';
-    if (!aprobado) {
-        observaciones = prompt('Indica el motivo del rechazo y qué debe corregir el técnico:');
-        if (!observaciones) return;
-    }
-    
-    try {
-        mostrarNotificacion(aprobado ? 'Aprobando trabajo...' : 'Rechazando trabajo...', 'info');
-        
-        const response = await fetch(`${API_URL}/jefe-taller/aprobar-entrega`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-            },
-            body: JSON.stringify({ 
-                id_orden: idOrden, 
-                aprobado: aprobado,
-                observaciones: observaciones
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            mostrarNotificacion(data.message, 'success');
-            await cargarOrdenesActivas();
-            await cargarOrdenesFinalizadas();
-        } else {
-            throw new Error(data.error);
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion(error.message, 'error');
-    }
-}
-
-// =====================================================
-// OTRAS FUNCIONES
+// VER DETALLE DE ORDEN
 // =====================================================
 
 async function verDetalleOrden(idOrden) {
@@ -1012,71 +930,6 @@ async function verDetalleOrden(idOrden) {
         
         const fotosHtml = detalle.fotos ? renderFotosDetalle(detalle.fotos) : '';
         
-        const audioRecepcionHtml = detalle.audio_url ? `
-            <div class="detalle-seccion">
-                <h4><i class="fas fa-microphone"></i> Grabación del Problema (Recepción)</h4>
-                <audio controls style="width: 100%;">
-                    <source src="${detalle.audio_url}" type="audio/mpeg">
-                </audio>
-            </div>
-        ` : '';
-        
-        const audioDiagnosticoHtml = detalle.diagnostico_audio_url ? `
-            <div class="detalle-seccion">
-                <h4><i class="fas fa-microphone"></i> Grabación del Diagnóstico Inicial</h4>
-                <audio controls style="width: 100%;">
-                    <source src="${detalle.diagnostico_audio_url}" type="audio/mpeg">
-                </audio>
-            </div>
-        ` : '';
-        
-        let planificacionHtml = '';
-        if (detalle.planificacion && (detalle.planificacion.bahia_asignada || detalle.planificacion.fecha_hora_inicio_estimado)) {
-            planificacionHtml = `
-                <div class="detalle-seccion">
-                    <h4><i class="fas fa-calendar-alt"></i> Planificación</h4>
-                    <div class="detalle-grid">
-                        ${detalle.planificacion.bahia_asignada ? `
-                            <div class="detalle-item">
-                                <span class="detalle-label">Bahía</span>
-                                <span class="detalle-value">Bahía ${detalle.planificacion.bahia_asignada}</span>
-                            </div>
-                        ` : ''}
-                        ${detalle.planificacion.fecha_hora_inicio_estimado ? `
-                            <div class="detalle-item">
-                                <span class="detalle-label">Inicio estimado</span>
-                                <span class="detalle-value">${new Date(detalle.planificacion.fecha_hora_inicio_estimado).toLocaleString()}</span>
-                            </div>
-                        ` : ''}
-                        ${detalle.planificacion.horas_estimadas ? `
-                            <div class="detalle-item">
-                                <span class="detalle-label">Horas estimadas</span>
-                                <span class="detalle-value">${detalle.planificacion.horas_estimadas} horas</span>
-                            </div>
-                        ` : ''}
-                    </div>
-                </div>
-            `;
-        }
-        
-        let jefesHtml = '';
-        if (detalle.jefe_operativo && detalle.jefe_operativo.nombre) {
-            jefesHtml += `
-                <div class="detalle-item">
-                    <span class="detalle-label">Jefe Principal</span>
-                    <span class="detalle-value">${escapeHtml(detalle.jefe_operativo.nombre)}</span>
-                </div>
-            `;
-        }
-        if (detalle.jefe_operativo_2 && detalle.jefe_operativo_2.nombre) {
-            jefesHtml += `
-                <div class="detalle-item">
-                    <span class="detalle-label">Jefe Secundario</span>
-                    <span class="detalle-value">${escapeHtml(detalle.jefe_operativo_2.nombre)}</span>
-                </div>
-            `;
-        }
-        
         body.innerHTML = `
             <div class="detalle-orden">
                 <div class="detalle-seccion">
@@ -1084,7 +937,7 @@ async function verDetalleOrden(idOrden) {
                     <div class="detalle-grid">
                         <div class="detalle-item">
                             <span class="detalle-label">Código</span>
-                            <span class="detalle-value">${detalle.codigo_unico}</span>
+                            <span class="detalle-value">${escapeHtml(detalle.codigo_unico)}</span>
                         </div>
                         <div class="detalle-item">
                             <span class="detalle-label">Estado</span>
@@ -1102,13 +955,6 @@ async function verDetalleOrden(idOrden) {
                         ` : ''}
                     </div>
                 </div>
-                
-                ${jefesHtml ? `
-                    <div class="detalle-seccion">
-                        <h4><i class="fas fa-user-tie"></i> Jefes Operativos</h4>
-                        <div class="detalle-grid">${jefesHtml}</div>
-                    </div>
-                ` : ''}
                 
                 <div class="detalle-seccion">
                     <h4><i class="fas fa-user"></i> Datos del Cliente</h4>
@@ -1147,9 +993,7 @@ async function verDetalleOrden(idOrden) {
                     <div class="detalle-descripcion">${escapeHtml(detalle.transcripcion_problema || 'No registrada')}</div>
                 </div>
                 
-                ${audioRecepcionHtml}
                 ${fotosHtml}
-                ${planificacionHtml}
                 
                 ${detalle.diagnostico_inicial ? `
                     <div class="detalle-seccion">
@@ -1157,8 +1001,6 @@ async function verDetalleOrden(idOrden) {
                         <div class="detalle-descripcion">${escapeHtml(detalle.diagnostico_inicial)}</div>
                     </div>
                 ` : ''}
-                
-                ${audioDiagnosticoHtml}
                 
                 <div class="detalle-seccion">
                     <h4><i class="fas fa-users"></i> Técnicos Asignados</h4>
@@ -1170,7 +1012,7 @@ async function verDetalleOrden(idOrden) {
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalDetalleOrden()">Cerrar</button>
+                <button class="btn-secondary" onclick="window.cerrarModalDetalleOrden()">Cerrar</button>
             </div>
         `;
         
@@ -1181,13 +1023,10 @@ async function verDetalleOrden(idOrden) {
     }
 }
 
-function cerrarModalDetalleOrden() {
-    document.getElementById('modalDetalleOrden').classList.remove('show');
-}
-
 function renderFotosDetalle(fotos) {
     if (!fotos) return '';
     
+    // Mapeo de campos a nombres legibles
     const camposMap = {
         'url_lateral_izquierda': 'Lateral Izquierdo',
         'url_lateral_derecha': 'Lateral Derecho',
@@ -1198,9 +1037,18 @@ function renderFotosDetalle(fotos) {
         'url_foto_tablero': 'Tablero'
     };
     
-    const fotosConUrl = Object.entries(fotos)
-        .filter(([key, url]) => url && camposMap[key])
-        .map(([key, url]) => ({ url, nombre: camposMap[key] }));
+    // Convertir objeto a array de fotos con url y nombre
+    let fotosConUrl = [];
+    
+    if (typeof fotos === 'object' && !Array.isArray(fotos)) {
+        // Es un objeto con claves
+        fotosConUrl = Object.entries(fotos)
+            .filter(([key, url]) => url && camposMap[key])
+            .map(([key, url]) => ({ url, nombre: camposMap[key] }));
+    } else if (Array.isArray(fotos)) {
+        // Ya es un array
+        fotosConUrl = fotos.filter(f => f.url);
+    }
     
     if (fotosConUrl.length === 0) return '';
     
@@ -1209,8 +1057,8 @@ function renderFotosDetalle(fotos) {
             <h4><i class="fas fa-camera"></i> Fotos de Recepción (${fotosConUrl.length}/7)</h4>
             <div class="detalle-fotos-grid">
                 ${fotosConUrl.map(foto => `
-                    <div class="detalle-foto-item" onclick="verImagenAmpliada('${foto.url}')">
-                        <img src="${foto.url}" alt="${foto.nombre}">
+                    <div class="detalle-foto-item" onclick="window.verImagenAmpliada('${foto.url}')">
+                        <img src="${foto.url}" alt="${foto.nombre}" onerror="this.src='https://placehold.co/400x300/2C2C2E/8E8E93?text=Imagen+no+disponible'">
                         <span class="detalle-foto-label">${foto.nombre}</span>
                     </div>
                 `).join('')}
@@ -1219,157 +1067,12 @@ function renderFotosDetalle(fotos) {
     `;
 }
 
-async function verHistorialDiagnosticos(idOrden) {
-    try {
-        const response = await fetch(`${API_URL}/jefe-taller/historial-diagnosticos/${idOrden}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
-        });
-        
-        const data = await response.json();
-        if (!response.ok) throw new Error('Error cargando historial');
-        
-        const diagnosticos = data.diagnosticos || [];
-        const modal = document.getElementById('modalHistorialDiagnostico');
-        const body = document.getElementById('modalHistorialDiagnosticoBody');
-        
-        if (diagnosticos.length === 0) {
-            body.innerHTML = '<div class="empty-state"><p>No hay diagnósticos técnicos registrados</p></div>';
-        } else {
-            body.innerHTML = `
-                <div class="diagnostico-historial">
-                    ${diagnosticos.map(d => `
-                        <div class="diagnostico-historial-item">
-                            <div class="diagnostico-version">Versión ${d.version}</div>
-                            <div class="diagnostico-fecha">
-                                <i class="far fa-calendar-alt"></i> ${new Date(d.fecha_envio).toLocaleString()}
-                                <span class="badge">${escapeHtml(d.tecnico_nombre)}</span>
-                            </div>
-                            <div class="diagnostico-informe">${escapeHtml(d.informe || 'Sin informe detallado')}</div>
-                            ${d.fotos && d.fotos.length > 0 ? `
-                                <div class="diagnostico-fotos">
-                                    ${d.fotos.map(f => `<div class="diagnostico-foto" style="background-image: url('${f.url_foto}')" onclick="verImagenAmpliada('${f.url_foto}')"></div>`).join('')}
-                                </div>
-                            ` : ''}
-                            ${d.observaciones ? `
-                                <div class="observacion">
-                                    <i class="fas fa-comment"></i> <strong>Observación:</strong><br>
-                                    ${escapeHtml(d.observaciones)}
-                                </div>
-                            ` : ''}
-                            ${!d.aprobado && d.estado !== 'aprobado' ? `
-                                <div class="modal-footer" style="margin-top: 0.5rem; padding: 0;">
-                                    <button class="btn-success" onclick="aprobarDiagnosticoTecnico(${d.id}, true)">Aprobar</button>
-                                    <button class="btn-danger" onclick="abrirModalObservacionRechazo(${d.id})">Rechazar</button>
-                                </div>
-                            ` : d.aprobado ? `
-                                <div class="badge-success">✓ Aprobado</div>
-                            ` : ''}
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        }
-        
-        modal.classList.add('show');
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion('Error cargando historial', 'error');
-    }
+function cerrarModalDetalleOrden() {
+    document.getElementById('modalDetalleOrden').classList.remove('show');
 }
 
 function cerrarModalHistorialDiagnostico() {
     document.getElementById('modalHistorialDiagnostico').classList.remove('show');
-}
-
-function abrirModalObservacionRechazo(idDiagnostico) {
-    const observacion = prompt('Ingresa la observación para el técnico (motivo del rechazo):');
-    if (observacion && observacion.trim()) {
-        aprobarDiagnosticoTecnico(idDiagnostico, false, observacion.trim());
-    }
-}
-
-async function aprobarDiagnosticoTecnico(idDiagnostico, aceptado, observacion = null) {
-    try {
-        mostrarNotificacion(aceptado ? 'Aprobando diagnóstico...' : 'Rechazando diagnóstico...', 'info');
-        
-        const response = await fetch(`${API_URL}/jefe-taller/aprobar-diagnostico`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-            },
-            body: JSON.stringify({ id_diagnostico: idDiagnostico, aceptado, observacion })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            mostrarNotificacion(aceptado ? 'Diagnóstico aprobado' : 'Diagnóstico rechazado con observaciones', 'success');
-            await cargarOrdenesActivas();
-        } else {
-            throw new Error(data.error || 'Error al procesar diagnóstico');
-        }
-    } catch (error) {
-        console.error('Error procesando diagnóstico:', error);
-        mostrarNotificacion(error.message, 'error');
-    }
-}
-
-// =====================================================
-// FUNCIONES DE FILTRADO
-// =====================================================
-
-function filtrarOrdenesActivas() {
-    const searchTerm = document.getElementById('searchActivas')?.value.toLowerCase() || '';
-    const tecnicoFiltro = document.getElementById('tecnicoFiltro')?.value;
-    const estadoFiltro = document.getElementById('estadoFiltroActivas')?.value;
-    
-    let filtradas = [...ordenesActivas];
-    
-    if (searchTerm) {
-        filtradas = filtradas.filter(o => 
-            (o.codigo_unico?.toLowerCase().includes(searchTerm)) ||
-            (o.placa?.toLowerCase().includes(searchTerm)) ||
-            (o.cliente_nombre?.toLowerCase().includes(searchTerm))
-        );
-    }
-    
-    if (tecnicoFiltro) {
-        filtradas = filtradas.filter(o => 
-            o.tecnicos && o.tecnicos.some(t => t.id == tecnicoFiltro)
-        );
-    }
-    
-    if (estadoFiltro) {
-        filtradas = filtradas.filter(o => o.estado_global === estadoFiltro);
-    }
-    
-    renderOrdenesActivas(filtradas);
-}
-
-function filtrarOrdenesFinalizadas() {
-    const searchTerm = document.getElementById('searchFinalizadas')?.value.toLowerCase() || '';
-    const fechaDesde = document.getElementById('fechaDesdeFinalizadas')?.value;
-    const fechaHasta = document.getElementById('fechaHastaFinalizadas')?.value;
-    
-    let filtradas = [...ordenesFinalizadas];
-    
-    if (searchTerm) {
-        filtradas = filtradas.filter(o => 
-            (o.codigo_unico?.toLowerCase().includes(searchTerm)) ||
-            (o.placa?.toLowerCase().includes(searchTerm)) ||
-            (o.cliente_nombre?.toLowerCase().includes(searchTerm))
-        );
-    }
-    
-    if (fechaDesde) {
-        filtradas = filtradas.filter(o => o.fecha_ingreso >= fechaDesde);
-    }
-    if (fechaHasta) {
-        filtradas = filtradas.filter(o => o.fecha_ingreso <= fechaHasta + 'T23:59:59');
-    }
-    
-    renderOrdenesFinalizadas(filtradas);
 }
 
 // =====================================================
@@ -1384,19 +1087,30 @@ function iniciarPolling() {
 }
 
 function verImagenAmpliada(url) {
-    const modal = document.createElement('div');
-    modal.className = 'modal-imagen';
-    modal.innerHTML = `
-        <div class="modal-imagen-content">
-            <button class="modal-imagen-close" onclick="this.parentElement.parentElement.remove()">&times;</button>
-            <img src="${url}" alt="Imagen ampliada">
-        </div>
-    `;
-    document.body.appendChild(modal);
+    // Crear modal si no existe
+    let modal = document.querySelector('.modal-imagen');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal-imagen';
+        modal.innerHTML = `
+            <div class="modal-imagen-content">
+                <button class="modal-imagen-close">&times;</button>
+                <img src="" alt="Imagen ampliada">
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Evento para cerrar
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal || e.target.classList.contains('modal-imagen-close')) {
+                modal.style.display = 'none';
+            }
+        });
+    }
+    
+    const img = modal.querySelector('img');
+    img.src = url;
     modal.style.display = 'flex';
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) modal.remove();
-    });
 }
 
 function escapeHtml(text) {
@@ -1430,6 +1144,87 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
 }
 
 // =====================================================
+// FUNCIONES ADICIONALES (para compatibilidad)
+// =====================================================
+
+async function iniciarTrabajo(idOrden) {
+    if (!confirm('¿Estás seguro de que deseas INICIAR el trabajo?')) return;
+    try {
+        const response = await fetch(`${API_URL}/jefe-taller/iniciar-trabajo`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            },
+            body: JSON.stringify({ id_orden: idOrden })
+        });
+        const data = await response.json();
+        if (response.ok) {
+            mostrarNotificacion(data.message, 'success');
+            await cargarOrdenesActivas();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (error) {
+        mostrarNotificacion(error.message, 'error');
+    }
+}
+
+async function reanudarOrden(idOrden) {
+    try {
+        const response = await fetch(`${API_URL}/jefe-taller/reanudar-orden`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            },
+            body: JSON.stringify({ id_orden: idOrden })
+        });
+        const data = await response.json();
+        if (response.ok) {
+            mostrarNotificacion('Orden reanudada correctamente', 'success');
+            await cargarOrdenesActivas();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (error) {
+        mostrarNotificacion(error.message, 'error');
+    }
+}
+
+async function aprobarEntrega(idOrden, aprobado) {
+    const mensaje = aprobado ? '¿Confirmas que el trabajo está correcto?' : '¿Rechazas el trabajo?';
+    if (!confirm(mensaje)) return;
+    
+    let observaciones = '';
+    if (!aprobado) {
+        observaciones = prompt('Indica el motivo del rechazo:');
+        if (!observaciones) return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/jefe-taller/aprobar-entrega`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            },
+            body: JSON.stringify({ id_orden: idOrden, aprobado, observaciones })
+        });
+        const data = await response.json();
+        if (response.ok) {
+            mostrarNotificacion(data.message, 'success');
+            await cargarOrdenesActivas();
+            await cargarOrdenesFinalizadas();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (error) {
+        mostrarNotificacion(error.message, 'error');
+    }
+}
+
+// =====================================================
 // EXPONER FUNCIONES GLOBALES
 // =====================================================
 
@@ -1437,11 +1232,8 @@ window.iniciarTrabajo = iniciarTrabajo;
 window.reanudarOrden = reanudarOrden;
 window.aprobarEntrega = aprobarEntrega;
 window.verDetalleOrden = verDetalleOrden;
-window.verHistorialDiagnosticos = verHistorialDiagnosticos;
 window.verImagenAmpliada = verImagenAmpliada;
 window.abrirModalGestionOrden = abrirModalGestionOrden;
-window.abrirModalObservacionRechazo = abrirModalObservacionRechazo;
-window.aprobarDiagnosticoTecnico = aprobarDiagnosticoTecnico;
 window.cerrarModalGestionOrden = cerrarModalGestionOrden;
 window.cerrarModalDetalleOrden = cerrarModalDetalleOrden;
 window.cerrarModalHistorialDiagnostico = cerrarModalHistorialDiagnostico;

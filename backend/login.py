@@ -1,3 +1,7 @@
+# =====================================================
+# LOGIN Y AUTENTICACIÓN - FURIA MOTOR COMPANY SRL
+# =====================================================
+
 from flask import Blueprint, request, jsonify
 import jwt
 import datetime
@@ -28,7 +32,7 @@ EMAIL_CONFIG = {
     'smtp_server': 'smtp.gmail.com',
     'smtp_port': 587,
     'email_user': 'vaniacarrasco68056530@gmail.com',
-    'email_password': 'uahnoblikntnqlbk',  # Contraseña de aplicación sin espacios
+    'email_password': 'uahnoblikntnqlbk',
     'from_name': 'FURIA MOTOR COMPANY'
 }
 
@@ -43,13 +47,6 @@ def generar_codigo_verificacion():
 def enviar_email(destinatario, asunto, cuerpo_html):
     """Enviar correo electrónico"""
     try:
-        # Verificar configuración - REMUEVE ESTA VALIDACIÓN
-        # if EMAIL_CONFIG['email_password'] == 'gmuhjextdixawkk':
-        #     logger.info(f"⚠️ MODO DESARROLLO - Email simulado a: {destinatario}")
-        #     logger.info(f"Asunto: {asunto}")
-        #     logger.info(f"Cuerpo: {cuerpo_html[:200]}...")
-        #     return True
-        
         msg = MIMEMultipart('alternative')
         msg['Subject'] = asunto
         msg['From'] = f"{EMAIL_CONFIG['from_name']} <{EMAIL_CONFIG['email_user']}>"
@@ -71,21 +68,64 @@ def enviar_email(destinatario, asunto, cuerpo_html):
         logger.error(f"❌ Error enviando email: {str(e)}")
         return False
 
-def crear_notificacion_admin(tipo, titulo, mensaje):
-    """Crear notificación para el Administrador General"""
+def obtener_roles_usuario(id_usuario):
+    """Obtener todos los roles de un usuario (como lista de strings)"""
     try:
-        admin_result = supabase.table('usuario').select('id').eq('id_rol', 1).limit(1).execute()
+        # Intentar usar la función SQL que retorna array de textos
+        result = supabase.rpc('usuario_obtener_nombres_roles', {'p_usuario_id': id_usuario}).execute()
         
-        if admin_result.data:
-            supabase.table('notificacion').insert({
-                'id_usuario_destino': admin_result.data[0]['id'],
-                'tipo': tipo,
-                'mensaje': f"{titulo}: {mensaje}",
-                'fecha_envio': datetime.datetime.now().isoformat()
-            }).execute()
-            logger.info(f"📢 Notificación creada para admin: {titulo}")
+        if result.data and isinstance(result.data, list):
+            return result.data
+        
+        # Fallback: usar la función original
+        result = supabase.rpc('usuario_obtener_roles', {'p_usuario_id': id_usuario}).execute()
+        
+        if result.data:
+            roles = []
+            for item in result.data:
+                if isinstance(item, dict):
+                    # Buscar el nombre del rol en cualquier campo
+                    rol = item.get('nombre_rol') or item.get('nombre') or item.get('rol')
+                    if rol:
+                        roles.append(rol)
+                    else:
+                        roles.append(str(item))
+                else:
+                    roles.append(str(item))
+            return roles
+        
+        return []
     except Exception as e:
-        logger.error(f"Error creando notificación: {str(e)}")
+        logger.error(f"Error obteniendo roles: {str(e)}")
+        # Fallback: consultar directamente la tabla
+        try:
+            result = supabase.table('usuario_rol') \
+                .select('rol(nombre_rol)') \
+                .eq('id_usuario', id_usuario) \
+                .execute()
+            
+            if result.data:
+                roles = []
+                for item in result.data:
+                    if item.get('rol') and item['rol'].get('nombre_rol'):
+                        roles.append(item['rol']['nombre_rol'])
+                return roles
+        except Exception as e2:
+            logger.error(f"Error en fallback de roles: {e2}")
+        
+        return []
+
+def usuario_tiene_rol(id_usuario, rol_nombre):
+    """Verificar si usuario tiene un rol específico"""
+    try:
+        result = supabase.rpc('usuario_tiene_rol', {
+            'p_usuario_id': id_usuario,
+            'p_rol_nombre': rol_nombre
+        }).execute()
+        return result.data if result.data else False
+    except Exception as e:
+        logger.error(f"Error verificando rol: {str(e)}")
+        return False
 
 # =====================================================
 # DECORADOR PARA VERIFICAR TOKEN
@@ -146,30 +186,17 @@ def login():
             # LOGIN PARA PERSONAL
             logger.info(f"🔍 Buscando staff con: {identifier}")
             
-            roles_result = supabase.table('rol').select('id, nombre_rol').execute()
-            roles = {r['id']: r['nombre_rol'] for r in roles_result.data} if roles_result.data else {}
-            
-            # CORREGIDO: Usar filter con operadores en lugar de or_
+            # Buscar por email o documento
             result = supabase.table('usuario') \
                 .select('*') \
-                .filter('numero_documento', 'eq', identifier) \
-                .filter('email', 'eq', identifier) \
+                .eq('email', identifier) \
                 .execute()
             
-            # Alternativa: Hacer dos consultas separadas
             if not result.data:
-                # Buscar por email si no se encontró por documento
                 result = supabase.table('usuario') \
                     .select('*') \
-                    .eq('email', identifier) \
+                    .eq('numero_documento', identifier) \
                     .execute()
-                
-                if not result.data:
-                    # Buscar por documento
-                    result = supabase.table('usuario') \
-                        .select('*') \
-                        .eq('numero_documento', identifier) \
-                        .execute()
             
             if not result.data:
                 logger.warning(f"❌ Usuario no encontrado: {identifier}")
@@ -181,29 +208,49 @@ def login():
                 logger.warning(f"❌ Contraseña incorrecta para: {identifier}")
                 return jsonify({'error': 'Credenciales inválidas'}), 401
             
-            rol_nombre = roles.get(user['id_rol'], 'desconocido')
-            logger.info(f"✅ Login exitoso: {user['nombre']} - Rol: {rol_nombre}")
+            # Obtener roles del usuario
+            nombres_roles = obtener_roles_usuario(user['id'])
+            logger.info(f"Roles obtenidos para {user['nombre']}: {nombres_roles}")
             
+            # Determinar rol principal para redirección
+            # Prioridad: jefe_taller > jefe_operativo > tecnico > encargado_repuestos
+            rol_principal = 'jefe_operativo'  # default
+            if 'jefe_taller' in nombres_roles:
+                rol_principal = 'jefe_taller'
+            elif 'jefe_operativo' in nombres_roles:
+                rol_principal = 'jefe_operativo'
+            elif 'tecnico' in nombres_roles:
+                rol_principal = 'tecnico'
+            elif 'encargado_repuestos' in nombres_roles:
+                rol_principal = 'encargado_repuestos'
+            elif nombres_roles:
+                rol_principal = nombres_roles[0]
+            
+            logger.info(f"✅ Login exitoso: {user['nombre']} - Roles: {nombres_roles} - Rol principal: {rol_principal}")
+            
+            # Mapeo de roles a URLs de redirección
+            role_redirects = {
+                'jefe_operativo': '/jefe_operativo/dashboard.html',
+                'jefe_taller': '/jefe_taller/dashboard.html',
+                'tecnico': '/tecnico_mecanico/misvehiculos.html',
+                'encargado_repuestos': '/encargado_rep_almacen/dashboard.html'
+            }
+            
+            redirect_url = role_redirects.get(rol_principal, '/dashboard.html')
+            
+            # Crear token JWT
             token = jwt.encode({
                 'user': {
                     'id': user['id'],
                     'nombre': user['nombre'],
                     'documento': user.get('numero_documento', ''),
                     'email': user.get('email', ''),
-                    'id_rol': user['id_rol'],
-                    'rol': rol_nombre,
+                    'roles': nombres_roles,
+                    'rol_principal': rol_principal,
                     'type': 'staff'
                 },
                 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
             }, SECRET_KEY, algorithm="HS256")
-            
-            role_redirects = {
-                'admin_general': '/admin_general/dashboard.html',
-                'jefe_operativo': '/jefe_operativo/dashboard.html',
-                'jefe_taller': '/jefe_taller/dashboard.html',
-                'tecnico_mecanico': '/tecnico_mecanico/misvehiculos.html',
-                'encargado_rep_almacen': '/encargado_rep_almacen/dashboard.html'
-            }
             
             return jsonify({
                 'success': True,
@@ -213,14 +260,15 @@ def login():
                     'nombre': user['nombre'],
                     'documento': user.get('numero_documento', ''),
                     'email': user.get('email', ''),
-                    'rol': rol_nombre,
+                    'roles': nombres_roles,
+                    'rol_principal': rol_principal,
                     'type': 'staff'
                 },
-                'redirect': role_redirects.get(rol_nombre, '/dashboard.html')
+                'redirect': redirect_url
             }), 200
             
         elif user_type == 'client':
-            # LOGIN PARA CLIENTES (también necesita corrección)
+            # LOGIN PARA CLIENTES
             logger.info(f"🔍 Buscando cliente con: {identifier}")
             
             cliente = None
@@ -256,13 +304,19 @@ def login():
             else:
                 return jsonify({'error': 'Credenciales inválidas'}), 401
             
+            # Cliente siempre tiene rol 'cliente'
+            roles_usuario = obtener_roles_usuario(user['id'])
+            nombres_roles = roles_usuario + ['cliente']
+            
             token = jwt.encode({
                 'user': {
                     'id_cliente': cliente['id'],
+                    'id_usuario': user['id'],
                     'nombre': user['nombre'] if user else cliente.get('nombre', 'Cliente'),
                     'email': cliente.get('email', ''),
                     'placa': vehicle['placa'],
                     'id_vehiculo': vehicle['id'],
+                    'roles': nombres_roles,
                     'vehiculo': {
                         'marca': vehicle.get('marca', ''),
                         'modelo': vehicle.get('modelo', ''),
@@ -297,6 +351,8 @@ def login():
         import traceback
         traceback.print_exc()
         return jsonify({'error': 'Error interno del servidor'}), 500
+
+
 # =====================================================
 # ENDPOINTS DE RECUPERACIÓN DE CONTRASEÑA
 # =====================================================
@@ -346,33 +402,16 @@ def solicitar_recuperacion():
         cuerpo_html = f"""
         <!DOCTYPE html>
         <html>
-        <head>
-            <meta charset="UTF-8">
-            <style>
-                body {{ font-family: 'Plus Jakarta Sans', sans-serif; background: #f5f5f5; padding: 20px; }}
-                .container {{ max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }}
-                .header {{ background: #C1121F; padding: 30px; text-align: center; }}
-                .header h1 {{ color: white; margin: 0; font-size: 24px; }}
-                .content {{ padding: 30px; text-align: center; }}
-                .codigo {{ font-size: 32px; font-weight: bold; color: #C1121F; letter-spacing: 5px; background: #f5f5f5; padding: 15px; border-radius: 12px; margin: 20px 0; font-family: monospace; }}
-                .footer {{ background: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #666; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>FURIA MOTOR COMPANY</h1>
-                </div>
-                <div class="content">
-                    <h2>Recuperación de contraseña</h2>
+        <head><meta charset="UTF-8"></head>
+        <body style="font-family: 'Plus Jakarta Sans'; text-align: center; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden;">
+                <div style="background: #C1121F; padding: 30px;"><h1 style="color: white;">FURIA MOTOR</h1></div>
+                <div style="padding: 30px;">
+                    <h2>Código de recuperación</h2>
                     <p>Hola <strong>{nombre_usuario}</strong>,</p>
-                    <p>Recibimos una solicitud para restablecer tu contraseña. Usa el siguiente código:</p>
-                    <div class="codigo">{codigo}</div>
-                    <p>Este código expirará en <strong>15 minutos</strong>.</p>
-                    <p>Si no solicitaste este cambio, ignora este mensaje.</p>
-                </div>
-                <div class="footer">
-                    <p>© 2026 FURIA MOTOR COMPANY. Todos los derechos reservados.</p>
+                    <p>Usa el siguiente código:</p>
+                    <div style="font-size: 32px; font-weight: bold; color: #C1121F; background: #f5f5f5; padding: 15px; border-radius: 12px;">{codigo}</div>
+                    <p>Expira en <strong>15 minutos</strong>.</p>
                 </div>
             </div>
         </body>
@@ -380,7 +419,6 @@ def solicitar_recuperacion():
         """
         
         enviar_email(email, asunto, cuerpo_html)
-        crear_notificacion_admin('recuperacion', 'Solicitud de recuperación', f'{nombre_usuario} solicitó recuperar contraseña')
         
         return jsonify({
             'success': True,
@@ -473,6 +511,181 @@ def cambiar_contrasena():
         logger.error(f"Error cambiando contraseña: {str(e)}")
         return jsonify({'error': 'Error interno del servidor'}), 500
 
+
+# =====================================================
+# ENDPOINTS DE RECUPERACIÓN POR DOCUMENTO
+# =====================================================
+
+@login_bp.route('/api/recuperar/solicitar-por-documento', methods=['POST'])
+def solicitar_recuperacion_por_documento():
+    """Solicitar código de recuperación usando número de documento"""
+    try:
+        data = request.get_json()
+        documento = data.get('documento')
+        
+        if not documento:
+            return jsonify({'error': 'Número de documento requerido'}), 400
+        
+        if not documento.isdigit():
+            return jsonify({'error': 'El documento debe contener solo números'}), 400
+        
+        user_result = supabase.table('usuario') \
+            .select('id, nombre, email, numero_documento') \
+            .eq('numero_documento', documento) \
+            .execute()
+        
+        if not user_result.data:
+            return jsonify({'error': 'No se encontró un usuario con ese número de documento'}), 404
+        
+        user = user_result.data[0]
+        email = user.get('email')
+        
+        if not email:
+            return jsonify({'error': 'El usuario no tiene un correo electrónico registrado'}), 400
+        
+        codigo = generar_codigo_verificacion()
+        expira = datetime.datetime.now() + datetime.timedelta(minutes=15)
+        
+        supabase.table('codigoverificacion').insert({
+            'email': email,
+            'codigo': codigo,
+            'tipo': 'reset_password',
+            'expira': expira.isoformat(),
+            'datos_extra': {'documento': documento}
+        }).execute()
+        
+        asunto = "🔐 Código de recuperación - FURIA MOTOR"
+        cuerpo_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"></head>
+        <body style="font-family: 'Plus Jakarta Sans'; text-align: center; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden;">
+                <div style="background: #C1121F; padding: 30px;"><h1 style="color: white;">FURIA MOTOR</h1></div>
+                <div style="padding: 30px;">
+                    <h2>Código de recuperación</h2>
+                    <p>Hola <strong>{user['nombre']}</strong>,</p>
+                    <p>Usa el siguiente código:</p>
+                    <div style="font-size: 32px; font-weight: bold; color: #C1121F; background: #f5f5f5; padding: 15px; border-radius: 12px;">{codigo}</div>
+                    <p>Expira en <strong>15 minutos</strong>.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        enviar_email(email, asunto, cuerpo_html)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Código enviado a tu correo electrónico',
+            'email': email
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error en solicitud: {str(e)}")
+        return jsonify({'error': 'Error interno del servidor'}), 500
+
+
+@login_bp.route('/api/recuperar/verificar-por-documento', methods=['POST'])
+def verificar_codigo_por_documento():
+    """Verificar código de recuperación por documento"""
+    try:
+        data = request.get_json()
+        documento = data.get('documento')
+        codigo = data.get('codigo')
+        
+        if not documento or not codigo:
+            return jsonify({'error': 'Documento y código requeridos'}), 400
+        
+        user_result = supabase.table('usuario') \
+            .select('email') \
+            .eq('numero_documento', documento) \
+            .execute()
+        
+        if not user_result.data:
+            return jsonify({'error': 'Usuario no encontrado'}), 404
+        
+        email = user_result.data[0]['email']
+        
+        result = supabase.table('codigoverificacion') \
+            .select('*') \
+            .eq('email', email) \
+            .eq('codigo', codigo) \
+            .eq('tipo', 'reset_password') \
+            .eq('usado', False) \
+            .gt('expira', datetime.datetime.now().isoformat()) \
+            .execute()
+        
+        if not result.data:
+            return jsonify({'error': 'Código inválido o expirado'}), 400
+        
+        return jsonify({'success': True, 'message': 'Código válido'}), 200
+        
+    except Exception as e:
+        logger.error(f"Error verificando código: {str(e)}")
+        return jsonify({'error': 'Error interno del servidor'}), 500
+
+
+@login_bp.route('/api/recuperar/cambiar-por-documento', methods=['POST'])
+def cambiar_contrasena_por_documento():
+    """Cambiar contraseña usando número de documento"""
+    try:
+        data = request.get_json()
+        documento = data.get('documento')
+        nueva_contrasena = data.get('nueva_contrasena')
+        
+        if not documento or not nueva_contrasena:
+            return jsonify({'error': 'Documento y nueva contraseña requeridos'}), 400
+        
+        if len(nueva_contrasena) < 6:
+            return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
+        
+        user_result = supabase.table('usuario') \
+            .select('id, email') \
+            .eq('numero_documento', documento) \
+            .execute()
+        
+        if not user_result.data:
+            return jsonify({'error': 'Usuario no encontrado'}), 404
+        
+        user = user_result.data[0]
+        
+        nueva_hash = generate_password_hash(nueva_contrasena)
+        supabase.table('usuario').update({'contrasenia': nueva_hash}).eq('id', user['id']).execute()
+        
+        supabase.table('codigoverificacion') \
+            .update({'usado': True}) \
+            .eq('email', user['email']) \
+            .eq('tipo', 'reset_password') \
+            .eq('usado', False) \
+            .execute()
+        
+        asunto = "🔐 Contraseña actualizada - FURIA MOTOR"
+        cuerpo_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <body style="font-family: 'Plus Jakarta Sans'; text-align: center; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden;">
+                <div style="background: #10B981; padding: 30px;"><h1 style="color: white;">✅ Contraseña actualizada</h1></div>
+                <div style="padding: 30px;">
+                    <p>Tu contraseña ha sido actualizada exitosamente.</p>
+                    <a href="http://localhost:5000/" style="display: inline-block; padding: 12px 24px; background: #C1121F; color: white; text-decoration: none; border-radius: 8px;">Iniciar sesión</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        enviar_email(user['email'], asunto, cuerpo_html)
+        
+        return jsonify({'success': True, 'message': 'Contraseña actualizada correctamente'}), 200
+        
+    except Exception as e:
+        logger.error(f"Error cambiando contraseña: {str(e)}")
+        return jsonify({'error': 'Error interno del servidor'}), 500
+
+
 # =====================================================
 # ENDPOINTS DE REGISTRO DE PERSONAL
 # =====================================================
@@ -511,12 +724,10 @@ def solicitar_registro_personal():
         if user_existente.data:
             return jsonify({'error': 'El email ya está registrado'}), 400
         
-        # Verificar si ya existe usuario con ese documento
         doc_existente = supabase.table('usuario').select('id').eq('numero_documento', documento).execute()
         if doc_existente.data:
             return jsonify({'error': 'El número de documento ya está registrado'}), 400
         
-        # Verificar solicitud pendiente
         solicitud_existente = supabase.table('solicitudregistropersonal') \
             .select('id') \
             .eq('email', email) \
@@ -526,10 +737,8 @@ def solicitar_registro_personal():
         if solicitud_existente.data:
             return jsonify({'error': 'Ya tienes una solicitud pendiente de aprobación'}), 400
         
-        # Hashear contraseña
         hashed_password = generate_password_hash(password)
         
-        # Insertar solicitud
         solicitud_result = supabase.table('solicitudregistropersonal').insert({
             'nombre': nombre,
             'email': email,
@@ -545,11 +754,9 @@ def solicitar_registro_personal():
         if not solicitud_result.data:
             return jsonify({'error': 'Error al crear solicitud'}), 500
         
-        # Obtener nombre del rol
         rol_result = supabase.table('rol').select('nombre_rol').eq('id', id_rol).execute()
         nombre_rol = rol_result.data[0]['nombre_rol'] if rol_result.data else 'Personal'
         
-        # Enviar email al administrador
         admin_email = 'vaniacarrasco68056530@gmail.com'
         
         base_url = 'http://localhost:5000'
@@ -560,50 +767,19 @@ def solicitar_registro_personal():
         cuerpo_html = f"""
         <!DOCTYPE html>
         <html>
-        <head>
-            <meta charset="UTF-8">
-            <style>
-                body {{ font-family: 'Plus Jakarta Sans', sans-serif; background: #f5f5f5; padding: 20px; }}
-                .container {{ max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }}
-                .header {{ background: #C1121F; padding: 30px; text-align: center; }}
-                .header h1 {{ color: white; margin: 0; font-size: 24px; }}
-                .content {{ padding: 30px; }}
-                .info {{ background: #f5f5f5; padding: 20px; border-radius: 12px; margin: 20px 0; }}
-                .info-item {{ margin-bottom: 10px; }}
-                .info-label {{ font-weight: bold; color: #C1121F; width: 120px; display: inline-block; }}
-                .buttons {{ display: flex; gap: 15px; justify-content: center; margin-top: 30px; }}
-                .btn {{ padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; text-align: center; display: inline-block; }}
-                .btn-aprobar {{ background: #10B981; color: white; }}
-                .btn-rechazar {{ background: #C1121F; color: white; }}
-                .footer {{ background: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #666; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>FURIA MOTOR COMPANY</h1>
-                </div>
-                <div class="content">
-                    <h2>📋 Nueva solicitud de registro</h2>
-                    <p>Se ha recibido una nueva solicitud de registro en el sistema:</p>
-                    
-                    <div class="info">
-                        <div class="info-item"><span class="info-label">👤 Nombre:</span> {nombre}</div>
-                        <div class="info-item"><span class="info-label">📧 Email:</span> {email}</div>
-                        <div class="info-item"><span class="info-label">🆔 Documento:</span> {documento}</div>
-                        <div class="info-item"><span class="info-label">📞 Teléfono:</span> {telefono or 'No especificado'}</div>
-                        <div class="info-item"><span class="info-label">📍 Dirección:</span> {direccion or 'No especificada'}</div>
-                        <div class="info-item"><span class="info-label">🎯 Rol solicitado:</span> <strong>{nombre_rol}</strong></div>
+        <head><meta charset="UTF-8"></head>
+        <body style="font-family: 'Plus Jakarta Sans'; text-align: center; padding: 20px;">
+            <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 16px;">
+                <div style="background: #C1121F; padding: 30px;"><h1 style="color: white;">Nueva Solicitud</h1></div>
+                <div style="padding: 30px;">
+                    <p><strong>👤 Nombre:</strong> {nombre}</p>
+                    <p><strong>📧 Email:</strong> {email}</p>
+                    <p><strong>🆔 Documento:</strong> {documento}</p>
+                    <p><strong>🎯 Rol:</strong> {nombre_rol}</p>
+                    <div style="margin-top: 20px;">
+                        <a href="{aprobar_url}" style="background: #10B981; color: white; padding: 10px 20px; text-decoration: none; border-radius: 8px; margin: 5px;">✓ APROBAR</a>
+                        <a href="{rechazar_url}" style="background: #C1121F; color: white; padding: 10px 20px; text-decoration: none; border-radius: 8px; margin: 5px;">✗ RECHAZAR</a>
                     </div>
-                    
-                    <div class="buttons">
-                        <a href="{aprobar_url}" class="btn btn-aprobar">✓ APROBAR SOLICITUD</a>
-                        <a href="{rechazar_url}" class="btn btn-rechazar">✗ RECHAZAR SOLICITUD</a>
-                    </div>
-                    <p style="margin-top: 20px; font-size: 12px; color: #666;">Este enlace expirará en 7 días.</p>
-                </div>
-                <div class="footer">
-                    <p>© 2026 FURIA MOTOR COMPANY. Todos los derechos reservados.</p>
                 </div>
             </div>
         </body>
@@ -614,15 +790,13 @@ def solicitar_registro_personal():
         
         return jsonify({
             'success': True,
-            'message': '✅ Solicitud enviada exitosamente. Revisa tu correo para confirmación.',
+            'message': '✅ Solicitud enviada exitosamente',
             'solicitud_id': solicitud_result.data[0]['id']
         }), 200
         
     except Exception as e:
-        logger.error(f"Error en solicitud de registro personal: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': f'Error interno del servidor: {str(e)}'}), 500
+        logger.error(f"Error en solicitud: {str(e)}")
+        return jsonify({'error': f'Error interno: {str(e)}'}), 500
 
 
 @login_bp.route('/api/registro/personal/aprobar/<int:solicitud_id>', methods=['GET'])
@@ -636,30 +810,15 @@ def aprobar_solicitud_personal(solicitud_id):
             .execute()
         
         if not solicitud_result.data:
-            return """
-            <html><body style="font-family: Arial; text-align: center; padding: 50px;">
-                <h1 style="color: #C1121F;">❌ Solicitud no encontrada</h1>
-                <p>La solicitud ya fue procesada o no existe.</p>
-                <a href="/">Volver al inicio</a>
-            </body></html>
-            """, 404
+            return "Solicitud no encontrada", 404
         
         solicitud = solicitud_result.data[0]
         
-        # Verificar si el usuario ya existe
         user_existente = supabase.table('usuario').select('id').eq('email', solicitud['email']).execute()
         if user_existente.data:
-            return """
-            <html><body style="font-family: Arial; text-align: center; padding: 50px;">
-                <h1 style="color: #C1121F;">❌ Error</h1>
-                <p>El usuario ya existe en el sistema.</p>
-                <a href="/">Volver al inicio</a>
-            </body></html>
-            """, 400
+            return "El usuario ya existe", 400
         
-        # Crear usuario
         usuario_result = supabase.table('usuario').insert({
-            'id_rol': solicitud['id_rol_solicitado'],
             'nombre': solicitud['nombre'],
             'numero_documento': solicitud['numero_documento'],
             'contacto': solicitud.get('telefono', ''),
@@ -670,63 +829,43 @@ def aprobar_solicitud_personal(solicitud_id):
         }).execute()
         
         if not usuario_result.data:
-            return """
-            <html><body style="font-family: Arial; text-align: center; padding: 50px;">
-                <h1 style="color: #C1121F;">❌ Error al crear usuario</h1>
-                <a href="/">Volver al inicio</a>
-            </body></html>
-            """, 500
+            return "Error al crear usuario", 500
         
-        # Actualizar solicitud
+        id_usuario = usuario_result.data[0]['id']
+        
+        # Asignar rol usando usuario_rol
+        supabase.table('usuario_rol').insert({
+            'id_usuario': id_usuario,
+            'id_rol': solicitud['id_rol_solicitado'],
+            'fecha_asignacion': datetime.datetime.now().isoformat(),
+            'asignado_por': None
+        }).execute()
+        
         supabase.table('solicitudregistropersonal').update({
             'estado': 'aprobado',
             'fecha_respuesta': datetime.datetime.now().isoformat()
         }).eq('id', solicitud_id).execute()
         
-        # Email de confirmación
         asunto = "✅ ¡Tu registro ha sido aprobado! - FURIA MOTOR"
         cuerpo_html = f"""
         <!DOCTYPE html>
         <html>
-        <head><meta charset="UTF-8"></head>
-        <body style="font-family: 'Plus Jakarta Sans'; text-align: center; padding: 20px;">
-            <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden;">
-                <div style="background: #10B981; padding: 30px;"><h1 style="color: white;">✅ ¡Bienvenido!</h1></div>
-                <div style="padding: 30px;">
-                    <h2>Hola {solicitud['nombre']}</h2>
-                    <p>Tu solicitud de registro ha sido <strong>APROBADA</strong>.</p>
-                    <p>Ahora puedes iniciar sesión con las credenciales que registraste:</p>
-                    <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                        <p><strong>📧 Email:</strong> {solicitud['email']}</p>
-                        <p><strong>🆔 Documento:</strong> {solicitud['numero_documento']}</p>
-                    </div>
-                    <a href="http://localhost:5000/" style="display: inline-block; padding: 12px 24px; background: #C1121F; color: white; text-decoration: none; border-radius: 8px;">Iniciar sesión</a>
-                </div>
-            </div>
+        <body style="text-align: center;">
+            <h2 style="color: #10B981;">✅ ¡Bienvenido!</h2>
+            <p>Hola {solicitud['nombre']}, tu solicitud ha sido <strong>APROBADA</strong>.</p>
+            <p>Ahora puedes iniciar sesión.</p>
+            <a href="http://localhost:5000/">Iniciar sesión</a>
         </body>
         </html>
         """
         
         enviar_email(solicitud['email'], asunto, cuerpo_html)
         
-        return """
-        <html><body style="font-family: Arial; text-align: center; padding: 50px;">
-            <h1 style="color: #10B981;">✅ Solicitud aprobada</h1>
-            <p>El usuario ha sido registrado exitosamente.</p>
-            <p>Se ha enviado un correo de confirmación.</p>
-            <a href="/">Volver al inicio</a>
-        </body></html>
-        """
+        return "<h2 style='color: green;'>✅ Solicitud aprobada</h2><p>Usuario registrado exitosamente.</p><a href='/'>Volver</a>"
         
     except Exception as e:
-        logger.error(f"Error aprobando solicitud: {str(e)}")
-        return f"""
-        <html><body style="font-family: Arial; text-align: center; padding: 50px;">
-            <h1 style="color: #C1121F;">❌ Error</h1>
-            <p>Ocurrió un error: {str(e)}</p>
-            <a href="/">Volver al inicio</a>
-        </body></html>
-        """, 500
+        logger.error(f"Error aprobando: {str(e)}")
+        return f"Error: {str(e)}", 500
 
 
 @login_bp.route('/api/registro/personal/rechazar/<int:solicitud_id>', methods=['GET'])
@@ -751,39 +890,34 @@ def rechazar_solicitud_personal(solicitud_id):
         
         asunto = "📋 Actualización sobre tu solicitud - FURIA MOTOR"
         cuerpo_html = f"""
-        <!DOCTYPE html>
         <html>
-        <body style="font-family: Arial; text-align: center; padding: 20px;">
-            <div style="background: #C1121F; padding: 20px;"><h1 style="color: white;">❌ Solicitud no aprobada</h1></div>
-            <h2>Hola {solicitud['nombre']}</h2>
-            <p>Lamentamos informarte que tu solicitud de registro no ha sido aprobada en este momento.</p>
-            <p>Si consideras que esto es un error, por favor contacta al administrador.</p>
+        <body style="text-align: center;">
+            <h2 style="color: #C1121F;">❌ Solicitud no aprobada</h2>
+            <p>Hola {solicitud['nombre']}, tu solicitud no ha sido aprobada.</p>
         </body>
         </html>
         """
         
         enviar_email(solicitud['email'], asunto, cuerpo_html)
         
-        return """
-        <html><body style="text-align: center; padding: 50px;">
-            <h1 style="color: #C1121F;">❌ Solicitud rechazada</h1>
-            <p>Se ha notificado al solicitante.</p>
-            <a href="/">Volver al inicio</a>
-        </body></html>
-        """
+        return "<h2 style='color: red;'>❌ Solicitud rechazada</h2><a href='/'>Volver</a>"
         
     except Exception as e:
-        logger.error(f"Error rechazando solicitud: {str(e)}")
-        return str(e), 500
+        logger.error(f"Error rechazando: {str(e)}")
+        return f"Error: {str(e)}", 500
 
+
+# =====================================================
+# OTROS ENDPOINTS
+# =====================================================
 
 @login_bp.route('/api/roles', methods=['GET'])
 def obtener_roles():
     """Obtener lista de roles disponibles"""
     try:
-        result = supabase.table('rol').select('id, nombre_rol').execute()
+        result = supabase.table('rol').select('id, nombre_rol, descripcion').execute()
         roles = [
-            {'id': r['id'], 'nombre': r['nombre_rol']}
+            {'id': r['id'], 'nombre': r['nombre_rol'], 'descripcion': r.get('descripcion', '')}
             for r in (result.data if result.data else [])
         ]
         return jsonify(roles), 200
@@ -791,9 +925,6 @@ def obtener_roles():
         logger.error(f"Error obteniendo roles: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# =====================================================
-# OTROS ENDPOINTS
-# =====================================================
 
 @login_bp.route('/api/verify-token', methods=['GET'])
 @token_required
@@ -816,324 +947,3 @@ def health_check():
         'message': 'Servidor FURIA MOTOR funcionando',
         'timestamp': datetime.datetime.now().isoformat()
     }), 200
-
-
-@login_bp.route('/api/registro/cliente/solicitar', methods=['POST'])
-def solicitar_registro_cliente():
-    """Solicitar registro de cliente"""
-    try:
-        data = request.get_json()
-        nombre = data.get('nombre')
-        email = data.get('email')
-        telefono = data.get('telefono')
-        direccion = data.get('direccion')
-        password = data.get('password')
-        
-        if not all([nombre, email, telefono, direccion, password]):
-            return jsonify({'error': 'Todos los campos son requeridos'}), 400
-        
-        if len(password) < 6:
-            return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
-        
-        email_existente = supabase.table('cliente').select('id').eq('email', email).execute()
-        if email_existente.data:
-            return jsonify({'error': 'El correo ya está registrado'}), 400
-        
-        codigo = generar_codigo_verificacion()
-        expira = datetime.datetime.now() + datetime.timedelta(minutes=15)
-        
-        supabase.table('codigoverificacion').insert({
-            'email': email,
-            'codigo': codigo,
-            'tipo': 'register_confirm',
-            'expira': expira.isoformat(),
-            'datos_extra': {
-                'nombre': nombre,
-                'telefono': telefono,
-                'direccion': direccion,
-                'password': generate_password_hash(password)
-            }
-        }).execute()
-        
-        asunto = "Verifica tu correo - FURIA MOTOR"
-        cuerpo_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <body style="font-family: Arial; text-align: center;">
-            <h2>Verifica tu correo electrónico</h2>
-            <p>Hola {nombre},</p>
-            <p>Tu código de verificación es: <strong style="font-size: 24px; color: #C1121F;">{codigo}</strong></p>
-            <p>Expira en 15 minutos.</p>
-        </body>
-        </html>
-        """
-        
-        enviar_email(email, asunto, cuerpo_html)
-        
-        return jsonify({'success': True, 'message': 'Código enviado a tu correo', 'email': email}), 200
-        
-    except Exception as e:
-        logger.error(f"Error en solicitud de registro cliente: {str(e)}")
-        return jsonify({'error': 'Error interno del servidor'}), 500
-
-
-@login_bp.route('/api/registro/cliente/confirmar', methods=['POST'])
-def confirmar_registro_cliente():
-    """Confirmar registro de cliente"""
-    try:
-        data = request.get_json()
-        email = data.get('email')
-        codigo = data.get('codigo')
-        
-        if not email or not codigo:
-            return jsonify({'error': 'Email y código requeridos'}), 400
-        
-        codigo_result = supabase.table('codigoverificacion') \
-            .select('*') \
-            .eq('email', email) \
-            .eq('codigo', codigo) \
-            .eq('tipo', 'register_confirm') \
-            .eq('usado', False) \
-            .gt('expira', datetime.datetime.now().isoformat()) \
-            .execute()
-        
-        if not codigo_result.data:
-            return jsonify({'error': 'Código inválido o expirado'}), 400
-        
-        datos_extra = codigo_result.data[0].get('datos_extra', {})
-        
-        user_result = supabase.table('usuario').insert({
-            'id_rol': 6,
-            'nombre': datos_extra.get('nombre'),
-            'contacto': datos_extra.get('telefono'),
-            'ubicacion': datos_extra.get('direccion'),
-            'contrasenia': datos_extra.get('password'),
-            'email': email,
-            'fecha_registro': datetime.datetime.now().isoformat()
-        }).execute()
-        
-        if not user_result.data:
-            return jsonify({'error': 'Error al crear usuario'}), 500
-        
-        id_usuario = user_result.data[0]['id']
-        
-        cliente_result = supabase.table('cliente').insert({
-            'id_usuario': id_usuario,
-            'email': email,
-            'tipo_documento': 'CI',
-            'numero_documento': f"TEMP-{datetime.datetime.now().timestamp()}"
-        }).execute()
-        
-        if not cliente_result.data:
-            supabase.table('usuario').delete().eq('id', id_usuario).execute()
-            return jsonify({'error': 'Error al crear cliente'}), 500
-        
-        supabase.table('codigoverificacion').update({'usado': True}).eq('id', codigo_result.data[0]['id']).execute()
-        
-        return jsonify({'success': True, 'message': 'Registro completado exitosamente'}), 200
-        
-    except Exception as e:
-        logger.error(f"Error confirmando registro: {str(e)}")
-        return jsonify({'error': 'Error interno del servidor'}), 500
-# =====================================================
-# ENDPOINTS DE RECUPERACIÓN DE CONTRASEÑA POR DOCUMENTO
-# =====================================================
-
-@login_bp.route('/api/recuperar/solicitar-por-documento', methods=['POST'])
-def solicitar_recuperacion_por_documento():
-    """Solicitar código de recuperación usando número de documento"""
-    try:
-        data = request.get_json()
-        documento = data.get('documento')
-        
-        if not documento:
-            return jsonify({'error': 'Número de documento requerido'}), 400
-        
-        if not documento.isdigit():
-            return jsonify({'error': 'El documento debe contener solo números'}), 400
-        
-        # Buscar usuario por documento
-        user_result = supabase.table('usuario') \
-            .select('id, nombre, email, numero_documento') \
-            .eq('numero_documento', documento) \
-            .execute()
-        
-        if not user_result.data:
-            return jsonify({'error': 'No se encontró un usuario con ese número de documento'}), 404
-        
-        user = user_result.data[0]
-        email = user.get('email')
-        
-        if not email:
-            return jsonify({'error': 'El usuario no tiene un correo electrónico registrado'}), 400
-        
-        # Generar código
-        codigo = generar_codigo_verificacion()
-        expira = datetime.datetime.now() + datetime.timedelta(minutes=15)
-        
-        # Guardar código
-        supabase.table('codigoverificacion').insert({
-            'email': email,
-            'codigo': codigo,
-            'tipo': 'reset_password',
-            'expira': expira.isoformat(),
-            'datos_extra': {'documento': documento}
-        }).execute()
-        
-        # Enviar email
-        asunto = "🔐 Código de recuperación - FURIA MOTOR"
-        cuerpo_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <style>
-                body {{ font-family: 'Plus Jakarta Sans', sans-serif; background: #f5f5f5; padding: 20px; }}
-                .container {{ max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }}
-                .header {{ background: #C1121F; padding: 30px; text-align: center; }}
-                .header h1 {{ color: white; margin: 0; font-size: 24px; }}
-                .content {{ padding: 30px; text-align: center; }}
-                .codigo {{ font-size: 32px; font-weight: bold; color: #C1121F; letter-spacing: 5px; background: #f5f5f5; padding: 15px; border-radius: 12px; margin: 20px 0; font-family: monospace; }}
-                .footer {{ background: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #666; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>FURIA MOTOR COMPANY</h1>
-                </div>
-                <div class="content">
-                    <h2>Código de recuperación</h2>
-                    <p>Hola <strong>{user['nombre']}</strong>,</p>
-                    <p>Recibimos una solicitud para restablecer tu contraseña. Usa el siguiente código:</p>
-                    <div class="codigo">{codigo}</div>
-                    <p>Este código expirará en <strong>15 minutos</strong>.</p>
-                    <p>Si no solicitaste este cambio, ignora este mensaje.</p>
-                </div>
-                <div class="footer">
-                    <p>© 2026 FURIA MOTOR COMPANY. Todos los derechos reservados.</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-        
-        enviar_email(email, asunto, cuerpo_html)
-        
-        return jsonify({
-            'success': True,
-            'message': 'Código enviado a tu correo electrónico',
-            'email': email
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error en solicitud de recuperación por documento: {str(e)}")
-        return jsonify({'error': 'Error interno del servidor'}), 500
-
-
-@login_bp.route('/api/recuperar/verificar-por-documento', methods=['POST'])
-def verificar_codigo_por_documento():
-    """Verificar código de recuperación por documento"""
-    try:
-        data = request.get_json()
-        documento = data.get('documento')
-        codigo = data.get('codigo')
-        
-        if not documento or not codigo:
-            return jsonify({'error': 'Documento y código requeridos'}), 400
-        
-        # Buscar usuario por documento
-        user_result = supabase.table('usuario') \
-            .select('email') \
-            .eq('numero_documento', documento) \
-            .execute()
-        
-        if not user_result.data:
-            return jsonify({'error': 'Usuario no encontrado'}), 404
-        
-        email = user_result.data[0]['email']
-        
-        # Verificar código
-        result = supabase.table('codigoverificacion') \
-            .select('*') \
-            .eq('email', email) \
-            .eq('codigo', codigo) \
-            .eq('tipo', 'reset_password') \
-            .eq('usado', False) \
-            .gt('expira', datetime.datetime.now().isoformat()) \
-            .execute()
-        
-        if not result.data:
-            return jsonify({'error': 'Código inválido o expirado'}), 400
-        
-        return jsonify({'success': True, 'message': 'Código válido'}), 200
-        
-    except Exception as e:
-        logger.error(f"Error verificando código: {str(e)}")
-        return jsonify({'error': 'Error interno del servidor'}), 500
-
-
-@login_bp.route('/api/recuperar/cambiar-por-documento', methods=['POST'])
-def cambiar_contrasena_por_documento():
-    """Cambiar contraseña usando número de documento"""
-    try:
-        data = request.get_json()
-        documento = data.get('documento')
-        nueva_contrasena = data.get('nueva_contrasena')
-        
-        if not documento or not nueva_contrasena:
-            return jsonify({'error': 'Documento y nueva contraseña requeridos'}), 400
-        
-        if len(nueva_contrasena) < 6:
-            return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
-        
-        # Buscar usuario por documento
-        user_result = supabase.table('usuario') \
-            .select('id, email') \
-            .eq('numero_documento', documento) \
-            .execute()
-        
-        if not user_result.data:
-            return jsonify({'error': 'Usuario no encontrado'}), 404
-        
-        user = user_result.data[0]
-        
-        # Actualizar contraseña
-        nueva_hash = generate_password_hash(nueva_contrasena)
-        supabase.table('usuario').update({'contrasenia': nueva_hash}).eq('id', user['id']).execute()
-        
-        # Marcar todos los códigos pendientes como usados
-        supabase.table('codigoverificacion') \
-            .update({'usado': True}) \
-            .eq('email', user['email']) \
-            .eq('tipo', 'reset_password') \
-            .eq('usado', False) \
-            .execute()
-        
-        # Enviar email de confirmación
-        asunto = "🔐 Contraseña actualizada - FURIA MOTOR"
-        cuerpo_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head><meta charset="UTF-8"></head>
-        <body style="font-family: 'Plus Jakarta Sans'; text-align: center; padding: 20px;">
-            <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden;">
-                <div style="background: #10B981; padding: 30px;"><h1 style="color: white;">✅ Contraseña actualizada</h1></div>
-                <div style="padding: 30px;">
-                    <h2>Hola</h2>
-                    <p>Tu contraseña ha sido actualizada exitosamente.</p>
-                    <p>Si no realizaste este cambio, por favor contacta al administrador.</p>
-                    <a href="http://localhost:5000/" style="display: inline-block; padding: 12px 24px; background: #C1121F; color: white; text-decoration: none; border-radius: 8px; margin-top: 20px;">Iniciar sesión</a>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-        
-        enviar_email(user['email'], asunto, cuerpo_html)
-        
-        return jsonify({'success': True, 'message': 'Contraseña actualizada correctamente'}), 200
-        
-    except Exception as e:
-        logger.error(f"Error cambiando contraseña: {str(e)}")
-        return jsonify({'error': 'Error interno del servidor'}), 500

@@ -1,8 +1,12 @@
 from flask import Flask, send_from_directory, jsonify, request
 from flask_cors import CORS
 import os
+import sys
 import logging
 from config import config
+
+# Agregar el directorio actual al path para importar módulos
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -28,30 +32,58 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 from login import login_bp
 app.register_blueprint(login_bp)
 
-# Jefe Operativo - Módulos
-from jefe_operativo.recepcion import jefe_operativo_recepcion_bp
-from jefe_operativo.cotizacion import jefe_operativo_cotizacion_bp
-from jefe_operativo.comunicados import jefe_operativo_comunicados_bp
-from jefe_operativo.historial import jefe_operativo_historial_bp
-from jefe_operativo.perfil import jefe_operativo_perfil_bp
+# Decorators (centralizado)
+from decorators import verificar_rol, jefe_taller_required, jefe_operativo_required
 
+# Técnico Mecánico - Mis Vehículos
+try:
+    from tecnico_mecanico.misvehiculos import mis_vehiculos_bp
+    app.register_blueprint(mis_vehiculos_bp)
+    from tecnico_mecanico.diagnostico import diagnostico_bp
+    app.register_blueprint(diagnostico_bp)
+    from tecnico_mecanico.historial import historial_bp
+    app.register_blueprint(historial_bp)
+    from tecnico_mecanico.perfil import tecnico_mecanico_perfil_bp
+    app.register_blueprint(tecnico_mecanico_perfil_bp)
+    logger.info("✅ Blueprints de Técnico Mecánico registrados")
+except Exception as e:
+    logger.warning(f"⚠️ Error registrando blueprints de Técnico Mecánico: {e}")
+
+# Jefe Operativo - Módulos
+try:
+    from jefe_operativo.recepcion import jefe_operativo_recepcion_bp
+    from jefe_operativo.comunicados import jefe_operativo_comunicados_bp
+    from jefe_operativo.historial import jefe_operativo_historial_bp
+    from jefe_operativo.perfil import jefe_operativo_perfil_bp
+    
+    app.register_blueprint(jefe_operativo_recepcion_bp)
+    app.register_blueprint(jefe_operativo_comunicados_bp)
+    app.register_blueprint(jefe_operativo_historial_bp)
+    app.register_blueprint(jefe_operativo_perfil_bp)
+    logger.info("✅ Blueprints de Jefe Operativo registrados")
+except Exception as e:
+    logger.warning(f"⚠️ Error registrando blueprints de Jefe Operativo: {e}")
 
 # Jefe Taller - Módulos
-from jefe_taller.orden_trabajo import jefe_taller_ordenes_bp
-from jefe_taller.calendario_bahias import calendario_bahias_bp
-from jefe_taller.historial_vehiculos import historial_vehiculos_bp  
-
-# Registrar blueprints
-app.register_blueprint(jefe_operativo_recepcion_bp)
-app.register_blueprint(jefe_operativo_cotizacion_bp)
-app.register_blueprint(jefe_operativo_comunicados_bp)
-app.register_blueprint(jefe_operativo_historial_bp)
-app.register_blueprint(jefe_operativo_perfil_bp)
-
-app.register_blueprint(jefe_taller_ordenes_bp)  # ← AGREGAR EL BLUEPRINT DEL JEFE TALLER
-app.register_blueprint(calendario_bahias_bp)
-app.register_blueprint(historial_vehiculos_bp)   
-
+try:
+    from jefe_taller.orden_trabajo import jefe_taller_ordenes_bp
+    from jefe_taller.calendario_bahias import calendario_bahias_bp
+    from jefe_taller.historial_vehiculos import historial_vehiculos_bp
+    from jefe_taller.perfil import perfil_bp   
+    from jefe_taller.diagnostico import jefe_taller_diagnostico_bp
+    from jefe_taller.cotizaciones import cotizaciones_bp
+    from jefe_taller.admin_roles import admin_roles_bp 
+    
+    app.register_blueprint(jefe_taller_ordenes_bp)
+    app.register_blueprint(calendario_bahias_bp)
+    app.register_blueprint(historial_vehiculos_bp)
+    app.register_blueprint(perfil_bp)
+    app.register_blueprint(jefe_taller_diagnostico_bp)
+    app.register_blueprint(cotizaciones_bp)
+    app.register_blueprint(admin_roles_bp) 
+    logger.info("✅ Blueprints de Jefe Taller registrados")
+except Exception as e:
+    logger.warning(f"⚠️ Error registrando blueprints de Jefe Taller: {e}")
 
 # =====================================================
 # RUTAS ESPECÍFICAS PARA ARCHIVOS ESTÁTICOS
@@ -150,7 +182,7 @@ def serve_jefe_operativo(path):
     """Servir archivos de Jefe Operativo"""
     return send_from_directory('../jefe_operativo', path)
 
-# Rutas para Jefe Taller (NUEVO)
+# Rutas para Jefe Taller
 @app.route('/jefe_taller/<path:path>')
 def serve_jefe_taller(path):
     """Servir archivos de Jefe Taller"""
@@ -249,8 +281,7 @@ def serve_html(path):
         'admin_general/dashboard': '../admin_general/dashboard.html',
         
         # Técnico Mecánico
-        'tecnico_mecanico': '../tecnico_mecanico/dashboard.html',
-        'tecnico_mecanico/dashboard': '../tecnico_mecanico/dashboard.html',
+        'tecnico_mecanico': '../tecnico_mecanico/misvehiculos.html',
         
         # Encargado Repuestos
         'encargado_rep_almacen': '../encargado_rep_almacen/dashboard.html',
@@ -304,7 +335,6 @@ def test_api():
 @app.errorhandler(404)
 def not_found(error):
     """Manejo de errores 404"""
-    # Importar request dentro de la función para evitar NameError
     from flask import request
     logger.warning(f"404 error: {request.path}")
     try:
@@ -332,49 +362,6 @@ if __name__ == '__main__':
     print("   📄 http://localhost:5000/ - Login")
     print("   📄 http://localhost:5000/registro-personal.html - Registro Personal")
     print("   📄 http://localhost:5000/recuperar-contrasena.html - Recuperar Contraseña")
-    print("")
-    print("🔌 API Endpoints Jefe Operativo:")
-    print("   • GET  /api/jefe-operativo/servicios-disponibles - Servicios disponibles")
-    print("   • GET  /api/jefe-operativo/ordenes-para-cotizar - Órdenes sin cotizar")
-    print("   • GET  /api/jefe-operativo/cotizaciones - Listar cotizaciones")
-    print("   • POST /api/jefe-operativo/cotizaciones - Crear cotización")
-    print("   • GET  /api/jefe-operativo/cotizaciones/<id> - Detalle cotización")
-    print("   • PUT  /api/jefe-operativo/cotizaciones/<id> - Actualizar cotización")
-    print("   • DELETE /api/jefe-operativo/cotizaciones/<id> - Eliminar cotización")
-    print("   • POST /api/jefe-operativo/cotizaciones/<id>/enviar - Enviar cotización")
-    print("   • POST /api/jefe-operativo/cotizaciones/<id>/aprobar - Aprobar cotización")
-    print("   • GET  /api/jefe-operativo/notificaciones - Notificaciones")
-    print("")
-    print("🔌 API Endpoints Jefe Operativo - Recepción:")
-    print("   • POST /api/jefe-operativo/iniciar-sesion - Crear sesión")
-    print("   • POST /api/jefe-operativo/unirse-sesion - Unirse a sesión")
-    print("   • POST /api/jefe-operativo/guardar-seccion - Guardar sección")
-    print("   • GET  /api/jefe-operativo/obtener-sesion/<codigo> - Obtener sesión")
-    print("   • POST /api/jefe-operativo/finalizar-sesion - Finalizar sesión")
-    print("   • GET  /api/jefe-operativo/sesiones-activas - Sesiones activas")
-    print("   • GET  /api/jefe-operativo/listar-recepciones - Listar recepciones")
-    print("   • GET  /api/jefe-operativo/detalle-recepcion/<id> - Detalle recepción")
-    print("   • DELETE /api/jefe-operativo/eliminar-recepcion/<id> - Eliminar recepción")
-    print("   • PUT  /api/jefe-operativo/actualizar-recepcion/<id> - Editar recepción")
-    print("   • GET  /api/jefe-operativo/verificar-placa/<placa> - Verificar placa")
-    print("   • POST /api/jefe-operativo/transcribir-audio - Transcribir audio")
-    print("")
-    print("🔌 API Endpoints Jefe Taller (NUEVO):")
-    print("   • GET  /api/jefe-taller/tecnicos - Listar técnicos")
-    print("   • GET  /api/jefe-taller/recepciones-pendientes - Recepciones pendientes")
-    print("   • GET  /api/jefe-taller/detalle-recepcion/<id> - Detalle recepción")
-    print("   • POST /api/jefe-taller/crear-orden - Crear orden de trabajo")
-    print("   • GET  /api/jefe-taller/ordenes-activas - Órdenes activas")
-    print("   • GET  /api/jefe-taller/ordenes-finalizadas - Órdenes finalizadas")
-    print("   • POST /api/jefe-taller/asignar-tecnicos - Asignar técnicos")
-    print("   • POST /api/jefe-taller/diagnostico-inicial - Guardar diagnóstico inicial")
-    print("   • POST /api/jefe-taller/planificar - Planificar trabajo")
-    print("   • GET  /api/jefe-taller/bahias - Estado de bahías")
-    print("   • GET  /api/jefe-taller/carga-tecnicos - Carga de técnicos")
-    print("   • POST /api/jefe-taller/reanudar-orden - Reanudar orden")
-    print("   • GET  /api/jefe-taller/detalle-orden/<id> - Detalle orden")
-    print("   • GET  /api/jefe-taller/historial-diagnosticos/<id> - Historial diagnósticos")
-    print("   • POST /api/jefe-taller/aprobar-diagnostico - Aprobar/rechazar diagnóstico")
     print("")
     print("📁 Frontend accesible en:")
     print("   • Jefe Operativo: http://localhost:5000/jefe_operativo")

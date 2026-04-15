@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Historial de Vehículos | FURIA MOTOR</title>
+    <title>Historial de Vehículos | FURIA MOTOR - Jefe Taller</title>
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -92,34 +92,35 @@
         </main>
     </div>
 
-    <!-- Modal para ver detalle de orden -->
+    <!-- Modal para ver detalle de orden (UNIFICADO) -->
     <div class="modal" id="modalDetalleOrden">
-        <div class="modal-content modal-lg">
+        <div class="modal-content modal-xl">
             <div class="modal-header">
-                <h2><i class="fas fa-clipboard-list"></i> Detalle de Orden</h2>
-                <button class="modal-close" onclick="cerrarModalDetalle()">&times;</button>
+                <h2><i class="fas fa-clipboard-list"></i> Detalle Completo de Orden</h2>
+                <button class="modal-close" onclick="window.cerrarModalDetalle()">&times;</button>
             </div>
             <div class="modal-body" id="modalDetalleBody">
                 <!-- Contenido dinámico -->
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalDetalle()">Cerrar</button>
+                <button class="btn-secondary" onclick="window.cerrarModalDetalle()">Cerrar</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal para ver fotos -->
-    <div class="modal" id="modalFotos">
-        <div class="modal-content modal-md">
+    <!-- Modal para ver imágenes ampliadas -->
+    <div class="modal" id="modalImagen">
+        <div class="modal-content modal-sm">
             <div class="modal-header">
-                <h2><i class="fas fa-images"></i> Fotos de la Orden</h2>
-                <button class="modal-close" onclick="cerrarModalFotos()">&times;</button>
+                <h2><i class="fas fa-image"></i> <span id="imagenTitulo">Imagen</span></h2>
+                <button class="modal-close" onclick="window.cerrarModalImagen()">&times;</button>
             </div>
-            <div class="modal-body" id="modalFotosBody">
-                <!-- Contenido dinámico -->
+            <div class="modal-body" id="modalImagenBody">
+                <img id="imagenAmpliada" src="" alt="Imagen ampliada"
+                    style="width: 100%; border-radius: var(--radius-md);">
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalFotos()">Cerrar</button>
+                <button class="btn-secondary" onclick="window.cerrarModalImagen()">Cerrar</button>
             </div>
         </div>
     </div>

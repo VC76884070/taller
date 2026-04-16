@@ -3,8 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Administración de Roles | FURIA MOTOR</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Gestión de Roles | Personal - FURIA MOTOR</title>
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -13,7 +13,7 @@
         rel="stylesheet">
 
     <!-- Estilos -->
-    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
     <link rel="stylesheet" href="css/admin_roles.css">
 
 </head>
@@ -25,8 +25,8 @@
         <main class="main-content">
             <header class="top-bar">
                 <div class="page-title">
-                    <h1><i class="fas fa-user-shield"></i> Administración de Roles</h1>
-                    <p>Gestiona los roles y permisos de los usuarios del sistema</p>
+                    <h1><i class="fas fa-user-tag"></i> Gestión de Roles - Personal</h1>
+                    <p>Asigna roles y gestiona usuarios del personal (Jefe Operativo, Jefe Taller, Técnico, Repuestos). Los clientes no aparecen en esta lista.</p>
                 </div>
                 <div class="top-actions">
                     <div class="notification-icon">
@@ -37,6 +37,10 @@
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
                     </div>
+                    <button class="btn-logout" id="logoutBtn" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Cerrar Sesión</span>
+                    </button>
                 </div>
             </header>
 
@@ -47,7 +51,7 @@
                         <div class="stat-icon"><i class="fas fa-users"></i></div>
                         <div class="stat-info">
                             <span class="stat-value" id="totalUsuarios">0</span>
-                            <span class="stat-label">Total Usuarios</span>
+                            <span class="stat-label">Total Personal</span>
                         </div>
                     </div>
                     <div class="stat-card" id="statJefeOperativo">
@@ -83,7 +87,7 @@
                 <!-- Tabla de Usuarios -->
                 <div class="usuarios-card">
                     <div class="card-header">
-                        <h3><i class="fas fa-list"></i> Usuarios del Sistema</h3>
+                        <h3><i class="fas fa-list"></i> Usuarios del Sistema (Personal)</h3>
                         <div class="search-box">
                             <i class="fas fa-search"></i>
                             <input type="text" id="searchInput" placeholder="Buscar por nombre, email o documento...">
@@ -105,7 +109,7 @@
                             <tbody id="usuariosTableBody">
                                 <tr>
                                     <td colspan="6" class="loading-row">
-                                        <i class="fas fa-spinner fa-spin"></i> Cargando usuarios...
+                                        <i class="fas fa-spinner fa-spin"></i> Cargando usuarios de personal...
                                     </td>
                                 </tr>
                             </tbody>
@@ -125,23 +129,105 @@
             </div>
             <div class="modal-body">
                 <div class="user-info-modal">
-                    <p><strong>Usuario:</strong> <span id="modalUserName"></span></p>
-                    <p><strong>Email:</strong> <span id="modalUserEmail"></span></p>
-                    <p><strong>Documento:</strong> <span id="modalUserDocumento"></span></p>
+                    <p><strong>👤 Usuario:</strong> <span id="modalUserName"></span></p>
+                    <p><strong>📧 Email:</strong> <span id="modalUserEmail"></span></p>
+                    <p><strong>🆔 Documento:</strong> <span id="modalUserDocumento"></span></p>
                 </div>
                 <div class="roles-checkbox-group" id="rolesCheckboxGroup">
                     <!-- Roles se cargarán dinámicamente -->
                 </div>
+                <p class="modal-hint" style="margin-top: 1rem; font-size: 0.7rem; color: var(--gris-texto);">
+                    <i class="fas fa-info-circle"></i> Solo se pueden asignar roles de personal. Los clientes se gestionan por separado.
+                </p>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="closeRolesModal()">Cancelar</button>
-                <button class="btn-primary" onclick="saveRoles()">Guardar Cambios</button>
+                <button class="btn-primary" onclick="saveRoles()">
+                    <i class="fas fa-save"></i> Guardar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Detalle de Usuario -->
+    <div id="modalDetalleUsuario" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-circle"></i> Detalle del Usuario</h3>
+                <button class="modal-close" onclick="cerrarModalDetalleUsuario()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalDetalleUsuarioBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalDetalleUsuario()">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmación para Eliminar -->
+    <div id="modalConfirmarEliminar" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> Confirmar Eliminación</h3>
+                <button class="modal-close" onclick="cerrarModalConfirmarEliminar()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirmarEliminarTexto">¿Estás seguro de que deseas eliminar este usuario?</p>
+                <p style="color: var(--rojo-primario); font-size: 0.85rem; margin-top: 0.5rem;">
+                    <i class="fas fa-info-circle"></i> Esta acción no se puede deshacer.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalConfirmarEliminar()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button class="btn-primary" id="btnConfirmarEliminar" style="background: var(--rojo-primario);">
+                    <i class="fas fa-trash-alt"></i> Eliminar
+                </button>
             </div>
         </div>
     </div>
 
     <script src="js/include.js"></script>
     <script src="js/admin_roles.js"></script>
+    
+    <script>
+        // Función para cerrar modal de confirmación
+        function cerrarModalConfirmarEliminar() {
+            const modal = document.getElementById('modalConfirmarEliminar');
+            if (modal) modal.classList.remove('show');
+        }
+        
+        // Función global de logout
+        function logout() {
+            localStorage.removeItem('furia_token');
+            localStorage.removeItem('furia_user');
+            window.location.href = '/';
+        }
+        
+        // Cerrar modales al hacer clic fuera
+        window.onclick = function(event) {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                if (event.target === modal) {
+                    modal.classList.remove('show');
+                }
+            });
+        }
+        
+        // Cerrar modales con tecla ESC
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                const modals = document.querySelectorAll('.modal.show');
+                modals.forEach(modal => {
+                    modal.classList.remove('show');
+                });
+            }
+        });
+    </script>
 </body>
 
 </html>

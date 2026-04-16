@@ -1,5 +1,5 @@
 // =====================================================
-// ADMINISTRACIÓN DE ROLES - JEFE TALLER (CORREGIDO)
+// ADMINISTRACIÓN DE ROLES - JEFE TALLER
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
@@ -35,11 +35,9 @@ async function checkAuth() {
     }
     
     try {
-        // Decodificar token para obtener información del usuario
         const payload = JSON.parse(atob(token.split('.')[1]));
         currentUserInfo = payload.user;
         
-        // Obtener roles del usuario
         if (currentUserInfo && currentUserInfo.roles && Array.isArray(currentUserInfo.roles)) {
             currentUserRoles = currentUserInfo.roles;
         } else if (userData) {
@@ -48,19 +46,11 @@ async function checkAuth() {
             if (currentUserInfo) currentUserInfo.roles = currentUserRoles;
         }
         
-        console.log('🔐 Usuario autenticado:', currentUserInfo?.nombre);
-        console.log('📋 Roles del usuario:', currentUserRoles);
-        
-        // Verificar si tiene rol de JEFE TALLER (permisos para asignar roles)
         const esJefeTaller = currentUserRoles.includes('jefe_taller') || 
                               (currentUserInfo && currentUserInfo.rol_principal === 'jefe_taller') ||
                               (currentUserInfo && currentUserInfo.rol === 'jefe_taller');
         
-        // Compatibilidad con sistema antiguo
-        const tieneIdRolAntiguo = currentUserInfo && (currentUserInfo.id_rol === 2);
-        
-        if (!esJefeTaller && !tieneIdRolAntiguo) {
-            console.warn('❌ Usuario no tiene permisos de Jefe Taller', currentUserRoles);
+        if (!esJefeTaller) {
             mostrarNotificacion('No tienes permisos para acceder a esta sección', 'error');
             setTimeout(() => {
                 window.location.href = '/jefe_taller/dashboard.html';
@@ -68,7 +58,6 @@ async function checkAuth() {
             return false;
         }
         
-        console.log('✅ Autorizado como Jefe Taller');
         return true;
         
     } catch (error) {
@@ -88,7 +77,6 @@ function initPage() {
         dateDisplay.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
     }
     
-    // Mostrar nombre de usuario
     const userNameElement = document.getElementById('userNombre');
     if (userNameElement && currentUserInfo) {
         userNameElement.textContent = currentUserInfo.nombre || 'Jefe Taller';
@@ -101,7 +89,6 @@ function setupEventListeners() {
         searchInput.addEventListener('input', () => filtrarUsuarios());
     }
     
-    // Logout
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) logoutBtn.addEventListener('click', logout);
 }
@@ -126,19 +113,14 @@ function getAuthHeaders() {
 
 async function cargarRoles() {
     try {
-        const response = await fetch(`${API_URL}/roles`, {
-            headers: getAuthHeaders()
-        });
-        
-        if (response.status === 401) {
-            logout();
-            return;
-        }
+        const response = await fetch(`${API_URL}/roles`, { headers: getAuthHeaders() });
+        if (response.status === 401) { logout(); return; }
         
         const data = await response.json();
         if (response.ok && data.success) {
-            rolesData = data.roles;
-            console.log('✅ Roles cargados:', rolesData);
+            // Filtrar para asegurar que no venga el rol cliente
+            rolesData = data.roles.filter(rol => rol.id !== 5);
+            console.log('✅ Roles cargados (solo personal):', rolesData);
         } else {
             throw new Error(data.error || 'Error cargando roles');
         }
@@ -150,18 +132,13 @@ async function cargarRoles() {
 
 async function cargarUsuarios() {
     try {
-        const response = await fetch(`${API_URL}/usuarios`, {
-            headers: getAuthHeaders()
-        });
-        
-        if (response.status === 401) {
-            logout();
-            return;
-        }
+        const response = await fetch(`${API_URL}/usuarios`, { headers: getAuthHeaders() });
+        if (response.status === 401) { logout(); return; }
         
         const data = await response.json();
         if (response.ok && data.success) {
             usuariosData = data.usuarios;
+            console.log('✅ Usuarios de personal cargados:', usuariosData.length);
             renderUsuariosTable(usuariosData);
         } else {
             throw new Error(data.error || 'Error cargando usuarios');
@@ -178,23 +155,15 @@ async function cargarUsuarios() {
 
 async function cargarEstadisticas() {
     try {
-        const response = await fetch(`${API_URL}/estadisticas`, {
-            headers: getAuthHeaders()
-        });
-        
-        if (response.status === 401) {
-            logout();
-            return;
-        }
+        const response = await fetch(`${API_URL}/estadisticas`, { headers: getAuthHeaders() });
+        if (response.status === 401) { logout(); return; }
         
         const data = await response.json();
         if (response.ok && data.success) {
             const stats = data.estadisticas;
             
-            const totalUsuariosElem = document.getElementById('totalUsuarios');
-            if (totalUsuariosElem) totalUsuariosElem.textContent = stats.total_usuarios || 0;
+            document.getElementById('totalUsuarios').textContent = stats.total_usuarios || 0;
             
-            // Actualizar estadísticas por rol
             for (const rol of stats.usuarios_por_rol) {
                 const rolNombre = rol.rol_nombre;
                 const cantidad = rol.cantidad;
@@ -244,13 +213,19 @@ function renderUsuariosTable(usuarios) {
                         ? usuario.roles_nombres.map(rol => `<span class="role-tag ${rol.replace('_', '-')}">${formatRolName(rol)}</span>`).join('')
                         : '<span class="no-roles">Sin roles asignados</span>'}
                 </div>
-              </td>
-            <td>
-                <button class="btn-edit-roles" onclick="abrirModalRoles(${usuario.id})" title="Gestionar roles">
+               </td>
+            <td class="action-buttons">
+                <button class="action-btn view" onclick="verDetalleUsuario(${usuario.id})" title="Ver detalles">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="action-btn edit" onclick="abrirModalRoles(${usuario.id})" title="Editar roles">
                     <i class="fas fa-edit"></i>
                 </button>
-              </td>
-          </tr>
+                <button class="action-btn delete" onclick="eliminarUsuario(${usuario.id})" title="Eliminar usuario">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+             </td>
+        </tr>
     `).join('');
 }
 
@@ -272,6 +247,114 @@ function filtrarUsuarios() {
 }
 
 // =====================================================
+// VER DETALLE DE USUARIO
+// =====================================================
+
+async function verDetalleUsuario(usuarioId) {
+    try {
+        mostrarNotificacion('Cargando datos...', 'info');
+        
+        const response = await fetch(`${API_URL}/usuario/${usuarioId}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.status === 401) { logout(); return; }
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            const usuario = data.usuario;
+            
+            const modalBody = document.getElementById('modalDetalleUsuarioBody');
+            if (modalBody) {
+                modalBody.innerHTML = `
+                    <div class="detalle-usuario">
+                        <div class="info-group">
+                            <label><i class="fas fa-user"></i> Nombre completo</label>
+                            <p>${escapeHtml(usuario.nombre)}</p>
+                        </div>
+                        <div class="info-group">
+                            <label><i class="fas fa-envelope"></i> Correo electrónico</label>
+                            <p>${escapeHtml(usuario.email || 'No registrado')}</p>
+                        </div>
+                        <div class="info-group">
+                            <label><i class="fas fa-id-card"></i> Número de documento</label>
+                            <p>${escapeHtml(usuario.documento || 'No registrado')}</p>
+                        </div>
+                        <div class="info-group">
+                            <label><i class="fas fa-phone"></i> Teléfono / Contacto</label>
+                            <p>${escapeHtml(usuario.contacto || 'No registrado')}</p>
+                        </div>
+                        <div class="info-group">
+                            <label><i class="fas fa-map-marker-alt"></i> Ubicación</label>
+                            <p>${escapeHtml(usuario.ubicacion || 'No registrada')}</p>
+                        </div>
+                        <div class="info-group">
+                            <label><i class="fas fa-calendar-alt"></i> Fecha de registro</label>
+                            <p>${formatDate(usuario.fecha_registro)}</p>
+                        </div>
+                        <div class="info-group">
+                            <label><i class="fas fa-tags"></i> Roles asignados</label>
+                            <div class="roles-badge">
+                                ${usuario.roles && usuario.roles.length > 0 
+                                    ? usuario.roles.map(rol => `<span class="role-tag ${rol.replace('_', '-')}">${formatRolName(rol)}</span>`).join('')
+                                    : '<span class="no-roles">Sin roles asignados</span>'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('modalDetalleUsuario').classList.add('show');
+        } else {
+            throw new Error(data.error || 'Error al cargar detalles');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion(error.message, 'error');
+    }
+}
+
+function cerrarModalDetalleUsuario() {
+    document.getElementById('modalDetalleUsuario').classList.remove('show');
+}
+
+// =====================================================
+// ELIMINAR USUARIO
+// =====================================================
+
+async function eliminarUsuario(usuarioId) {
+    const usuario = usuariosData.find(u => u.id === usuarioId);
+    if (!usuario) return;
+    
+    if (!confirm(`¿Estás seguro de que deseas eliminar al usuario "${usuario.nombre}"?\n\nEsta acción no se puede deshacer.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/usuario/${usuarioId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        
+        if (response.status === 401) { logout(); return; }
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            mostrarNotificacion(data.message, 'success');
+            await cargarUsuarios();
+            await cargarEstadisticas();
+        } else {
+            throw new Error(data.error || 'Error al eliminar usuario');
+        }
+    } catch (error) {
+        console.error('Error eliminando usuario:', error);
+        mostrarNotificacion(error.message, 'error');
+    }
+}
+
+// =====================================================
 // MODAL DE ROLES
 // =====================================================
 
@@ -284,16 +367,10 @@ function abrirModalRoles(usuarioId) {
     
     usuarioSeleccionado = usuario;
     
-    // Actualizar información del usuario en el modal
-    const modalUserName = document.getElementById('modalUserName');
-    const modalUserEmail = document.getElementById('modalUserEmail');
-    const modalUserDocumento = document.getElementById('modalUserDocumento');
+    document.getElementById('modalUserName').textContent = usuario.nombre;
+    document.getElementById('modalUserEmail').textContent = usuario.email || 'No registrado';
+    document.getElementById('modalUserDocumento').textContent = usuario.documento || 'No registrado';
     
-    if (modalUserName) modalUserName.textContent = usuario.nombre;
-    if (modalUserEmail) modalUserEmail.textContent = usuario.email || 'No registrado';
-    if (modalUserDocumento) modalUserDocumento.textContent = usuario.documento || 'No registrado';
-    
-    // Generar checkboxes de roles (solo roles de personal)
     const rolesContainer = document.getElementById('rolesCheckboxGroup');
     if (rolesContainer && rolesData.length > 0) {
         rolesContainer.innerHTML = rolesData.map(rol => `
@@ -308,10 +385,7 @@ function abrirModalRoles(usuarioId) {
         `).join('');
     }
     
-    const modal = document.getElementById('rolesModal');
-    if (modal) {
-        modal.classList.add('show');
-    }
+    document.getElementById('rolesModal').classList.add('show');
 }
 
 function toggleCheckbox(rolId) {
@@ -338,10 +412,7 @@ async function saveRoles() {
             body: JSON.stringify({ roles_ids: rolesSeleccionados })
         });
         
-        if (response.status === 401) {
-            logout();
-            return;
-        }
+        if (response.status === 401) { logout(); return; }
         
         const data = await response.json();
         
@@ -360,10 +431,7 @@ async function saveRoles() {
 }
 
 function closeRolesModal() {
-    const modal = document.getElementById('rolesModal');
-    if (modal) {
-        modal.classList.remove('show');
-    }
+    document.getElementById('rolesModal').classList.remove('show');
     usuarioSeleccionado = null;
 }
 
@@ -391,6 +459,16 @@ function getRolDescription(rolNombre) {
     return descripciones[rolNombre] || '';
 }
 
+function formatDate(dateStr) {
+    if (!dateStr) return 'No registrado';
+    try {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+    } catch {
+        return dateStr;
+    }
+}
+
 function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
@@ -404,12 +482,7 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
     if (!toastContainer) {
         toastContainer = document.createElement('div');
         toastContainer.className = 'toast-container';
-        toastContainer.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-        `;
+        toastContainer.style.cssText = `position: fixed; top: 20px; right: 20px; z-index: 9999;`;
         document.body.appendChild(toastContainer);
     }
     
@@ -424,21 +497,6 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
     };
     
     toast.innerHTML = `<i class="fas ${iconos[tipo] || iconos.info}"></i><span>${escapeHtml(mensaje)}</span>`;
-    
-    toast.style.cssText = `
-        background: white;
-        padding: 1rem 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        margin-bottom: 0.5rem;
-        animation: slideIn 0.3s ease;
-        border-left: 4px solid ${tipo === 'success' ? '#10B981' : tipo === 'error' ? '#C1121F' : tipo === 'warning' ? '#F59E0B' : '#1E3A5F'};
-        min-width: 300px;
-    `;
-    
     toastContainer.appendChild(toast);
     
     setTimeout(() => {
@@ -452,6 +510,9 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
 }
 
 // Funciones globales
+window.verDetalleUsuario = verDetalleUsuario;
+window.cerrarModalDetalleUsuario = cerrarModalDetalleUsuario;
+window.eliminarUsuario = eliminarUsuario;
 window.abrirModalRoles = abrirModalRoles;
 window.closeRolesModal = closeRolesModal;
 window.saveRoles = saveRoles;

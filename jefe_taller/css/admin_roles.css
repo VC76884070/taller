@@ -1,11 +1,11 @@
 /* =====================================================
-   ADMINISTRACIÓN DE ROLES - ESTILOS
+   ADMINISTRACIÓN DE ROLES - ESTILOS COMPLETOS
    FURIA MOTOR COMPANY SRL
    Basado en la paleta oscura del dashboard
    ===================================================== */
 
 /* =====================================================
-   IMPORTAR VARIABLES DEL DASHBOARD
+   VARIABLES GLOBALES
    ===================================================== */
 :root {
     /* ========== 🔴 COLOR PRIMARIO - ROJO ACENTO ========== */
@@ -183,11 +183,13 @@
    ===================================================== */
 .table-container {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .usuarios-table {
     width: 100%;
     border-collapse: collapse;
+    min-width: 600px;
 }
 
 .usuarios-table thead tr {
@@ -210,6 +212,7 @@
     border-bottom: 1px solid var(--border-color);
     font-size: 0.9rem;
     color: var(--blanco);
+    vertical-align: middle;
 }
 
 .usuarios-table tbody tr:hover {
@@ -289,7 +292,46 @@
 }
 
 /* =====================================================
-   BOTÓN DE ACCIÓN
+   BOTONES DE ACCIÓN EN TABLA
+   ===================================================== */
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.action-btn {
+    background: transparent;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition);
+    color: var(--gris-texto);
+    font-size: 1rem;
+}
+
+.action-btn.view:hover {
+    background: rgba(37, 99, 235, 0.15);
+    color: var(--azul-acento);
+}
+
+.action-btn.edit:hover {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--ambar-alerta);
+}
+
+.action-btn.delete:hover {
+    background: rgba(193, 18, 31, 0.15);
+    color: var(--rojo-primario);
+}
+
+/* =====================================================
+   BOTÓN DE EDICIÓN DE ROLES (LEGADO)
    ===================================================== */
 .btn-edit-roles {
     background: transparent;
@@ -314,153 +356,31 @@
 }
 
 /* =====================================================
-   MODAL
+   BOTÓN LOGOUT EN TOP ACTIONS
    ===================================================== */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    z-index: 1100;
-    align-items: center;
-    justify-content: center;
-    backdrop-filter: blur(4px);
-}
-
-.modal.show {
-    display: flex;
-}
-
-.modal-content {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    width: 90%;
-    max-width: 500px;
-    max-height: 85vh;
-    overflow: hidden;
-    box-shadow: var(--shadow-lg);
+.btn-logout {
+    background: transparent;
     border: 1px solid var(--border-color);
-}
-
-.modal-header {
-    padding: 1.25rem 1.5rem;
-    border-bottom: 1px solid var(--border-color);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: var(--gris-oscuro);
-}
-
-.modal-header h3 {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--blanco);
-    margin: 0;
-}
-
-.modal-header h3 i {
-    color: var(--rojo-primario);
-    margin-right: 0.5rem;
-}
-
-.modal-close {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    cursor: pointer;
     color: var(--gris-texto);
-    transition: var(--transition);
-    line-height: 1;
-}
-
-.modal-close:hover {
-    color: var(--rojo-primario);
-}
-
-.modal-body {
-    padding: 1.5rem;
-    overflow-y: auto;
-    max-height: calc(85vh - 130px);
-}
-
-.user-info-modal {
-    background: var(--gris-oscuro);
-    padding: 1rem;
+    padding: 0.5rem 1rem;
     border-radius: var(--radius-md);
-    margin-bottom: 1.5rem;
-    border: 1px solid var(--border-color);
-}
-
-.user-info-modal p {
-    margin: 0.25rem 0;
-    font-size: 0.9rem;
-    color: var(--blanco);
-}
-
-.user-info-modal strong {
-    color: var(--gris-texto);
+    font-size: 0.85rem;
     font-weight: 500;
-}
-
-.roles-checkbox-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-
-.role-checkbox-item {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.75rem;
-    background: var(--gris-oscuro);
-    border-radius: var(--radius-md);
     cursor: pointer;
     transition: var(--transition);
-    border: 1px solid var(--border-color);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
-.role-checkbox-item:hover {
-    background: rgba(193, 18, 31, 0.1);
+.btn-logout:hover {
+    background: rgba(193, 18, 31, 0.15);
     border-color: var(--rojo-primario);
-}
-
-.role-checkbox-item input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    cursor: pointer;
-    accent-color: var(--rojo-primario);
-}
-
-.role-checkbox-item label {
-    flex: 1;
-    cursor: pointer;
-    font-weight: 500;
-    color: var(--blanco);
-    font-size: 0.9rem;
-}
-
-.role-description {
-    font-size: 0.7rem;
-    color: var(--gris-texto);
-    display: block;
-    margin-top: 0.25rem;
-}
-
-.modal-footer {
-    padding: 1rem 1.5rem;
-    border-top: 1px solid var(--border-color);
-    display: flex;
-    justify-content: flex-end;
-    gap: 1rem;
-    background: var(--gris-oscuro);
+    color: var(--rojo-primario);
 }
 
 /* =====================================================
-   BOTONES
+   BOTONES GENERALES
    ===================================================== */
 .btn-primary {
     background: var(--rojo-primario);
@@ -506,6 +426,212 @@
 .btn-sm {
     padding: 0.3rem 0.8rem;
     font-size: 0.75rem;
+}
+
+/* =====================================================
+   MODAL
+   ===================================================== */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 1100;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+}
+
+.modal.show {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    width: 90%;
+    max-width: 500px;
+    max-height: 85vh;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-color);
+    animation: modalFadeIn 0.3s ease;
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.modal-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--gris-oscuro);
+}
+
+.modal-header h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--blanco);
+    margin: 0;
+}
+
+.modal-header h3 i {
+    color: var(--rojo-primario);
+    margin-right: 0.5rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--gris-texto);
+    transition: var(--transition);
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: var(--rojo-primario);
+}
+
+.modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    max-height: calc(85vh - 130px);
+}
+
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    background: var(--gris-oscuro);
+}
+
+/* =====================================================
+   MODAL - INFO DE USUARIO
+   ===================================================== */
+.user-info-modal {
+    background: var(--gris-oscuro);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border-color);
+}
+
+.user-info-modal p {
+    margin: 0.25rem 0;
+    font-size: 0.9rem;
+    color: var(--blanco);
+}
+
+.user-info-modal strong {
+    color: var(--gris-texto);
+    font-weight: 500;
+}
+
+/* =====================================================
+   MODAL - CHECKBOX DE ROLES
+   ===================================================== */
+.roles-checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.role-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem;
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+    border: 1px solid var(--border-color);
+}
+
+.role-checkbox-item:hover {
+    background: rgba(193, 18, 31, 0.1);
+    border-color: var(--rojo-primario);
+}
+
+.role-checkbox-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--rojo-primario);
+}
+
+.role-checkbox-item label {
+    flex: 1;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--blanco);
+    font-size: 0.9rem;
+}
+
+.role-description {
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+    display: block;
+    margin-top: 0.25rem;
+}
+
+/* =====================================================
+   MODAL - DETALLE DE USUARIO
+   ===================================================== */
+.detalle-usuario {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.info-group {
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.75rem;
+}
+
+.info-group:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.info-group label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--gris-texto);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.25rem;
+}
+
+.info-group label i {
+    width: 20px;
+    color: var(--rojo-primario);
+    margin-right: 0.25rem;
+}
+
+.info-group p {
+    font-size: 0.9rem;
+    color: var(--blanco);
+    margin: 0;
+    word-break: break-word;
 }
 
 /* =====================================================
@@ -591,86 +717,6 @@
 }
 
 /* =====================================================
-   RESPONSIVE
-   ===================================================== */
-@media (max-width: 1024px) {
-    .stats-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
-
-@media (max-width: 768px) {
-    .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 1rem;
-    }
-    
-    .card-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .search-box input {
-        width: 200px;
-    }
-    
-    .usuarios-table th,
-    .usuarios-table td {
-        padding: 0.75rem;
-        font-size: 0.8rem;
-    }
-}
-
-@media (max-width: 480px) {
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .modal-content {
-        width: 95%;
-        max-width: none;
-    }
-    
-    .search-box input {
-        width: 100%;
-    }
-    
-    .role-checkbox-item {
-        flex-wrap: wrap;
-    }
-    
-    .toast-notification {
-        min-width: 280px;
-        font-size: 0.85rem;
-        padding: 0.75rem 1rem;
-    }
-}
-
-/* =====================================================
-   BOTÓN LOGOUT EN TOP ACTIONS
-   ===================================================== */
-.btn-logout {
-    background: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--gris-texto);
-    padding: 0.5rem 1rem;
-    border-radius: var(--radius-md);
-    font-size: 0.85rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: var(--transition);
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.btn-logout:hover {
-    background: rgba(193, 18, 31, 0.15);
-    border-color: var(--rojo-primario);
-    color: var(--rojo-primario);
-}
-
-/* =====================================================
    SCROLLBAR PERSONALIZADO
    ===================================================== */
 ::-webkit-scrollbar {
@@ -690,4 +736,279 @@
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--rojo-primario);
+}
+
+/* =====================================================
+   RESPONSIVE DESIGN
+   ===================================================== */
+
+/* Tablets y pantallas medianas (1024px) */
+@media (max-width: 1024px) {
+    .stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+    }
+    
+    .stat-value {
+        font-size: 1.5rem;
+    }
+    
+    .stat-icon {
+        width: 45px;
+        height: 45px;
+        font-size: 1.3rem;
+    }
+}
+
+/* Tablets pequeñas (768px) */
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+    
+    .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .search-box {
+        width: 100%;
+    }
+    
+    .search-box input {
+        width: 100%;
+    }
+    
+    .usuarios-table th,
+    .usuarios-table td {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.8rem;
+    }
+    
+    /* Ocultar columna de documento en tablets */
+    .usuarios-table th:nth-child(4),
+    .usuarios-table td:nth-child(4) {
+        display: none;
+    }
+    
+    .action-buttons {
+        gap: 0.25rem;
+    }
+    
+    .action-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 0.85rem;
+    }
+    
+    .modal-content {
+        width: 95%;
+        max-width: none;
+    }
+}
+
+/* Móviles (480px) */
+@media (max-width: 480px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+    
+    .stat-card {
+        padding: 1rem;
+    }
+    
+    .stat-value {
+        font-size: 1.3rem;
+    }
+    
+    .stat-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1.1rem;
+    }
+    
+    /* Ocultar columna ID en móviles */
+    .usuarios-table th:nth-child(1),
+    .usuarios-table td:nth-child(1) {
+        display: none;
+    }
+    
+    /* Ocultar columna email en móviles muy pequeños */
+    .usuarios-table th:nth-child(3),
+    .usuarios-table td:nth-child(3) {
+        display: none;
+    }
+    
+    .usuarios-table th,
+    .usuarios-table td {
+        padding: 0.6rem 0.4rem;
+        font-size: 0.75rem;
+    }
+    
+    .role-tag {
+        font-size: 0.65rem;
+        padding: 0.2rem 0.5rem;
+    }
+    
+    .roles-badge {
+        gap: 0.25rem;
+    }
+    
+    .action-btn {
+        width: 24px;
+        height: 24px;
+        font-size: 0.75rem;
+    }
+    
+    .toast-notification {
+        min-width: 280px;
+        font-size: 0.85rem;
+        padding: 0.75rem 1rem;
+        right: 10px;
+        left: 10px;
+        width: auto;
+    }
+    
+    .toast-container {
+        right: 10px;
+        left: 10px;
+    }
+    
+    .modal-body {
+        padding: 1rem;
+    }
+    
+    .role-checkbox-item {
+        padding: 0.5rem;
+    }
+    
+    .role-checkbox-item label {
+        font-size: 0.8rem;
+    }
+    
+    .role-description {
+        font-size: 0.65rem;
+    }
+    
+    .btn-primary, .btn-secondary {
+        padding: 0.5rem 1rem;
+        font-size: 0.8rem;
+    }
+    
+    .btn-logout span {
+        display: none;
+    }
+    
+    .btn-logout {
+        padding: 0.5rem;
+    }
+    
+    .btn-logout i {
+        margin: 0;
+    }
+}
+
+/* Móviles muy pequeños (375px) */
+@media (max-width: 375px) {
+    .stat-card {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.5rem;
+    }
+    
+    .stat-info {
+        text-align: center;
+    }
+    
+    .card-header h3 {
+        font-size: 1rem;
+    }
+    
+    .modal-header h3 {
+        font-size: 1rem;
+    }
+    
+    .info-group label {
+        font-size: 0.65rem;
+    }
+    
+    .info-group p {
+        font-size: 0.8rem;
+    }
+}
+
+/* Orientación landscape en móviles */
+@media (max-width: 768px) and (orientation: landscape) {
+    .modal-content {
+        max-height: 90vh;
+    }
+    
+    .modal-body {
+        max-height: calc(90vh - 130px);
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Pantallas grandes (1400px+) */
+@media (min-width: 1400px) {
+    .content {
+        max-width: 1600px;
+    }
+    
+    .stats-grid {
+        gap: 2rem;
+    }
+    
+    .stat-value {
+        font-size: 2rem;
+    }
+    
+    .stat-icon {
+        width: 60px;
+        height: 60px;
+        font-size: 1.8rem;
+    }
+}
+
+/* =====================================================
+   UTILIDADES ADICIONALES
+   ===================================================== */
+
+/* Texto truncado para celdas largas */
+.truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+/* Focus visible para accesibilidad */
+:focus-visible {
+    outline: 2px solid var(--rojo-primario);
+    outline-offset: 2px;
+}
+
+/* Transiciones suaves para todos los elementos interactivos */
+button,
+input,
+select,
+a,
+.stat-card,
+.role-checkbox-item {
+    transition: var(--transition);
+}
+
+/* Deshabilitar selección de texto en botones */
+button {
+    user-select: none;
+}
+
+/* Scroll suave para toda la página */
+html {
+    scroll-behavior: smooth;
 }

@@ -24,13 +24,47 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function checkAuth() {
     const token = localStorage.getItem('furia_token');
-    userInfo = JSON.parse(localStorage.getItem('furia_user') || '{}');
+    const userData = localStorage.getItem('furia_user');
     
-    if (!token || (userInfo.rol !== 'jefe_taller' && userInfo.id_rol !== 3)) {
+    if (!token) {
         window.location.href = '/';
         return false;
     }
-    return true;
+    
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        userInfo = payload.user;
+        
+        // Obtener roles del token o del localStorage
+        let userRoles = [];
+        
+        if (userInfo && userInfo.roles && Array.isArray(userInfo.roles)) {
+            userRoles = userInfo.roles;
+        } else if (userData) {
+            const user = JSON.parse(userData);
+            userRoles = user.roles || [];
+        }
+        
+        // Verificar si tiene rol de jefe_taller
+        const tieneRolJefeTaller = userRoles.includes('jefe_taller');
+        
+        if (!tieneRolJefeTaller) {
+            console.warn('Usuario no tiene rol jefe_taller. Roles:', userRoles);
+            mostrarNotificacion('No tienes permisos para acceder a esta sección', 'error');
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 2000);
+            return false;
+        }
+        
+        console.log('✅ Autenticación exitosa - Roles:', userRoles);
+        return true;
+        
+    } catch (error) {
+        console.error('Error verificando autenticación:', error);
+        window.location.href = '/';
+        return false;
+    }
 }
 
 function initPage() {

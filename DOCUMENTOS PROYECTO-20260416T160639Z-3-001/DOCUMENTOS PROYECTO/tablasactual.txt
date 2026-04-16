@@ -1,0 +1,1012 @@
+Rol
+id (SERIAL) - Identificador único del rol
+
+nombre_rol (VARCHAR(100)) - Nombre del rol
+
+descripcion (TEXT) - Descripción detallada del rol
+
+Usuario
+id (SERIAL) - Identificador único del usuario
+
+id_rol (INTEGER, FK → Rol) - Rol asignado al usuario
+
+nombre (VARCHAR(200)) - Nombre completo del usuario
+
+contacto (VARCHAR(100)) - Teléfono o medio de contacto
+
+ubicacion (VARCHAR(255)) - Ubicación del usuario
+
+contrasenia (VARCHAR(255)) - Contraseña hasheada
+
+email (VARCHAR(255), UNIQUE) - Correo electrónico del usuario
+
+avatar_url (TEXT) - URL de la foto de perfil
+
+fecha_registro (TIMESTAMP) - Fecha de registro
+
+Proveedor
+id (SERIAL) - Identificador único del proveedor
+
+id_filtro (INTEGER, FK → Filtro_herramienta) - Filtro asociado al proveedor
+
+nombre (VARCHAR(200)) - Nombre del proveedor
+
+telefono (VARCHAR(50)) - Teléfono de contacto
+
+ubicacion_gps (VARCHAR(255)) - Ubicación GPS
+
+propietario (VARCHAR(200)) - Nombre del propietario
+
+Filtro_herramienta
+id (SERIAL) - Identificador único del filtro
+
+nombre_filtro (VARCHAR(100)) - Nombre del filtro
+
+descripcion (TEXT) - Descripción del filtro
+
+Vehiculo
+id (SERIAL) - Identificador único del vehículo
+
+id_cliente (INTEGER, FK → Cliente) - Cliente propietario
+
+placa (VARCHAR(20), UNIQUE) - Número de placa
+
+marca (VARCHAR(100)) - Marca del vehículo
+
+modelo (VARCHAR(100)) - Modelo del vehículo
+
+anio (INTEGER) - Año de fabricación
+
+kilometraje (INTEGER) - Kilometraje actual
+
+ordenTrabajo
+id (SERIAL) - Identificador único de la orden
+
+codigo_unico (VARCHAR(100), UNIQUE) - Código único de la orden
+
+id_vehiculo (INTEGER, FK → Vehiculo) - Vehículo asociado
+
+id_jefe_operativo (INTEGER, FK → Usuario) - Jefe operativo principal
+
+id_jefe_operativo_2 (INTEGER, FK → Usuario) - Segundo jefe operativo
+
+fecha_ingreso (TIMESTAMP) - Fecha de ingreso
+
+fecha_salida (TIMESTAMP) - Fecha de salida
+
+estado_global (VARCHAR(50)) - Estado actual (Ej: EnRecepcion)
+
+Recepcion
+id (SERIAL) - Identificador único
+
+id_orden_trabajo (INTEGER, UNIQUE, FK → ordenTrabajo) - Orden asociada
+
+url_lateral_izquierda (TEXT) - Foto lado izquierdo
+
+url_lateral_derecha (TEXT) - Foto lado derecho
+
+url_foto_frontal (TEXT) - Foto frontal
+
+url_foto_trasera (TEXT) - Foto trasera
+
+url_foto_superior (TEXT) - Foto superior
+
+url_foto_inferior (TEXT) - Foto inferior
+
+url_foto_tablero (TEXT) - Foto del tablero
+
+url_grabacion_problema (TEXT) - Grabación del problema
+
+transcripcion_problema (TEXT) - Transcripción de la grabación
+
+Diagnostico_tecnico
+id (SERIAL) - Identificador único
+
+id_orden_trabajo (INTEGER, FK → ordenTrabajo) - Orden asociada
+
+id_tecnico (INTEGER, FK → Usuario) - Técnico que diagnostica
+
+informe (TEXT) - Informe del diagnóstico
+
+url_grabacion_informe (TEXT) - Grabación del informe
+
+transcripcion_informe (TEXT) - Transcripción del informe
+
+estado (VARCHAR(50)) - Estado del diagnóstico
+
+fecha_envio (TIMESTAMP) - Fecha de envío
+
+version (INTEGER) - Número de versión
+
+ObservacionDiagnostico
+id (SERIAL) - Identificador único
+
+id_diagnostico_tecnico (INTEGER, FK → Diagnostico_tecnico) - Diagnóstico asociado
+
+id_jefe_taller (INTEGER, FK → Usuario) - Jefe de taller que observa
+
+observacion (TEXT) - Texto de la observación
+
+url_grabacion_observacion (TEXT) - Grabación de la observación
+
+transcripcion_obs (TEXT) - Transcripción de la observación
+
+fecha_hora (TIMESTAMP) - Fecha y hora
+
+DiagnostigoInicial
+id (SERIAL) - Identificador único
+
+id_orden_trabajo (INTEGER, FK → ordenTrabajo) - Orden asociada
+
+id_jefe_taller (INTEGER, FK → Usuario) - Jefe de taller
+
+diagnostigo (TEXT) - Diagnóstico inicial
+
+url_grabacion (TEXT) - Grabación de audio del diagnóstico
+
+fecha_hora (TIMESTAMP) - Fecha y hora
+
+CarritoHerramientas
+id (SERIAL) - Identificador único
+
+id_tecnico (INTEGER, FK → Usuario) - Técnico propietario
+
+nombre (VARCHAR(200)) - Nombre del carrito
+
+codigo (VARCHAR(50), UNIQUE) - Código único
+
+estado (VARCHAR(50)) - Estado del carrito
+
+Herramienta
+id (SERIAL) - Identificador único
+
+id_carritoherramienta (INTEGER, FK → CarritoHerramientas) - Carrito al que pertenece
+
+nombre (VARCHAR(200)) - Nombre de la herramienta
+
+descripcion (VARCHAR(255)) - Descripción
+
+tipo (VARCHAR(100)) - Tipo de herramienta
+
+marca (VARCHAR(100)) - Marca
+
+ControlCarrito
+id (SERIAL) - Identificador único
+
+id_carritoherramienta (INTEGER, FK → CarritoHerramientas) - Carrito controlado
+
+fecha_control (TIMESTAMP) - Fecha del control
+
+estado_encontrado (VARCHAR(100)) - Estado encontrado
+
+observacion (TEXT) - Observaciones
+
+url_evidencia (TEXT) - Evidencia en foto/video
+
+Foto_diagnostico
+id (SERIAL) - Identificador único
+
+id_diagnostico_tecnico (INTEGER, FK → Diagnostico_tecnico) - Diagnóstico asociado
+
+url_foto (TEXT) - URL de la foto
+
+descripcion_tecnico (VARCHAR(255)) - Descripción del técnico
+
+AsignacionTecnico
+id (SERIAL) - Identificador único
+
+id_orden_trabajo (INTEGER, FK → ordenTrabajo) - Orden asignada
+
+id_tecnico (INTEGER, FK → Usuario) - Técnico asignado
+
+fecha_hora_inicio (TIMESTAMP) - Inicio de asignación
+
+fecha_hora_final (TIMESTAMP) - Fin de asignación
+
+AvanceTrabajo
+id (SERIAL) - Identificador único
+
+id_orden_trabajo (INTEGER, FK → ordenTrabajo) - Orden asociada
+
+id_tecnico (INTEGER, FK → Usuario) - Técnico que reporta
+
+fecha_hora (TIMESTAMP) - Fecha del avance
+
+descripcion (TEXT) - Descripción del avance
+
+tipo_avance (VARCHAR(100)) - Tipo de avance
+
+estado_asociado (VARCHAR(100)) - Estado relacionado
+
+Foto_avance
+id (SERIAL) - Identificador único
+
+id_avance (INTEGER, FK → AvanceTrabajo) - Avance asociado
+
+url_foto (TEXT) - URL de la foto
+
+descripcion_tecnico (VARCHAR(255)) - Descripción
+
+fecha_subida (TIMESTAMP) - Fecha de subida
+
+SeguimientoOrden
+id (SERIAL) - Identificador único
+
+id_orden_trabajo (INTEGER, FK → ordenTrabajo) - Orden seguida
+
+estado (VARCHAR(50)) - Estado actual
+
+motivo_pausa (TEXT) - Motivo si está en pausa
+
+fecha_hora_cambio (TIMESTAMP) - Fecha del cambio
+
+notificaciones_enviadas (INTEGER) - Contador de notificaciones
+
+Planificacion
+id (SERIAL) - Identificador único
+
+id_orden_trabajo (INTEGER, UNIQUE, FK → ordenTrabajo) - Orden planificada
+
+bahia_asignada (INTEGER) - Bahía/taller asignado
+
+horas_estimadas (DECIMAL(5,2)) - Horas estimadas
+
+fecha_hora_inicio_estimado (TIMESTAMP) - Inicio estimado
+
+fecha_hora_fin_estimado (TIMESTAMP) - Fin estimado
+
+fecha_hora_inicio_real (TIMESTAMP) - Inicio real
+
+fecha_hora_fin_real (TIMESTAMP) - Fin real
+
+Repuesto
+id (SERIAL) - Identificador único
+
+codigo (VARCHAR(50), UNIQUE) - Código del repuesto
+
+nombre (VARCHAR(200)) - Nombre del repuesto
+
+descripcion (TEXT) - Descripción
+
+cantidad_stock (INTEGER) - Cantidad en stock
+
+precio_unitario (DECIMAL(10,2)) - Precio unitario
+
+Servicio
+id (SERIAL) - Identificador único
+
+id_diagnostico_tecnico (INTEGER, FK → Diagnostico_tecnico) - Diagnóstico asociado
+
+descripcion (TEXT) - Descripción del servicio
+
+precio_estimado (DECIMAL(10,2)) - Precio estimado
+
+precio_final (DECIMAL(10,2)) - Precio final
+
+Cotizacion
+id (SERIAL) - Identificador único
+
+id_orden_trabajo (INTEGER, FK → ordenTrabajo) - Orden asociada
+
+fecha_generacion (TIMESTAMP) - Fecha de generación
+
+estado (VARCHAR(50)) - Estado (Ej: Enviada)
+
+CotizacionDetalle
+id (SERIAL) - Identificador único
+
+id_cotizacion (INTEGER, FK → Cotizacion) - Cotización asociada
+
+id_servicio (INTEGER, FK → Servicio) - Servicio asociado
+
+servicio_descripcion (TEXT) - Descripción del servicio
+
+precio (DECIMAL(10,2)) - Precio del servicio
+
+aprobado_por_cliente (BOOLEAN) - Aprobación del cliente
+
+CompraRepuesto
+id (SERIAL) - Identificador único
+
+id_proveedor (INTEGER, FK → Proveedor) - Proveedor asociado
+
+id_encargado_repuestos (INTEGER, FK → Usuario) - Encargado de compra
+
+fecha_compra (TIMESTAMP) - Fecha de compra
+
+total (DECIMAL(10,2)) - Total de la compra
+
+url_foto_comprobante (TEXT) - Comprobante de compra
+
+CompraDetalle
+id (SERIAL) - Identificador único
+
+id_compra (INTEGER, FK → CompraRepuesto) - Compra asociada
+
+id_repuesto (INTEGER, FK → Repuesto) - Repuesto comprado
+
+cantidad (INTEGER) - Cantidad comprada
+
+precio_compra (DECIMAL(10,2)) - Precio de compra
+
+url_foto_repuesto (TEXT) - Foto del repuesto
+
+UsoRepuesto
+id (SERIAL) - Identificador único
+
+id_orden_trabajo (INTEGER, FK → ordenTrabajo) - Orden que usa el repuesto
+
+id_repuesto (INTEGER, FK → Repuesto) - Repuesto utilizado
+
+cantidad (INTEGER) - Cantidad usada
+
+fecha_uso (TIMESTAMP) - Fecha de uso
+
+TransaccionFinanciera
+id (SERIAL) - Identificador único
+
+id_orden_trabajo (INTEGER, FK → ordenTrabajo) - Orden asociada
+
+id_compra (INTEGER, FK → CompraRepuesto) - Compra asociada
+
+id_usuario_registra (INTEGER, FK → Usuario) - Usuario que registra
+
+tipo (VARCHAR(50)) - Tipo de transacción
+
+monto (DECIMAL(10,2)) - Monto de la transacción
+
+descripcion (TEXT) - Descripción
+
+fecha_hora (TIMESTAMP) - Fecha y hora
+
+AgendaCliente
+id (SERIAL) - Identificador único
+
+id_cliente (INTEGER, FK → Cliente) - Cliente asociado
+
+fecha_solicitud (TIMESTAMP) - Fecha de solicitud
+
+fecha_agendada (TIMESTAMP) - Fecha agendada
+
+descripcion_problema (TEXT) - Descripción del problema
+
+estado (VARCHAR(50)) - Estado de la agenda
+
+Notificacion
+id (SERIAL) - Identificador único
+
+id_usuario_destino (INTEGER, FK → Usuario) - Usuario destino
+
+tipo (VARCHAR(100)) - Tipo de notificación
+
+mensaje (TEXT) - Mensaje de la notificación
+
+fecha_envio (TIMESTAMP) - Fecha de envío
+
+leida (BOOLEAN) - Indica si fue leída
+
+RendicionDiaria
+id (SERIAL) - Identificador único
+
+id_encargado_repuestos (INTEGER, FK → Usuario) - Encargado que rinde
+
+id_jefe_operativo (INTEGER, FK → Usuario) - Jefe operativo que recibe
+
+fecha (DATE) - Fecha de la rendición
+
+monto_total (DECIMAL(10,2)) - Monto total rendido
+
+observaciones (TEXT) - Observaciones
+
+RendicionSemanal
+id (SERIAL) - Identificador único
+
+id_admin_general (INTEGER, FK → Usuario) - Administrador que recibe
+
+id_jefe_operativo (INTEGER, FK → Usuario) - Jefe operativo que rinde
+
+fecha_inicio (DATE) - Fecha inicio del período
+
+fecha_fin (DATE) - Fecha fin del período
+
+monto_total (DECIMAL(10,2)) - Monto total rendido
+
+observaciones (TEXT) - Observaciones
+
+CodigoVerificacion
+id (SERIAL) - Identificador único
+
+email (VARCHAR(255)) - Correo asociado al código
+
+codigo (VARCHAR(6)) - Código de verificación
+
+tipo (VARCHAR(50)) - Tipo: reset_password, register_confirm
+
+expira (TIMESTAMP) - Fecha de expiración
+
+usado (BOOLEAN) - Indica si ya fue usado
+
+fecha_creacion (TIMESTAMP) - Fecha de creación
+
+datos_extra (JSONB) - Datos adicionales en formato JSON
+
+NotificacionAdmin
+id (SERIAL) - Identificador único
+
+id_admin_general (INTEGER, FK → Usuario) - Administrador destino
+
+tipo (VARCHAR(50)) - Tipo: nuevo_cliente, recuperacion_password, reporte
+
+titulo (VARCHAR(200)) - Título de la notificación
+
+mensaje (TEXT) - Mensaje
+
+leida (BOOLEAN) - Indica si fue leída
+
+fecha_creacion (TIMESTAMP) - Fecha de creación
+
+SolicitudRegistroPersonal
+id (SERIAL) - Identificador único
+
+nombre (VARCHAR(200)) - Nombre del solicitante
+
+email (VARCHAR(255), UNIQUE) - Correo electrónico
+
+numero_documento (VARCHAR(50), UNIQUE) - Número de documento
+
+telefono (VARCHAR(50)) - Teléfono
+
+direccion (TEXT) - Dirección
+
+id_rol_solicitado (INTEGER, FK → Rol) - Rol que solicita
+
+estado (VARCHAR(50)) - Estado: pendiente, aprobado, rechazado
+
+fecha_solicitud (TIMESTAMP) - Fecha de solicitud
+
+fecha_respuesta (TIMESTAMP) - Fecha de respuesta
+
+id_admin_responde (INTEGER, FK → Usuario) - Admin que respondió
+
+observacion_admin (TEXT) - Observaciones del admin
+
+token_aprobacion (VARCHAR(100)) - Token para aprobación por email
+
+contrasenia_temporal (VARCHAR(255)) - Contraseña temporal hasheada
+
+comunicado
+id (SERIAL) - Identificador único
+
+titulo (VARCHAR(255)) - Título del comunicado
+
+contenido (TEXT) - Contenido del comunicado
+
+prioridad (VARCHAR(50)) - Prioridad: normal, importante, urgente
+
+estado (VARCHAR(50)) - Estado: activo, inactivo
+
+destinatarios (JSONB) - Roles destinatarios en formato JSON
+
+fecha_creacion (TIMESTAMP) - Fecha de creación
+
+fecha_actualizacion (TIMESTAMP) - Fecha de actualización
+
+creado_por (INTEGER, FK → Usuario) - Usuario que lo creó
+
+
+
+-- =====================================================
+-- SCRIPT MÍNIMO - GESTIÓN DE BAHÍAS
+-- FURIA MOTOR - SOLO LO ESENCIAL
+-- =====================================================
+
+-- =====================================================
+-- 1. AGREGAR NUEVO ESTADO A ordenTrabajo
+-- =====================================================
+
+ALTER TABLE ordentrabajo 
+DROP CONSTRAINT IF EXISTS ordentrabajo_estado_global_check;
+
+ALTER TABLE ordentrabajo 
+ADD CONSTRAINT ordentrabajo_estado_global_check 
+CHECK (estado_global IN ('EnRecepcion', 'EnProceso', 'EnPausa', 'PendienteAprobacion', 'Finalizado', 'Entregado'));
+
+-- =====================================================
+-- 2. AGREGAR CAMPOS DE TIEMPOS REALES A planificacion
+-- =====================================================
+
+ALTER TABLE planificacion 
+ADD COLUMN IF NOT EXISTS fecha_hora_inicio_real TIMESTAMP,
+ADD COLUMN IF NOT EXISTS fecha_hora_fin_real TIMESTAMP;
+
+-- =====================================================
+-- 3. VISTA PARA ESTADO DE BAHÍAS
+-- =====================================================
+
+CREATE OR REPLACE VIEW vista_bahias AS
+SELECT 
+    b.bahia_numero,
+    CASE 
+        WHEN p.id IS NOT NULL AND p.fecha_hora_fin_real IS NULL AND p.fecha_hora_inicio_real IS NOT NULL THEN 'ocupado'
+        WHEN p.id IS NOT NULL AND p.fecha_hora_fin_real IS NULL THEN 'reservado'
+        ELSE 'libre'
+    END AS estado,
+    o.codigo_unico AS orden_codigo,
+    o.estado_global AS orden_estado,
+    p.fecha_hora_inicio_estimado,
+    p.fecha_hora_fin_estimado
+FROM (
+    SELECT generate_series(1, 12) AS bahia_numero
+) b
+LEFT JOIN planificacion p ON p.bahia_asignada = b.bahia_numero AND p.fecha_hora_fin_real IS NULL
+LEFT JOIN ordentrabajo o ON o.id = p.id_orden_trabajo;
+
+-- =====================================================
+-- 4. VISTA PARA CARGA DE TÉCNICOS
+-- =====================================================
+
+CREATE OR REPLACE VIEW vista_tecnicos_carga AS
+SELECT 
+    u.id,
+    u.nombre,
+    u.contacto,
+    COUNT(a.id_orden_trabajo) FILTER (WHERE a.fecha_hora_final IS NULL) AS ordenes_activas,
+    2 AS max_vehiculos
+FROM usuario u
+LEFT JOIN asignaciontecnico a ON a.id_tecnico = u.id
+WHERE u.id_rol = 4
+GROUP BY u.id, u.nombre, u.contacto;
+
+-- =====================================================
+-- 5. VERIFICAR
+-- =====================================================
+
+SELECT * FROM vista_bahias ORDER BY bahia_numero;
+SELECT * FROM vista_tecnicos_carga ORDER BY ordenes_activas DESC;
+
+
+
+-- =====================================================
+-- SCRIPT MÍNIMO - SOLO PARA CONTROL DE BAHÍAS OCUPADAS
+-- =====================================================
+
+-- 1. Agregar campos de tiempos reales a planificacion (si no existen)
+ALTER TABLE planificacion 
+ADD COLUMN IF NOT EXISTS fecha_hora_inicio_real TIMESTAMP,
+ADD COLUMN IF NOT EXISTS fecha_hora_fin_real TIMESTAMP;
+
+-- 2. Vista para saber qué bahías están ocupadas en tiempo real
+CREATE OR REPLACE VIEW vista_bahias_ocupadas AS
+SELECT 
+    p.bahia_asignada,
+    p.id_orden_trabajo,
+    o.codigo_unico,
+    o.estado_global,
+    p.fecha_hora_inicio_estimado,
+    p.fecha_hora_fin_estimado,
+    p.fecha_hora_inicio_real,
+    -- Una bahía está ocupada si tiene inicio real y no tiene fin real
+    CASE 
+        WHEN p.fecha_hora_inicio_real IS NOT NULL AND p.fecha_hora_fin_real IS NULL THEN true
+        ELSE false
+    END AS esta_ocupada
+FROM planificacion p
+JOIN ordentrabajo o ON o.id = p.id_orden_trabajo
+WHERE p.fecha_hora_fin_real IS NULL;  -- Solo planificaciones activas
+
+-- 3. Función para verificar disponibilidad de bahía en un horario
+CREATE OR REPLACE FUNCTION bahia_disponible_en_horario(
+    p_bahia INTEGER,
+    p_fecha_inicio TIMESTAMP,
+    p_fecha_fin TIMESTAMP,
+    p_excluir_orden INTEGER DEFAULT NULL
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+    v_conflicto INTEGER;
+BEGIN
+    -- Buscar si hay alguna planificación que ocupe la bahía en ese horario
+    SELECT p.id INTO v_conflicto
+    FROM planificacion p
+    WHERE p.bahia_asignada = p_bahia
+    AND p.fecha_hora_fin_real IS NULL  -- Bahía no liberada
+    AND (p_excluir_orden IS NULL OR p.id_orden_trabajo != p_excluir_orden)
+    AND p.fecha_hora_inicio_estimado < p_fecha_fin
+    AND p.fecha_hora_fin_estimado > p_fecha_inicio
+    LIMIT 1;
+    
+    RETURN v_conflicto IS NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+
+
+-- =====================================================
+-- SCRIPT COMPLETO - DIAGNÓSTICO TÉCNICO CON SERVICIOS
+-- FURIA MOTOR COMPANY SRL
+-- =====================================================
+
+-- =====================================================
+-- 1. CREAR TABLA DE SERVICIOS DEL TÉCNICO
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS servicio_tecnico (
+    id SERIAL PRIMARY KEY,
+    id_diagnostico_tecnico INTEGER NOT NULL REFERENCES diagnostico_tecnico(id) ON DELETE CASCADE,
+    descripcion TEXT NOT NULL,
+    orden INTEGER DEFAULT 0,
+    creado_en TIMESTAMP DEFAULT NOW()
+);
+
+-- Índices para mejorar rendimiento
+CREATE INDEX IF NOT EXISTS idx_servicio_tecnico_diagnostico ON servicio_tecnico(id_diagnostico_tecnico);
+
+-- =====================================================
+-- 2. AGREGAR CAMPOS A diagnostico_tecnico
+-- =====================================================
+
+-- Agregar campo de límite de fotos
+ALTER TABLE diagnostico_tecnico 
+ADD COLUMN IF NOT EXISTS max_fotos INTEGER DEFAULT 2;
+
+-- Agregar campo de borrador (para saber si está completo o es borrador)
+ALTER TABLE diagnostico_tecnico 
+ADD COLUMN IF NOT EXISTS es_borrador BOOLEAN DEFAULT TRUE;
+
+-- Agregar campo de fecha de última modificación
+ALTER TABLE diagnostico_tecnico 
+ADD COLUMN IF NOT EXISTS fecha_modificacion TIMESTAMP DEFAULT NOW();
+
+-- Modificar constraint de estado para incluir 'borrador'
+ALTER TABLE diagnostico_tecnico 
+DROP CONSTRAINT IF EXISTS diagnostico_tecnico_estado_check;
+
+ALTER TABLE diagnostico_tecnico 
+ADD CONSTRAINT diagnostico_tecnico_estado_check 
+CHECK (estado IN ('borrador', 'pendiente', 'aprobado', 'rechazado'));
+
+-- =====================================================
+-- 3. MODIFICAR TABLA foto_diagnostico (agregar public_id para Cloudinary)
+-- =====================================================
+
+ALTER TABLE foto_diagnostico 
+ADD COLUMN IF NOT EXISTS public_id TEXT;
+
+-- =====================================================
+-- 4. CREAR TABLA PARA RELACIONAR SERVICIOS CON PRECIOS (JEFE OPERATIVO)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS servicio_precio (
+    id SERIAL PRIMARY KEY,
+    id_servicio INTEGER NOT NULL REFERENCES servicio_tecnico(id) ON DELETE CASCADE,
+    id_jefe_operativo INTEGER REFERENCES usuario(id),
+    precio_estimado DECIMAL(10,2),
+    precio_final DECIMAL(10,2),
+    aprobado_por_jefe_operativo BOOLEAN DEFAULT FALSE,
+    aprobado_en TIMESTAMP,
+    UNIQUE(id_servicio)
+);
+
+-- =====================================================
+-- 5. CREAR TABLA PARA COTIZACIÓN FINAL (enviada al cliente)
+-- =====================================================
+
+-- Esta tabla reemplaza/mejora la existente CotizacionDetalle
+CREATE TABLE IF NOT EXISTS cotizacion_servicio (
+    id SERIAL PRIMARY KEY,
+    id_cotizacion INTEGER NOT NULL REFERENCES cotizacion(id) ON DELETE CASCADE,
+    id_servicio INTEGER NOT NULL REFERENCES servicio_tecnico(id),
+    precio_final DECIMAL(10,2) NOT NULL,
+    aprobado_por_cliente BOOLEAN DEFAULT FALSE,
+    fecha_aprobacion TIMESTAMP,
+    UNIQUE(id_cotizacion, id_servicio)
+);
+
+-- =====================================================
+-- 6. MODIFICAR TABLA observaciondiagnostico (agregar versión)
+-- =====================================================
+
+ALTER TABLE observaciondiagnostico 
+ADD COLUMN IF NOT EXISTS version_diagnostico INTEGER DEFAULT 1;
+
+-- =====================================================
+-- 7. CREAR TRIGGER PARA ACTUALIZAR fecha_modificacion
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION update_diagnostico_modificacion()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.fecha_modificacion = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_update_diagnostico_modificacion ON diagnostico_tecnico;
+CREATE TRIGGER trigger_update_diagnostico_modificacion
+    BEFORE UPDATE ON diagnostico_tecnico
+    FOR EACH ROW
+    EXECUTE FUNCTION update_diagnostico_modificacion();
+
+-- =====================================================
+-- 8. CREAR VISTA PARA VER DIAGNÓSTICO CON SERVICIOS
+-- =====================================================
+
+CREATE OR REPLACE VIEW vista_diagnostico_completo AS
+SELECT 
+    dt.id AS diagnostico_id,
+    dt.id_orden_trabajo,
+    dt.id_tecnico,
+    u.nombre AS tecnico_nombre,
+    dt.informe,
+    dt.url_grabacion_informe,
+    dt.transcripcion_informe,
+    dt.estado,
+    dt.version,
+    dt.es_borrador,
+    dt.fecha_envio,
+    dt.fecha_modificacion,
+    -- Servicios asociados
+    COALESCE(
+        (SELECT json_agg(
+            json_build_object(
+                'id', st.id,
+                'descripcion', st.descripcion,
+                'orden', st.orden,
+                'precio_estimado', sp.precio_estimado,
+                'precio_final', sp.precio_final
+            ) ORDER BY st.orden
+        ) FROM servicio_tecnico st 
+        LEFT JOIN servicio_precio sp ON sp.id_servicio = st.id
+        WHERE st.id_diagnostico_tecnico = dt.id),
+        '[]'::json
+    ) AS servicios,
+    -- Contador de fotos
+    COALESCE(
+        (SELECT COUNT(*) FROM foto_diagnostico fd WHERE fd.id_diagnostico_tecnico = dt.id),
+        0
+    ) AS total_fotos
+FROM diagnostico_tecnico dt
+JOIN usuario u ON u.id = dt.id_tecnico;
+
+-- =====================================================
+-- 9. FUNCIÓN PARA VERIFICAR LÍMITE DE FOTOS
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION verificar_limite_fotos(p_diagnostico_id INTEGER)
+RETURNS TABLE(
+    puede_subir BOOLEAN,
+    fotos_actuales INTEGER,
+    max_fotos INTEGER
+) AS $$
+DECLARE
+    v_max_fotos INTEGER;
+    v_fotos_actuales INTEGER;
+BEGIN
+    -- Obtener límite máximo de fotos del diagnóstico
+    SELECT COALESCE(dt.max_fotos, 2) INTO v_max_fotos
+    FROM diagnostico_tecnico dt
+    WHERE dt.id = p_diagnostico_id;
+    
+    -- Contar fotos actuales
+    SELECT COUNT(*) INTO v_fotos_actuales
+    FROM foto_diagnostico
+    WHERE id_diagnostico_tecnico = p_diagnostico_id;
+    
+    RETURN QUERY SELECT 
+        (v_fotos_actuales < v_max_fotos) AS puede_subir,
+        v_fotos_actuales AS fotos_actuales,
+        v_max_fotos AS max_fotos;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =====================================================
+-- 10. FUNCIÓN PARA NOTIFICAR APROBACIÓN/RECHAZO
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION notificar_tecnico_aprobacion()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Insertar notificación para el técnico cuando cambia el estado
+    IF NEW.estado = 'aprobado' AND OLD.estado != 'aprobado' THEN
+        INSERT INTO notificacion (id_usuario_destino, tipo, mensaje, fecha_envio, leida)
+        SELECT 
+            dt.id_tecnico,
+            'diagnostico_aprobado',
+            '✅ Tu diagnóstico ha sido APROBADO. El Jefe Operativo asignará los precios próximamente.',
+            NOW(),
+            FALSE
+        FROM diagnostico_tecnico dt
+        WHERE dt.id = NEW.id;
+    
+    ELSIF NEW.estado = 'rechazado' AND OLD.estado != 'rechazado' THEN
+        INSERT INTO notificacion (id_usuario_destino, tipo, mensaje, fecha_envio, leida)
+        SELECT 
+            dt.id_tecnico,
+            'diagnostico_rechazado',
+            '❌ Tu diagnóstico ha sido RECHAZADO. Revisa las observaciones del Jefe de Taller y realiza las correcciones necesarias.',
+            NOW(),
+            FALSE
+        FROM diagnostico_tecnico dt
+        WHERE dt.id = NEW.id;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_notificar_tecnico ON diagnostico_tecnico;
+CREATE TRIGGER trigger_notificar_tecnico
+    AFTER UPDATE OF estado ON diagnostico_tecnico
+    FOR EACH ROW
+    EXECUTE FUNCTION notificar_tecnico_aprobacion();
+
+-- =====================================================
+-- 11. FUNCIÓN PARA ACTUALIZAR ESTADO DE ORDEN CUANDO SE APRUEBA DIAGNÓSTICO
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION actualizar_estado_orden_aprobacion()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Cuando el diagnóstico es aprobado, cambiar estado de la orden a 'PendienteAprobacion'
+    -- para que el Jefe Operativo asigne precios
+    IF NEW.estado = 'aprobado' AND OLD.estado != 'aprobado' THEN
+        UPDATE ordentrabajo 
+        SET estado_global = 'PendienteAprobacion'
+        WHERE id = NEW.id_orden_trabajo;
+        
+        -- Notificar al Jefe Operativo que debe asignar precios
+        INSERT INTO notificacion (id_usuario_destino, tipo, mensaje, fecha_envio, leida)
+        SELECT 
+            ot.id_jefe_operativo,
+            'precios_pendientes',
+            '💰 Se requiere asignación de precios para la orden ' || ot.codigo_unico,
+            NOW(),
+            FALSE
+        FROM ordentrabajo ot
+        WHERE ot.id = NEW.id_orden_trabajo;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_actualizar_estado_orden ON diagnostico_tecnico;
+CREATE TRIGGER trigger_actualizar_estado_orden
+    AFTER UPDATE OF estado ON diagnostico_tecnico
+    FOR EACH ROW
+    EXECUTE FUNCTION actualizar_estado_orden_aprobacion();
+
+-- =====================================================
+-- 12. VERIFICAR QUE TODO ESTÉ CORRECTO
+-- =====================================================
+
+-- Verificar tablas creadas
+SELECT table_name 
+FROM information_schema.tables 
+WHERE table_name IN ('servicio_tecnico', 'servicio_precio', 'cotizacion_servicio');
+
+-- Verificar columnas agregadas
+SELECT column_name 
+FROM information_schema.columns 
+WHERE table_name = 'diagnostico_tecnico' 
+AND column_name IN ('max_fotos', 'es_borrador', 'fecha_modificacion');
+
+-- Verificar vista
+SELECT * FROM vista_diagnostico_completo LIMIT 0;
+
+
+
+-- =====================================================
+-- CORRECCIÓN: Cambiar Jefe Operativo por Jefe de Taller
+-- =====================================================
+
+-- 1. Renombrar la columna en servicio_precio
+ALTER TABLE servicio_precio 
+RENAME COLUMN id_jefe_operativo TO id_jefe_taller;
+
+-- =====================================================
+-- NUEVA TABLA: Solicitud de cotización al encargado de repuestos
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS solicitud_cotizacion_repuesto (
+    id SERIAL PRIMARY KEY,
+    id_orden_trabajo INTEGER NOT NULL REFERENCES ordentrabajo(id),
+    id_servicio INTEGER NOT NULL REFERENCES servicio_tecnico(id),
+    id_jefe_taller INTEGER NOT NULL REFERENCES usuario(id),
+    id_encargado_repuestos INTEGER REFERENCES usuario(id),
+    descripcion_pieza TEXT NOT NULL,  -- Qué pieza/herramienta/líquido necesita
+    cantidad INTEGER DEFAULT 1,
+    estado VARCHAR(50) DEFAULT 'pendiente', -- pendiente, cotizado, rechazado
+    precio_cotizado DECIMAL(10,2),
+    proveedor_info TEXT,
+    fecha_solicitud TIMESTAMP DEFAULT NOW(),
+    fecha_respuesta TIMESTAMP,
+    observacion_jefe_taller TEXT,
+    respuesta_encargado TEXT
+);
+
+
+-- =====================================================
+-- CORRECCIÓN: Crear índices solo si no existen
+-- =====================================================
+
+-- Eliminar índices si existen (opcional, si quieres recrearlos)
+DROP INDEX IF EXISTS idx_solicitud_orden;
+DROP INDEX IF EXISTS idx_solicitud_estado;
+
+-- Crear índices con nombres únicos y verificación
+CREATE INDEX IF NOT EXISTS idx_solicitud_repuesto_orden 
+ON solicitud_cotizacion_repuesto(id_orden_trabajo);
+
+CREATE INDEX IF NOT EXISTS idx_solicitud_repuesto_estado 
+ON solicitud_cotizacion_repuesto(estado);
+
+
+
+
+-- =====================================================
+-- CORRECCIÓN: Recrear la vista completamente
+-- =====================================================
+
+-- Eliminar la vista si existe
+DROP VIEW IF EXISTS vista_diagnostico_completo CASCADE;
+
+-- Recrear la vista con la nueva estructura
+CREATE OR REPLACE VIEW vista_diagnostico_completo AS
+SELECT 
+    dt.id AS diagnostico_id,
+    dt.id_orden_trabajo,
+    dt.id_tecnico,
+    u.nombre AS tecnico_nombre,
+    dt.informe,
+    dt.url_grabacion_informe,
+    dt.transcripcion_informe,
+    dt.estado,
+    dt.version,
+    dt.es_borrador,
+    dt.fecha_envio,
+    dt.fecha_modificacion,
+    -- Servicios asociados con sus precios
+    COALESCE(
+        (SELECT json_agg(
+            json_build_object(
+                'id', st.id,
+                'descripcion', st.descripcion,
+                'orden', st.orden,
+                'precio_estimado', sp.precio_estimado,
+                'precio_final', sp.precio_final,
+                'tiene_solicitud_repuesto', EXISTS(
+                    SELECT 1 FROM solicitud_cotizacion_repuesto scr 
+                    WHERE scr.id_servicio = st.id
+                )
+            ) ORDER BY st.orden
+        ) FROM servicio_tecnico st 
+        LEFT JOIN servicio_precio sp ON sp.id_servicio = st.id
+        WHERE st.id_diagnostico_tecnico = dt.id),
+        '[]'::json
+    ) AS servicios,
+    -- Solicitudes de repuestos activas
+    COALESCE(
+        (SELECT json_agg(
+            json_build_object(
+                'id', scr.id,
+                'descripcion_pieza', scr.descripcion_pieza,
+                'cantidad', scr.cantidad,
+                'estado', scr.estado,
+                'precio_cotizado', scr.precio_cotizado,
+                'fecha_solicitud', scr.fecha_solicitud
+            )
+        ) FROM solicitud_cotizacion_repuesto scr
+        WHERE scr.id_orden_trabajo = dt.id_orden_trabajo AND scr.estado != 'rechazado'),
+        '[]'::json
+    ) AS solicitudes_repuestos,
+    -- Contador de fotos
+    COALESCE(
+        (SELECT COUNT(*) FROM foto_diagnostico fd WHERE fd.id_diagnostico_tecnico = dt.id),
+        0
+    ) AS total_fotos
+FROM diagnostico_tecnico dt
+JOIN usuario u ON u.id = dt.id_tecnico;
+
+-- Verificar que la vista se creó correctamente
+SELECT * FROM vista_diagnostico_completo LIMIT 0;

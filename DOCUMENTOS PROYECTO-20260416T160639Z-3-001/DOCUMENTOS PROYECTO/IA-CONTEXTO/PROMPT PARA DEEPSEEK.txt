@@ -1,0 +1,197 @@
+Actúa como arquitecto de software senior especializado en sistemas ERP y desarrollo full stack.
+
+Estoy desarrollando un SISTEMA DE GESTIÓN INTEGRAL PARA UN TALLER MECÁNICO llamado FURIA MOTOR COMPANY SRL como proyecto de grado universitario.
+
+El sistema debe cumplir una estructura modular por roles y debe ser escalable, seguro y profesional.
+
+────────────────────────────
+📌 CONTEXTO GENERAL
+────────────────────────────
+
+El sistema controla todo el proceso del taller:
+
+1. Recepción del vehículo
+2. Diagnóstico inicial
+3. Diagnóstico técnico
+4. Cotización
+5. Aprobación del cliente
+6. Reparación
+7. Control de calidad
+8. Entrega
+9. Control financiero
+10. Inventario
+
+El sistema debe ser web y adaptable a móvil.
+Debe manejar autenticación y permisos por rol.
+
+────────────────────────────
+📌 ROLES DEL SISTEMA (6)
+────────────────────────────
+
+1. Jefe Operativo
+2. Jefe de Taller
+3. Técnico/Mecánico
+4. Encargado de Repuestos
+5. Administrador General
+6. Cliente
+
+Cada rol debe ver solo sus módulos correspondientes.
+
+────────────────────────────
+📌 ESTRUCTURA DETALLADA POR ROL
+────────────────────────────
+
+🔵 1) JEFE OPERATIVO
+Pestañas:
+- Dashboard
+- Recepción de Vehículos
+- Cotizaciones
+- Vehículos en Proceso
+- Control de Salidas
+- Rendición Diaria
+- Comunicados
+- Historial
+- Perfil
+
+Funciones clave:
+- Registro cliente
+- Registro vehículo
+- Subida de fotos (6 vistas)
+- Grabación de voz con transcripción
+- Generación código único
+- Gestión de cotización
+- Aplicación automática regla:
+   - Si no acepta ningún servicio → cobrar Bs. 200
+   - Si acepta al menos uno → diagnóstico gratuito
+- Rendición diaria
+
+────────────────────────────
+
+🟣 2) JEFE DE TALLER
+Pestañas:
+- Dashboard Técnico
+- Órdenes de Trabajo
+- Calendario y Bahías (12 bahías)
+- Diagnósticos
+- Control de Calidad
+- Historial
+- Perfil
+
+Funciones clave:
+- Generar orden de trabajo
+- Asignar máximo 2 técnicos
+- Revisar diagnóstico técnico
+- Aprobar/Rechazar
+- Planificar horas
+- Supervisar carga de trabajo
+- Control de calidad final
+
+────────────────────────────
+
+🟢 3) TÉCNICO
+Pestañas:
+- Mis Vehículos (máx 2 activos)
+- Diagnóstico
+- Avance de Trabajo
+- Historial
+- Perfil
+
+Funciones clave:
+- Subir fotos diagnóstico
+- Grabar informe técnico
+- Cambiar estado:
+   - En proceso
+   - En pausa (motivo obligatorio)
+   - Finalizado
+- Notificación automática cada 3h si está en pausa
+
+────────────────────────────
+
+🟡 4) ENCARGADO DE REPUESTOS
+Pestañas:
+- Dashboard Inventario
+- Inventario
+- Compras
+- Proveedores
+- Herramientas
+- Rendición Diaria
+- Historial
+
+Funciones clave:
+- Registrar compra
+- Subir comprobante
+- Control de stock
+- Asociar repuestos a orden
+- Registro proveedores con GPS
+- Rendición diaria al Jefe Operativo
+
+────────────────────────────
+
+🔴 5) ADMINISTRADOR GENERAL
+Pestañas:
+- Dashboard General
+- Finanzas
+- Reportes
+- Rendiciones
+- Supervisión Operativa
+- Usuarios y Roles
+- Historial Global
+
+Funciones clave:
+- Ver ingresos
+- Ver egresos
+- Ganancia neta
+- Gráficos financieros
+- Reportes PDF
+- Supervisión global
+
+────────────────────────────
+
+🟠 6) CLIENTE
+Pestañas:
+- Mis Vehículos
+- Diagnóstico
+- Cotización
+- Seguimiento
+- Historial
+- Recomendaciones
+- Perfil
+
+Funciones clave:
+- Aprobar servicios seleccionados
+- Rechazar servicios
+- Ver fotos y diagnóstico
+- Seguimiento en tiempo real
+
+────────────────────────────
+📌 ESTADOS DEL SISTEMA
+────────────────────────────
+
+Estados de orden:
+- Pendiente
+- En proceso
+- En pausa
+- Finalizado
+- Entregado
+- Rechazado
+
+Cada estado debe afectar permisos y visibilidad.
+
+────────────────────────────
+📌 LO QUE NECESITO QUE GENERES
+────────────────────────────
+
+1. Arquitectura del sistema (backend + frontend)
+2. Modelo de base de datos optimizado
+3. Diagrama lógico de módulos
+4. Matriz de permisos por rol
+5. Estructura de carpetas profesional
+6. Recomendación de tecnologías
+7. API REST estructurada por módulos
+8. Flujo completo de cada proceso
+9. Validaciones críticas del sistema
+10. Buenas prácticas de seguridad
+
+Responde de forma técnica, estructurada y profesional.
+Evita respuestas genéricas.
+Propón mejoras si detectas optimizaciones posibles.

@@ -1,0 +1,1214 @@
+-- =====================================================
+-- SCRIPT PARA CREAR BASE DE DATOS EN POSTGRESQL (SUPABASE)
+-- BASADO EN EL DIAGRAMA ENTIDAD-RELACIÓN PROPORCIONADO
+-- CON CORRECCIONES:
+-- 1. id_filtro agregado a Proveedor como FK
+-- 2. url_foto_lateral → url_lateral_izquierda + url_lateral_derecha en Recepcion
+-- 3. url_observacion_obs → url_grabacion_observacion en ObservacionDiagnostico
+-- =====================================================
+
+-- =====================================================
+-- TABLAS PRINCIPALES (SIN DEPENDENCIAS EXTERNAS)
+-- =====================================================
+
+-- Tabla Rol
+CREATE TABLE Rol (
+    id SERIAL PRIMARY KEY,
+    nombre_rol VARCHAR(100) NOT NULL,
+    descripcion TEXT
+);
+
+-- Tabla Proveedor
+CREATE TABLE Proveedor (
+    id SERIAL PRIMARY KEY,
+    id_filtro INTEGER,
+    nombre VARCHAR(200) NOT NULL,
+    telefono VARCHAR(50),
+    ubicacion_gps VARCHAR(255),
+    propietario VARCHAR(200)
+);
+
+-- Tabla Cliente
+CREATE TABLE Cliente (
+    id SERIAL PRIMARY KEY,
+    id_usuario INTEGER,
+    tipo_documento VARCHAR(50),
+    numero_documento VARCHAR(50) UNIQUE
+);
+
+-- Tabla Usuario (depende de Rol)
+CREATE TABLE Usuario (
+    id SERIAL PRIMARY KEY,
+    id_rol INTEGER NOT NULL,
+    nombre VARCHAR(200) NOT NULL,
+    contacto VARCHAR(100),
+    ubicacion VARCHAR(255),
+    contrasenia VARCHAR(255) NOT NULL,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_rol) REFERENCES Rol(id)
+);
+
+-- Tabla Filtro_herramienta
+CREATE TABLE Filtro_herramienta (
+    id SERIAL PRIMARY KEY,
+    nombre_filtro VARCHAR(100) NOT NULL,
+    descripcion TEXT
+);
+
+-- Tabla Repuesto
+CREATE TABLE Repuesto (
+    id SERIAL PRIMARY KEY,
+    codigo VARCHAR(50) UNIQUE NOT NULL,
+    nombre VARCHAR(200) NOT NULL,
+    descripcion TEXT,
+    cantidad_stock INTEGER DEFAULT 0,
+    precio_unitario DECIMAL(10, 2)
+);
+
+-- Tabla Servicio
+CREATE TABLE Servicio (
+    id SERIAL PRIMARY KEY,
+    id_diagnostico_tecnico INTEGER,
+    descripcion TEXT NOT NULL,
+    precio_estimado DECIMAL(10, 2),
+    precio_final DECIMAL(10, 2)
+);
+
+-- =====================================================
+-- TABLAS CON DEPENDENCIAS
+-- =====================================================
+
+-- Tabla Vehiculo (depende de Cliente)
+CREATE TABLE Vehiculo (
+    id SERIAL PRIMARY KEY,
+    id_cliente INTEGER NOT NULL,
+    placa VARCHAR(20) UNIQUE NOT NULL,
+    marca VARCHAR(100),
+    modelo VARCHAR(100),
+    anio INTEGER,
+    kilometraje INTEGER,
+    FOREIGN KEY (id_cliente) REFERENCES Cliente(id)
+);
+
+-- Tabla CarritoHerramientas (depende de Usuario como técnico)
+CREATE TABLE CarritoHerramientas (
+    id SERIAL PRIMARY KEY,
+    id_tecnico INTEGER NOT NULL,
+    nombre VARCHAR(200) NOT NULL,
+    codigo VARCHAR(50) UNIQUE NOT NULL,
+    estado VARCHAR(50),
+    FOREIGN KEY (id_tecnico) REFERENCES Usuario(id)
+);
+
+-- Tabla Herramienta (depende de CarritoHerramientas)
+CREATE TABLE Herramienta (
+    id SERIAL PRIMARY KEY,
+    id_carritoherramienta INTEGER NOT NULL,
+    nombre VARCHAR(200) NOT NULL,
+    descripcion VARCHAR(255),
+    tipo VARCHAR(100),
+    marca VARCHAR(100),
+    FOREIGN KEY (id_carritoherramienta) REFERENCES CarritoHerramientas(id)
+);
+
+-- Tabla ControlCarrito (depende de CarritoHerramientas)
+CREATE TABLE ControlCarrito (
+    id SERIAL PRIMARY KEY,
+    id_carritoherramienta INTEGER NOT NULL,
+    fecha_control TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    estado_encontrado VARCHAR(100),
+    observacion TEXT,
+    url_evidencia TEXT,
+    FOREIGN KEY (id_carritoherramienta) REFERENCES CarritoHerramientas(id)
+);
+
+-- Tabla ordenTrabajo (depende de Vehiculo y Usuario)
+CREATE TABLE ordenTrabajo (
+    id SERIAL PRIMARY KEY,
+    codigo_unico VARCHAR(100) UNIQUE NOT NULL,
+    id_vehiculo INTEGER NOT NULL,
+    id_jefe_operativo INTEGER NOT NULL,
+    fecha_ingreso TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_salida TIMESTAMP,
+    estado_global VARCHAR(50) DEFAULT 'EnRecepcion',
+    FOREIGN KEY (id_vehiculo) REFERENCES Vehiculo(id),
+    FOREIGN KEY (id_jefe_operativo) REFERENCES Usuario(id)
+);
+
+-- Tabla Recepcion (depende de ordenTrabajo) - CORREGIDA
+CREATE TABLE Recepcion (
+    id SERIAL PRIMARY KEY,
+    id_orden_trabajo INTEGER NOT NULL UNIQUE,
+    url_lateral_izquierda TEXT,
+    url_lateral_derecha TEXT,
+    url_foto_frontal TEXT,
+    url_foto_trasera TEXT,
+    url_foto_superior TEXT,
+    url_foto_inferior TEXT,
+    url_foto_tablero TEXT,
+    url_grabacion_problema TEXT,
+    transcripcion_problema TEXT,
+    FOREIGN KEY (id_orden_trabajo) REFERENCES ordenTrabajo(id)
+);
+
+-- Tabla Diagnostico_tecnico (depende de ordenTrabajo y Usuario)
+CREATE TABLE Diagnostico_tecnico (
+    id SERIAL PRIMARY KEY,
+    id_orden_trabajo INTEGER NOT NULL,
+    id_tecnico INTEGER NOT NULL,
+    informe TEXT,
+    url_grabacion_informe TEXT,
+    transcripcion_informe TEXT,
+    estado VARCHAR(50),
+    fecha_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    version INTEGER DEFAULT 1,
+    FOREIGN KEY (id_orden_trabajo) REFERENCES ordenTrabajo(id),
+    FOREIGN KEY (id_tecnico) REFERENCES Usuario(id)
+);
+
+-- Tabla Foto_diagnostico (depende de Diagnostico_tecnico)
+CREATE TABLE Foto_diagnostico (
+    id SERIAL PRIMARY KEY,
+    id_diagnostico_tecnico INTEGER NOT NULL,
+    url_foto TEXT NOT NULL,
+    descripcion_tecnico VARCHAR(255),
+    FOREIGN KEY (id_diagnostico_tecnico) REFERENCES Diagnostico_tecnico(id)
+);
+
+-- Tabla DiagnostigoInicial (depende de ordenTrabajo y Usuario)
+CREATE TABLE DiagnostigoInicial (
+    id SERIAL PRIMARY KEY,
+    id_orden_trabajo INTEGER NOT NULL,
+    id_jefe_taller INTEGER NOT NULL,
+    diagnostigo TEXT NOT NULL,
+    fecha_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_orden_trabajo) REFERENCES ordenTrabajo(id),
+    FOREIGN KEY (id_jefe_taller) REFERENCES Usuario(id)
+);
+
+-- Tabla ObservacionDiagnostico (depende de Diagnostico_tecnico y Usuario) - CORREGIDA
+CREATE TABLE ObservacionDiagnostico (
+    id SERIAL PRIMARY KEY,
+    id_diagnostico_tecnico INTEGER NOT NULL,
+    id_jefe_taller INTEGER NOT NULL,
+    observacion TEXT NOT NULL,
+    url_grabacion_observacion TEXT,
+    transcripcion_obs TEXT,
+    fecha_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_diagnostico_tecnico) REFERENCES Diagnostico_tecnico(id),
+    FOREIGN KEY (id_jefe_taller) REFERENCES Usuario(id)
+);
+
+-- Tabla AsignacionTecnico (depende de ordenTrabajo y Usuario)
+CREATE TABLE AsignacionTecnico (
+    id SERIAL PRIMARY KEY,
+    id_orden_trabajo INTEGER NOT NULL,
+    id_tecnico INTEGER NOT NULL,
+    fecha_hora_inicio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_hora_final TIMESTAMP,
+    FOREIGN KEY (id_orden_trabajo) REFERENCES ordenTrabajo(id),
+    FOREIGN KEY (id_tecnico) REFERENCES Usuario(id)
+);
+
+-- Tabla AvanceTrabajo (depende de ordenTrabajo y Usuario)
+CREATE TABLE AvanceTrabajo (
+    id SERIAL PRIMARY KEY,
+    id_orden_trabajo INTEGER NOT NULL,
+    id_tecnico INTEGER NOT NULL,
+    fecha_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    descripcion TEXT,
+    tipo_avance VARCHAR(100),
+    estado_asociado VARCHAR(100),
+    FOREIGN KEY (id_orden_trabajo) REFERENCES ordenTrabajo(id),
+    FOREIGN KEY (id_tecnico) REFERENCES Usuario(id)
+);
+
+-- Tabla Foto_avance (depende de AvanceTrabajo)
+CREATE TABLE Foto_avance (
+    id SERIAL PRIMARY KEY,
+    id_avance INTEGER NOT NULL,
+    url_foto TEXT NOT NULL,
+    descripcion_tecnico VARCHAR(255),
+    fecha_subida TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_avance) REFERENCES AvanceTrabajo(id)
+);
+
+-- Tabla SeguimientoOrden (depende de ordenTrabajo)
+CREATE TABLE SeguimientoOrden (
+    id SERIAL PRIMARY KEY,
+    id_orden_trabajo INTEGER NOT NULL,
+    estado VARCHAR(50),
+    motivo_pausa TEXT,
+    fecha_hora_cambio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notificaciones_enviadas INTEGER DEFAULT 0,
+    FOREIGN KEY (id_orden_trabajo) REFERENCES ordenTrabajo(id)
+);
+
+-- Tabla Planificacion (depende de ordenTrabajo)
+CREATE TABLE Planificacion (
+    id SERIAL PRIMARY KEY,
+    id_orden_trabajo INTEGER NOT NULL UNIQUE,
+    bahia_asignada INTEGER,
+    horas_estimadas DECIMAL(5, 2),
+    fecha_hora_inicio_estimado TIMESTAMP,
+    fecha_hora_fin_estimado TIMESTAMP,
+    fecha_hora_inicio_real TIMESTAMP,
+    fecha_hora_fin_real TIMESTAMP,
+    FOREIGN KEY (id_orden_trabajo) REFERENCES ordenTrabajo(id)
+);
+
+-- Tabla Cotizacion (depende de ordenTrabajo)
+CREATE TABLE Cotizacion (
+    id SERIAL PRIMARY KEY,
+    id_orden_trabajo INTEGER NOT NULL,
+    fecha_generacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    estado VARCHAR(50) DEFAULT 'Enviada',
+    FOREIGN KEY (id_orden_trabajo) REFERENCES ordenTrabajo(id)
+);
+
+-- Tabla CotizacionDetalle (depende de Cotizacion y Servicio)
+CREATE TABLE CotizacionDetalle (
+    id SERIAL PRIMARY KEY,
+    id_cotizacion INTEGER NOT NULL,
+    id_servicio INTEGER,
+    servicio_descripcion TEXT,
+    precio DECIMAL(10, 2) NOT NULL,
+    aprobado_por_cliente BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (id_cotizacion) REFERENCES Cotizacion(id),
+    FOREIGN KEY (id_servicio) REFERENCES Servicio(id)
+);
+
+-- Tabla CompraRepuesto (depende de Proveedor y Usuario)
+CREATE TABLE CompraRepuesto (
+    id SERIAL PRIMARY KEY,
+    id_proveedor INTEGER NOT NULL,
+    id_encargado_repuestos INTEGER NOT NULL,
+    fecha_compra TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    total DECIMAL(10, 2),
+    url_foto_comprobante TEXT,
+    FOREIGN KEY (id_proveedor) REFERENCES Proveedor(id),
+    FOREIGN KEY (id_encargado_repuestos) REFERENCES Usuario(id)
+);
+
+-- Tabla CompraDetalle (depende de CompraRepuesto y Repuesto)
+CREATE TABLE CompraDetalle (
+    id SERIAL PRIMARY KEY,
+    id_compra INTEGER NOT NULL,
+    id_repuesto INTEGER NOT NULL,
+    cantidad INTEGER NOT NULL,
+    precio_compra DECIMAL(10, 2) NOT NULL,
+    url_foto_repuesto TEXT,
+    FOREIGN KEY (id_compra) REFERENCES CompraRepuesto(id),
+    FOREIGN KEY (id_repuesto) REFERENCES Repuesto(id)
+);
+
+-- Tabla UsoRepuesto (depende de ordenTrabajo y Repuesto)
+CREATE TABLE UsoRepuesto (
+    id SERIAL PRIMARY KEY,
+    id_orden_trabajo INTEGER NOT NULL,
+    id_repuesto INTEGER NOT NULL,
+    cantidad INTEGER NOT NULL,
+    fecha_uso TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_orden_trabajo) REFERENCES ordenTrabajo(id),
+    FOREIGN KEY (id_repuesto) REFERENCES Repuesto(id)
+);
+
+-- Tabla TransaccionFinanciera (depende de ordenTrabajo, CompraRepuesto y Usuario)
+CREATE TABLE TransaccionFinanciera (
+    id SERIAL PRIMARY KEY,
+    id_orden_trabajo INTEGER,
+    id_compra INTEGER,
+    id_usuario_registra INTEGER NOT NULL,
+    tipo VARCHAR(50) NOT NULL,
+    monto DECIMAL(10, 2) NOT NULL,
+    descripcion TEXT,
+    fecha_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_orden_trabajo) REFERENCES ordenTrabajo(id),
+    FOREIGN KEY (id_compra) REFERENCES CompraRepuesto(id),
+    FOREIGN KEY (id_usuario_registra) REFERENCES Usuario(id)
+);
+
+-- Tabla AgendaCliente (depende de Cliente)
+CREATE TABLE AgendaCliente (
+    id SERIAL PRIMARY KEY,
+    id_cliente INTEGER NOT NULL,
+    fecha_solicitud TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_agendada TIMESTAMP NOT NULL,
+    descripcion_problema TEXT,
+    estado VARCHAR(50) DEFAULT 'Pendiente',
+    FOREIGN KEY (id_cliente) REFERENCES Cliente(id)
+);
+
+-- Tabla Notificacion (depende de Usuario)
+CREATE TABLE Notificacion (
+    id SERIAL PRIMARY KEY,
+    id_usuario_destino INTEGER NOT NULL,
+    tipo VARCHAR(100),
+    mensaje TEXT,
+    fecha_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    leida BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (id_usuario_destino) REFERENCES Usuario(id)
+);
+
+-- Tabla RendicionDiaria (depende de Usuario)
+CREATE TABLE RendicionDiaria (
+    id SERIAL PRIMARY KEY,
+    id_encargado_repuestos INTEGER NOT NULL,
+    id_jefe_operativo INTEGER NOT NULL,
+    fecha DATE DEFAULT CURRENT_DATE,
+    monto_total DECIMAL(10, 2),
+    observaciones TEXT,
+    FOREIGN KEY (id_encargado_repuestos) REFERENCES Usuario(id),
+    FOREIGN KEY (id_jefe_operativo) REFERENCES Usuario(id)
+);
+
+-- Tabla RendicionSemanal (depende de Usuario)
+CREATE TABLE RendicionSemanal (
+    id SERIAL PRIMARY KEY,
+    id_admin_general INTEGER NOT NULL,
+    id_jefe_operativo INTEGER NOT NULL,
+    fecha_inicio DATE NOT NULL,
+    fecha_fin DATE NOT NULL,
+    monto_total DECIMAL(10, 2),
+    observaciones TEXT,
+    FOREIGN KEY (id_admin_general) REFERENCES Usuario(id),
+    FOREIGN KEY (id_jefe_operativo) REFERENCES Usuario(id)
+);
+
+-- =====================================================
+-- ACTUALIZACIÓN DE CLAVES FORÁNEAS ADICIONALES
+-- =====================================================
+
+-- Actualizar clave foránea de Cliente que apunta a Usuario
+ALTER TABLE Cliente
+ADD CONSTRAINT fk_cliente_usuario
+FOREIGN KEY (id_usuario) REFERENCES Usuario(id);
+
+-- Actualizar clave foránea de Servicio que apunta a Diagnostico_tecnico
+ALTER TABLE Servicio
+ADD CONSTRAINT fk_servicio_diagnostico
+FOREIGN KEY (id_diagnostico_tecnico) REFERENCES Diagnostico_tecnico(id);
+
+-- Actualizar clave foránea de Proveedor que apunta a Filtro_herramienta
+ALTER TABLE Proveedor
+ADD CONSTRAINT fk_proveedor_filtro
+FOREIGN KEY (id_filtro) REFERENCES Filtro_herramienta(id);
+
+-- =====================================================
+-- ÍNDICES RECOMENDADOS PARA MEJORAR RENDIMIENTO
+-- =====================================================
+
+CREATE INDEX idx_usuario_rol ON Usuario(id_rol);
+CREATE INDEX idx_vehiculo_cliente ON Vehiculo(id_cliente);
+CREATE INDEX idx_vehiculo_placa ON Vehiculo(placa);
+CREATE INDEX idx_ordentrabajo_vehiculo ON ordenTrabajo(id_vehiculo);
+CREATE INDEX idx_ordentrabajo_estado ON ordenTrabajo(estado_global);
+CREATE INDEX idx_ordentrabajo_codigo ON ordenTrabajo(codigo_unico);
+CREATE INDEX idx_diagnostico_orden ON Diagnostico_tecnico(id_orden_trabajo);
+CREATE INDEX idx_asignacion_tecnico ON AsignacionTecnico(id_tecnico);
+CREATE INDEX idx_avance_orden ON AvanceTrabajo(id_orden_trabajo);
+CREATE INDEX idx_notificacion_usuario ON Notificacion(id_usuario_destino);
+CREATE INDEX idx_notificacion_leida ON Notificacion(leida);
+CREATE INDEX idx_transaccion_orden ON TransaccionFinanciera(id_orden_trabajo);
+CREATE INDEX idx_compra_proveedor ON CompraRepuesto(id_proveedor);
+CREATE INDEX idx_repuesto_codigo ON Repuesto(codigo);
+CREATE INDEX idx_cliente_documento ON Cliente(numero_documento);
+CREATE INDEX idx_proveedor_filtro ON Proveedor(id_filtro);
+
+-- =====================================================
+-- COMENTARIOS PARA DOCUMENTACIÓN
+-- =====================================================
+
+COMMENT ON TABLE Rol IS 'Tabla de roles de usuario en el sistema';
+COMMENT ON TABLE Usuario IS 'Usuarios del sistema con diferentes roles';
+COMMENT ON TABLE ordenTrabajo IS 'Órdenes de trabajo principales';
+COMMENT ON TABLE Diagnostico_tecnico IS 'Diagnósticos realizados por técnicos';
+COMMENT ON TABLE Cliente IS 'Clientes del taller';
+COMMENT ON TABLE Proveedor IS 'Proveedores de repuestos con filtro asociado';
+COMMENT ON COLUMN Proveedor.id_filtro IS 'Filtro de herramientas asociado al proveedor';
+COMMENT ON COLUMN Recepcion.url_lateral_izquierda IS 'Foto del lado izquierdo del vehículo';
+COMMENT ON COLUMN Recepcion.url_lateral_derecha IS 'Foto del lado derecho del vehículo';
+COMMENT ON COLUMN ObservacionDiagnostico.url_grabacion_observacion IS 'Grabación de la observación del diagnóstico';
+
+
+
+
+
+CAMBIOS EN EL SCRIPT 
+
+
+
+-- =====================================================
+-- SCRIPT PARA AGREGAR CAMPO EMAIL A TABLAS EXISTENTES
+-- Y CREAR TABLA DE CÓDIGOS DE VERIFICACIÓN
+-- =====================================================
+
+-- 1. Agregar columna email a la tabla Usuario (para personal)
+ALTER TABLE Usuario 
+ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE;
+
+-- 2. Agregar columna email a la tabla Cliente
+ALTER TABLE Cliente 
+ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE;
+
+-- 3. Crear tabla para códigos de verificación (recuperación de contraseña)
+CREATE TABLE IF NOT EXISTS CodigoVerificacion (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    codigo VARCHAR(6) NOT NULL,
+    tipo VARCHAR(50) NOT NULL, -- 'reset_password', 'register_confirm'
+    expira TIMESTAMP NOT NULL,
+    usado BOOLEAN DEFAULT FALSE,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4. Crear índices para mejorar rendimiento
+CREATE INDEX IF NOT EXISTS idx_codigo_verificacion_email ON CodigoVerificacion(email);
+CREATE INDEX IF NOT EXISTS idx_codigo_verificacion_codigo ON CodigoVerificacion(codigo);
+CREATE INDEX IF NOT EXISTS idx_usuario_email ON Usuario(email);
+CREATE INDEX IF NOT EXISTS idx_cliente_email ON Cliente(email);
+
+-- 5. Agregar comentarios para documentación
+COMMENT ON COLUMN Usuario.email IS 'Correo electrónico del usuario personal';
+COMMENT ON COLUMN Cliente.email IS 'Correo electrónico del cliente';
+COMMENT ON TABLE CodigoVerificacion IS 'Códigos de verificación para recuperación de contraseña y registro';
+COMMENT ON COLUMN CodigoVerificacion.tipo IS 'Tipo de código: reset_password, register_confirm';
+COMMENT ON COLUMN CodigoVerificacion.expira IS 'Fecha y hora de expiración del código';
+
+-- =====================================================
+-- OPCIONAL: ACTUALIZAR DATOS EXISTENTES CON EMAILS DE PRUEBA
+-- (SOLO PARA PRUEBAS - ELIMINAR EN PRODUCCIÓN)
+-- =====================================================
+
+-- Actualizar usuarios con emails de prueba
+UPDATE Usuario 
+SET email = LOWER(REPLACE(nombre, ' ', '.')) || '@furia.com'
+WHERE email IS NULL;
+
+-- Actualizar clientes con emails de prueba
+UPDATE Cliente 
+SET email = 'cliente' || id || '@furia.com'
+WHERE email IS NULL;
+
+-- =====================================================
+-- CREAR TABLA DE NOTIFICACIONES ADMIN (OPCIONAL)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS NotificacionAdmin (
+    id SERIAL PRIMARY KEY,
+    id_admin_general INTEGER NOT NULL,
+    tipo VARCHAR(50) NOT NULL, -- 'nuevo_cliente', 'recuperacion_password', 'reporte'
+    titulo VARCHAR(200) NOT NULL,
+    mensaje TEXT,
+    leida BOOLEAN DEFAULT FALSE,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_admin_general) REFERENCES Usuario(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_notificacion_admin ON NotificacionAdmin(id_admin_general);
+CREATE INDEX IF NOT EXISTS idx_notificacion_admin_leida ON NotificacionAdmin(leida);
+
+COMMENT ON TABLE NotificacionAdmin IS 'Notificaciones para el administrador general sobre actividades del sistema';
+
+
+-- =====================================================
+-- TABLA PARA SOLICITUDES DE REGISTRO DE PERSONAL
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS SolicitudRegistroPersonal (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(200) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    numero_documento VARCHAR(50) NOT NULL UNIQUE,
+    telefono VARCHAR(50),
+    direccion TEXT,
+    id_rol_solicitado INTEGER NOT NULL,
+    estado VARCHAR(50) DEFAULT 'pendiente', -- pendiente, aprobado, rechazado
+    fecha_solicitud TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_respuesta TIMESTAMP,
+    id_admin_responde INTEGER,
+    observacion_admin TEXT,
+    token_aprobacion VARCHAR(100),
+    FOREIGN KEY (id_rol_solicitado) REFERENCES Rol(id),
+    FOREIGN KEY (id_admin_responde) REFERENCES Usuario(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_solicitud_email ON SolicitudRegistroPersonal(email);
+CREATE INDEX IF NOT EXISTS idx_solicitud_documento ON SolicitudRegistroPersonal(numero_documento);
+CREATE INDEX IF NOT EXISTS idx_solicitud_estado ON SolicitudRegistroPersonal(estado);
+
+COMMENT ON TABLE SolicitudRegistroPersonal IS 'Solicitudes de registro de nuevo personal';
+COMMENT ON COLUMN SolicitudRegistroPersonal.token_aprobacion IS 'Token único para aprobación por email';
+
+
+-- =====================================================
+-- ACTUALIZAR TABLA SOLICITUDREGISTROPERSONAL
+-- =====================================================
+
+-- Agregar columna contrasenia_temporal si no existe
+ALTER TABLE SolicitudRegistroPersonal 
+ADD COLUMN IF NOT EXISTS contrasenia_temporal VARCHAR(255);
+
+-- Agregar columna observacion_admin si no existe
+ALTER TABLE SolicitudRegistroPersonal 
+ADD COLUMN IF NOT EXISTS observacion_admin TEXT;
+
+-- Actualizar la estructura completa de la tabla
+COMMENT ON COLUMN SolicitudRegistroPersonal.contrasenia_temporal IS 'Contraseña temporal hasheada del solicitante';
+COMMENT ON COLUMN SolicitudRegistroPersonal.observacion_admin IS 'Observaciones adicionales del solicitante';
+
+-- Verificar la estructura actual de la tabla
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'solicitudregistropersonal'
+ORDER BY ordinal_position;
+
+
+-- Verificar las columnas de la tabla
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns 
+WHERE table_name = 'solicitudregistropersonal'
+ORDER BY ordinal_position;
+
+-- Si falta la columna contrasenia_temporal, agregarla
+ALTER TABLE SolicitudRegistroPersonal 
+ADD COLUMN IF NOT EXISTS contrasenia_temporal VARCHAR(255);
+
+-- También agregar numero_documento si falta (veo que ya la tienes)
+-- Verificar que todas las columnas necesarias existan
+
+
+
+-- Agregar columna datos_extra a la tabla codigoverificacion
+ALTER TABLE CodigoVerificacion 
+ADD COLUMN IF NOT EXISTS datos_extra JSONB;
+
+-- Verificar la estructura
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'codigoverificacion'
+ORDER BY ordinal_position;
+
+
+
+-- Tabla para comunicados
+CREATE TABLE IF NOT EXISTS comunicado (
+    id SERIAL PRIMARY KEY,
+    titulo VARCHAR(255) NOT NULL,
+    contenido TEXT NOT NULL,
+    prioridad VARCHAR(50) DEFAULT 'normal',
+    estado VARCHAR(50) DEFAULT 'activo',
+    destinatarios JSONB DEFAULT '[]',
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    creado_por INTEGER,
+    FOREIGN KEY (creado_por) REFERENCES Usuario(id)
+);
+
+-- Índices para mejorar rendimiento
+CREATE INDEX IF NOT EXISTS idx_comunicado_estado ON comunicado(estado);
+CREATE INDEX IF NOT EXISTS idx_comunicado_prioridad ON comunicado(prioridad);
+CREATE INDEX IF NOT EXISTS idx_comunicado_fecha ON comunicado(fecha_creacion DESC);
+CREATE INDEX IF NOT EXISTS idx_comunicado_destinatarios ON comunicado USING gin (destinatarios);
+
+-- Comentarios
+COMMENT ON TABLE comunicado IS 'Comunicados internos del taller';
+COMMENT ON COLUMN comunicado.prioridad IS 'Prioridad del comunicado: normal, importante, urgente';
+COMMENT ON COLUMN comunicado.estado IS 'Estado del comunicado: activo, inactivo';
+COMMENT ON COLUMN comunicado.destinatarios IS 'Array de roles destinatarios: jefe_operativo, jefe_taller, tecnico, encargado_repuestos, admin_general';
+
+
+-- Agregar columna avatar_url a la tabla usuario
+ALTER TABLE usuario ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+
+-- Comentario para documentación
+COMMENT ON COLUMN usuario.avatar_url IS 'URL de la foto de perfil del usuario';
+
+-- Verificar que la columna se agregó correctamente
+SELECT column_name 
+FROM information_schema.columns 
+WHERE table_name = 'usuario' 
+AND column_name = 'avatar_url';
+
+
+-- Agregar columna avatar_url a la tabla usuario si no existe
+ALTER TABLE usuario ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+
+-- Comentario para documentación
+COMMENT ON COLUMN usuario.avatar_url IS 'URL de la foto de perfil del usuario';
+
+
+
+
+-- =====================================================
+-- AGREGAR SEGUNDO JEFE OPERATIVO A ORDEN DE TRABAJO
+-- =====================================================
+
+-- 1. Agregar columna id_jefe_operativo_2 a la tabla ordentrabajo
+ALTER TABLE ordentrabajo 
+ADD COLUMN IF NOT EXISTS id_jefe_operativo_2 INTEGER;
+
+-- 2. Agregar comentario para documentación
+COMMENT ON COLUMN ordentrabajo.id_jefe_operativo_2 IS 'Segundo jefe operativo que participó en la recepción';
+
+-- 3. Crear índice para mejorar rendimiento
+CREATE INDEX IF NOT EXISTS idx_ordentrabajo_jefe_operativo_2 ON ordentrabajo(id_jefe_operativo_2);
+
+-- 4. Agregar clave foránea (opcional, recomendado)
+ALTER TABLE ordentrabajo 
+ADD CONSTRAINT fk_ordentrabajo_jefe_operativo_2 
+FOREIGN KEY (id_jefe_operativo_2) REFERENCES usuario(id) ON DELETE SET NULL;
+
+-- 5. Verificar que la columna se agregó correctamente
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns 
+WHERE table_name = 'ordentrabajo' 
+AND column_name LIKE '%jefe_operativo%'
+ORDER BY ordinal_position;
+
+-- Agregar campo para guardar la URL de la grabación de audio del diagnóstico inicial
+ALTER TABLE DiagnostigoInicial 
+ADD COLUMN IF NOT EXISTS url_grabacion TEXT;
+
+-- Agregar comentario
+COMMENT ON COLUMN DiagnostigoInicial.url_grabacion IS 'URL de la grabación de audio del diagnóstico inicial';
+
+
+
+-- =====================================================
+-- SCRIPT MÍNIMO - GESTIÓN DE BAHÍAS
+-- FURIA MOTOR - SOLO LO ESENCIAL
+-- =====================================================
+
+-- =====================================================
+-- 1. AGREGAR NUEVO ESTADO A ordenTrabajo
+-- =====================================================
+
+ALTER TABLE ordentrabajo 
+DROP CONSTRAINT IF EXISTS ordentrabajo_estado_global_check;
+
+ALTER TABLE ordentrabajo 
+ADD CONSTRAINT ordentrabajo_estado_global_check 
+CHECK (estado_global IN ('EnRecepcion', 'EnProceso', 'EnPausa', 'PendienteAprobacion', 'Finalizado', 'Entregado'));
+
+-- =====================================================
+-- 2. AGREGAR CAMPOS DE TIEMPOS REALES A planificacion
+-- =====================================================
+
+ALTER TABLE planificacion 
+ADD COLUMN IF NOT EXISTS fecha_hora_inicio_real TIMESTAMP,
+ADD COLUMN IF NOT EXISTS fecha_hora_fin_real TIMESTAMP;
+
+-- =====================================================
+-- 3. VISTA PARA ESTADO DE BAHÍAS
+-- =====================================================
+
+CREATE OR REPLACE VIEW vista_bahias AS
+SELECT 
+    b.bahia_numero,
+    CASE 
+        WHEN p.id IS NOT NULL AND p.fecha_hora_fin_real IS NULL AND p.fecha_hora_inicio_real IS NOT NULL THEN 'ocupado'
+        WHEN p.id IS NOT NULL AND p.fecha_hora_fin_real IS NULL THEN 'reservado'
+        ELSE 'libre'
+    END AS estado,
+    o.codigo_unico AS orden_codigo,
+    o.estado_global AS orden_estado,
+    p.fecha_hora_inicio_estimado,
+    p.fecha_hora_fin_estimado
+FROM (
+    SELECT generate_series(1, 12) AS bahia_numero
+) b
+LEFT JOIN planificacion p ON p.bahia_asignada = b.bahia_numero AND p.fecha_hora_fin_real IS NULL
+LEFT JOIN ordentrabajo o ON o.id = p.id_orden_trabajo;
+
+-- =====================================================
+-- 4. VISTA PARA CARGA DE TÉCNICOS
+-- =====================================================
+
+CREATE OR REPLACE VIEW vista_tecnicos_carga AS
+SELECT 
+    u.id,
+    u.nombre,
+    u.contacto,
+    COUNT(a.id_orden_trabajo) FILTER (WHERE a.fecha_hora_final IS NULL) AS ordenes_activas,
+    2 AS max_vehiculos
+FROM usuario u
+LEFT JOIN asignaciontecnico a ON a.id_tecnico = u.id
+WHERE u.id_rol = 4
+GROUP BY u.id, u.nombre, u.contacto;
+
+-- =====================================================
+-- 5. VERIFICAR
+-- =====================================================
+
+SELECT * FROM vista_bahias ORDER BY bahia_numero;
+SELECT * FROM vista_tecnicos_carga ORDER BY ordenes_activas DESC;
+
+
+
+-- =====================================================
+-- SCRIPT MÍNIMO - SOLO PARA CONTROL DE BAHÍAS OCUPADAS
+-- =====================================================
+
+-- 1. Agregar campos de tiempos reales a planificacion (si no existen)
+ALTER TABLE planificacion 
+ADD COLUMN IF NOT EXISTS fecha_hora_inicio_real TIMESTAMP,
+ADD COLUMN IF NOT EXISTS fecha_hora_fin_real TIMESTAMP;
+
+-- 2. Vista para saber qué bahías están ocupadas en tiempo real
+CREATE OR REPLACE VIEW vista_bahias_ocupadas AS
+SELECT 
+    p.bahia_asignada,
+    p.id_orden_trabajo,
+    o.codigo_unico,
+    o.estado_global,
+    p.fecha_hora_inicio_estimado,
+    p.fecha_hora_fin_estimado,
+    p.fecha_hora_inicio_real,
+    -- Una bahía está ocupada si tiene inicio real y no tiene fin real
+    CASE 
+        WHEN p.fecha_hora_inicio_real IS NOT NULL AND p.fecha_hora_fin_real IS NULL THEN true
+        ELSE false
+    END AS esta_ocupada
+FROM planificacion p
+JOIN ordentrabajo o ON o.id = p.id_orden_trabajo
+WHERE p.fecha_hora_fin_real IS NULL;  -- Solo planificaciones activas
+
+-- 3. Función para verificar disponibilidad de bahía en un horario
+CREATE OR REPLACE FUNCTION bahia_disponible_en_horario(
+    p_bahia INTEGER,
+    p_fecha_inicio TIMESTAMP,
+    p_fecha_fin TIMESTAMP,
+    p_excluir_orden INTEGER DEFAULT NULL
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+    v_conflicto INTEGER;
+BEGIN
+    -- Buscar si hay alguna planificación que ocupe la bahía en ese horario
+    SELECT p.id INTO v_conflicto
+    FROM planificacion p
+    WHERE p.bahia_asignada = p_bahia
+    AND p.fecha_hora_fin_real IS NULL  -- Bahía no liberada
+    AND (p_excluir_orden IS NULL OR p.id_orden_trabajo != p_excluir_orden)
+    AND p.fecha_hora_inicio_estimado < p_fecha_fin
+    AND p.fecha_hora_fin_estimado > p_fecha_inicio
+    LIMIT 1;
+    
+    RETURN v_conflicto IS NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+
+
+-- =====================================================
+-- SCRIPT COMPLETO - DIAGNÓSTICO TÉCNICO CON SERVICIOS
+-- FURIA MOTOR COMPANY SRL
+-- =====================================================
+
+-- =====================================================
+-- 1. CREAR TABLA DE SERVICIOS DEL TÉCNICO
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS servicio_tecnico (
+    id SERIAL PRIMARY KEY,
+    id_diagnostico_tecnico INTEGER NOT NULL REFERENCES diagnostico_tecnico(id) ON DELETE CASCADE,
+    descripcion TEXT NOT NULL,
+    orden INTEGER DEFAULT 0,
+    creado_en TIMESTAMP DEFAULT NOW()
+);
+
+-- Índices para mejorar rendimiento
+CREATE INDEX IF NOT EXISTS idx_servicio_tecnico_diagnostico ON servicio_tecnico(id_diagnostico_tecnico);
+
+-- =====================================================
+-- 2. AGREGAR CAMPOS A diagnostico_tecnico
+-- =====================================================
+
+-- Agregar campo de límite de fotos
+ALTER TABLE diagnostico_tecnico 
+ADD COLUMN IF NOT EXISTS max_fotos INTEGER DEFAULT 2;
+
+-- Agregar campo de borrador (para saber si está completo o es borrador)
+ALTER TABLE diagnostico_tecnico 
+ADD COLUMN IF NOT EXISTS es_borrador BOOLEAN DEFAULT TRUE;
+
+-- Agregar campo de fecha de última modificación
+ALTER TABLE diagnostico_tecnico 
+ADD COLUMN IF NOT EXISTS fecha_modificacion TIMESTAMP DEFAULT NOW();
+
+-- Modificar constraint de estado para incluir 'borrador'
+ALTER TABLE diagnostico_tecnico 
+DROP CONSTRAINT IF EXISTS diagnostico_tecnico_estado_check;
+
+ALTER TABLE diagnostico_tecnico 
+ADD CONSTRAINT diagnostico_tecnico_estado_check 
+CHECK (estado IN ('borrador', 'pendiente', 'aprobado', 'rechazado'));
+
+-- =====================================================
+-- 3. MODIFICAR TABLA foto_diagnostico (agregar public_id para Cloudinary)
+-- =====================================================
+
+ALTER TABLE foto_diagnostico 
+ADD COLUMN IF NOT EXISTS public_id TEXT;
+
+-- =====================================================
+-- 4. CREAR TABLA PARA RELACIONAR SERVICIOS CON PRECIOS (JEFE OPERATIVO)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS servicio_precio (
+    id SERIAL PRIMARY KEY,
+    id_servicio INTEGER NOT NULL REFERENCES servicio_tecnico(id) ON DELETE CASCADE,
+    id_jefe_operativo INTEGER REFERENCES usuario(id),
+    precio_estimado DECIMAL(10,2),
+    precio_final DECIMAL(10,2),
+    aprobado_por_jefe_operativo BOOLEAN DEFAULT FALSE,
+    aprobado_en TIMESTAMP,
+    UNIQUE(id_servicio)
+);
+
+-- =====================================================
+-- 5. CREAR TABLA PARA COTIZACIÓN FINAL (enviada al cliente)
+-- =====================================================
+
+-- Esta tabla reemplaza/mejora la existente CotizacionDetalle
+CREATE TABLE IF NOT EXISTS cotizacion_servicio (
+    id SERIAL PRIMARY KEY,
+    id_cotizacion INTEGER NOT NULL REFERENCES cotizacion(id) ON DELETE CASCADE,
+    id_servicio INTEGER NOT NULL REFERENCES servicio_tecnico(id),
+    precio_final DECIMAL(10,2) NOT NULL,
+    aprobado_por_cliente BOOLEAN DEFAULT FALSE,
+    fecha_aprobacion TIMESTAMP,
+    UNIQUE(id_cotizacion, id_servicio)
+);
+
+-- =====================================================
+-- 6. MODIFICAR TABLA observaciondiagnostico (agregar versión)
+-- =====================================================
+
+ALTER TABLE observaciondiagnostico 
+ADD COLUMN IF NOT EXISTS version_diagnostico INTEGER DEFAULT 1;
+
+-- =====================================================
+-- 7. CREAR TRIGGER PARA ACTUALIZAR fecha_modificacion
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION update_diagnostico_modificacion()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.fecha_modificacion = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_update_diagnostico_modificacion ON diagnostico_tecnico;
+CREATE TRIGGER trigger_update_diagnostico_modificacion
+    BEFORE UPDATE ON diagnostico_tecnico
+    FOR EACH ROW
+    EXECUTE FUNCTION update_diagnostico_modificacion();
+
+-- =====================================================
+-- 8. CREAR VISTA PARA VER DIAGNÓSTICO CON SERVICIOS
+-- =====================================================
+
+CREATE OR REPLACE VIEW vista_diagnostico_completo AS
+SELECT 
+    dt.id AS diagnostico_id,
+    dt.id_orden_trabajo,
+    dt.id_tecnico,
+    u.nombre AS tecnico_nombre,
+    dt.informe,
+    dt.url_grabacion_informe,
+    dt.transcripcion_informe,
+    dt.estado,
+    dt.version,
+    dt.es_borrador,
+    dt.fecha_envio,
+    dt.fecha_modificacion,
+    -- Servicios asociados
+    COALESCE(
+        (SELECT json_agg(
+            json_build_object(
+                'id', st.id,
+                'descripcion', st.descripcion,
+                'orden', st.orden,
+                'precio_estimado', sp.precio_estimado,
+                'precio_final', sp.precio_final
+            ) ORDER BY st.orden
+        ) FROM servicio_tecnico st 
+        LEFT JOIN servicio_precio sp ON sp.id_servicio = st.id
+        WHERE st.id_diagnostico_tecnico = dt.id),
+        '[]'::json
+    ) AS servicios,
+    -- Contador de fotos
+    COALESCE(
+        (SELECT COUNT(*) FROM foto_diagnostico fd WHERE fd.id_diagnostico_tecnico = dt.id),
+        0
+    ) AS total_fotos
+FROM diagnostico_tecnico dt
+JOIN usuario u ON u.id = dt.id_tecnico;
+
+-- =====================================================
+-- 9. FUNCIÓN PARA VERIFICAR LÍMITE DE FOTOS
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION verificar_limite_fotos(p_diagnostico_id INTEGER)
+RETURNS TABLE(
+    puede_subir BOOLEAN,
+    fotos_actuales INTEGER,
+    max_fotos INTEGER
+) AS $$
+DECLARE
+    v_max_fotos INTEGER;
+    v_fotos_actuales INTEGER;
+BEGIN
+    -- Obtener límite máximo de fotos del diagnóstico
+    SELECT COALESCE(dt.max_fotos, 2) INTO v_max_fotos
+    FROM diagnostico_tecnico dt
+    WHERE dt.id = p_diagnostico_id;
+    
+    -- Contar fotos actuales
+    SELECT COUNT(*) INTO v_fotos_actuales
+    FROM foto_diagnostico
+    WHERE id_diagnostico_tecnico = p_diagnostico_id;
+    
+    RETURN QUERY SELECT 
+        (v_fotos_actuales < v_max_fotos) AS puede_subir,
+        v_fotos_actuales AS fotos_actuales,
+        v_max_fotos AS max_fotos;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =====================================================
+-- 10. FUNCIÓN PARA NOTIFICAR APROBACIÓN/RECHAZO
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION notificar_tecnico_aprobacion()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Insertar notificación para el técnico cuando cambia el estado
+    IF NEW.estado = 'aprobado' AND OLD.estado != 'aprobado' THEN
+        INSERT INTO notificacion (id_usuario_destino, tipo, mensaje, fecha_envio, leida)
+        SELECT 
+            dt.id_tecnico,
+            'diagnostico_aprobado',
+            '✅ Tu diagnóstico ha sido APROBADO. El Jefe Operativo asignará los precios próximamente.',
+            NOW(),
+            FALSE
+        FROM diagnostico_tecnico dt
+        WHERE dt.id = NEW.id;
+    
+    ELSIF NEW.estado = 'rechazado' AND OLD.estado != 'rechazado' THEN
+        INSERT INTO notificacion (id_usuario_destino, tipo, mensaje, fecha_envio, leida)
+        SELECT 
+            dt.id_tecnico,
+            'diagnostico_rechazado',
+            '❌ Tu diagnóstico ha sido RECHAZADO. Revisa las observaciones del Jefe de Taller y realiza las correcciones necesarias.',
+            NOW(),
+            FALSE
+        FROM diagnostico_tecnico dt
+        WHERE dt.id = NEW.id;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_notificar_tecnico ON diagnostico_tecnico;
+CREATE TRIGGER trigger_notificar_tecnico
+    AFTER UPDATE OF estado ON diagnostico_tecnico
+    FOR EACH ROW
+    EXECUTE FUNCTION notificar_tecnico_aprobacion();
+
+-- =====================================================
+-- 11. FUNCIÓN PARA ACTUALIZAR ESTADO DE ORDEN CUANDO SE APRUEBA DIAGNÓSTICO
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION actualizar_estado_orden_aprobacion()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Cuando el diagnóstico es aprobado, cambiar estado de la orden a 'PendienteAprobacion'
+    -- para que el Jefe Operativo asigne precios
+    IF NEW.estado = 'aprobado' AND OLD.estado != 'aprobado' THEN
+        UPDATE ordentrabajo 
+        SET estado_global = 'PendienteAprobacion'
+        WHERE id = NEW.id_orden_trabajo;
+        
+        -- Notificar al Jefe Operativo que debe asignar precios
+        INSERT INTO notificacion (id_usuario_destino, tipo, mensaje, fecha_envio, leida)
+        SELECT 
+            ot.id_jefe_operativo,
+            'precios_pendientes',
+            '💰 Se requiere asignación de precios para la orden ' || ot.codigo_unico,
+            NOW(),
+            FALSE
+        FROM ordentrabajo ot
+        WHERE ot.id = NEW.id_orden_trabajo;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_actualizar_estado_orden ON diagnostico_tecnico;
+CREATE TRIGGER trigger_actualizar_estado_orden
+    AFTER UPDATE OF estado ON diagnostico_tecnico
+    FOR EACH ROW
+    EXECUTE FUNCTION actualizar_estado_orden_aprobacion();
+
+-- =====================================================
+-- 12. VERIFICAR QUE TODO ESTÉ CORRECTO
+-- =====================================================
+
+-- Verificar tablas creadas
+SELECT table_name 
+FROM information_schema.tables 
+WHERE table_name IN ('servicio_tecnico', 'servicio_precio', 'cotizacion_servicio');
+
+-- Verificar columnas agregadas
+SELECT column_name 
+FROM information_schema.columns 
+WHERE table_name = 'diagnostico_tecnico' 
+AND column_name IN ('max_fotos', 'es_borrador', 'fecha_modificacion');
+
+-- Verificar vista
+SELECT * FROM vista_diagnostico_completo LIMIT 0;
+
+
+-- =====================================================
+-- CORRECCIÓN: Cambiar Jefe Operativo por Jefe de Taller
+-- =====================================================
+
+-- 1. Renombrar la columna en servicio_precio
+ALTER TABLE servicio_precio 
+RENAME COLUMN id_jefe_operativo TO id_jefe_taller;
+
+-- =====================================================
+-- NUEVA TABLA: Solicitud de cotización al encargado de repuestos
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS solicitud_cotizacion_repuesto (
+    id SERIAL PRIMARY KEY,
+    id_orden_trabajo INTEGER NOT NULL REFERENCES ordentrabajo(id),
+    id_servicio INTEGER NOT NULL REFERENCES servicio_tecnico(id),
+    id_jefe_taller INTEGER NOT NULL REFERENCES usuario(id),
+    id_encargado_repuestos INTEGER REFERENCES usuario(id),
+    descripcion_pieza TEXT NOT NULL,  -- Qué pieza/herramienta/líquido necesita
+    cantidad INTEGER DEFAULT 1,
+    estado VARCHAR(50) DEFAULT 'pendiente', -- pendiente, cotizado, rechazado
+    precio_cotizado DECIMAL(10,2),
+    proveedor_info TEXT,
+    fecha_solicitud TIMESTAMP DEFAULT NOW(),
+    fecha_respuesta TIMESTAMP,
+    observacion_jefe_taller TEXT,
+    respuesta_encargado TEXT
+);
+
+
+-- =====================================================
+-- CORRECCIÓN: Crear índices solo si no existen
+-- =====================================================
+
+-- Eliminar índices si existen (opcional, si quieres recrearlos)
+DROP INDEX IF EXISTS idx_solicitud_orden;
+DROP INDEX IF EXISTS idx_solicitud_estado;
+
+-- Crear índices con nombres únicos y verificación
+CREATE INDEX IF NOT EXISTS idx_solicitud_repuesto_orden 
+ON solicitud_cotizacion_repuesto(id_orden_trabajo);
+
+CREATE INDEX IF NOT EXISTS idx_solicitud_repuesto_estado 
+ON solicitud_cotizacion_repuesto(estado);
+
+
+
+-- =====================================================
+-- CORRECCIÓN: Recrear la vista completamente
+-- =====================================================
+
+-- Eliminar la vista si existe
+DROP VIEW IF EXISTS vista_diagnostico_completo CASCADE;
+
+-- Recrear la vista con la nueva estructura
+CREATE OR REPLACE VIEW vista_diagnostico_completo AS
+SELECT 
+    dt.id AS diagnostico_id,
+    dt.id_orden_trabajo,
+    dt.id_tecnico,
+    u.nombre AS tecnico_nombre,
+    dt.informe,
+    dt.url_grabacion_informe,
+    dt.transcripcion_informe,
+    dt.estado,
+    dt.version,
+    dt.es_borrador,
+    dt.fecha_envio,
+    dt.fecha_modificacion,
+    -- Servicios asociados con sus precios
+    COALESCE(
+        (SELECT json_agg(
+            json_build_object(
+                'id', st.id,
+                'descripcion', st.descripcion,
+                'orden', st.orden,
+                'precio_estimado', sp.precio_estimado,
+                'precio_final', sp.precio_final,
+                'tiene_solicitud_repuesto', EXISTS(
+                    SELECT 1 FROM solicitud_cotizacion_repuesto scr 
+                    WHERE scr.id_servicio = st.id
+                )
+            ) ORDER BY st.orden
+        ) FROM servicio_tecnico st 
+        LEFT JOIN servicio_precio sp ON sp.id_servicio = st.id
+        WHERE st.id_diagnostico_tecnico = dt.id),
+        '[]'::json
+    ) AS servicios,
+    -- Solicitudes de repuestos activas
+    COALESCE(
+        (SELECT json_agg(
+            json_build_object(
+                'id', scr.id,
+                'descripcion_pieza', scr.descripcion_pieza,
+                'cantidad', scr.cantidad,
+                'estado', scr.estado,
+                'precio_cotizado', scr.precio_cotizado,
+                'fecha_solicitud', scr.fecha_solicitud
+            )
+        ) FROM solicitud_cotizacion_repuesto scr
+        WHERE scr.id_orden_trabajo = dt.id_orden_trabajo AND scr.estado != 'rechazado'),
+        '[]'::json
+    ) AS solicitudes_repuestos,
+    -- Contador de fotos
+    COALESCE(
+        (SELECT COUNT(*) FROM foto_diagnostico fd WHERE fd.id_diagnostico_tecnico = dt.id),
+        0
+    ) AS total_fotos
+FROM diagnostico_tecnico dt
+JOIN usuario u ON u.id = dt.id_tecnico;
+
+-- Verificar que la vista se creó correctamente
+SELECT * FROM vista_diagnostico_completo LIMIT 0;
+
+
+CREATE TABLE IF NOT EXISTS solicitud_compra (
+    id SERIAL PRIMARY KEY,
+    id_orden_trabajo INTEGER NOT NULL REFERENCES ordentrabajo(id),
+    id_solicitud_cotizacion INTEGER REFERENCES solicitud_cotizacion_repuesto(id),
+    id_jefe_taller INTEGER NOT NULL REFERENCES usuario(id),
+    id_encargado_repuestos INTEGER REFERENCES usuario(id),
+    descripcion_pieza TEXT NOT NULL,
+    cantidad INTEGER DEFAULT 1,
+    precio_cotizado DECIMAL(10,2),
+    proveedor_info TEXT,
+    estado VARCHAR(50) DEFAULT 'pendiente',
+    mensaje_jefe_taller TEXT,
+    respuesta_encargado TEXT,
+    fecha_solicitud TIMESTAMP DEFAULT NOW(),
+    fecha_respuesta TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS configuracion_taller (
+    id SERIAL PRIMARY KEY,
+    clave VARCHAR(100) UNIQUE NOT NULL,
+    valor TEXT,
+    actualizado_en TIMESTAMP DEFAULT NOW()
+);

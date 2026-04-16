@@ -1,0 +1,358 @@
+*************DASHBOARD – JEFE OPERATIVO****************
+Diseña una interfaz web profesional tipo dashboard empresarial para el rol “Jefe Operativo” de un sistema de gestión integral de taller mecánico.
+
+🎨 PALETA DE COLORES OBLIGATORIA:
+- Rojo Primario: #E53935 (botones principales y badges activos)
+- Rojo Oscuro: #B71C1C (hover y acciones críticas)
+- Rojo Acento: #FF3B30 (alertas importantes)
+- Negro: #121212 (sidebar y encabezados principales)
+- Gris Medio: #6E6E6E (texto secundario)
+- Gris Claro: #E5E5E5 (bordes y separadores)
+- Blanco: #FFFFFF (fondo principal)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color #121212
+- Logo superior
+- Menú vertical con iconos:
+  Dashboard
+  Recepción de Vehículos
+  Cotizaciones
+  Vehículos en Proceso
+  Control de Salidas
+  Rendición Diaria
+  Comunicados
+  Historial
+  Perfil
+
+🖥 ÁREA PRINCIPAL:
+- 4 tarjetas KPI con borde rojo primario:
+   Vehículos ingresados hoy
+   Vehículos en proceso
+   Trabajos en pausa
+   Ingresos del día
+- Gráfico de ingresos diarios
+- Panel de notificaciones recientes (alertas en rojo acento)
+- Tabla “Últimos ingresos”
+
+Diseño moderno, corporativo, automotriz, limpio y profesional.
+
+**************RECEPCIÓN DE VEHÍCULOS*************************
+Diseña pantalla web para registro de ingreso de vehículo.
+
+🎨 PALETA:
+Fondo blanco #FFFFFF
+Encabezados negro #121212
+Botón principal rojo #E53935
+Hover rojo oscuro #B71C1C
+Bordes gris claro #E5E5E5
+Alertas rojo acento #FF3B30
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color #121212
+- Logo superior
+- Menú vertical con iconos:
+  Dashboard
+  Recepción de Vehículos
+  Cotizaciones
+  Vehículos en Proceso
+  Control de Salidas
+  Rendición Diaria
+  Comunicados
+  Historial
+  Perfil
+- Encabezado superior con título grande “Recepción de Vehículo”
+
+🖥 ÁREA PRINCIPAL:
+Formulario dividido en tarjetas:
+
+1️⃣ Datos del Cliente
+- Nombre completo
+- Teléfono
+- Ubicación
+
+2️⃣ Datos del Vehículo
+- Placa
+- Marca
+- Modelo
+- Año
+- Kilometraje
+
+3️⃣ Registro Fotográfico
+- 6 cajas para subir imágenes con vista previa
+
+4️⃣ Descripción del Problema
+- Campo texto grande
+- Botón grabar audio
+
+Botón grande inferior:
+“Generar Código de Trabajo” color #E53935
+
+Diseño claro, estructurado y profesional.
+
+************************* COTIZACIONES ********************
+Diseña pantalla de gestión de cotizaciones.
+
+🎨 PALETA:
+Rojo primario #E53935 botones principales
+Rojo oscuro #B71C1C hover
+Rojo acento #FF3B30 alertas
+Negro #121212 títulos
+Gris medio #6E6E6E texto secundario
+Blanco #FFFFFF fondo
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color #121212
+- Logo superior
+- Menú vertical con iconos:
+  Dashboard
+  Recepción de Vehículos
+  Cotizaciones
+  Vehículos en Proceso
+  Control de Salidas
+  Rendición Diaria
+  Comunicados
+  Historial
+  Perfil
+- Encabezado “Cotizaciones”
+
+🖥 ÁREA PRINCIPAL:
+- Tabla principal:
+   Código
+   Cliente
+   Total
+   Estado (badge rojo)
+   Fecha
+- Panel lateral derecho con detalle de cotización
+- Lista de servicios con checkbox
+- Total dinámico destacado en rojo primario
+- Mensaje automático:
+   “Diagnóstico Bs. 200 aplicado” si no acepta servicios
+
+Estilo ERP moderno.
+
+*********************** VEHÍCULOS EN PROCESO **************************
+Diseña pantalla tipo panel operativo para seguimiento de vehículos activos.
+
+🎨 PALETA:
+En proceso #E53935
+En pausa #FF3B30
+Finalizado gris medio #6E6E6E
+Pendiente gris claro #E5E5E5
+Fondo blanco
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color #121212
+- Logo superior
+- Menú vertical con iconos:
+  Dashboard
+  Recepción de Vehículos
+  Cotizaciones
+  Vehículos en Proceso
+  Control de Salidas
+  Rendición Diaria
+  Comunicados
+  Historial
+  Perfil
+- Título superior “Vehículos en Proceso”
+
+🖥 ÁREA PRINCIPAL:
+Vista tipo tarjetas grandes por vehículo:
+
+Cada tarjeta:
+- Código de orden
+- Cliente
+- Vehículo
+- Técnico asignado
+- Tiempo estimado
+- Estado visible en badge rojo
+
+Diseño tipo centro de control automotriz.
+
+************************ CONTROL DE SALIDAS *************************
+Diseña pantalla de control de entrega de vehículos.
+
+🎨 PALETA:
+Botones principales #E53935
+Hover #B71C1C
+Texto principal #121212
+Bordes #E5E5E5
+Fondo blanco
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color #121212
+- Logo superior
+- Menú vertical con iconos:
+  Dashboard
+  Recepción de Vehículos
+  Cotizaciones
+  Vehículos en Proceso
+  Control de Salidas
+  Rendición Diaria
+  Comunicados
+  Historial
+  Perfil
+- Encabezado “Control de Salidas”
+
+🖥 ÁREA PRINCIPAL:
+Tabla:
+- Código
+- Cliente
+- Técnico
+- Estado
+- Botón “Confirmar Entrega”
+
+Panel modal:
+- Firma digital cliente
+- Generar comprobante PDF
+- Confirmar entrega
+
+Estilo formal y profesional.
+
+************************ RENDICIÓN DIARIA ************************
+Diseña pantalla financiera diaria.
+
+🎨 PALETA:
+Rojo primario #E53935 indicadores importantes
+Rojo acento #FF3B30 alertas
+Negro #121212 títulos
+Gris medio #6E6E6E texto secundario
+Blanco #FFFFFF fondo
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color #121212
+- Logo superior
+- Menú vertical con iconos:
+  Dashboard
+  Recepción de Vehículos
+  Cotizaciones
+  Vehículos en Proceso
+  Control de Salidas
+  Rendición Diaria
+  Comunicados
+  Historial
+  Perfil
+- Encabezado “Rendición Diaria”
+
+🖥 ÁREA PRINCIPAL:
+- Tarjetas:
+   Total ingresos
+   Total diagnóstico cobrados
+   Total entregado a administración
+- Tabla detallada por orden
+- Gráfico de barras simple
+- Botón “Generar Reporte Diario” rojo primario
+
+Estilo ejecutivo.
+
+******************** COMUNICADOS ****************************
+
+Diseña módulo de comunicados internos.
+
+🎨 PALETA:
+Botón nuevo comunicado #E53935
+Hover #B71C1C
+Fondo blanco
+Texto negro
+Bordes gris claro
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color #121212
+- Logo superior
+- Menú vertical con iconos:
+  Dashboard
+  Recepción de Vehículos
+  Cotizaciones
+  Vehículos en Proceso
+  Control de Salidas
+  Rendición Diaria
+  Comunicados
+  Historial
+  Perfil
+- Encabezado “Comunicados”
+
+🖥 ÁREA PRINCIPAL:
+- Botón “Nuevo Comunicado”
+- Lista tipo tarjetas:
+   Título
+   Fecha
+   Estado activo/inactivo
+- Editor de texto para crear comunicado
+
+Estilo administrativo limpio.
+************************HISTORIAL***********************
+Diseña pantalla de historial general de vehículos atendidos.
+
+🎨 PALETA:
+Rojo primario para filtros activos
+Negro títulos
+Gris medio texto secundario
+Blanco fondo
+Gris claro bordes
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color #121212
+- Logo superior
+- Menú vertical con iconos:
+  Dashboard
+  Recepción de Vehículos
+  Cotizaciones
+  Vehículos en Proceso
+  Control de Salidas
+  Rendición Diaria
+  Comunicados
+  Historial
+  Perfil
+- Encabezado “Historial”
+
+🖥 ÁREA PRINCIPAL:
+- Buscador superior
+- Filtros:
+   Fecha
+   Cliente
+   Estado
+- Tabla amplia:
+   Código
+   Vehículo
+   Fecha ingreso
+   Total facturado
+   Estado final
+- Botón “Ver detalle”
+
+Estilo ERP profesional.
+
+******************** PERFIL **************************
+
+Diseña pantalla de perfil de usuario.
+
+🎨 PALETA:
+Encabezados negro
+Botones rojo primario
+Hover rojo oscuro
+Fondo blanco
+Separadores gris claro
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color #121212
+- Logo superior
+- Menú vertical con iconos:
+  Dashboard
+  Recepción de Vehículos
+  Cotizaciones
+  Vehículos en Proceso
+  Control de Salidas
+  Rendición Diaria
+  Comunicados
+  Historial
+  Perfil
+- Encabezado “Mi Perfil”
+
+🖥 ÁREA PRINCIPAL:
+Tarjeta central:
+- Foto de perfil
+- Nombre
+- Rol
+- Teléfono
+- Correo
+- Botón “Cambiar contraseña”
+
+Diseño minimalista, elegante y corporativo.

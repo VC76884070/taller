@@ -228,7 +228,7 @@ function renderUsuariosTable(usuarios) {
     if (!tbody) return;
     
     if (usuarios.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="loading-row">No hay usuarios registrados</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="loading-row">No hay usuarios de personal registrados</td></tr>`;
         return;
     }
     
@@ -244,13 +244,13 @@ function renderUsuariosTable(usuarios) {
                         ? usuario.roles_nombres.map(rol => `<span class="role-tag ${rol.replace('_', '-')}">${formatRolName(rol)}</span>`).join('')
                         : '<span class="no-roles">Sin roles asignados</span>'}
                 </div>
-             </td>
+              </td>
             <td>
                 <button class="btn-edit-roles" onclick="abrirModalRoles(${usuario.id})" title="Gestionar roles">
                     <i class="fas fa-edit"></i>
                 </button>
-             </td>
-         </tr>
+              </td>
+          </tr>
     `).join('');
 }
 
@@ -293,7 +293,7 @@ function abrirModalRoles(usuarioId) {
     if (modalUserEmail) modalUserEmail.textContent = usuario.email || 'No registrado';
     if (modalUserDocumento) modalUserDocumento.textContent = usuario.documento || 'No registrado';
     
-    // Generar checkboxes de roles
+    // Generar checkboxes de roles (solo roles de personal)
     const rolesContainer = document.getElementById('rolesCheckboxGroup');
     if (rolesContainer && rolesData.length > 0) {
         rolesContainer.innerHTML = rolesData.map(rol => `
@@ -376,8 +376,7 @@ function formatRolName(rolNombre) {
         'jefe_operativo': 'Jefe Operativo',
         'jefe_taller': 'Jefe de Taller',
         'tecnico': 'Técnico Mecánico',
-        'encargado_repuestos': 'Encargado de Repuestos',
-        'cliente': 'Cliente'
+        'encargado_repuestos': 'Encargado de Repuestos'
     };
     return nombres[rolNombre] || rolNombre.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
@@ -387,8 +386,7 @@ function getRolDescription(rolNombre) {
         'jefe_operativo': 'Gestiona recepción, cotizaciones y facturación',
         'jefe_taller': 'Supervisa diagnósticos, asigna técnicos y planifica',
         'tecnico': 'Realiza diagnósticos y trabajos mecánicos',
-        'encargado_repuestos': 'Gestiona inventario y cotizaciones de repuestos',
-        'cliente': 'Acceso a sus vehículos y servicios'
+        'encargado_repuestos': 'Gestiona inventario y cotizaciones de repuestos'
     };
     return descripciones[rolNombre] || '';
 }

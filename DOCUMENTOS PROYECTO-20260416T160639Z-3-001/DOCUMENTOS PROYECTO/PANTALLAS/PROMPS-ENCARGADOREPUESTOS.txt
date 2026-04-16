@@ -1,0 +1,286 @@
+************************* DASHBOARD INVENTARIO ****************************
+
+Diseña un dashboard web profesional para el rol “Encargado de Repuestos” en un sistema de gestión de taller mecánico.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario: #E53935
+- Rojo Oscuro: #B71C1C
+- Rojo Acento: #FF3B30
+- Negro: #121212
+- Gris Medio: #6E6E6E
+- Gris Claro: #E5E5E5
+- Blanco: #FFFFFF
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú vertical:
+   Dashboard Inventario
+   Inventario
+   Compras
+   Proveedores
+   Herramientas
+   Rendición Diaria
+   Historial
+
+🖥 ÁREA PRINCIPAL:
+
+Tarjetas KPI superiores:
+- Total repuestos en stock
+- Repuestos con stock bajo (en rojo primario)
+- Compras del mes
+- Proveedores activos
+
+Sección central:
+- Lista de alertas urgentes (usar rojo acento #FF3B30)
+- Gráfico circular de categorías de repuestos
+
+Diseño tipo sistema logístico profesional.
+
+************************* INVENTARIO ***************************************
+
+Diseña pantalla web de gestión de inventario.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario #E53935 (botón agregar repuesto)
+- Rojo Acento #FF3B30 (stock crítico)
+- Negro #121212 (títulos)
+- Gris Medio #6E6E6E (texto secundario)
+- Gris Claro #E5E5E5 (bordes)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú vertical:
+   Dashboard Inventario
+   Inventario
+   Compras
+   Proveedores
+   Herramientas
+   Rendición Diaria
+   Historial
+- Encabezado “Inventario”
+- Botón “Agregar Repuesto” en rojo primario
+
+🖥 ÁREA PRINCIPAL:
+
+Barra superior:
+- Buscador
+- Filtro por categoría
+- Filtro por estado de stock
+
+Tabla profesional:
+- Código
+- Nombre repuesto
+- Categoría
+- Stock actual
+- Stock mínimo
+- Estado:
+   Normal
+   Bajo (#E53935)
+   Crítico (#FF3B30)
+- Acciones (Editar / Ver historial)
+
+Diseño claro tipo ERP logístico.
+
+*************************** COMPRAS ****************************************
+
+Diseña pantalla para registro y control de compras de repuestos.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario #E53935 (guardar compra)
+- Rojo Oscuro #B71C1C (hover)
+- Negro #121212 (títulos)
+- Gris Claro #E5E5E5 (separadores)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú vertical:
+   Dashboard Inventario
+   Inventario
+   Compras
+   Proveedores
+   Herramientas
+   Rendición Diaria
+   Historial
+- Encabezado “Compras”
+- Botón “Nueva Compra” en rojo primario
+
+🖥 ÁREA PRINCIPAL:
+
+Formulario dividido en tarjetas:
+
+1️⃣ Datos del proveedor
+2️⃣ Lista de repuestos comprados (tabla editable)
+   - Repuesto
+   - Cantidad
+   - Precio unitario
+   - Subtotal
+3️⃣ Total automático destacado
+4️⃣ Subir comprobante (imagen o PDF)
+
+Botón inferior:
+“Guardar Compra”
+
+Diseño financiero y ordenado.
+
+*************************** PROVEEDORES ************************************
+
+Diseña pantalla web para gestión de proveedores.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario #E53935 (botón nuevo proveedor)
+- Negro #121212 (encabezados)
+- Gris Medio #6E6E6E (texto)
+- Gris Claro #E5E5E5 (bordes)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú vertical:
+   Dashboard Inventario
+   Inventario
+   Compras
+   Proveedores
+   Herramientas
+   Rendición Diaria
+   Historial
+- Encabezado “Proveedores”
+
+🖥 ÁREA PRINCIPAL:
+
+Tabla profesional:
+- Nombre proveedor
+- Teléfono
+- Ubicación
+- Categoría de productos
+- Estado (Activo/Inactivo)
+
+Panel lateral:
+- Detalle del proveedor
+- Historial de compras
+- Clasificación
+
+Botón “Nuevo Proveedor” rojo primario.
+
+*********************** HERRAMIENTAS *************************************
+
+Diseña pantalla para control de herramientas del taller.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario #E53935 (registrar herramienta)
+- Rojo Acento #FF3B30 (herramienta faltante)
+- Negro #121212 (títulos)
+- Gris Claro #E5E5E5 (bordes)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú vertical:
+   Dashboard Inventario
+   Inventario
+   Compras
+   Proveedores
+   Herramientas
+   Rendición Diaria
+   Historial
+- Encabezado “Herramientas”
+
+🖥 ÁREA PRINCIPAL:
+
+Tabla:
+- Nombre herramienta
+- Código interno
+- Estado:
+   Disponible
+   En uso
+   Mantenimiento
+   Faltante (#FF3B30)
+- Evidencia fotográfica
+
+Botón “Registrar Herramienta”
+
+Diseño tipo control de activos.
+
+************************ RENDICIÓN DIARIA *********************************
+
+Diseña pantalla para rendición diaria del encargado de repuestos.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario #E53935 (enviar rendición)
+- Rojo Acento #FF3B30 (alertas)
+- Negro #121212 (títulos)
+- Gris Medio #6E6E6E (texto)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú vertical:
+   Dashboard Inventario
+   Inventario
+   Compras
+   Proveedores
+   Herramientas
+   Rendición Diaria
+   Historial
+- Encabezado “Rendición Diaria”
+
+🖥 ÁREA PRINCIPAL:
+
+Tarjetas superiores:
+- Total compras del día
+- Total gastos adicionales
+- Diferencia presupuestaria
+
+Tabla detallada:
+- Compra
+- Proveedor
+- Monto
+- Comprobante adjunto
+
+Botón “Enviar Rendición” rojo primario.
+
+Estilo financiero y formal.
+
+*************************** HISTORIAL *************************************
+
+Diseña pantalla de historial logístico completo.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario (filtros activos)
+- Negro (títulos)
+- Gris Medio (texto)
+- Gris Claro (bordes)
+- Blanco (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú vertical:
+   Dashboard Inventario
+   Inventario
+   Compras
+   Proveedores
+   Herramientas
+   Rendición Diaria
+   Historial
+- Encabezado “Historial”
+
+🖥 ÁREA PRINCIPAL:
+
+Filtros:
+- Fecha
+- Tipo (Compra / Ajuste / Herramienta)
+- Proveedor
+- Categoría
+
+Tabla:
+- Código movimiento
+- Tipo
+- Fecha
+- Responsable
+- Detalle
+- Monto (si aplica)
+
+Botón “Ver Detalle”
+
+Diseño profesional tipo sistema de inventario empresarial.

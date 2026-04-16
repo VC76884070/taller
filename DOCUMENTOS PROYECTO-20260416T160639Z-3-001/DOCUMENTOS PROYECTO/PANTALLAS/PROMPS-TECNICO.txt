@@ -1,0 +1,217 @@
+************************** MIS VEHÍCULOS (Máx 2 activos) ****************************
+Diseña una interfaz web profesional para el rol “Técnico” en un sistema de gestión de taller mecánico.
+
+Pestaña: “Mis Vehículos”
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario: #E53935
+- Rojo Oscuro: #B71C1C
+- Rojo Acento: #FF3B30
+- Negro: #121212
+- Gris Medio: #6E6E6E
+- Gris Claro: #E5E5E5
+- Blanco: #FFFFFF
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú:
+   Mis Vehículos
+   Diagnóstico
+   Avance de Trabajo
+   Historial
+   Perfil
+
+🖥 ÁREA PRINCIPAL:
+
+Mostrar máximo 2 tarjetas grandes (solo puede tener 2 órdenes activas).
+
+Cada tarjeta debe contener:
+- Código de orden grande y visible
+- Cliente
+- Vehículo (marca, modelo, placa)
+- Tiempo estimado restante
+- Estado visual con badge:
+   En proceso → #E53935
+   En pausa → #FF3B30
+- Barra de progreso
+- Botón principal “Entrar” en rojo primario
+
+Si no tiene órdenes activas:
+Mostrar mensaje limpio:
+“No tienes vehículos asignados actualmente”.
+
+Diseño práctico, claro y enfocado en productividad.
+
+************************************ DIAGNÓSTICO ******************************
+
+Diseña pantalla web para que el Técnico registre el diagnóstico de un vehículo.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario: #E53935 (botón enviar)
+- Rojo Oscuro: #B71C1C (acciones críticas)
+- Rojo Acento: #FF3B30 (alertas)
+- Negro: #121212 (títulos)
+- Gris Medio: #6E6E6E (texto secundario)
+- Gris Claro: #E5E5E5 (bordes)
+- Blanco: #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú:
+   Mis Vehículos
+   Diagnóstico
+   Avance de Trabajo
+   Historial
+   Perfil
+- Encabezado superior con:
+   Código de Orden
+   Cliente
+   Vehículo
+
+🖥 ÁREA PRINCIPAL:
+
+Dividir en secciones verticales:
+
+1️⃣ Información básica del vehículo (solo lectura)
+
+2️⃣ Registro Fotográfico
+- Área para subir múltiples fotos
+- Vista previa en cuadrícula
+
+3️⃣ Descripción del diagnóstico
+- Campo de texto grande
+- Contador de caracteres
+- Botón grabar audio opcional
+
+4️⃣ Lista de posibles servicios detectados (checkbox)
+
+Botón grande inferior:
+“Enviar Diagnóstico” en rojo primario #E53935
+
+Diseño enfocado en rapidez y claridad.
+
+********************** AVANCE DE TRABAJO ***************************
+
+Diseña pantalla web para actualización de avance de trabajo del Técnico.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario: #E53935 (guardar cambios)
+- Rojo Oscuro: #B71C1C (finalizar trabajo)
+- Rojo Acento: #FF3B30 (trabajo en pausa)
+- Negro: #121212 (encabezados)
+- Gris Medio: #6E6E6E (texto)
+- Gris Claro: #E5E5E5 (separadores)
+- Blanco: #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú:
+   Mis Vehículos
+   Diagnóstico
+   Avance de Trabajo
+   Historial
+   Perfil
+- Encabezado con:
+   Código de orden
+   Vehículo
+   Estado actual
+
+🖥 ÁREA PRINCIPAL:
+
+Sección 1:
+Selector de estado:
+- En proceso
+- En pausa (campo obligatorio motivo)
+- Finalizado
+
+Sección 2:
+Subida de fotos de avance
+
+Sección 3:
+Observaciones técnicas
+
+Sección 4:
+Línea de tiempo del trabajo (historial de cambios)
+
+Botones:
+- Guardar Cambios (rojo primario)
+- Finalizar Trabajo (rojo oscuro)
+
+Diseño operativo, profesional y claro.
+
+**************************** HISTORIAL ******************************
+
+Diseña pantalla de historial personal del Técnico.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario (filtros activos)
+- Negro (títulos)
+- Gris Medio (texto)
+- Gris Claro (bordes)
+- Blanco (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú:
+   Mis Vehículos
+   Diagnóstico
+   Avance de Trabajo
+   Historial
+   Perfil
+- Encabezado “Historial de Trabajos”
+
+🖥 ÁREA PRINCIPAL:
+
+Barra superior:
+- Buscador
+- Filtro por fecha
+- Filtro por estado
+
+Tabla profesional:
+- Código
+- Cliente
+- Vehículo
+- Fecha inicio
+- Fecha finalización
+- Estado final
+
+Botón “Ver Detalle”
+
+Diseño limpio tipo sistema ERP.
+********************** PERFIL ***********************************
+
+Diseña pantalla de perfil del Técnico.
+
+🎨 PALETA OBLIGATORIA:
+- Negro #121212 (títulos)
+- Rojo Primario #E53935 (botones)
+- Rojo Oscuro #B71C1C (hover)
+- Gris Claro #E5E5E5 (separadores)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú:
+   Mis Vehículos
+   Diagnóstico
+   Avance de Trabajo
+   Historial
+   Perfil
+- Encabezado “Mi Perfil”
+
+🖥 ÁREA PRINCIPAL:
+
+Tarjeta central:
+- Foto de perfil
+- Nombre completo
+- Rol: Técnico
+- Especialidad
+- Años de experiencia
+- Teléfono
+- Correo
+
+Botones:
+- Editar información
+- Cambiar contraseña
+
+Diseño minimalista, profesional y moderno.

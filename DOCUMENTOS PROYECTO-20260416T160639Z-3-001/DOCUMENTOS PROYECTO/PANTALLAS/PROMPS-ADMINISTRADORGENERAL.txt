@@ -1,0 +1,286 @@
+***********************DASHBOARD GENERAL*************************
+Diseña un dashboard web ejecutivo para el rol “Administrador General” en un sistema de gestión integral de taller mecánico.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario: #E53935
+- Rojo Oscuro: #B71C1C
+- Rojo Acento: #FF3B30
+- Negro: #121212
+- Gris Medio: #6E6E6E
+- Gris Claro: #E5E5E5
+- Blanco: #FFFFFF
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú vertical:
+   Dashboard General
+   Finanzas
+   Reportes
+   Rendiciones
+   Supervisión Operativa
+   Usuarios y Roles
+   Historial Global
+
+🖥 ÁREA PRINCIPAL:
+
+Tarjetas KPI superiores:
+- Ingresos totales del mes
+- Egresos totales
+- Ganancia neta (destacar en rojo primario)
+- Órdenes activas
+
+Sección central:
+- Gráfico de ingresos vs egresos mensual
+- Indicadores de rendimiento (KPI operativos)
+- Panel de alertas críticas en rojo acento
+
+Diseño elegante tipo software financiero corporativo.
+
+********************** FINANZAS *****************************
+
+Diseña pantalla financiera detallada para Administrador General.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario #E53935 (valores positivos y acciones)
+- Rojo Acento #FF3B30 (alertas o déficit)
+- Negro #121212 (títulos)
+- Gris Medio #6E6E6E (texto)
+- Gris Claro #E5E5E5 (bordes)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú vertical:
+   Dashboard General
+   Finanzas
+   Reportes
+   Rendiciones
+   Supervisión Operativa
+   Usuarios y Roles
+   Historial Global
+- Encabezado “Finanzas”
+
+🖥 ÁREA PRINCIPAL:
+
+Sección 1:
+Filtros:
+- Rango de fechas
+- Tipo (Ingresos / Egresos)
+
+Sección 2:
+Tabla financiera:
+- Fecha
+- Concepto
+- Responsable
+- Tipo
+- Monto
+
+Sección 3:
+Resumen lateral:
+- Total ingresos
+- Total egresos
+- Balance final (resaltar en rojo primario)
+
+Diseño formal y profesional.
+
+************************ REPORTES ***************************
+
+Diseña pantalla para generación de reportes ejecutivos.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario #E53935 (botones principales)
+- Rojo Oscuro #B71C1C (hover)
+- Negro #121212 (encabezados)
+- Gris Claro #E5E5E5 (separadores)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú vertical:
+   Dashboard General
+   Finanzas
+   Reportes
+   Rendiciones
+   Supervisión Operativa
+   Usuarios y Roles
+   Historial Global
+- Encabezado “Reportes”
+
+🖥 ÁREA PRINCIPAL:
+
+Opciones de generación:
+- Reporte Diario
+- Reporte Semanal
+- Reporte Mensual
+- Reporte Personalizado (selector fechas)
+
+Opciones de exportación:
+- PDF
+- Excel
+
+Botón principal “Generar Reporte” en rojo primario.
+
+Diseño ejecutivo minimalista.
+
+************************ RENDICIONES ************************
+
+Diseña pantalla para revisión y aprobación de rendiciones internas.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario #E53935 (aprobar)
+- Rojo Oscuro #B71C1C (rechazar)
+- Rojo Acento #FF3B30 (alertas)
+- Negro #121212 (títulos)
+- Gris Medio #6E6E6E (texto)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú vertical:
+   Dashboard General
+   Finanzas
+   Reportes
+   Rendiciones
+   Supervisión Operativa
+   Usuarios y Roles
+   Historial Global
+- Encabezado “Rendiciones”
+
+🖥 ÁREA PRINCIPAL:
+
+Tabla principal:
+- Responsable
+- Tipo (Operativo / Inventario)
+- Fecha
+- Total
+- Estado (Pendiente / Aprobado / Rechazado)
+
+Panel lateral:
+- Detalle de rendición
+- Comprobantes adjuntos
+- Botones:
+   Aprobar
+   Rechazar (requiere observación)
+
+Diseño formal tipo sistema contable.
+
+************************** SUPERVISIÓN OPERATIVA ****************************
+
+Diseña panel de supervisión general del taller.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario #E53935 (bahías ocupadas)
+- Rojo Acento #FF3B30 (trabajos en pausa)
+- Negro #121212 (títulos)
+- Gris Medio #6E6E6E (texto)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú vertical:
+   Dashboard General
+   Finanzas
+   Reportes
+   Rendiciones
+   Supervisión Operativa
+   Usuarios y Roles
+   Historial Global
+- Encabezado “Supervisión Operativa”
+
+🖥 ÁREA PRINCIPAL:
+
+Vista tipo centro de control:
+- Mapa de 12 bahías con estados
+- Lista de técnicos activos
+- Órdenes en pausa
+- Tiempo promedio por orden
+
+Indicadores visuales claros y profesionales.
+
+************************** USUARIOS Y ROLES ********************************
+
+Diseña pantalla de gestión de usuarios y roles del sistema.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario #E53935 (crear usuario)
+- Rojo Oscuro #B71C1C (desactivar usuario)
+- Negro #121212 (títulos)
+- Gris Claro #E5E5E5 (bordes)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú vertical:
+   Dashboard General
+   Finanzas
+   Reportes
+   Rendiciones
+   Supervisión Operativa
+   Usuarios y Roles
+   Historial Global
+- Encabezado “Usuarios y Roles”
+
+🖥 ÁREA PRINCIPAL:
+
+Tabla:
+- Nombre
+- Rol
+- Estado
+- Fecha creación
+- Acciones (Editar / Cambiar Rol / Desactivar)
+
+Panel modal:
+- Crear usuario
+- Asignar rol:
+   Jefe Operativo
+   Jefe de Taller
+   Técnico
+   Encargado de Repuestos
+   Administrador General
+   Cliente
+
+Diseño tipo sistema corporativo empresarial.
+ 
+************************* HISTORIAL GLOBAL ***********************************
+
+Diseña pantalla de historial global del sistema.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario (filtros activos)
+- Negro (títulos)
+- Gris Medio (texto)
+- Gris Claro (bordes)
+- Blanco (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda color negro #121212
+- Menú vertical:
+   Dashboard General
+   Finanzas
+   Reportes
+   Rendiciones
+   Supervisión Operativa
+   Usuarios y Roles
+   Historial Global
+- Encabezado “Historial Global”
+
+🖥 ÁREA PRINCIPAL:
+
+Filtros avanzados:
+- Fecha
+- Usuario
+- Rol
+- Tipo de acción
+- Estado
+
+Tabla amplia:
+- Fecha
+- Usuario
+- Acción realizada
+- Módulo
+- Descripción
+- Resultado
+
+Botón “Ver Detalle”
+
+Diseño profesional tipo auditoría empresarial.

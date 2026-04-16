@@ -1,0 +1,279 @@
+********************** DASHBOARD TÉCNICO **********************
+Diseña una interfaz web profesional tipo dashboard empresarial para el rol “Jefe de Taller” en un sistema de gestión automotriz.
+
+🎨 PALETA DE COLORES OBLIGATORIA:
+- Rojo Primario: #E53935 (indicadores activos y métricas clave)
+- Rojo Oscuro: #B71C1C (acciones críticas y hover)
+- Rojo Acento: #FF3B30 (alertas y trabajos en pausa)
+- Negro: #121212 (sidebar y encabezados)
+- Gris Medio: #6E6E6E (texto secundario)
+- Gris Claro: #E5E5E5 (bordes y separadores)
+- Blanco: #FFFFFF (fondo principal)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda en color negro #121212
+- Logo superior
+- Menú vertical:
+  Dashboard Técnico
+  Órdenes de Trabajo
+  Calendario y Bahías
+  Diagnósticos
+  Control de Calidad
+  Historial
+  Perfil
+
+🖥 ÁREA PRINCIPAL:
+- 4 tarjetas KPI:
+   Órdenes activas
+   Órdenes en pausa
+   Técnicos trabajando
+   Bahías ocupadas
+- Vista gráfica de 12 bahías tipo bloques:
+   Ocupada → #E53935
+   En pausa → #FF3B30
+   Libre → #E5E5E5
+- Lista de diagnósticos pendientes de revisión
+- Mini calendario semanal
+
+Estilo moderno, industrial y profesional tipo software de operaciones.
+
+***************************** ÓRDENES DE TRABAJO *****************************
+
+Diseña pantalla web para gestión de Órdenes de Trabajo del Jefe de Taller.
+
+🎨 PALETA:
+- Rojo primario #E53935 (botón Nueva Orden)
+- Rojo oscuro #B71C1C (hover)
+- Negro #121212 (títulos)
+- Gris medio #6E6E6E (texto secundario)
+- Gris claro #E5E5E5 (bordes)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda en color negro #121212
+- Logo superior
+- Menú vertical:
+  Dashboard Técnico
+  Órdenes de Trabajo
+  Calendario y Bahías
+  Diagnósticos
+  Control de Calidad
+  Historial
+  Perfil
+- Encabezado grande: “Órdenes de Trabajo”
+- Botón superior derecho “Nueva Orden” en rojo primario
+
+🖥 ÁREA PRINCIPAL:
+Tabla profesional con columnas:
+- Código
+- Cliente
+- Vehículo
+- Técnicos asignados (máx 2)
+- Tiempo estimado
+- Estado (badge rojo según estado)
+- Acciones (Ver / Reasignar / Editar)
+
+Panel lateral deslizable:
+- Detalle completo de orden
+- Botón asignar técnico
+- Selector de estado
+
+Diseño tipo ERP automotriz avanzado.
+
+**************************** CALENDARIO Y BAHÍAS (12 BAHÍAS) ******************
+
+Diseña pantalla tipo planificación operativa para taller mecánico.
+
+🎨 PALETA:
+- Rojo primario #E53935 (bahía ocupada)
+- Rojo acento #FF3B30 (trabajo en pausa)
+- Gris claro #E5E5E5 (bahía libre)
+- Negro #121212 (encabezados)
+- Blanco #FFFFFF (fondo)
+- Gris medio #6E6E6E (texto secundario)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda en color negro #121212
+- Logo superior
+- Menú vertical:
+  Dashboard Técnico
+  Órdenes de Trabajo
+  Calendario y Bahías
+  Diagnósticos
+  Control de Calidad
+  Historial
+  Perfil
+- Encabezado “Calendario y Bahías”
+
+🖥 ÁREA PRINCIPAL:
+Se divide en dos columnas:
+
+Columna izquierda:
+- Calendario semanal grande con vista por horas
+
+Columna derecha:
+- Vista gráfica de 12 bahías tipo panel industrial
+- Cada bahía muestra:
+   Número
+   Código de orden
+   Estado visual
+- Posibilidad de arrastrar órdenes al calendario
+
+Indicador visual de carga por técnico.
+
+Estilo moderno tipo software de planta industrial.
+
+********************** DIAGNÓSTICOS *****************************************
+
+Diseña pantalla para revisión y aprobación de diagnósticos técnicos.
+
+🎨 PALETA:
+- Rojo primario #E53935 (botón Aprobar)
+- Rojo oscuro #B71C1C (botón Rechazar)
+- Rojo acento #FF3B30 (alertas)
+- Negro #121212 (títulos)
+- Gris medio #6E6E6E (texto)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda en color negro #121212
+- Logo superior
+- Menú vertical:
+  Dashboard Técnico
+  Órdenes de Trabajo
+  Calendario y Bahías
+  Diagnósticos
+  Control de Calidad
+  Historial
+  Perfil
+- Encabezado “Diagnósticos”
+
+🖥 ÁREA PRINCIPAL:
+Vista dividida en dos secciones:
+
+Sección izquierda:
+- Información del vehículo
+- Datos del cliente
+- Estado actual
+
+Sección derecha:
+- Galería de fotos del diagnóstico
+- Texto transcrito del informe técnico
+- Campo observaciones (si rechaza)
+- Botones:
+   Aprobar (rojo primario)
+   Rechazar (rojo oscuro)
+
+Diseño limpio, técnico y profesional.
+
+************************* CONTROL DE CALIDAD *********************************
+
+Diseña módulo web de Control de Calidad final.
+
+🎨 PALETA:
+- Rojo primario #E53935 (autorizar entrega)
+- Rojo acento #FF3B30 (advertencias)
+- Negro #121212 (títulos)
+- Gris claro #E5E5E5 (separadores)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda en color negro #121212
+- Logo superior
+- Menú vertical:
+  Dashboard Técnico
+  Órdenes de Trabajo
+  Calendario y Bahías
+  Diagnósticos
+  Control de Calidad
+  Historial
+  Perfil
+- Encabezado “Control de Calidad”
+
+🖥 ÁREA PRINCIPAL:
+- Checklist visual:
+   Prueba de manejo realizada
+   Reparación verificada
+   Limpieza realizada
+- Sección observaciones finales
+- Botón grande “Autorizar Entrega” rojo primario
+- Estado final destacado
+
+Estilo formal y serio.
+
+************************* HISTORIAL *******************************************
+
+Diseña pantalla de historial técnico del taller.
+
+🎨 PALETA:
+- Rojo primario para filtros activos
+- Negro títulos
+- Gris medio texto
+- Gris claro bordes
+- Blanco fondo
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda en color negro #121212
+- Logo superior
+- Menú vertical:
+  Dashboard Técnico
+  Órdenes de Trabajo
+  Calendario y Bahías
+  Diagnósticos
+  Control de Calidad
+  Historial
+  Perfil
+- Encabezado “Historial”
+
+🖥 ÁREA PRINCIPAL:
+- Barra de búsqueda superior
+- Filtros:
+   Fecha
+   Técnico
+   Estado
+   Cliente
+- Tabla amplia:
+   Código
+   Vehículo
+   Técnico asignado
+   Fecha
+   Estado final
+- Botón “Ver Detalle”
+
+Estilo ERP profesional.
+
+****************************  PERFIL **************************************
+
+Diseña pantalla de perfil del Jefe de Taller.
+
+🎨 PALETA:
+- Negro #121212 títulos
+- Rojo primario #E53935 botones
+- Rojo oscuro #B71C1C hover
+- Gris claro separadores
+- Blanco fondo
+
+🧱 ESTRUCTURA:
+- Sidebar fija izquierda en color negro #121212
+- Logo superior
+- Menú vertical:
+  Dashboard Técnico
+  Órdenes de Trabajo
+  Calendario y Bahías
+  Diagnósticos
+  Control de Calidad
+  Historial
+  Perfil
+- Encabezado “Mi Perfil”
+
+🖥 ÁREA PRINCIPAL:
+Tarjeta central elegante:
+- Foto de perfil
+- Nombre completo
+- Rol
+- Especialidad
+- Teléfono
+- Correo
+- Botón “Cambiar contraseña”
+
+Diseño minimalista y corporativo.

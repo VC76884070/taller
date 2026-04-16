@@ -1,0 +1,36 @@
+:root {
+    /* Primarios - Rojo como acento, no dominante */
+    --rojo-primario: #C1121F;     /* Botones principales, acentos importantes */
+    --rojo-oscuro: #8B0F1A;       /* Hovers, elementos destacados */
+    --rojo-acento: #FF4D4D;       /* Alertas, notificaciones urgentes */
+    
+    /* Neutrales - La base del diseño */
+    --negro: #0F0F10;              /* Textos principales, fondo navbar */
+    --gris-oscuro: #2C3E50;        /* Títulos secundarios, cards */
+    --gris-medio: #6B7280;         /* Textos de apoyo, placeholders */
+    --gris-claro: #F3F4F6;         /* Fondos de secciones, bordes suaves */
+    --blanco: #FFFFFF;              /* Fondos principales, tarjetas */
+    
+    /* Acentos secundarios - Para variedad visual */
+    --azul-profundo: #1E3A5F;      /* Detalles en panel izquierdo */
+    --verde-exito: #10B981;         /* Confirmaciones, éxito */
+    --ambar-alerta: #F59E0B;        /* Advertencias, pausas */
+    
+    /* Sombras y efectos */
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+    --shadow-lg: 0 10px 25px rgba(0,0,0,0.05);
+    --shadow-xl: 0 20px 40px rgba(0,0,0,0.08);
+    --shadow-red: 0 4px 12px rgba(193,18,31,0.15);
+    
+    /* Radios */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+    --radius-full: 9999px;
+    
+    /* Transiciones */
+    --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}

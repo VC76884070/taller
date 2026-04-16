@@ -1,0 +1,5 @@
+admin general:              Vania68056530            654321
+jefeoperativo:              admin123                 987654
+jefe taller:                admin123                 12865496
+tecnico mecanico:           admin123                 147258
+repuestos almacen:          admin123                 369258

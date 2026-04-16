@@ -1,34 +1,26 @@
 // =====================================================
-// PERFIL - JEFE TALLER
+// PERFIL - JEFE TALLER (VERSIÓN SIMPLIFICADA)
 // =====================================================
 
 const API_URL = 'http://localhost:5000/api';
-let userInfo = null;
 let avatarBase64 = null;
 
 // =====================================================
 // INICIALIZACIÓN
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    const autenticado = await checkAuth();
-    if (!autenticado) return;
+    // Solo verificar que exista token, no validar roles específicos
+    const token = localStorage.getItem('furia_token');
+    if (!token) {
+        window.location.href = '/';
+        return;
+    }
     
     initPage();
     setupEventListeners();
     await cargarDatosPerfil();
     await cargarEstadisticas();
 });
-
-async function checkAuth() {
-    const token = localStorage.getItem('furia_token');
-    userInfo = JSON.parse(localStorage.getItem('furia_user') || '{}');
-    
-    if (!token || (userInfo.rol !== 'jefe_taller' && userInfo.id_rol !== 3)) {
-        window.location.href = '/';
-        return false;
-    }
-    return true;
-}
 
 function initPage() {
     const now = new Date();
@@ -48,6 +40,13 @@ function setupEventListeners() {
     document.getElementById('avatarInput')?.addEventListener('change', previewAvatar);
 }
 
+function getHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+    };
+}
+
 // =====================================================
 // CARGAR DATOS DEL PERFIL
 // =====================================================
@@ -55,8 +54,13 @@ function setupEventListeners() {
 async function cargarDatosPerfil() {
     try {
         const response = await fetch(`${API_URL}/jefe-taller/perfil`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+            headers: getHeaders()
         });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
         
         const data = await response.json();
         
@@ -90,8 +94,13 @@ async function cargarDatosPerfil() {
 async function cargarEstadisticas() {
     try {
         const response = await fetch(`${API_URL}/jefe-taller/perfil/estadisticas`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+            headers: getHeaders()
         });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
         
         const data = await response.json();
         
@@ -168,12 +177,14 @@ async function guardarPerfil() {
         if (avatarBase64) {
             const avatarResponse = await fetch(`${API_URL}/jefe-taller/perfil/avatar`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-                },
+                headers: getHeaders(),
                 body: JSON.stringify({ avatar: avatarBase64 })
             });
+            
+            if (avatarResponse.status === 401) {
+                logout();
+                return;
+            }
             
             const avatarData = await avatarResponse.json();
             if (avatarResponse.ok && avatarData.avatar_url) {
@@ -186,10 +197,7 @@ async function guardarPerfil() {
         // Guardar datos del perfil
         const response = await fetch(`${API_URL}/jefe-taller/perfil`, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-            },
+            headers: getHeaders(),
             body: JSON.stringify({
                 nombre,
                 email,
@@ -198,6 +206,11 @@ async function guardarPerfil() {
                 avatar_url: avatarUrl
             })
         });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
         
         const data = await response.json();
         
@@ -267,15 +280,17 @@ async function cambiarPassword() {
     try {
         const response = await fetch(`${API_URL}/jefe-taller/perfil/cambiar-password`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-            },
+            headers: getHeaders(),
             body: JSON.stringify({
                 current_password: currentPassword,
                 new_password: newPassword
             })
         });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
         
         const data = await response.json();
         
@@ -294,6 +309,12 @@ async function cambiarPassword() {
         console.error('Error:', error);
         mostrarNotificacion(error.message, 'error');
     }
+}
+
+function logout() {
+    localStorage.removeItem('furia_token');
+    localStorage.removeItem('furia_user');
+    window.location.href = '/';
 }
 
 // =====================================================
@@ -333,10 +354,4 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
 }
 
 // Exponer funciones globales
-window.logout = function() {
-    if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
-        localStorage.removeItem('furia_token');
-        localStorage.removeItem('furia_user');
-        window.location.href = '/';
-    }
-};
+window.logout = logout;

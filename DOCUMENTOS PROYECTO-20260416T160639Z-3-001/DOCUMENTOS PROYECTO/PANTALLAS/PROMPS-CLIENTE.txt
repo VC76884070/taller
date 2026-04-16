@@ -1,0 +1,281 @@
+********************** MIS VEHÍCULOS ****************************
+Diseña una interfaz web amigable y profesional para el rol “Cliente” en un sistema de gestión de taller mecánico.
+
+Pestaña: “Mis Vehículos”
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario: #E53935
+- Rojo Oscuro: #B71C1C
+- Rojo Acento: #FF3B30
+- Negro: #121212
+- Gris Medio: #6E6E6E
+- Gris Claro: #E5E5E5
+- Blanco: #FFFFFF
+
+🧱 ESTRUCTURA:
+- Sidebar izquierda simplificada
+- Menú:
+   Mis Vehículos
+   Diagnóstico
+   Cotización
+   Seguimiento
+   Historial
+   Recomendaciones
+   Perfil
+
+🖥 ÁREA PRINCIPAL:
+
+Mostrar tarjetas por cada vehículo del cliente:
+
+Cada tarjeta:
+- Imagen del vehículo
+- Marca, modelo, placa
+- Estado actual grande y visible:
+   Recepción
+   Diagnóstico
+   Cotización
+   Reparación
+   Finalizado
+- Fecha de ingreso
+- Botón “Ver Detalle” en rojo primario
+
+Diseño limpio, claro y fácil de entender.
+
+************************** DIAGNÓSTICO ****************************
+
+Diseña pantalla donde el cliente pueda visualizar el diagnóstico de su vehículo.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario #E53935 (acciones principales)
+- Rojo Acento #FF3B30 (alertas)
+- Negro #121212 (títulos)
+- Gris Medio #6E6E6E (texto)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar izquierda simplificada
+- Menú:
+   Mis Vehículos
+   Diagnóstico
+   Cotización
+   Seguimiento
+   Historial
+   Recomendaciones
+   Perfil
+- Encabezado “Diagnóstico del Vehículo”
+
+🖥 ÁREA PRINCIPAL:
+
+Sección superior:
+- Información del vehículo
+- Código de orden
+
+Sección central:
+- Galería de fotos del problema
+- Descripción del técnico (lenguaje claro)
+
+Sección inferior:
+- Estado del diagnóstico:
+   Pendiente de aprobación
+   Aprobado
+   En proceso
+
+Diseño transparente y profesional.
+
+************************* COTIZACIÓN ***********************************
+
+Diseña pantalla donde el cliente pueda revisar y aprobar la cotización.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario #E53935 (botón aprobar)
+- Rojo Oscuro #B71C1C (rechazar)
+- Rojo Acento #FF3B30 (alertas importantes)
+- Negro #121212 (títulos)
+- Gris Claro #E5E5E5 (separadores)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar izquierda simplificada
+- Menú:
+   Mis Vehículos
+   Diagnóstico
+   Cotización
+   Seguimiento
+   Historial
+   Recomendaciones
+   Perfil
+- Encabezado “Cotización”
+
+🖥 ÁREA PRINCIPAL:
+
+Tabla clara:
+- Servicio
+- Descripción
+- Precio
+
+Total destacado en rojo primario.
+
+Mensaje automático:
+“Si no se aprueban los servicios, se cobrará Bs. 200 por diagnóstico.”
+
+Botones:
+- Aprobar Servicios (rojo primario)
+- Rechazar Cotización (rojo oscuro)
+
+Diseño claro, formal y transparente.
+
+**************************** SEGUIMIENTO *******************************
+
+Diseña pantalla de seguimiento visual del proceso del vehículo.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario #E53935 (etapa actual)
+- Gris Claro #E5E5E5 (etapas pendientes)
+- Negro #121212 (títulos)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar izquierda simplificada
+- Menú:
+   Mis Vehículos
+   Diagnóstico
+   Cotización
+   Seguimiento
+   Historial
+   Recomendaciones
+   Perfil
+- Encabezado “Seguimiento del Servicio”
+
+🖥 ÁREA PRINCIPAL:
+
+Línea de tiempo horizontal con etapas:
+- Recepción
+- Diagnóstico
+- Cotización
+- Reparación
+- Finalizado
+
+La etapa actual resaltada en rojo primario.
+
+Mostrar:
+- Fecha de cada etapa
+- Técnico asignado
+- Observaciones
+
+Diseño visual tipo tracking profesional.
+
+****************************** HISTORIAL ******************************
+
+Diseña pantalla de historial de servicios del cliente.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario (filtros activos)
+- Negro (títulos)
+- Gris Medio (texto)
+- Gris Claro (bordes)
+- Blanco (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar izquierda simplificada
+- Menú:
+   Mis Vehículos
+   Diagnóstico
+   Cotización
+   Seguimiento
+   Historial
+   Recomendaciones
+   Perfil
+- Encabezado “Historial”
+
+🖥 ÁREA PRINCIPAL:
+
+Tabla amigable:
+- Fecha
+- Vehículo
+- Servicio realizado
+- Total pagado
+- Estado
+
+Botón:
+“Descargar comprobante”
+
+Diseño limpio tipo panel bancario.
+
+************************** RECOMENDACIONES ***************************
+
+Diseña pantalla de recomendaciones de mantenimiento para el cliente.
+
+🎨 PALETA OBLIGATORIA:
+- Rojo Primario #E53935 (servicio prioritario)
+- Rojo Acento #FF3B30 (urgente)
+- Gris Medio #6E6E6E (informativo)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar izquierda simplificada
+- Menú:
+   Mis Vehículos
+   Diagnóstico
+   Cotización
+   Seguimiento
+   Historial
+   Recomendaciones
+   Perfil
+- Encabezado “Recomendaciones”
+
+🖥 ÁREA PRINCIPAL:
+
+Mostrar tarjetas por recomendación:
+
+Cada tarjeta:
+- Servicio recomendado
+- Descripción breve
+- Fecha sugerida
+- Nivel:
+   Normal
+   Próximo
+   Urgente (rojo acento)
+
+Botón:
+“Agendar Servicio”
+
+Diseño amigable y preventivo.
+
+******************* PERFIL ********************************
+
+Diseña pantalla de perfil del cliente.
+
+🎨 PALETA OBLIGATORIA:
+- Negro #121212 (títulos)
+- Rojo Primario #E53935 (botones)
+- Rojo Oscuro #B71C1C (hover)
+- Gris Claro #E5E5E5 (separadores)
+- Blanco #FFFFFF (fondo)
+
+🧱 ESTRUCTURA:
+- Sidebar izquierda simplificada
+- Menú:
+   Mis Vehículos
+   Diagnóstico
+   Cotización
+   Seguimiento
+   Historial
+   Recomendaciones
+   Perfil
+- Encabezado “Mi Perfil”
+
+🖥 ÁREA PRINCIPAL:
+
+Tarjeta central:
+- Foto de perfil
+- Nombre completo
+- Teléfono
+- Correo
+- Dirección
+- Lista de vehículos registrados
+
+Botones:
+- Editar información
+- Cambiar contraseña
+
+Diseño moderno, limpio y confiable.

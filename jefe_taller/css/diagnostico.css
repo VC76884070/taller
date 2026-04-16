@@ -1575,3 +1575,352 @@
 
 /* Resto de estilos de modales, etc. (mantener los que ya tenías) */
 /* ... */
+
+
+
+
+/* =====================================================
+   MODAL DE DIAGNÓSTICO MEJORADO
+   ==================================================== */
+
+/* Layout principal del detalle */
+.diagnostico-detalle {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Tarjetas de sección */
+.info-section {
+    background: linear-gradient(135deg, var(--gris-oscuro) 0%, rgba(30, 30, 35, 0.95) 100%);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.info-section:hover {
+    border-color: rgba(193, 18, 31, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Encabezados de sección */
+.info-section h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--blanco);
+    border-bottom: 2px solid rgba(193, 18, 31, 0.3);
+    padding-bottom: 0.75rem;
+}
+
+.info-section h3 i {
+    color: var(--rojo-primario);
+    font-size: 1.1rem;
+}
+
+/* Grid de información general */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.info-grid-item {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.info-grid-item strong {
+    color: var(--gris-texto);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 80px;
+}
+
+.info-grid-item span {
+    color: var(--blanco);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+/* Contenido del informe */
+.informe-content {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--rojo-primario);
+}
+
+.informe-content p {
+    margin: 0;
+    line-height: 1.6;
+    color: var(--blanco);
+    font-size: 0.9rem;
+}
+
+.informe-content audio {
+    margin-top: 1rem;
+    width: 100%;
+}
+
+/* Lista de servicios mejorada */
+.servicios-list-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.servicio-card-modal {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    transition: all 0.3s ease;
+    border: 1px solid transparent;
+}
+
+.servicio-card-modal:hover {
+    border-color: rgba(193, 18, 31, 0.3);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.servicio-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.servicio-icon {
+    color: var(--rojo-primario);
+    font-size: 1rem;
+    margin-top: 0.2rem;
+}
+
+.servicio-info {
+    flex: 1;
+}
+
+.servicio-descripcion {
+    font-weight: 600;
+    color: var(--blanco);
+    font-size: 0.9rem;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.servicio-meta {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+}
+
+.servicio-meta i {
+    margin-right: 0.3rem;
+    font-size: 0.7rem;
+}
+
+/* Badges de precios */
+.precio-badge {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--verde-exito);
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+/* Lista de solicitudes de repuestos */
+.solicitudes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.solicitud-item {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    transition: all 0.3s ease;
+}
+
+.solicitud-info {
+    flex: 1;
+}
+
+.solicitud-descripcion {
+    font-weight: 600;
+    color: var(--blanco);
+    font-size: 0.9rem;
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.solicitud-detalles {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+}
+
+.solicitud-detalles i {
+    margin-right: 0.3rem;
+}
+
+.solicitud-estado {
+    padding: 0.3rem 0.8rem;
+    border-radius: var(--radius-full);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.solicitud-estado.pendiente {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--ambar-alerta);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.solicitud-estado.cotizado,
+.solicitud-estado.aprobado {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--verde-exito);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* Grid de fotos mejorado */
+.fotos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 1rem;
+}
+
+.foto-item {
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: all 0.3s ease;
+    border: 1px solid var(--border-color);
+}
+
+.foto-item:hover {
+    transform: translateY(-4px);
+    border-color: var(--rojo-primario);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+.foto-item img {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+}
+
+.foto-item span {
+    display: block;
+    padding: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+    text-align: center;
+    background: rgba(0, 0, 0, 0.3);
+}
+
+/* Observaciones */
+.observaciones-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.observacion-item {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    border-left: 3px solid var(--rojo-primario);
+}
+
+.observacion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+}
+
+.observacion-autor i {
+    margin-right: 0.3rem;
+    color: var(--rojo-primario);
+}
+
+.observacion-fecha i {
+    margin-right: 0.3rem;
+}
+
+.observacion-texto {
+    color: var(--blanco);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin: 0.5rem 0;
+}
+
+.observacion-audio {
+    margin-top: 0.75rem;
+}
+
+.observacion-audio audio {
+    width: 100%;
+    max-width: 300px;
+}
+
+/* Responsive para el modal */
+@media (max-width: 768px) {
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .info-grid-item {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    
+    .info-grid-item strong {
+        min-width: auto;
+    }
+    
+    .servicio-header {
+        flex-direction: column;
+    }
+    
+    .solicitud-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .fotos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    }
+    
+    .observacion-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+}

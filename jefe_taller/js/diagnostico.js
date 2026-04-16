@@ -541,7 +541,7 @@ async function verDiagnostico(diagnosticoId) {
 }
 
 function mostrarModalDiagnostico(diagnostico) {
-    console.log('🎨 Renderizando modal con diagnóstico');
+    console.log('🎨 Renderizando modal con diagnóstico mejorado');
     
     const modalBody = document.getElementById('modalDiagnosticoBody');
     if (!modalBody) return;
@@ -549,72 +549,168 @@ function mostrarModalDiagnostico(diagnostico) {
     const servicios = diagnostico.servicios || [];
     const solicitudes = diagnostico.solicitudes_repuestos || [];
     const fotos = diagnostico.fotos || [];
+    const observaciones = diagnostico.observaciones || [];
+    
+    // Helper para mostrar precio
+    const mostrarPrecio = (precio) => {
+        if (!precio) return 'No asignado';
+        return `$${parseFloat(precio).toLocaleString('es-CO')}`;
+    };
     
     modalBody.innerHTML = `
         <div class="diagnostico-detalle">
+            <!-- Información General -->
             <div class="info-section">
                 <h3><i class="fas fa-info-circle"></i> Información General</h3>
                 <div class="info-grid">
-                    <div><strong>Código Orden:</strong> ${escapeHtml(diagnostico.codigo_unico || 'N/A')}</div>
-                    <div><strong>Técnico:</strong> ${escapeHtml(diagnostico.tecnico_nombre || 'Sin asignar')}</div>
-                    <div><strong>Vehículo:</strong> ${escapeHtml(diagnostico.placa || 'N/A')} - ${escapeHtml(diagnostico.marca || '')} ${escapeHtml(diagnostico.modelo || '')}</div>
-                    <div><strong>Estado:</strong> <span class="estado-badge ${diagnostico.estado}">${getEstadoTexto(diagnostico.estado)}</span></div>
-                    <div><strong>Fecha Envío:</strong> ${formatDate(diagnostico.fecha_envio)}</div>
-                    <div><strong>Versión:</strong> ${diagnostico.version || 1}</div>
+                    <div class="info-grid-item">
+                        <strong>Código Orden:</strong>
+                        <span>${escapeHtml(diagnostico.codigo_unico || 'N/A')}</span>
+                    </div>
+                    <div class="info-grid-item">
+                        <strong>Técnico:</strong>
+                        <span><i class="fas fa-user"></i> ${escapeHtml(diagnostico.tecnico_nombre || 'Sin asignar')}</span>
+                    </div>
+                    <div class="info-grid-item">
+                        <strong>Vehículo:</strong>
+                        <span><i class="fas fa-car"></i> ${escapeHtml(diagnostico.placa || 'N/A')} - ${escapeHtml(diagnostico.marca || '')} ${escapeHtml(diagnostico.modelo || '')}</span>
+                    </div>
+                    <div class="info-grid-item">
+                        <strong>Estado:</strong>
+                        <span class="estado-badge ${diagnostico.estado}">${getEstadoTexto(diagnostico.estado)}</span>
+                    </div>
+                    <div class="info-grid-item">
+                        <strong>Fecha Envío:</strong>
+                        <span><i class="fas fa-calendar"></i> ${formatDate(diagnostico.fecha_envio)}</span>
+                    </div>
+                    <div class="info-grid-item">
+                        <strong>Versión:</strong>
+                        <span><i class="fas fa-code-branch"></i> ${diagnostico.version || 1}</span>
+                    </div>
                 </div>
             </div>
             
+            <!-- Informe del Técnico -->
             <div class="info-section">
                 <h3><i class="fas fa-file-alt"></i> Informe del Técnico</h3>
                 <div class="informe-content">
                     <p>${escapeHtml(diagnostico.informe || 'No hay informe escrito')}</p>
-                    ${diagnostico.url_grabacion_informe ? `<audio controls src="${diagnostico.url_grabacion_informe}" style="width: 100%; margin-top: 12px;"></audio>` : ''}
+                    ${diagnostico.url_grabacion_informe ? `
+                        <audio controls src="${diagnostico.url_grabacion_informe}">
+                            Tu navegador no soporta audio
+                        </audio>
+                    ` : ''}
                 </div>
             </div>
             
+            <!-- Servicios Propuestos -->
             <div class="info-section">
                 <h3><i class="fas fa-tools"></i> Servicios Propuestos (${servicios.length})</h3>
                 <div class="servicios-list-modal">
-                    ${servicios.length > 0 ? servicios.map(s => `
+                    ${servicios.length > 0 ? servicios.map((s, index) => `
                         <div class="servicio-card-modal">
                             <div class="servicio-header">
-                                <span class="servicio-descripcion">${escapeHtml(s.descripcion)}</span>
-                                <button class="solicitar-repuesto-btn" onclick="window.abrirModalSolicitarRepuesto(${diagnostico.id_orden_trabajo}, ${s.id}, '${escapeHtml(s.descripcion).replace(/'/g, "\\'")}')">
-                                    <i class="fas fa-shopping-cart"></i> Solicitar Cotización
-                                </button>
+                                <div class="servicio-icon">
+                                    <i class="fas fa-wrench"></i>
+                                </div>
+                                <div class="servicio-info">
+                                    <span class="servicio-descripcion">
+                                        ${index + 1}. ${escapeHtml(s.descripcion)}
+                                    </span>
+                                    <div class="servicio-meta">
+                                        ${s.precio_estimado ? `
+                                            <span class="precio-badge">
+                                                <i class="fas fa-tag"></i> Estimado: ${mostrarPrecio(s.precio_estimado)}
+                                            </span>
+                                        ` : ''}
+                                        ${s.precio_final ? `
+                                            <span class="precio-badge">
+                                                <i class="fas fa-check-circle"></i> Final: ${mostrarPrecio(s.precio_final)}
+                                            </span>
+                                        ` : ''}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    `).join('') : '<p>No hay servicios registrados</p>'}
+                    `).join('') : '<p style="color: var(--gris-texto); text-align: center;">No hay servicios registrados</p>'}
                 </div>
             </div>
             
+            <!-- Solicitudes de Repuestos -->
             <div class="info-section">
                 <h3><i class="fas fa-boxes"></i> Solicitudes de Repuestos (${solicitudes.length})</h3>
                 <div class="solicitudes-list">
                     ${solicitudes.length > 0 ? solicitudes.map(s => `
                         <div class="solicitud-item">
-                            <div><strong>${escapeHtml(s.descripcion_pieza)}</strong> x${s.cantidad}</div>
-                            <div class="solicitud-estado ${s.estado}">${s.estado || 'pendiente'}</div>
+                            <div class="solicitud-info">
+                                <span class="solicitud-descripcion">
+                                    <i class="fas fa-cube"></i> ${escapeHtml(s.descripcion_pieza)}
+                                </span>
+                                <div class="solicitud-detalles">
+                                    <span><i class="fas fa-hashtag"></i> Cantidad: ${s.cantidad}</span>
+                                    <span><i class="fas fa-chart-line"></i> Urgencia: ${s.urgencia || 'normal'}</span>
+                                    ${s.fecha_solicitud ? `<span><i class="fas fa-calendar"></i> ${formatDate(s.fecha_solicitud)}</span>` : ''}
+                                </div>
+                            </div>
+                            <div class="solicitud-estado ${s.estado || 'pendiente'}">
+                                ${s.estado || 'pendiente'}
+                            </div>
                         </div>
-                    `).join('') : '<p>No hay solicitudes de repuestos</p>'}
+                    `).join('') : '<p style="color: var(--gris-texto); text-align: center;">No hay solicitudes de repuestos</p>'}
                 </div>
             </div>
             
+            <!-- Fotos del Diagnóstico -->
+            ${fotos.length > 0 ? `
             <div class="info-section">
                 <h3><i class="fas fa-camera"></i> Fotos del Diagnóstico (${fotos.length})</h3>
                 <div class="fotos-grid">
-                    ${fotos.length > 0 ? fotos.map(f => `
+                    ${fotos.map(f => `
                         <div class="foto-item" onclick="window.verImagenAmpliada('${f.url_foto}')">
-                            <img src="${f.url_foto}" alt="Foto" onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%25%22%20height%3D%22100%25%22%20viewBox%3D%220%200%20200%20200%22%3E%3Crect%20width%3D%22200%22%20height%3D%22200%22%20fill%3D%22%23333%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dy%3D%22.3em%22%20fill%3D%22%23999%22%3ESin%20imagen%3C%2Ftext%3E%3C%2Fsvg%3E'">
+                            <img src="${f.url_foto}" alt="Foto diagnóstico" onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%25%22%20height%3D%22100%25%22%20viewBox%3D%220%200%20200%20200%22%3E%3Crect%20width%3D%22200%22%20height%3D%22200%22%20fill%3D%22%23333%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dy%3D%22.3em%22%20fill%3D%22%23999%22%3ESin%20imagen%3C%2Ftext%3E%3C%2Fsvg%3E'">
                             <span>${escapeHtml(f.descripcion_tecnico || 'Sin descripción')}</span>
                         </div>
-                    `).join('') : '<p>No hay fotos registradas</p>'}
+                    `).join('')}
                 </div>
             </div>
+            ` : ''}
+            
+            <!-- Observaciones (si existen) -->
+            ${observaciones.length > 0 ? `
+            <div class="info-section">
+                <h3><i class="fas fa-comments"></i> Historial de Observaciones (${observaciones.length})</h3>
+                <div class="observaciones-list">
+                    ${observaciones.map(obs => `
+                        <div class="observacion-item">
+                            <div class="observacion-header">
+                                <span class="observacion-autor">
+                                    <i class="fas fa-user-tie"></i> ${escapeHtml(obs.jefe_taller_nombre || 'Jefe de Taller')}
+                                </span>
+                                <span class="observacion-fecha">
+                                    <i class="fas fa-clock"></i> ${formatDate(obs.fecha_hora)}
+                                </span>
+                            </div>
+                            ${obs.observacion ? `
+                                <div class="observacion-texto">
+                                    <i class="fas fa-quote-left"></i> ${escapeHtml(obs.observacion)}
+                                </div>
+                            ` : ''}
+                            ${obs.url_grabacion ? `
+                                <div class="observacion-audio">
+                                    <audio controls src="${obs.url_grabacion}">
+                                        Tu navegador no soporta audio
+                                    </audio>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
         </div>
     `;
     
-    console.log('✅ Modal renderizado');
+    console.log('✅ Modal mejorado renderizado');
 }
 
 function cerrarModalDiagnostico() {

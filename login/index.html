@@ -485,6 +485,29 @@
         // Exponer función globalmente
         window.togglePasswordField = togglePasswordField;
     </script>
+    <!-- Modal de Selección de Rol para usuarios multi-rol -->
+    <div class="modal" id="roleSelectionModal">
+        <div class="modal-content modal-role">
+            <div class="modal-header">
+                <h2><i class="fas fa-exchange-alt"></i> Seleccionar Rol de Acceso</h2>
+            </div>
+            <div class="modal-body">
+                <div class="role-selection-message">
+                    <i class="fas fa-user-circle"></i>
+                    Hola, <strong id="roleUserName"></strong>
+                    <p>Tienes múltiples roles asignados. Selecciona con qué perfil deseas ingresar:</p>
+                </div>
+                <div class="roles-grid" id="rolesGrid">
+                    <!-- Los roles se cargarán dinámicamente -->
+                </div>
+                <div class="role-selection-footer">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="rememberRoleChoice">
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

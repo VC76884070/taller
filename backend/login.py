@@ -71,61 +71,46 @@ def enviar_email(destinatario, asunto, cuerpo_html):
 def obtener_roles_usuario(id_usuario):
     """Obtener todos los roles de un usuario (como lista de strings)"""
     try:
-        # Intentar usar la función SQL que retorna array de textos
         result = supabase.rpc('usuario_obtener_nombres_roles', {'p_usuario_id': id_usuario}).execute()
         
         if result.data and isinstance(result.data, list):
-            return result.data
+            roles = []
+            for rol in result.data:
+                if rol:
+                    rol_clean = str(rol).strip().lower()
+                    if rol_clean in ['jefe_operativo', 'jefe_taller', 'tecnico', 'encargado_repuestos', 'admin_general']:
+                        roles.append(rol_clean)
+            if roles:
+                return roles
         
-        # Fallback: usar la función original
-        result = supabase.rpc('usuario_obtener_roles', {'p_usuario_id': id_usuario}).execute()
+        result = supabase.table('usuario_rol') \
+            .select('rol(nombre_rol)') \
+            .eq('id_usuario', id_usuario) \
+            .execute()
         
         if result.data:
             roles = []
             for item in result.data:
-                if isinstance(item, dict):
-                    # Buscar el nombre del rol en cualquier campo
-                    rol = item.get('nombre_rol') or item.get('nombre') or item.get('rol')
-                    if rol:
-                        roles.append(rol)
-                    else:
-                        roles.append(str(item))
-                else:
-                    roles.append(str(item))
+                if item.get('rol') and item['rol'].get('nombre_rol'):
+                    rol_nombre = item['rol']['nombre_rol'].strip().lower()
+                    if rol_nombre in ['jefe_operativo', 'jefe_taller', 'tecnico', 'encargado_repuestos', 'admin_general']:
+                        roles.append(rol_nombre)
             return roles
         
         return []
     except Exception as e:
         logger.error(f"Error obteniendo roles: {str(e)}")
-        # Fallback: consultar directamente la tabla
-        try:
-            result = supabase.table('usuario_rol') \
-                .select('rol(nombre_rol)') \
-                .eq('id_usuario', id_usuario) \
-                .execute()
-            
-            if result.data:
-                roles = []
-                for item in result.data:
-                    if item.get('rol') and item['rol'].get('nombre_rol'):
-                        roles.append(item['rol']['nombre_rol'])
-                return roles
-        except Exception as e2:
-            logger.error(f"Error en fallback de roles: {e2}")
-        
         return []
 
-def usuario_tiene_rol(id_usuario, rol_nombre):
-    """Verificar si usuario tiene un rol específico"""
-    try:
-        result = supabase.rpc('usuario_tiene_rol', {
-            'p_usuario_id': id_usuario,
-            'p_rol_nombre': rol_nombre
-        }).execute()
-        return result.data if result.data else False
-    except Exception as e:
-        logger.error(f"Error verificando rol: {str(e)}")
-        return False
+def obtener_rol_principal(nombres_roles):
+    """Determinar el rol principal según prioridad"""
+    prioridad = ['jefe_taller', 'jefe_operativo', 'tecnico', 'encargado_repuestos', 'admin_general']
+    
+    for rol in prioridad:
+        if rol in nombres_roles:
+            return rol
+    
+    return 'jefe_operativo' if nombres_roles else 'jefe_operativo'
 
 # =====================================================
 # DECORADOR PARA VERIFICAR TOKEN
@@ -186,7 +171,6 @@ def login():
             # LOGIN PARA PERSONAL
             logger.info(f"🔍 Buscando staff con: {identifier}")
             
-            # Buscar por email o documento
             result = supabase.table('usuario') \
                 .select('*') \
                 .eq('email', identifier) \
@@ -208,37 +192,16 @@ def login():
                 logger.warning(f"❌ Contraseña incorrecta para: {identifier}")
                 return jsonify({'error': 'Credenciales inválidas'}), 401
             
-            # Obtener roles del usuario
+            # Obtener TODOS los roles del usuario
             nombres_roles = obtener_roles_usuario(user['id'])
             logger.info(f"Roles obtenidos para {user['nombre']}: {nombres_roles}")
             
-            # Determinar rol principal para redirección
-            # Prioridad: jefe_taller > jefe_operativo > tecnico > encargado_repuestos
-            rol_principal = 'jefe_operativo'  # default
-            if 'jefe_taller' in nombres_roles:
-                rol_principal = 'jefe_taller'
-            elif 'jefe_operativo' in nombres_roles:
-                rol_principal = 'jefe_operativo'
-            elif 'tecnico' in nombres_roles:
-                rol_principal = 'tecnico'
-            elif 'encargado_repuestos' in nombres_roles:
-                rol_principal = 'encargado_repuestos'
-            elif nombres_roles:
-                rol_principal = nombres_roles[0]
+            # Determinar rol principal solo para info, NO para redirección
+            rol_principal = obtener_rol_principal(nombres_roles)
             
-            logger.info(f"✅ Login exitoso: {user['nombre']} - Roles: {nombres_roles} - Rol principal: {rol_principal}")
+            logger.info(f"✅ Login exitoso: {user['nombre']} - Roles: {nombres_roles}")
             
-            # Mapeo de roles a URLs de redirección
-            role_redirects = {
-                'jefe_operativo': '/jefe_operativo/dashboard.html',
-                'jefe_taller': '/jefe_taller/dashboard.html',
-                'tecnico': '/tecnico_mecanico/misvehiculos.html',
-                'encargado_repuestos': '/encargado_rep_almacen/dashboard.html'
-            }
-            
-            redirect_url = role_redirects.get(rol_principal, '/dashboard.html')
-            
-            # Crear token JWT
+            # Crear token JWT con TODOS los roles
             token = jwt.encode({
                 'user': {
                     'id': user['id'],
@@ -252,6 +215,7 @@ def login():
                 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
             }, SECRET_KEY, algorithm="HS256")
             
+            # IMPORTANTE: NO enviar redirect, el frontend decide a dónde ir
             return jsonify({
                 'success': True,
                 'token': token,
@@ -263,8 +227,8 @@ def login():
                     'roles': nombres_roles,
                     'rol_principal': rol_principal,
                     'type': 'staff'
-                },
-                'redirect': redirect_url
+                }
+                # SIN CAMPO 'redirect' - el frontend maneja la redirección
             }), 200
             
         elif user_type == 'client':
@@ -304,7 +268,6 @@ def login():
             else:
                 return jsonify({'error': 'Credenciales inválidas'}), 401
             
-            # Cliente siempre tiene rol 'cliente'
             roles_usuario = obtener_roles_usuario(user['id'])
             nombres_roles = roles_usuario + ['cliente']
             
@@ -338,9 +301,9 @@ def login():
                     'email': cliente.get('email', ''),
                     'placa': vehicle['placa'],
                     'vehiculo': f"{vehicle.get('marca', '')} {vehicle.get('modelo', '')}".strip(),
+                    'roles': nombres_roles,
                     'type': 'client'
-                },
-                'redirect': '/cliente/misvehiculos.html'
+                }
             }), 200
         
         else:
@@ -513,35 +476,33 @@ def cambiar_contrasena():
 
 
 # =====================================================
-# ENDPOINTS DE RECUPERACIÓN POR DOCUMENTO
+# ENDPOINTS DE REGISTRO DE CLIENTE
 # =====================================================
 
-@login_bp.route('/api/recuperar/solicitar-por-documento', methods=['POST'])
-def solicitar_recuperacion_por_documento():
-    """Solicitar código de recuperación usando número de documento"""
+@login_bp.route('/api/registro/solicitar', methods=['POST'])
+def solicitar_registro_cliente():
+    """Solicitar registro como cliente - enviar código de verificación"""
     try:
         data = request.get_json()
-        documento = data.get('documento')
         
-        if not documento:
-            return jsonify({'error': 'Número de documento requerido'}), 400
+        nombre = data.get('nombre')
+        email = data.get('email')
+        telefono = data.get('telefono')
+        direccion = data.get('direccion')
+        password = data.get('password')
         
-        if not documento.isdigit():
-            return jsonify({'error': 'El documento debe contener solo números'}), 400
+        if not all([nombre, email, telefono, direccion, password]):
+            return jsonify({'error': 'Todos los campos son requeridos'}), 400
         
-        user_result = supabase.table('usuario') \
-            .select('id, nombre, email, numero_documento') \
-            .eq('numero_documento', documento) \
-            .execute()
+        if len(password) < 6:
+            return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
         
-        if not user_result.data:
-            return jsonify({'error': 'No se encontró un usuario con ese número de documento'}), 404
+        if '@' not in email or '.' not in email:
+            return jsonify({'error': 'Email inválido'}), 400
         
-        user = user_result.data[0]
-        email = user.get('email')
-        
-        if not email:
-            return jsonify({'error': 'El usuario no tiene un correo electrónico registrado'}), 400
+        cliente_existente = supabase.table('cliente').select('id').eq('email', email).execute()
+        if cliente_existente.data:
+            return jsonify({'error': 'El email ya está registrado'}), 400
         
         codigo = generar_codigo_verificacion()
         expira = datetime.datetime.now() + datetime.timedelta(minutes=15)
@@ -549,12 +510,17 @@ def solicitar_recuperacion_por_documento():
         supabase.table('codigoverificacion').insert({
             'email': email,
             'codigo': codigo,
-            'tipo': 'reset_password',
+            'tipo': 'registro_cliente',
             'expira': expira.isoformat(),
-            'datos_extra': {'documento': documento}
+            'datos_extra': {
+                'nombre': nombre,
+                'telefono': telefono,
+                'direccion': direccion,
+                'password': generate_password_hash(password)
+            }
         }).execute()
         
-        asunto = "🔐 Código de recuperación - FURIA MOTOR"
+        asunto = "✅ Código de verificación - FURIA MOTOR"
         cuerpo_html = f"""
         <!DOCTYPE html>
         <html>
@@ -563,9 +529,9 @@ def solicitar_recuperacion_por_documento():
             <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden;">
                 <div style="background: #C1121F; padding: 30px;"><h1 style="color: white;">FURIA MOTOR</h1></div>
                 <div style="padding: 30px;">
-                    <h2>Código de recuperación</h2>
-                    <p>Hola <strong>{user['nombre']}</strong>,</p>
-                    <p>Usa el siguiente código:</p>
+                    <h2>Código de verificación</h2>
+                    <p>Hola <strong>{nombre}</strong>,</p>
+                    <p>Usa el siguiente código para completar tu registro:</p>
                     <div style="font-size: 32px; font-weight: bold; color: #C1121F; background: #f5f5f5; padding: 15px; border-radius: 12px;">{codigo}</div>
                     <p>Expira en <strong>15 minutos</strong>.</p>
                 </div>
@@ -583,106 +549,119 @@ def solicitar_recuperacion_por_documento():
         }), 200
         
     except Exception as e:
-        logger.error(f"Error en solicitud: {str(e)}")
+        logger.error(f"Error en solicitud de registro: {str(e)}")
         return jsonify({'error': 'Error interno del servidor'}), 500
 
 
-@login_bp.route('/api/recuperar/verificar-por-documento', methods=['POST'])
-def verificar_codigo_por_documento():
-    """Verificar código de recuperación por documento"""
+@login_bp.route('/api/registro/confirmar', methods=['POST'])
+def confirmar_registro_cliente():
+    """Confirmar registro de cliente con código de verificación"""
     try:
         data = request.get_json()
-        documento = data.get('documento')
+        email = data.get('email')
         codigo = data.get('codigo')
         
-        if not documento or not codigo:
-            return jsonify({'error': 'Documento y código requeridos'}), 400
+        if not email or not codigo:
+            return jsonify({'error': 'Email y código requeridos'}), 400
         
-        user_result = supabase.table('usuario') \
-            .select('email') \
-            .eq('numero_documento', documento) \
-            .execute()
-        
-        if not user_result.data:
-            return jsonify({'error': 'Usuario no encontrado'}), 404
-        
-        email = user_result.data[0]['email']
-        
-        result = supabase.table('codigoverificacion') \
+        codigo_result = supabase.table('codigoverificacion') \
             .select('*') \
             .eq('email', email) \
             .eq('codigo', codigo) \
-            .eq('tipo', 'reset_password') \
+            .eq('tipo', 'registro_cliente') \
             .eq('usado', False) \
             .gt('expira', datetime.datetime.now().isoformat()) \
             .execute()
         
-        if not result.data:
+        if not codigo_result.data:
             return jsonify({'error': 'Código inválido o expirado'}), 400
         
-        return jsonify({'success': True, 'message': 'Código válido'}), 200
+        datos_extra = codigo_result.data[0].get('datos_extra', {})
+        
+        usuario_result = supabase.table('usuario').insert({
+            'nombre': datos_extra.get('nombre'),
+            'email': email,
+            'contrasenia': datos_extra.get('password'),
+            'contacto': datos_extra.get('telefono'),
+            'ubicacion': datos_extra.get('direccion'),
+            'fecha_registro': datetime.datetime.now().isoformat()
+        }).execute()
+        
+        if not usuario_result.data:
+            return jsonify({'error': 'Error al crear usuario'}), 500
+        
+        id_usuario = usuario_result.data[0]['id']
+        
+        cliente_result = supabase.table('cliente').insert({
+            'nombre': datos_extra.get('nombre'),
+            'email': email,
+            'telefono': datos_extra.get('telefono'),
+            'direccion': datos_extra.get('direccion'),
+            'id_usuario': id_usuario,
+            'fecha_registro': datetime.datetime.now().isoformat()
+        }).execute()
+        
+        if not cliente_result.data:
+            return jsonify({'error': 'Error al crear cliente'}), 500
+        
+        supabase.table('codigoverificacion').update({'usado': True}).eq('id', codigo_result.data[0]['id']).execute()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Registro completado exitosamente'
+        }), 200
         
     except Exception as e:
-        logger.error(f"Error verificando código: {str(e)}")
+        logger.error(f"Error confirmando registro: {str(e)}")
         return jsonify({'error': 'Error interno del servidor'}), 500
 
 
-@login_bp.route('/api/recuperar/cambiar-por-documento', methods=['POST'])
-def cambiar_contrasena_por_documento():
-    """Cambiar contraseña usando número de documento"""
+@login_bp.route('/api/registro/vehiculo', methods=['POST'])
+def registrar_vehiculo_existente():
+    """Registrar vehículo para cliente existente"""
     try:
         data = request.get_json()
-        documento = data.get('documento')
-        nueva_contrasena = data.get('nueva_contrasena')
         
-        if not documento or not nueva_contrasena:
-            return jsonify({'error': 'Documento y nueva contraseña requeridos'}), 400
+        email = data.get('email')
+        placa = data.get('placa').upper()
+        marca = data.get('marca')
+        modelo = data.get('modelo')
+        anio = data.get('anio')
+        color = data.get('color')
         
-        if len(nueva_contrasena) < 6:
-            return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
+        if not all([email, placa, marca, modelo]):
+            return jsonify({'error': 'Email, placa, marca y modelo son requeridos'}), 400
         
-        user_result = supabase.table('usuario') \
-            .select('id, email') \
-            .eq('numero_documento', documento) \
-            .execute()
+        cliente_result = supabase.table('cliente').select('id').eq('email', email).execute()
         
-        if not user_result.data:
-            return jsonify({'error': 'Usuario no encontrado'}), 404
+        if not cliente_result.data:
+            return jsonify({'error': 'Cliente no encontrado. Debes registrarte primero.'}), 404
         
-        user = user_result.data[0]
+        id_cliente = cliente_result.data[0]['id']
         
-        nueva_hash = generate_password_hash(nueva_contrasena)
-        supabase.table('usuario').update({'contrasenia': nueva_hash}).eq('id', user['id']).execute()
+        placa_existente = supabase.table('vehiculo').select('id').eq('placa', placa).execute()
+        if placa_existente.data:
+            return jsonify({'error': 'La placa ya está registrada'}), 400
         
-        supabase.table('codigoverificacion') \
-            .update({'usado': True}) \
-            .eq('email', user['email']) \
-            .eq('tipo', 'reset_password') \
-            .eq('usado', False) \
-            .execute()
+        vehiculo_result = supabase.table('vehiculo').insert({
+            'placa': placa,
+            'marca': marca,
+            'modelo': modelo,
+            'anio': anio if anio else None,
+            'color': color if color else None,
+            'id_cliente': id_cliente
+        }).execute()
         
-        asunto = "🔐 Contraseña actualizada - FURIA MOTOR"
-        cuerpo_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <body style="font-family: 'Plus Jakarta Sans'; text-align: center; padding: 20px;">
-            <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden;">
-                <div style="background: #10B981; padding: 30px;"><h1 style="color: white;">✅ Contraseña actualizada</h1></div>
-                <div style="padding: 30px;">
-                    <p>Tu contraseña ha sido actualizada exitosamente.</p>
-                    <a href="http://localhost:5000/" style="display: inline-block; padding: 12px 24px; background: #C1121F; color: white; text-decoration: none; border-radius: 8px;">Iniciar sesión</a>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
+        if not vehiculo_result.data:
+            return jsonify({'error': 'Error al registrar vehículo'}), 500
         
-        enviar_email(user['email'], asunto, cuerpo_html)
-        
-        return jsonify({'success': True, 'message': 'Contraseña actualizada correctamente'}), 200
+        return jsonify({
+            'success': True,
+            'message': 'Vehículo registrado exitosamente'
+        }), 200
         
     except Exception as e:
-        logger.error(f"Error cambiando contraseña: {str(e)}")
+        logger.error(f"Error registrando vehículo: {str(e)}")
         return jsonify({'error': 'Error interno del servidor'}), 500
 
 
@@ -719,7 +698,6 @@ def solicitar_registro_personal():
         if len(documento) < 5 or len(documento) > 15:
             return jsonify({'error': 'El documento debe tener entre 5 y 15 dígitos'}), 400
         
-        # Verificar si ya existe
         user_existente = supabase.table('usuario').select('id').eq('email', email).execute()
         if user_existente.data:
             return jsonify({'error': 'El email ya está registrado'}), 400
@@ -833,7 +811,6 @@ def aprobar_solicitud_personal(solicitud_id):
         
         id_usuario = usuario_result.data[0]['id']
         
-        # Asignar rol usando usuario_rol
         supabase.table('usuario_rol').insert({
             'id_usuario': id_usuario,
             'id_rol': solicitud['id_rol_solicitado'],

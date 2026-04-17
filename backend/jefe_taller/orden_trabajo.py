@@ -1,10 +1,10 @@
 # =====================================================
-# ÓRDENES DE TRABAJO - JEFE TALLER
+# ÓRDENES DE TRABAJO - JEFE TALLER (CORREGIDO)
 # =====================================================
 
 from flask import Blueprint, request, jsonify
 from config import config
-from decorators import jefe_taller_required  # <-- IMPORTAR EL DECORADOR
+from decorators import jefe_taller_required
 import jwt
 import datetime
 import logging
@@ -38,40 +38,51 @@ supabase = config.supabase
 def listar_tecnicos(current_user):
     """Listar técnicos disponibles para asignación con su carga actual"""
     try:
-        resultado = supabase.table('usuario') \
+        # Usar la función usuario_tiene_rol para obtener técnicos
+        usuarios_result = supabase.table('usuario') \
             .select('id, nombre, contacto') \
-            .eq('id_rol', 4) \
             .execute()
         
         tecnicos = []
         MAX_ORDENES = 2
         
-        for tecnico in (resultado.data or []):
-            # Contar órdenes activas del técnico (sin fecha_hora_final)
-            asignaciones = supabase.table('asignaciontecnico') \
-                .select('id_orden_trabajo') \
-                .eq('id_tecnico', tecnico['id']) \
-                .is_('fecha_hora_final', 'null') \
-                .execute()
+        for usuario in (usuarios_result.data or []):
+            # Verificar si tiene rol de técnico
+            tiene_rol = supabase.rpc('usuario_tiene_rol', {
+                'p_usuario_id': usuario['id'],
+                'p_rol_nombre': 'tecnico'
+            }).execute()
             
-            ordenes_activas = len(asignaciones.data) if asignaciones.data else 0
-            
-            tecnicos.append({
-                'id': tecnico['id'],
-                'nombre': tecnico['nombre'],
-                'contacto': tecnico.get('contacto', ''),
-                'ordenes_activas': ordenes_activas,
-                'max_vehiculos': MAX_ORDENES,
-                'disponible': ordenes_activas < MAX_ORDENES,
-                'cupo_restante': MAX_ORDENES - ordenes_activas
-            })
+            if tiene_rol.data:
+                # Contar órdenes activas del técnico
+                asignaciones = supabase.table('asignaciontecnico') \
+                    .select('id_orden_trabajo') \
+                    .eq('id_tecnico', usuario['id']) \
+                    .is_('fecha_hora_final', 'null') \
+                    .execute()
+                
+                ordenes_activas = len(asignaciones.data) if asignaciones.data else 0
+                
+                tecnicos.append({
+                    'id': usuario['id'],
+                    'nombre': usuario['nombre'],
+                    'contacto': usuario.get('contacto', ''),
+                    'ordenes_activas': ordenes_activas,
+                    'max_vehiculos': MAX_ORDENES,
+                    'disponible': ordenes_activas < MAX_ORDENES,
+                    'cupo_restante': MAX_ORDENES - ordenes_activas
+                })
+        
+        logger.info(f"Técnicos encontrados: {len(tecnicos)}")
         
         return jsonify({'success': True, 'tecnicos': tecnicos}), 200
         
     except Exception as e:
         logger.error(f"Error listando técnicos: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-    
+
 
 @jefe_taller_ordenes_bp.route('/ordenes-activas', methods=['GET'])
 @jefe_taller_required
@@ -1213,32 +1224,38 @@ def aprobar_entrega_orden(current_user):
 def get_carga_tecnicos(current_user):
     """Obtener carga de trabajo de técnicos para el panel derecho"""
     try:
-        resultado = supabase.table('usuario') \
+        # Usar la función usuario_tiene_rol para obtener técnicos
+        usuarios_result = supabase.table('usuario') \
             .select('id, nombre, contacto') \
-            .eq('id_rol', 4) \
             .execute()
         
         tecnicos = []
         MAX_ORDENES = 2
         
-        for tecnico in (resultado.data or []):
-            asignaciones = supabase.table('asignaciontecnico') \
-                .select('id_orden_trabajo') \
-                .eq('id_tecnico', tecnico['id']) \
-                .is_('fecha_hora_final', 'null') \
-                .execute()
+        for usuario in (usuarios_result.data or []):
+            tiene_rol = supabase.rpc('usuario_tiene_rol', {
+                'p_usuario_id': usuario['id'],
+                'p_rol_nombre': 'tecnico'
+            }).execute()
             
-            ordenes_activas = len(asignaciones.data) if asignaciones.data else 0
-            porcentaje = (ordenes_activas / MAX_ORDENES) * 100
-            
-            tecnicos.append({
-                'id': tecnico['id'],
-                'nombre': tecnico['nombre'],
-                'contacto': tecnico.get('contacto', ''),
-                'ordenes_activas': ordenes_activas,
-                'max_vehiculos': MAX_ORDENES,
-                'porcentaje': porcentaje
-            })
+            if tiene_rol.data:
+                asignaciones = supabase.table('asignaciontecnico') \
+                    .select('id_orden_trabajo') \
+                    .eq('id_tecnico', usuario['id']) \
+                    .is_('fecha_hora_final', 'null') \
+                    .execute()
+                
+                ordenes_activas = len(asignaciones.data) if asignaciones.data else 0
+                porcentaje = (ordenes_activas / MAX_ORDENES) * 100
+                
+                tecnicos.append({
+                    'id': usuario['id'],
+                    'nombre': usuario['nombre'],
+                    'contacto': usuario.get('contacto', ''),
+                    'ordenes_activas': ordenes_activas,
+                    'max_vehiculos': MAX_ORDENES,
+                    'porcentaje': porcentaje
+                })
         
         return jsonify({'success': True, 'tecnicos': tecnicos}), 200
         

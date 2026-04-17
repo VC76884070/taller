@@ -1,9 +1,25 @@
 // =====================================================
-// DASHBOARD JEFE DE TALLER
+// DASHBOARD JEFE DE TALLER - CORREGIDO PARA MULTI-ROL
 // =====================================================
 
 // Configuración
 const API_URL = 'http://localhost:5000/api';
+
+// Configuración de roles para redirección
+const ROLE_CONFIG = {
+    'jefe_operativo': {
+        redirect: '/jefe_operativo/dashboard.html'
+    },
+    'jefe_taller': {
+        redirect: '/jefe_taller/dashboard.html'
+    },
+    'tecnico': {
+        redirect: '/tecnico_mecanico/misvehiculos.html'
+    },
+    'encargado_repuestos': {
+        redirect: '/encargado_rep_almacen/dashboard.html'
+    }
+};
 
 // Elementos DOM
 const currentDateSpan = document.getElementById('currentDate');
@@ -27,51 +43,96 @@ let rolesUsuario = [];
 // INICIALIZACIÓN
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 Inicializando dashboard Jefe Taller');
+    
     const autenticado = await checkAuth();
     if (!autenticado) return;
     
     initPage();
     await loadDashboardData();
     setupEventListeners();
-    await cargarRolesUsuario(); // Cargar roles para el UI
+    await cargarRolesUsuario();
 });
 
-// Verificar autenticación (actualizado para múltiples roles)
+// Verificar autenticación - CORREGIDO PARA MULTI-ROL
 async function checkAuth() {
     const token = localStorage.getItem('furia_token');
     const userData = localStorage.getItem('furia_user');
     
     if (!token) {
-        window.location.href = '../../login.html';
+        console.log('❌ No hay token, redirigiendo a login');
+        window.location.href = '/';
         return false;
     }
     
     try {
+        // Obtener usuario del localStorage
+        if (userData) {
+            usuarioActual = JSON.parse(userData);
+        }
+        
         // Decodificar token para verificar roles
         const payload = JSON.parse(atob(token.split('.')[1]));
-        usuarioActual = payload.user;
-        
-        // Obtener roles del usuario desde el token o desde el localStorage actualizado
-        if (usuarioActual.roles && Array.isArray(usuarioActual.roles)) {
-            rolesUsuario = usuarioActual.roles;
-        } else if (userData) {
-            const user = JSON.parse(userData);
-            rolesUsuario = user.roles || [];
-            usuarioActual.roles = rolesUsuario;
+        if (payload.user) {
+            usuarioActual = { ...usuarioActual, ...payload.user };
         }
         
-        // Verificar si tiene rol de jefe_taller o jefe_operativo
-        const tieneRolPermitido = rolesUsuario.includes('jefe_taller') || 
-                                   rolesUsuario.includes('jefe_operativo') ||
-                                   usuarioActual.rol === 'jefe_taller' || // Compatibilidad
-                                   usuarioActual.id_rol === 2 || 
-                                   usuarioActual.id_rol === 3;
+        // Obtener roles del usuario
+        if (usuarioActual && usuarioActual.roles && Array.isArray(usuarioActual.roles)) {
+            rolesUsuario = usuarioActual.roles;
+        } else if (usuarioActual && usuarioActual.rol) {
+            rolesUsuario = [usuarioActual.rol];
+        } else {
+            rolesUsuario = [];
+        }
         
-        if (!tieneRolPermitido) {
-            console.warn('Usuario no tiene permisos de jefe_taller o jefe_operativo');
-            window.location.href = '../../login.html';
+        // Obtener rol seleccionado
+        const selectedRole = usuarioActual?.selected_role;
+        
+        console.log('📋 Roles del usuario:', rolesUsuario);
+        console.log('🎯 Rol seleccionado:', selectedRole);
+        
+        // Verificar si tiene rol de jefe_taller
+        const tieneRolJefeTaller = rolesUsuario.includes('jefe_taller');
+        
+        if (!tieneRolJefeTaller) {
+            console.warn('❌ Usuario no tiene permiso de Jefe Taller');
+            mostrarNotificacion('No tienes permisos para acceder a esta sección', 'error');
+            
+            // Si tiene jefe_operativo, redirigir allí
+            if (rolesUsuario.includes('jefe_operativo')) {
+                window.location.href = '/jefe_operativo/dashboard.html';
+            } else {
+                window.location.href = '/';
+            }
             return false;
         }
+        
+        // Si el usuario seleccionó jefe_operativo pero está en jefe_taller, redirigir
+        if (selectedRole === 'jefe_operativo' && rolesUsuario.includes('jefe_operativo')) {
+            console.log('🔄 Usuario seleccionó Jefe Operativo, redirigiendo...');
+            window.location.href = '/jefe_operativo/dashboard.html';
+            return false;
+        }
+        
+        // Verificar token con el backend
+        const response = await fetch(`${API_URL}/verify-token`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.valid) {
+            console.log('❌ Token inválido, redirigiendo a login');
+            localStorage.clear();
+            window.location.href = '/';
+            return false;
+        }
+        
+        console.log('✅ Autenticación correcta para Jefe Taller');
         
         // Actualizar localStorage con roles si es necesario
         if (usuarioActual && !usuarioActual.roles) {
@@ -83,7 +144,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error verificando autenticación:', error);
-        window.location.href = '../../login.html';
+        window.location.href = '/';
         return false;
     }
 }
@@ -102,12 +163,10 @@ async function cargarRolesUsuario() {
             const data = await response.json();
             if (data.success && data.roles) {
                 rolesUsuario = data.roles.map(r => r.nombre_rol || r);
-                usuarioActual.roles = rolesUsuario;
-                
-                // Actualizar localStorage
-                localStorage.setItem('furia_user', JSON.stringify(usuarioActual));
-                
-                // Mostrar indicador visual de roles múltiples si aplica
+                if (usuarioActual) {
+                    usuarioActual.roles = rolesUsuario;
+                    localStorage.setItem('furia_user', JSON.stringify(usuarioActual));
+                }
                 mostrarIndicadorRoles();
             }
         }
@@ -120,6 +179,9 @@ async function cargarRolesUsuario() {
 function mostrarIndicadorRoles() {
     const headerUserInfo = document.querySelector('.user-info');
     if (headerUserInfo && rolesUsuario.length > 1) {
+        // Verificar si ya existe el badge
+        if (headerUserInfo.querySelector('.roles-badge')) return;
+        
         const rolesBadge = document.createElement('div');
         rolesBadge.className = 'roles-badge';
         rolesBadge.style.cssText = `
@@ -129,8 +191,10 @@ function mostrarIndicadorRoles() {
             border-radius: 12px;
             margin-top: 0.25rem;
             display: inline-block;
+            color: var(--blanco);
         `;
-        rolesBadge.textContent = rolesUsuario.map(r => {
+        
+        const nombresRoles = rolesUsuario.map(r => {
             const nombres = {
                 'jefe_taller': 'Jefe Taller',
                 'jefe_operativo': 'Jefe Operativo',
@@ -139,6 +203,11 @@ function mostrarIndicadorRoles() {
             };
             return nombres[r] || r;
         }).join(' • ');
+        
+        rolesBadge.innerHTML = `<i class="fas fa-exchange-alt" style="margin-right: 0.3rem;"></i>${nombresRoles}`;
+        
+        // Agregar tooltip
+        rolesBadge.title = 'Tienes múltiples roles. Puedes cambiar desde el menú de perfil.';
         
         headerUserInfo.appendChild(rolesBadge);
     }
@@ -159,7 +228,7 @@ function initPage() {
         currentDateSpan.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
     }
     
-    // Mostrar nombre de usuario con roles
+    // Mostrar nombre de usuario
     const userNombreSpan = document.getElementById('userNombre');
     if (userNombreSpan && usuarioActual) {
         userNombreSpan.textContent = usuarioActual.nombre || usuarioActual.email || 'Usuario';
@@ -168,7 +237,6 @@ function initPage() {
 
 // Configurar event listeners
 function setupEventListeners() {
-    // Botón de recargar datos
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', () => loadDashboardData());
@@ -182,6 +250,10 @@ async function loadDashboardData() {
     try {
         mostrarLoading(true);
         const token = localStorage.getItem('furia_token');
+        
+        if (!token) {
+            throw new Error('No hay token');
+        }
         
         // Cargar estadísticas de diagnósticos
         const statsResponse = await fetch(`${API_URL}/jefe-taller/diagnosticos-stats`, {
@@ -209,7 +281,7 @@ async function loadDashboardData() {
                 ordenesActivas: pendientes?.diagnosticos?.filter(d => d.estado === 'pendiente').length || 0,
                 ordenesPausa: pendientes?.diagnosticos?.filter(d => d.estado === 'rechazado').length || 0,
                 tecnicosActivos: new Set(pendientes?.diagnosticos?.map(d => d.id_tecnico)).size || 0,
-                bahiasOcupadas: 9 // Este dato vendría de otro endpoint
+                bahiasOcupadas: 9
             },
             diagnosticos: pendientes?.diagnosticos || [],
             cotizaciones: cotizaciones?.cotizaciones || [],
@@ -221,7 +293,6 @@ async function loadDashboardData() {
     } catch (error) {
         console.error('Error cargando dashboard:', error);
         mostrarNotificacion('Error al cargar datos del dashboard', 'error');
-        // Usar datos de ejemplo como fallback
         usarDatosEjemplo();
     } finally {
         mostrarLoading(false);
@@ -236,7 +307,7 @@ function mostrarLoading(mostrar) {
     }
 }
 
-// Usar datos de ejemplo en caso de error
+// Usar datos de ejemplo
 function usarDatosEjemplo() {
     dashboardData = {
         kpis: {
@@ -284,63 +355,39 @@ function generarBahias() {
 
 // Generar diagnósticos pendientes
 function generarDiagnosticos() {
-    const diagnosticos = [
+    return [
         {
-            id: 1,
+            diagnostico_id: 1,
             vehiculo: 'Toyota Corolla',
             placa: 'ABC123',
-            tecnico: 'Luis Mamani',
-            tiempo: 'Hace 15 min',
-            descripcion: 'Ruido en motor al acelerar'
+            tecnico_nombre: 'Luis Mamani',
+            fecha_envio: new Date().toISOString(),
+            informe: 'Ruido en motor al acelerar, posible problema en correa'
         },
         {
-            id: 2,
+            diagnostico_id: 2,
             vehiculo: 'Honda Civic',
             placa: 'XYZ789',
-            tecnico: 'Carlos Rodríguez',
-            tiempo: 'Hace 32 min',
-            descripcion: 'Vibración en frenos'
-        },
-        {
-            id: 3,
-            vehiculo: 'Chevrolet Spark',
-            placa: 'JKL012',
-            tecnico: 'Juan Pérez',
-            tiempo: 'Hace 1h 10m',
-            descripcion: 'Falla en sistema eléctrico'
+            tecnico_nombre: 'Carlos Rodríguez',
+            fecha_envio: new Date().toISOString(),
+            informe: 'Vibración en frenos, discos desgastados'
         }
     ];
-    
-    return diagnosticos;
 }
 
 // Generar próximas entregas
 function generarEntregas() {
-    const entregas = [
+    return [
         {
             id: 1,
             vehiculo: 'Nissan Versa',
             placa: 'GHI789',
-            cliente: 'Ana Flores',
-            hora: '14:30'
-        },
-        {
-            id: 2,
-            vehiculo: 'Suzuki Swift',
-            placa: 'DEF456',
-            cliente: 'Roberto Méndez',
-            hora: '16:00'
-        },
-        {
-            id: 3,
-            vehiculo: 'Ford Fiesta',
-            placa: 'MNO345',
-            cliente: 'Laura Sánchez',
-            hora: '17:30'
+            cliente_nombre: 'Ana Flores',
+            fecha_envio: new Date().toISOString(),
+            total: 1500,
+            estado_cliente: 'enviada'
         }
     ];
-    
-    return entregas;
 }
 
 // =====================================================
@@ -424,7 +471,7 @@ function renderizarDiagnosticos() {
     `).join('');
 }
 
-// Renderizar entregas (cotizaciones pendientes)
+// Renderizar entregas
 function renderizarEntregas() {
     if (!entregasList) return;
     
@@ -498,7 +545,7 @@ function renderizarCalendario() {
         
         const hoy = new Date();
         const esHoy = fecha.toDateString() === hoy.toDateString();
-        const tieneOrden = Math.random() > 0.5; // Simulación - reemplazar con datos reales
+        const tieneOrden = Math.random() > 0.5;
         
         html += `
             <div class="calendario-dia ${esHoy ? 'today' : ''} ${tieneOrden ? 'has-orden' : ''}">
@@ -524,25 +571,17 @@ function renderizarCalendario() {
 // =====================================================
 window.verDetalleBahia = (numero) => {
     mostrarNotificacion(`Viendo detalle de Bahía ${numero}`, 'info');
-    // Aquí iría la navegación a la página de detalle
 };
 
 window.revisarDiagnostico = (id) => {
-    // Navegar a la página de revisión de diagnóstico
-    window.location.href = `diagnostico-revision.html?id=${id}`;
-};
-
-window.verEntrega = (id) => {
-    window.location.href = `cotizacion-detalle.html?id=${id}`;
+    window.location.href = `diagnosticos.html?diagnostico_id=${id}`;
 };
 
 window.verCotizacion = (id) => {
-    window.location.href = `cotizacion-detalle.html?id=${id}`;
+    window.location.href = `cotizaciones.html?id=${id}`;
 };
 
-// =====================================================
-// CALENDARIO
-// =====================================================
+// Cambiar semana en calendario
 window.cambiarSemana = (direccion) => {
     if (direccion === 'anterior') {
         semanaActual.setDate(semanaActual.getDate() - 7);
@@ -612,10 +651,16 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
 }
 
 // =====================================================
-// LOGOUT
+// LOGOUT - CORREGIDO
 // =====================================================
 window.logout = () => {
     localStorage.removeItem('furia_token');
     localStorage.removeItem('furia_user');
-    window.location.href = '../../login.html';
+    localStorage.removeItem('furia_remembered');
+    localStorage.removeItem('furia_remembered_type');
+    localStorage.removeItem('furia_selected_role');
+    localStorage.removeItem('furia_selected_role_user');
+    window.location.href = '/';
 };
+
+console.log('✅ dashboard.js de Jefe Taller cargado correctamente');

@@ -1,9 +1,29 @@
 // =====================================================
-// DASHBOARD ENCARGADO DE REPUESTOS
+// DASHBOARD ENCARGADO DE REPUESTOS - CORREGIDO PARA MULTI-ROL
+// FURIA MOTOR COMPANY SRL
 // =====================================================
 
 // Configuración
 const API_URL = 'http://localhost:5000/api';
+
+// Configuración de roles para redirección
+const ROLE_CONFIG = {
+    'jefe_operativo': {
+        redirect: '/jefe_operativo/dashboard.html'
+    },
+    'jefe_taller': {
+        redirect: '/jefe_taller/dashboard.html'
+    },
+    'tecnico': {
+        redirect: '/tecnico_mecanico/misvehiculos.html'
+    },
+    'encargado_repuestos': {
+        redirect: '/encargado_rep_almacen/dashboard.html'
+    },
+    'encargado_rep_almacen': {
+        redirect: '/encargado_rep_almacen/dashboard.html'
+    }
+};
 
 // Elementos DOM
 const currentDateSpan = document.getElementById('currentDate');
@@ -17,39 +37,172 @@ const criticosList = document.getElementById('criticosList');
 const alertasCount = document.getElementById('alertasCount');
 const criticosCount = document.getElementById('criticosCount');
 
+// Variables de estado
+let usuarioActual = null;
+let rolesUsuario = [];
+let token = null;
+
 // Variables para gráficos
 let categoriasChart = null;
+
+// =====================================================
+// VERIFICAR AUTENTICACIÓN - CORREGIDO PARA MULTI-ROL
+// =====================================================
+async function checkAuth() {
+    token = localStorage.getItem('furia_token');
+    const userData = localStorage.getItem('furia_user');
+    
+    if (!token) {
+        console.log('❌ No hay token, redirigiendo a login');
+        window.location.href = '/';
+        return false;
+    }
+    
+    try {
+        // Obtener usuario del localStorage
+        if (userData) {
+            usuarioActual = JSON.parse(userData);
+            rolesUsuario = usuarioActual.roles || [];
+        }
+        
+        // Decodificar token para verificar roles
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.user) {
+            usuarioActual = { ...usuarioActual, ...payload.user };
+            if (payload.user.roles) {
+                rolesUsuario = payload.user.roles;
+            }
+        }
+        
+        // Obtener rol seleccionado
+        const selectedRole = usuarioActual?.selected_role;
+        
+        console.log('📋 Roles del usuario:', rolesUsuario);
+        console.log('🎯 Rol seleccionado:', selectedRole);
+        
+        // Roles válidos para encargado de repuestos
+        const rolesValidos = ['encargado_repuestos', 'encargado_rep_almacen'];
+        const tieneRolRepuestos = rolesUsuario.some(r => rolesValidos.includes(r));
+        
+        if (!tieneRolRepuestos) {
+            console.warn('❌ Usuario no tiene permiso de Encargado de Repuestos');
+            mostrarNotificacion('No tienes permisos para acceder a esta sección', 'error');
+            
+            // Redirigir según el rol que tenga
+            if (rolesUsuario.includes('jefe_operativo')) {
+                window.location.href = '/jefe_operativo/dashboard.html';
+            } else if (rolesUsuario.includes('jefe_taller')) {
+                window.location.href = '/jefe_taller/dashboard.html';
+            } else if (rolesUsuario.includes('tecnico')) {
+                window.location.href = '/tecnico_mecanico/misvehiculos.html';
+            } else {
+                window.location.href = '/';
+            }
+            return false;
+        }
+        
+        // Si el usuario seleccionó otro rol diferente a repuestos, redirigir
+        if (selectedRole && selectedRole !== 'encargado_repuestos' && selectedRole !== 'encargado_rep_almacen') {
+            if (ROLE_CONFIG[selectedRole]) {
+                console.log(`🔄 Usuario seleccionó ${selectedRole}, redirigiendo...`);
+                window.location.href = ROLE_CONFIG[selectedRole].redirect;
+                return false;
+            }
+        }
+        
+        // Verificar token con el backend
+        const response = await fetch(`${API_URL}/verify-token`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.valid) {
+            console.log('❌ Token inválido, redirigiendo a login');
+            localStorage.clear();
+            window.location.href = '/';
+            return false;
+        }
+        
+        console.log('✅ Autenticación correcta para Encargado de Repuestos');
+        
+        // Actualizar localStorage con datos actualizados
+        if (usuarioActual) {
+            localStorage.setItem('furia_user', JSON.stringify(usuarioActual));
+        }
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error verificando autenticación:', error);
+        window.location.href = '/';
+        return false;
+    }
+}
+
+// Mostrar indicador de roles múltiples
+function mostrarIndicadorRoles() {
+    const headerUserInfo = document.querySelector('.user-info');
+    if (headerUserInfo && rolesUsuario && rolesUsuario.length > 1) {
+        if (headerUserInfo.querySelector('.roles-badge')) return;
+        
+        const rolesBadge = document.createElement('div');
+        rolesBadge.className = 'roles-badge';
+        rolesBadge.style.cssText = `
+            font-size: 0.7rem;
+            background: var(--gris-200);
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            margin-top: 0.25rem;
+            display: inline-block;
+            color: var(--blanco);
+            cursor: pointer;
+        `;
+        
+        const nombresRoles = rolesUsuario.map(r => {
+            const nombres = {
+                'jefe_taller': 'Jefe Taller',
+                'jefe_operativo': 'Jefe Operativo',
+                'tecnico': 'Técnico',
+                'encargado_repuestos': 'Repuestos',
+                'encargado_rep_almacen': 'Repuestos'
+            };
+            return nombres[r] || r;
+        }).join(' • ');
+        
+        rolesBadge.innerHTML = `<i class="fas fa-exchange-alt" style="margin-right: 0.3rem;"></i>${nombresRoles}`;
+        rolesBadge.title = 'Tienes múltiples roles. Cierra sesión para cambiar de rol.';
+        
+        headerUserInfo.appendChild(rolesBadge);
+    }
+}
+
+// Mostrar nombre de usuario
+function mostrarNombreUsuario() {
+    const userNameSpan = document.getElementById('userName');
+    if (userNameSpan && usuarioActual) {
+        userNameSpan.textContent = usuarioActual.nombre || usuarioActual.email || 'Usuario';
+    }
+}
 
 // =====================================================
 // INICIALIZACIÓN
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 Inicializando dashboard Encargado de Repuestos');
+    
     const autenticado = await checkAuth();
-    if (autenticado) {
-        initPage();
-        await loadDashboardData();
-        setupEventListeners();
-    }
+    if (!autenticado) return;
+    
+    initPage();
+    mostrarNombreUsuario();
+    mostrarIndicadorRoles();
+    await loadDashboardData();
+    setupEventListeners();
 });
-
-// Verificar autenticación
-async function checkAuth() {
-    const token = localStorage.getItem('furia_token');
-    const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
-    
-    if (!token) {
-        window.location.href = '../../login.html';
-        return false;
-    }
-    
-    const rolesValidos = ['encargado_repuestos', 'encargado_rep_almacen'];
-    if (!rolesValidos.includes(user.rol)) {
-        window.location.href = '../../login.html';
-        return false;
-    }
-    
-    return true;
-}
 
 // Inicializar página
 function initPage() {
@@ -69,7 +222,11 @@ function initPage() {
 
 // Configurar event listeners
 function setupEventListeners() {
-    // Aquí puedes agregar más event listeners
+    // Botón de refrescar
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => loadDashboardData());
+    }
 }
 
 // =====================================================
@@ -77,24 +234,71 @@ function setupEventListeners() {
 // =====================================================
 async function loadDashboardData() {
     try {
-        // Simulación - Reemplazar con llamada real a la API
-        await new Promise(resolve => setTimeout(resolve, 1200));
+        mostrarLoading(true);
         
-        // Datos de ejemplo
+        // Intentar cargar datos reales desde la API
+        const response = await fetch(`${API_URL}/encargado-repuestos/dashboard`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.status === 401) {
+            localStorage.clear();
+            window.location.href = '/';
+            return;
+        }
+        
+        let data;
+        
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+                data = result.data;
+            } else {
+                throw new Error(result.error || 'Error al cargar datos');
+            }
+        } else {
+            // Si la API no está disponible, usar datos de ejemplo
+            console.log('Usando datos de ejemplo para demostración');
+            data = generarDatosEjemplo();
+        }
+        
+        actualizarKPIs(data);
+        renderizarAlertas(data.alertas || []);
+        renderizarCompras(data.compras || []);
+        renderizarCriticos(data.criticos || []);
+        if (data.categorias) {
+            renderizarGrafico(data.categorias);
+        }
+        
+        // Actualizar badge de stock bajo en sidebar
+        const stockBajoCount = (data.alertas || []).length;
+        localStorage.setItem('stock_bajo_count', stockBajoCount.toString());
+        
+    } catch (error) {
+        console.error('Error cargando dashboard:', error);
+        mostrarNotificacion('Error al cargar datos del dashboard', 'error');
+        
+        // Usar datos de ejemplo como fallback
         const data = generarDatosEjemplo();
-        
         actualizarKPIs(data);
         renderizarAlertas(data.alertas);
         renderizarCompras(data.compras);
         renderizarCriticos(data.criticos);
         renderizarGrafico(data.categorias);
-        
-        // Actualizar badge de stock bajo en sidebar
-        localStorage.setItem('stock_bajo_count', data.alertas.length.toString());
-        
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion('Error al cargar datos del dashboard', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// Mostrar/ocultar loading
+function mostrarLoading(mostrar) {
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.style.display = mostrar ? 'flex' : 'none';
     }
 }
 
@@ -199,28 +403,40 @@ function generarDatosEjemplo() {
 
 // Actualizar KPIs
 function actualizarKPIs(data) {
-    totalRepuestos.textContent = data.kpis.totalRepuestos.toLocaleString();
-    stockBajo.textContent = data.kpis.stockBajo;
-    comprasMes.textContent = `Bs. ${data.kpis.comprasMes.toLocaleString()}`;
-    proveedoresActivos.textContent = data.kpis.proveedoresActivos;
+    if (totalRepuestos) totalRepuestos.textContent = (data.kpis.totalRepuestos || 0).toLocaleString();
+    if (stockBajo) stockBajo.textContent = data.kpis.stockBajo || 0;
+    if (comprasMes) comprasMes.textContent = `Bs. ${(data.kpis.comprasMes || 0).toLocaleString()}`;
+    if (proveedoresActivos) proveedoresActivos.textContent = data.kpis.proveedoresActivos || 0;
 }
 
 // Renderizar alertas
 function renderizarAlertas(alertas) {
-    alertasCount.textContent = alertas.length;
+    if (alertasCount) alertasCount.textContent = alertas.length;
+    
+    if (!alertasList) return;
+    
+    if (alertas.length === 0) {
+        alertasList.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--gris-texto);">
+                <i class="fas fa-check-circle" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+                <p>No hay alertas de stock bajo</p>
+            </div>
+        `;
+        return;
+    }
     
     alertasList.innerHTML = alertas.map(alerta => `
         <div class="alerta-item">
             <div class="alerta-icon">
-                <i class="fas fa-exclamation"></i>
+                <i class="fas fa-exclamation-triangle"></i>
             </div>
             <div class="alerta-content">
-                <div class="alerta-titulo">${alerta.titulo}</div>
-                <div class="alerta-desc">${alerta.descripcion}</div>
+                <div class="alerta-titulo">${escapeHtml(alerta.titulo)}</div>
+                <div class="alerta-desc">${escapeHtml(alerta.descripcion)}</div>
             </div>
             <div class="alerta-meta">
                 <div class="alerta-cantidad">${alerta.cantidad}</div>
-                <div class="alerta-unidad">${alerta.unidad}</div>
+                <div class="alerta-unidad">${alerta.unidad || 'uds'}</div>
             </div>
         </div>
     `).join('');
@@ -228,34 +444,58 @@ function renderizarAlertas(alertas) {
 
 // Renderizar compras recientes
 function renderizarCompras(compras) {
+    if (!comprasList) return;
+    
+    if (compras.length === 0) {
+        comprasList.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--gris-texto);">
+                <i class="fas fa-receipt" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+                <p>No hay compras recientes</p>
+            </div>
+        `;
+        return;
+    }
+    
     comprasList.innerHTML = compras.map(compra => `
         <div class="compra-item">
             <div class="compra-icon">
                 <i class="fas fa-receipt"></i>
             </div>
             <div class="compra-content">
-                <div class="compra-proveedor">${compra.proveedor}</div>
+                <div class="compra-proveedor">${escapeHtml(compra.proveedor)}</div>
                 <div class="compra-info">
                     <span><i class="far fa-clock"></i> ${compra.fecha}</span>
                     <span><i class="fas fa-boxes"></i> ${compra.items} items</span>
                 </div>
             </div>
-            <div class="compra-monto">Bs. ${compra.monto.toLocaleString()}</div>
+            <div class="compra-monto">Bs. ${(compra.monto || 0).toLocaleString()}</div>
         </div>
     `).join('');
 }
 
 // Renderizar repuestos críticos
 function renderizarCriticos(criticos) {
-    criticosCount.textContent = criticos.length;
+    if (criticosCount) criticosCount.textContent = criticos.length;
+    
+    if (!criticosList) return;
+    
+    if (criticos.length === 0) {
+        criticosList.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--gris-texto);">
+                <i class="fas fa-check" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+                <p>No hay repuestos críticos</p>
+            </div>
+        `;
+        return;
+    }
     
     criticosList.innerHTML = criticos.map(critico => `
         <div class="critico-item">
             <div class="critico-info">
-                <h4>${critico.nombre}</h4>
-                <p>${critico.codigo} | Mínimo: ${critico.minimo}</p>
+                <h4>${escapeHtml(critico.nombre)}</h4>
+                <p>${escapeHtml(critico.codigo)} | Mínimo: ${critico.minimo}</p>
             </div>
-            <div class="critico-stock">
+            <div class="critico-stock ${critico.stock <= (critico.minimo / 2) ? 'critico' : 'bajo'}">
                 <span>${critico.stock}</span>
                 <small>uds</small>
             </div>
@@ -265,14 +505,13 @@ function renderizarCriticos(criticos) {
 
 // Renderizar gráfico circular
 function renderizarGrafico(categorias) {
-    const ctx = document.getElementById('categoriasChart').getContext('2d');
+    const canvas = document.getElementById('categoriasChart');
+    if (!canvas) return;
     
-    // Colores para el gráfico
-    const colores = [
-        '#C1121F', '#2C3E50', '#1E3A5F', '#10B981', '#F59E0B', '#6B7280'
-    ];
+    const ctx = canvas.getContext('2d');
     
-    // Destruir gráfico anterior si existe
+    const colores = ['#C1121F', '#2C3E50', '#1E3A5F', '#10B981', '#F59E0B', '#6B7280'];
+    
     if (categoriasChart) {
         categoriasChart.destroy();
     }
@@ -283,7 +522,7 @@ function renderizarGrafico(categorias) {
             labels: categorias.labels,
             datasets: [{
                 data: categorias.data,
-                backgroundColor: colores,
+                backgroundColor: colores.slice(0, categorias.labels.length),
                 borderWidth: 0,
                 borderRadius: 4,
                 spacing: 4
@@ -303,11 +542,11 @@ function renderizarGrafico(categorias) {
                             size: 11,
                             family: 'Plus Jakarta Sans'
                         },
-                        color: '#2C3E50'
+                        color: '#8E8E93'
                     }
                 },
                 tooltip: {
-                    backgroundColor: '#0F0F10',
+                    backgroundColor: '#1C1C1E',
                     titleColor: '#FFFFFF',
                     bodyColor: '#FFFFFF',
                     cornerRadius: 8,
@@ -325,6 +564,14 @@ function renderizarGrafico(categorias) {
     });
 }
 
+// Escapar HTML
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // =====================================================
 // NOTIFICACIONES
 // =====================================================
@@ -339,6 +586,9 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
             top: 20px;
             right: 20px;
             z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         `;
         document.body.appendChild(toastContainer);
     }
@@ -359,39 +609,42 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
     `;
     
     toast.style.cssText = `
-        background: white;
-        padding: 1rem 1.5rem;
+        background: var(--bg-card);
+        color: var(--blanco);
+        padding: 0.75rem 1.25rem;
         border-radius: 10px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        margin-bottom: 0.5rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-left: 4px solid ${tipo === 'success' ? '#10B981' : tipo === 'error' ? '#C1121F' : tipo === 'warning' ? '#F59E0B' : '#1E3A5F'};
         animation: slideIn 0.3s ease;
-        border-left: 4px solid ${tipo === 'success' ? '#10B981' : tipo === 'error' ? '#C1121F' : tipo === 'warning' ? '#F59E0B' : '#2196F3'};
-        min-width: 300px;
     `;
     
     toastContainer.appendChild(toast);
     
     setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => {
-            if (toastContainer.contains(toast)) {
-                toastContainer.removeChild(toast);
-            }
-        }, 300);
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
 
 // =====================================================
-// LOGOUT
+// LOGOUT - CORREGIDO
 // =====================================================
 window.logout = () => {
-    if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
-        localStorage.removeItem('furia_token');
-        localStorage.removeItem('furia_user');
-        localStorage.removeItem('stock_bajo_count');
-        window.location.href = '../../login.html';
-    }
+    localStorage.removeItem('furia_token');
+    localStorage.removeItem('furia_user');
+    localStorage.removeItem('furia_remembered');
+    localStorage.removeItem('furia_remembered_type');
+    localStorage.removeItem('furia_selected_role');
+    localStorage.removeItem('furia_selected_role_user');
+    localStorage.removeItem('stock_bajo_count');
+    window.location.href = '/';
 };
+
+// Funciones globales
+window.recargarDatos = () => loadDashboardData();
+
+console.log('✅ dashboard.js de Encargado de Repuestos cargado correctamente');

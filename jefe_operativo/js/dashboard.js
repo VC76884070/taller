@@ -1,5 +1,25 @@
+// =====================================================
+// DASHBOARD JEFE OPERATIVO - CORREGIDO
+// =====================================================
+
 // Configuración
 const API_URL = 'http://localhost:5000/api';
+
+// Configuración de roles para redirección
+const ROLE_CONFIG = {
+    'jefe_operativo': {
+        redirect: '/jefe_operativo/dashboard.html'
+    },
+    'jefe_taller': {
+        redirect: '/jefe_taller/dashboard.html'
+    },
+    'tecnico': {
+        redirect: '/tecnico_mecanico/misvehiculos.html'
+    },
+    'encargado_repuestos': {
+        redirect: '/encargado_rep_almacen/dashboard.html'
+    }
+};
 
 // Elementos DOM
 const userName = document.getElementById('userName');
@@ -13,34 +33,148 @@ const ultimosIngresos = document.getElementById('ultimosIngresos');
 const notificationsList = document.getElementById('notificationsList');
 const notificationBadge = document.querySelector('.notification-badge');
 
-// Variable para el gráfico
+// Variables de estado
 let incomeChart = null;
+let usuarioActual = null;
+let rolesUsuario = [];
+let token = null;
 
-// Inicialización
-document.addEventListener('DOMContentLoaded', async () => {
-    await checkAuth();
-    initDashboard();
-    await loadDashboardData();
-    setupEventListeners();
-    
-    // Actualización cada 30 segundos
-    setInterval(() => {
-        console.log('Actualizando datos...');
-        loadDashboardData();
-    }, 30000);
-});
-
-// Verificar autenticación
+// =====================================================
+// VERIFICAR AUTENTICACIÓN - CORREGIDO
+// =====================================================
 async function checkAuth() {
-    const token = localStorage.getItem('furia_token');
-    const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
+    token = localStorage.getItem('furia_token');
+    const userData = localStorage.getItem('furia_user');
     
-    if (!token || user.rol !== 'jefe_operativo') {
+    if (!token) {
+        console.log('❌ No hay token, redirigiendo a login');
         window.location.href = '/';
         return false;
     }
     
-    return true;
+    try {
+        // Obtener usuario del localStorage
+        if (userData) {
+            usuarioActual = JSON.parse(userData);
+            rolesUsuario = usuarioActual.roles || [];
+        }
+        
+        // Decodificar token para obtener información actualizada
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.user) {
+            usuarioActual = { ...usuarioActual, ...payload.user };
+            if (payload.user.roles) {
+                rolesUsuario = payload.user.roles;
+            }
+        }
+        
+        // Obtener rol seleccionado
+        const selectedRole = usuarioActual?.selected_role;
+        
+        console.log('📋 Roles del usuario:', rolesUsuario);
+        console.log('🎯 Rol seleccionado:', selectedRole);
+        
+        // Verificar si tiene rol de jefe_operativo
+        const tieneRolJefeOperativo = rolesUsuario.includes('jefe_operativo');
+        
+        if (!tieneRolJefeOperativo) {
+            console.warn('❌ Usuario no tiene permiso de Jefe Operativo');
+            
+            // Redirigir según el rol que tenga
+            if (rolesUsuario.includes('jefe_taller')) {
+                window.location.href = '/jefe_taller/dashboard.html';
+            } else if (rolesUsuario.includes('tecnico')) {
+                window.location.href = '/tecnico_mecanico/misvehiculos.html';
+            } else if (rolesUsuario.includes('encargado_repuestos')) {
+                window.location.href = '/encargado_rep_almacen/dashboard.html';
+            } else {
+                window.location.href = '/';
+            }
+            return false;
+        }
+        
+        // Si el usuario seleccionó jefe_taller, redirigir
+        if (selectedRole === 'jefe_taller' && rolesUsuario.includes('jefe_taller')) {
+            console.log('🔄 Usuario seleccionó Jefe Taller, redirigiendo...');
+            window.location.href = '/jefe_taller/dashboard.html';
+            return false;
+        }
+        
+        // Verificar token con el backend
+        const response = await fetch(`${API_URL}/verify-token`, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.valid) {
+            console.log('❌ Token inválido, redirigiendo a login');
+            localStorage.clear();
+            window.location.href = '/';
+            return false;
+        }
+        
+        console.log('✅ Autenticación correcta para Jefe Operativo');
+        
+        // Actualizar localStorage con datos actualizados
+        if (usuarioActual) {
+            localStorage.setItem('furia_user', JSON.stringify(usuarioActual));
+        }
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error verificando autenticación:', error);
+        window.location.href = '/';
+        return false;
+    }
+}
+
+// Mostrar indicador de roles múltiples
+function mostrarIndicadorRoles() {
+    const headerUserInfo = document.querySelector('.user-info');
+    if (headerUserInfo && rolesUsuario && rolesUsuario.length > 1) {
+        if (headerUserInfo.querySelector('.roles-badge')) return;
+        
+        const rolesBadge = document.createElement('div');
+        rolesBadge.className = 'roles-badge';
+        rolesBadge.style.cssText = `
+            font-size: 0.7rem;
+            background: rgba(255,255,255,0.1);
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            margin-top: 0.25rem;
+            display: inline-block;
+            color: var(--blanco);
+            cursor: pointer;
+        `;
+        
+        const nombresRoles = rolesUsuario.map(r => {
+            const nombres = {
+                'jefe_taller': 'Jefe Taller',
+                'jefe_operativo': 'Jefe Operativo',
+                'tecnico': 'Técnico',
+                'encargado_repuestos': 'Repuestos'
+            };
+            return nombres[r] || r;
+        }).join(' • ');
+        
+        rolesBadge.innerHTML = `<i class="fas fa-exchange-alt" style="margin-right: 0.3rem;"></i>${nombresRoles}`;
+        rolesBadge.title = 'Tienes múltiples roles. Cierra sesión para cambiar de rol.';
+        
+        headerUserInfo.appendChild(rolesBadge);
+    }
+}
+
+// Mostrar nombre de usuario
+function mostrarNombreUsuario() {
+    if (userName && usuarioActual) {
+        userName.textContent = usuarioActual.nombre || 'Usuario';
+    }
+    if (welcomeName && usuarioActual) {
+        welcomeName.textContent = (usuarioActual.nombre || 'Usuario').split(' ')[0];
+    }
 }
 
 // Inicializar dashboard
@@ -69,15 +203,11 @@ function setupEventListeners() {
             if (href && href !== '#' && !href.startsWith('http')) {
                 e.preventDefault();
                 
-                // Quitar active de todos
                 document.querySelectorAll('.nav-item').forEach(item => {
                     item.classList.remove('active');
                 });
                 
-                // Activar item actual
                 link.closest('.nav-item').classList.add('active');
-                
-                // Navegar a la página
                 window.location.href = href;
             }
         });
@@ -86,18 +216,27 @@ function setupEventListeners() {
     // Notificaciones
     document.querySelector('.notification-icon')?.addEventListener('click', () => {
         console.log('Abrir notificaciones');
-        // Aquí puedes implementar un dropdown o modal de notificaciones
     });
 }
 
-// Cargar datos del dashboard
+// =====================================================
+// CARGAR DATOS DEL DASHBOARD
+// =====================================================
 async function loadDashboardData() {
     try {
         const response = await fetch(`${API_URL}/jefe-operativo/dashboard`, {
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
             }
         });
+        
+        if (response.status === 401) {
+            console.log('Sesión expirada');
+            localStorage.clear();
+            window.location.href = '/';
+            return;
+        }
         
         const result = await response.json();
         
@@ -107,26 +246,28 @@ async function loadDashboardData() {
         
         const data = result.data;
         
-        // Actualizar nombre de usuario
-        if (userName) userName.textContent = data.usuario.nombre;
-        if (welcomeName) welcomeName.textContent = data.usuario.nombre.split(' ')[0];
-        
         // Actualizar KPIs
-        updateKPIs(data.kpis);
+        if (data.kpis) {
+            updateKPIs(data.kpis);
+        }
         
         // Actualizar tabla de últimos ingresos
-        updateUltimosIngresos(data.ultimos_ingresos);
+        if (data.ultimos_ingresos) {
+            updateUltimosIngresos(data.ultimos_ingresos);
+        }
         
         // Actualizar notificaciones
-        updateNotificaciones(data.notificaciones, data.total_notificaciones);
+        if (data.notificaciones) {
+            updateNotificaciones(data.notificaciones, data.total_notificaciones || 0);
+        }
         
         // Actualizar gráfico
-        updateChart(data.grafico.fechas, data.grafico.ingresos);
+        if (data.grafico) {
+            updateChart(data.grafico.fechas, data.grafico.ingresos);
+        }
         
     } catch (error) {
         console.error('Error cargando datos:', error);
-        
-        // Mostrar error en UI pero no cargar datos de prueba
         mostrarError('No se pudieron cargar los datos del dashboard');
     }
 }
@@ -148,11 +289,7 @@ function mostrarError(mensaje) {
     const content = document.querySelector('.content');
     if (content) {
         content.insertBefore(errorDiv, content.firstChild);
-        
-        // Eliminar después de 5 segundos
-        setTimeout(() => {
-            errorDiv.remove();
-        }, 5000);
+        setTimeout(() => errorDiv.remove(), 5000);
     }
 }
 
@@ -199,9 +336,9 @@ function updateUltimosIngresos(ingresos) {
         return `
             <tr>
                 <td>${ingreso.hora || '--:--'}</td>
-                <td><span class="plate-badge">${ingreso.placa || '---'}</span></td>
-                <td>${ingreso.vehiculo || '---'}</td>
-                <td>${ingreso.cliente || '---'}</td>
+                <td><span class="plate-badge">${escapeHtml(ingreso.placa || '---')}</span></td>
+                <td>${escapeHtml(ingreso.vehiculo || '---')}</td>
+                <td>${escapeHtml(ingreso.cliente || '---')}</td>
                 <td><span class="status-badge ${estadoClass}">${estadoTexto}</span></td>
                 <td>
                     <button class="action-btn" onclick="verDetalles('${ingreso.placa}')" title="Ver detalles">
@@ -215,12 +352,10 @@ function updateUltimosIngresos(ingresos) {
 
 // Actualizar notificaciones
 function updateNotificaciones(notificaciones, total) {
-    // Actualizar contador
     if (notificationBadge) {
         notificationBadge.textContent = total || 0;
     }
     
-    // Actualizar lista
     if (!notificationsList) return;
     
     if (!notificaciones || notificaciones.length === 0) {
@@ -238,7 +373,7 @@ function updateNotificaciones(notificaciones, total) {
                 <i class="fas fa-${notif.icono || 'info-circle'}"></i>
             </div>
             <div class="notification-content">
-                <p>${notif.mensaje || ''}</p>
+                <p>${escapeHtml(notif.mensaje || '')}</p>
                 <span class="notification-time">${notif.tiempo || ''}</span>
             </div>
             ${notif.badge ? `<span class="notification-badge urgent">${notif.badge}</span>` : ''}
@@ -251,7 +386,6 @@ function updateChart(labels, data) {
     const ctx = document.getElementById('incomeChart')?.getContext('2d');
     if (!ctx) return;
     
-    // Destruir gráfico anterior si existe
     if (incomeChart) {
         incomeChart.destroy();
     }
@@ -279,9 +413,7 @@ function updateChart(labels, data) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: {
-                    display: false
-                },
+                legend: { display: false },
                 tooltip: {
                     callbacks: {
                         label: (context) => `Bs ${context.parsed.y.toLocaleString()}`
@@ -291,35 +423,64 @@ function updateChart(labels, data) {
             scales: {
                 y: {
                     beginAtZero: true,
-                    grid: {
-                        color: 'rgba(0,0,0,0.05)'
-                    },
-                    ticks: {
-                        callback: (value) => `Bs ${value}`
-                    }
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { callback: (value) => `Bs ${value}` }
                 },
-                x: {
-                    grid: {
-                        display: false
-                    }
-                }
+                x: { grid: { display: false } }
             }
         }
     });
 }
 
+// Escapar HTML
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Funciones de acción
 window.verDetalles = (placa) => {
-    if (!placa) return;
-    console.log('Ver detalles:', placa);
-    // Redirigir a la página de detalles
-    window.location.href = `detalle-vehiculo.html?placa=${placa}`;
+    if (placa) {
+        window.location.href = `detalle-vehiculo.html?placa=${placa}`;
+    }
 };
 
+// =====================================================
+// LOGOUT - CORREGIDO
+// =====================================================
 window.logout = () => {
     localStorage.removeItem('furia_token');
     localStorage.removeItem('furia_user');
     localStorage.removeItem('furia_remembered');
     localStorage.removeItem('furia_remembered_type');
+    localStorage.removeItem('furia_selected_role');
+    localStorage.removeItem('furia_selected_role_user');
     window.location.href = '/';
 };
+
+// =====================================================
+// INICIALIZACIÓN PRINCIPAL
+// =====================================================
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 Inicializando dashboard Jefe Operativo');
+    
+    const autenticado = await checkAuth();
+    if (!autenticado) return;
+    
+    initDashboard();
+    mostrarNombreUsuario();
+    mostrarIndicadorRoles();
+    await loadDashboardData();
+    setupEventListeners();
+    
+    // Actualización cada 30 segundos
+    setInterval(() => {
+        if (document.visibilityState === 'visible') {
+            loadDashboardData();
+        }
+    }, 30000);
+});
+
+console.log('✅ dashboard.js de Jefe Operativo cargado correctamente');

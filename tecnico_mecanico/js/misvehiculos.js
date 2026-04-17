@@ -1,22 +1,40 @@
 // =====================================================
 // MIS VEHÍCULOS - TÉCNICO MECÁNICO
+// CORREGIDO PARA MULTI-ROL CON SISTEMA DE BAHÍAS
 // FURIA MOTOR COMPANY SRL
 // =====================================================
+
+// Configuración de roles
+const ROLE_CONFIG = {
+    'jefe_operativo': {
+        redirect: '/jefe_operativo/dashboard.html'
+    },
+    'jefe_taller': {
+        redirect: '/jefe_taller/dashboard.html'
+    },
+    'tecnico': {
+        redirect: '/tecnico_mecanico/misvehiculos.html'
+    },
+    'encargado_repuestos': {
+        redirect: '/encargado_rep_almacen/dashboard.html'
+    },
+    'cliente': {
+        redirect: '/cliente/dashboard.html'
+    }
+};
 
 // Estado global
 let vehiculosAsignados = [];
 let token = null;
+let usuarioActual = null;
+let rolesUsuario = [];
 
-// Obtener token - USANDO LA MISMA CLAVE QUE LOGIN.JS
+// Obtener token
 function getToken() {
-    // Usar la misma clave que en login.js
     const localToken = localStorage.getItem('furia_token');
     if (localToken) return localToken;
-    
-    // Fallback por si usan otra clave
     const fallbackToken = localStorage.getItem('token');
     if (fallbackToken) return fallbackToken;
-    
     return null;
 }
 
@@ -32,15 +50,22 @@ function mostrarFechaActual() {
 
 // Mostrar toast
 function showToast(message, type = 'success') {
-    const container = document.getElementById('toast-container');
+    let container = document.getElementById('toast-container');
     if (!container) {
-        // Si no existe el contenedor, crearlo
-        const newContainer = document.createElement('div');
-        newContainer.id = 'toast-container';
-        document.body.appendChild(newContainer);
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        `;
+        document.body.appendChild(container);
     }
     
-    const toastContainer = document.getElementById('toast-container');
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     
@@ -53,7 +78,20 @@ function showToast(message, type = 'success') {
         <span>${message}</span>
     `;
     
-    toastContainer.appendChild(toast);
+    toast.style.cssText = `
+        background: var(--bg-card);
+        color: var(--blanco);
+        padding: 0.75rem 1.25rem;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-left: 4px solid ${type === 'success' ? '#10B981' : type === 'error' ? '#C1121F' : type === 'warning' ? '#F59E0B' : '#1E3A5F'};
+        animation: slideIn 0.3s ease;
+    `;
+    
+    container.appendChild(toast);
     
     setTimeout(() => {
         toast.style.opacity = '0';
@@ -62,12 +100,15 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
-// Recargar datos (función global para el botón)
+// Recargar datos
 window.recargarDatos = function() {
     cargarVehiculos();
+    cargarEstadoBahias();
 };
 
-// Verificar token antes de cargar
+// =====================================================
+// VERIFICAR AUTENTICACIÓN - CORREGIDO
+// =====================================================
 async function verificarToken() {
     if (!token) {
         console.error('No hay token');
@@ -76,22 +117,75 @@ async function verificarToken() {
     }
     
     try {
-        const response = await fetch('/api/verify-token', {
+        // Obtener usuario del localStorage
+        const userData = localStorage.getItem('furia_user');
+        if (userData) {
+            usuarioActual = JSON.parse(userData);
+            rolesUsuario = usuarioActual.roles || [];
+        }
+        
+        // Verificar token con el backend
+        const response = await fetch('/tecnico/api/verify-token', {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
         const data = await response.json();
         
-        if (!data.valid) {
+        if (!response.ok || !data.valid) {
             console.error('Token inválido');
-            localStorage.removeItem('furia_token');
-            localStorage.removeItem('furia_user');
+            localStorage.clear();
             window.location.href = '/';
             return false;
         }
         
+        // Actualizar usuario con datos del backend
+        if (data.user) {
+            usuarioActual = data.user;
+            rolesUsuario = data.user.roles || [];
+            
+            // Actualizar localStorage
+            localStorage.setItem('furia_user', JSON.stringify(usuarioActual));
+        }
+        
+        // Obtener rol seleccionado
+        const selectedRole = localStorage.getItem('furia_selected_role');
+        
+        console.log('📋 Roles del usuario:', rolesUsuario);
+        console.log('🎯 Rol seleccionado:', selectedRole);
+        
+        // Verificar si tiene rol de técnico (por NOMBRE)
+        const tieneRolTecnico = rolesUsuario.includes('tecnico');
+        
+        if (!tieneRolTecnico) {
+            console.warn('❌ Usuario no tiene permiso de Técnico');
+            showToast('No tienes permisos para acceder a esta sección', 'error');
+            
+            // Redirigir según el primer rol que tenga
+            if (rolesUsuario.includes('jefe_operativo')) {
+                window.location.href = '/jefe_operativo/dashboard.html';
+            } else if (rolesUsuario.includes('jefe_taller')) {
+                window.location.href = '/jefe_taller/dashboard.html';
+            } else if (rolesUsuario.includes('encargado_repuestos')) {
+                window.location.href = '/encargado_rep_almacen/dashboard.html';
+            } else if (rolesUsuario.includes('cliente')) {
+                window.location.href = '/cliente/dashboard.html';
+            } else {
+                window.location.href = '/';
+            }
+            return false;
+        }
+        
+        // Si el usuario seleccionó otro rol diferente a técnico, redirigir
+        if (selectedRole && selectedRole !== 'tecnico' && ROLE_CONFIG[selectedRole]) {
+            console.log(`🔄 Usuario seleccionó ${selectedRole}, redirigiendo...`);
+            window.location.href = ROLE_CONFIG[selectedRole].redirect;
+            return false;
+        }
+        
+        console.log('✅ Autenticación correcta para Técnico Mecánico');
         return true;
+        
     } catch (error) {
         console.error('Error verificando token:', error);
         window.location.href = '/';
@@ -99,7 +193,101 @@ async function verificarToken() {
     }
 }
 
-// Cargar vehículos asignados
+// Mostrar indicador de roles múltiples
+function mostrarIndicadorRoles() {
+    const headerUserInfo = document.querySelector('.user-info');
+    if (headerUserInfo && rolesUsuario && rolesUsuario.length > 1) {
+        if (headerUserInfo.querySelector('.roles-badge')) return;
+        
+        const rolesBadge = document.createElement('div');
+        rolesBadge.className = 'roles-badge';
+        rolesBadge.style.cssText = `
+            font-size: 0.7rem;
+            background: var(--gris-200);
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            margin-top: 0.25rem;
+            display: inline-block;
+            color: var(--blanco);
+            cursor: pointer;
+        `;
+        
+        const nombresRoles = rolesUsuario.map(r => {
+            const nombres = {
+                'jefe_taller': 'Jefe Taller',
+                'jefe_operativo': 'Jefe Operativo',
+                'tecnico': 'Técnico',
+                'encargado_repuestos': 'Repuestos',
+                'cliente': 'Cliente'
+            };
+            return nombres[r] || r;
+        }).join(' • ');
+        
+        rolesBadge.innerHTML = `<i class="fas fa-exchange-alt" style="margin-right: 0.3rem;"></i>${nombresRoles}`;
+        rolesBadge.title = 'Tienes múltiples roles. Haz clic para cambiar de rol.';
+        rolesBadge.onclick = () => {
+            if (confirm('¿Cambiar de rol? Deberás cerrar sesión y seleccionar otro rol.')) {
+                cerrarSesion();
+            }
+        };
+        
+        headerUserInfo.appendChild(rolesBadge);
+    }
+}
+
+// Mostrar nombre de usuario
+function mostrarNombreUsuario() {
+    const userNameSpan = document.getElementById('userName');
+    if (userNameSpan && usuarioActual) {
+        userNameSpan.textContent = usuarioActual.nombre || usuarioActual.email || 'Usuario';
+    }
+}
+
+// =====================================================
+// CARGAR ESTADO DE BAHÍAS
+// =====================================================
+async function cargarEstadoBahias() {
+    try {
+        const response = await fetch('/tecnico/api/estado-bahias', {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.bahias) {
+            actualizarUIBahias(data.bahias);
+        }
+    } catch (error) {
+        console.error('Error cargando estado de bahías:', error);
+    }
+}
+
+function actualizarUIBahias(bahias) {
+    const container = document.getElementById('bahiasContainer');
+    if (!container) return;
+    
+    container.innerHTML = bahias.map(bahia => {
+        const estado = bahia.estado || 'libre';
+        const estadoClass = estado === 'ocupado' ? 'ocupado' : 'libre';
+        const estadoTexto = estado === 'ocupado' ? 'Ocupada' : 'Libre';
+        
+        return `
+            <div class="bahia-card ${estadoClass}" data-bahia="${bahia.bahia_numero}">
+                <div class="bahia-numero">Bahía ${bahia.bahia_numero}</div>
+                <div class="bahia-estado">
+                    <span class="estado-indicador ${estadoClass}"></span>
+                    ${estadoTexto}
+                </div>
+                ${bahia.orden_codigo ? `<div class="bahia-orden">Orden: ${escapeHtml(bahia.orden_codigo)}</div>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+// =====================================================
+// CARGAR VEHÍCULOS ASIGNADOS
+// =====================================================
 async function cargarVehiculos() {
     const grid = document.getElementById('vehiculosGrid');
     const loadingContainer = document.getElementById('loadingContainer');
@@ -119,9 +307,7 @@ async function cargarVehiculos() {
         });
         
         if (response.status === 401) {
-            // Token inválido o expirado
-            localStorage.removeItem('furia_token');
-            localStorage.removeItem('furia_user');
+            localStorage.clear();
             window.location.href = '/';
             return;
         }
@@ -263,7 +449,13 @@ function renderVehiculos() {
                         <button class="btn-sm btn-success-sm" onclick="abrirReanudarModal(${vehiculo.orden_id})">
                             <i class="fas fa-play"></i> Reanudar
                         </button>
+                        <button class="btn-sm btn-danger-sm" onclick="finalizarTrabajo(${vehiculo.orden_id})">
+                            <i class="fas fa-flag-checkered"></i> Finalizar
+                        </button>
                     ` : `
+                        <button class="btn-sm btn-outline-sm" onclick="abrirIniciarModal(${vehiculo.orden_id})">
+                            <i class="fas fa-play-circle"></i> Empezar
+                        </button>
                         <button class="btn-sm btn-outline-sm" onclick="abrirPausaModal(${vehiculo.orden_id})">
                             <i class="fas fa-pause"></i> Pausar
                         </button>
@@ -305,6 +497,85 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// =====================================================
+// MODAL DE INICIAR TRABAJO (CON SELECCIÓN DE BAHÍA)
+// =====================================================
+let ordenSeleccionadaParaIniciar = null;
+
+window.abrirIniciarModal = async function(ordenId) {
+    ordenSeleccionadaParaIniciar = ordenId;
+    
+    // Cargar estado actual de bahías
+    await cargarEstadoBahias();
+    
+    // Obtener información de la orden
+    const vehiculo = vehiculosAsignados.find(v => v.orden_id === ordenId);
+    if (vehiculo) {
+        const infoHtml = `
+            <p><strong>Vehículo:</strong> ${escapeHtml(vehiculo.vehiculo.marca)} ${escapeHtml(vehiculo.vehiculo.modelo)}</p>
+            <p><strong>Placa:</strong> ${escapeHtml(vehiculo.vehiculo.placa)}</p>
+            <p><strong>Orden:</strong> ${escapeHtml(vehiculo.codigo_unico)}</p>
+        `;
+        document.getElementById('iniciarInfo').innerHTML = infoHtml;
+    }
+    
+    document.getElementById('iniciarModal').classList.add('show');
+};
+
+window.cerrarIniciarModal = function() {
+    document.getElementById('iniciarModal').classList.remove('show');
+    document.getElementById('iniciarInfo').innerHTML = '';
+    document.getElementById('bahiaSeleccionada').value = '';
+    ordenSeleccionadaParaIniciar = null;
+};
+
+async function confirmarInicio() {
+    const bahiaSeleccionada = document.getElementById('bahiaSeleccionada').value;
+    
+    if (!bahiaSeleccionada) {
+        showToast('Debes seleccionar una bahía', 'warning');
+        return;
+    }
+    
+    cerrarIniciarModal();
+    showToast('Iniciando trabajo...', 'info');
+    
+    try {
+        const response = await fetch('/tecnico/api/iniciar-trabajo', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ 
+                id_orden: parseInt(ordenSeleccionadaParaIniciar), 
+                bahia_asignada: parseInt(bahiaSeleccionada)
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast(data.message || 'Trabajo iniciado correctamente', 'success');
+            cargarVehiculos();
+            cargarEstadoBahias();
+        } else {
+            if (data.bahia_ocupada) {
+                showToast(data.error, 'warning');
+                // Recargar estado de bahías para mostrar actualización
+                await cargarEstadoBahias();
+                // Reabrir modal para que seleccione otra bahía
+                setTimeout(() => abrirIniciarModal(ordenSeleccionadaParaIniciar), 1500);
+            } else {
+                showToast(data.error || 'Error al iniciar', 'error');
+            }
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    }
 }
 
 // =====================================================
@@ -413,7 +684,42 @@ async function confirmarReanudar() {
 }
 
 // =====================================================
-// MODAL DE DETALLE - VERSIÓN MEJORADA
+// FINALIZAR TRABAJO
+// =====================================================
+window.finalizarTrabajo = async function(ordenId) {
+    if (!confirm('¿Estás seguro de que deseas finalizar este trabajo? La bahía quedará libre para nuevas órdenes.')) {
+        return;
+    }
+    
+    showToast('Finalizando trabajo...', 'info');
+    
+    try {
+        const response = await fetch('/tecnico/api/finalizar-trabajo', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ id_orden: parseInt(ordenId) })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Trabajo finalizado correctamente', 'success');
+            cargarVehiculos();
+            cargarEstadoBahias();
+        } else {
+            showToast(data.error || 'Error al finalizar', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    }
+};
+
+// =====================================================
+// MODAL DE DETALLE
 // =====================================================
 window.verDetalle = async function(ordenId) {
     showToast('Cargando detalles...', 'info');
@@ -425,8 +731,7 @@ window.verDetalle = async function(ordenId) {
         });
         
         if (response.status === 401) {
-            localStorage.removeItem('furia_token');
-            localStorage.removeItem('furia_user');
+            localStorage.clear();
             window.location.href = '/';
             return;
         }
@@ -439,42 +744,38 @@ window.verDetalle = async function(ordenId) {
         
         const detalle = data.detalle;
         
-        // Verificar qué datos llegaron (para depuración)
-        console.log('Datos recibidos:', detalle);
-        
         const fotos = detalle.recepcion?.fotos || {};
         const fotosArray = Object.entries(fotos).filter(([_, url]) => url && url !== '');
         
-        // Formatear kilometraje
         const kilometraje = detalle.vehiculo?.kilometraje ? 
             `${parseInt(detalle.vehiculo.kilometraje).toLocaleString()} km` : 'N/A';
         
-        // Formatear año
         const anio = detalle.vehiculo?.anio && detalle.vehiculo.anio !== 'N/A' ? 
             detalle.vehiculo.anio : 'No especificado';
         
-        // Obtener marca y modelo
         const marcaModelo = `${detalle.vehiculo?.marca || ''} ${detalle.vehiculo?.modelo || ''}`.trim() || 'No especificado';
+        
+        const bahiaInfo = detalle.planificacion?.bahia_asignada ? 
+            `<div><strong>Bahía asignada:</strong> ${detalle.planificacion.bahia_asignada}</div>` : '';
         
         const detalleHtml = `
             <div style="display: grid; gap: 1rem;">
-                <!-- Información de la Orden -->
                 <div class="modal-section">
                     <h3><i class="fas fa-clipboard-list"></i> Información de la Orden</h3>
                     <div class="detalle-grid">
                         <div><strong>Código:</strong> ${escapeHtml(detalle.orden?.codigo_unico || 'N/A')}</div>
                         <div><strong>Estado:</strong> 
                             <span class="estado-badge ${detalle.orden?.estado_global === 'EnProceso' ? 'proceso' : 'pausa'}" style="display: inline-flex; font-size: 0.7rem;">
-                                ${detalle.orden?.estado_global === 'EnProceso' ? 'En Proceso' : 'En Pausa'}
+                                ${detalle.orden?.estado_global === 'EnProceso' ? 'En Proceso' : detalle.orden?.estado_global || 'N/A'}
                             </span>
                         </div>
                         <div><strong>Fecha Ingreso:</strong> ${formatFecha(detalle.orden?.fecha_ingreso)}</div>
+                        ${bahiaInfo}
                     </div>
                 </div>
                 
-                <!-- Información del vehículo -->
                 <div class="modal-section">
-                    <h3><i class="fas fa-car" style="color: var(--rojo-primario);"></i> Datos del Vehículo</h3>
+                    <h3><i class="fas fa-car"></i> Datos del Vehículo</h3>
                     <div class="detalle-grid">
                         <div><strong>Placa:</strong> ${escapeHtml(detalle.vehiculo?.placa || 'No registrada')}</div>
                         <div><strong>Marca/Modelo:</strong> ${escapeHtml(marcaModelo)}</div>
@@ -484,9 +785,8 @@ window.verDetalle = async function(ordenId) {
                     </div>
                 </div>
                 
-                <!-- Información del cliente -->
                 <div class="modal-section">
-                    <h3><i class="fas fa-user" style="color: var(--rojo-primario);"></i> Datos del Cliente</h3>
+                    <h3><i class="fas fa-user"></i> Datos del Cliente</h3>
                     <div class="detalle-grid">
                         <div><strong>Nombre:</strong> ${escapeHtml(detalle.cliente?.nombre || 'No registrado')}</div>
                         <div><strong>Teléfono:</strong> ${escapeHtml(detalle.cliente?.telefono || 'No registrado')}</div>
@@ -494,9 +794,8 @@ window.verDetalle = async function(ordenId) {
                     </div>
                 </div>
                 
-                <!-- Problema reportado por el cliente -->
                 <div class="modal-section">
-                    <h3><i class="fas fa-comment" style="color: var(--rojo-primario);"></i> Problema Reportado</h3>
+                    <h3><i class="fas fa-comment"></i> Problema Reportado</h3>
                     <div class="diagnostico-box">
                         <p>${escapeHtml(detalle.recepcion?.transcripcion_problema || 'No hay descripción del problema')}</p>
                         ${detalle.recepcion?.audio_url ? `
@@ -510,9 +809,8 @@ window.verDetalle = async function(ordenId) {
                     </div>
                 </div>
                 
-                <!-- Instrucciones del Jefe de Taller -->
                 <div class="modal-section">
-                    <h3><i class="fas fa-clipboard-list" style="color: var(--rojo-primario);"></i> Instrucciones del Jefe de Taller</h3>
+                    <h3><i class="fas fa-clipboard-list"></i> Instrucciones del Jefe de Taller</h3>
                     <div class="diagnostico-box">
                         <p>${escapeHtml(detalle.diagnostico_inicial || 'No hay instrucciones registradas')}</p>
                         ${detalle.diagnostico_audio_url ? `
@@ -526,10 +824,9 @@ window.verDetalle = async function(ordenId) {
                     </div>
                 </div>
                 
-                <!-- Fotos del vehículo -->
                 ${fotosArray.length > 0 ? `
                     <div class="modal-section">
-                        <h3><i class="fas fa-images" style="color: var(--rojo-primario);"></i> Fotos del Vehículo (${fotosArray.length})</h3>
+                        <h3><i class="fas fa-images"></i> Fotos del Vehículo (${fotosArray.length})</h3>
                         <div class="fotos-grid">
                             ${fotosArray.map(([nombre, url]) => `
                                 <div class="foto-item" onclick="verFoto('${url}')">
@@ -539,15 +836,7 @@ window.verDetalle = async function(ordenId) {
                             `).join('')}
                         </div>
                     </div>
-                ` : `
-                    <div class="modal-section">
-                        <h3><i class="fas fa-images" style="color: var(--rojo-primario);"></i> Fotos del Vehículo</h3>
-                        <div class="diagnostico-box" style="text-align: center; color: var(--gris-texto);">
-                            <i class="fas fa-camera" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
-                            No hay fotos disponibles de este vehículo
-                        </div>
-                    </div>
-                `}
+                ` : ''}
             </div>
         `;
         
@@ -589,13 +878,15 @@ window.cerrarDetalleModal = function() {
 };
 
 // =====================================================
-// CIERRE DE SESIÓN - USANDO LA MISMA CLAVE
+// CIERRE DE SESIÓN
 // =====================================================
 window.cerrarSesion = function() {
     localStorage.removeItem('furia_token');
     localStorage.removeItem('furia_user');
     localStorage.removeItem('furia_remembered');
     localStorage.removeItem('furia_remembered_type');
+    localStorage.removeItem('furia_selected_role');
+    localStorage.removeItem('furia_selected_role_user');
     window.location.href = '/';
 };
 
@@ -613,14 +904,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
     
-    // Verificar token antes de cargar datos
     const tokenValido = await verificarToken();
     if (!tokenValido) return;
     
     mostrarFechaActual();
+    mostrarNombreUsuario();
+    mostrarIndicadorRoles();
     await cargarVehiculos();
+    await cargarEstadoBahias();
     
     // Configurar botones de modales
+    const confirmarInicioBtn = document.getElementById('confirmarInicioBtn');
+    if (confirmarInicioBtn) {
+        confirmarInicioBtn.onclick = confirmarInicio;
+    }
+    
     const confirmarPausaBtn = document.getElementById('confirmarPausaBtn');
     if (confirmarPausaBtn) {
         confirmarPausaBtn.onclick = confirmarPausa;
@@ -644,6 +942,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     setInterval(() => {
         if (document.visibilityState === 'visible' && token) {
             cargarVehiculos();
+            cargarEstadoBahias();
         }
     }, 30000);
+    
+    console.log('✅ misvehiculos.js cargado correctamente');
 });

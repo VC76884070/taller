@@ -1,42 +1,31 @@
 // =====================================================
-// LOGIN - FURIA MOTOR COMPANY
-// Funcionalidades: Login, Recuperar contraseña, Registro, Multi-rol
+// LOGIN - FURIA MOTOR COMPANY - CORREGIDO
 // =====================================================
 
 // Configuración
 const API_URL = 'http://localhost:5000/api';
 
-// Configuración de roles con URLs correctas
+// Configuración de roles
 const ROLE_CONFIG = {
     'jefe_taller': {
         nombre: 'Jefe de Taller',
         icono: 'fa-user-tie',
-        descripcion: 'Gestión de diagnósticos, aprobación de servicios, control de calidad',
         redirect: '/jefe_taller/dashboard.html'
     },
     'jefe_operativo': {
         nombre: 'Jefe Operativo',
         icono: 'fa-chart-line',
-        descripcion: 'Dashboard general, reportes, gestión de órdenes',
         redirect: '/jefe_operativo/dashboard.html'
     },
     'tecnico': {
         nombre: 'Técnico Mecánico',
         icono: 'fa-wrench',
-        descripcion: 'Diagnósticos, órdenes de trabajo asignadas',
         redirect: '/tecnico_mecanico/misvehiculos.html'
     },
     'encargado_repuestos': {
         nombre: 'Encargado de Repuestos',
         icono: 'fa-boxes',
-        descripcion: 'Cotizaciones, gestión de inventario',
         redirect: '/encargado_rep_almacen/dashboard.html'
-    },
-    'admin_general': {
-        nombre: 'Administrador General',
-        icono: 'fa-crown',
-        descripcion: 'Control total del sistema',
-        redirect: '/admin_general/dashboard.html'
     }
 };
 
@@ -55,22 +44,8 @@ const loginBtn = document.getElementById('loginBtn');
 const rememberCheck = document.getElementById('remember');
 const toastContainer = document.getElementById('toastContainer');
 
-// Modales
-const recoverModal = document.getElementById('recoverModal');
-const registerModal = document.getElementById('registerModal');
-const vehicleRegisterModal = document.getElementById('vehicleRegisterModal');
-
 // Variables de estado
 let selectedType = 'staff';
-let recoveryEmail = '';
-let recoveryUserType = '';
-let registerData = {};
-let recoveryTimer = null;
-let registerTimer = null;
-let recoveryTimeLeft = 0;
-let registerTimeLeft = 0;
-
-// Variables para multi-rol
 let pendingLoginData = null;
 let pendingToken = null;
 
@@ -78,19 +53,23 @@ let pendingToken = null;
 // INICIALIZACIÓN
 // =====================================================
 document.addEventListener('DOMContentLoaded', () => {
-    init();
-});
-
-function init() {
+    console.log('🚀 Inicializando login');
     setupEventListeners();
     checkSavedSession();
     setupCodeInputs();
-}
+    
+    // Verificar si hay un modal de roles y configurarlo
+    const modal = document.getElementById('roleSelectionModal');
+    if (modal) {
+        console.log('✅ Modal de roles encontrado');
+    } else {
+        console.error('❌ Modal de roles NO encontrado - Verifica que el HTML tenga el modal');
+    }
+});
 
 function setupEventListeners() {
-    // Tabs
     tabBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', () => {
             tabBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             selectedType = btn.dataset.type;
@@ -98,12 +77,10 @@ function setupEventListeners() {
         });
     });
 
-    // Login form
     if (loginForm) {
         loginForm.addEventListener('submit', handleLogin);
     }
 
-    // Convertir placa a mayúsculas
     if (plateInput) {
         plateInput.addEventListener('input', (e) => {
             e.target.value = e.target.value.toUpperCase();
@@ -118,8 +95,6 @@ function toggleLoginFields() {
         welcomeTitle.textContent = 'Acceso Personal Taller';
         welcomeSubtitle.textContent = 'Ingresa con tu número de documento o correo electrónico';
         clientQuickAccess.style.display = 'none';
-        
-        if (plateInput) plateInput.value = '';
         if (documentInput) documentInput.focus();
     } else {
         documentGroup.style.display = 'none';
@@ -127,14 +102,12 @@ function toggleLoginFields() {
         welcomeTitle.textContent = 'Acceso Cliente';
         welcomeSubtitle.textContent = 'Ingresa con tu correo electrónico o placa';
         clientQuickAccess.style.display = 'block';
-        
-        if (documentInput) documentInput.value = '';
         if (plateInput) plateInput.focus();
     }
 }
 
 // =====================================================
-// LOGIN CON SOPORTE MULTI-ROL
+// LOGIN
 // =====================================================
 async function handleLogin(e) {
     e.preventDefault();
@@ -142,11 +115,10 @@ async function handleLogin(e) {
     const identifier = selectedType === 'staff' 
         ? documentInput?.value.trim() 
         : plateInput?.value.trim().toUpperCase();
-        
     const password = passwordInput?.value;
     
     if (!identifier || !password) {
-        showToast('Por favor completa todos los campos', 'warning');
+        showToast('Completa todos los campos', 'warning');
         return;
     }
     
@@ -173,58 +145,49 @@ async function handleLogin(e) {
             const userRoles = data.user.roles || [];
             const isMultiRole = userRoles.length > 1;
             
-            // Verificar si tiene un rol guardado previamente
+            console.log('📋 Roles del usuario:', userRoles);
+            console.log('🎭 Es multi-rol:', isMultiRole);
+            
+            // Verificar si tiene un rol guardado
             const savedRole = localStorage.getItem('furia_selected_role');
             const savedUserId = localStorage.getItem('furia_selected_role_user');
-            const hasSavedRole = savedRole && savedUserId && savedUserId == data.user.id && userRoles.includes(savedRole);
-            
-            console.log('🔍 Roles del usuario:', userRoles);
-            console.log('📌 Rol guardado:', savedRole, 'Coincide:', hasSavedRole);
+            const hasSavedRole = savedRole && savedUserId == data.user.id && userRoles.includes(savedRole);
             
             if (isMultiRole && !hasSavedRole) {
-                // Mostrar modal de selección de rol
                 console.log('🎯 Mostrando modal de selección de roles');
                 pendingLoginData = data.user;
                 pendingToken = data.token;
-                showRoleSelectionModal(data.user);
+                showRoleModal();
                 setLoadingState(false);
                 return;
             }
             
-            // Si tiene un solo rol o tiene selección guardada
-            let finalUserData = data.user;
+            // Determinar redirección
             let redirectUrl = null;
+            let selectedRole = null;
             
             if (hasSavedRole) {
-                finalUserData = {
-                    ...data.user,
-                    selected_role: savedRole
-                };
-                if (ROLE_CONFIG[savedRole]) {
-                    redirectUrl = ROLE_CONFIG[savedRole].redirect;
-                }
-                console.log('✅ Usando rol guardado:', savedRole, 'Redirect:', redirectUrl);
+                selectedRole = savedRole;
+                redirectUrl = ROLE_CONFIG[savedRole]?.redirect;
+                console.log('✅ Usando rol guardado:', savedRole);
             } else if (userRoles.length === 1) {
-                // Un solo rol, usar ese
-                const singleRole = userRoles[0];
-                if (ROLE_CONFIG[singleRole]) {
-                    redirectUrl = ROLE_CONFIG[singleRole].redirect;
-                    finalUserData = {
-                        ...data.user,
-                        selected_role: singleRole
-                    };
-                }
-                console.log('✅ Un solo rol:', singleRole, 'Redirect:', redirectUrl);
+                selectedRole = userRoles[0];
+                redirectUrl = ROLE_CONFIG[selectedRole]?.redirect;
+                console.log('✅ Un solo rol:', selectedRole);
             } else {
-                // Fallback - usar el primer rol
-                const firstRole = userRoles[0];
-                if (ROLE_CONFIG[firstRole]) {
-                    redirectUrl = ROLE_CONFIG[firstRole].redirect;
-                }
+                selectedRole = userRoles[0];
+                redirectUrl = ROLE_CONFIG[selectedRole]?.redirect;
+                console.log('⚠️ Múltiples roles sin selección, usando primero:', selectedRole);
             }
             
+            if (!redirectUrl) {
+                throw new Error('No se pudo determinar la redirección');
+            }
+            
+            // Guardar datos
+            const finalUser = { ...data.user, selected_role: selectedRole };
             localStorage.setItem('furia_token', data.token);
-            localStorage.setItem('furia_user', JSON.stringify(finalUserData));
+            localStorage.setItem('furia_user', JSON.stringify(finalUser));
             
             if (rememberCheck?.checked) {
                 localStorage.setItem('furia_remembered', identifier);
@@ -234,22 +197,15 @@ async function handleLogin(e) {
                 localStorage.removeItem('furia_remembered_type');
             }
             
-            const roleName = finalUserData.selected_role ? ` (${ROLE_CONFIG[finalUserData.selected_role]?.nombre || finalUserData.selected_role})` : '';
-            showToast(`¡Bienvenido ${finalUserData.nombre}!${roleName}`, 'success');
-            
-            if (redirectUrl) {
-                setTimeout(() => {
-                    window.location.href = redirectUrl;
-                }, 1500);
-            } else {
-                setLoadingState(false);
-                showToast('Error: No se pudo determinar el destino', 'error');
-            }
+            showToast(`Bienvenido ${data.user.nombre}`, 'success');
+            setTimeout(() => {
+                window.location.href = redirectUrl;
+            }, 1000);
         }
         
     } catch (error) {
         console.error('Error:', error);
-        showToast(error.message || 'Error al conectar con el servidor', 'error');
+        showToast(error.message, 'error');
         setLoadingState(false);
     }
 }
@@ -265,118 +221,105 @@ function setLoadingState(loading) {
 }
 
 // =====================================================
-// SELECCIÓN DE ROL (MULTI-ROL)
+// MODAL DE SELECCIÓN DE ROL
 // =====================================================
-
-function showRoleSelectionModal(user) {
+function showRoleModal() {
     const modal = document.getElementById('roleSelectionModal');
     const rolesGrid = document.getElementById('rolesGrid');
     const userNameSpan = document.getElementById('roleUserName');
     
-    if (!modal || !rolesGrid) {
-        console.error('Modal de selección de roles no encontrado');
+    if (!modal) {
+        console.error('❌ Modal no encontrado');
+        alert('Error: No se encontró el modal de selección de roles');
         return;
     }
     
-    if (userNameSpan) userNameSpan.textContent = user.nombre || 'Usuario';
+    if (!pendingLoginData) {
+        console.error('❌ No hay datos pendientes');
+        return;
+    }
     
-    const userRoles = user.roles || [];
+    if (userNameSpan) {
+        userNameSpan.textContent = pendingLoginData.nombre || 'Usuario';
+    }
+    
+    const userRoles = pendingLoginData.roles || [];
     const availableRoles = userRoles.filter(rol => ROLE_CONFIG[rol]);
     
-    console.log('🎨 Roles disponibles para selección:', availableRoles);
+    console.log('🎨 Roles disponibles:', availableRoles);
     
     if (availableRoles.length === 0) {
-        console.error('No hay roles válidos disponibles');
+        console.error('No hay roles disponibles');
         return;
     }
     
-    rolesGrid.innerHTML = availableRoles.map(rol => `
-        <div class="role-card" data-role="${rol}" onclick="selectRole('${rol}')">
-            <div class="role-icon">
-                <i class="fas ${ROLE_CONFIG[rol].icono}"></i>
+    if (rolesGrid) {
+        rolesGrid.innerHTML = availableRoles.map(rol => `
+            <div class="role-card" onclick="selectRoleHandler('${rol}')">
+                <div class="role-icon">
+                    <i class="fas ${ROLE_CONFIG[rol].icono}"></i>
+                </div>
+                <div class="role-name">${ROLE_CONFIG[rol].nombre}</div>
+                <div class="role-description">${ROLE_CONFIG[rol].descripcion}</div>
             </div>
-            <div class="role-name">${ROLE_CONFIG[rol].nombre}</div>
-            <div class="role-description">${ROLE_CONFIG[rol].descripcion}</div>
-        </div>
-    `).join('');
+        `).join('');
+    }
     
+    modal.style.display = 'flex';
     modal.classList.add('show');
+    console.log('✅ Modal mostrado');
 }
 
-function closeRoleSelectionModal() {
+function closeRoleModal() {
     const modal = document.getElementById('roleSelectionModal');
-    if (modal) modal.classList.remove('show');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+    }
     pendingLoginData = null;
     pendingToken = null;
 }
 
-// Función global para seleccionar rol
-window.selectRole = function(selectedRole) {
+// Handler global para seleccionar rol
+window.selectRoleHandler = function(selectedRole) {
     console.log('🎯 Rol seleccionado:', selectedRole);
-    console.log('📦 Datos pendientes:', pendingLoginData);
     
     if (!pendingLoginData || !pendingToken) {
         showToast('Error: No hay datos de sesión', 'error');
-        closeRoleSelectionModal();
+        closeRoleModal();
         return;
     }
     
-    // Verificar que el rol seleccionado esté en la lista de roles del usuario
     if (!pendingLoginData.roles.includes(selectedRole)) {
-        console.error('Rol no permitido:', selectedRole, 'Roles disponibles:', pendingLoginData.roles);
-        showToast('No tienes permiso para acceder con este rol', 'error');
+        showToast('No tienes permiso para este rol', 'error');
         return;
     }
     
-    // Verificar si el usuario marcó "recordar mi selección"
     const rememberChoice = document.getElementById('rememberRoleChoice')?.checked || false;
     
     if (rememberChoice) {
         localStorage.setItem('furia_selected_role', selectedRole);
         localStorage.setItem('furia_selected_role_user', pendingLoginData.id);
-        console.log('💾 Rol guardado para futuros logins:', selectedRole);
-    } else {
-        localStorage.removeItem('furia_selected_role');
-        localStorage.removeItem('furia_selected_role_user');
-        console.log('🗑️ No se guardó la selección de rol');
+        console.log('💾 Rol guardado');
     }
     
-    // Crear el objeto de usuario final con el rol seleccionado
-    const finalUserData = {
-        ...pendingLoginData,
-        selected_role: selectedRole
-    };
-    
-    // Obtener la URL de redirección según el rol seleccionado
     const redirectUrl = ROLE_CONFIG[selectedRole]?.redirect;
-    console.log('🔗 URL de redirección:', redirectUrl);
-    
     if (!redirectUrl) {
-        showToast('Error: No se encontró URL para el rol seleccionado', 'error');
+        showToast('Error: URL no encontrada', 'error');
         return;
     }
     
-    // Guardar en localStorage
+    const finalUser = { ...pendingLoginData, selected_role: selectedRole };
     localStorage.setItem('furia_token', pendingToken);
-    localStorage.setItem('furia_user', JSON.stringify(finalUserData));
+    localStorage.setItem('furia_user', JSON.stringify(finalUser));
     
-    const roleName = ROLE_CONFIG[selectedRole]?.nombre || selectedRole;
-    showToast(`✅ Bienvenido ${finalUserData.nombre} - Accediendo como ${roleName}`, 'success');
+    showToast(`Accediendo como ${ROLE_CONFIG[selectedRole].nombre}`, 'success');
+    closeRoleModal();
     
-    // Cerrar el modal
-    closeRoleSelectionModal();
-    
-    // Redirigir después de un pequeño delay
     setTimeout(() => {
-        console.log('🚀 Redirigiendo a:', redirectUrl);
         window.location.href = redirectUrl;
-    }, 1000);
+    }, 500);
 };
-
-function clearSavedRoleSelection() {
-    localStorage.removeItem('furia_selected_role');
-    localStorage.removeItem('furia_selected_role_user');
-}
 
 // =====================================================
 // VERIFICAR SESIÓN GUARDADA
@@ -387,7 +330,7 @@ async function checkSavedSession() {
     
     if (!token) return;
     
-    // Solo verificar si estamos en login
+    // Solo en página de login
     if (currentPath === '/' || currentPath === '/login.html') {
         try {
             const response = await fetch(`${API_URL}/verify-token`, {
@@ -401,57 +344,40 @@ async function checkSavedSession() {
                 const user = data.user;
                 let redirect = null;
                 
-                // IMPORTANTE: Usar el rol seleccionado si existe
+                // Verificar si hay un rol seleccionado
                 const savedUser = localStorage.getItem('furia_user');
                 if (savedUser) {
                     const userData = JSON.parse(savedUser);
                     if (userData.selected_role && ROLE_CONFIG[userData.selected_role]) {
                         redirect = ROLE_CONFIG[userData.selected_role].redirect;
-                        console.log('🔁 Usando rol seleccionado guardado:', userData.selected_role, redirect);
                     }
                 }
                 
-                // Si no hay rol seleccionado, verificar si tiene múltiples roles
-                if (!redirect && user.roles) {
-                    if (user.roles.length === 1) {
-                        // Un solo rol, redirigir automáticamente
-                        const singleRole = user.roles[0];
-                        if (ROLE_CONFIG[singleRole]) {
-                            redirect = ROLE_CONFIG[singleRole].redirect;
-                            // Actualizar el usuario guardado con el rol
-                            const updatedUser = { ...user, selected_role: singleRole };
-                            localStorage.setItem('furia_user', JSON.stringify(updatedUser));
-                        }
-                    } else if (user.roles.length > 1) {
-                        // Múltiples roles - NO redirigir automáticamente, mostrar login
-                        console.log('⚠️ Múltiples roles sin selección, mostrando login');
-                        // Limpiar token para forzar selección
-                        localStorage.removeItem('furia_token');
-                        localStorage.removeItem('furia_user');
-                        return;
-                    }
+                // Si no hay rol seleccionado y tiene múltiples roles, mostrar login
+                if (!redirect && user.roles && user.roles.length > 1) {
+                    console.log('Múltiples roles sin selección, forzando login');
+                    localStorage.removeItem('furia_token');
+                    localStorage.removeItem('furia_user');
+                    return;
                 }
                 
-                if (redirect && redirect !== '/' && !window.location.pathname.includes(redirect.replace('/', ''))) {
-                    console.log('🔄 Redirigiendo por sesión guardada a:', redirect);
+                // Si solo tiene un rol, usar ese
+                if (!redirect && user.roles && user.roles.length === 1) {
+                    redirect = ROLE_CONFIG[user.roles[0]]?.redirect;
+                }
+                
+                if (redirect && redirect !== '/') {
                     window.location.href = redirect;
                 }
             } else {
-                // Token inválido, limpiar
-                localStorage.removeItem('furia_token');
-                localStorage.removeItem('furia_user');
-                localStorage.removeItem('furia_remembered');
-                localStorage.removeItem('furia_remembered_type');
-                clearSavedRoleSelection();
+                localStorage.clear();
             }
         } catch (error) {
-            console.error('Error verificando token:', error);
-            localStorage.removeItem('furia_token');
-            localStorage.removeItem('furia_user');
+            console.error('Error:', error);
         }
     }
     
-    // Cargar credenciales recordadas para el formulario
+    // Cargar credenciales recordadas
     const remembered = localStorage.getItem('furia_remembered');
     const rememberedType = localStorage.getItem('furia_remembered_type');
     
@@ -471,282 +397,21 @@ async function checkSavedSession() {
 }
 
 // =====================================================
-// RECUPERAR CONTRASEÑA (Funciones básicas)
-// =====================================================
-function openRecoverModal(e) {
-    if (e) e.preventDefault();
-    const modal = document.getElementById('recoverModal');
-    if (modal) modal.classList.add('show');
-}
-
-function closeRecoverModal() {
-    const modal = document.getElementById('recoverModal');
-    if (modal) modal.classList.remove('show');
-}
-
-function goBackToStep1() {
-    const step1 = document.getElementById('recoverStep1');
-    const step2 = document.getElementById('recoverStep2');
-    if (step1) step1.style.display = 'block';
-    if (step2) step2.style.display = 'none';
-}
-
-async function sendRecoveryCode() {
-    const email = document.getElementById('recoverEmail')?.value.trim();
-    const userType = document.getElementById('recoverUserType')?.value;
-    
-    if (!email) {
-        showToast('Ingresa tu correo electrónico', 'warning');
-        return;
-    }
-    
-    setModalLoading(true);
-    
-    try {
-        const response = await fetch(`${API_URL}/recuperar/solicitar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email, tipo: userType })
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) throw new Error(data.error);
-        
-        recoveryEmail = email;
-        recoveryUserType = userType;
-        
-        showToast('Código enviado a tu correo electrónico', 'success');
-        
-        const emailDisplay = document.getElementById('recoverEmailDisplay');
-        if (emailDisplay) emailDisplay.textContent = email;
-        
-        const step1 = document.getElementById('recoverStep1');
-        const step2 = document.getElementById('recoverStep2');
-        if (step1) step1.style.display = 'none';
-        if (step2) step2.style.display = 'block';
-        
-    } catch (error) {
-        showToast(error.message, 'error');
-    } finally {
-        setModalLoading(false);
-    }
-}
-
-async function verifyAndChangePassword() {
-    const newPassword = document.getElementById('newPassword')?.value;
-    const confirmPassword = document.getElementById('confirmPassword')?.value;
-    
-    if (!newPassword || newPassword.length < 6) {
-        showToast('La contraseña debe tener al menos 6 caracteres', 'warning');
-        return;
-    }
-    
-    if (newPassword !== confirmPassword) {
-        showToast('Las contraseñas no coinciden', 'error');
-        return;
-    }
-    
-    setModalLoading(true);
-    
-    try {
-        const response = await fetch(`${API_URL}/recuperar/cambiar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                email: recoveryEmail,
-                codigo: '123456', // En producción, obtener del input
-                nueva_contrasena: newPassword
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) throw new Error(data.error);
-        
-        showToast('Contraseña actualizada correctamente', 'success');
-        closeRecoverModal();
-        
-    } catch (error) {
-        showToast(error.message, 'error');
-    } finally {
-        setModalLoading(false);
-    }
-}
-
-// =====================================================
-// REGISTRO DE CLIENTE (Funciones básicas)
-// =====================================================
-function openRegisterModal() {
-    const modal = document.getElementById('registerModal');
-    if (modal) modal.classList.add('show');
-}
-
-function closeRegisterModal() {
-    const modal = document.getElementById('registerModal');
-    if (modal) modal.classList.remove('show');
-}
-
-function openVehicleRegisterModal() {
-    const modal = document.getElementById('vehicleRegisterModal');
-    if (modal) modal.classList.add('show');
-}
-
-function closeVehicleRegisterModal() {
-    const modal = document.getElementById('vehicleRegisterModal');
-    if (modal) modal.classList.remove('show');
-}
-
-async function sendRegisterCode() {
-    const nombre = document.getElementById('regNombre')?.value.trim();
-    const email = document.getElementById('regEmail')?.value.trim();
-    const telefono = document.getElementById('regTelefono')?.value.trim();
-    const direccion = document.getElementById('regDireccion')?.value.trim();
-    const password = document.getElementById('regPassword')?.value;
-    const confirmPassword = document.getElementById('regConfirmPassword')?.value;
-    
-    if (!nombre || !email || !telefono || !direccion || !password) {
-        showToast('Todos los campos son requeridos', 'warning');
-        return;
-    }
-    
-    if (password !== confirmPassword) {
-        showToast('Las contraseñas no coinciden', 'error');
-        return;
-    }
-    
-    setModalLoading(true);
-    
-    try {
-        const response = await fetch(`${API_URL}/registro/solicitar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nombre, email, telefono, direccion, password })
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) throw new Error(data.error);
-        
-        showToast('Código de verificación enviado a tu correo', 'success');
-        
-        const emailDisplay = document.getElementById('registerEmailDisplay');
-        if (emailDisplay) emailDisplay.textContent = email;
-        
-        const step1 = document.getElementById('registerStep1');
-        const step2 = document.getElementById('registerStep2');
-        if (step1) step1.style.display = 'none';
-        if (step2) step2.style.display = 'block';
-        
-        registerData = { nombre, email, telefono, direccion, password };
-        
-    } catch (error) {
-        showToast(error.message, 'error');
-    } finally {
-        setModalLoading(false);
-    }
-}
-
-async function verifyRegisterCode() {
-    const codigo = getCodeFromInputs('#registerStep2 .code-digit');
-    
-    if (codigo.length !== 6) {
-        showToast('Ingresa el código de 6 dígitos', 'warning');
-        return;
-    }
-    
-    setModalLoading(true);
-    
-    try {
-        const response = await fetch(`${API_URL}/registro/confirmar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: registerData.email, codigo: codigo })
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) throw new Error(data.error);
-        
-        showToast('Registro completado exitosamente. Ahora puedes iniciar sesión.', 'success');
-        closeRegisterModal();
-        
-        const clientTab = document.querySelector('.tab-btn[data-type="client"]');
-        if (clientTab) clientTab.click();
-        
-    } catch (error) {
-        showToast(error.message, 'error');
-    } finally {
-        setModalLoading(false);
-    }
-}
-
-async function registerVehicle() {
-    const email = prompt('Para registrar tu vehículo, ingresa tu correo electrónico:');
-    const placa = document.getElementById('vehPlaca')?.value.trim().toUpperCase();
-    const marca = document.getElementById('vehMarca')?.value.trim();
-    const modelo = document.getElementById('vehModelo')?.value.trim();
-    const anio = document.getElementById('vehAnio')?.value.trim();
-    const color = document.getElementById('vehColor')?.value.trim();
-    
-    if (!email) {
-        showToast('Necesitas un correo electrónico registrado', 'warning');
-        return;
-    }
-    
-    if (!placa || !marca || !modelo) {
-        showToast('Placa, marca y modelo son requeridos', 'warning');
-        return;
-    }
-    
-    setModalLoading(true);
-    
-    try {
-        const response = await fetch(`${API_URL}/registro/vehiculo`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, placa, marca, modelo, anio, color })
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) throw new Error(data.error);
-        
-        showToast('Vehículo registrado exitosamente', 'success');
-        closeVehicleRegisterModal();
-        
-        const clientTab = document.querySelector('.tab-btn[data-type="client"]');
-        if (clientTab) clientTab.click();
-        
-        if (plateInput) plateInput.value = placa;
-        
-    } catch (error) {
-        showToast(error.message, 'error');
-    } finally {
-        setModalLoading(false);
-    }
-}
-
-// =====================================================
 // UTILIDADES
 // =====================================================
 function togglePassword() {
     if (!passwordInput) return;
     const type = passwordInput.type === 'password' ? 'text' : 'password';
     passwordInput.type = type;
-    const toggleIcon = document.getElementById('toggleIcon');
-    if (toggleIcon) {
-        toggleIcon.className = type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
-    }
+    const icon = document.getElementById('toggleIcon');
+    if (icon) icon.className = type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
 }
 
 function setupCodeInputs() {
     document.addEventListener('input', (e) => {
         if (e.target.classList.contains('code-digit')) {
-            const container = e.target.closest('.code-inputs');
-            const inputs = container ? container.querySelectorAll('.code-digit') : document.querySelectorAll('.code-digit');
+            const inputs = document.querySelectorAll('.code-digit');
             const index = parseInt(e.target.dataset.index);
-            
             if (e.target.value.length === 1 && index < inputs.length - 1) {
                 inputs[index + 1].focus();
             }
@@ -755,10 +420,8 @@ function setupCodeInputs() {
     
     document.addEventListener('keydown', (e) => {
         if (e.target.classList.contains('code-digit') && e.key === 'Backspace') {
-            const container = e.target.closest('.code-inputs');
-            const inputs = container ? container.querySelectorAll('.code-digit') : document.querySelectorAll('.code-digit');
+            const inputs = document.querySelectorAll('.code-digit');
             const index = parseInt(e.target.dataset.index);
-            
             if (e.target.value === '' && index > 0) {
                 inputs[index - 1].focus();
             }
@@ -775,59 +438,48 @@ function getCodeFromInputs(selector) {
 }
 
 function setModalLoading(loading) {
-    const buttons = document.querySelectorAll('.modal .btn-primary, .modal .btn-secondary, .modal button');
+    const buttons = document.querySelectorAll('.modal .btn-primary, .modal .btn-secondary');
     buttons.forEach(btn => {
         btn.disabled = loading;
         btn.style.opacity = loading ? '0.6' : '1';
-        btn.style.cursor = loading ? 'not-allowed' : 'pointer';
     });
 }
 
 function showToast(message, type = 'info') {
     if (!toastContainer) return;
-    
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    
-    const icons = {
-        success: 'fa-check-circle',
-        error: 'fa-exclamation-circle',
-        warning: 'fa-exclamation-triangle',
-        info: 'fa-info-circle'
-    };
-    
+    const icons = { success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
     toast.innerHTML = `<i class="fas ${icons[type]}"></i><span>${message}</span>`;
     toastContainer.appendChild(toast);
-    
     setTimeout(() => toast.remove(), 4000);
 }
 
-// Funciones globales
-window.togglePassword = togglePassword;
-window.openRecoverModal = openRecoverModal;
-window.closeRecoverModal = closeRecoverModal;
-window.goBackToStep1 = goBackToStep1;
-window.sendRecoveryCode = sendRecoveryCode;
-window.verifyAndChangePassword = verifyAndChangePassword;
-window.openRegisterModal = openRegisterModal;
-window.closeRegisterModal = closeRegisterModal;
-window.sendRegisterCode = sendRegisterCode;
-window.verifyRegisterCode = verifyRegisterCode;
-window.openVehicleRegisterModal = openVehicleRegisterModal;
-window.closeVehicleRegisterModal = closeVehicleRegisterModal;
-window.registerVehicle = registerVehicle;
-window.closeRoleSelectionModal = closeRoleSelectionModal;
+// =====================================================
+// RECUPERAR CONTRASEÑA (Placeholders)
+// =====================================================
+window.openRecoverModal = () => showToast('Función en desarrollo', 'info');
+window.closeRecoverModal = () => {};
+window.sendRecoveryCode = () => showToast('Función en desarrollo', 'info');
+window.verifyAndChangePassword = () => showToast('Función en desarrollo', 'info');
+
+// =====================================================
+// REGISTRO (Placeholders)
+// =====================================================
+window.openRegisterModal = () => showToast('Función en desarrollo', 'info');
+window.closeRegisterModal = () => {};
+window.sendRegisterCode = () => showToast('Función en desarrollo', 'info');
+window.verifyRegisterCode = () => showToast('Función en desarrollo', 'info');
+window.openVehicleRegisterModal = () => showToast('Función en desarrollo', 'info');
+window.closeVehicleRegisterModal = () => {};
+window.registerVehicle = () => showToast('Función en desarrollo', 'info');
+
+// =====================================================
+// LOGOUT
+// =====================================================
 window.logout = () => {
-    clearSavedRoleSelection();
-    localStorage.removeItem('furia_token');
-    localStorage.removeItem('furia_user');
-    localStorage.removeItem('furia_remembered');
-    localStorage.removeItem('furia_remembered_type');
+    localStorage.clear();
     window.location.href = '/';
 };
-
-// Funciones placeholder para compatibilidad
-window.resendRecoveryCode = () => showToast('Función en desarrollo', 'info');
-window.resendRegisterCode = () => showToast('Función en desarrollo', 'info');
 
 console.log('✅ login.js cargado correctamente');

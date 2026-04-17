@@ -11,6 +11,49 @@ import logging
 logger = logging.getLogger(__name__)
 supabase = config.supabase
 
+# Cache simple para roles (reduce consultas a BD)
+_roles_cache = {}
+_CACHE_TTL = 60  # segundos
+
+def obtener_roles_usuario(usuario_id):
+    """Obtener roles de usuario con caché simple"""
+    import time
+    
+    # Verificar caché
+    if usuario_id in _roles_cache:
+        cached_data, timestamp = _roles_cache[usuario_id]
+        if time.time() - timestamp < _CACHE_TTL:
+            return cached_data
+    
+    roles = []
+    try:
+        # Consultar roles directamente
+        roles_result = supabase.table('usuario_rol') \
+            .select('rol:rol!inner(nombre_rol)') \
+            .eq('id_usuario', usuario_id) \
+            .execute()
+        
+        if roles_result.data:
+            for item in roles_result.data:
+                rol_obj = item.get('rol', {})
+                if isinstance(rol_obj, dict):
+                    nombre = rol_obj.get('nombre_rol')
+                    if nombre:
+                        # Normalizar nombre de rol
+                        if nombre in ['jefe_taller', 'jefe_operativo', 'tecnico', 'encargado_repuestos']:
+                            roles.append(nombre)
+                elif isinstance(rol_obj, list) and len(rol_obj) > 0:
+                    nombre = rol_obj[0].get('nombre_rol')
+                    if nombre and nombre in ['jefe_taller', 'jefe_operativo', 'tecnico', 'encargado_repuestos']:
+                        roles.append(nombre)
+    except Exception as e:
+        logger.debug(f"Error consultando roles: {e}")
+    
+    # Guardar en caché
+    _roles_cache[usuario_id] = (roles, time.time())
+    
+    return roles
+
 def verificar_rol(roles_permitidos):
     """Decorador para verificar que el usuario tenga al menos uno de los roles permitidos"""
     def decorator(f):
@@ -31,73 +74,27 @@ def verificar_rol(roles_permitidos):
             try:
                 data = jwt.decode(token, config.SECRET_KEY, algorithms=["HS256"])
                 current_user = data['user']
-                
                 usuario_id = current_user.get('id')
                 
                 if not usuario_id:
                     logger.error("Usuario sin ID en token")
                     return jsonify({'error': 'Token inválido'}), 401
                 
-                # Primero intentar obtener roles desde usuario_rol (nuevo sistema)
-                roles_usuario = []
-                try:
-                    roles_result = supabase.table('usuario_rol') \
-                        .select('rol:rol!inner(nombre_rol)') \
-                        .eq('id_usuario', usuario_id) \
-                        .execute()
-                    
-                    if roles_result.data:
-                        for item in roles_result.data:
-                            rol_obj = item.get('rol', {})
-                            if isinstance(rol_obj, dict):
-                                roles_usuario.append(rol_obj.get('nombre_rol'))
-                            elif isinstance(rol_obj, list) and len(rol_obj) > 0:
-                                roles_usuario.append(rol_obj[0].get('nombre_rol'))
-                except Exception as e:
-                    logger.warning(f"Error consultando usuario_rol: {e}")
+                # Obtener roles del usuario (con caché)
+                roles_usuario = obtener_roles_usuario(usuario_id)
                 
-                # Si no tiene roles en usuario_rol, obtener de la tabla usuario (sistema antiguo)
+                # Si no tiene roles, intentar obtener del token
                 if not roles_usuario:
-                    try:
-                        user_result = supabase.table('usuario') \
-                            .select('id_rol, rol:rol!inner(nombre_rol)') \
-                            .eq('id', usuario_id) \
-                            .execute()
-                        
-                        if user_result.data:
-                            rol_obj = user_result.data[0].get('rol', {})
-                            if isinstance(rol_obj, dict):
-                                rol_antiguo = rol_obj.get('nombre_rol')
-                                if rol_antiguo:
-                                    roles_usuario.append(rol_antiguo)
-                    except Exception as e:
-                        logger.warning(f"Error consultando usuario: {e}")
+                    roles_token = current_user.get('roles', [])
+                    if roles_token:
+                        roles_usuario = [r for r in roles_token if r in ['jefe_taller', 'jefe_operativo', 'tecnico', 'encargado_repuestos']]
                 
-                # Mapeo de roles antiguos a nuevos por si acaso
-                mapeo_roles = {
-                    'admin_general': 'jefe_operativo',
-                    'jefe_operativo': 'jefe_operativo',
-                    'jefe_taller': 'jefe_taller',
-                    'tecnico_mecanico': 'tecnico',
-                    'tecnico': 'tecnico',
-                    'encargado_rep_almacen': 'encargado_repuestos',
-                    'encargado_repuestos': 'encargado_repuestos',
-                    'cliente': 'cliente'
-                }
-                
-                # Normalizar roles
-                roles_normalizados = []
-                for rol in roles_usuario:
-                    rol_normalizado = mapeo_roles.get(rol, rol)
-                    roles_normalizados.append(rol_normalizado)
-                
-                logger.info(f"Usuario {current_user.get('nombre')} (ID: {usuario_id}) tiene roles: {roles_normalizados}")
-                
-                # Verificar si tiene al menos uno de los roles permitidos
-                tiene_rol = any(rol in roles_normalizados for rol in roles_permitidos)
+                # Verificar si tiene al menos un rol permitido
+                tiene_rol = any(rol in roles_usuario for rol in roles_permitidos)
                 
                 if not tiene_rol:
-                    logger.warning(f"Usuario {current_user.get('nombre')} no tiene rol permitido. Requeridos: {roles_permitidos}, Tiene: {roles_normalizados}")
+                    # Solo log de advertencia cuando realmente no tiene permiso
+                    logger.warning(f"Acceso denegado: Usuario {current_user.get('nombre')} (ID: {usuario_id}) - Roles: {roles_usuario} - Requeridos: {roles_permitidos}")
                     return jsonify({'error': f'No autorizado. Se requiere rol: {", ".join(roles_permitidos)}'}), 403
                     
             except jwt.ExpiredSignatureError:

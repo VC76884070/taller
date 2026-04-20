@@ -39,93 +39,45 @@ let usuarioActual = null;
 let rolesUsuario = [];
 let token = null;
 
-// =====================================================
-// VERIFICAR AUTENTICACIÓN - CORREGIDO
-// =====================================================
+// En dashboard.js, actualizar checkAuth similar
 async function checkAuth() {
-    token = localStorage.getItem('furia_token');
-    const userData = localStorage.getItem('furia_user');
+    const token = localStorage.getItem('furia_token');
+    const userInfoRaw = localStorage.getItem('furia_user');
     
     if (!token) {
-        console.log('❌ No hay token, redirigiendo a login');
         window.location.href = '/';
         return false;
     }
     
     try {
-        // Obtener usuario del localStorage
-        if (userData) {
-            usuarioActual = JSON.parse(userData);
-            rolesUsuario = usuarioActual.roles || [];
-        }
+        const userInfo = JSON.parse(userInfoRaw || '{}');
         
-        // Decodificar token para obtener información actualizada
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        if (payload.user) {
-            usuarioActual = { ...usuarioActual, ...payload.user };
-            if (payload.user.roles) {
-                rolesUsuario = payload.user.roles;
-            }
-        }
-        
-        // Obtener rol seleccionado
-        const selectedRole = usuarioActual?.selected_role;
-        
-        console.log('📋 Roles del usuario:', rolesUsuario);
-        console.log('🎯 Rol seleccionado:', selectedRole);
-        
-        // Verificar si tiene rol de jefe_operativo
-        const tieneRolJefeOperativo = rolesUsuario.includes('jefe_operativo');
-        
-        if (!tieneRolJefeOperativo) {
-            console.warn('❌ Usuario no tiene permiso de Jefe Operativo');
-            
-            // Redirigir según el rol que tenga
-            if (rolesUsuario.includes('jefe_taller')) {
-                window.location.href = '/jefe_taller/dashboard.html';
-            } else if (rolesUsuario.includes('tecnico')) {
-                window.location.href = '/tecnico_mecanico/misvehiculos.html';
-            } else if (rolesUsuario.includes('encargado_repuestos')) {
-                window.location.href = '/encargado_rep_almacen/dashboard.html';
-            } else {
-                window.location.href = '/';
-            }
-            return false;
-        }
-        
-        // Si el usuario seleccionó jefe_taller, redirigir
-        if (selectedRole === 'jefe_taller' && rolesUsuario.includes('jefe_taller')) {
-            console.log('🔄 Usuario seleccionó Jefe Taller, redirigiendo...');
-            window.location.href = '/jefe_taller/dashboard.html';
-            return false;
-        }
-        
-        // Verificar token con el backend
-        const response = await fetch(`${API_URL}/verify-token`, {
-            method: 'GET',
+        // Verificar token con backend
+        const verifyResponse = await fetch('/api/verify-token', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
-        const data = await response.json();
-        
-        if (!response.ok || !data.valid) {
-            console.log('❌ Token inválido, redirigiendo a login');
+        if (!verifyResponse.ok) {
             localStorage.clear();
             window.location.href = '/';
             return false;
         }
         
-        console.log('✅ Autenticación correcta para Jefe Operativo');
+        // Verificar si tiene rol jefe_operativo o jefe_taller
+        const tieneAcceso = 
+            (userInfo.roles && (userInfo.roles.includes('jefe_operativo') || userInfo.roles.includes('jefe_taller'))) ||
+            userInfo.rol === 'jefe_operativo' ||
+            userInfo.rol === 'jefe_taller';
         
-        // Actualizar localStorage con datos actualizados
-        if (usuarioActual) {
-            localStorage.setItem('furia_user', JSON.stringify(usuarioActual));
+        if (!tieneAcceso) {
+            window.location.href = '/';
+            return false;
         }
         
         return true;
         
     } catch (error) {
-        console.error('Error verificando autenticación:', error);
+        console.error('Error en checkAuth:', error);
         window.location.href = '/';
         return false;
     }

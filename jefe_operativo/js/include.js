@@ -204,16 +204,19 @@ function marcarItemActivo(currentPage) {
 }
 
 // =====================================================
-// OBTENER USUARIO ACTUAL DESDE LOCALSTORAGE
+// OBTENER USUARIO ACTUAL DESDE LOCALSTORAGE - CORREGIDO
 // =====================================================
 function obtenerUsuarioActual() {
     try {
         const userStr = localStorage.getItem('furia_user');
         if (userStr) {
             const user = JSON.parse(userStr);
+            console.log('Usuario desde localStorage:', user);
             return {
                 nombre: user.nombre || CONFIG.defaultUserName,
-                rol: user.rol || 'jefe_operativo'
+                rol: user.rol || 'jefe_operativo',
+                roles: user.roles || [user.rol],
+                id_rol: user.id_rol
             };
         }
     } catch (error) {
@@ -222,10 +225,10 @@ function obtenerUsuarioActual() {
     
     return {
         nombre: CONFIG.defaultUserName,
-        rol: 'jefe_operativo'
+        rol: 'jefe_operativo',
+        roles: ['jefe_operativo']
     };
 }
-
 // =====================================================
 // ACTUALIZAR NOMBRE DE USUARIO EN EL SIDEBAR
 // =====================================================

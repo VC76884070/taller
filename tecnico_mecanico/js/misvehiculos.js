@@ -28,6 +28,7 @@ let vehiculosAsignados = [];
 let token = null;
 let usuarioActual = null;
 let rolesUsuario = [];
+let comunicadosVistos = [];
 
 // Obtener token
 function getToken() {
@@ -45,6 +46,34 @@ function mostrarFechaActual() {
         const hoy = new Date();
         const opciones = { day: '2-digit', month: '2-digit', year: 'numeric' };
         fechaSpan.textContent = hoy.toLocaleDateString('es-ES', opciones);
+    }
+}
+
+// Formato de fecha más amigable para comunicados
+function formatFechaComunicado(fechaISO) {
+    if (!fechaISO) return 'Fecha no disponible';
+    
+    const fecha = new Date(fechaISO);
+    const ahora = new Date();
+    const diffMs = ahora - fecha;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) {
+        return 'Justo ahora';
+    } else if (diffMins < 60) {
+        return `Hace ${diffMins} minuto${diffMins !== 1 ? 's' : ''}`;
+    } else if (diffHours < 24) {
+        return `Hace ${diffHours} hora${diffHours !== 1 ? 's' : ''}`;
+    } else if (diffDays < 7) {
+        return `Hace ${diffDays} día${diffDays !== 1 ? 's' : ''}`;
+    } else {
+        return fecha.toLocaleDateString('es-ES', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
     }
 }
 
@@ -104,12 +133,15 @@ function showToast(message, type = 'success') {
 window.recargarDatos = function() {
     cargarVehiculos();
     cargarEstadoBahias();
+    cargarComunicados();
 };
 
 // =====================================================
-// VERIFICAR AUTENTICACIÓN - CORREGIDO
+// VERIFICAR AUTENTICACIÓN
 // =====================================================
 async function verificarToken() {
+    token = getToken();
+    
     if (!token) {
         console.error('No hay token');
         window.location.href = '/';
@@ -117,14 +149,12 @@ async function verificarToken() {
     }
     
     try {
-        // Obtener usuario del localStorage
         const userData = localStorage.getItem('furia_user');
         if (userData) {
             usuarioActual = JSON.parse(userData);
             rolesUsuario = usuarioActual.roles || [];
         }
         
-        // Verificar token con el backend
         const response = await fetch('/tecnico/api/verify-token', {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
@@ -139,29 +169,23 @@ async function verificarToken() {
             return false;
         }
         
-        // Actualizar usuario con datos del backend
         if (data.user) {
             usuarioActual = data.user;
             rolesUsuario = data.user.roles || [];
-            
-            // Actualizar localStorage
             localStorage.setItem('furia_user', JSON.stringify(usuarioActual));
         }
         
-        // Obtener rol seleccionado
         const selectedRole = localStorage.getItem('furia_selected_role');
         
         console.log('📋 Roles del usuario:', rolesUsuario);
         console.log('🎯 Rol seleccionado:', selectedRole);
         
-        // Verificar si tiene rol de técnico (por NOMBRE)
         const tieneRolTecnico = rolesUsuario.includes('tecnico');
         
         if (!tieneRolTecnico) {
             console.warn('❌ Usuario no tiene permiso de Técnico');
             showToast('No tienes permisos para acceder a esta sección', 'error');
             
-            // Redirigir según el primer rol que tenga
             if (rolesUsuario.includes('jefe_operativo')) {
                 window.location.href = '/jefe_operativo/dashboard.html';
             } else if (rolesUsuario.includes('jefe_taller')) {
@@ -176,7 +200,6 @@ async function verificarToken() {
             return false;
         }
         
-        // Si el usuario seleccionó otro rol diferente a técnico, redirigir
         if (selectedRole && selectedRole !== 'tecnico' && ROLE_CONFIG[selectedRole]) {
             console.log(`🔄 Usuario seleccionó ${selectedRole}, redirigiendo...`);
             window.location.href = ROLE_CONFIG[selectedRole].redirect;
@@ -193,7 +216,6 @@ async function verificarToken() {
     }
 }
 
-// Mostrar indicador de roles múltiples
 function mostrarIndicadorRoles() {
     const headerUserInfo = document.querySelector('.user-info');
     if (headerUserInfo && rolesUsuario && rolesUsuario.length > 1) {
@@ -235,7 +257,6 @@ function mostrarIndicadorRoles() {
     }
 }
 
-// Mostrar nombre de usuario
 function mostrarNombreUsuario() {
     const userNameSpan = document.getElementById('userName');
     if (userNameSpan && usuarioActual) {
@@ -294,7 +315,7 @@ async function cargarVehiculos() {
     const emptyState = document.getElementById('emptyState');
     
     if (grid) grid.innerHTML = '';
-    if (loadingContainer) loadingContainer.style.display = 'block';
+    if (loadingContainer) loadingContainer.style.display = 'flex';
     if (emptyState) emptyState.style.display = 'none';
     
     try {
@@ -320,7 +341,6 @@ async function cargarVehiculos() {
         
         vehiculosAsignados = data.vehiculos || [];
         
-        // Actualizar badge de notificaciones (trabajos en pausa)
         const badge = document.getElementById('notificacionesBadge');
         if (badge) {
             const enPausa = vehiculosAsignados.filter(v => v.estado_global === 'EnPausa').length;
@@ -351,7 +371,6 @@ async function cargarVehiculos() {
     }
 }
 
-// Renderizar tarjetas de vehículos
 function renderVehiculos() {
     const grid = document.getElementById('vehiculosGrid');
     if (!grid) return;
@@ -369,6 +388,7 @@ function renderVehiculos() {
         const tieneDiagnostico = vehiculo.diagnostico_inicial && vehiculo.diagnostico_inicial !== '';
         const tieneAudio = vehiculo.diagnostico_audio_url;
         const tieneProblema = vehiculo.recepcion?.transcripcion_problema;
+        const trabajoIniciado = vehiculo.trabajo_iniciado || false;
         
         return `
             <div class="vehiculo-card" data-orden-id="${vehiculo.orden_id}">
@@ -416,6 +436,13 @@ function renderVehiculos() {
                         </div>
                     ` : ''}
                     
+                    ${vehiculo.bahia_asignada && trabajoIniciado ? `
+                        <div class="bahia-info">
+                            <i class="fas fa-warehouse"></i>
+                            <strong>Bahía asignada:</strong> ${vehiculo.bahia_asignada}
+                        </div>
+                    ` : ''}
+                    
                     ${tieneProblema ? `
                         <div class="diagnostico-preview">
                             <p><i class="fas fa-comment"></i> <strong>Problema reportado:</strong></p>
@@ -453,9 +480,11 @@ function renderVehiculos() {
                             <i class="fas fa-flag-checkered"></i> Finalizar
                         </button>
                     ` : `
-                        <button class="btn-sm btn-outline-sm" onclick="abrirIniciarModal(${vehiculo.orden_id})">
-                            <i class="fas fa-play-circle"></i> Empezar
-                        </button>
+                        ${!trabajoIniciado ? `
+                            <button class="btn-sm btn-primary-sm" onclick="abrirIniciarModal(${vehiculo.orden_id})">
+                                <i class="fas fa-play-circle"></i> Iniciar Trabajo
+                            </button>
+                        ` : ''}
                         <button class="btn-sm btn-outline-sm" onclick="abrirPausaModal(${vehiculo.orden_id})">
                             <i class="fas fa-pause"></i> Pausar
                         </button>
@@ -466,7 +495,6 @@ function renderVehiculos() {
     }).join('');
 }
 
-// Formatear fecha
 function formatFecha(fechaStr) {
     if (!fechaStr) return 'N/A';
     try {
@@ -484,14 +512,12 @@ function formatFecha(fechaStr) {
     }
 }
 
-// Truncar texto
 function truncateText(text, maxLength) {
     if (!text) return '';
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
 }
 
-// Escapar HTML
 function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
@@ -500,17 +526,9 @@ function escapeHtml(text) {
 }
 
 // =====================================================
-// MODAL DE INICIAR TRABAJO (CON SELECCIÓN DE BAHÍA)
+// MODAL DE INICIAR TRABAJO
 // =====================================================
-let ordenSeleccionadaParaIniciar = null;
-
-window.abrirIniciarModal = async function(ordenId) {
-    ordenSeleccionadaParaIniciar = ordenId;
-    
-    // Cargar estado actual de bahías
-    await cargarEstadoBahias();
-    
-    // Obtener información de la orden
+window.abrirIniciarModal = function(ordenId) {
     const vehiculo = vehiculosAsignados.find(v => v.orden_id === ordenId);
     if (vehiculo) {
         const infoHtml = `
@@ -520,7 +538,8 @@ window.abrirIniciarModal = async function(ordenId) {
         `;
         document.getElementById('iniciarInfo').innerHTML = infoHtml;
     }
-    
+    document.getElementById('ordenIdIniciar').value = ordenId;
+    document.getElementById('bahiaSeleccionada').value = '';
     document.getElementById('iniciarModal').classList.add('show');
 };
 
@@ -528,14 +547,15 @@ window.cerrarIniciarModal = function() {
     document.getElementById('iniciarModal').classList.remove('show');
     document.getElementById('iniciarInfo').innerHTML = '';
     document.getElementById('bahiaSeleccionada').value = '';
-    ordenSeleccionadaParaIniciar = null;
+    document.getElementById('ordenIdIniciar').value = '';
 };
 
 async function confirmarInicio() {
-    const bahiaSeleccionada = document.getElementById('bahiaSeleccionada').value;
+    const ordenId = document.getElementById('ordenIdIniciar').value;
+    const bahia = document.getElementById('bahiaSeleccionada').value;
     
-    if (!bahiaSeleccionada) {
-        showToast('Debes seleccionar una bahía', 'warning');
+    if (!bahia) {
+        showToast('Selecciona una bahía', 'warning');
         return;
     }
     
@@ -549,10 +569,7 @@ async function confirmarInicio() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ 
-                id_orden: parseInt(ordenSeleccionadaParaIniciar), 
-                bahia_asignada: parseInt(bahiaSeleccionada)
-            })
+            body: JSON.stringify({ id_orden: parseInt(ordenId), bahia_asignada: parseInt(bahia) })
         });
         
         const data = await response.json();
@@ -564,10 +581,7 @@ async function confirmarInicio() {
         } else {
             if (data.bahia_ocupada) {
                 showToast(data.error, 'warning');
-                // Recargar estado de bahías para mostrar actualización
-                await cargarEstadoBahias();
-                // Reabrir modal para que seleccione otra bahía
-                setTimeout(() => abrirIniciarModal(ordenSeleccionadaParaIniciar), 1500);
+                setTimeout(() => abrirIniciarModal(parseInt(ordenId)), 1500);
             } else {
                 showToast(data.error || 'Error al iniciar', 'error');
             }
@@ -781,7 +795,6 @@ window.verDetalle = async function(ordenId) {
                         <div><strong>Marca/Modelo:</strong> ${escapeHtml(marcaModelo)}</div>
                         <div><strong>Año:</strong> ${escapeHtml(anio)}</div>
                         <div><strong>Kilometraje:</strong> ${kilometraje}</div>
-                        ${detalle.vehiculo?.color ? `<div><strong>Color:</strong> ${escapeHtml(detalle.vehiculo.color)}</div>` : ''}
                     </div>
                 </div>
                 
@@ -849,33 +862,212 @@ window.verDetalle = async function(ordenId) {
     }
 };
 
-// Ver foto en grande
 window.verFoto = function(url) {
-    const modalHtml = `
-        <div class="modal show" id="fotoModal" onclick="cerrarFotoModal()">
-            <div class="modal-content modal-lg" style="max-width: 90%; background: transparent;" onclick="event.stopPropagation()">
-                <div style="text-align: right; margin-bottom: 0.5rem;">
-                    <button class="modal-close" onclick="cerrarFotoModal()" style="background: var(--bg-card); padding: 0.3rem 0.8rem; border-radius: var(--radius-full);">&times;</button>
-                </div>
-                <img src="${url}" style="width: 100%; border-radius: var(--radius-lg);">
-            </div>
-        </div>
-    `;
-    
-    const existingModal = document.getElementById('fotoModal');
-    if (existingModal) existingModal.remove();
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = document.getElementById('fotoModal');
+    const imagen = document.getElementById('fotoAmpliada');
+    if (imagen) imagen.src = url;
+    if (modal) modal.classList.add('show');
 };
 
 window.cerrarFotoModal = function() {
     const modal = document.getElementById('fotoModal');
-    if (modal) modal.remove();
+    if (modal) modal.classList.remove('show');
 };
 
 window.cerrarDetalleModal = function() {
     document.getElementById('detalleModal').classList.remove('show');
 };
+
+// =====================================================
+// COMUNICADOS DEL JEFE OPERATIVO - VERSIÓN PARA TÉCNICOS
+// =====================================================
+
+window.cargarComunicados = async function() {
+    const comunicadosList = document.getElementById('comunicadosList');
+    if (!comunicadosList) return;
+    
+    try {
+        // Cargar comunicados vistos desde localStorage
+        const vistosStorage = localStorage.getItem('comunicados_vistos');
+        if (vistosStorage) {
+            comunicadosVistos = JSON.parse(vistosStorage);
+        }
+        
+        const response = await fetch('/tecnico/api/comunicados', {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.error || 'Error al cargar comunicados');
+        }
+        
+        const comunicados = result.data || [];
+        const badge = document.getElementById('comunicadosBadge');
+        
+        // Calcular no leídos
+        const noLeidos = comunicados.filter(c => !comunicadosVistos.includes(c.id)).length;
+        if (badge) {
+            badge.textContent = noLeidos;
+            badge.style.backgroundColor = noLeidos > 0 ? 'var(--rojo-primario)' : 'var(--gris-medio)';
+        }
+        
+        if (comunicados.length === 0) {
+            comunicadosList.innerHTML = `
+                <div class="empty-comunicados">
+                    <i class="fas fa-bullhorn"></i>
+                    <p>No hay comunicados disponibles</p>
+                </div>
+            `;
+            return;
+        }
+        
+        comunicados.sort((a, b) => new Date(b.fecha_creacion) - new Date(a.fecha_creacion));
+        
+        comunicadosList.innerHTML = comunicados.map(com => {
+            let prioridadIcon = '';
+            let prioridadClass = '';
+            const esNuevo = !comunicadosVistos.includes(com.id);
+            const nuevoClass = esNuevo ? 'nuevo' : '';
+            
+            if (com.prioridad === 'importante') {
+                prioridadIcon = '<i class="fas fa-exclamation-triangle importante"></i>';
+                prioridadClass = 'importante';
+            } else if (com.prioridad === 'urgente') {
+                prioridadIcon = '<i class="fas fa-bell urgente"></i>';
+                prioridadClass = 'urgente';
+            } else {
+                prioridadIcon = '<i class="fas fa-info-circle"></i>';
+                prioridadClass = 'normal';
+            }
+            
+            const fechaFormateada = formatFechaComunicado(com.fecha_creacion);
+            
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = com.contenido;
+            const textoPlano = tempDiv.textContent || tempDiv.innerText || '';
+            const textoResumido = textoPlano.length > 100 ? textoPlano.substring(0, 100) + '...' : textoPlano;
+            
+            return `
+                <div class="comunicado-item ${prioridadClass} ${nuevoClass}" onclick="verComunicadoCompleto(${com.id})" data-id="${com.id}">
+                    <div class="comunicado-titulo">
+                        ${prioridadIcon}
+                        <strong>${escapeHtml(com.titulo)}</strong>
+                        <span class="comunicado-fecha">
+                            <i class="far fa-clock"></i> ${fechaFormateada}
+                        </span>
+                    </div>
+                    <div class="comunicado-contenido">
+                        ${escapeHtml(textoResumido)}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+    } catch (error) {
+        console.error('Error cargando comunicados:', error);
+        const comunicadosList = document.getElementById('comunicadosList');
+        if (comunicadosList) {
+            comunicadosList.innerHTML = `
+                <div class="empty-comunicados">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <p>Error al cargar comunicados</p>
+                </div>
+            `;
+        }
+    }
+};
+
+function verComunicadoCompleto(id) {
+    // Marcar como visto
+    if (!comunicadosVistos.includes(id)) {
+        comunicadosVistos.push(id);
+        localStorage.setItem('comunicados_vistos', JSON.stringify(comunicadosVistos));
+        
+        // Actualizar badge
+        const badge = document.getElementById('comunicadosBadge');
+        if (badge) {
+            const comunicadosList = document.querySelectorAll('.comunicado-item');
+            const noLeidos = Array.from(comunicadosList).filter(item => !comunicadosVistos.includes(parseInt(item.dataset.id))).length;
+            badge.textContent = noLeidos;
+            badge.style.backgroundColor = noLeidos > 0 ? 'var(--rojo-primario)' : 'var(--gris-medio)';
+        }
+        
+        // Remover clase nuevo del elemento
+        const elemento = document.querySelector(`.comunicado-item[data-id="${id}"]`);
+        if (elemento) elemento.classList.remove('nuevo');
+    }
+    
+    fetch(`/tecnico/api/comunicados/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success && result.data) {
+            const com = result.data;
+            const fechaFormateada = formatFechaComunicado(com.fecha_creacion);
+            
+            let prioridadBadge = '';
+            let prioridadClass = '';
+            if (com.prioridad === 'importante') {
+                prioridadBadge = '<span class="prioridad-badge importante">Importante</span>';
+                prioridadClass = 'importante';
+            } else if (com.prioridad === 'urgente') {
+                prioridadBadge = '<span class="prioridad-badge urgente">Urgente</span>';
+                prioridadClass = 'urgente';
+            } else {
+                prioridadBadge = '<span class="prioridad-badge normal">Normal</span>';
+                prioridadClass = 'normal';
+            }
+            
+            const modalContent = `
+                <div class="modal-section ${prioridadClass}">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                        <h3 style="margin: 0;">${escapeHtml(com.titulo)}</h3>
+                        ${prioridadBadge}
+                    </div>
+                    <div class="comunicado-meta">
+                        <span><i class="far fa-calendar-alt"></i> ${fechaFormateada}</span>
+                    </div>
+                    <div class="comunicado-contenido-completo">
+                        ${com.contenido}
+                    </div>
+                </div>
+            `;
+            
+            const modal = document.createElement('div');
+            modal.className = 'modal show';
+            modal.style.display = 'flex';
+            modal.innerHTML = `
+                <div class="modal-content modal-md">
+                    <div class="modal-header">
+                        <h2><i class="fas fa-bullhorn"></i> Comunicado</h2>
+                        <button class="modal-close" onclick="this.closest('.modal').remove()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        ${modalContent}
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="this.closest('.modal').remove()">Cerrar</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error al cargar el comunicado', 'error');
+    });
+}
 
 // =====================================================
 // CIERRE DE SESIÓN
@@ -891,19 +1083,75 @@ window.cerrarSesion = function() {
 };
 
 // =====================================================
+// ESTILOS ADICIONALES PARA COMUNICADOS
+// =====================================================
+const comunicadoStyle = document.createElement('style');
+comunicadoStyle.textContent = `
+    .prioridad-badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: var(--radius-full);
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+    .prioridad-badge.normal {
+        background: var(--gris-medio);
+        color: var(--gris-texto);
+    }
+    .prioridad-badge.importante {
+        background: rgba(245, 158, 11, 0.15);
+        color: var(--ambar-alerta);
+    }
+    .prioridad-badge.urgente {
+        background: rgba(193, 18, 31, 0.15);
+        color: var(--rojo-primario);
+    }
+    .comunicado-meta {
+        font-size: 0.7rem;
+        color: var(--gris-texto);
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .comunicado-contenido-completo {
+        font-size: 0.9rem;
+        line-height: 1.6;
+        color: var(--blanco);
+    }
+    .comunicado-contenido-completo p {
+        margin-bottom: 0.75rem;
+    }
+    .comunicado-contenido-completo ul,
+    .comunicado-contenido-completo ol {
+        margin: 0.5rem 0 0.5rem 1.5rem;
+    }
+    .comunicado-contenido-completo h1,
+    .comunicado-contenido-completo h2,
+    .comunicado-contenido-completo h3 {
+        margin: 0.75rem 0 0.5rem 0;
+        color: var(--rojo-primario);
+    }
+    .modal-md {
+        max-width: 550px;
+    }
+    .comunicado-item.nuevo {
+        animation: highlight 2s ease;
+    }
+    @keyframes highlight {
+        0% {
+            background: rgba(193, 18, 31, 0.2);
+        }
+        100% {
+            background: transparent;
+        }
+    }
+`;
+document.head.appendChild(comunicadoStyle);
+
+// =====================================================
 // INICIALIZACIÓN
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    token = getToken();
-    
-    console.log('Token encontrado:', token ? 'Sí' : 'No');
-    
-    if (!token) {
-        console.error('No se encontró token');
-        window.location.href = '/';
-        return;
-    }
-    
     const tokenValido = await verificarToken();
     if (!tokenValido) return;
     
@@ -912,8 +1160,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     mostrarIndicadorRoles();
     await cargarVehiculos();
     await cargarEstadoBahias();
+    await cargarComunicados();
     
-    // Configurar botones de modales
     const confirmarInicioBtn = document.getElementById('confirmarInicioBtn');
     if (confirmarInicioBtn) {
         confirmarInicioBtn.onclick = confirmarInicio;
@@ -929,7 +1177,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         confirmarReanudarBtn.onclick = confirmarReanudar;
     }
     
-    // Cerrar modales al hacer click fuera
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
@@ -938,11 +1185,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
     
-    // Refrescar datos cada 30 segundos
     setInterval(() => {
         if (document.visibilityState === 'visible' && token) {
             cargarVehiculos();
             cargarEstadoBahias();
+            cargarComunicados();
         }
     }, 30000);
     

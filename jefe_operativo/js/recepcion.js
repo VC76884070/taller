@@ -127,17 +127,78 @@ document.addEventListener('DOMContentLoaded', async () => {
     initRecepcionesPanel();
 });
 
+// =====================================================
+// CHECK AUTH - CORREGIDO PARA USAR roles ARRAY
+// =====================================================
 async function checkAuth() {
     const token = localStorage.getItem('furia_token');
-    userInfo = JSON.parse(localStorage.getItem('furia_user') || '{}');
+    const userInfoRaw = localStorage.getItem('furia_user');
     
-    if (!token || (userInfo.rol !== 'jefe_operativo' && userInfo.id_rol !== 2)) {
+    console.log('=== CHECK AUTH DEBUG ===');
+    console.log('Token existe:', !!token);
+    
+    if (!token) {
+        console.error('No hay token');
         window.location.href = '/';
         return false;
     }
-    return true;
+    
+    try {
+        userInfo = JSON.parse(userInfoRaw || '{}');
+        console.log('userInfo parseado:', userInfo);
+        
+        // Verificar si el token es válido con el backend
+        const verifyResponse = await fetch('/api/verify-token', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!verifyResponse.ok) {
+            console.error('Token inválido según backend');
+            localStorage.clear();
+            window.location.href = '/';
+            return false;
+        }
+        
+        const verifyData = await verifyResponse.json();
+        console.log('Verificación backend:', verifyData);
+        
+        // Actualizar userInfo con datos del backend
+        if (verifyData.user) {
+            userInfo = verifyData.user;
+            localStorage.setItem('furia_user', JSON.stringify(userInfo));
+        }
+        
+        // IMPORTANTE: Verificar por roles (array) 
+        // El login devuelve user.roles = ['jefe_taller', 'jefe_operativo']
+        const tieneRolJefeOperativo = 
+            (userInfo.roles && userInfo.roles.includes('jefe_operativo')) ||
+            userInfo.rol === 'jefe_operativo';
+        
+        console.log('Roles del usuario:', userInfo.roles);
+        console.log('Tiene rol jefe_operativo?', tieneRolJefeOperativo);
+        
+        if (!tieneRolJefeOperativo) {
+            console.error('No tiene rol jefe_operativo');
+            // Si no es jefe_operativo pero es jefe_taller, ir a dashboard de taller
+            if (userInfo.roles && userInfo.roles.includes('jefe_taller')) {
+                window.location.href = '/jefe_taller/dashboard.html';
+            } else {
+                window.location.href = '/';
+            }
+            return false;
+        }
+        
+        console.log('✅ Autenticación exitosa - Acceso permitido a Recepción');
+        return true;
+        
+    } catch (error) {
+        console.error('Error en checkAuth:', error);
+        window.location.href = '/';
+        return false;
+    }
 }
-
 function initPage() {
     const now = new Date();
     const options = { 
@@ -583,7 +644,6 @@ async function cargarDatosSesion() {
         const data = await response.json();
         
         if (response.ok) {
-            // Verificar si la sesión ya no existe o está finalizada
             if (!data.sesion || data.sesion.estado === 'finalizada') {
                 logger.info('La sesión ha sido finalizada por otro usuario');
                 mostrarNotificacion('La sesión ha sido finalizada por otro colaborador', 'info');

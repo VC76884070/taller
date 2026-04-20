@@ -45,6 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     initPage();
     initQuill();
+    cargarDestinatarios();
     await loadComunicados();
     setupEventListeners();
     iniciarPollingNotificaciones();
@@ -53,16 +54,68 @@ document.addEventListener('DOMContentLoaded', async () => {
     listaColumn.classList.add('full-width');
 });
 
-// Verificar autenticación
+// =====================================================
+// CHECK AUTH - CORREGIDO
+// =====================================================
 async function checkAuth() {
     const token = localStorage.getItem('furia_token');
-    userInfo = JSON.parse(localStorage.getItem('furia_user') || '{}');
+    const userInfoRaw = localStorage.getItem('furia_user');
     
-    if (!token || (userInfo.rol !== 'jefe_operativo' && userInfo.id_rol !== 2)) {
+    console.log('=== VERIFICANDO AUTENTICACIÓN - COMUNICADOS ===');
+    
+    if (!token) {
+        console.error('No hay token');
         window.location.href = '/';
         return false;
     }
-    return true;
+    
+    try {
+        userInfo = JSON.parse(userInfoRaw || '{}');
+        console.log('UserInfo:', userInfo);
+        
+        // Verificar token con backend
+        const verifyResponse = await fetch('/api/verify-token', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!verifyResponse.ok) {
+            console.error('Token inválido');
+            localStorage.clear();
+            window.location.href = '/';
+            return false;
+        }
+        
+        const verifyData = await verifyResponse.json();
+        if (verifyData.user) {
+            userInfo = verifyData.user;
+            localStorage.setItem('furia_user', JSON.stringify(userInfo));
+        }
+        
+        // Verificar por roles (array)
+        const roles = userInfo.roles || [];
+        const tieneRolJefeOperativo = roles.includes('jefe_operativo');
+        
+        console.log('Roles:', roles);
+        console.log('Tiene jefe_operativo?', tieneRolJefeOperativo);
+        
+        if (!tieneRolJefeOperativo) {
+            console.error('No tiene permisos de jefe_operativo');
+            if (roles.includes('jefe_taller')) {
+                window.location.href = '/jefe_taller/dashboard.html';
+            } else {
+                window.location.href = '/';
+            }
+            return false;
+        }
+        
+        console.log('✅ Autenticación exitosa - Comunicados');
+        return true;
+        
+    } catch (error) {
+        console.error('Error en checkAuth:', error);
+        window.location.href = '/';
+        return false;
+    }
 }
 
 // Inicializar página
@@ -96,6 +149,34 @@ function initQuill() {
             ]
         }
     });
+}
+
+// =====================================================
+// CARGAR DESTINATARIOS DISPONIBLES
+// =====================================================
+function cargarDestinatarios() {
+    if (!destinatariosGrid) return;
+    
+    // Roles disponibles SIN admin_general
+    const rolesDisponibles = [
+        { id: 'jefe_operativo', nombre: 'Jefe Operativo' },
+        { id: 'jefe_taller', nombre: 'Jefe Taller' },
+        { id: 'tecnico', nombre: 'Técnicos' },
+        { id: 'encargado_repuestos', nombre: 'Enc. Repuestos' }
+    ];
+    
+    destinatariosGrid.innerHTML = rolesDisponibles.map(rol => `
+        <label class="destinatario-checkbox">
+            <input type="checkbox" class="dest-rol" value="${rol.id}" checked>
+            <span>${rol.nombre}</span>
+        </label>
+    `).join('');
+    
+    // Configurar el checkbox "Todos"
+    if (destTodos) {
+        destTodos.checked = true;
+        destTodos.indeterminate = false;
+    }
 }
 
 // =====================================================
@@ -231,17 +312,21 @@ function formatFecha(fechaISO) {
     }
 }
 
-// Obtener tags de destinatarios
+// Obtener tags de destinatarios (SIN admin_general)
 function getDestinatariosTags(destinatarios) {
     const nombres = {
         'jefe_operativo': 'Jefe Operativo',
         'jefe_taller': 'Jefe Taller',
         'tecnico': 'Técnicos',
-        'encargado_repuestos': 'Enc. Repuestos',
-        'admin_general': 'Admin General'
+        'encargado_repuestos': 'Enc. Repuestos'
     };
     
-    return destinatarios.map(d => `
+    // Filtrar roles que no existen
+    const rolesValidos = destinatarios.filter(d => nombres[d]);
+    
+    if (rolesValidos.length === 0) return '<span class="destinatario-tag">Sin destinatarios</span>';
+    
+    return rolesValidos.map(d => `
         <span class="destinatario-tag">${nombres[d] || d}</span>
     `).join('');
 }
@@ -270,10 +355,14 @@ async function guardarComunicado() {
         return;
     }
     
-    // Obtener destinatarios seleccionados
+    // Obtener destinatarios seleccionados (solo roles válidos)
     const destinatarios = [];
     document.querySelectorAll('.dest-rol:checked').forEach(cb => {
-        destinatarios.push(cb.value);
+        const valor = cb.value;
+        // Solo agregar roles válidos (excluir admin_general si existe)
+        if (valor !== 'admin_general') {
+            destinatarios.push(valor);
+        }
     });
     
     if (destinatarios.length === 0) {
@@ -349,9 +438,12 @@ async function editarComunicado(id) {
     comunicadoEstado.checked = comunicado.estado === 'activo';
     estadoLabel.textContent = comunicado.estado === 'activo' ? 'Activo' : 'Inactivo';
     
-    // Destinatarios
+    // Destinatarios (filtrar roles inválidos)
+    const rolesValidos = ['jefe_operativo', 'jefe_taller', 'tecnico', 'encargado_repuestos'];
+    const destinatariosValidos = (comunicado.destinatarios || []).filter(d => rolesValidos.includes(d));
+    
     document.querySelectorAll('.dest-rol').forEach(cb => {
-        cb.checked = comunicado.destinatarios?.includes(cb.value) || false;
+        cb.checked = destinatariosValidos.includes(cb.value);
     });
     
     // Actualizar checkbox "Todos"
@@ -457,7 +549,19 @@ function resetForm() {
     comunicadoEstado.checked = true;
     estadoLabel.textContent = 'Activo';
     destTodos.checked = true;
-    document.querySelectorAll('.dest-rol').forEach(cb => cb.checked = true);
+    
+    // Marcar todos los checkboxes de roles válidos
+    document.querySelectorAll('.dest-rol').forEach(cb => {
+        // Solo marcar roles válidos (excluir admin_general)
+        if (cb.value !== 'admin_general') {
+            cb.checked = true;
+        } else {
+            cb.checked = false;
+            // Opcional: ocultar el checkbox de admin_general
+            const label = cb.closest('.destinatario-checkbox');
+            if (label) label.style.display = 'none';
+        }
+    });
     
     if (quillEditor) {
         quillEditor.setText('');
@@ -518,16 +622,22 @@ function setupEventListeners() {
     destTodos.addEventListener('change', () => {
         const checkboxes = document.querySelectorAll('.dest-rol');
         checkboxes.forEach(cb => {
-            cb.checked = destTodos.checked;
+            // Solo marcar roles válidos
+            if (cb.value !== 'admin_general') {
+                cb.checked = destTodos.checked;
+            }
         });
     });
     
     // Checkboxes individuales
     document.querySelectorAll('.dest-rol').forEach(cb => {
         cb.addEventListener('change', () => {
-            const allChecked = Array.from(document.querySelectorAll('.dest-rol')).every(c => c.checked);
+            // Solo considerar roles válidos para el estado "Todos"
+            const checkboxesValidos = Array.from(document.querySelectorAll('.dest-rol'))
+                .filter(c => c.value !== 'admin_general');
+            const allChecked = checkboxesValidos.every(c => c.checked);
             destTodos.checked = allChecked;
-            destTodos.indeterminate = !allChecked && Array.from(document.querySelectorAll('.dest-rol')).some(c => c.checked);
+            destTodos.indeterminate = !allChecked && checkboxesValidos.some(c => c.checked);
         });
     });
     

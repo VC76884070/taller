@@ -61,16 +61,69 @@ document.addEventListener('DOMContentLoaded', async () => {
     iniciarPollingNotificaciones();
 });
 
-// Verificar autenticación
+// =====================================================
+// CHECK AUTH - CORREGIDO
+// =====================================================
 async function checkAuth() {
     const token = localStorage.getItem('furia_token');
-    const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
+    const userInfoRaw = localStorage.getItem('furia_user');
     
-    if (!token || (user.rol !== 'jefe_operativo' && user.id_rol !== 2)) {
+    console.log('=== VERIFICANDO AUTENTICACIÓN - PERFIL ===');
+    
+    if (!token) {
+        console.error('No hay token');
         window.location.href = '/';
         return false;
     }
-    return true;
+    
+    try {
+        const user = JSON.parse(userInfoRaw || '{}');
+        console.log('UserInfo desde localStorage:', user);
+        
+        // Verificar token con backend
+        const verifyResponse = await fetch('/api/verify-token', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!verifyResponse.ok) {
+            console.error('Token inválido');
+            localStorage.clear();
+            window.location.href = '/';
+            return false;
+        }
+        
+        const verifyData = await verifyResponse.json();
+        let userInfo = user;
+        if (verifyData.user) {
+            userInfo = verifyData.user;
+            localStorage.setItem('furia_user', JSON.stringify(userInfo));
+        }
+        
+        // Verificar por roles (array)
+        const roles = userInfo.roles || [];
+        const tieneRolJefeOperativo = roles.includes('jefe_operativo');
+        
+        console.log('Roles:', roles);
+        console.log('Tiene jefe_operativo?', tieneRolJefeOperativo);
+        
+        if (!tieneRolJefeOperativo) {
+            console.error('No tiene permisos de jefe_operativo');
+            if (roles.includes('jefe_taller')) {
+                window.location.href = '/jefe_taller/dashboard.html';
+            } else {
+                window.location.href = '/';
+            }
+            return false;
+        }
+        
+        console.log('✅ Autenticación exitosa - Perfil');
+        return true;
+        
+    } catch (error) {
+        console.error('Error en checkAuth:', error);
+        window.location.href = '/';
+        return false;
+    }
 }
 
 // Inicializar página
@@ -92,25 +145,40 @@ function initPage() {
 // Configurar event listeners
 function setupEventListeners() {
     // Cambiar avatar
-    changeAvatarBtn.addEventListener('click', () => {
-        avatarInput.click();
-    });
+    if (changeAvatarBtn) {
+        changeAvatarBtn.addEventListener('click', () => {
+            avatarInput.click();
+        });
+    }
     
-    avatarInput.addEventListener('change', async (e) => {
-        if (e.target.files && e.target.files[0]) {
-            await subirAvatar(e.target.files[0]);
-        }
-    });
+    if (avatarInput) {
+        avatarInput.addEventListener('change', async (e) => {
+            if (e.target.files && e.target.files[0]) {
+                await subirAvatar(e.target.files[0]);
+            }
+        });
+    }
     
     // Cambiar contraseña
-    changePasswordBtn.addEventListener('click', () => {
-        resetPasswordForm();
-        passwordModal.classList.add('show');
-    });
+    if (changePasswordBtn) {
+        changePasswordBtn.addEventListener('click', () => {
+            resetPasswordForm();
+            passwordModal.classList.add('show');
+        });
+    }
     
     // Validar contraseña en tiempo real
-    newPassword.addEventListener('input', validatePassword);
-    confirmPassword.addEventListener('input', validatePassword);
+    if (newPassword) {
+        newPassword.addEventListener('input', validatePassword);
+    }
+    if (confirmPassword) {
+        confirmPassword.addEventListener('input', validatePassword);
+    }
+    
+    // Guardar cambios generales
+    if (saveChangesBtn) {
+        saveChangesBtn.addEventListener('click', guardarCambiosGenerales);
+    }
 }
 
 // =====================================================
@@ -118,11 +186,19 @@ function setupEventListeners() {
 // =====================================================
 async function loadUserData() {
     try {
-        const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
+        // Obtener el ID del usuario desde localStorage
+        const userStr = localStorage.getItem('furia_user');
+        if (!userStr) {
+            throw new Error('No se encontró información del usuario');
+        }
+        
+        const user = JSON.parse(userStr);
         const userId = user.id;
         
+        console.log('Cargando perfil para usuario ID:', userId);
+        
         if (!userId) {
-            throw new Error('ID de usuario no encontrado');
+            throw new Error('ID de usuario no encontrado en localStorage');
         }
         
         const response = await fetch(`${API_URL}/jefe-operativo/perfil/${userId}`, {
@@ -132,6 +208,7 @@ async function loadUserData() {
         });
         
         const result = await response.json();
+        console.log('Respuesta del servidor:', result);
         
         if (!response.ok) {
             throw new Error(result.error || 'Error al cargar perfil');
@@ -140,14 +217,14 @@ async function loadUserData() {
         userData = result.data;
         
         // Actualizar UI
-        userNameDisplay.textContent = userData.nombre || '-';
-        userRoleDisplay.textContent = 'Jefe Operativo';
-        userPhone.textContent = userData.contacto || '-';
-        userEmail.textContent = userData.email || '-';
-        userLocation.textContent = userData.ubicacion || '-';
+        if (userNameDisplay) userNameDisplay.textContent = userData.nombre || '-';
+        if (userRoleDisplay) userRoleDisplay.textContent = 'Jefe Operativo';
+        if (userPhone) userPhone.textContent = userData.contacto || '-';
+        if (userEmail) userEmail.textContent = userData.email || '-';
+        if (userLocation) userLocation.textContent = userData.ubicacion || '-';
         
         // Formatear fecha de registro
-        if (userData.fecha_registro) {
+        if (userMemberSince && userData.fecha_registro) {
             const fecha = new Date(userData.fecha_registro);
             userMemberSince.textContent = fecha.toLocaleDateString('es-ES', {
                 day: 'numeric',
@@ -157,15 +234,17 @@ async function loadUserData() {
         }
         
         // Cargar avatar si existe
-        if (userData.avatar_url && userData.avatar_url !== 'null') {
-            avatarImg.src = userData.avatar_url;
-            avatarImg.style.display = 'block';
-            avatarPlaceholder.style.display = 'none';
-            avatarWrapper.classList.add('has-image');
-        } else {
-            avatarImg.style.display = 'none';
-            avatarPlaceholder.style.display = 'flex';
-            avatarWrapper.classList.remove('has-image');
+        if (avatarImg && avatarPlaceholder && avatarWrapper) {
+            if (userData.avatar_url && userData.avatar_url !== 'null') {
+                avatarImg.src = userData.avatar_url;
+                avatarImg.style.display = 'block';
+                avatarPlaceholder.style.display = 'none';
+                avatarWrapper.classList.add('has-image');
+            } else {
+                avatarImg.style.display = 'none';
+                avatarPlaceholder.style.display = 'flex';
+                avatarWrapper.classList.remove('has-image');
+            }
         }
         
         // Guardar valores originales
@@ -212,10 +291,12 @@ async function subirAvatar(file) {
                 throw new Error(result.error || 'Error al subir avatar');
             }
             
-            avatarImg.src = base64;
-            avatarImg.style.display = 'block';
-            avatarPlaceholder.style.display = 'none';
-            avatarWrapper.classList.add('has-image');
+            if (avatarImg && avatarPlaceholder && avatarWrapper) {
+                avatarImg.src = base64;
+                avatarImg.style.display = 'block';
+                avatarPlaceholder.style.display = 'none';
+                avatarWrapper.classList.add('has-image');
+            }
             
             mostrarNotificacion('Foto de perfil actualizada', 'success');
             
@@ -237,21 +318,21 @@ window.editarCampo = (campo) => {
         'telefono': {
             titulo: 'Editar teléfono',
             label: 'Número de teléfono',
-            valor: userPhone.textContent
+            valor: userPhone ? userPhone.textContent : ''
         },
         'email': {
             titulo: 'Editar correo electrónico',
             label: 'Correo electrónico',
-            valor: userEmail.textContent
+            valor: userEmail ? userEmail.textContent : ''
         },
         'ubicacion': {
             titulo: 'Editar ubicación',
             label: 'Ubicación',
-            valor: userLocation.textContent
+            valor: userLocation ? userLocation.textContent : ''
         }
     };
     
-    if (campos[campo]) {
+    if (campos[campo] && editModalTitle && editFieldLabel && editField) {
         editModalTitle.textContent = campos[campo].titulo;
         editFieldLabel.textContent = campos[campo].label;
         editField.value = campos[campo].valor;
@@ -309,24 +390,33 @@ window.guardarCampoEditado = async () => {
         // Actualizar UI
         switch (currentEditField) {
             case 'telefono':
-                userPhone.textContent = nuevoValor;
+                if (userPhone) userPhone.textContent = nuevoValor;
                 camposEditados.telefono = nuevoValor;
                 break;
             case 'email':
-                userEmail.textContent = nuevoValor;
+                if (userEmail) userEmail.textContent = nuevoValor;
                 camposEditados.email = nuevoValor;
                 break;
             case 'ubicacion':
-                userLocation.textContent = nuevoValor;
+                if (userLocation) userLocation.textContent = nuevoValor;
                 camposEditados.ubicacion = nuevoValor;
                 break;
+        }
+        
+        // Actualizar localStorage
+        const userStr = localStorage.getItem('furia_user');
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            if (data.email) user.email = data.email;
+            if (data.contacto) user.contacto = data.contacto;
+            localStorage.setItem('furia_user', JSON.stringify(user));
         }
         
         mostrarNotificacion('Campo actualizado correctamente', 'success');
         cerrarEditModal();
         
         // Mostrar botón de guardar cambios
-        saveChangesBtn.style.display = 'inline-flex';
+        if (saveChangesBtn) saveChangesBtn.style.display = 'inline-flex';
         
     } catch (error) {
         console.error('Error:', error);
@@ -335,15 +425,17 @@ window.guardarCampoEditado = async () => {
 };
 
 window.cerrarEditModal = () => {
-    editModal.classList.remove('show');
+    if (editModal) editModal.classList.remove('show');
     currentEditField = null;
-    editField.value = '';
+    if (editField) editField.value = '';
 };
 
 // =====================================================
 // GUARDAR CAMBIOS GENERALES
 // =====================================================
-saveChangesBtn.addEventListener('click', async () => {
+async function guardarCambiosGenerales() {
+    if (!userPhone || !userEmail || !userLocation) return;
+    
     const cambios = {};
     
     if (camposEditados.telefono !== userPhone.textContent) {
@@ -385,88 +477,105 @@ saveChangesBtn.addEventListener('click', async () => {
         camposEditados.ubicacion = userLocation.textContent;
         
         // Actualizar localStorage
-        const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
-        if (cambios.email) user.email = cambios.email;
-        if (cambios.contacto) user.contacto = cambios.contacto;
-        localStorage.setItem('furia_user', JSON.stringify(user));
+        const userStr = localStorage.getItem('furia_user');
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            if (cambios.email) user.email = cambios.email;
+            if (cambios.contacto) user.contacto = cambios.contacto;
+            localStorage.setItem('furia_user', JSON.stringify(user));
+        }
         
         mostrarNotificacion('Cambios guardados correctamente', 'success');
-        saveChangesBtn.style.display = 'none';
+        if (saveChangesBtn) saveChangesBtn.style.display = 'none';
         
     } catch (error) {
         console.error('Error:', error);
         mostrarNotificacion(error.message, 'error');
     }
-});
+}
 
 // =====================================================
 // FUNCIONES DE CONTRASEÑA
 // =====================================================
 function validatePassword() {
-    const password = newPassword.value;
+    const password = newPassword ? newPassword.value : '';
     
     // Validar longitud
-    if (password.length >= 8) {
-        reqLength.classList.add('valid');
-        reqLength.innerHTML = '✓ Mínimo 8 caracteres';
-    } else {
-        reqLength.classList.remove('valid');
-        reqLength.innerHTML = '✗ Mínimo 8 caracteres';
+    if (reqLength) {
+        if (password.length >= 8) {
+            reqLength.classList.add('valid');
+            reqLength.innerHTML = '✓ Mínimo 8 caracteres';
+        } else {
+            reqLength.classList.remove('valid');
+            reqLength.innerHTML = '✗ Mínimo 8 caracteres';
+        }
     }
     
     // Validar mayúscula
-    if (/[A-Z]/.test(password)) {
-        reqUpper.classList.add('valid');
-        reqUpper.innerHTML = '✓ Al menos una mayúscula';
-    } else {
-        reqUpper.classList.remove('valid');
-        reqUpper.innerHTML = '✗ Al menos una mayúscula';
+    if (reqUpper) {
+        if (/[A-Z]/.test(password)) {
+            reqUpper.classList.add('valid');
+            reqUpper.innerHTML = '✓ Al menos una mayúscula';
+        } else {
+            reqUpper.classList.remove('valid');
+            reqUpper.innerHTML = '✗ Al menos una mayúscula';
+        }
     }
     
     // Validar minúscula
-    if (/[a-z]/.test(password)) {
-        reqLower.classList.add('valid');
-        reqLower.innerHTML = '✓ Al menos una minúscula';
-    } else {
-        reqLower.classList.remove('valid');
-        reqLower.innerHTML = '✗ Al menos una minúscula';
+    if (reqLower) {
+        if (/[a-z]/.test(password)) {
+            reqLower.classList.add('valid');
+            reqLower.innerHTML = '✓ Al menos una minúscula';
+        } else {
+            reqLower.classList.remove('valid');
+            reqLower.innerHTML = '✗ Al menos una minúscula';
+        }
     }
     
     // Validar número
-    if (/[0-9]/.test(password)) {
-        reqNumber.classList.add('valid');
-        reqNumber.innerHTML = '✓ Al menos un número';
-    } else {
-        reqNumber.classList.remove('valid');
-        reqNumber.innerHTML = '✗ Al menos un número';
+    if (reqNumber) {
+        if (/[0-9]/.test(password)) {
+            reqNumber.classList.add('valid');
+            reqNumber.innerHTML = '✓ Al menos un número';
+        } else {
+            reqNumber.classList.remove('valid');
+            reqNumber.innerHTML = '✗ Al menos un número';
+        }
     }
     
     // Validar coincidencia
-    if (confirmPassword.value && password !== confirmPassword.value) {
+    if (confirmPassword && password !== confirmPassword.value) {
         confirmPassword.setCustomValidity('Las contraseñas no coinciden');
-    } else {
+    } else if (confirmPassword) {
         confirmPassword.setCustomValidity('');
     }
 }
 
 window.togglePassword = (inputId) => {
     const input = document.getElementById(inputId);
+    if (!input) return;
+    
     const type = input.type === 'password' ? 'text' : 'password';
     input.type = type;
     
     const toggleBtn = input.nextElementSibling;
-    const icon = toggleBtn.querySelector('i');
-    if (type === 'text') {
-        icon.classList.remove('fa-eye');
-        icon.classList.add('fa-eye-slash');
-    } else {
-        icon.classList.remove('fa-eye-slash');
-        icon.classList.add('fa-eye');
+    const icon = toggleBtn ? toggleBtn.querySelector('i') : null;
+    if (icon) {
+        if (type === 'text') {
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
     }
 };
 
 window.cambiarContrasena = async () => {
     // Validar campos
+    if (!currentPassword || !newPassword || !confirmPassword) return;
+    
     if (!currentPassword.value || !newPassword.value || !confirmPassword.value) {
         mostrarNotificacion('Todos los campos son requeridos', 'warning');
         return;
@@ -518,23 +627,23 @@ window.cambiarContrasena = async () => {
 };
 
 function resetPasswordForm() {
-    currentPassword.value = '';
-    newPassword.value = '';
-    confirmPassword.value = '';
+    if (currentPassword) currentPassword.value = '';
+    if (newPassword) newPassword.value = '';
+    if (confirmPassword) confirmPassword.value = '';
     
     // Resetear validaciones
     [reqLength, reqUpper, reqLower, reqNumber].forEach(req => {
-        req.classList.remove('valid');
+        if (req) req.classList.remove('valid');
     });
     
-    reqLength.innerHTML = '✗ Mínimo 8 caracteres';
-    reqUpper.innerHTML = '✗ Al menos una mayúscula';
-    reqLower.innerHTML = '✗ Al menos una minúscula';
-    reqNumber.innerHTML = '✗ Al menos un número';
+    if (reqLength) reqLength.innerHTML = '✗ Mínimo 8 caracteres';
+    if (reqUpper) reqUpper.innerHTML = '✗ Al menos una mayúscula';
+    if (reqLower) reqLower.innerHTML = '✗ Al menos una minúscula';
+    if (reqNumber) reqNumber.innerHTML = '✗ Al menos un número';
 }
 
 window.cerrarPasswordModal = () => {
-    passwordModal.classList.remove('show');
+    if (passwordModal) passwordModal.classList.remove('show');
     resetPasswordForm();
 };
 
@@ -594,13 +703,20 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
     }, 3000);
 }
 
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // =====================================================
 // CERRAR MODALES CON ESC
 // =====================================================
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        if (passwordModal?.classList.contains('show')) cerrarPasswordModal();
-        if (editModal?.classList.contains('show')) cerrarEditModal();
+        if (passwordModal && passwordModal.classList.contains('show')) cerrarPasswordModal();
+        if (editModal && editModal.classList.contains('show')) cerrarEditModal();
     }
 });
 

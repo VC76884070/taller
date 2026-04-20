@@ -48,6 +48,24 @@
 
             <!-- CONTENT -->
             <div class="content">
+                <!-- SECCIÓN DE COMUNICADOS -->
+                <div class="comunicados-section" id="comunicadosSection">
+                    <div class="comunicados-header">
+                        <i class="fas fa-bullhorn"></i>
+                        <h3>Comunicados del Jefe Operativo</h3>
+                        <span class="comunicados-badge" id="comunicadosBadge">0</span>
+                        <button class="btn-refresh-comunicados" onclick="cargarComunicados()" title="Actualizar comunicados">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <div class="comunicados-list" id="comunicadosList">
+                        <div class="loading-comunicados">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Cargando comunicados...</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Indicador de límite -->
                 <div class="limit-indicator" id="limitIndicator">
                     <i class="fas fa-info-circle"></i>
@@ -60,7 +78,7 @@
                 </div>
 
                 <!-- Mensaje de carga -->
-                <div class="loading-container" id="loadingContainer">
+                <div class="loading-container" id="loadingContainer" style="display: none;">
                     <i class="fas fa-spinner fa-spin"></i>
                     <p>Cargando tus vehículos...</p>
                 </div>
@@ -81,6 +99,40 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Modal de INICIAR TRABAJO (con selección de bahía) -->
+    <div class="modal" id="iniciarModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2><i class="fas fa-play-circle"></i> Iniciar Trabajo</h2>
+                <button class="modal-close" onclick="cerrarIniciarModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Selecciona la bahía donde trabajarás:</p>
+                <div id="iniciarInfo" class="modal-info"></div>
+                <select id="bahiaSeleccionada" class="form-select">
+                    <option value="">Selecciona una bahía...</option>
+                    <option value="1">Bahía 1</option>
+                    <option value="2">Bahía 2</option>
+                    <option value="3">Bahía 3</option>
+                    <option value="4">Bahía 4</option>
+                    <option value="5">Bahía 5</option>
+                    <option value="6">Bahía 6</option>
+                    <option value="7">Bahía 7</option>
+                    <option value="8">Bahía 8</option>
+                    <option value="9">Bahía 9</option>
+                    <option value="10">Bahía 10</option>
+                    <option value="11">Bahía 11</option>
+                    <option value="12">Bahía 12</option>
+                </select>
+                <input type="hidden" id="ordenIdIniciar">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarIniciarModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmarInicioBtn">Iniciar Trabajo</button>
+            </div>
+        </div>
     </div>
 
     <!-- Modal de PAUSA -->
@@ -135,6 +187,16 @@
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarDetalleModal()">Cerrar</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal de FOTO AMPLIADA -->
+    <div class="modal" id="fotoModal" onclick="cerrarFotoModal()">
+        <div class="modal-content modal-lg" style="max-width: 90%; background: transparent;" onclick="event.stopPropagation()">
+            <div style="text-align: right; margin-bottom: 0.5rem;">
+                <button class="modal-close" onclick="cerrarFotoModal()" style="background: var(--bg-card); padding: 0.3rem 0.8rem; border-radius: var(--radius-full);">&times;</button>
+            </div>
+            <img id="fotoAmpliada" src="" style="width: 100%; border-radius: var(--radius-lg);">
         </div>
     </div>
 

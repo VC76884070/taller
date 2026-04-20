@@ -1,10 +1,11 @@
 from flask import Blueprint, request, jsonify
-from functools import wraps
 from config import config
-import jwt
 import datetime
 import logging
-import uuid
+import jwt
+
+# Importar decorador desde decorators.py
+from decorators import jefe_operativo_required
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -19,69 +20,54 @@ jefe_operativo_comunicados_bp = Blueprint('jefe_operativo_comunicados', __name__
 SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
 
+
 # =====================================================
-# DECORADOR PARA VERIFICAR TOKEN Y ROL
+# FUNCIÓN AUXILIAR PARA VERIFICAR TOKEN Y ROLES
 # =====================================================
-def jefe_operativo_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = None
-        
-        if 'Authorization' in request.headers:
-            auth_header = request.headers['Authorization']
-            try:
-                token = auth_header.split(" ")[1]
-            except IndexError:
-                return jsonify({'error': 'Token inválido'}), 401
-        
-        if not token:
-            return jsonify({'error': 'Token requerido'}), 401
-        
-        try:
-            data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            current_user = data['user']
-            
-            if current_user.get('rol') != 'jefe_operativo' and current_user.get('id_rol') != 2:
-                logger.warning(f"Usuario {current_user.get('nombre')} intentó acceder sin permisos")
-                return jsonify({'error': 'No autorizado para esta operación'}), 403
-                
-        except jwt.ExpiredSignatureError:
-            logger.warning("Token expirado")
-            return jsonify({'error': 'Token expirado'}), 401
-        except jwt.InvalidTokenError as e:
-            logger.warning(f"Token inválido: {str(e)}")
-            return jsonify({'error': 'Token inválido'}), 401
-        
-        return f(current_user, *args, **kwargs)
+def verificar_token_y_roles(roles_permitidos):
+    """Verifica token y retorna el usuario si tiene alguno de los roles permitidos"""
+    token = None
     
-    return decorated
+    if 'Authorization' in request.headers:
+        auth_header = request.headers['Authorization']
+        try:
+            token = auth_header.split(" ")[1]
+        except IndexError:
+            return None, "Token inválido", 401
+    
+    if not token:
+        return None, "Token requerido", 401
+    
+    try:
+        data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        current_user = data['user']
+        
+        # Obtener roles del usuario
+        from decorators import obtener_roles_usuario
+        roles = obtener_roles_usuario(current_user.get('id'))
+        
+        # Verificar si tiene al menos uno de los roles permitidos
+        tiene_rol = any(rol in roles for rol in roles_permitidos)
+        
+        if not tiene_rol:
+            return None, f"No autorizado - Se requiere rol: {', '.join(roles_permitidos)}", 403
+        
+        return current_user, None, None
+        
+    except jwt.ExpiredSignatureError:
+        return None, "Token expirado", 401
+    except jwt.InvalidTokenError:
+        return None, "Token inválido", 401
 
 
 # =====================================================
-# MODELO DE COMUNICADO (para referencia)
-# =====================================================
-"""
-Tabla: comunicado
-- id: SERIAL PRIMARY KEY
-- titulo: VARCHAR(255) NOT NULL
-- contenido: TEXT NOT NULL
-- prioridad: VARCHAR(50) DEFAULT 'normal' (normal, importante, urgente)
-- estado: VARCHAR(50) DEFAULT 'activo' (activo, inactivo)
-- destinatarios: JSONB (array de roles: ['jefe_operativo', 'jefe_taller', 'tecnico', 'encargado_repuestos', 'admin_general'])
-- fecha_creacion: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-- fecha_actualizacion: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-- creado_por: INTEGER (id del usuario que creó el comunicado)
-"""
-
-
-# =====================================================
-# ENDPOINTS DE COMUNICADOS
+# ENDPOINTS PARA JEFE OPERATIVO (CON DECORADOR)
 # =====================================================
 
 @jefe_operativo_comunicados_bp.route('/comunicados', methods=['GET'])
 @jefe_operativo_required
 def listar_comunicados(current_user):
-    """Listar todos los comunicados"""
+    """Listar todos los comunicados (Jefe Operativo)"""
     try:
         resultado = supabase.table('comunicado') \
             .select('*') \
@@ -115,7 +101,7 @@ def listar_comunicados(current_user):
 @jefe_operativo_comunicados_bp.route('/comunicados', methods=['POST'])
 @jefe_operativo_required
 def crear_comunicado(current_user):
-    """Crear un nuevo comunicado"""
+    """Crear un nuevo comunicado (Jefe Operativo)"""
     try:
         data = request.get_json()
         
@@ -125,7 +111,6 @@ def crear_comunicado(current_user):
         estado = data.get('estado', 'activo')
         destinatarios = data.get('destinatarios', [])
         
-        # Validaciones
         if not titulo or not titulo.strip():
             return jsonify({'error': 'El título es requerido'}), 400
         
@@ -135,7 +120,6 @@ def crear_comunicado(current_user):
         if len(destinatarios) == 0:
             return jsonify({'error': 'Selecciona al menos un destinatario'}), 400
         
-        # Insertar comunicado
         resultado = supabase.table('comunicado').insert({
             'titulo': titulo.strip(),
             'contenido': contenido,
@@ -174,50 +158,13 @@ def crear_comunicado(current_user):
         return jsonify({'error': str(e)}), 500
 
 
-@jefe_operativo_comunicados_bp.route('/comunicados/<int:id_comunicado>', methods=['GET'])
-@jefe_operativo_required
-def obtener_comunicado(current_user, id_comunicado):
-    """Obtener un comunicado específico"""
-    try:
-        resultado = supabase.table('comunicado') \
-            .select('*') \
-            .eq('id', id_comunicado) \
-            .single() \
-            .execute()
-        
-        if not resultado.data:
-            return jsonify({'error': 'Comunicado no encontrado'}), 404
-        
-        c = resultado.data
-        
-        return jsonify({
-            'success': True,
-            'data': {
-                'id': c['id'],
-                'titulo': c['titulo'],
-                'contenido': c['contenido'],
-                'prioridad': c.get('prioridad', 'normal'),
-                'estado': c.get('estado', 'activo'),
-                'destinatarios': c.get('destinatarios', []),
-                'fecha_creacion': c['fecha_creacion'],
-                'fecha_actualizacion': c.get('fecha_actualizacion'),
-                'creado_por': c.get('creado_por')
-            }
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error obteniendo comunicado: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
 @jefe_operativo_comunicados_bp.route('/comunicados/<int:id_comunicado>', methods=['PUT'])
 @jefe_operativo_required
 def actualizar_comunicado(current_user, id_comunicado):
-    """Actualizar un comunicado existente"""
+    """Actualizar un comunicado existente (Jefe Operativo)"""
     try:
         data = request.get_json()
         
-        # Verificar que el comunicado existe
         existente = supabase.table('comunicado') \
             .select('id') \
             .eq('id', id_comunicado) \
@@ -226,7 +173,6 @@ def actualizar_comunicado(current_user, id_comunicado):
         if not existente.data:
             return jsonify({'error': 'Comunicado no encontrado'}), 404
         
-        # Preparar datos para actualizar
         update_data = {}
         
         if 'titulo' in data:
@@ -255,7 +201,6 @@ def actualizar_comunicado(current_user, id_comunicado):
         
         update_data['fecha_actualizacion'] = datetime.datetime.now().isoformat()
         
-        # Actualizar comunicado
         resultado = supabase.table('comunicado') \
             .update(update_data) \
             .eq('id', id_comunicado) \
@@ -290,7 +235,6 @@ def cambiar_estado_comunicado(current_user, id_comunicado):
         if not nuevo_estado or nuevo_estado not in ['activo', 'inactivo']:
             return jsonify({'error': 'Estado inválido. Debe ser "activo" o "inactivo"'}), 400
         
-        # Verificar que el comunicado existe
         existente = supabase.table('comunicado') \
             .select('id') \
             .eq('id', id_comunicado) \
@@ -299,7 +243,6 @@ def cambiar_estado_comunicado(current_user, id_comunicado):
         if not existente.data:
             return jsonify({'error': 'Comunicado no encontrado'}), 404
         
-        # Actualizar estado
         resultado = supabase.table('comunicado') \
             .update({
                 'estado': nuevo_estado,
@@ -311,8 +254,10 @@ def cambiar_estado_comunicado(current_user, id_comunicado):
         if not resultado.data:
             return jsonify({'error': 'Error al cambiar estado'}), 500
         
-        # CORREGIDO: Usar if-else en lugar de operador ternario
-        mensaje = 'Comunicado activado correctamente' if nuevo_estado == 'activo' else 'Comunicado desactivado correctamente'
+        if nuevo_estado == 'activo':
+            mensaje = 'Comunicado activado correctamente'
+        else:
+            mensaje = 'Comunicado desactivado correctamente'
         
         logger.info(f"Comunicado {id_comunicado} cambiado a {nuevo_estado} por {current_user.get('nombre')}")
         
@@ -330,9 +275,8 @@ def cambiar_estado_comunicado(current_user, id_comunicado):
 @jefe_operativo_comunicados_bp.route('/comunicados/<int:id_comunicado>', methods=['DELETE'])
 @jefe_operativo_required
 def eliminar_comunicado(current_user, id_comunicado):
-    """Eliminar un comunicado"""
+    """Eliminar un comunicado (Jefe Operativo)"""
     try:
-        # Verificar que el comunicado existe
         existente = supabase.table('comunicado') \
             .select('id, titulo') \
             .eq('id', id_comunicado) \
@@ -341,7 +285,6 @@ def eliminar_comunicado(current_user, id_comunicado):
         if not existente.data:
             return jsonify({'error': 'Comunicado no encontrado'}), 404
         
-        # Eliminar comunicado
         supabase.table('comunicado') \
             .delete() \
             .eq('id', id_comunicado) \
@@ -360,28 +303,46 @@ def eliminar_comunicado(current_user, id_comunicado):
         return jsonify({'error': str(e)}), 500
 
 
-@jefe_operativo_comunicados_bp.route('/comunicados/filtrar', methods=['GET'])
+@jefe_operativo_comunicados_bp.route('/comunicados/destinatarios', methods=['GET'])
 @jefe_operativo_required
-def filtrar_comunicados(current_user):
-    """Filtrar comunicados por estado, prioridad o destinatario"""
+def obtener_destinatarios_disponibles(current_user):
+    """Obtener lista de roles disponibles para enviar comunicados"""
     try:
-        estado = request.args.get('estado')
-        prioridad = request.args.get('prioridad')
-        destinatario = request.args.get('destinatario')
+        roles = [
+            {'id': 'jefe_operativo', 'nombre': 'Jefe Operativo'},
+            {'id': 'jefe_taller', 'nombre': 'Jefe de Taller'},
+            {'id': 'tecnico', 'nombre': 'Técnicos'},
+            {'id': 'encargado_repuestos', 'nombre': 'Encargado Repuestos'}
+        ]
         
-        query = supabase.table('comunicado').select('*')
+        return jsonify({'success': True, 'data': roles}), 200
         
-        if estado:
-            query = query.eq('estado', estado)
+    except Exception as e:
+        logger.error(f"Error obteniendo destinatarios: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINTS PARA TÉCNICOS (ACCESO PÚBLICO CON VERIFICACIÓN)
+# =====================================================
+
+@jefe_operativo_comunicados_bp.route('/comunicados/tecnico', methods=['GET'])
+def obtener_comunicados_tecnico():
+    """Endpoint para que los técnicos vean comunicados dirigidos a ellos"""
+    try:
+        # Verificar token y rol de técnico
+        current_user, error, status = verificar_token_y_roles(['tecnico'])
         
-        if prioridad:
-            query = query.eq('prioridad', prioridad)
+        if error:
+            return jsonify({'error': error}), status
         
-        if destinatario:
-            # Filtrar por destinatario en JSONB
-            query = query.contains('destinatarios', [destinatario])
-        
-        resultado = query.order('fecha_creacion', desc=True).execute()
+        # Obtener comunicados activos que tengan 'tecnico' como destinatario
+        resultado = supabase.table('comunicado') \
+            .select('*') \
+            .eq('estado', 'activo') \
+            .contains('destinatarios', ['tecnico']) \
+            .order('fecha_creacion', desc=True) \
+            .execute()
         
         comunicados = []
         if resultado.data:
@@ -399,25 +360,206 @@ def filtrar_comunicados(current_user):
         return jsonify({'success': True, 'data': comunicados}), 200
         
     except Exception as e:
-        logger.error(f"Error filtrando comunicados: {str(e)}")
+        logger.error(f"Error obteniendo comunicados para técnico: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
-@jefe_operativo_comunicados_bp.route('/comunicados/destinatarios', methods=['GET'])
-@jefe_operativo_required
-def obtener_destinatarios_disponibles(current_user):
-    """Obtener lista de roles disponibles para enviar comunicados"""
+@jefe_operativo_comunicados_bp.route('/comunicados/tecnico/<int:id_comunicado>', methods=['GET'])
+def obtener_comunicado_tecnico(id_comunicado):
+    """Endpoint para que los técnicos vean un comunicado específico"""
     try:
-        roles = [
-            {'id': 'jefe_operativo', 'nombre': 'Jefe Operativo'},
-            {'id': 'jefe_taller', 'nombre': 'Jefe de Taller'},
-            {'id': 'tecnico', 'nombre': 'Técnicos'},
-            {'id': 'encargado_repuestos', 'nombre': 'Encargado Repuestos'},
-            {'id': 'admin_general', 'nombre': 'Administrador General'}
-        ]
+        # Verificar token y rol de técnico
+        current_user, error, status = verificar_token_y_roles(['tecnico'])
         
-        return jsonify({'success': True, 'data': roles}), 200
+        if error:
+            return jsonify({'error': error}), status
+        
+        # Obtener comunicado específico (solo si está activo y tiene destinatario técnico)
+        resultado = supabase.table('comunicado') \
+            .select('*') \
+            .eq('id', id_comunicado) \
+            .eq('estado', 'activo') \
+            .contains('destinatarios', ['tecnico']) \
+            .execute()
+        
+        if not resultado.data:
+            return jsonify({'error': 'Comunicado no encontrado'}), 404
+        
+        c = resultado.data[0]
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'id': c['id'],
+                'titulo': c['titulo'],
+                'contenido': c['contenido'],
+                'prioridad': c.get('prioridad', 'normal'),
+                'fecha_creacion': c['fecha_creacion']
+            }
+        }), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo destinatarios: {str(e)}")
+        logger.error(f"Error obteniendo comunicado: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINTS PARA JEFE TALLER (ACCESO PÚBLICO CON VERIFICACIÓN)
+# =====================================================
+
+@jefe_operativo_comunicados_bp.route('/comunicados/jefe-taller', methods=['GET'])
+def obtener_comunicados_jefe_taller():
+    """Endpoint para que el jefe de taller vea comunicados dirigidos a él"""
+    try:
+        # Verificar token y rol de jefe_taller
+        current_user, error, status = verificar_token_y_roles(['jefe_taller'])
+        
+        if error:
+            return jsonify({'error': error}), status
+        
+        # Obtener comunicados activos que tengan 'jefe_taller' como destinatario
+        resultado = supabase.table('comunicado') \
+            .select('*') \
+            .eq('estado', 'activo') \
+            .contains('destinatarios', ['jefe_taller']) \
+            .order('fecha_creacion', desc=True) \
+            .execute()
+        
+        comunicados = []
+        if resultado.data:
+            for c in resultado.data:
+                comunicados.append({
+                    'id': c['id'],
+                    'titulo': c['titulo'],
+                    'contenido': c['contenido'],
+                    'prioridad': c.get('prioridad', 'normal'),
+                    'estado': c.get('estado', 'activo'),
+                    'destinatarios': c.get('destinatarios', []),
+                    'fecha_creacion': c['fecha_creacion']
+                })
+        
+        return jsonify({'success': True, 'data': comunicados}), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo comunicados para jefe taller: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@jefe_operativo_comunicados_bp.route('/comunicados/jefe-taller/<int:id_comunicado>', methods=['GET'])
+def obtener_comunicado_jefe_taller(id_comunicado):
+    """Endpoint para que el jefe de taller vea un comunicado específico"""
+    try:
+        # Verificar token y rol de jefe_taller
+        current_user, error, status = verificar_token_y_roles(['jefe_taller'])
+        
+        if error:
+            return jsonify({'error': error}), status
+        
+        # Obtener comunicado específico
+        resultado = supabase.table('comunicado') \
+            .select('*') \
+            .eq('id', id_comunicado) \
+            .eq('estado', 'activo') \
+            .contains('destinatarios', ['jefe_taller']) \
+            .execute()
+        
+        if not resultado.data:
+            return jsonify({'error': 'Comunicado no encontrado'}), 404
+        
+        c = resultado.data[0]
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'id': c['id'],
+                'titulo': c['titulo'],
+                'contenido': c['contenido'],
+                'prioridad': c.get('prioridad', 'normal'),
+                'fecha_creacion': c['fecha_creacion']
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo comunicado: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINTS PARA ENCARGADO DE REPUESTOS (ACCESO PÚBLICO CON VERIFICACIÓN)
+# =====================================================
+
+@jefe_operativo_comunicados_bp.route('/comunicados/encargado-repuestos', methods=['GET'])
+def obtener_comunicados_encargado_repuestos():
+    """Endpoint para que el encargado de repuestos vea comunicados dirigidos a él"""
+    try:
+        # Verificar token y rol de encargado_repuestos
+        current_user, error, status = verificar_token_y_roles(['encargado_repuestos'])
+        
+        if error:
+            return jsonify({'error': error}), status
+        
+        # Obtener comunicados activos que tengan 'encargado_repuestos' como destinatario
+        resultado = supabase.table('comunicado') \
+            .select('*') \
+            .eq('estado', 'activo') \
+            .contains('destinatarios', ['encargado_repuestos']) \
+            .order('fecha_creacion', desc=True) \
+            .execute()
+        
+        comunicados = []
+        if resultado.data:
+            for c in resultado.data:
+                comunicados.append({
+                    'id': c['id'],
+                    'titulo': c['titulo'],
+                    'contenido': c['contenido'],
+                    'prioridad': c.get('prioridad', 'normal'),
+                    'estado': c.get('estado', 'activo'),
+                    'destinatarios': c.get('destinatarios', []),
+                    'fecha_creacion': c['fecha_creacion']
+                })
+        
+        return jsonify({'success': True, 'data': comunicados}), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo comunicados para encargado repuestos: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@jefe_operativo_comunicados_bp.route('/comunicados/encargado-repuestos/<int:id_comunicado>', methods=['GET'])
+def obtener_comunicado_encargado_repuestos(id_comunicado):
+    """Endpoint para que el encargado de repuestos vea un comunicado específico"""
+    try:
+        # Verificar token y rol de encargado_repuestos
+        current_user, error, status = verificar_token_y_roles(['encargado_repuestos'])
+        
+        if error:
+            return jsonify({'error': error}), status
+        
+        # Obtener comunicado específico
+        resultado = supabase.table('comunicado') \
+            .select('*') \
+            .eq('id', id_comunicado) \
+            .eq('estado', 'activo') \
+            .contains('destinatarios', ['encargado_repuestos']) \
+            .execute()
+        
+        if not resultado.data:
+            return jsonify({'error': 'Comunicado no encontrado'}), 404
+        
+        c = resultado.data[0]
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'id': c['id'],
+                'titulo': c['titulo'],
+                'contenido': c['contenido'],
+                'prioridad': c.get('prioridad', 'normal'),
+                'fecha_creacion': c['fecha_creacion']
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo comunicado: {str(e)}")
         return jsonify({'error': str(e)}), 500

@@ -1,15 +1,17 @@
 # =====================================================
 # MIS VEHÍCULOS - TÉCNICO MECÁNICO
-# CORREGIDO PARA MULTI-ROL CON VERIFICACIÓN POR NOMBRE
+# CORREGIDO PARA MULTI-ROL CON SISTEMA DE BAHÍAS
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
-from flask import Blueprint, request, jsonify, render_template
+from flask import Blueprint, request, jsonify, send_from_directory
 from functools import wraps
 from config import config
 import jwt
 import datetime
 import logging
+import os
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +23,10 @@ supabase = config.supabase
 
 # =====================================================
 # FUNCIÓN AUXILIAR: OBTENER ROLES DEL USUARIO
-# CORREGIDA - Usa la estructura real de la BD
 # =====================================================
 def obtener_roles_usuario(usuario_id):
     """Obtiene los nombres de los roles de un usuario"""
     try:
-        # Paso 1: Obtener los rol_id de usuario_rol
         user_roles = supabase.table('usuario_rol') \
             .select('id_rol') \
             .eq('id_usuario', usuario_id) \
@@ -36,10 +36,8 @@ def obtener_roles_usuario(usuario_id):
             logger.info(f"Usuario {usuario_id} no tiene roles asignados")
             return []
         
-        # Paso 2: Obtener los IDs de roles
         rol_ids = [ur['id_rol'] for ur in user_roles.data]
         
-        # Paso 3: Obtener los nombres de los roles
         roles_data = supabase.table('rol') \
             .select('nombre_rol') \
             .in_('id', rol_ids) \
@@ -52,8 +50,6 @@ def obtener_roles_usuario(usuario_id):
         
     except Exception as e:
         logger.error(f"Error obteniendo roles: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return []
 
 
@@ -64,17 +60,12 @@ def verificar_token_y_usuario():
     """Verifica el token y retorna el usuario si es válido"""
     token = None
     
-    # Buscar token en headers
     if 'Authorization' in request.headers:
         auth_header = request.headers['Authorization']
         try:
             token = auth_header.split(" ")[1]
         except IndexError:
             pass
-    
-    # Buscar token en cookies
-    if not token:
-        token = request.cookies.get('token')
     
     if not token:
         return None, "No autorizado", 401
@@ -83,7 +74,6 @@ def verificar_token_y_usuario():
         data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         current_user = data['user']
         
-        # Obtener roles del usuario
         roles = obtener_roles_usuario(current_user.get('id'))
         current_user['roles'] = roles
         
@@ -98,7 +88,7 @@ def verificar_token_y_usuario():
 
 
 # =====================================================
-# DECORADOR: VERIFICAR ROL TÉCNICO (por NOMBRE)
+# DECORADOR: VERIFICAR ROL TÉCNICO
 # =====================================================
 def tecnico_required(f):
     @wraps(f)
@@ -108,7 +98,6 @@ def tecnico_required(f):
         if error:
             return jsonify({'error': error}), status
         
-        # Verificar que tenga rol de técnico (por NOMBRE)
         if 'tecnico' not in current_user.get('roles', []):
             logger.warning(f"Usuario {current_user.get('nombre')} no tiene rol de técnico")
             return jsonify({'error': 'No autorizado - Se requiere rol de Técnico'}), 403
@@ -119,20 +108,28 @@ def tecnico_required(f):
 
 
 # =====================================================
-# RUTA PARA SERVIR EL HTML (SIN DECORADOR)
+# RUTAS PARA SERVIR ARCHIVOS ESTÁTICOS
 # =====================================================
 @mis_vehiculos_bp.route('/mis-vehiculos')
 def mis_vehiculos_page():
-    """Servir la página de Mis Vehículos"""
-    return render_template('../tecnico_mecanico/misvehiculos.html')
+    return send_from_directory(os.path.join(os.path.dirname(__file__), '..', 'tecnico_mecanico'), 'misvehiculos.html')
+
+
+@mis_vehiculos_bp.route('/css/<path:filename>')
+def serve_css(filename):
+    return send_from_directory(os.path.join(os.path.dirname(__file__), '..', 'tecnico_mecanico', 'css'), filename)
+
+
+@mis_vehiculos_bp.route('/js/<path:filename>')
+def serve_js(filename):
+    return send_from_directory(os.path.join(os.path.dirname(__file__), '..', 'tecnico_mecanico', 'js'), filename)
 
 
 # =====================================================
-# API: VERIFICAR TOKEN Y OBTENER USUARIO (para el JS)
+# API: VERIFICAR TOKEN
 # =====================================================
 @mis_vehiculos_bp.route('/api/verify-token', methods=['GET'])
 def verify_token():
-    """Endpoint para que el JS verifique el usuario y sus roles"""
     current_user, error, status = verificar_token_y_usuario()
     
     if error:
@@ -149,6 +146,84 @@ def verify_token():
     }), 200
 
 
+@mis_vehiculos_bp.route('/api/comunicados', methods=['GET'])
+@tecnico_required
+def obtener_comunicados_tecnico(current_user):
+    """Obtener comunicados dirigidos al rol de técnico"""
+    try:
+        logger.info(f"📢 Técnico {current_user['id']} consultando comunicados")
+        
+        # Obtener TODOS los comunicados activos
+        resultado = supabase.table('comunicado') \
+            .select('*') \
+            .eq('estado', 'activo') \
+            .order('fecha_creacion', desc=True) \
+            .execute()
+        
+        comunicados = []
+        if resultado.data:
+            for c in resultado.data:
+                # Verificar si 'tecnico' está en la lista de destinatarios
+                destinatarios = c.get('destinatarios', [])
+                if isinstance(destinatarios, list) and 'tecnico' in destinatarios:
+                    comunicados.append({
+                        'id': c['id'],
+                        'titulo': c['titulo'],
+                        'contenido': c['contenido'],
+                        'prioridad': c.get('prioridad', 'normal'),
+                        'estado': c.get('estado', 'activo'),
+                        'destinatarios': destinatarios,
+                        'fecha_creacion': c['fecha_creacion']
+                    })
+        
+        logger.info(f"✅ {len(comunicados)} comunicados encontrados")
+        
+        return jsonify({'success': True, 'data': comunicados}), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo comunicados: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@mis_vehiculos_bp.route('/api/comunicados/<int:id_comunicado>', methods=['GET'])
+@tecnico_required
+def obtener_comunicado_tecnico_detalle(current_user, id_comunicado):
+    """Obtener detalle de un comunicado específico"""
+    try:
+        resultado = supabase.table('comunicado') \
+            .select('*') \
+            .eq('id', id_comunicado) \
+            .eq('estado', 'activo') \
+            .execute()
+        
+        if not resultado.data:
+            return jsonify({'error': 'Comunicado no encontrado'}), 404
+        
+        c = resultado.data[0]
+        
+        # Verificar que el técnico tenga acceso (que 'tecnico' esté en destinatarios)
+        destinatarios = c.get('destinatarios', [])
+        if not isinstance(destinatarios, list) or 'tecnico' not in destinatarios:
+            return jsonify({'error': 'No tienes permiso para ver este comunicado'}), 403
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'id': c['id'],
+                'titulo': c['titulo'],
+                'contenido': c['contenido'],
+                'prioridad': c.get('prioridad', 'normal'),
+                'fecha_creacion': c['fecha_creacion']
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo comunicado: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 # =====================================================
 # API: OBTENER VEHÍCULOS ASIGNADOS
 # =====================================================
@@ -160,48 +235,73 @@ def obtener_mis_vehiculos(current_user):
         
         logger.info(f"🔧 Técnico {tecnico_id} consultando sus vehículos asignados")
         
-        # 1. Obtener asignaciones activas del técnico
-        asignaciones = supabase.table('asignaciontecnico') \
-            .select('id_orden_trabajo, fecha_hora_inicio') \
-            .eq('id_tecnico', tecnico_id) \
-            .is_('fecha_hora_final', 'null') \
-            .execute()
+        def execute_with_retry(query_func, max_retries=3, delay=0.5):
+            for attempt in range(max_retries):
+                try:
+                    return query_func()
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        raise e
+                    logger.warning(f"Intento {attempt + 1} falló: {str(e)}. Reintentando...")
+                    time.sleep(delay)
+                    delay *= 2
+            return None
         
-        if not asignaciones.data:
+        # 1. Asignaciones
+        def get_asignaciones():
+            return supabase.table('asignaciontecnico') \
+                .select('id_orden_trabajo, fecha_hora_inicio') \
+                .eq('id_tecnico', tecnico_id) \
+                .is_('fecha_hora_final', 'null') \
+                .execute()
+        
+        asignaciones = execute_with_retry(get_asignaciones)
+        
+        if not asignaciones or not asignaciones.data:
             logger.info(f"Técnico {tecnico_id} no tiene asignaciones activas")
             return jsonify({'success': True, 'vehiculos': []}), 200
         
         orden_ids = [a['id_orden_trabajo'] for a in asignaciones.data]
         asignacion_fechas = {a['id_orden_trabajo']: a['fecha_hora_inicio'] for a in asignaciones.data}
         
-        # 2. Obtener órdenes de trabajo
-        ordenes = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
-            .in_('id', orden_ids) \
-            .in_('estado_global', ['EnProceso', 'EnPausa']) \
-            .execute()
+        # 2. Órdenes
+        def get_ordenes():
+            return supabase.table('ordentrabajo') \
+                .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
+                .in_('id', orden_ids) \
+                .in_('estado_global', ['EnProceso', 'EnPausa']) \
+                .execute()
         
-        if not ordenes.data:
+        ordenes = execute_with_retry(get_ordenes)
+        
+        if not ordenes or not ordenes.data:
             return jsonify({'success': True, 'vehiculos': []}), 200
         
-        # 3. Obtener vehículos
-        vehiculos_ids = [o['id_vehiculo'] for o in ordenes.data]
-        vehiculos = supabase.table('vehiculo') \
-            .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
-            .in_('id', vehiculos_ids) \
-            .execute()
+        # 3. Vehículos
+        vehiculos_ids = [o['id_vehiculo'] for o in ordenes.data if o.get('id_vehiculo')]
+        
+        def get_vehiculos():
+            return supabase.table('vehiculo') \
+                .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
+                .in_('id', vehiculos_ids) \
+                .execute()
+        
+        vehiculos = execute_with_retry(get_vehiculos)
         vehiculos_map = {v['id']: v for v in (vehiculos.data or [])}
         
-        # 4. Obtener clientes
+        # 4. Clientes
         clientes_ids = list(set([v.get('id_cliente') for v in vehiculos_map.values() if v.get('id_cliente')]))
         clientes_map = {}
         usuarios_ids = []
         
         if clientes_ids:
-            clientes = supabase.table('cliente') \
-                .select('id, id_usuario') \
-                .in_('id', clientes_ids) \
-                .execute()
+            def get_clientes():
+                return supabase.table('cliente') \
+                    .select('id, id_usuario, email') \
+                    .in_('id', clientes_ids) \
+                    .execute()
+            
+            clientes = execute_with_retry(get_clientes)
             for c in (clientes.data or []):
                 clientes_map[c['id']] = c
                 if c.get('id_usuario'):
@@ -209,41 +309,66 @@ def obtener_mis_vehiculos(current_user):
         
         usuarios_map = {}
         if usuarios_ids:
-            usuarios = supabase.table('usuario') \
-                .select('id, nombre, contacto, email') \
-                .in_('id', usuarios_ids) \
-                .execute()
+            def get_usuarios():
+                return supabase.table('usuario') \
+                    .select('id, nombre, contacto, email') \
+                    .in_('id', usuarios_ids) \
+                    .execute()
+            
+            usuarios = execute_with_retry(get_usuarios)
             for u in (usuarios.data or []):
                 usuarios_map[u['id']] = u
         
-        # 5. Obtener recepciones
-        recepciones = supabase.table('recepcion') \
-            .select('id_orden_trabajo, transcripcion_problema, url_grabacion_problema') \
-            .in_('id_orden_trabajo', orden_ids) \
-            .execute()
+        # 5. Recepciones
+        def get_recepciones():
+            return supabase.table('recepcion') \
+                .select('id_orden_trabajo, transcripcion_problema, url_grabacion_problema') \
+                .in_('id_orden_trabajo', orden_ids) \
+                .execute()
+        
+        recepciones = execute_with_retry(get_recepciones)
         recepciones_map = {r['id_orden_trabajo']: r for r in (recepciones.data or [])}
         
-        # 6. Obtener diagnósticos iniciales
-        diagnosticos = supabase.table('diagnostigoinicial') \
-            .select('id_orden_trabajo, diagnostigo, url_grabacion') \
-            .in_('id_orden_trabajo', orden_ids) \
-            .execute()
+        # 6. Diagnósticos
+        def get_diagnosticos():
+            return supabase.table('diagnostigoinicial') \
+                .select('id_orden_trabajo, diagnostigo, url_grabacion') \
+                .in_('id_orden_trabajo', orden_ids) \
+                .execute()
+        
+        diagnosticos = execute_with_retry(get_diagnosticos)
         diagnosticos_map = {d['id_orden_trabajo']: d for d in (diagnosticos.data or [])}
         
-        # 7. Obtener pausas
-        pausas = supabase.table('seguimientoorden') \
-            .select('id_orden_trabajo, motivo_pausa, fecha_hora_cambio') \
-            .in_('id_orden_trabajo', orden_ids) \
-            .eq('estado', 'EnPausa') \
-            .execute()
+        # 7. Pausas
+        def get_pausas():
+            return supabase.table('seguimientoorden') \
+                .select('id_orden_trabajo, motivo_pausa, fecha_hora_cambio') \
+                .in_('id_orden_trabajo', orden_ids) \
+                .eq('estado', 'EnPausa') \
+                .execute()
+        
+        pausas = execute_with_retry(get_pausas)
         pausas_map = {p['id_orden_trabajo']: p for p in (pausas.data or [])}
         
-        # 8. Construir respuesta
+        # 8. Planificaciones
+        def get_planificaciones():
+            return supabase.table('planificacion') \
+                .select('id_orden_trabajo, fecha_hora_inicio_real, bahia_asignada') \
+                .in_('id_orden_trabajo', orden_ids) \
+                .execute()
+        
+        planificaciones = execute_with_retry(get_planificaciones)
+        planificaciones_map = {p['id_orden_trabajo']: p for p in (planificaciones.data or [])}
+        
+        # 9. Construir respuesta
         vehiculos_resultado = []
         for orden in ordenes.data:
             vehiculo = vehiculos_map.get(orden['id_vehiculo'], {})
             cliente_info = clientes_map.get(vehiculo.get('id_cliente'), {})
             usuario_cliente = usuarios_map.get(cliente_info.get('id_usuario'), {})
+            planif = planificaciones_map.get(orden['id'], {})
+            
+            trabajo_iniciado = planif.get('fecha_hora_inicio_real') is not None
             
             vehiculos_resultado.append({
                 'orden_id': orden['id'],
@@ -253,6 +378,8 @@ def obtener_mis_vehiculos(current_user):
                 'estado_global': orden['estado_global'],
                 'motivo_pausa': pausas_map.get(orden['id'], {}).get('motivo_pausa'),
                 'fecha_pausa': pausas_map.get(orden['id'], {}).get('fecha_hora_cambio'),
+                'trabajo_iniciado': trabajo_iniciado,
+                'bahia_asignada': planif.get('bahia_asignada'),
                 'vehiculo': {
                     'placa': vehiculo.get('placa', ''),
                     'marca': vehiculo.get('marca', ''),
@@ -285,12 +412,49 @@ def obtener_mis_vehiculos(current_user):
 
 
 # =====================================================
-# API: INICIAR TRABAJO (MARCAR BAHÍA COMO OCUPADA)
+# API: ESTADO DE BAHÍAS
+# =====================================================
+@mis_vehiculos_bp.route('/api/estado-bahias', methods=['GET'])
+@tecnico_required
+def estado_bahias(current_user):
+    try:
+        planificaciones_activas = supabase.table('planificacion') \
+            .select('id_orden_trabajo, bahia_asignada, fecha_hora_inicio_real') \
+            .not_.is_('fecha_hora_inicio_real', 'null') \
+            .is_('fecha_hora_fin_real', 'null') \
+            .execute()
+        
+        bahias_ocupadas = {}
+        for p in (planificaciones_activas.data or []):
+            if p.get('bahia_asignada'):
+                orden = supabase.table('ordentrabajo') \
+                    .select('codigo_unico') \
+                    .eq('id', p['id_orden_trabajo']) \
+                    .single() \
+                    .execute()
+                bahias_ocupadas[p['bahia_asignada']] = orden.data.get('codigo_unico') if orden.data else None
+        
+        resultado = []
+        for i in range(1, 13):
+            resultado.append({
+                'bahia_numero': i,
+                'estado': 'ocupado' if i in bahias_ocupadas else 'libre',
+                'orden_codigo': bahias_ocupadas.get(i)
+            })
+        
+        return jsonify({'success': True, 'bahias': resultado}), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo estado de bahías: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# API: INICIAR TRABAJO
 # =====================================================
 @mis_vehiculos_bp.route('/api/iniciar-trabajo', methods=['POST'])
 @tecnico_required
 def iniciar_trabajo(current_user):
-    """Inicia el trabajo en una orden, marcando la bahía como ocupada"""
     try:
         data = request.get_json()
         id_orden = data.get('id_orden')
@@ -302,7 +466,6 @@ def iniciar_trabajo(current_user):
         if not bahia_asignada:
             return jsonify({'error': 'Número de bahía requerido'}), 400
         
-        # Verificar que la orden está asignada al técnico
         asignacion = supabase.table('asignaciontecnico') \
             .select('id') \
             .eq('id_orden_trabajo', id_orden) \
@@ -313,7 +476,6 @@ def iniciar_trabajo(current_user):
         if not asignacion.data:
             return jsonify({'error': 'No tienes esta orden asignada'}), 403
         
-        # Verificar estado actual
         orden = supabase.table('ordentrabajo') \
             .select('estado_global') \
             .eq('id', id_orden) \
@@ -326,13 +488,10 @@ def iniciar_trabajo(current_user):
         if orden.data['estado_global'] != 'EnProceso':
             return jsonify({'error': f'No se puede iniciar una orden en estado {orden.data["estado_global"]}'}), 400
         
-        # Verificar si la bahía está disponible
-        ahora = datetime.datetime.now()
-        
-        # Buscar si hay otra orden usando la misma bahía
         bahia_ocupada = supabase.table('planificacion') \
             .select('id_orden_trabajo, fecha_hora_inicio_real') \
             .eq('bahia_asignada', bahia_asignada) \
+            .not_.is_('fecha_hora_inicio_real', 'null') \
             .is_('fecha_hora_fin_real', 'null') \
             .execute()
         
@@ -343,9 +502,9 @@ def iniciar_trabajo(current_user):
                     'bahia_ocupada': True
                 }), 409
         
+        ahora = datetime.datetime.now()
         ahora_str = ahora.isoformat()
         
-        # Buscar planificación existente
         planificacion = supabase.table('planificacion') \
             .select('id') \
             .eq('id_orden_trabajo', id_orden) \
@@ -367,14 +526,6 @@ def iniciar_trabajo(current_user):
                 'horas_estimadas': 4.0
             }).execute()
         
-        # Registrar en seguimiento
-        supabase.table('seguimientoorden').insert({
-            'id_orden_trabajo': id_orden,
-            'estado': 'EnProceso',
-            'fecha_hora_cambio': ahora_str,
-            'notificaciones_enviadas': 0
-        }).execute()
-        
         logger.info(f"🔧 Orden {id_orden} iniciada en bahía {bahia_asignada}")
         
         return jsonify({
@@ -385,56 +536,6 @@ def iniciar_trabajo(current_user):
         
     except Exception as e:
         logger.error(f"Error iniciando trabajo: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-# =====================================================
-# API: VERIFICAR ESTADO DE BAHÍAS
-# =====================================================
-@mis_vehiculos_bp.route('/api/estado-bahias', methods=['GET'])
-@tecnico_required
-def estado_bahias(current_user):
-    """Obtiene el estado actual de todas las bahías"""
-    try:
-        # Intentar usar la vista
-        try:
-            bahias = supabase.table('vista_bahias') \
-                .select('*') \
-                .execute()
-            
-            if bahias.data:
-                return jsonify({'success': True, 'bahias': bahias.data}), 200
-        except Exception:
-            pass
-        
-        # Consulta manual
-        planificaciones_activas = supabase.table('planificacion') \
-            .select('id_orden_trabajo, bahia_asignada, fecha_hora_inicio_real') \
-            .is_('fecha_hora_fin_real', 'null') \
-            .execute()
-        
-        bahias_ocupadas = {}
-        for p in (planificaciones_activas.data or []):
-            if p.get('bahia_asignada') and p.get('fecha_hora_inicio_real'):
-                orden = supabase.table('ordentrabajo') \
-                    .select('codigo_unico') \
-                    .eq('id', p['id_orden_trabajo']) \
-                    .single() \
-                    .execute()
-                bahias_ocupadas[p['bahia_asignada']] = orden.data.get('codigo_unico') if orden.data else None
-        
-        resultado = []
-        for i in range(1, 13):
-            resultado.append({
-                'bahia_numero': i,
-                'estado': 'ocupado' if i in bahias_ocupadas else 'libre',
-                'orden_codigo': bahias_ocupadas.get(i)
-            })
-        
-        return jsonify({'success': True, 'bahias': resultado}), 200
-        
-    except Exception as e:
-        logger.error(f"Error obteniendo estado de bahías: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -559,12 +660,11 @@ def reanudar_trabajo(current_user):
 
 
 # =====================================================
-# API: FINALIZAR TRABAJO (LIBERAR BAHÍA)
+# API: FINALIZAR TRABAJO
 # =====================================================
 @mis_vehiculos_bp.route('/api/finalizar-trabajo', methods=['POST'])
 @tecnico_required
 def finalizar_trabajo(current_user):
-    """Finaliza el trabajo, liberando la bahía"""
     try:
         data = request.get_json()
         id_orden = data.get('id_orden')
@@ -611,7 +711,7 @@ def finalizar_trabajo(current_user):
 
 
 # =====================================================
-# API: OBTENER DETALLE DE ORDEN
+# API: DETALLE DE ORDEN
 # =====================================================
 @mis_vehiculos_bp.route('/api/detalle-orden/<int:id_orden>', methods=['GET'])
 @tecnico_required
@@ -642,7 +742,7 @@ def detalle_orden(current_user, id_orden):
         vehiculo_id = orden_data.get('id_vehiculo')
         
         vehiculo = supabase.table('vehiculo') \
-            .select('id, placa, marca, modelo, anio, kilometraje, color, id_cliente') \
+            .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
             .eq('id', vehiculo_id) \
             .single() \
             .execute()
@@ -653,7 +753,7 @@ def detalle_orden(current_user, id_orden):
         cliente_info = {}
         if cliente_id:
             cliente = supabase.table('cliente') \
-                .select('id, id_usuario, email, telefono') \
+                .select('id, id_usuario, email') \
                 .eq('id', cliente_id) \
                 .single() \
                 .execute()
@@ -715,8 +815,7 @@ def detalle_orden(current_user, id_orden):
                     'marca': vehiculo_data.get('marca', 'No especificada'),
                     'modelo': vehiculo_data.get('modelo', 'No especificado'),
                     'anio': vehiculo_data.get('anio', 'N/A'),
-                    'kilometraje': vehiculo_data.get('kilometraje', 0),
-                    'color': vehiculo_data.get('color', 'No especificado')
+                    'kilometraje': vehiculo_data.get('kilometraje', 0)
                 },
                 'cliente': cliente_info,
                 'orden': {

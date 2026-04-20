@@ -1,13 +1,14 @@
 from flask import Blueprint, request, jsonify
-from functools import wraps
 from config import config
-import jwt
 import datetime
 import logging
 from werkzeug.security import check_password_hash, generate_password_hash
 import base64
 import io
 import os
+
+# Importar decorador desde decorators.py
+from decorators import jefe_operativo_required
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -19,7 +20,6 @@ logger = logging.getLogger(__name__)
 jefe_operativo_perfil_bp = Blueprint('jefe_operativo_perfil', __name__, url_prefix='/api/jefe-operativo')
 
 # Configuración
-SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
 
 # =====================================================
@@ -42,43 +42,6 @@ try:
         logger.warning("⚠️ Cloudinary no configurado")
 except Exception as e:
     logger.error(f"❌ Error configurando Cloudinary: {str(e)}")
-
-# =====================================================
-# DECORADOR PARA VERIFICAR TOKEN Y ROL
-# =====================================================
-def jefe_operativo_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = None
-        
-        if 'Authorization' in request.headers:
-            auth_header = request.headers['Authorization']
-            try:
-                token = auth_header.split(" ")[1]
-            except IndexError:
-                return jsonify({'error': 'Token inválido'}), 401
-        
-        if not token:
-            return jsonify({'error': 'Token requerido'}), 401
-        
-        try:
-            data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            current_user = data['user']
-            
-            if current_user.get('rol') != 'jefe_operativo' and current_user.get('id_rol') != 2:
-                logger.warning(f"Usuario {current_user.get('nombre')} intentó acceder sin permisos")
-                return jsonify({'error': 'No autorizado para esta operación'}), 403
-                
-        except jwt.ExpiredSignatureError:
-            logger.warning("Token expirado")
-            return jsonify({'error': 'Token expirado'}), 401
-        except jwt.InvalidTokenError as e:
-            logger.warning(f"Token inválido: {str(e)}")
-            return jsonify({'error': 'Token inválido'}), 401
-        
-        return f(current_user, *args, **kwargs)
-    
-    return decorated
 
 
 # =====================================================
@@ -171,7 +134,6 @@ def obtener_perfil(current_user, id_usuario):
         # Obtener avatar_url si existe la columna
         avatar_url = None
         try:
-            # Intentar obtener avatar_url (puede no existir la columna)
             avatar_result = supabase.table('usuario') \
                 .select('avatar_url') \
                 .eq('id', id_usuario) \
@@ -247,15 +209,12 @@ def actualizar_avatar(current_user):
         if not avatar_base64:
             return jsonify({'error': 'Imagen no proporcionada'}), 400
         
-        # Subir a Cloudinary o guardar localmente
         avatar_url = subir_imagen_a_cloudinary(avatar_base64, 'avatars', f'user_{current_user["id"]}')
         
         if not avatar_url:
             return jsonify({'error': 'Error al subir imagen'}), 500
         
-        # Verificar si la columna avatar_url existe
         try:
-            # Primero verificar si la columna existe
             resultado = supabase.table('usuario') \
                 .update({'avatar_url': avatar_url}) \
                 .eq('id', current_user['id']) \
@@ -265,7 +224,6 @@ def actualizar_avatar(current_user):
                 return jsonify({'error': 'Error al actualizar avatar'}), 500
                 
         except Exception as e:
-            # Si la columna no existe, devolver error
             logger.error(f"Error actualizando avatar: {str(e)}")
             return jsonify({'error': 'La tabla usuario no tiene campo avatar_url. Contacte al administrador.'}), 500
         
@@ -288,7 +246,6 @@ def cambiar_contrasena(current_user):
         if not current_password or not new_password:
             return jsonify({'error': 'Contraseña actual y nueva son requeridas'}), 400
         
-        # Validar requisitos de contraseña
         if len(new_password) < 8:
             return jsonify({'error': 'La contraseña debe tener al menos 8 caracteres'}), 400
         if not any(c.isupper() for c in new_password):
@@ -298,7 +255,6 @@ def cambiar_contrasena(current_user):
         if not any(c.isdigit() for c in new_password):
             return jsonify({'error': 'La contraseña debe tener al menos un número'}), 400
         
-        # Obtener usuario actual
         resultado = supabase.table('usuario') \
             .select('contrasenia') \
             .eq('id', current_user['id']) \
@@ -307,11 +263,9 @@ def cambiar_contrasena(current_user):
         if not resultado.data or len(resultado.data) == 0:
             return jsonify({'error': 'Usuario no encontrado'}), 404
         
-        # Verificar contraseña actual
         if not check_password_hash(resultado.data[0]['contrasenia'], current_password):
             return jsonify({'error': 'Contraseña actual incorrecta'}), 401
         
-        # Actualizar contraseña
         nueva_contrasenia_hash = generate_password_hash(new_password)
         
         supabase.table('usuario') \

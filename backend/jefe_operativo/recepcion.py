@@ -19,12 +19,15 @@ import time
 import random
 import string
 
+# Importar decoradores desde decorators.py
+from decorators import jefe_operativo_required
+
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # =====================================================
-# CREAR BLUEPRINT - NOMBRE CORRECTO PARA IMPORTAR EN APP.PY
+# CREAR BLUEPRINT
 # =====================================================
 jefe_operativo_recepcion_bp = Blueprint('jefe_operativo_recepcion', __name__, url_prefix='/api/jefe-operativo')
 
@@ -33,11 +36,10 @@ SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
 
 # =====================================================
-# CONFIGURACIÓN DE CLOUDINARY - CORREGIDA
+# CONFIGURACIÓN DE CLOUDINARY
 # =====================================================
 CLOUDINARY_CONFIGURED = False
 try:
-    # Verificar que existan las variables en config
     if hasattr(config, 'CLOUDINARY_CLOUD_NAME') and config.CLOUDINARY_CLOUD_NAME:
         cloudinary.config(
             cloud_name=config.CLOUDINARY_CLOUD_NAME,
@@ -160,43 +162,6 @@ def transcribir_audio_bytes(audio_bytes, idioma="es", model_size="base"):
 # ALMACENAMIENTO DE SESIONES COLABORATIVAS
 # =====================================================
 sesiones_activas = {}
-
-# =====================================================
-# DECORADOR PARA VERIFICAR TOKEN Y ROL
-# =====================================================
-def jefe_operativo_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = None
-        
-        if 'Authorization' in request.headers:
-            auth_header = request.headers['Authorization']
-            try:
-                token = auth_header.split(" ")[1]
-            except IndexError:
-                return jsonify({'error': 'Token inválido'}), 401
-        
-        if not token:
-            return jsonify({'error': 'Token requerido'}), 401
-        
-        try:
-            data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            current_user = data['user']
-            
-            if current_user.get('rol') != 'jefe_operativo' and current_user.get('id_rol') != 2:
-                logger.warning(f"Usuario {current_user.get('nombre')} intentó acceder sin permisos")
-                return jsonify({'error': 'No autorizado para esta operación'}), 403
-                
-        except jwt.ExpiredSignatureError:
-            logger.warning("Token expirado")
-            return jsonify({'error': 'Token expirado'}), 401
-        except jwt.InvalidTokenError as e:
-            logger.warning(f"Token inválido: {str(e)}")
-            return jsonify({'error': 'Token inválido'}), 401
-        
-        return f(current_user, *args, **kwargs)
-    
-    return decorated
 
 # =====================================================
 # FUNCIONES DE CLOUDINARY
@@ -357,6 +322,118 @@ def generar_codigo_sesion():
     caracteres = string.ascii_uppercase + string.digits
     codigo = ''.join(random.choices(caracteres, k=6))
     return f"S-{codigo}"
+
+def obtener_o_crear_cliente(nombre, telefono, ubicacion):
+    """
+    Obtener un cliente existente o crear uno nuevo.
+    Los roles se manejan en la tabla usuario_rol, no en usuario.id_rol
+    """
+    id_cliente = None
+    id_usuario = None
+    
+    try:
+        # Buscar por teléfono
+        if telefono:
+            usuario_existente = supabase.table('usuario') \
+                .select('id, nombre, ubicacion') \
+                .eq('contacto', telefono) \
+                .execute()
+            
+            if usuario_existente.data and len(usuario_existente.data) > 0:
+                id_usuario = usuario_existente.data[0]['id']
+                
+                # Actualizar datos del usuario
+                supabase.table('usuario') \
+                    .update({
+                        'nombre': nombre,
+                        'ubicacion': ubicacion
+                    }) \
+                    .eq('id', id_usuario) \
+                    .execute()
+                
+                # Verificar si ya tiene rol de cliente en usuario_rol
+                rol_result = supabase.table('usuario_rol') \
+                    .select('id_rol') \
+                    .eq('id_usuario', id_usuario) \
+                    .eq('id_rol', 5) \
+                    .execute()
+                
+                if not rol_result.data:
+                    # Asignar rol de cliente (id_rol = 5)
+                    supabase.table('usuario_rol').insert({
+                        'id_usuario': id_usuario,
+                        'id_rol': 5,
+                        'fecha_asignacion': datetime.datetime.now().isoformat()
+                    }).execute()
+                    logger.info(f"Rol cliente asignado al usuario {id_usuario}")
+                
+                # Buscar en tabla cliente
+                cliente_existente = supabase.table('cliente') \
+                    .select('id') \
+                    .eq('id_usuario', id_usuario) \
+                    .execute()
+                
+                if cliente_existente.data and len(cliente_existente.data) > 0:
+                    id_cliente = cliente_existente.data[0]['id']
+        
+        # Si no existe, crear nuevo usuario
+        if not id_cliente:
+            email_cliente = f"cliente_{uuid.uuid4().hex[:8]}@furia.com"
+            contrasenia = generate_password_hash(telefono if telefono else '123456')
+            
+            user_result = supabase.table('usuario').insert({
+                'nombre': nombre,
+                'contacto': telefono,
+                'ubicacion': ubicacion,
+                'contrasenia': contrasenia,
+                'fecha_registro': datetime.datetime.now().isoformat(),
+                'email': email_cliente
+            }).execute()
+            
+            if not user_result.data:
+                logger.error("Error creando usuario cliente")
+                return None, None
+            
+            id_usuario = user_result.data[0]['id']
+            
+            # Asignar rol de cliente (id_rol = 5) en usuario_rol
+            rol_result = supabase.table('usuario_rol').insert({
+                'id_usuario': id_usuario,
+                'id_rol': 5,
+                'fecha_asignacion': datetime.datetime.now().isoformat()
+            }).execute()
+            
+            if not rol_result.data:
+                logger.error("Error asignando rol cliente")
+                supabase.table('usuario').delete().eq('id', id_usuario).execute()
+                return None, None
+            
+            # Crear registro en tabla cliente
+            numero_documento = f"TEMP-{int(datetime.datetime.now().timestamp())}"
+            cliente_result = supabase.table('cliente').insert({
+                'id_usuario': id_usuario,
+                'tipo_documento': 'CI',
+                'numero_documento': numero_documento,
+                'email': email_cliente
+            }).execute()
+            
+            if not cliente_result.data:
+                # Rollback: eliminar usuario y rol
+                supabase.table('usuario_rol').delete().eq('id_usuario', id_usuario).execute()
+                supabase.table('usuario').delete().eq('id', id_usuario).execute()
+                logger.error("Error creando cliente")
+                return None, None
+            
+            id_cliente = cliente_result.data[0]['id']
+            logger.info(f"Nuevo cliente creado: {nombre} (ID: {id_cliente})")
+        
+        return id_cliente, id_usuario
+        
+    except Exception as e:
+        logger.error(f"Error en obtener_o_crear_cliente: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None, None
 
 # =====================================================
 # SESIONES COLABORATIVAS
@@ -555,7 +632,6 @@ def finalizar_sesion(current_user):
         
         sesion = sesiones_activas[codigo_sesion]
         
-        # Si se enviaron datos directos, actualizar la sesión
         if datos_directos:
             sesion['datos'] = datos_directos
             logger.info(f"Datos actualizados directamente en sesión {codigo_sesion}")
@@ -570,7 +646,6 @@ def finalizar_sesion(current_user):
         if not resultado['success']:
             return jsonify({'error': resultado['error']}), 500
         
-        # Marcar la sesión como finalizada
         sesion['estado'] = 'finalizada'
         sesion['fecha_finalizacion'] = datetime.datetime.now().isoformat()
         
@@ -599,65 +674,17 @@ def crear_orden_desde_sesion(datos, current_user):
         nombre_cliente = cliente_data.get('nombre', '')
         ubicacion_cliente = cliente_data.get('ubicacion', '')
         
-        id_cliente = None
-        id_usuario = None
-        
-        if telefono_cliente:
-            usuario_existente = supabase.table('usuario') \
-                .select('id') \
-                .eq('contacto', telefono_cliente) \
-                .execute()
-            
-            if usuario_existente.data and len(usuario_existente.data) > 0:
-                id_usuario = usuario_existente.data[0]['id']
-                
-                supabase.table('usuario') \
-                    .update({
-                        'nombre': nombre_cliente,
-                        'ubicacion': ubicacion_cliente
-                    }) \
-                    .eq('id', id_usuario) \
-                    .execute()
-                
-                cliente_existente = supabase.table('cliente') \
-                    .select('id') \
-                    .eq('id_usuario', id_usuario) \
-                    .execute()
-                
-                if cliente_existente.data and len(cliente_existente.data) > 0:
-                    id_cliente = cliente_existente.data[0]['id']
+        # Crear o obtener cliente con rol 5
+        id_cliente, id_usuario = obtener_o_crear_cliente(
+            nombre_cliente, 
+            telefono_cliente, 
+            ubicacion_cliente
+        )
         
         if not id_cliente:
-            email_cliente = f"cliente_{uuid.uuid4().hex[:8]}@furia.com"
-            user_result = supabase.table('usuario').insert({
-                'id_rol': 6,
-                'nombre': nombre_cliente,
-                'contacto': telefono_cliente,
-                'ubicacion': ubicacion_cliente,
-                'contrasenia': generate_password_hash(telefono_cliente if telefono_cliente else '123456'),
-                'fecha_registro': datetime.datetime.now().isoformat(),
-                'email': email_cliente
-            }).execute()
-            
-            if not user_result.data:
-                return {'success': False, 'error': 'Error creando usuario cliente'}
-            
-            id_usuario = user_result.data[0]['id']
-            
-            numero_documento = f"TEMP-{int(datetime.datetime.now().timestamp())}"
-            cliente_result = supabase.table('cliente').insert({
-                'id_usuario': id_usuario,
-                'tipo_documento': 'CI',
-                'numero_documento': numero_documento,
-                'email': email_cliente
-            }).execute()
-            
-            if not cliente_result.data:
-                supabase.table('usuario').delete().eq('id', id_usuario).execute()
-                return {'success': False, 'error': 'Error creando cliente'}
-            
-            id_cliente = cliente_result.data[0]['id']
+            return {'success': False, 'error': 'Error creando cliente'}
         
+        # Gestionar vehículo
         placa = vehiculo_data.get('placa', '').upper()
         id_vehiculo = None
         
@@ -695,18 +722,13 @@ def crear_orden_desde_sesion(datos, current_user):
         
         codigo_unico = generar_codigo_unico()
         
-        # =====================================================
-        # OBTENER EL SEGUNDO JEFE OPERATIVO DE LA SESIÓN
-        # =====================================================
+        # Obtener segundo jefe operativo de la sesión
         segundo_jefe_id = None
         
-        # Buscar la sesión activa en sesiones_activas
         for codigo_sesion, sesion in sesiones_activas.items():
             if sesion.get('estado') == 'activa' and len(sesion.get('colaboradores', [])) > 1:
-                # Si hay más de un colaborador y el usuario actual está en la sesión
                 colaboradores = sesion.get('colaboradores', [])
                 if current_user['id'] in colaboradores:
-                    # Encontrar el otro colaborador (que no sea el usuario actual)
                     for colab_id in colaboradores:
                         if colab_id != current_user['id']:
                             segundo_jefe_id = colab_id
@@ -715,16 +737,15 @@ def crear_orden_desde_sesion(datos, current_user):
         
         logger.info(f"Segundo jefe operativo ID: {segundo_jefe_id}")
         
-        # Crear la orden con ambos jefes operativos
+        # Crear orden de trabajo
         orden_data = {
             'codigo_unico': codigo_unico,
             'id_vehiculo': id_vehiculo,
-            'id_jefe_operativo': current_user['id'],  # Jefe operativo principal (el que finaliza)
+            'id_jefe_operativo': current_user['id'],
             'fecha_ingreso': datetime.datetime.now().isoformat(),
             'estado_global': 'EnRecepcion'
         }
         
-        # Agregar segundo jefe si existe
         if segundo_jefe_id:
             orden_data['id_jefe_operativo_2'] = segundo_jefe_id
             logger.info(f"✅ Guardando segundo jefe operativo: {segundo_jefe_id}")
@@ -736,6 +757,7 @@ def crear_orden_desde_sesion(datos, current_user):
         
         id_orden = orden_result.data[0]['id']
         
+        # Crear recepción
         recepcion_data = {
             'id_orden_trabajo': id_orden,
             'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
@@ -764,17 +786,15 @@ def crear_orden_desde_sesion(datos, current_user):
         return {'success': False, 'error': str(e)}
 
 
-# =====================================================
-# VERIFICAR PLACA
-# =====================================================
 @jefe_operativo_recepcion_bp.route('/verificar-placa/<placa>', methods=['GET'])
 @jefe_operativo_required
 def verificar_placa(current_user, placa):
     try:
         placa = placa.upper()
         
+        # CORREGIDO: La relación correcta es vehiculo -> cliente -> usuario
         resultado = supabase.table('vehiculo') \
-            .select('id, placa, marca, modelo, id_cliente, cliente!inner(id_usuario), usuario!inner(nombre, contacto)') \
+            .select('id, placa, marca, modelo, id_cliente, cliente!inner(id_usuario), usuario:cliente!inner(id_usuario)!inner(nombre, contacto)') \
             .eq('placa', placa) \
             .execute()
         
@@ -782,6 +802,7 @@ def verificar_placa(current_user, placa):
             vehiculo = resultado.data[0]
             
             cliente_data = {}
+            # Obtener datos del usuario asociado al cliente
             if 'usuario' in vehiculo:
                 cliente_data = vehiculo['usuario']
             
@@ -897,13 +918,11 @@ def listar_sesiones_activas(current_user):
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# LISTAR RECEPCIONES GUARDADAS
-# =====================================================
 @jefe_operativo_recepcion_bp.route('/listar-recepciones', methods=['GET'])
 @jefe_operativo_required
 def listar_recepciones(current_user):
     try:
+        # CORREGIDO: Usar la relación correcta
         resultado = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo, vehiculo!inner(placa, marca, modelo, cliente!inner(id_usuario, usuario!inner(nombre, contacto, ubicacion)))') \
             .order('fecha_ingreso', desc=True) \
@@ -936,9 +955,6 @@ def listar_recepciones(current_user):
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# DETALLE DE RECEPCIÓN
-# =====================================================
 @jefe_operativo_recepcion_bp.route('/detalle-recepcion/<int:id_orden>', methods=['GET'])
 @jefe_operativo_required
 def detalle_recepcion(current_user, id_orden):
@@ -954,7 +970,6 @@ def detalle_recepcion(current_user, id_orden):
         
         orden = orden_result.data
         
-        # Obtener jefe operativo principal
         jefe_principal = {}
         if orden.get('id_jefe_operativo'):
             jefe1 = supabase.table('usuario') \
@@ -964,7 +979,6 @@ def detalle_recepcion(current_user, id_orden):
             if jefe1.data:
                 jefe_principal = jefe1.data[0]
         
-        # Obtener segundo jefe operativo
         jefe_secundario = {}
         if orden.get('id_jefe_operativo_2'):
             jefe2 = supabase.table('usuario') \
@@ -974,6 +988,7 @@ def detalle_recepcion(current_user, id_orden):
             if jefe2.data:
                 jefe_secundario = jefe2.data[0]
         
+        # CORREGIDO: Relación vehiculo -> cliente -> usuario
         vehiculo_result = supabase.table('vehiculo') \
             .select('id, placa, marca, modelo, anio, kilometraje, id_cliente, cliente!inner(id_usuario, usuario!inner(nombre, contacto, ubicacion))') \
             .eq('id', orden['id_vehiculo']) \
@@ -1025,7 +1040,6 @@ def detalle_recepcion(current_user, id_orden):
     except Exception as e:
         logger.error(f"Error obteniendo detalle: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
 
 # =====================================================
 # ELIMINAR RECEPCIÓN
@@ -1090,63 +1104,18 @@ def actualizar_recepcion(current_user, id_orden):
         nombre_cliente = cliente_data.get('nombre', '')
         ubicacion_cliente = cliente_data.get('ubicacion', '')
         
-        id_cliente = None
-        id_usuario = None
-        
-        if telefono_cliente:
-            usuario_existente = supabase.table('usuario') \
-                .select('id') \
-                .eq('contacto', telefono_cliente) \
-                .execute()
-            
-            if usuario_existente.data and len(usuario_existente.data) > 0:
-                id_usuario = usuario_existente.data[0]['id']
-                
-                supabase.table('usuario') \
-                    .update({
-                        'nombre': nombre_cliente,
-                        'ubicacion': ubicacion_cliente
-                    }) \
-                    .eq('id', id_usuario) \
-                    .execute()
-                
-                cliente_existente = supabase.table('cliente') \
-                    .select('id') \
-                    .eq('id_usuario', id_usuario) \
-                    .execute()
-                
-                if cliente_existente.data and len(cliente_existente.data) > 0:
-                    id_cliente = cliente_existente.data[0]['id']
+        # Usar la misma función para obtener/crear cliente con rol 5
+        id_cliente, id_usuario = obtener_o_crear_cliente(
+            nombre_cliente, 
+            telefono_cliente, 
+            ubicacion_cliente
+        )
         
         if not id_cliente:
-            email_cliente = f"cliente_{uuid.uuid4().hex[:8]}@furia.com"
-            user_result = supabase.table('usuario').insert({
-                'id_rol': 6,
-                'nombre': nombre_cliente,
-                'contacto': telefono_cliente,
-                'ubicacion': ubicacion_cliente,
-                'contrasenia': generate_password_hash(telefono_cliente if telefono_cliente else '123456'),
-                'fecha_registro': datetime.datetime.now().isoformat(),
-                'email': email_cliente
-            }).execute()
-            
-            if user_result.data:
-                id_usuario = user_result.data[0]['id']
-                
-                numero_documento = f"TEMP-{int(datetime.datetime.now().timestamp())}"
-                cliente_result = supabase.table('cliente').insert({
-                    'id_usuario': id_usuario,
-                    'tipo_documento': 'CI',
-                    'numero_documento': numero_documento,
-                    'email': email_cliente
-                }).execute()
-                
-                if cliente_result.data:
-                    id_cliente = cliente_result.data[0]['id']
+            return jsonify({'error': 'Error procesando cliente'}), 500
         
         vehiculo_data = data.get('vehiculo', {})
         placa = vehiculo_data.get('placa', '').upper()
-        id_vehiculo = None
         
         orden_actual = supabase.table('ordentrabajo') \
             .select('id_vehiculo') \
@@ -1168,8 +1137,6 @@ def actualizar_recepcion(current_user, id_orden):
                 }) \
                 .eq('id', id_vehiculo_actual) \
                 .execute()
-            
-            id_vehiculo = id_vehiculo_actual
         
         fotos = data.get('fotos', {})
         descripcion = data.get('descripcion', {})

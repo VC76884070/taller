@@ -53,11 +53,14 @@
                     <select id="ordenSelect" class="orden-select">
                         <option value="">-- Seleccione una orden --</option>
                     </select>
+                    <button id="btnCargarDiagnostico" class="btn-cargar">
+                        <i class="fas fa-search"></i> Cargar Diagnóstico
+                    </button>
                     <div id="estadoDiagnostico" class="estado-diagnostico"></div>
                 </div>
 
                 <!-- Formulario de Diagnóstico -->
-                <div id="diagnosticoForm" class="diagnostico-form" style="display: none;">
+                <div id="diagnosticoForm" class="diagnostico-form">
                     <div class="form-grid">
                         <!-- Información del Vehículo -->
                         <div class="form-section">
@@ -76,10 +79,8 @@
 
                             <div class="servicios-input-group">
                                 <input type="text" id="nuevoServicioInput" class="servicio-input"
-                                    placeholder="Ej: Cambio de bujías, Cambio de aceite, Alineación de dirección..."
-                                    onkeypress="if(event.key === 'Enter') agregarServicio()">
-                                <button type="button" id="btnAgregarServicio" class="btn-agregar"
-                                    onclick="agregarServicio()">
+                                    placeholder="Ej: Cambio de bujías, Cambio de aceite, Alineación de dirección...">
+                                <button type="button" id="btnAgregarServicio" class="btn-agregar">
                                     <i class="fas fa-plus"></i> Agregar
                                 </button>
                             </div>

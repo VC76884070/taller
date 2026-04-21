@@ -943,3 +943,32 @@ body {
         padding: 0.8rem;
     }
 }
+/* Agregar al final del archivo */
+.btn-cargar {
+    background: var(--azul-acento);
+    color: var(--blanco);
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.btn-cargar:hover {
+    background: #1e40af;
+    transform: translateY(-1px);
+}
+
+/* Ocultar formulario inicialmente */
+#diagnosticoForm {
+    display: none;
+}
+
+#diagnosticoForm.visible {
+    display: block;
+}

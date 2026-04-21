@@ -4,10 +4,11 @@
 // =====================================================
 
 let token = null;
+let userInfo = null;
 let ordenesTecnico = [];
 let ordenSeleccionada = null;
 let serviciosLista = [];
-let fotosSubidas = [{}, {}]; // Array para 2 fotos
+let fotosSubidas = [{}, {}];
 let mediaRecorder = null;
 let audioChunks = [];
 let grabando = false;
@@ -21,8 +22,6 @@ let diagnosticoActual = null;
 function getToken() {
     const localToken = localStorage.getItem('furia_token');
     if (localToken) return localToken;
-    const fallbackToken = localStorage.getItem('token');
-    if (fallbackToken) return fallbackToken;
     return null;
 }
 
@@ -40,6 +39,15 @@ function showToast(message, type = 'success') {
     if (!container) {
         container = document.createElement('div');
         container.id = 'toast-container';
+        container.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        `;
         document.body.appendChild(container);
     }
     
@@ -56,7 +64,7 @@ function showToast(message, type = 'success') {
     setTimeout(() => {
         toast.style.opacity = '0';
         toast.style.transform = 'translateX(100%)';
-        setTimeout(() => toast.remove(), 300);
+        setTimeout(() => toast.remove(), 3500);
     }, 3500);
 }
 
@@ -85,12 +93,20 @@ function escapeHtml(text) {
 // =====================================================
 
 async function verificarToken() {
+    token = getToken();
+    
     if (!token) {
+        console.error('No hay token');
         window.location.href = '/';
         return false;
     }
     
     try {
+        const userData = localStorage.getItem('furia_user');
+        if (userData) {
+            userInfo = JSON.parse(userData);
+        }
+        
         const response = await fetch('/api/verify-token', {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
@@ -98,14 +114,33 @@ async function verificarToken() {
         
         const data = await response.json();
         
-        if (!data.valid) {
-            localStorage.removeItem('furia_token');
-            localStorage.removeItem('furia_user');
+        if (!response.ok || !data.valid) {
+            console.error('Token inválido');
+            localStorage.clear();
             window.location.href = '/';
             return false;
         }
         
+        if (data.user) {
+            userInfo = data.user;
+            localStorage.setItem('furia_user', JSON.stringify(userInfo));
+        }
+        
+        const roles = userInfo.roles || [];
+        const tieneRolTecnico = roles.includes('tecnico');
+        
+        if (!tieneRolTecnico) {
+            console.error('No tiene rol de técnico');
+            showToast('No tienes permisos de técnico', 'error');
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 2000);
+            return false;
+        }
+        
+        console.log('✅ Autenticación exitosa - Técnico');
         return true;
+        
     } catch (error) {
         console.error('Error verificando token:', error);
         window.location.href = '/';
@@ -118,27 +153,47 @@ async function verificarToken() {
 // =====================================================
 
 async function cargarOrdenes() {
+    const select = document.getElementById('ordenSelect');
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">-- Cargando órdenes... --</option>';
+    
     try {
-        showToast('Cargando órdenes...', 'info');
+        console.log('Cargando órdenes...');
         const response = await fetch('/tecnico/api/ordenes-tecnico', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
+        if (response.status === 401) {
+            localStorage.clear();
+            window.location.href = '/';
+            return;
+        }
+        
         const data = await response.json();
+        console.log('Órdenes recibidas:', data);
         
         if (data.success) {
-            ordenesTecnico = data.ordenes;
+            ordenesTecnico = data.ordenes || [];
+            console.log('📋 Total órdenes cargadas:', ordenesTecnico.length);
+            if (ordenesTecnico.length > 0) {
+                console.log('📋 Primera orden ejemplo:', ordenesTecnico[0]);
+            }
             actualizarSelectorOrdenes();
+            
             if (ordenesTecnico.length === 0) {
+                select.innerHTML = '<option value="">-- No hay órdenes asignadas --</option>';
                 showToast('No tienes órdenes de trabajo asignadas', 'warning');
             } else {
                 showToast(`${ordenesTecnico.length} órden(es) cargada(s)`, 'success');
             }
         } else {
+            select.innerHTML = '<option value="">-- Error al cargar órdenes --</option>';
             showToast(data.error || 'Error al cargar órdenes', 'error');
         }
     } catch (error) {
         console.error('Error cargando órdenes:', error);
+        select.innerHTML = '<option value="">-- Error al cargar órdenes --</option>';
         showToast('Error al cargar órdenes', 'error');
     }
 }
@@ -151,17 +206,248 @@ function actualizarSelectorOrdenes() {
     
     ordenesTecnico.forEach(orden => {
         const option = document.createElement('option');
-        option.value = orden.orden_id;
-        let texto = `${orden.codigo_unico} - ${orden.vehiculo.placa} (${orden.vehiculo.marca} ${orden.vehiculo.modelo})`;
-        if (orden.tiene_diagnostico) {
-            const estadoIcon = orden.diagnostico_estado === 'pendiente' ? '⏳' : 
-                              orden.diagnostico_estado === 'aprobado' ? '✅' : 
-                              orden.diagnostico_estado === 'rechazado' ? '❌' : '📝';
-            texto += ` ${estadoIcon} ${orden.diagnostico_estado || 'borrador'}`;
-        }
-        option.textContent = texto;
+        // Usar setAttribute para asegurar
+        option.setAttribute('value', orden.orden_id);
+        
+        let estadoIcon = '';
+        if (orden.diagnostico_estado === 'pendiente') estadoIcon = '⏳';
+        else if (orden.diagnostico_estado === 'aprobado') estadoIcon = '✅';
+        else if (orden.diagnostico_estado === 'rechazado') estadoIcon = '❌';
+        else if (orden.tiene_diagnostico) estadoIcon = '📝';
+        else estadoIcon = '🆕';
+        
+        option.textContent = `${orden.codigo_unico} - ${orden.vehiculo.placa} (${orden.vehiculo.marca} ${orden.vehiculo.modelo}) ${estadoIcon}`;
         select.appendChild(option);
     });
+    
+    console.log('✅ Selector actualizado');
+    // Forzar que el primer option tenga el value correcto
+    if (select.options.length > 1) {
+        console.log('Option 1 value:', select.options[1].getAttribute('value'));
+        console.log('Option 1 value property:', select.options[1].value);
+    }
+}
+
+// =====================================================
+// CARGA DE DIAGNÓSTICO EXISTENTE
+// =====================================================
+
+async function cargarDiagnosticoExistente(ordenId) {
+    try {
+        console.log(`Cargando diagnóstico para orden ${ordenId}`);
+        const response = await fetch(`/tecnico/api/diagnostico/${ordenId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.status === 401) {
+            localStorage.clear();
+            window.location.href = '/';
+            return;
+        }
+        
+        const data = await response.json();
+        console.log('Diagnóstico recibido:', data);
+        
+        if (data.success) {
+            diagnosticoActual = data.diagnostico;
+            
+            // Cargar transcripción
+            if (data.diagnostico && data.diagnostico.transcripcion_informe) {
+                document.getElementById('transcripcionDiagnostico').value = data.diagnostico.transcripcion_informe;
+            } else {
+                document.getElementById('transcripcionDiagnostico').value = '';
+            }
+            
+            // Cargar audio
+            if (data.diagnostico && data.diagnostico.url_grabacion_informe) {
+                audioUrlSubido = data.diagnostico.url_grabacion_informe;
+                document.getElementById('audioUrl').value = data.diagnostico.url_grabacion_informe;
+                const audioPreview = document.getElementById('audioPreview');
+                audioPreview.src = data.diagnostico.url_grabacion_informe;
+                audioPreview.style.display = 'block';
+                document.getElementById('btnEliminarAudio').style.display = 'inline-flex';
+                document.getElementById('grabacionStatus').innerHTML = '<i class="fas fa-check-circle"></i> Audio disponible';
+            } else {
+                document.getElementById('audioPreview').style.display = 'none';
+                document.getElementById('btnEliminarAudio').style.display = 'none';
+                document.getElementById('grabacionStatus').innerHTML = '';
+            }
+            
+            // Cargar servicios
+            serviciosLista = data.servicios || [];
+            renderizarServicios();
+            
+            // Cargar fotos
+            if (data.fotos && data.fotos.length > 0) {
+                cargarFotosDesdeServidor(data.fotos);
+            } else {
+                limpiarFotos();
+            }
+            
+            // Mostrar estado
+            if (data.diagnostico) {
+                mostrarEstadoDiagnostico(data.diagnostico);
+            }
+            
+            // Mostrar historial
+            if (data.observaciones && data.observaciones.length > 0) {
+                mostrarHistorial(data.observaciones);
+            } else {
+                document.getElementById('historialContainer').style.display = 'none';
+            }
+            
+            // Si el diagnóstico está rechazado, mostrar mensaje
+            if (data.diagnostico && data.diagnostico.estado === 'rechazado') {
+                showToast('⚠️ Este diagnóstico fue rechazado. Revisa las observaciones y realiza las correcciones.', 'warning');
+            }
+        } else {
+            // Nuevo diagnóstico
+            limpiarFormularioDiagnostico();
+        }
+    } catch (error) {
+        console.error('Error cargando diagnóstico:', error);
+        limpiarFormularioDiagnostico();
+        showToast('Error al cargar diagnóstico existente', 'error');
+    }
+}
+
+function limpiarFormularioDiagnostico() {
+    diagnosticoActual = null;
+    serviciosLista = [];
+    fotosSubidas = [{}, {}];
+    renderizarServicios();
+    limpiarFotos();
+    document.getElementById('transcripcionDiagnostico').value = '';
+    document.getElementById('audioPreview').style.display = 'none';
+    document.getElementById('audioUrl').value = '';
+    document.getElementById('btnEliminarAudio').style.display = 'none';
+    document.getElementById('grabacionStatus').innerHTML = '';
+    document.getElementById('historialContainer').style.display = 'none';
+    document.getElementById('estadoDiagnostico').innerHTML = '';
+}
+
+function limpiarFotos() {
+    for (let i = 0; i < 2; i++) {
+        const uploadCard = document.getElementById(`fotoUpload${i + 1}`);
+        if (uploadCard) {
+            const uploadArea = uploadCard.querySelector('.upload-area');
+            const fotoPreview = uploadCard.querySelector('.foto-preview');
+            const fotoInput = uploadCard.querySelector('.foto-input');
+            if (uploadArea) uploadArea.style.display = 'block';
+            if (fotoPreview) fotoPreview.style.display = 'none';
+            if (fotoInput) fotoInput.value = '';
+        }
+    }
+    actualizarInfoFotos();
+}
+
+function cargarFotosDesdeServidor(fotos) {
+    fotosSubidas = [{}, {}];
+    
+    fotos.forEach((foto, idx) => {
+        if (idx < 2) {
+            fotosSubidas[idx] = { id: foto.id, url: foto.url_foto };
+            
+            const uploadCard = document.getElementById(`fotoUpload${idx + 1}`);
+            if (uploadCard) {
+                const uploadArea = uploadCard.querySelector('.upload-area');
+                const fotoPreview = uploadCard.querySelector('.foto-preview');
+                const previewImg = fotoPreview.querySelector('img');
+                
+                if (previewImg) previewImg.src = foto.url_foto;
+                if (uploadArea) uploadArea.style.display = 'none';
+                if (fotoPreview) fotoPreview.style.display = 'block';
+            }
+        }
+    });
+    
+    actualizarInfoFotos();
+}
+
+function mostrarEstadoDiagnostico(diagnostico) {
+    const estadoContainer = document.getElementById('estadoDiagnostico');
+    if (!estadoContainer) return;
+    
+    let estadoHtml = '';
+    switch (diagnostico.estado) {
+        case 'borrador':
+            estadoHtml = '<span class="estado-badge estado-borrador"><i class="fas fa-pencil-alt"></i> Borrador</span>';
+            break;
+        case 'pendiente':
+            estadoHtml = '<span class="estado-badge estado-pendiente"><i class="fas fa-clock"></i> Pendiente de revisión</span>';
+            break;
+        case 'aprobado':
+            estadoHtml = '<span class="estado-badge estado-aprobado"><i class="fas fa-check-circle"></i> Aprobado</span>';
+            break;
+        case 'rechazado':
+            estadoHtml = '<span class="estado-badge estado-rechazado"><i class="fas fa-times-circle"></i> Rechazado</span>';
+            break;
+        default:
+            estadoHtml = '';
+    }
+    
+    estadoContainer.innerHTML = estadoHtml;
+}
+
+function mostrarHistorial(observaciones) {
+    const historialContainer = document.getElementById('historialContainer');
+    const historialList = document.getElementById('historialList');
+    
+    if (observaciones && observaciones.length > 0) {
+        historialContainer.style.display = 'block';
+        historialList.innerHTML = observaciones.map(obs => `
+            <div class="historial-item">
+                <div class="historial-header">
+                    <span class="historial-version">
+                        <i class="fas fa-comment-dots"></i> Observación
+                    </span>
+                    <span class="historial-fecha">${formatFecha(obs.fecha_hora)}</span>
+                </div>
+                <div class="historial-informe">${escapeHtml(obs.observacion)}</div>
+                ${obs.transcripcion_obs ? `<div class="historial-transcripcion"><i class="fas fa-microphone-alt"></i> ${escapeHtml(obs.transcripcion_obs)}</div>` : ''}
+            </div>
+        `).join('');
+    } else {
+        historialContainer.style.display = 'none';
+    }
+}
+
+function mostrarInfoVehiculo(orden) {
+    const vehiculo = orden.vehiculo;
+    
+    const placaEl = document.getElementById('vehiculoPlaca');
+    const modeloEl = document.getElementById('vehiculoModelo');
+    const anioEl = document.getElementById('vehiculoAnio');
+    const kmEl = document.getElementById('vehiculoKm');
+    
+    if (placaEl) placaEl.textContent = vehiculo.placa || 'No registrada';
+    if (modeloEl) modeloEl.textContent = `${vehiculo.marca || ''} ${vehiculo.modelo || ''}`.trim() || 'No especificado';
+    if (anioEl) anioEl.textContent = vehiculo.anio || 'No especificado';
+    if (kmEl) kmEl.textContent = vehiculo.kilometraje ? `${vehiculo.kilometraje.toLocaleString()} km` : 'No registrado';
+}
+
+// =====================================================
+// MOSTRAR/OCULTAR FORMULARIO
+// =====================================================
+
+function mostrarFormulario() {
+    const form = document.getElementById('diagnosticoForm');
+    if (form) {
+        form.style.display = 'block';
+        console.log('✅ Formulario mostrado');
+        return true;
+    } else {
+        console.error('❌ No se encontró el formulario');
+        return false;
+    }
+}
+
+function ocultarFormulario() {
+    const form = document.getElementById('diagnosticoForm');
+    if (form) {
+        form.style.display = 'none';
+        console.log('✅ Formulario ocultado');
+    }
 }
 
 // =====================================================
@@ -260,7 +546,8 @@ async function iniciarGrabacion() {
         btnGrabar.innerHTML = '<i class="fas fa-stop"></i> Detener Grabación';
         btnGrabar.classList.add('recording');
         
-        document.getElementById('grabacionStatus').innerHTML = '<i class="fas fa-circle" style="color: red;"></i> Grabando...';
+        const statusEl = document.getElementById('grabacionStatus');
+        if (statusEl) statusEl.innerHTML = '<i class="fas fa-circle" style="color: red;"></i> Grabando...';
     } catch (error) {
         console.error('Error al iniciar grabación:', error);
         showToast('Error al acceder al micrófono', 'error');
@@ -276,26 +563,30 @@ function detenerGrabacion() {
         btnGrabar.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
         btnGrabar.classList.remove('recording');
         
-        document.getElementById('grabacionStatus').innerHTML = 'Procesando grabación...';
+        const statusEl = document.getElementById('grabacionStatus');
+        if (statusEl) statusEl.innerHTML = 'Procesando grabación...';
     }
 }
 
 function eliminarGrabacion() {
-    if (audioUrlSubido) {
-        // Opcional: llamar a API para eliminar audio de Cloudinary
-        audioUrlSubido = null;
-    }
-    
-    document.getElementById('audioUrl').value = '';
+    audioUrlSubido = null;
+    const audioUrlInput = document.getElementById('audioUrl');
     const audioPreview = document.getElementById('audioPreview');
-    if (audioPreview.src && audioPreview.src.startsWith('blob:')) {
-        URL.revokeObjectURL(audioPreview.src);
+    const transcripcion = document.getElementById('transcripcionDiagnostico');
+    const statusEl = document.getElementById('grabacionStatus');
+    const btnEliminar = document.getElementById('btnEliminarAudio');
+    
+    if (audioUrlInput) audioUrlInput.value = '';
+    if (audioPreview) {
+        if (audioPreview.src && audioPreview.src.startsWith('blob:')) {
+            URL.revokeObjectURL(audioPreview.src);
+        }
+        audioPreview.src = '';
+        audioPreview.style.display = 'none';
     }
-    audioPreview.src = '';
-    audioPreview.style.display = 'none';
-    document.getElementById('transcripcionDiagnostico').value = '';
-    document.getElementById('grabacionStatus').innerHTML = 'Audio eliminado';
-    document.getElementById('btnEliminarAudio').style.display = 'none';
+    if (transcripcion) transcripcion.value = '';
+    if (statusEl) statusEl.innerHTML = 'Audio eliminado';
+    if (btnEliminar) btnEliminar.style.display = 'none';
     showToast('Audio eliminado', 'info');
 }
 
@@ -321,12 +612,16 @@ async function subirAudio(audioBlob) {
         
         if (data.success) {
             audioUrlSubido = data.url;
-            document.getElementById('audioUrl').value = data.url;
-            document.getElementById('btnEliminarAudio').style.display = 'inline-flex';
+            const audioUrlInput = document.getElementById('audioUrl');
+            const btnEliminar = document.getElementById('btnEliminarAudio');
+            const transcripcion = document.getElementById('transcripcionDiagnostico');
+            
+            if (audioUrlInput) audioUrlInput.value = data.url;
+            if (btnEliminar) btnEliminar.style.display = 'inline-flex';
             showToast('Audio subido correctamente', 'success');
             
-            if (data.transcripcion) {
-                document.getElementById('transcripcionDiagnostico').value = data.transcripcion;
+            if (data.transcripcion && transcripcion) {
+                transcripcion.value = data.transcripcion;
             }
         } else {
             showToast(data.error || 'Error al subir audio', 'error');
@@ -338,7 +633,7 @@ async function subirAudio(audioBlob) {
 }
 
 // =====================================================
-// MANEJO DE FOTOS (MÁXIMO 2)
+// MANEJO DE FOTOS
 // =====================================================
 
 function setupFotosUpload() {
@@ -352,44 +647,53 @@ function setupFotosUpload() {
         const previewImg = fotoPreview.querySelector('img');
         const btnEliminar = fotoPreview.querySelector('.btn-eliminar-foto');
         
-        uploadArea.addEventListener('click', () => fotoInput.click());
+        if (uploadArea) {
+            uploadArea.addEventListener('click', () => fotoInput.click());
+        }
         
-        fotoInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                if (file.size > 5 * 1024 * 1024) {
-                    showToast('La imagen no debe superar los 5MB', 'warning');
-                    fotoInput.value = '';
-                    return;
+        if (fotoInput) {
+            fotoInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    if (file.size > 5 * 1024 * 1024) {
+                        showToast('La imagen no debe superar los 5MB', 'warning');
+                        fotoInput.value = '';
+                        return;
+                    }
+                    if (!file.type.startsWith('image/')) {
+                        showToast('Solo se permiten archivos de imagen', 'warning');
+                        fotoInput.value = '';
+                        return;
+                    }
+                    
+                    const uploaded = await subirFoto(file, i);
+                    if (uploaded) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            if (previewImg) previewImg.src = e.target.result;
+                            if (uploadArea) uploadArea.style.display = 'none';
+                            if (fotoPreview) fotoPreview.style.display = 'block';
+                        };
+                        reader.readAsDataURL(file);
+                    } else {
+                        fotoInput.value = '';
+                    }
                 }
-                if (!file.type.startsWith('image/')) {
-                    showToast('Solo se permiten archivos de imagen', 'warning');
-                    fotoInput.value = '';
-                    return;
-                }
-                
-                await subirFoto(file, i);
-                
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    previewImg.src = e.target.result;
-                    uploadArea.style.display = 'none';
-                    fotoPreview.style.display = 'block';
-                };
-                reader.readAsDataURL(file);
-            }
-        });
+            });
+        }
         
-        btnEliminar.addEventListener('click', async () => {
-            if (fotosSubidas[i] && fotosSubidas[i].id) {
-                await eliminarFoto(fotosSubidas[i].id);
-            }
-            fotosSubidas[i] = {};
-            uploadArea.style.display = 'block';
-            fotoPreview.style.display = 'none';
-            fotoInput.value = '';
-            actualizarInfoFotos();
-        });
+        if (btnEliminar) {
+            btnEliminar.addEventListener('click', async () => {
+                if (fotosSubidas[i] && fotosSubidas[i].id) {
+                    await eliminarFoto(fotosSubidas[i].id);
+                }
+                fotosSubidas[i] = {};
+                if (uploadArea) uploadArea.style.display = 'block';
+                if (fotoPreview) fotoPreview.style.display = 'none';
+                if (fotoInput) fotoInput.value = '';
+                actualizarInfoFotos();
+            });
+        }
     }
 }
 
@@ -472,168 +776,6 @@ function validarFotos() {
     return fotosValidas >= 1;
 }
 
-function cargarFotosDesdeServidor(fotos) {
-    fotosSubidas = [{}, {}];
-    
-    fotos.forEach((foto, idx) => {
-        if (idx < 2) {
-            fotosSubidas[idx] = { id: foto.id, url: foto.url_foto };
-            
-            const uploadCard = document.getElementById(`fotoUpload${idx + 1}`);
-            if (uploadCard) {
-                const uploadArea = uploadCard.querySelector('.upload-area');
-                const fotoPreview = uploadCard.querySelector('.foto-preview');
-                const previewImg = fotoPreview.querySelector('img');
-                
-                previewImg.src = foto.url_foto;
-                uploadArea.style.display = 'none';
-                fotoPreview.style.display = 'block';
-            }
-        }
-    });
-    
-    actualizarInfoFotos();
-}
-
-// =====================================================
-// CARGA DE DIAGNÓSTICO EXISTENTE
-// =====================================================
-
-async function cargarDiagnosticoExistente(ordenId) {
-    try {
-        const response = await fetch(`/tecnico/api/diagnostico/${ordenId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        const data = await response.json();
-        
-        if (data.success && data.diagnostico) {
-            diagnosticoActual = data.diagnostico;
-            
-            // Cargar transcripción
-            if (data.diagnostico.transcripcion_informe) {
-                document.getElementById('transcripcionDiagnostico').value = data.diagnostico.transcripcion_informe;
-            }
-            
-            // Cargar audio
-            if (data.diagnostico.url_grabacion_informe) {
-                audioUrlSubido = data.diagnostico.url_grabacion_informe;
-                document.getElementById('audioUrl').value = data.diagnostico.url_grabacion_informe;
-                const audioPreview = document.getElementById('audioPreview');
-                audioPreview.src = data.diagnostico.url_grabacion_informe;
-                audioPreview.style.display = 'block';
-                document.getElementById('btnEliminarAudio').style.display = 'inline-flex';
-                document.getElementById('grabacionStatus').innerHTML = 'Audio disponible';
-            }
-            
-            // Cargar servicios
-            serviciosLista = data.servicios || [];
-            renderizarServicios();
-            
-            // Cargar fotos
-            if (data.fotos && data.fotos.length > 0) {
-                cargarFotosDesdeServidor(data.fotos);
-            }
-            
-            // Mostrar estado
-            mostrarEstadoDiagnostico(data.diagnostico);
-            
-            // Mostrar historial
-            mostrarHistorial(data.diagnostico.observaciones || []);
-            
-            // Si el diagnóstico está rechazado, mostrar mensaje
-            if (data.diagnostico.estado === 'rechazado') {
-                showToast('⚠️ Este diagnóstico fue rechazado. Revisa las observaciones y realiza las correcciones.', 'warning');
-            }
-        } else {
-            // Nuevo diagnóstico
-            diagnosticoActual = null;
-            serviciosLista = [];
-            fotosSubidas = [{}, {}];
-            renderizarServicios();
-            actualizarInfoFotos();
-            
-            // Limpiar UI de fotos
-            for (let i = 0; i < 2; i++) {
-                const uploadCard = document.getElementById(`fotoUpload${i + 1}`);
-                if (uploadCard) {
-                    const uploadArea = uploadCard.querySelector('.upload-area');
-                    const fotoPreview = uploadCard.querySelector('.foto-preview');
-                    const fotoInput = uploadCard.querySelector('.foto-input');
-                    uploadArea.style.display = 'block';
-                    fotoPreview.style.display = 'none';
-                    if (fotoInput) fotoInput.value = '';
-                }
-            }
-            
-            document.getElementById('transcripcionDiagnostico').value = '';
-            document.getElementById('audioPreview').style.display = 'none';
-            document.getElementById('audioUrl').value = '';
-            document.getElementById('btnEliminarAudio').style.display = 'none';
-            document.getElementById('grabacionStatus').innerHTML = '';
-            document.getElementById('historialContainer').style.display = 'none';
-            document.getElementById('estadoDiagnostico').innerHTML = '';
-        }
-    } catch (error) {
-        console.error('Error cargando diagnóstico:', error);
-    }
-}
-
-function mostrarEstadoDiagnostico(diagnostico) {
-    const estadoContainer = document.getElementById('estadoDiagnostico');
-    if (!estadoContainer) return;
-    
-    let estadoHtml = '';
-    switch (diagnostico.estado) {
-        case 'borrador':
-            estadoHtml = '<span class="estado-badge estado-borrador"><i class="fas fa-pencil-alt"></i> Borrador</span>';
-            break;
-        case 'pendiente':
-            estadoHtml = '<span class="estado-badge estado-pendiente"><i class="fas fa-clock"></i> Pendiente de revisión</span>';
-            break;
-        case 'aprobado':
-            estadoHtml = '<span class="estado-badge estado-aprobado"><i class="fas fa-check-circle"></i> Aprobado</span>';
-            break;
-        case 'rechazado':
-            estadoHtml = '<span class="estado-badge estado-rechazado"><i class="fas fa-times-circle"></i> Rechazado</span>';
-            break;
-    }
-    
-    estadoContainer.innerHTML = estadoHtml;
-}
-
-function mostrarHistorial(observaciones) {
-    const historialContainer = document.getElementById('historialContainer');
-    const historialList = document.getElementById('historialList');
-    
-    if (observaciones && observaciones.length > 0) {
-        historialContainer.style.display = 'block';
-        historialList.innerHTML = observaciones.map(obs => `
-            <div class="historial-item">
-                <div class="historial-header">
-                    <span class="historial-version">
-                        <i class="fas fa-comment-dots"></i> Observación
-                    </span>
-                    <span class="historial-fecha">${formatFecha(obs.fecha_hora)}</span>
-                </div>
-                <div class="historial-informe">${escapeHtml(obs.observacion)}</div>
-                ${obs.transcripcion_obs ? `<div class="historial-transcripcion"><i class="fas fa-microphone-alt"></i> ${escapeHtml(obs.transcripcion_obs)}</div>` : ''}
-            </div>
-        `).join('');
-    } else {
-        historialContainer.style.display = 'none';
-    }
-}
-
-function mostrarInfoVehiculo(orden) {
-    const vehiculo = orden.vehiculo;
-    
-    document.getElementById('vehiculoPlaca').textContent = vehiculo.placa || 'No registrada';
-    document.getElementById('vehiculoModelo').textContent = `${vehiculo.marca || ''} ${vehiculo.modelo || ''}`.trim() || 'No especificado';
-    document.getElementById('vehiculoAnio').textContent = vehiculo.anio || 'No especificado';
-    document.getElementById('vehiculoKm').textContent = vehiculo.kilometraje ? `${vehiculo.kilometraje.toLocaleString()} km` : 'No registrado';
-}
-
 // =====================================================
 // GUARDAR DIAGNÓSTICO
 // =====================================================
@@ -671,12 +813,13 @@ async function guardarDiagnostico(enviar = false) {
         }
     }
     
-    document.getElementById('validacionErrores').style.display = 'none';
+    const errorDiv = document.getElementById('validacionErrores');
+    if (errorDiv) errorDiv.style.display = 'none';
     
     const data = {
         id_orden: ordenSeleccionada.orden_id,
-        transcripcion: document.getElementById('transcripcionDiagnostico').value,
-        url_grabacion: document.getElementById('audioUrl').value,
+        transcripcion: document.getElementById('transcripcionDiagnostico')?.value || '',
+        url_grabacion: document.getElementById('audioUrl')?.value || '',
         servicios: serviciosLista.map(s => s.descripcion),
         enviar: enviar
     };
@@ -700,8 +843,9 @@ async function guardarDiagnostico(enviar = false) {
             
             if (enviar) {
                 cerrarConfirmModal();
-                document.getElementById('diagnosticoForm').style.display = 'none';
-                document.getElementById('ordenSelect').value = '';
+                ocultarFormulario();
+                const select = document.getElementById('ordenSelect');
+                if (select) select.value = '';
                 ordenSeleccionada = null;
                 await cargarOrdenes();
             } else {
@@ -729,18 +873,23 @@ function abrirConfirmModal() {
         const errorList = document.querySelector('#validacionErrores ul');
         if (errorList) {
             errorList.innerHTML = errores.map(e => `<li>${e}</li>`).join('');
-            document.getElementById('validacionErrores').style.display = 'block';
+            const errorDiv = document.getElementById('validacionErrores');
+            if (errorDiv) errorDiv.style.display = 'block';
         }
         showToast('Por favor completa todos los campos requeridos antes de enviar', 'warning');
         return;
     }
     
-    document.getElementById('validacionErrores').style.display = 'none';
-    document.getElementById('confirmModal').classList.add('show');
+    const errorDiv = document.getElementById('validacionErrores');
+    if (errorDiv) errorDiv.style.display = 'none';
+    
+    const modal = document.getElementById('confirmModal');
+    if (modal) modal.classList.add('show');
 }
 
 function cerrarConfirmModal() {
-    document.getElementById('confirmModal').classList.remove('show');
+    const modal = document.getElementById('confirmModal');
+    if (modal) modal.classList.remove('show');
 }
 
 // =====================================================
@@ -754,16 +903,73 @@ function cerrarSesion() {
 }
 
 // =====================================================
+// FUNCIÓN PRINCIPAL PARA CARGAR DIAGNÓSTICO
+// =====================================================
+
+async function cargarDiagnosticoSeleccionado() {
+    const select = document.getElementById('ordenSelect');
+    if (!select) {
+        console.error('❌ Selector de órdenes no encontrado');
+        showToast('Error: Selector de órdenes no encontrado', 'error');
+        return;
+    }
+    
+    // Obtener el índice seleccionado y luego el value
+    const selectedIndex = select.selectedIndex;
+    console.log('=== CARGANDO DIAGNÓSTICO ===');
+    console.log('Selected index:', selectedIndex);
+    
+    if (selectedIndex <= 0) {
+        showToast('Selecciona una orden primero', 'warning');
+        return;
+    }
+    
+    const selectedOption = select.options[selectedIndex];
+    const selectedValue = selectedOption.value;
+    console.log('Selected option value:', selectedValue);
+    console.log('Selected option text:', selectedOption.text);
+    
+    if (!selectedValue || selectedValue === '') {
+        showToast('Valor de orden inválido', 'error');
+        return;
+    }
+    
+    const ordenId = parseInt(selectedValue);
+    console.log('Orden ID parseado:', ordenId);
+    
+    if (isNaN(ordenId)) {
+        showToast('ID de orden inválido', 'error');
+        return;
+    }
+    
+    console.log('ordenesTecnico disponibles:', ordenesTecnico.length);
+    
+    const ordenEncontrada = ordenesTecnico.find(o => o.orden_id === ordenId);
+    console.log('Orden encontrada:', ordenEncontrada);
+    
+    if (ordenEncontrada) {
+        ordenSeleccionada = ordenEncontrada;
+        mostrarInfoVehiculo(ordenSeleccionada);
+        
+        // Mostrar formulario
+        mostrarFormulario();
+        
+        await cargarDiagnosticoExistente(ordenId);
+        showToast(`Cargando diagnóstico para orden ${ordenSeleccionada.codigo_unico}...`, 'info');
+    } else {
+        console.error('❌ Orden no encontrada en el array');
+        console.log('IDs disponibles:', ordenesTecnico.map(o => o.orden_id));
+        showToast('Orden no encontrada', 'error');
+    }
+}
+
+// =====================================================
 // INICIALIZACIÓN
 // =====================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    token = getToken();
-    
-    if (!token) {
-        window.location.href = '/';
-        return;
-    }
+    console.log('🚀 Inicializando página de diagnóstico...');
+    console.log('📋 Verificando elemento diagnosticoForm:', document.getElementById('diagnosticoForm'));
     
     const tokenValido = await verificarToken();
     if (!tokenValido) return;
@@ -772,20 +978,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     await cargarOrdenes();
     setupFotosUpload();
     
-    // Event Listeners
+    // Configurar el botón Cargar Diagnóstico
+    const btnCargar = document.getElementById('btnCargarDiagnostico');
+    if (btnCargar) {
+        console.log('✅ Botón Cargar Diagnóstico encontrado');
+        // Eliminar event listeners anteriores clonando y reemplazando
+        const newBtn = btnCargar.cloneNode(true);
+        btnCargar.parentNode.replaceChild(newBtn, btnCargar);
+        newBtn.addEventListener('click', cargarDiagnosticoSeleccionado);
+        console.log('✅ Event listener agregado al botón');
+    } else {
+        console.error('❌ Botón Cargar Diagnóstico NO encontrado');
+    }
+    
+    // También configurar el evento change del select para depuración
     const ordenSelect = document.getElementById('ordenSelect');
-    ordenSelect.addEventListener('change', async (e) => {
-        const ordenId = parseInt(e.target.value);
-        if (ordenId) {
-            ordenSeleccionada = ordenesTecnico.find(o => o.orden_id === ordenId);
-            mostrarInfoVehiculo(ordenSeleccionada);
-            document.getElementById('diagnosticoForm').style.display = 'block';
-            await cargarDiagnosticoExistente(ordenId);
-        } else {
-            ordenSeleccionada = null;
-            document.getElementById('diagnosticoForm').style.display = 'none';
-        }
-    });
+    if (ordenSelect) {
+        ordenSelect.addEventListener('change', function() {
+            console.log('📋 Selector cambiado - Nuevo valor:', this.value);
+            console.log('📋 Texto seleccionado:', this.options[this.selectedIndex]?.text);
+        });
+    }
     
     // Botón agregar servicio
     const btnAgregarServicio = document.getElementById('btnAgregarServicio');
@@ -854,4 +1067,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.eliminarServicio = eliminarServicio;
     window.cerrarSesion = cerrarSesion;
     window.cerrarConfirmModal = cerrarConfirmModal;
+    window.cargarDiagnosticoSeleccionado = cargarDiagnosticoSeleccionado;
+    
+    console.log('✅ diagnostico.js cargado correctamente');
 });

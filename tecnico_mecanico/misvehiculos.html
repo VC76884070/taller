@@ -101,45 +101,30 @@
         </main>
     </div>
 
-    <!-- Modal de INICIAR TRABAJO (con selección de bahía) -->
+    <!-- Modal de CONFIRMACIÓN PARA INICIAR REPARACIÓN -->
     <div class="modal" id="iniciarModal">
         <div class="modal-content modal-sm">
             <div class="modal-header">
-                <h2><i class="fas fa-play-circle"></i> Iniciar Trabajo</h2>
+                <h2><i class="fas fa-play-circle"></i> Iniciar Reparación</h2>
                 <button class="modal-close" onclick="cerrarIniciarModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Selecciona la bahía donde trabajarás:</p>
+                <p>¿Estás listo para comenzar la reparación en la bahía asignada?</p>
                 <div id="iniciarInfo" class="modal-info"></div>
-                <select id="bahiaSeleccionada" class="form-select">
-                    <option value="">Selecciona una bahía...</option>
-                    <option value="1">Bahía 1</option>
-                    <option value="2">Bahía 2</option>
-                    <option value="3">Bahía 3</option>
-                    <option value="4">Bahía 4</option>
-                    <option value="5">Bahía 5</option>
-                    <option value="6">Bahía 6</option>
-                    <option value="7">Bahía 7</option>
-                    <option value="8">Bahía 8</option>
-                    <option value="9">Bahía 9</option>
-                    <option value="10">Bahía 10</option>
-                    <option value="11">Bahía 11</option>
-                    <option value="12">Bahía 12</option>
-                </select>
                 <input type="hidden" id="ordenIdIniciar">
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarIniciarModal()">Cancelar</button>
-                <button class="btn-primary" id="confirmarInicioBtn">Iniciar Trabajo</button>
+                <button class="btn-primary" id="confirmarInicioBtn">Iniciar Reparación</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal de PAUSA -->
+    <!-- Modal de PAUSA REPARACIÓN -->
     <div class="modal" id="pausaModal">
         <div class="modal-content modal-sm">
             <div class="modal-header">
-                <h2><i class="fas fa-pause-circle"></i> Pausar Trabajo</h2>
+                <h2><i class="fas fa-pause-circle"></i> Pausar Reparación</h2>
                 <button class="modal-close" onclick="cerrarPausaModal()">&times;</button>
             </div>
             <div class="modal-body">
@@ -155,11 +140,11 @@
         </div>
     </div>
 
-    <!-- Modal de REANUDAR -->
+    <!-- Modal de REANUDAR REPARACIÓN -->
     <div class="modal" id="reanudarModal">
         <div class="modal-content modal-sm">
             <div class="modal-header">
-                <h2><i class="fas fa-play-circle"></i> Reanudar Trabajo</h2>
+                <h2><i class="fas fa-play-circle"></i> Reanudar Reparación</h2>
                 <button class="modal-close" onclick="cerrarReanudarModal()">&times;</button>
             </div>
             <div class="modal-body">

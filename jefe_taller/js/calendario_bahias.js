@@ -1,6 +1,6 @@
 // =====================================================
-// CALENDARIO Y BAHÍAS - JEFE TALLER (CORREGIDO)
-// CALENDARIO MENSUAL CON DETALLE POR DÍA
+// CALENDARIO Y BAHÍAS - JEFE TALLER
+// CALENDARIO MENSUAL CON DETALLE POR DÍA Y ESTADO DE BAHÍAS
 // =====================================================
 
 const API_URL = 'http://localhost:5000/api';
@@ -17,12 +17,16 @@ let statsGenerales = {
     total: 0,
     enProceso: 0,
     enPausa: 0,
-    finalizadas: 0
+    enRecepcion: 0,
+    pendienteAprobacion: 0,
+    finalizadas: 0,
+    entregadas: 0
 };
 let diagnosticoStats = {
     pendiente: 0,
     aprobado: 0,
-    rechazado: 0
+    rechazado: 0,
+    borrador: 0
 };
 
 // Mapeo de estados a colores y texto
@@ -54,6 +58,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     await cargarTodosLosDatos();
     renderizarCalendario();
+    renderizarBahias();
     
     iniciarPolling();
 });
@@ -88,15 +93,10 @@ async function checkAuth() {
             if (userInfo) userInfo.roles = currentUserRoles;
         }
         
-        // Verificar si tiene rol de jefe_taller (usando el nuevo sistema)
-        const tieneRolJefeTaller = currentUserRoles.includes('jefe_taller') || 
-                                    (userInfo && userInfo.rol_principal === 'jefe_taller') ||
-                                    (userInfo && userInfo.rol === 'jefe_taller');
+        // Verificar si tiene rol de jefe_taller
+        const tieneRolJefeTaller = currentUserRoles.includes('jefe_taller');
         
-        // Compatibilidad con sistema antiguo (por si acaso)
-        const tieneIdRolAntiguo = userInfo && (userInfo.id_rol === 2 || userInfo.id_rol === 3);
-        
-        if (!tieneRolJefeTaller && !tieneIdRolAntiguo) {
+        if (!tieneRolJefeTaller) {
             console.warn('Usuario no tiene permisos de jefe_taller', currentUserRoles);
             mostrarNotificacion('No tienes permisos para acceder a esta sección', 'error');
             setTimeout(() => {
@@ -222,6 +222,8 @@ function cambiarPestana(tabId) {
         renderizarBahias();
     } else if (tabId === 'estadisticas') {
         renderizarEstadisticas();
+    } else if (tabId === 'tecnicos') {
+        renderizarTecnicos();
     }
 }
 
@@ -279,7 +281,10 @@ async function cargarOrdenesConPlanificacion() {
                         modelo: orden.modelo,
                         cliente_nombre: orden.cliente_nombre,
                         tecnicos: orden.tecnicos || [],
-                        fecha_inicio: orden.fecha_hora_inicio_estimado
+                        fecha_inicio: orden.fecha_hora_inicio_estimado,
+                        fecha_inicio_real: orden.fecha_hora_inicio_real,
+                        fecha_fin_real: orden.fecha_hora_fin_real,
+                        bahia_ocupada: orden.bahia_ocupada
                     });
                 }
             });
@@ -315,7 +320,11 @@ async function cargarBahias() {
         bahiasEstado = Array.from({ length: 12 }, (_, i) => ({
             numero: i + 1,
             estado: 'libre',
-            orden_codigo: null
+            orden_codigo: null,
+            orden_estado: null,
+            horas_estimadas: null,
+            horas_transcurridas: null,
+            inicio_real: null
         }));
     }
 }
@@ -329,6 +338,7 @@ async function cargarCargaTecnicos() {
         const data = await response.json();
         if (response.ok && data.tecnicos) {
             tecnicosCarga = data.tecnicos;
+            renderizarTecnicos();
         }
     } catch (error) {
         console.error('Error cargando carga de técnicos:', error);
@@ -431,12 +441,12 @@ function renderizarCalendario() {
                  onclick="abrirDetalleDia('${fechaKey}', ${dia}, ${mes + 1}, ${año})">
                 <div class="dia-numero">${dia}</div>
                 <div class="dia-eventos">
-                    ${ordenesDelDia.slice(0, 3).map(orden => `
+                    ${ordenesDelDia.slice(0, 2).map(orden => `
                         <div class="evento-mini ${orden.estado_global}" title="${orden.codigo_unico} - ${ESTADOS_ORDEN[orden.estado_global]?.texto || orden.estado_global}">
-                            ${orden.codigo_unico}
+                            ${orden.codigo_unico.substring(0, 12)}...
                         </div>
                     `).join('')}
-                    ${ordenesDelDia.length > 3 ? `<div class="evento-mas">+${ordenesDelDia.length - 3} más</div>` : ''}
+                    ${ordenesDelDia.length > 2 ? `<div class="evento-mas">+${ordenesDelDia.length - 2} más</div>` : ''}
                 </div>
                 ${ordenesDelDia.length > 0 ? `
                     <div class="dia-resumen">
@@ -511,6 +521,12 @@ async function abrirDetalleDia(fechaKey, dia, mes, año) {
                                     <i class="fas fa-clock"></i>
                                     <span>${new Date(orden.fecha_inicio).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - ${orden.horas_estimadas || '?'} horas estimadas</span>
                                 </div>
+                                ${orden.fecha_inicio_real ? `
+                                    <div class="orden-info">
+                                        <i class="fas fa-play-circle"></i>
+                                        <span>Inicio real: ${new Date(orden.fecha_inicio_real).toLocaleString()}</span>
+                                    </div>
+                                ` : ''}
                                 <div class="orden-info">
                                     <i class="fas fa-users"></i>
                                     <span>Técnicos: ${orden.tecnicos?.map(t => t.nombre).join(', ') || 'Sin asignar'}</span>
@@ -549,7 +565,7 @@ function getEstadoIcono(estado) {
 }
 
 // =====================================================
-// RENDERIZADO DE BAHÍAS
+// RENDERIZADO DE BAHÍAS (CON PROGRESO)
 // =====================================================
 
 function renderizarBahias() {
@@ -560,12 +576,25 @@ function renderizarBahias() {
         let estadoClass = '';
         let estadoTexto = '';
         let bgColor = '';
+        let infoAdicional = '';
         
         switch (bahia.estado) {
             case 'ocupado':
                 estadoClass = 'ocupado';
                 estadoTexto = 'Ocupado';
                 bgColor = 'rgba(239, 68, 68, 0.15)';
+                // Mostrar progreso si hay horas estimadas
+                if (bahia.horas_estimadas && bahia.horas_transcurridas) {
+                    const porcentaje = Math.min(100, Math.round((bahia.horas_transcurridas / bahia.horas_estimadas) * 100));
+                    infoAdicional = `
+                        <div class="bahia-progreso">
+                            <div class="progreso-bar">
+                                <div class="progreso-fill" style="width: ${porcentaje}%"></div>
+                            </div>
+                            <span class="progreso-texto">${bahia.horas_transcurridas}/${bahia.horas_estimadas}h (${porcentaje}%)</span>
+                        </div>
+                    `;
+                }
                 break;
             case 'mantenimiento':
                 estadoClass = 'mantenimiento';
@@ -583,6 +612,7 @@ function renderizarBahias() {
                 <div class="bahia-numero">Bahía ${bahia.numero}</div>
                 <div class="bahia-estado ${estadoClass}" style="background: ${bgColor}">${estadoTexto}</div>
                 ${bahia.orden_codigo ? `<div class="bahia-orden">${escapeHtml(bahia.orden_codigo)}</div>` : ''}
+                ${infoAdicional}
                 ${bahia.orden_estado ? `<div class="bahia-orden-estado">${escapeHtml(bahia.orden_estado)}</div>` : ''}
             </div>
         `;
@@ -595,10 +625,32 @@ function verDetalleBahia(numero) {
     const body = document.getElementById('modalBahiaBody');
     
     let estadoTexto = '';
+    let tiempoInfo = '';
+    
     switch (bahia?.estado) {
-        case 'ocupado': estadoTexto = 'Ocupado'; break;
-        case 'mantenimiento': estadoTexto = 'Mantenimiento'; break;
-        default: estadoTexto = 'Libre';
+        case 'ocupado': 
+            estadoTexto = 'Ocupado';
+            if (bahia.horas_estimadas && bahia.horas_transcurridas) {
+                const porcentaje = Math.min(100, Math.round((bahia.horas_transcurridas / bahia.horas_estimadas) * 100));
+                tiempoInfo = `
+                    <div class="detalle-item">
+                        <span class="detalle-label">Progreso</span>
+                        <span class="detalle-value">
+                            ${bahia.horas_transcurridas} / ${bahia.horas_estimadas} horas (${porcentaje}%)
+                        </span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Inicio Real</span>
+                        <span class="detalle-value">${new Date(bahia.inicio_real).toLocaleString()}</span>
+                    </div>
+                `;
+            }
+            break;
+        case 'mantenimiento': 
+            estadoTexto = 'Mantenimiento'; 
+            break;
+        default: 
+            estadoTexto = 'Libre';
     }
     
     if (body) {
@@ -612,6 +664,7 @@ function verDetalleBahia(numero) {
                     <span class="detalle-label">Estado</span>
                     <span class="detalle-value ${bahia?.estado}">${estadoTexto}</span>
                 </div>
+                ${tiempoInfo}
                 ${bahia?.orden_codigo ? `
                     <div class="detalle-item">
                         <span class="detalle-label">Orden Actual</span>
@@ -621,7 +674,8 @@ function verDetalleBahia(numero) {
                         <span class="detalle-label">Estado Orden</span>
                         <span class="detalle-value">${escapeHtml(bahia.orden_estado || 'Desconocido')}</span>
                     </div>
-                ` : bahia?.estado === 'mantenimiento' ? `
+                ` : ''}
+                ${bahia?.estado === 'mantenimiento' ? `
                     <div class="detalle-item">
                         <span class="detalle-label">Nota</span>
                         <span class="detalle-value">Bahía en mantenimiento</span>
@@ -640,6 +694,57 @@ function cerrarModalBahia() {
 }
 
 // =====================================================
+// RENDERIZADO DE TÉCNICOS
+// =====================================================
+
+function renderizarTecnicos() {
+    const container = document.getElementById('tecnicosContainer');
+    if (!container) return;
+    
+    if (tecnicosCarga.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-users-slash"></i>
+                <p>No hay técnicos registrados</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = tecnicosCarga.map(tecnico => {
+        const porcentaje = (tecnico.ordenes_activas / tecnico.max_vehiculos) * 100;
+        return `
+            <div class="tecnico-card">
+                <div class="tecnico-header">
+                    <div class="tecnico-icon">
+                        <i class="fas fa-user-cog"></i>
+                    </div>
+                    <div class="tecnico-info">
+                        <h4>${escapeHtml(tecnico.nombre)}</h4>
+                        <span class="tecnico-contacto"><i class="fas fa-phone"></i> ${escapeHtml(tecnico.contacto || 'Sin contacto')}</span>
+                    </div>
+                </div>
+                <div class="tecnico-body">
+                    <div class="carga-info">
+                        <span class="carga-label">Carga actual:</span>
+                        <span class="carga-value">${tecnico.ordenes_activas} / ${tecnico.max_vehiculos} vehículos</span>
+                    </div>
+                    <div class="carga-progreso">
+                        <div class="carga-bar" style="width: ${porcentaje}%"></div>
+                    </div>
+                    ${tecnico.diagnosticos_activos > 0 ? `
+                        <div class="diagnostico-info">
+                            <i class="fas fa-stethoscope"></i>
+                            <span>${tecnico.diagnosticos_activos} diagnóstico(s) pendiente(s)</span>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// =====================================================
 // RENDERIZADO DE ESTADÍSTICAS
 // =====================================================
 
@@ -647,20 +752,28 @@ function renderizarEstadisticas() {
     const totalElement = document.getElementById('totalOrdenes');
     const enProcesoElement = document.getElementById('enProcesoCount');
     const enPausaElement = document.getElementById('enPausaCount');
+    const enRecepcionElement = document.getElementById('enRecepcionCount');
+    const pendienteAprobacionElement = document.getElementById('pendienteAprobacionCount');
     const finalizadasElement = document.getElementById('finalizadasCount');
+    const entregadasElement = document.getElementById('entregadasCount');
     
     if (totalElement) totalElement.textContent = statsGenerales.total || 0;
     if (enProcesoElement) enProcesoElement.textContent = statsGenerales.enProceso || 0;
     if (enPausaElement) enPausaElement.textContent = statsGenerales.enPausa || 0;
+    if (enRecepcionElement) enRecepcionElement.textContent = statsGenerales.enRecepcion || 0;
+    if (pendienteAprobacionElement) pendienteAprobacionElement.textContent = statsGenerales.pendienteAprobacion || 0;
     if (finalizadasElement) finalizadasElement.textContent = statsGenerales.finalizadas || 0;
+    if (entregadasElement) entregadasElement.textContent = statsGenerales.entregadas || 0;
     
     const diagPendientes = document.getElementById('diagPendientes');
     const diagAprobados = document.getElementById('diagAprobados');
     const diagRechazados = document.getElementById('diagRechazados');
+    const diagBorradores = document.getElementById('diagBorradores');
     
     if (diagPendientes) diagPendientes.textContent = diagnosticoStats.pendiente || 0;
     if (diagAprobados) diagAprobados.textContent = diagnosticoStats.aprobado || 0;
     if (diagRechazados) diagRechazados.textContent = diagnosticoStats.rechazado || 0;
+    if (diagBorradores) diagBorradores.textContent = diagnosticoStats.borrador || 0;
 }
 
 // =====================================================
@@ -686,6 +799,22 @@ async function verDetalleOrden(idOrden) {
         const body = document.getElementById('modalDetalleOrdenBody');
         
         if (body) {
+            // Calcular tiempo transcurrido si está en proceso
+            let tiempoInfo = '';
+            if (detalle.planificacion?.fecha_hora_inicio_real && !detalle.planificacion?.fecha_hora_fin_real) {
+                const inicioReal = new Date(detalle.planificacion.fecha_hora_inicio_real);
+                const ahora = new Date();
+                const diffMs = ahora - inicioReal;
+                const horas = Math.floor(diffMs / 3600000);
+                const minutos = Math.floor((diffMs % 3600000) / 60000);
+                tiempoInfo = `
+                    <div class="detalle-item">
+                        <span class="detalle-label">Tiempo transcurrido</span>
+                        <span class="detalle-value">${horas}h ${minutos}m</span>
+                    </div>
+                `;
+            }
+            
             body.innerHTML = `
                 <div class="detalle-orden">
                     <div class="detalle-seccion">
@@ -729,7 +858,7 @@ async function verDetalleOrden(idOrden) {
                     </div>
                     
                     <div class="detalle-seccion">
-                        <h4><i class="fas fa-calendar-alt"></i> Planificación</h4>
+                        <h4><i class="fas fa-calendar-alt"></i> Planificación y Tiempos</h4>
                         <div class="detalle-grid">
                             <div class="detalle-item">
                                 <span class="detalle-label">Bahía</span>
@@ -740,9 +869,26 @@ async function verDetalleOrden(idOrden) {
                                 <span class="detalle-value">${detalle.planificacion?.fecha_hora_inicio_estimado ? new Date(detalle.planificacion.fecha_hora_inicio_estimado).toLocaleString() : 'No programado'}</span>
                             </div>
                             <div class="detalle-item">
+                                <span class="detalle-label">Fin Estimado</span>
+                                <span class="detalle-value">${detalle.planificacion?.fecha_hora_fin_estimado ? new Date(detalle.planificacion.fecha_hora_fin_estimado).toLocaleString() : 'No programado'}</span>
+                            </div>
+                            <div class="detalle-item">
                                 <span class="detalle-label">Horas Estimadas</span>
                                 <span class="detalle-value">${detalle.planificacion?.horas_estimadas || 'N/A'} horas</span>
                             </div>
+                            ${detalle.planificacion?.fecha_hora_inicio_real ? `
+                                <div class="detalle-item">
+                                    <span class="detalle-label">Inicio Real</span>
+                                    <span class="detalle-value">${new Date(detalle.planificacion.fecha_hora_inicio_real).toLocaleString()}</span>
+                                </div>
+                            ` : ''}
+                            ${tiempoInfo}
+                            ${detalle.planificacion?.fecha_hora_fin_real ? `
+                                <div class="detalle-item">
+                                    <span class="detalle-label">Fin Real</span>
+                                    <span class="detalle-value">${new Date(detalle.planificacion.fecha_hora_fin_real).toLocaleString()}</span>
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
                     
@@ -750,10 +896,24 @@ async function verDetalleOrden(idOrden) {
                         <h4><i class="fas fa-users"></i> Técnicos Asignados</h4>
                         <div class="orden-tecnicos">
                             ${detalle.tecnicos && detalle.tecnicos.length > 0 ? 
-                                detalle.tecnicos.map(t => `<span class="tecnico-badge"><i class="fas fa-user"></i> ${escapeHtml(t.nombre)}</span>`).join('') :
+                                detalle.tecnicos.map(t => `<span class="tecnico-badge"><i class="fas fa-user"></i> ${escapeHtml(t.nombre)} (${t.tipo === 'diagnostico' ? 'Diagnóstico' : 'Reparación'})</span>`).join('') :
                                 '<span>Sin técnicos asignados</span>'}
                         </div>
                     </div>
+                    
+                    ${detalle.servicios && detalle.servicios.length > 0 ? `
+                        <div class="detalle-seccion">
+                            <h4><i class="fas fa-dollar-sign"></i> Servicios Cotizados</h4>
+                            <div class="servicios-lista">
+                                ${detalle.servicios.map(s => `
+                                    <div class="servicio-item">
+                                        <span>${escapeHtml(s.descripcion)}</span>
+                                        <span class="servicio-precio">Bs. ${s.precio?.toFixed(2) || '0.00'}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
                     
                     ${detalle.diagnostico_inicial ? `
                         <div class="detalle-seccion">
@@ -784,8 +944,12 @@ function cerrarModalDetalleOrden() {
 function iniciarPolling() {
     if (pollingInterval) clearInterval(pollingInterval);
     pollingInterval = setInterval(async () => {
-        await cargarOrdenesConPlanificacion();
-        renderizarCalendario();
+        if (document.visibilityState === 'visible') {
+            await cargarOrdenesConPlanificacion();
+            await cargarBahias();
+            renderizarCalendario();
+            renderizarBahias();
+        }
     }, 30000);
 }
 

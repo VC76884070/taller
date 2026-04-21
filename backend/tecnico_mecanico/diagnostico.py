@@ -47,38 +47,86 @@ try:
 except ImportError:
     logger.warning("⚠️ Whisper no instalado")
 
+
 # =====================================================
-# DECORADOR PARA VERIFICAR TOKEN Y ROL TÉCNICO
+# FUNCIÓN AUXILIAR: OBTENER ROLES DEL USUARIO
+# =====================================================
+def obtener_roles_usuario(usuario_id):
+    """Obtiene los nombres de los roles de un usuario"""
+    try:
+        user_roles = supabase.table('usuario_rol') \
+            .select('id_rol') \
+            .eq('id_usuario', usuario_id) \
+            .execute()
+        
+        if not user_roles.data:
+            logger.info(f"Usuario {usuario_id} no tiene roles asignados")
+            return []
+        
+        rol_ids = [ur['id_rol'] for ur in user_roles.data]
+        
+        roles_data = supabase.table('rol') \
+            .select('nombre_rol') \
+            .in_('id', rol_ids) \
+            .execute()
+        
+        roles = [r['nombre_rol'] for r in (roles_data.data or [])]
+        
+        return roles
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo roles: {str(e)}")
+        return []
+
+
+# =====================================================
+# FUNCIÓN AUXILIAR: VERIFICAR TOKEN Y OBTENER USUARIO
+# =====================================================
+def verificar_token_y_usuario():
+    """Verifica el token y retorna el usuario si es válido"""
+    token = None
+    
+    if 'Authorization' in request.headers:
+        auth_header = request.headers['Authorization']
+        try:
+            token = auth_header.split(" ")[1]
+        except IndexError:
+            pass
+    
+    if not token:
+        return None, "No autorizado", 401
+    
+    try:
+        data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        current_user = data['user']
+        
+        roles = obtener_roles_usuario(current_user.get('id'))
+        current_user['roles'] = roles
+        
+        logger.info(f"✅ Usuario verificado: {current_user.get('nombre')} - Roles: {roles}")
+        return current_user, None, None
+        
+    except jwt.ExpiredSignatureError:
+        return None, "Sesión expirada", 401
+    except jwt.InvalidTokenError as e:
+        logger.error(f"Token inválido: {str(e)}")
+        return None, "Token inválido", 401
+
+
+# =====================================================
+# DECORADOR: VERIFICAR ROL TÉCNICO
 # =====================================================
 def tecnico_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = None
+        current_user, error, status = verificar_token_y_usuario()
         
-        if 'Authorization' in request.headers:
-            auth_header = request.headers['Authorization']
-            try:
-                token = auth_header.split(" ")[1]
-            except IndexError:
-                pass
+        if error:
+            return jsonify({'error': error}), status
         
-        if not token:
-            token = request.cookies.get('token')
-        
-        if not token:
-            return jsonify({'error': 'No autorizado'}), 401
-        
-        try:
-            data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            current_user = data['user']
-            
-            if current_user.get('id_rol') != 4:
-                return jsonify({'error': 'No autorizado - Se requiere rol de Técnico'}), 403
-                
-        except jwt.ExpiredSignatureError:
-            return jsonify({'error': 'Sesión expirada'}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({'error': 'Token inválido'}), 401
+        if 'tecnico' not in current_user.get('roles', []):
+            logger.warning(f"Usuario {current_user.get('nombre')} no tiene rol de técnico")
+            return jsonify({'error': 'No autorizado - Se requiere rol de Técnico'}), 403
         
         return f(current_user, *args, **kwargs)
     
@@ -140,7 +188,6 @@ def transcribir_audio_local(audio_url):
     
     temp_path = None
     try:
-        # Descargar audio de Cloudinary
         import requests
         response = requests.get(audio_url)
         if response.status_code != 200:
@@ -187,26 +234,30 @@ def obtener_ordenes_tecnico(current_user):
         tecnico_id = current_user['id']
         logger.info(f"Obteniendo órdenes para técnico ID: {tecnico_id}")
         
+        # Obtener asignaciones activas
         asignaciones = supabase.table('asignaciontecnico') \
-            .select('id_orden_trabajo, fecha_hora_inicio') \
+            .select('id_orden_trabajo, fecha_hora_inicio, tipo_asignacion') \
             .eq('id_tecnico', tecnico_id) \
+            .eq('tipo_asignacion', 'diagnostico') \
             .is_('fecha_hora_final', 'null') \
             .execute()
         
         if not asignaciones.data:
+            logger.info(f"No hay asignaciones de diagnóstico para técnico {tecnico_id}")
             return jsonify({'success': True, 'ordenes': []}), 200
         
         orden_ids = [a['id_orden_trabajo'] for a in asignaciones.data]
         
+        # Obtener órdenes
         ordenes = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
             .in_('id', orden_ids) \
-            .in_('estado_global', ['EnProceso', 'EnPausa', 'PendienteAprobacion']) \
             .execute()
         
         if not ordenes.data:
             return jsonify({'success': True, 'ordenes': []}), 200
         
+        # Obtener vehículos
         vehiculos_ids = [o['id_vehiculo'] for o in ordenes.data]
         vehiculos = supabase.table('vehiculo') \
             .select('id, placa, marca, modelo, anio, kilometraje') \
@@ -218,6 +269,7 @@ def obtener_ordenes_tecnico(current_user):
         for orden in ordenes.data:
             vehiculo = vehiculos_map.get(orden['id_vehiculo'], {})
             
+            # Verificar si existe diagnóstico
             diagnostico_existente = supabase.table('diagnostico_tecnico') \
                 .select('id, estado, version, fecha_envio') \
                 .eq('id_orden_trabajo', orden['id']) \
@@ -249,6 +301,8 @@ def obtener_ordenes_tecnico(current_user):
         
     except Exception as e:
         logger.error(f"Error obteniendo órdenes: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -266,6 +320,7 @@ def obtener_diagnostico(current_user, id_orden):
             .select('id') \
             .eq('id_orden_trabajo', id_orden) \
             .eq('id_tecnico', tecnico_id) \
+            .eq('tipo_asignacion', 'diagnostico') \
             .is_('fecha_hora_final', 'null') \
             .execute()
         
@@ -283,7 +338,7 @@ def obtener_diagnostico(current_user, id_orden):
         
         diagnostico_data = diagnostico.data[0] if diagnostico.data else None
         
-        # Obtener servicios (consulta separada)
+        # Obtener servicios
         servicios = []
         if diagnostico_data:
             servicios_result = supabase.table('servicio_tecnico') \
@@ -293,7 +348,7 @@ def obtener_diagnostico(current_user, id_orden):
                 .execute()
             servicios = servicios_result.data if servicios_result.data else []
         
-        # Obtener fotos (consulta separada)
+        # Obtener fotos
         fotos = []
         if diagnostico_data:
             fotos_result = supabase.table('foto_diagnostico') \
@@ -302,7 +357,7 @@ def obtener_diagnostico(current_user, id_orden):
                 .execute()
             fotos = fotos_result.data if fotos_result.data else []
         
-        # Obtener observaciones (consulta separada con join manual)
+        # Obtener observaciones
         observaciones = []
         if diagnostico_data:
             obs_result = supabase.table('observaciondiagnostico') \
@@ -312,7 +367,6 @@ def obtener_diagnostico(current_user, id_orden):
                 .execute()
             
             if obs_result.data:
-                # Obtener nombres de jefes de taller por separado
                 jefes_ids = list(set([obs['id_jefe_taller'] for obs in obs_result.data if obs.get('id_jefe_taller')]))
                 jefes_nombres = {}
                 
@@ -334,18 +388,18 @@ def obtener_diagnostico(current_user, id_orden):
                         'jefe_taller': {'nombre': jefes_nombres.get(obs.get('id_jefe_taller'), 'Desconocido')}
                     })
         
-        if diagnostico_data:
-            diagnostico_data['observaciones'] = observaciones
-        
         return jsonify({
             'success': True,
             'diagnostico': diagnostico_data,
             'servicios': servicios,
-            'fotos': fotos
+            'fotos': fotos,
+            'observaciones': observaciones
         }), 200
         
     except Exception as e:
         logger.error(f"Error obteniendo diagnóstico: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -370,7 +424,7 @@ def subir_foto_diagnostico(current_user):
         
         tecnico_id = current_user['id']
         
-        # Obtener o crear diagnóstico - Consulta separada
+        # Obtener o crear diagnóstico
         diagnostico = supabase.table('diagnostico_tecnico') \
             .select('id, max_fotos') \
             .eq('id_orden_trabajo', id_orden) \
@@ -397,13 +451,13 @@ def subir_foto_diagnostico(current_user):
             diagnostico_id = diagnostico.data[0]['id']
             max_fotos = diagnostico.data[0].get('max_fotos', 2)
         
-        # Verificar límite de fotos - Usar count separado
+        # Verificar límite de fotos
         fotos_existentes = supabase.table('foto_diagnostico') \
-            .select('id', count='exact') \
+            .select('id') \
             .eq('id_diagnostico_tecnico', diagnostico_id) \
             .execute()
         
-        fotos_count = fotos_existentes.count if hasattr(fotos_existentes, 'count') else len(fotos_existentes.data or [])
+        fotos_count = len(fotos_existentes.data or [])
         
         if fotos_count >= max_fotos:
             return jsonify({'error': f'Máximo {max_fotos} fotos por diagnóstico'}), 400
@@ -441,8 +495,7 @@ def subir_foto_diagnostico(current_user):
 @tecnico_required
 def eliminar_foto_diagnostico(current_user, foto_id):
     try:
-        # PRIMERO: Obtener la foto y verificar pertenencia
-        # Consulta separada para evitar problemas con !inner
+        # Obtener la foto
         foto = supabase.table('foto_diagnostico') \
             .select('id, public_id, id_diagnostico_tecnico') \
             .eq('id', foto_id) \
@@ -453,7 +506,7 @@ def eliminar_foto_diagnostico(current_user, foto_id):
         
         foto_data = foto.data[0]
         
-        # SEGUNDO: Obtener el diagnóstico para verificar el técnico
+        # Verificar diagnóstico
         diagnostico = supabase.table('diagnostico_tecnico') \
             .select('id_tecnico') \
             .eq('id', foto_data['id_diagnostico_tecnico']) \
@@ -465,7 +518,7 @@ def eliminar_foto_diagnostico(current_user, foto_id):
         if diagnostico.data[0]['id_tecnico'] != current_user['id']:
             return jsonify({'error': 'No autorizado'}), 403
         
-        # TERCERO: Eliminar de Cloudinary si existe
+        # Eliminar de Cloudinary
         public_id = foto_data.get('public_id')
         if public_id and CLOUDINARY_CONFIGURED:
             try:
@@ -474,7 +527,7 @@ def eliminar_foto_diagnostico(current_user, foto_id):
             except Exception as e:
                 logger.error(f"Error eliminando de Cloudinary: {str(e)}")
         
-        # CUARTO: Eliminar de BD
+        # Eliminar de BD
         supabase.table('foto_diagnostico').delete().eq('id', foto_id).execute()
         
         return jsonify({'success': True, 'message': 'Foto eliminada'}), 200
@@ -543,10 +596,12 @@ def guardar_diagnostico(current_user):
         
         tecnico_id = current_user['id']
         
+        # Verificar asignación
         asignacion = supabase.table('asignaciontecnico') \
             .select('id') \
             .eq('id_orden_trabajo', id_orden) \
             .eq('id_tecnico', tecnico_id) \
+            .eq('tipo_asignacion', 'diagnostico') \
             .is_('fecha_hora_final', 'null') \
             .execute()
         
@@ -555,6 +610,7 @@ def guardar_diagnostico(current_user):
         
         ahora = datetime.datetime.now().isoformat()
         
+        # Verificar si existe diagnóstico
         diagnostico_existente = supabase.table('diagnostico_tecnico') \
             .select('id, version') \
             .eq('id_orden_trabajo', id_orden) \
@@ -565,8 +621,8 @@ def guardar_diagnostico(current_user):
         
         if diagnostico_existente.data:
             diagnostico_id = diagnostico_existente.data[0]['id']
-            nueva_version = diagnostico_existente.data[0]['version'] + 1
             
+            # Actualizar diagnóstico existente
             supabase.table('diagnostico_tecnico').update({
                 'transcripcion_informe': transcripcion,
                 'url_grabacion_informe': url_grabacion,
@@ -576,8 +632,10 @@ def guardar_diagnostico(current_user):
                 'fecha_modificacion': ahora
             }).eq('id', diagnostico_id).execute()
             
+            # Eliminar servicios existentes
             supabase.table('servicio_tecnico').delete().eq('id_diagnostico_tecnico', diagnostico_id).execute()
         else:
+            # Crear nuevo diagnóstico
             resultado = supabase.table('diagnostico_tecnico').insert({
                 'id_orden_trabajo': id_orden,
                 'id_tecnico': tecnico_id,
@@ -592,6 +650,7 @@ def guardar_diagnostico(current_user):
             }).execute()
             diagnostico_id = resultado.data[0]['id']
         
+        # Insertar servicios
         for idx, servicio_desc in enumerate(servicios):
             if servicio_desc.strip():
                 supabase.table('servicio_tecnico').insert({
@@ -600,11 +659,14 @@ def guardar_diagnostico(current_user):
                     'orden': idx
                 }).execute()
         
+        # Si se envió, actualizar estado de la orden
         if enviar:
-            notificar_jefes_taller(id_orden, current_user.get('nombre', 'Técnico'))
             supabase.table('ordentrabajo').update({
-                'estado_global': 'EnProceso'
+                'estado_global': 'PendienteAprobacion'
             }).eq('id', id_orden).execute()
+            
+            # Notificar al Jefe de Taller
+            notificar_jefes_taller(id_orden, current_user.get('nombre', 'Técnico'))
         
         return jsonify({
             'success': True,
@@ -614,15 +676,25 @@ def guardar_diagnostico(current_user):
         
     except Exception as e:
         logger.error(f"Error guardando diagnóstico: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
 def notificar_jefes_taller(id_orden, tecnico_nombre):
+    """Notificar a los jefes de taller sobre un nuevo diagnóstico"""
     try:
-        jefes = supabase.table('usuario') \
-            .select('id') \
-            .eq('id_rol', 3) \
+        # Obtener jefes de taller (rol con nombre 'jefe_taller')
+        jefes_result = supabase.table('usuario_rol') \
+            .select('id_usuario') \
+            .eq('id_rol', 2) \
             .execute()
+        
+        jefes_ids = [j['id_usuario'] for j in (jefes_result.data or [])]
+        
+        if not jefes_ids:
+            logger.warning("No se encontraron jefes de taller para notificar")
+            return
         
         orden = supabase.table('ordentrabajo') \
             .select('codigo_unico') \
@@ -631,15 +703,16 @@ def notificar_jefes_taller(id_orden, tecnico_nombre):
         
         codigo_orden = orden.data[0]['codigo_unico'] if orden.data else str(id_orden)
         
-        if jefes.data:
-            for jefe in jefes.data:
-                supabase.table('notificacion').insert({
-                    'id_usuario_destino': jefe['id'],
-                    'tipo': 'diagnostico_tecnico',
-                    'mensaje': f"📋 Nuevo diagnóstico de {tecnico_nombre} para orden #{codigo_orden}",
-                    'fecha_envio': datetime.datetime.now().isoformat(),
-                    'leida': False
-                }).execute()
-            logger.info(f"Notificaciones enviadas a {len(jefes.data)} jefes de taller")
+        for jefe_id in jefes_ids:
+            supabase.table('notificacion').insert({
+                'id_usuario_destino': jefe_id,
+                'tipo': 'diagnostico_tecnico',
+                'mensaje': f"📋 Nuevo diagnóstico de {tecnico_nombre} para orden #{codigo_orden}",
+                'fecha_envio': datetime.datetime.now().isoformat(),
+                'leida': False
+            }).execute()
+        
+        logger.info(f"Notificaciones enviadas a {len(jefes_ids)} jefes de taller")
+        
     except Exception as e:
         logger.error(f"Error enviando notificaciones: {str(e)}")

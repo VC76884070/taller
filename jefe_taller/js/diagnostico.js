@@ -1,5 +1,5 @@
 // =====================================================
-// DIAGNOSTICO.JS - JEFE DE TALLER (CORREGIDO)
+// DIAGNOSTICO.JS - JEFE DE TALLER (VERSIÓN DEFINITIVA CON ENDPOINT SIMPLE)
 // Gestión de diagnósticos técnicos
 // =====================================================
 
@@ -48,11 +48,9 @@ async function checkAuth() {
     }
     
     try {
-        // Decodificar token para obtener información del usuario
         const payload = JSON.parse(atob(token.split('.')[1]));
         userInfo = payload.user;
         
-        // Obtener roles del usuario
         if (userInfo && userInfo.roles && Array.isArray(userInfo.roles)) {
             currentUserRoles = userInfo.roles;
         } else if (userData) {
@@ -61,19 +59,16 @@ async function checkAuth() {
             if (userInfo) userInfo.roles = currentUserRoles;
         }
         
-        // Si no hay roles en el token, intentar obtener de userData
         if (currentUserRoles.length === 0 && userData) {
             const user = JSON.parse(userData);
             currentUserRoles = user.roles || [];
             if (userInfo) userInfo.roles = currentUserRoles;
         }
         
-        // Verificar si tiene rol de jefe_taller (usando el nuevo sistema)
         const tieneRolJefeTaller = currentUserRoles.includes('jefe_taller') || 
                                     (userInfo && userInfo.rol_principal === 'jefe_taller') ||
                                     (userInfo && userInfo.rol === 'jefe_taller');
         
-        // Compatibilidad con sistema antiguo (por si acaso)
         const tieneIdRolAntiguo = userInfo && (userInfo.id_rol === 2 || userInfo.id_rol === 3);
         
         if (!tieneRolJefeTaller && !tieneIdRolAntiguo) {
@@ -98,7 +93,6 @@ async function checkAuth() {
 function initPage() {
     console.log('✅ Inicializando página');
     
-    // Actualizar fecha
     const now = new Date();
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     const dateStr = now.toLocaleDateString('es-ES', options);
@@ -108,13 +102,11 @@ function initPage() {
         dateDisplay.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
     }
     
-    // Actualizar nombre de usuario
     const userNameElement = document.getElementById('userNombre');
     if (userNameElement && userInfo) {
         userNameElement.textContent = userInfo.nombre || 'Usuario';
     }
     
-    // Mostrar badge de roles si tiene múltiples
     if (currentUserRoles.length > 1) {
         const userContainer = document.querySelector('.user-info');
         if (userContainer && !document.querySelector('.user-roles-badge')) {
@@ -148,7 +140,6 @@ function initPage() {
 function initEventListeners() {
     console.log('✅ Configurando event listeners');
     
-    // Filtros
     const filterEstado = document.getElementById('filterEstado');
     const searchInput = document.getElementById('searchInput');
     const fechaDesde = document.getElementById('fechaDesde');
@@ -168,34 +159,26 @@ function initEventListeners() {
         loadStats();
     });
     
-    // Grabación de audio
     const startRecordBtn = document.getElementById('startRecordBtn');
     const stopRecordBtn = document.getElementById('stopRecordBtn');
     if (startRecordBtn) startRecordBtn.addEventListener('click', startRecording);
     if (stopRecordBtn) stopRecordBtn.addEventListener('click', stopRecording);
     
-    // Formularios
     const formSolicitud = document.getElementById('formSolicitarRepuesto');
     const formObservacion = document.getElementById('formObservacion');
     if (formSolicitud) formSolicitud.addEventListener('submit', enviarSolicitudRepuesto);
     if (formObservacion) formObservacion.addEventListener('submit', enviarObservacion);
     
-    // Logout
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) logoutBtn.addEventListener('click', logout);
 }
 
-// ====================================================
-// FUNCIONES DE UTILIDAD
-// ====================================================
 function getAuthToken() {
     return localStorage.getItem('furia_token');
 }
 
 function getHeaders() {
     const token = getAuthToken();
-    console.log('🔑 Token para headers:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN');
-    
     return {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
@@ -296,9 +279,6 @@ function logout() {
     window.location.href = '/';
 }
 
-// ====================================================
-// CARGAR DATOS
-// ====================================================
 async function loadDiagnosticos() {
     mostrarLoading(true);
     
@@ -358,9 +338,6 @@ async function loadStats() {
     }
 }
 
-// ====================================================
-// FILTRADO Y RENDERIZADO
-// ====================================================
 function applyFilters() {
     currentFilters.estado = document.getElementById('filterEstado')?.value || 'todos';
     currentFilters.search = document.getElementById('searchInput')?.value.toLowerCase() || '';
@@ -443,14 +420,14 @@ function renderDiagnosticosList(diagnosticos) {
                         ${getEstadoTexto(d.estado)}
                     </span>
                     <div class="action-buttons">
-                        <button class="action-btn view" onclick="window.verDiagnostico(${d.diagnostico_id})" title="Ver detalle">
+                        <button class="action-btn view" onclick="verDiagnostico(${d.diagnostico_id})" title="Ver detalle">
                             <i class="fas fa-eye"></i>
                         </button>
                         ${d.estado === 'pendiente' ? `
-                            <button class="action-btn approve" onclick="window.aprobarDiagnostico(${d.diagnostico_id})" title="Aprobar">
+                            <button class="action-btn approve" onclick="aprobarDiagnostico(${d.diagnostico_id})" title="Aprobar">
                                 <i class="fas fa-check-circle"></i>
                             </button>
-                            <button class="action-btn reject" onclick="window.abrirModalObservacion(${d.diagnostico_id})" title="Rechazar">
+                            <button class="action-btn reject" onclick="abrirModalObservacion(${d.diagnostico_id})" title="Rechazar">
                                 <i class="fas fa-times-circle"></i>
                             </button>
                         ` : ''}
@@ -489,6 +466,57 @@ function limpiarFiltros() {
 }
 
 // ====================================================
+// APROBAR DIAGNÓSTICO - VERSIÓN CON ENDPOINT SIMPLE
+// ====================================================
+async function aprobarDiagnostico(diagnosticoId) {
+    console.log('📝 Aprobando diagnóstico ID:', diagnosticoId);
+    
+    if (!diagnosticoId) {
+        mostrarNotificacion('ID de diagnóstico inválido', 'error');
+        return;
+    }
+    
+    if (!confirm('¿Estás seguro de aprobar este diagnóstico?\n\nAl aprobarlo, la orden pasará al estado COTIZACION.')) return;
+    
+    const token = getAuthToken();
+    if (!token) {
+        mostrarNotificacion('No hay sesión iniciada', 'error');
+        return;
+    }
+    
+    try {
+        // Usar la versión simple del endpoint (sin autenticación en el endpoint)
+        const formData = new FormData();
+        formData.append('diagnostico_id', diagnosticoId);
+        
+        const response = await fetch(`${API_URL}/jefe-taller/aprobar-diagnostico-simple`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+        
+        console.log('Response status:', response.status);
+        
+        const data = await response.json();
+        console.log('Respuesta:', data);
+        
+        if (response.ok && data.success) {
+            mostrarNotificacion(data.message || 'Diagnóstico aprobado correctamente', 'success');
+            await loadDiagnosticos();
+            await loadStats();
+            cerrarModalDiagnostico();
+        } else {
+            mostrarNotificacion(data.error || 'Error al aprobar', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion('Error de conexión: ' + error.message, 'error');
+    }
+}
+
+// ====================================================
 // VER DIAGNÓSTICO
 // ====================================================
 async function verDiagnostico(diagnosticoId) {
@@ -497,18 +525,9 @@ async function verDiagnostico(diagnosticoId) {
     const modal = document.getElementById('modalDiagnostico');
     const modalBody = document.getElementById('modalDiagnosticoBody');
     
-    if (!modal || !modalBody) {
-        console.error('❌ Modal no encontrado');
-        mostrarNotificacion('Error al abrir el modal', 'error');
-        return;
-    }
+    if (!modal || !modalBody) return;
     
-    modalBody.innerHTML = `
-        <div class="loading-state">
-            <i class="fas fa-spinner fa-spin"></i>
-            <p>Cargando detalles del diagnóstico...</p>
-        </div>
-    `;
+    modalBody.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i><p>Cargando...</p></div>`;
     modal.classList.add('show');
     
     try {
@@ -516,14 +535,9 @@ async function verDiagnostico(diagnosticoId) {
             headers: getHeaders()
         });
         
-        console.log('Response status:', response.status);
-        
-        if (!response.ok) {
-            throw new Error(`Error ${response.status}`);
-        }
+        if (!response.ok) throw new Error('Error');
         
         const data = await response.json();
-        console.log('Data recibida:', data);
         
         if (data.success && data.diagnostico) {
             mostrarModalDiagnostico(data.diagnostico);
@@ -531,21 +545,11 @@ async function verDiagnostico(diagnosticoId) {
             throw new Error(data.error || 'Datos inválidos');
         }
     } catch (error) {
-        console.error('Error:', error);
-        modalBody.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-exclamation-circle"></i>
-                <p>Error al cargar el diagnóstico: ${error.message}</p>
-                <button class="btn-primary" onclick="window.verDiagnostico(${diagnosticoId})">Reintentar</button>
-            </div>
-        `;
-        mostrarNotificacion('Error al cargar los detalles', 'error');
+        modalBody.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>Error: ${error.message}</p></div>`;
     }
 }
 
 function mostrarModalDiagnostico(diagnostico) {
-    console.log('🎨 Renderizando modal con diagnóstico mejorado');
-    
     const modalBody = document.getElementById('modalDiagnosticoBody');
     if (!modalBody) return;
     
@@ -554,166 +558,39 @@ function mostrarModalDiagnostico(diagnostico) {
     const fotos = diagnostico.fotos || [];
     const observaciones = diagnostico.observaciones || [];
     
-    // Helper para mostrar precio
-    const mostrarPrecio = (precio) => {
-        if (!precio) return 'No asignado';
-        return `$${parseFloat(precio).toLocaleString('es-CO')}`;
-    };
-    
     modalBody.innerHTML = `
         <div class="diagnostico-detalle">
-            <!-- Información General -->
             <div class="info-section">
                 <h3><i class="fas fa-info-circle"></i> Información General</h3>
                 <div class="info-grid">
-                    <div class="info-grid-item">
-                        <strong>Código Orden:</strong>
-                        <span>${escapeHtml(diagnostico.codigo_unico || 'N/A')}</span>
-                    </div>
-                    <div class="info-grid-item">
-                        <strong>Técnico:</strong>
-                        <span><i class="fas fa-user"></i> ${escapeHtml(diagnostico.tecnico_nombre || 'Sin asignar')}</span>
-                    </div>
-                    <div class="info-grid-item">
-                        <strong>Vehículo:</strong>
-                        <span><i class="fas fa-car"></i> ${escapeHtml(diagnostico.placa || 'N/A')} - ${escapeHtml(diagnostico.marca || '')} ${escapeHtml(diagnostico.modelo || '')}</span>
-                    </div>
-                    <div class="info-grid-item">
-                        <strong>Estado:</strong>
-                        <span class="estado-badge ${diagnostico.estado}">${getEstadoTexto(diagnostico.estado)}</span>
-                    </div>
-                    <div class="info-grid-item">
-                        <strong>Fecha Envío:</strong>
-                        <span><i class="fas fa-calendar"></i> ${formatDate(diagnostico.fecha_envio)}</span>
-                    </div>
-                    <div class="info-grid-item">
-                        <strong>Versión:</strong>
-                        <span><i class="fas fa-code-branch"></i> ${diagnostico.version || 1}</span>
-                    </div>
+                    <div class="info-grid-item"><strong>Código:</strong> ${escapeHtml(diagnostico.codigo_unico || 'N/A')}</div>
+                    <div class="info-grid-item"><strong>Técnico:</strong> ${escapeHtml(diagnostico.tecnico_nombre || 'N/A')}</div>
+                    <div class="info-grid-item"><strong>Vehículo:</strong> ${escapeHtml(diagnostico.placa || 'N/A')}</div>
+                    <div class="info-grid-item"><strong>Estado:</strong> <span class="estado-badge ${diagnostico.estado}">${getEstadoTexto(diagnostico.estado)}</span></div>
+                    <div class="info-grid-item"><strong>Fecha:</strong> ${formatDate(diagnostico.fecha_envio)}</div>
+                    <div class="info-grid-item"><strong>Versión:</strong> ${diagnostico.version || 1}</div>
                 </div>
             </div>
             
-            <!-- Informe del Técnico -->
             <div class="info-section">
                 <h3><i class="fas fa-file-alt"></i> Informe del Técnico</h3>
-                <div class="informe-content">
-                    <p>${escapeHtml(diagnostico.informe || 'No hay informe escrito')}</p>
-                    ${diagnostico.url_grabacion_informe ? `
-                        <audio controls src="${diagnostico.url_grabacion_informe}">
-                            Tu navegador no soporta audio
-                        </audio>
-                    ` : ''}
-                </div>
+                <p>${escapeHtml(diagnostico.informe || 'Sin informe')}</p>
+                ${diagnostico.url_grabacion_informe ? `<audio controls src="${diagnostico.url_grabacion_informe}"></audio>` : ''}
             </div>
             
-            <!-- Servicios Propuestos -->
             <div class="info-section">
-                <h3><i class="fas fa-tools"></i> Servicios Propuestos (${servicios.length})</h3>
-                <div class="servicios-list-modal">
-                    ${servicios.length > 0 ? servicios.map((s, index) => `
-                        <div class="servicio-card-modal">
-                            <div class="servicio-header">
-                                <div class="servicio-icon">
-                                    <i class="fas fa-wrench"></i>
-                                </div>
-                                <div class="servicio-info">
-                                    <span class="servicio-descripcion">
-                                        ${index + 1}. ${escapeHtml(s.descripcion)}
-                                    </span>
-                                    <div class="servicio-meta">
-                                        ${s.precio_estimado ? `
-                                            <span class="precio-badge">
-                                                <i class="fas fa-tag"></i> Estimado: ${mostrarPrecio(s.precio_estimado)}
-                                            </span>
-                                        ` : ''}
-                                        ${s.precio_final ? `
-                                            <span class="precio-badge">
-                                                <i class="fas fa-check-circle"></i> Final: ${mostrarPrecio(s.precio_final)}
-                                            </span>
-                                        ` : ''}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `).join('') : '<p style="color: var(--gris-texto); text-align: center;">No hay servicios registrados</p>'}
-                </div>
+                <h3><i class="fas fa-tools"></i> Servicios (${servicios.length})</h3>
+                ${servicios.map(s => `<div class="servicio-item">• ${escapeHtml(s.descripcion)}</div>`).join('') || '<p>Sin servicios</p>'}
             </div>
             
-            <!-- Solicitudes de Repuestos -->
-            <div class="info-section">
-                <h3><i class="fas fa-boxes"></i> Solicitudes de Repuestos (${solicitudes.length})</h3>
-                <div class="solicitudes-list">
-                    ${solicitudes.length > 0 ? solicitudes.map(s => `
-                        <div class="solicitud-item">
-                            <div class="solicitud-info">
-                                <span class="solicitud-descripcion">
-                                    <i class="fas fa-cube"></i> ${escapeHtml(s.descripcion_pieza)}
-                                </span>
-                                <div class="solicitud-detalles">
-                                    <span><i class="fas fa-hashtag"></i> Cantidad: ${s.cantidad}</span>
-                                    <span><i class="fas fa-chart-line"></i> Urgencia: ${s.urgencia || 'normal'}</span>
-                                    ${s.fecha_solicitud ? `<span><i class="fas fa-calendar"></i> ${formatDate(s.fecha_solicitud)}</span>` : ''}
-                                </div>
-                            </div>
-                            <div class="solicitud-estado ${s.estado || 'pendiente'}">
-                                ${s.estado || 'pendiente'}
-                            </div>
-                        </div>
-                    `).join('') : '<p style="color: var(--gris-texto); text-align: center;">No hay solicitudes de repuestos</p>'}
-                </div>
-            </div>
-            
-            <!-- Fotos del Diagnóstico -->
-            ${fotos.length > 0 ? `
-            <div class="info-section">
-                <h3><i class="fas fa-camera"></i> Fotos del Diagnóstico (${fotos.length})</h3>
-                <div class="fotos-grid">
-                    ${fotos.map(f => `
-                        <div class="foto-item" onclick="window.verImagenAmpliada('${f.url_foto}')">
-                            <img src="${f.url_foto}" alt="Foto diagnóstico" onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%25%22%20height%3D%22100%25%22%20viewBox%3D%220%200%20200%20200%22%3E%3Crect%20width%3D%22200%22%20height%3D%22200%22%20fill%3D%22%23333%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dy%3D%22.3em%22%20fill%3D%22%23999%22%3ESin%20imagen%3C%2Ftext%3E%3C%2Fsvg%3E'">
-                            <span>${escapeHtml(f.descripcion_tecnico || 'Sin descripción')}</span>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-            ` : ''}
-            
-            <!-- Observaciones (si existen) -->
             ${observaciones.length > 0 ? `
             <div class="info-section">
-                <h3><i class="fas fa-comments"></i> Historial de Observaciones (${observaciones.length})</h3>
-                <div class="observaciones-list">
-                    ${observaciones.map(obs => `
-                        <div class="observacion-item">
-                            <div class="observacion-header">
-                                <span class="observacion-autor">
-                                    <i class="fas fa-user-tie"></i> ${escapeHtml(obs.jefe_taller_nombre || 'Jefe de Taller')}
-                                </span>
-                                <span class="observacion-fecha">
-                                    <i class="fas fa-clock"></i> ${formatDate(obs.fecha_hora)}
-                                </span>
-                            </div>
-                            ${obs.observacion ? `
-                                <div class="observacion-texto">
-                                    <i class="fas fa-quote-left"></i> ${escapeHtml(obs.observacion)}
-                                </div>
-                            ` : ''}
-                            ${obs.url_grabacion ? `
-                                <div class="observacion-audio">
-                                    <audio controls src="${obs.url_grabacion}">
-                                        Tu navegador no soporta audio
-                                    </audio>
-                                </div>
-                            ` : ''}
-                        </div>
-                    `).join('')}
-                </div>
+                <h3><i class="fas fa-comments"></i> Observaciones</h3>
+                ${observaciones.map(obs => `<div class="observacion-item"><strong>${escapeHtml(obs.jefe_taller_nombre || 'Jefe')}:</strong> ${escapeHtml(obs.observacion || 'Sin texto')}</div>`).join('')}
             </div>
             ` : ''}
         </div>
     `;
-    
-    console.log('✅ Modal mejorado renderizado');
 }
 
 function cerrarModalDiagnostico() {
@@ -722,60 +599,7 @@ function cerrarModalDiagnostico() {
 }
 
 // ====================================================
-// APROBAR DIAGNÓSTICO (CORREGIDO CON MÁS LOGS)
-// ====================================================
-async function aprobarDiagnostico(diagnosticoId) {
-    console.log('📝 Aprobando diagnóstico ID:', diagnosticoId);
-    console.log('Tipo de ID:', typeof diagnosticoId);
-    
-    if (!diagnosticoId) {
-        console.error('❌ ID de diagnóstico inválido');
-        mostrarNotificacion('ID de diagnóstico inválido', 'error');
-        return;
-    }
-    
-    if (!confirm('¿Estás seguro de aprobar este diagnóstico?\n\nAl aprobarlo, la orden pasará al estado COTIZACION para que se puedan generar las cotizaciones.')) return;
-    
-    try {
-        const payload = { diagnostico_id: diagnosticoId };
-        console.log('📦 Payload a enviar:', payload);
-        
-        const response = await fetch(`${API_URL}/jefe-taller/aprobar-diagnostico`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify(payload)
-        });
-        
-        console.log('📡 Response status:', response.status);
-        
-        const data = await response.json();
-        console.log('📨 Respuesta completa:', data);
-        
-        if (response.ok && data.success) {
-            mostrarNotificacion(data.message || 'Diagnóstico aprobado correctamente', 'success');
-            
-            // Recargar listas
-            await loadDiagnosticos();
-            await loadStats();
-            
-            // Si hay modal abierto, cerrarlo
-            cerrarModalDiagnostico();
-            
-            // Mostrar mensaje adicional si cambió el estado
-            if (data.nuevo_estado) {
-                mostrarNotificacion(`La orden ahora está en estado: ${data.nuevo_estado}`, 'info');
-            }
-        } else {
-            mostrarNotificacion(data.error || 'Error al aprobar', 'error');
-        }
-    } catch (error) {
-        console.error('❌ Error en la petición:', error);
-        mostrarNotificacion('Error de conexión: ' + error.message, 'error');
-    }
-}
-
-// ====================================================
-// MODAL DE OBSERVACIÓN (RECHAZO)
+// RECHAZAR DIAGNÓSTICO
 // ====================================================
 function abrirModalObservacion(diagnosticoId) {
     currentDiagnosticoId = diagnosticoId;
@@ -809,15 +633,18 @@ async function enviarObservacion(event) {
         return;
     }
     
+    const formData = new FormData();
+    formData.append('diagnostico_id', diagnosticoId);
+    formData.append('observacion', observacion);
+    if (grabacionUrl) formData.append('grabacion_url', grabacionUrl);
+    
     try {
         const response = await fetch(`${API_URL}/jefe-taller/rechazar-diagnostico`, {
             method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify({
-                diagnostico_id: parseInt(diagnosticoId),
-                observacion: observacion,
-                grabacion_url: grabacionUrl || null
-            })
+            headers: {
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
+            body: formData
         });
         
         const data = await response.json();
@@ -831,7 +658,6 @@ async function enviarObservacion(event) {
             mostrarNotificacion(data.error || 'Error al rechazar', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
         mostrarNotificacion('Error de conexión', 'error');
     }
 }
@@ -857,9 +683,20 @@ async function startRecording() {
             
             const reader = new FileReader();
             reader.onloadend = async () => {
-                const url = await subirAudioObservacion(reader.result);
+                const formData = new FormData();
+                formData.append('audio', reader.result);
+                formData.append('tipo', 'observacion');
+                
+                const response = await fetch(`${API_URL}/jefe-taller/subir-audio-observacion`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: formData
+                });
+                const data = await response.json();
                 const grabacionUrl = document.getElementById('grabacionUrl');
-                if (grabacionUrl && url) grabacionUrl.value = url;
+                if (grabacionUrl && data.url) grabacionUrl.value = data.url;
             };
             reader.readAsDataURL(audioBlob);
             stream.getTracks().forEach(track => track.stop());
@@ -873,7 +710,6 @@ async function startRecording() {
         if (stopBtn) stopBtn.disabled = false;
         mostrarNotificacion('Grabando...', 'warning');
     } catch (error) {
-        console.error('Error al grabar:', error);
         mostrarNotificacion('No se pudo acceder al micrófono', 'error');
     }
 }
@@ -890,36 +726,15 @@ function stopRecording() {
     }
 }
 
-async function subirAudioObservacion(audioBase64) {
-    try {
-        const response = await fetch(`${API_URL}/jefe-taller/subir-audio-observacion`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify({ audio: audioBase64 })
-        });
-        const data = await response.json();
-        return data.success ? data.url : null;
-    } catch (error) {
-        console.error('Error subiendo audio:', error);
-        return null;
-    }
-}
-
 // ====================================================
 // SOLICITAR REPUESTO
 // ====================================================
 function abrirModalSolicitarRepuesto(ordenId, servicioId, servicioDescripcion) {
     const ordenInput = document.getElementById('solicitudOrdenId');
     const servicioInput = document.getElementById('solicitudServicioId');
-    const descripcionInput = document.getElementById('descripcionPieza');
-    const cantidadInput = document.getElementById('cantidad');
-    const observacionInput = document.getElementById('obsJefeTaller');
     
     if (ordenInput) ordenInput.value = ordenId;
     if (servicioInput) servicioInput.value = servicioId;
-    if (descripcionInput) descripcionInput.value = '';
-    if (cantidadInput) cantidadInput.value = '1';
-    if (observacionInput) observacionInput.value = '';
     
     const modal = document.getElementById('modalSolicitarRepuesto');
     if (modal) modal.classList.add('show');
@@ -941,42 +756,40 @@ async function enviarSolicitudRepuesto(event) {
     const observacion = document.getElementById('obsJefeTaller')?.value;
     
     if (!descripcion) {
-        mostrarNotificacion('Debes describir la pieza o herramienta necesaria', 'error');
+        mostrarNotificacion('Debes describir la pieza', 'error');
         return;
     }
+    
+    const formData = new FormData();
+    formData.append('orden_id', ordenId);
+    formData.append('servicio_id', servicioId);
+    formData.append('descripcion_pieza', descripcion);
+    formData.append('cantidad', cantidad);
+    formData.append('urgencia', urgencia);
+    formData.append('observacion', observacion);
     
     try {
         const response = await fetch(`${API_URL}/jefe-taller/solicitar-cotizacion-repuesto`, {
             method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify({
-                orden_id: parseInt(ordenId),
-                servicio_id: parseInt(servicioId),
-                descripcion_pieza: descripcion,
-                cantidad: parseInt(cantidad),
-                urgencia: urgencia,
-                observacion: observacion
-            })
+            headers: {
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
+            body: formData
         });
         
         const result = await response.json();
         
         if (result.success) {
-            mostrarNotificacion('Solicitud enviada al Encargado de Repuestos');
+            mostrarNotificacion('Solicitud enviada');
             cerrarModalSolicitud();
-            if (currentDiagnosticoId) verDiagnostico(currentDiagnosticoId);
         } else {
-            mostrarNotificacion(result.error || 'Error al enviar solicitud', 'error');
+            mostrarNotificacion(result.error || 'Error', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
         mostrarNotificacion('Error de conexión', 'error');
     }
 }
 
-// ====================================================
-// FUNCIONES ADICIONALES
-// ====================================================
 function verImagenAmpliada(url) {
     const modal = document.createElement('div');
     modal.className = 'modal-imagen';
@@ -1007,7 +820,6 @@ window.cerrarModalSolicitud = cerrarModalSolicitud;
 window.verImagenAmpliada = verImagenAmpliada;
 window.logout = logout;
 
-// Cerrar modales con ESC
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         cerrarModalDiagnostico();
@@ -1016,7 +828,6 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Cerrar modales clickeando fuera
 window.onclick = (event) => {
     if (event.target.classList?.contains('modal')) {
         event.target.classList.remove('show');

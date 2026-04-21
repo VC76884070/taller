@@ -38,7 +38,6 @@ supabase = config.supabase
 def listar_tecnicos(current_user):
     """Listar técnicos disponibles para asignación con su carga actual"""
     try:
-        # Usar la función usuario_tiene_rol para obtener técnicos
         usuarios_result = supabase.table('usuario') \
             .select('id, nombre, contacto') \
             .execute()
@@ -47,17 +46,16 @@ def listar_tecnicos(current_user):
         MAX_ORDENES = 2
         
         for usuario in (usuarios_result.data or []):
-            # Verificar si tiene rol de técnico
             tiene_rol = supabase.rpc('usuario_tiene_rol', {
                 'p_usuario_id': usuario['id'],
                 'p_rol_nombre': 'tecnico'
             }).execute()
             
             if tiene_rol.data:
-                # Contar órdenes activas del técnico
                 asignaciones = supabase.table('asignaciontecnico') \
                     .select('id_orden_trabajo') \
                     .eq('id_tecnico', usuario['id']) \
+                    .eq('tipo_asignacion', 'diagnostico') \
                     .is_('fecha_hora_final', 'null') \
                     .execute()
                 
@@ -89,7 +87,6 @@ def listar_tecnicos(current_user):
 def listar_ordenes_activas(current_user):
     """Listar órdenes de trabajo activas con datos de planificación (OPTIMIZADO)"""
     try:
-        # 1. Obtener todas las órdenes activas
         resultado = supabase.table('ordentrabajo') \
             .select('''
                 id, 
@@ -113,7 +110,6 @@ def listar_ordenes_activas(current_user):
         jefes_ids = list(set([o['id_jefe_operativo'] for o in ordenes if o.get('id_jefe_operativo')] + 
                              [o['id_jefe_operativo_2'] for o in ordenes if o.get('id_jefe_operativo_2')]))
         
-        # 2. Obtener TODOS los vehículos de una vez
         vehiculos_map = {}
         if vehiculos_ids:
             vehiculos = supabase.table('vehiculo') \
@@ -123,7 +119,6 @@ def listar_ordenes_activas(current_user):
             for v in (vehiculos.data or []):
                 vehiculos_map[v['id']] = v
         
-        # 3. Obtener TODOS los clientes de una vez
         clientes_ids = list(set([v.get('id_cliente') for v in vehiculos_map.values() if v.get('id_cliente')]))
         clientes_map = {}
         usuarios_ids = []
@@ -138,7 +133,6 @@ def listar_ordenes_activas(current_user):
                 if c.get('id_usuario'):
                     usuarios_ids.append(c['id_usuario'])
         
-        # 4. Obtener TODOS los usuarios (clientes) de una vez
         usuarios_map = {}
         if usuarios_ids:
             usuarios = supabase.table('usuario') \
@@ -148,7 +142,6 @@ def listar_ordenes_activas(current_user):
             for u in (usuarios.data or []):
                 usuarios_map[u['id']] = u
         
-        # 5. Obtener TODOS los jefes operativos de una vez
         jefes_map = {}
         if jefes_ids:
             jefes = supabase.table('usuario') \
@@ -158,7 +151,6 @@ def listar_ordenes_activas(current_user):
             for j in (jefes.data or []):
                 jefes_map[j['id']] = j
         
-        # 6. Obtener TODAS las recepciones de una vez
         recepciones_map = {}
         if ordenes_ids:
             recepciones = supabase.table('recepcion') \
@@ -168,12 +160,12 @@ def listar_ordenes_activas(current_user):
             for r in (recepciones.data or []):
                 recepciones_map[r['id_orden_trabajo']] = r
         
-        # 7. Obtener TODAS las asignaciones de técnicos de una vez
         tecnicos_por_orden = {}
         if ordenes_ids:
             asignaciones = supabase.table('asignaciontecnico') \
                 .select('id_orden_trabajo, id_tecnico') \
                 .in_('id_orden_trabajo', ordenes_ids) \
+                .eq('tipo_asignacion', 'diagnostico') \
                 .is_('fecha_hora_final', 'null') \
                 .execute()
             
@@ -197,7 +189,6 @@ def listar_ordenes_activas(current_user):
                         'nombre': tecnicos_nombres_map[a['id_tecnico']]['nombre']
                     })
         
-        # 8. Obtener TODOS los diagnósticos iniciales de una vez
         diagnosticos_map = {}
         if ordenes_ids:
             diagnosticos = supabase.table('diagnostigoinicial') \
@@ -207,7 +198,6 @@ def listar_ordenes_activas(current_user):
             for d in (diagnosticos.data or []):
                 diagnosticos_map[d['id_orden_trabajo']] = d.get('diagnostigo')
         
-        # 9. Obtener TODAS las planificaciones de una vez
         planificaciones_map = {}
         if ordenes_ids:
             planificaciones = supabase.table('planificacion') \
@@ -217,29 +207,19 @@ def listar_ordenes_activas(current_user):
             for p in (planificaciones.data or []):
                 planificaciones_map[p['id_orden_trabajo']] = p
         
-        # 10. Construir respuesta
         ordenes_resultado = []
         for orden in ordenes:
             v = vehiculos_map.get(orden['id_vehiculo'], {})
             
-            # Obtener cliente
             cliente_info = clientes_map.get(v.get('id_cliente'), {})
             usuario_cliente = usuarios_map.get(cliente_info.get('id_usuario'), {})
             
-            # Obtener jefes
             jefe_principal = jefes_map.get(orden.get('id_jefe_operativo'), {})
             jefe_secundario = jefes_map.get(orden.get('id_jefe_operativo_2'), {})
             
-            # Obtener recepción
             recepcion_data = recepciones_map.get(orden['id'], {})
-            
-            # Obtener técnicos
             tecnicos = tecnicos_por_orden.get(orden['id'], [])
-            
-            # Obtener diagnóstico
             diagnostico_texto = diagnosticos_map.get(orden['id'])
-            
-            # Obtener planificación
             planificacion_data = planificaciones_map.get(orden['id'], {})
             
             ordenes_resultado.append({
@@ -340,11 +320,12 @@ def listar_ordenes_finalizadas(current_user):
 @jefe_taller_ordenes_bp.route('/asignar-tecnicos', methods=['POST'])
 @jefe_taller_required
 def asignar_tecnicos(current_user):
-    """Asignar técnicos a una orden de trabajo"""
+    """Asignar técnicos a una orden de trabajo para diagnóstico"""
     try:
         data = request.get_json()
         id_orden = data.get('id_orden')
         tecnicos_ids = data.get('tecnicos', [])
+        tipo_asignacion = data.get('tipo_asignacion', 'diagnostico')  # ✅ NUEVO: permite especificar tipo
         
         if not id_orden:
             return jsonify({'error': 'ID de orden requerido'}), 400
@@ -357,9 +338,11 @@ def asignar_tecnicos(current_user):
         tecnicos_con_error = []
         
         for tecnico_id in tecnicos_ids:
+            # ✅ AHORA FILTRA POR tipo_asignacion
             asignaciones_activas = supabase.table('asignaciontecnico') \
                 .select('id_orden_trabajo') \
                 .eq('id_tecnico', tecnico_id) \
+                .eq('tipo_asignacion', tipo_asignacion) \
                 .is_('fecha_hora_final', 'null') \
                 .neq('id_orden_trabajo', id_orden) \
                 .execute()
@@ -374,7 +357,7 @@ def asignar_tecnicos(current_user):
                     .execute()
                 
                 nombre_tecnico = tecnico_info.data.get('nombre', f"ID {tecnico_id}") if tecnico_info.data else f"ID {tecnico_id}"
-                tecnicos_con_error.append(f"{nombre_tecnico} ya tiene {ordenes_activas}/{MAX_ORDENES_POR_TECNICO} órdenes activas")
+                tecnicos_con_error.append(f"{nombre_tecnico} ya tiene {ordenes_activas}/{MAX_ORDENES_POR_TECNICO} órdenes activas de {tipo_asignacion}")
         
         if tecnicos_con_error:
             return jsonify({
@@ -392,18 +375,20 @@ def asignar_tecnicos(current_user):
         if not orden.data:
             return jsonify({'error': 'Orden no encontrada'}), 404
         
-        # Eliminar asignaciones previas
+        # ✅ Eliminar asignaciones previas del mismo tipo
         supabase.table('asignaciontecnico') \
             .update({'fecha_hora_final': datetime.datetime.now().isoformat()}) \
             .eq('id_orden_trabajo', id_orden) \
+            .eq('tipo_asignacion', tipo_asignacion) \
             .is_('fecha_hora_final', 'null') \
             .execute()
         
-        # Crear nuevas asignaciones
+        # ✅ Crear nuevas asignaciones con tipo_asignacion
         for tecnico_id in tecnicos_ids:
             supabase.table('asignaciontecnico').insert({
                 'id_orden_trabajo': id_orden,
                 'id_tecnico': tecnico_id,
+                'tipo_asignacion': tipo_asignacion,  # ✅ AGREGADO
                 'fecha_hora_inicio': datetime.datetime.now().isoformat()
             }).execute()
         
@@ -420,9 +405,9 @@ def asignar_tecnicos(current_user):
                 'fecha_hora_cambio': datetime.datetime.now().isoformat()
             }).execute()
         
-        logger.info(f"Técnicos asignados a orden {id_orden}: {tecnicos_ids}")
+        logger.info(f"Técnicos asignados a orden {id_orden} para {tipo_asignacion}: {tecnicos_ids}")
         
-        return jsonify({'success': True, 'message': 'Técnicos asignados correctamente'}), 200
+        return jsonify({'success': True, 'message': f'Técnicos asignados correctamente para {tipo_asignacion}'}), 200
         
     except Exception as e:
         logger.error(f"Error asignando técnicos: {str(e)}")
@@ -442,7 +427,6 @@ def guardar_diagnostico_inicial(current_user):
         if not id_orden:
             return jsonify({'error': 'ID de orden requerido'}), 400
         
-        # Verificar si existe diagnóstico previo
         diagnostico_existente = supabase.table('diagnostigoinicial') \
             .select('id') \
             .eq('id_orden_trabajo', id_orden) \
@@ -596,7 +580,6 @@ def detalle_orden(current_user, id_orden):
         
         o = orden.data
         
-        # Obtener jefe operativo principal
         jefe_operativo = {}
         if o.get('id_jefe_operativo'):
             jefe1 = supabase.table('usuario') \
@@ -606,7 +589,6 @@ def detalle_orden(current_user, id_orden):
             if jefe1.data:
                 jefe_operativo = jefe1.data[0]
         
-        # Obtener segundo jefe operativo
         jefe_operativo_2 = {}
         if o.get('id_jefe_operativo_2'):
             jefe2 = supabase.table('usuario') \
@@ -616,14 +598,12 @@ def detalle_orden(current_user, id_orden):
             if jefe2.data:
                 jefe_operativo_2 = jefe2.data[0]
         
-        # Obtener vehículo
         vehiculo = supabase.table('vehiculo') \
             .select('*') \
             .eq('id', o['id_vehiculo']) \
             .execute()
         v = vehiculo.data[0] if vehiculo.data else {}
         
-        # Obtener cliente
         cliente_info = {}
         usuario_cliente = {}
         
@@ -645,17 +625,16 @@ def detalle_orden(current_user, id_orden):
                     if usuario.data:
                         usuario_cliente = usuario.data[0]
         
-        # Obtener datos de recepción
         recepcion = supabase.table('recepcion') \
             .select('*') \
             .eq('id_orden_trabajo', id_orden) \
             .execute()
         recepcion_data = recepcion.data[0] if recepcion.data else {}
         
-        # Obtener técnicos asignados
         asignaciones = supabase.table('asignaciontecnico') \
             .select('id_tecnico') \
             .eq('id_orden_trabajo', id_orden) \
+            .eq('tipo_asignacion', 'diagnostico') \
             .is_('fecha_hora_final', 'null') \
             .execute()
         
@@ -668,14 +647,12 @@ def detalle_orden(current_user, id_orden):
             if tecnico.data:
                 tecnicos.append(tecnico.data[0])
         
-        # Obtener diagnóstico inicial
         diagnostico = supabase.table('diagnostigoinicial') \
             .select('diagnostigo, fecha_hora, url_grabacion') \
             .eq('id_orden_trabajo', id_orden) \
             .execute()
         diagnostico_data = diagnostico.data[0] if diagnostico.data else None
         
-        # Obtener planificación
         planificacion = supabase.table('planificacion') \
             .select('*') \
             .eq('id_orden_trabajo', id_orden) \
@@ -1183,6 +1160,7 @@ def aprobar_entrega_orden(current_user):
             supabase.table('asignaciontecnico') \
                 .update({'fecha_hora_final': ahora}) \
                 .eq('id_orden_trabajo', id_orden) \
+                .eq('tipo_asignacion', 'diagnostico') \
                 .is_('fecha_hora_final', 'null') \
                 .execute()
             
@@ -1224,7 +1202,6 @@ def aprobar_entrega_orden(current_user):
 def get_carga_tecnicos(current_user):
     """Obtener carga de trabajo de técnicos para el panel derecho"""
     try:
-        # Usar la función usuario_tiene_rol para obtener técnicos
         usuarios_result = supabase.table('usuario') \
             .select('id, nombre, contacto') \
             .execute()
@@ -1242,6 +1219,7 @@ def get_carga_tecnicos(current_user):
                 asignaciones = supabase.table('asignaciontecnico') \
                     .select('id_orden_trabajo') \
                     .eq('id_tecnico', usuario['id']) \
+                    .eq('tipo_asignacion', 'diagnostico') \
                     .is_('fecha_hora_final', 'null') \
                     .execute()
                 

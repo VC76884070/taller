@@ -840,15 +840,19 @@ async function guardarGestionOrden() {
         }
         
         // Guardar técnicos
+        // En la función guardarGestionOrden(), reemplaza la parte de asignar técnicos:
         await fetch(`${API_URL}/jefe-taller/asignar-tecnicos`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
             },
-            body: JSON.stringify({ id_orden: ordenEnGestion.id, tecnicos: tecnicosSeleccionados })
+            body: JSON.stringify({ 
+                id_orden: ordenEnGestion.id, 
+                tecnicos: tecnicosSeleccionados,
+                tipo_asignacion: 'diagnostico'  // ✅ Agrega esta línea
+            })
         });
-        
         // Guardar planificación
         if (bahia && fechaInicio && horasEstimadas > 0) {
             await fetch(`${API_URL}/jefe-taller/planificar`, {

@@ -1,17 +1,14 @@
 # =====================================================
-# DIAGNÓSTICO - JEFE DE TALLER
+# DIAGNÓSTICO - JEFE DE TALLER (CORREGIDO)
 # =====================================================
 
 from flask import Blueprint, request, jsonify
-from functools import wraps
 from config import config
 from decorators import jefe_taller_required
-import jwt
 import datetime
 import logging
 import base64
 import io
-import uuid
 import os
 
 logger = logging.getLogger(__name__)
@@ -79,37 +76,10 @@ def subir_audio_cloudinary(audio_base64, carpeta, nombre):
         logger.error(f"Error subiendo audio: {e}")
         return None
 
-def obtener_tecnicos():
-    """Obtener lista de usuarios con rol técnico"""
-    try:
-        # Usar función usuario_tiene_rol para filtrar técnicos
-        # Primero obtenemos todos los usuarios
-        usuarios = supabase.table('usuario').select('id, nombre').execute()
-        
-        if not usuarios.data:
-            return []
-        
-        # Filtrar aquellos que tienen rol técnico
-        tecnicos = []
-        for usuario in usuarios.data:
-            tiene_rol = supabase.rpc('usuario_tiene_rol', {
-                'p_usuario_id': usuario['id'],
-                'p_rol_nombre': 'tecnico'
-            }).execute()
-            
-            if tiene_rol.data:
-                tecnicos.append(usuario)
-        
-        return tecnicos
-    except Exception as e:
-        logger.error(f"Error obteniendo técnicos: {e}")
-        return []
-
 def obtener_encargado_repuestos():
     """Obtener el primer encargado de repuestos disponible"""
     try:
         usuarios = supabase.table('usuario').select('id').execute()
-        
         if not usuarios.data:
             return None
         
@@ -118,10 +88,8 @@ def obtener_encargado_repuestos():
                 'p_usuario_id': usuario['id'],
                 'p_rol_nombre': 'encargado_repuestos'
             }).execute()
-            
             if tiene_rol.data:
                 return usuario['id']
-        
         return None
     except Exception as e:
         logger.error(f"Error obteniendo encargado repuestos: {e}")
@@ -136,7 +104,6 @@ def listar_diagnosticos_pendientes(current_user):
     try:
         logger.info("📋 Listando diagnósticos pendientes")
         
-        # Obtener diagnósticos con estado 'pendiente' o 'borrador'
         diagnosticos = supabase.table('diagnostico_tecnico') \
             .select('*') \
             .in_('estado', ['pendiente', 'borrador']) \
@@ -144,28 +111,20 @@ def listar_diagnosticos_pendientes(current_user):
             .execute()
         
         if not diagnosticos.data:
-            logger.info("No hay diagnósticos pendientes")
             return jsonify({'success': True, 'diagnosticos': []}), 200
         
-        # Obtener IDs de órdenes y técnicos
         ordenes_ids = list(set([d['id_orden_trabajo'] for d in diagnosticos.data if d.get('id_orden_trabajo')]))
         tecnicos_ids = list(set([d['id_tecnico'] for d in diagnosticos.data if d.get('id_tecnico')]))
         
-        logger.info(f"Órdenes IDs: {ordenes_ids}")
-        logger.info(f"Técnicos IDs: {tecnicos_ids}")
-        
-        # Obtener órdenes con vehículos de una vez
         ordenes_map = {}
         if ordenes_ids:
             ordenes = supabase.table('ordentrabajo') \
                 .select('id, codigo_unico, id_vehiculo') \
                 .in_('id', ordenes_ids) \
                 .execute()
-            logger.info(f"Órdenes encontradas: {len(ordenes.data) if ordenes.data else 0}")
             for o in (ordenes.data or []):
                 ordenes_map[o['id']] = o
         
-        # Obtener vehículos de una vez
         vehiculos_ids = list(set([o.get('id_vehiculo') for o in ordenes_map.values() if o.get('id_vehiculo')]))
         vehiculos_map = {}
         if vehiculos_ids:
@@ -173,29 +132,19 @@ def listar_diagnosticos_pendientes(current_user):
                 .select('id, placa, marca, modelo') \
                 .in_('id', vehiculos_ids) \
                 .execute()
-            logger.info(f"Vehículos encontrados: {len(vehiculos.data) if vehiculos.data else 0}")
             for v in (vehiculos.data or []):
                 vehiculos_map[v['id']] = v
         
-        # Obtener técnicos usando la nueva función
         tecnicos_map = {}
         if tecnicos_ids:
-            # Para cada técnico, verificar que tenga rol 'tecnico'
             for tecnico_id in tecnicos_ids:
-                tiene_rol = supabase.rpc('usuario_tiene_rol', {
-                    'p_usuario_id': tecnico_id,
-                    'p_rol_nombre': 'tecnico'
-                }).execute()
-                
-                if tiene_rol.data:
-                    tecnico = supabase.table('usuario') \
-                        .select('id, nombre') \
-                        .eq('id', tecnico_id) \
-                        .execute()
-                    if tecnico.data:
-                        tecnicos_map[tecnico_id] = tecnico.data[0]['nombre']
+                tecnico = supabase.table('usuario') \
+                    .select('id, nombre') \
+                    .eq('id', tecnico_id) \
+                    .execute()
+                if tecnico.data:
+                    tecnicos_map[tecnico_id] = tecnico.data[0]['nombre']
         
-        # Obtener servicios para cada diagnóstico
         diagnosticos_ids = [d['id'] for d in diagnosticos.data]
         servicios_map = {}
         if diagnosticos_ids:
@@ -203,7 +152,6 @@ def listar_diagnosticos_pendientes(current_user):
                 .select('id, descripcion, id_diagnostico_tecnico') \
                 .in_('id_diagnostico_tecnico', diagnosticos_ids) \
                 .execute()
-            logger.info(f"Servicios encontrados: {len(servicios.data) if servicios.data else 0}")
             for s in (servicios.data or []):
                 diag_id = s['id_diagnostico_tecnico']
                 if diag_id not in servicios_map:
@@ -251,7 +199,6 @@ def obtener_diagnostico(current_user, diagnostico_id):
     try:
         logger.info(f"🔍 Obteniendo diagnóstico {diagnostico_id}")
         
-        # 1. Obtener diagnóstico
         diagnostico = supabase.table('diagnostico_tecnico') \
             .select('*') \
             .eq('id', diagnostico_id) \
@@ -262,15 +209,12 @@ def obtener_diagnostico(current_user, diagnostico_id):
         
         dt = diagnostico.data[0]
         
-        # 2. Obtener orden de trabajo
         orden = supabase.table('ordentrabajo') \
             .select('*') \
             .eq('id', dt['id_orden_trabajo']) \
             .execute()
-        
         orden_data = orden.data[0] if orden.data else {}
         
-        # 3. Obtener vehículo
         vehiculo = {}
         if orden_data.get('id_vehiculo'):
             v = supabase.table('vehiculo') \
@@ -280,29 +224,20 @@ def obtener_diagnostico(current_user, diagnostico_id):
             if v.data:
                 vehiculo = v.data[0]
         
-        # 4. Obtener técnico (verificando rol)
         tecnico_nombre = ''
-        tiene_rol_tecnico = supabase.rpc('usuario_tiene_rol', {
-            'p_usuario_id': dt['id_tecnico'],
-            'p_rol_nombre': 'tecnico'
-        }).execute()
+        tecnico = supabase.table('usuario') \
+            .select('nombre') \
+            .eq('id', dt['id_tecnico']) \
+            .execute()
+        if tecnico.data:
+            tecnico_nombre = tecnico.data[0]['nombre']
         
-        if tiene_rol_tecnico.data:
-            tecnico = supabase.table('usuario') \
-                .select('nombre') \
-                .eq('id', dt['id_tecnico']) \
-                .execute()
-            if tecnico.data:
-                tecnico_nombre = tecnico.data[0]['nombre']
-        
-        # 5. Obtener servicios del diagnóstico
         servicios = supabase.table('servicio_tecnico') \
             .select('id, descripcion, orden') \
             .eq('id_diagnostico_tecnico', diagnostico_id) \
             .order('orden') \
             .execute()
         
-        # Obtener precios para los servicios
         servicios_ids = [s['id'] for s in (servicios.data or [])]
         precios_map = {}
         if servicios_ids:
@@ -324,47 +259,32 @@ def obtener_diagnostico(current_user, diagnostico_id):
                 'precio_final': precio.get('precio_final') if isinstance(precio, dict) else None
             })
         
-        # 6. Obtener solicitudes de repuestos
         solicitudes = supabase.table('solicitud_cotizacion_repuesto') \
             .select('*') \
             .eq('id_orden_trabajo', dt['id_orden_trabajo']) \
             .execute()
         
-        # 7. Obtener fotos del diagnóstico
         fotos = supabase.table('foto_diagnostico') \
             .select('*') \
             .eq('id_diagnostico_tecnico', diagnostico_id) \
             .execute()
         
-        # 8. Obtener observaciones
         observaciones = supabase.table('observaciondiagnostico') \
             .select('*') \
             .eq('id_diagnostico_tecnico', diagnostico_id) \
             .order('fecha_hora', desc=True) \
             .execute()
         
-        # Obtener nombres de jefes de taller para observaciones (verificando rol)
         jefes_ids = list(set([obs.get('id_jefe_taller') for obs in (observaciones.data or []) if obs.get('id_jefe_taller')]))
         jefes_map = {}
         if jefes_ids:
             for jefe_id in jefes_ids:
-                tiene_rol = supabase.rpc('usuario_tiene_rol', {
-                    'p_usuario_id': jefe_id,
-                    'p_rol_nombre': 'jefe_taller'
-                }).execute()
-                
-                if tiene_rol.data:
-                    jefe = supabase.table('usuario') \
-                        .select('id, nombre') \
-                        .eq('id', jefe_id) \
-                        .execute()
-                    if jefe.data:
-                        jefes_map[jefe_id] = jefe.data[0]['nombre']
-        
-        # También incluir los roles del técnico en la respuesta (opcional)
-        roles_tecnico = supabase.rpc('usuario_obtener_roles', {
-            'p_usuario_id': dt['id_tecnico']
-        }).execute()
+                jefe = supabase.table('usuario') \
+                    .select('id, nombre') \
+                    .eq('id', jefe_id) \
+                    .execute()
+                if jefe.data:
+                    jefes_map[jefe_id] = jefe.data[0]['nombre']
         
         resultado = {
             'diagnostico_id': dt['id'],
@@ -372,7 +292,6 @@ def obtener_diagnostico(current_user, diagnostico_id):
             'codigo_unico': orden_data.get('codigo_unico', ''),
             'id_tecnico': dt['id_tecnico'],
             'tecnico_nombre': tecnico_nombre,
-            'roles_tecnico': roles_tecnico.data if roles_tecnico.data else [],
             'informe': dt.get('informe', ''),
             'url_grabacion_informe': dt.get('url_grabacion_informe'),
             'transcripcion_informe': dt.get('transcripcion_informe'),
@@ -406,21 +325,44 @@ def obtener_diagnostico(current_user, diagnostico_id):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# 3. APROBAR DIAGNÓSTICO
+# 3. APROBAR DIAGNÓSTICO - CORREGIDO
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/aprobar-diagnostico', methods=['POST'])
 @jefe_taller_required
 def aprobar_diagnostico(current_user):
+    print("=" * 60)
+    print("🔵 APROBAR DIAGNÓSTICO - ENDPOINT LLAMADO")
+    print(f"Usuario: {current_user.get('nombre') if current_user else 'None'}")
+    
     try:
-        data = request.get_json()
+        # Obtener datos del request
+        data = request.get_json(silent=True)
+        print(f"Datos recibidos: {data}")
+        
+        if not data:
+            # Intentar obtener de form
+            data = request.form.to_dict()
+            print(f"Datos desde form: {data}")
+        
+        if not data:
+            return jsonify({'error': 'No se recibieron datos'}), 400
+        
+        # Obtener ID
         diagnostico_id = data.get('diagnostico_id')
+        if not diagnostico_id:
+            diagnostico_id = data.get('id')
+        
+        print(f"ID de diagnóstico: {diagnostico_id}")
         
         if not diagnostico_id:
             return jsonify({'error': 'ID de diagnóstico requerido'}), 400
         
-        # Verificar que el diagnóstico existe
+        # Convertir a entero
+        diagnostico_id = int(diagnostico_id)
+        
+        # Verificar diagnóstico
         diagnostico = supabase.table('diagnostico_tecnico') \
-            .select('id, id_orden_trabajo, id_tecnico, estado') \
+            .select('*') \
             .eq('id', diagnostico_id) \
             .execute()
         
@@ -428,40 +370,54 @@ def aprobar_diagnostico(current_user):
             return jsonify({'error': 'Diagnóstico no encontrado'}), 404
         
         dt = diagnostico.data[0]
+        print(f"Diagnóstico encontrado: estado={dt['estado']}, orden={dt['id_orden_trabajo']}")
         
         if dt['estado'] != 'pendiente':
-            return jsonify({'error': f'El diagnóstico está en estado {dt["estado"]}, no se puede aprobar'}), 400
+            return jsonify({'error': f'El diagnóstico está en estado {dt["estado"]}'}), 400
         
-        # Actualizar estado del diagnóstico
+        ahora = datetime.datetime.now().isoformat()
+        
+        # Actualizar diagnóstico
         supabase.table('diagnostico_tecnico') \
-            .update({
-                'estado': 'aprobado',
-                'fecha_modificacion': datetime.datetime.now().isoformat()
-            }) \
+            .update({'estado': 'aprobado', 'fecha_modificacion': ahora}) \
             .eq('id', diagnostico_id) \
             .execute()
         
-        # Actualizar estado de la orden de trabajo
+        # Actualizar orden a Cotizacion
         supabase.table('ordentrabajo') \
-            .update({'estado_global': 'PendienteAprobacion'}) \
+            .update({'estado_global': 'Cotizacion'}) \
             .eq('id', dt['id_orden_trabajo']) \
             .execute()
+        
+        # Registrar en seguimiento
+        supabase.table('seguimientoorden').insert({
+            'id_orden_trabajo': dt['id_orden_trabajo'],
+            'estado': 'Cotizacion',
+            'fecha_hora_cambio': ahora
+        }).execute()
         
         # Notificar al técnico
         supabase.table('notificacion').insert({
             'id_usuario_destino': dt['id_tecnico'],
             'tipo': 'diagnostico_aprobado',
-            'mensaje': '✅ Tu diagnóstico ha sido APROBADO.',
-            'fecha_envio': datetime.datetime.now().isoformat(),
+            'mensaje': '✅ Tu diagnóstico ha sido APROBADO. Ahora se procederá con la cotización.',
+            'fecha_envio': ahora,
             'leida': False
         }).execute()
         
-        logger.info(f"Diagnóstico {diagnostico_id} aprobado por Jefe de Taller {current_user['id']}")
+        print("🎉 DIAGNÓSTICO APROBADO CON ÉXITO!")
+        print("=" * 60)
         
-        return jsonify({'success': True, 'message': 'Diagnóstico aprobado correctamente'}), 200
+        return jsonify({
+            'success': True,
+            'message': 'Diagnóstico aprobado correctamente',
+            'nuevo_estado': 'Cotizacion'
+        }), 200
         
     except Exception as e:
-        logger.error(f"Error aprobando diagnóstico: {str(e)}")
+        print(f"❌ Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
@@ -482,7 +438,6 @@ def rechazar_diagnostico(current_user):
         if not observacion and not grabacion_url:
             return jsonify({'error': 'Debe proporcionar una observación o grabación'}), 400
         
-        # Verificar diagnóstico
         diagnostico = supabase.table('diagnostico_tecnico') \
             .select('id, id_orden_trabajo, id_tecnico, version') \
             .eq('id', diagnostico_id) \
@@ -493,7 +448,6 @@ def rechazar_diagnostico(current_user):
         
         dt = diagnostico.data[0]
         
-        # Guardar observación
         observacion_data = {
             'id_diagnostico_tecnico': diagnostico_id,
             'id_jefe_taller': current_user['id'],
@@ -505,7 +459,6 @@ def rechazar_diagnostico(current_user):
         
         supabase.table('observaciondiagnostico').insert(observacion_data).execute()
         
-        # Actualizar diagnóstico a rechazado
         supabase.table('diagnostico_tecnico') \
             .update({
                 'estado': 'rechazado',
@@ -515,7 +468,6 @@ def rechazar_diagnostico(current_user):
             .eq('id', diagnostico_id) \
             .execute()
         
-        # Notificar al técnico
         supabase.table('notificacion').insert({
             'id_usuario_destino': dt['id_tecnico'],
             'tipo': 'diagnostico_rechazado',
@@ -524,7 +476,7 @@ def rechazar_diagnostico(current_user):
             'leida': False
         }).execute()
         
-        logger.info(f"Diagnóstico {diagnostico_id} rechazado por Jefe de Taller {current_user['id']}")
+        logger.info(f"Diagnóstico {diagnostico_id} rechazado")
         
         return jsonify({'success': True, 'message': 'Diagnóstico rechazado correctamente'}), 200
         
@@ -551,7 +503,6 @@ def solicitar_cotizacion_repuesto(current_user):
         if not orden_id or not servicio_id or not descripcion_pieza:
             return jsonify({'error': 'Faltan datos requeridos'}), 400
         
-        # Verificar que la orden existe
         orden = supabase.table('ordentrabajo') \
             .select('id, codigo_unico') \
             .eq('id', orden_id) \
@@ -560,10 +511,8 @@ def solicitar_cotizacion_repuesto(current_user):
         if not orden.data:
             return jsonify({'error': 'Orden de trabajo no encontrada'}), 404
         
-        # Buscar encargado de repuestos usando la nueva función
         encargado_id = obtener_encargado_repuestos()
         
-        # Crear solicitud
         solicitud_data = {
             'id_orden_trabajo': orden_id,
             'id_servicio': servicio_id,
@@ -579,7 +528,6 @@ def solicitar_cotizacion_repuesto(current_user):
         
         result = supabase.table('solicitud_cotizacion_repuesto').insert(solicitud_data).execute()
         
-        # Notificar al encargado de repuestos
         if encargado_id:
             supabase.table('notificacion').insert({
                 'id_usuario_destino': encargado_id,
@@ -646,56 +594,9 @@ def diagnosticos_stats(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# 8. ASIGNAR PRECIOS A SERVICIOS
+# 8. ENDPOINT DE PRUEBA
 # =====================================================
-@jefe_taller_diagnostico_bp.route('/asignar-precios-servicios', methods=['POST'])
-@jefe_taller_required
-def asignar_precios_servicios(current_user):
-    try:
-        data = request.get_json()
-        diagnostico_id = data.get('diagnostico_id')
-        servicios = data.get('servicios', [])
-        
-        if not diagnostico_id:
-            return jsonify({'error': 'ID de diagnóstico requerido'}), 400
-        
-        for servicio in servicios:
-            servicio_id = servicio.get('id')
-            precio_estimado = servicio.get('precio_estimado')
-            precio_final = servicio.get('precio_final')
-            
-            if not servicio_id:
-                continue
-            
-            existing = supabase.table('servicio_precio') \
-                .select('id') \
-                .eq('id_servicio', servicio_id) \
-                .execute()
-            
-            if existing.data:
-                supabase.table('servicio_precio') \
-                    .update({
-                        'precio_estimado': precio_estimado,
-                        'precio_final': precio_final,
-                        'aprobado_por_jefe_taller': True,
-                        'aprobado_en': datetime.datetime.now().isoformat()
-                    }) \
-                    .eq('id_servicio', servicio_id) \
-                    .execute()
-            else:
-                supabase.table('servicio_precio').insert({
-                    'id_servicio': servicio_id,
-                    'id_jefe_taller': current_user['id'],
-                    'precio_estimado': precio_estimado,
-                    'precio_final': precio_final,
-                    'aprobado_por_jefe_taller': True,
-                    'aprobado_en': datetime.datetime.now().isoformat()
-                }).execute()
-        
-        logger.info(f"Precios asignados para diagnóstico {diagnostico_id}")
-        
-        return jsonify({'success': True, 'message': 'Precios asignados correctamente'}), 200
-        
-    except Exception as e:
-        logger.error(f"Error asignando precios: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+@jefe_taller_diagnostico_bp.route('/test', methods=['GET'])
+def test_endpoint():
+    """Endpoint de prueba para verificar que el blueprint funciona"""
+    return jsonify({'success': True, 'message': 'Endpoint de diagnóstico funcionando'}), 200

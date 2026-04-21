@@ -1,6 +1,6 @@
 // =====================================================
 // DIAGNÓSTICO TÉCNICO - TÉCNICO MECÁNICO
-// FURIA MOTOR COMPANY SRL
+// FURIA MOTOR COMPANY SRL - VERSIÓN CORREGIDA
 // =====================================================
 
 let token = null;
@@ -149,7 +149,7 @@ async function verificarToken() {
 }
 
 // =====================================================
-// CARGA DE ÓRDENES DEL TÉCNICO
+// CARGA DE ÓRDENES DEL TÉCNICO - CORREGIDO
 // =====================================================
 
 async function cargarOrdenes() {
@@ -171,14 +171,38 @@ async function cargarOrdenes() {
         }
         
         const data = await response.json();
-        console.log('Órdenes recibidas:', data);
+        console.log('=== RESPUESTA COMPLETA DE LA API ===');
+        console.log(JSON.stringify(data, null, 2));
         
         if (data.success) {
             ordenesTecnico = data.ordenes || [];
             console.log('📋 Total órdenes cargadas:', ordenesTecnico.length);
-            if (ordenesTecnico.length > 0) {
-                console.log('📋 Primera orden ejemplo:', ordenesTecnico[0]);
-            }
+            
+            // ✅ NORMALIZAR: Asegurar que cada orden tenga un ID válido
+            ordenesTecnico = ordenesTecnico.map(orden => {
+                // Intentar diferentes nombres de campo para el ID
+                const ordenId = orden.orden_id || orden.id || orden.ordenId;
+                
+                if (!ordenId) {
+                    console.error('⚠️ Orden sin ID:', orden);
+                }
+                
+                return {
+                    ...orden,
+                    orden_id: ordenId  // Normalizar a orden_id
+                };
+            });
+            
+            // Verificar cada orden
+            ordenesTecnico.forEach((orden, idx) => {
+                console.log(`Orden ${idx}:`, {
+                    orden_id: orden.orden_id,
+                    tipo: typeof orden.orden_id,
+                    codigo_unico: orden.codigo_unico,
+                    tiene_vehiculo: !!orden.vehiculo
+                });
+            });
+            
             actualizarSelectorOrdenes();
             
             if (ordenesTecnico.length === 0) {
@@ -205,9 +229,18 @@ function actualizarSelectorOrdenes() {
     select.innerHTML = '<option value="">-- Seleccione una orden --</option>';
     
     ordenesTecnico.forEach(orden => {
+        // ✅ Usar orden_id normalizado
+        const ordenId = orden.orden_id;
+        
+        if (!ordenId) {
+            console.error('❌ No se puede crear option: orden sin ID', orden);
+            return;
+        }
+        
         const option = document.createElement('option');
-        // Usar setAttribute para asegurar
-        option.setAttribute('value', orden.orden_id);
+        
+        // ✅ Asignar value correctamente
+        option.value = String(ordenId);
         
         let estadoIcon = '';
         if (orden.diagnostico_estado === 'pendiente') estadoIcon = '⏳';
@@ -216,16 +249,15 @@ function actualizarSelectorOrdenes() {
         else if (orden.tiene_diagnostico) estadoIcon = '📝';
         else estadoIcon = '🆕';
         
-        option.textContent = `${orden.codigo_unico} - ${orden.vehiculo.placa} (${orden.vehiculo.marca} ${orden.vehiculo.modelo}) ${estadoIcon}`;
+        const vehiculo = orden.vehiculo || {};
+        option.textContent = `${orden.codigo_unico} - ${vehiculo.placa || 'SIN PLACA'} (${vehiculo.marca || ''} ${vehiculo.modelo || ''}) ${estadoIcon}`;
+        
         select.appendChild(option);
+        
+        console.log(`✅ Option creado: value="${option.value}", text="${option.textContent.substring(0, 50)}..."`);
     });
     
-    console.log('✅ Selector actualizado');
-    // Forzar que el primer option tenga el value correcto
-    if (select.options.length > 1) {
-        console.log('Option 1 value:', select.options[1].getAttribute('value'));
-        console.log('Option 1 value property:', select.options[1].value);
-    }
+    console.log('✅ Selector actualizado con', ordenesTecnico.length, 'órdenes');
 }
 
 // =====================================================
@@ -413,7 +445,7 @@ function mostrarHistorial(observaciones) {
 }
 
 function mostrarInfoVehiculo(orden) {
-    const vehiculo = orden.vehiculo;
+    const vehiculo = orden.vehiculo || {};
     
     const placaEl = document.getElementById('vehiculoPlaca');
     const modeloEl = document.getElementById('vehiculoModelo');
@@ -914,23 +946,16 @@ async function cargarDiagnosticoSeleccionado() {
         return;
     }
     
-    // Obtener el índice seleccionado y luego el value
-    const selectedIndex = select.selectedIndex;
+    // Obtener el valor seleccionado
+    const selectedValue = select.value;
+    
     console.log('=== CARGANDO DIAGNÓSTICO ===');
-    console.log('Selected index:', selectedIndex);
-    
-    if (selectedIndex <= 0) {
-        showToast('Selecciona una orden primero', 'warning');
-        return;
-    }
-    
-    const selectedOption = select.options[selectedIndex];
-    const selectedValue = selectedOption.value;
-    console.log('Selected option value:', selectedValue);
-    console.log('Selected option text:', selectedOption.text);
+    console.log('Selected index:', select.selectedIndex);
+    console.log('Selected value:', selectedValue);
+    console.log('Selected option text:', select.options[select.selectedIndex]?.text);
     
     if (!selectedValue || selectedValue === '') {
-        showToast('Valor de orden inválido', 'error');
+        showToast('Selecciona una orden primero', 'warning');
         return;
     }
     
@@ -951,7 +976,6 @@ async function cargarDiagnosticoSeleccionado() {
         ordenSeleccionada = ordenEncontrada;
         mostrarInfoVehiculo(ordenSeleccionada);
         
-        // Mostrar formulario
         mostrarFormulario();
         
         await cargarDiagnosticoExistente(ordenId);
@@ -959,6 +983,7 @@ async function cargarDiagnosticoSeleccionado() {
     } else {
         console.error('❌ Orden no encontrada en el array');
         console.log('IDs disponibles:', ordenesTecnico.map(o => o.orden_id));
+        console.log('Todas las órdenes:', ordenesTecnico);
         showToast('Orden no encontrada', 'error');
     }
 }
@@ -982,7 +1007,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnCargar = document.getElementById('btnCargarDiagnostico');
     if (btnCargar) {
         console.log('✅ Botón Cargar Diagnóstico encontrado');
-        // Eliminar event listeners anteriores clonando y reemplazando
         const newBtn = btnCargar.cloneNode(true);
         btnCargar.parentNode.replaceChild(newBtn, btnCargar);
         newBtn.addEventListener('click', cargarDiagnosticoSeleccionado);
@@ -991,7 +1015,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('❌ Botón Cargar Diagnóstico NO encontrado');
     }
     
-    // También configurar el evento change del select para depuración
+    // Configurar evento change del select
     const ordenSelect = document.getElementById('ordenSelect');
     if (ordenSelect) {
         ordenSelect.addEventListener('change', function() {

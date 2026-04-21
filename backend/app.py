@@ -73,6 +73,11 @@ try:
     from jefe_taller.diagnostico import jefe_taller_diagnostico_bp
     from jefe_taller.cotizaciones import cotizaciones_bp
     from jefe_taller.admin_roles import admin_roles_bp  
+    # Agrega esta línea con los otros imports de jefe_taller
+    from jefe_taller.test_simple import test_bp
+
+    # Y registra el blueprint
+    app.register_blueprint(test_bp)
     
     app.register_blueprint(jefe_taller_ordenes_bp)
     app.register_blueprint(calendario_bahias_bp)

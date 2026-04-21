@@ -193,9 +193,12 @@ function getAuthToken() {
 }
 
 function getHeaders() {
+    const token = getAuthToken();
+    console.log('🔑 Token para headers:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN');
+    
     return {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
+        'Authorization': `Bearer ${token}`
     };
 }
 
@@ -719,30 +722,55 @@ function cerrarModalDiagnostico() {
 }
 
 // ====================================================
-// APROBAR DIAGNÓSTICO
+// APROBAR DIAGNÓSTICO (CORREGIDO CON MÁS LOGS)
 // ====================================================
 async function aprobarDiagnostico(diagnosticoId) {
-    if (!confirm('¿Estás seguro de aprobar este diagnóstico?')) return;
+    console.log('📝 Aprobando diagnóstico ID:', diagnosticoId);
+    console.log('Tipo de ID:', typeof diagnosticoId);
+    
+    if (!diagnosticoId) {
+        console.error('❌ ID de diagnóstico inválido');
+        mostrarNotificacion('ID de diagnóstico inválido', 'error');
+        return;
+    }
+    
+    if (!confirm('¿Estás seguro de aprobar este diagnóstico?\n\nAl aprobarlo, la orden pasará al estado COTIZACION para que se puedan generar las cotizaciones.')) return;
     
     try {
+        const payload = { diagnostico_id: diagnosticoId };
+        console.log('📦 Payload a enviar:', payload);
+        
         const response = await fetch(`${API_URL}/jefe-taller/aprobar-diagnostico`, {
             method: 'POST',
             headers: getHeaders(),
-            body: JSON.stringify({ diagnostico_id: diagnosticoId })
+            body: JSON.stringify(payload)
         });
         
-        const data = await response.json();
+        console.log('📡 Response status:', response.status);
         
-        if (data.success) {
-            mostrarNotificacion('Diagnóstico aprobado correctamente');
-            loadDiagnosticos();
-            loadStats();
+        const data = await response.json();
+        console.log('📨 Respuesta completa:', data);
+        
+        if (response.ok && data.success) {
+            mostrarNotificacion(data.message || 'Diagnóstico aprobado correctamente', 'success');
+            
+            // Recargar listas
+            await loadDiagnosticos();
+            await loadStats();
+            
+            // Si hay modal abierto, cerrarlo
+            cerrarModalDiagnostico();
+            
+            // Mostrar mensaje adicional si cambió el estado
+            if (data.nuevo_estado) {
+                mostrarNotificacion(`La orden ahora está en estado: ${data.nuevo_estado}`, 'info');
+            }
         } else {
             mostrarNotificacion(data.error || 'Error al aprobar', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion('Error de conexión', 'error');
+        console.error('❌ Error en la petición:', error);
+        mostrarNotificacion('Error de conexión: ' + error.message, 'error');
     }
 }
 

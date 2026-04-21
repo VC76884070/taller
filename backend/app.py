@@ -17,12 +17,41 @@ app = Flask(__name__,
             static_folder='../',  # Sirve archivos estáticos desde la raíz del proyecto
             static_url_path='')
 
-# Configuración
+# =====================================================
+# CONFIGURACIÓN MEJORADA
+# =====================================================
 app.config['SECRET_KEY'] = config.SECRET_KEY
 app.config['CORS_HEADERS'] = 'Content-Type'
+app.config['JSON_SORT_KEYS'] = False
+app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max para archivos
+app.config['JSON_AS_ASCII'] = False  # Para caracteres especiales
 
-# Habilitar CORS
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+# Habilitar CORS con soporte para credenciales
+CORS(app, 
+     resources={r"/api/*": {"origins": "*"}}, 
+     supports_credentials=True,
+     expose_headers=['Content-Type', 'Authorization'])
+
+# =====================================================
+# MIDDLEWARE PARA PROCESAR JSON CORRECTAMENTE
+# =====================================================
+@app.before_request
+def before_request():
+    """Configuración antes de cada request para asegurar JSON"""
+    # Solo para peticiones POST que deberían ser JSON
+    if request.method == 'POST' and request.endpoint and 'api' in request.endpoint:
+        # Log para depuración
+        logger.debug(f"📥 Request a {request.endpoint}")
+        logger.debug(f"   Content-Type: {request.content_type}")
+        logger.debug(f"   Data length: {len(request.data) if request.data else 0}")
+        
+        # Intentar pre-cargar JSON para detectar errores temprano
+        if request.is_json:
+            try:
+                request.get_json(force=True)
+            except Exception as e:
+                logger.warning(f"⚠️ Error parsing JSON: {e}")
 
 # =====================================================
 # IMPORTAR BLUEPRINTS POR ROL
@@ -73,12 +102,7 @@ try:
     from jefe_taller.diagnostico import jefe_taller_diagnostico_bp
     from jefe_taller.cotizaciones import cotizaciones_bp
     from jefe_taller.admin_roles import admin_roles_bp  
-    # Agrega esta línea con los otros imports de jefe_taller
-    from jefe_taller.test_simple import test_bp
 
-    # Y registra el blueprint
-    app.register_blueprint(test_bp)
-    
     app.register_blueprint(jefe_taller_ordenes_bp)
     app.register_blueprint(calendario_bahias_bp)
     app.register_blueprint(historial_vehiculos_bp)
@@ -276,7 +300,7 @@ def serve_html(path):
         'jefe_taller/orden_trabajo': '../jefe_taller/orden_trabajo.html',
         'jefe_taller/calendario_bahias': '../jefe_taller/calendario_bahias.html',
         'jefe_taller/historial_vehiculos': '../jefe_taller/historial_vehiculos.html',
-        'jefe_taller/diagnosticos': '../jefe_taller/diagnosticos.html',
+        'jefe_taller/diagnostico': '../jefe_taller/diagnostico.html',
         'jefe_taller/planificacion': '../jefe_taller/planificacion.html',
         'jefe_taller/control_calidad': '../jefe_taller/control_calidad.html',
         'jefe_taller/perfil': '../jefe_taller/perfil.html',
@@ -340,7 +364,6 @@ def test_api():
 @app.errorhandler(404)
 def not_found(error):
     """Manejo de errores 404"""
-    from flask import request
     logger.warning(f"404 error: {request.path}")
     try:
         return send_from_directory('../login', 'index.html')
@@ -373,4 +396,4 @@ if __name__ == '__main__':
     print("   • Jefe Taller:    http://localhost:5000/jefe_taller")
     print("="*60)
     
-    app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
+    app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)   

@@ -1,5 +1,5 @@
 # =====================================================
-# DIAGNÓSTICO - JEFE DE TALLER (CORREGIDO)
+# DIAGNÓSTICO - JEFE DE TALLER (VERSIÓN DEFINITIVA)
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -10,6 +10,7 @@ import logging
 import base64
 import io
 import os
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -325,7 +326,7 @@ def obtener_diagnostico(current_user, diagnostico_id):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# 3. APROBAR DIAGNÓSTICO - CORREGIDO
+# 3. APROBAR DIAGNÓSTICO - VERSIÓN QUE ACEPTA TODO
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/aprobar-diagnostico', methods=['POST'])
 @jefe_taller_required
@@ -335,30 +336,52 @@ def aprobar_diagnostico(current_user):
     print(f"Usuario: {current_user.get('nombre') if current_user else 'None'}")
     
     try:
-        # Obtener datos del request
-        data = request.get_json(silent=True)
-        print(f"Datos recibidos: {data}")
+        # Intentar obtener datos de diferentes fuentes
+        diagnostico_id = None
         
-        if not data:
-            # Intentar obtener de form
-            data = request.form.to_dict()
-            print(f"Datos desde form: {data}")
+        # 1. Intentar como JSON
+        if request.is_json:
+            data = request.get_json(silent=True)
+            if data:
+                diagnostico_id = data.get('diagnostico_id') or data.get('id')
+                print(f"📝 Desde JSON: {data}")
         
-        if not data:
-            return jsonify({'error': 'No se recibieron datos'}), 400
+        # 2. Intentar como FormData
+        if not diagnostico_id and request.form:
+            diagnostico_id = request.form.get('diagnostico_id') or request.form.get('id')
+            print(f"📝 Desde FormData: {request.form}")
         
-        # Obtener ID
-        diagnostico_id = data.get('diagnostico_id')
+        # 3. Intentar desde raw data
+        if not diagnostico_id and request.data:
+            try:
+                data = json.loads(request.data.decode('utf-8'))
+                diagnostico_id = data.get('diagnostico_id') or data.get('id')
+                print(f"📝 Desde Raw: {data}")
+            except:
+                pass
+        
+        # 4. Intentar desde args (GET)
+        if not diagnostico_id and request.args:
+            diagnostico_id = request.args.get('diagnostico_id') or request.args.get('id')
+            print(f"📝 Desde Args: {request.args}")
+        
+        print(f"🔍 ID extraído: {diagnostico_id}")
+        
         if not diagnostico_id:
-            diagnostico_id = data.get('id')
-        
-        print(f"ID de diagnóstico: {diagnostico_id}")
-        
-        if not diagnostico_id:
-            return jsonify({'error': 'ID de diagnóstico requerido'}), 400
+            print(f"❌ No se encontró ID")
+            return jsonify({
+                'error': 'ID de diagnóstico requerido',
+                'debug': {
+                    'content_type': request.content_type,
+                    'is_json': request.is_json,
+                    'form': dict(request.form),
+                    'data_present': bool(request.data)
+                }
+            }), 400
         
         # Convertir a entero
         diagnostico_id = int(diagnostico_id)
+        print(f"✅ ID convertido: {diagnostico_id}")
         
         # Verificar diagnóstico
         diagnostico = supabase.table('diagnostico_tecnico') \
@@ -367,10 +390,10 @@ def aprobar_diagnostico(current_user):
             .execute()
         
         if not diagnostico.data:
-            return jsonify({'error': 'Diagnóstico no encontrado'}), 404
+            return jsonify({'error': f'Diagnóstico {diagnostico_id} no encontrado'}), 404
         
         dt = diagnostico.data[0]
-        print(f"Diagnóstico encontrado: estado={dt['estado']}, orden={dt['id_orden_trabajo']}")
+        print(f"✅ Diagnóstico encontrado: estado={dt['estado']}, orden={dt['id_orden_trabajo']}")
         
         if dt['estado'] != 'pendiente':
             return jsonify({'error': f'El diagnóstico está en estado {dt["estado"]}'}), 400
@@ -382,21 +405,24 @@ def aprobar_diagnostico(current_user):
             .update({'estado': 'aprobado', 'fecha_modificacion': ahora}) \
             .eq('id', diagnostico_id) \
             .execute()
+        print("  ✓ Diagnóstico actualizado")
         
-        # Actualizar orden a Cotizacion
+        # Actualizar orden
         supabase.table('ordentrabajo') \
             .update({'estado_global': 'Cotizacion'}) \
             .eq('id', dt['id_orden_trabajo']) \
             .execute()
+        print(f"  ✓ Orden actualizada a Cotizacion")
         
-        # Registrar en seguimiento
+        # Registrar seguimiento
         supabase.table('seguimientoorden').insert({
             'id_orden_trabajo': dt['id_orden_trabajo'],
             'estado': 'Cotizacion',
             'fecha_hora_cambio': ahora
         }).execute()
+        print("  ✓ Seguimiento registrado")
         
-        # Notificar al técnico
+        # Notificar
         supabase.table('notificacion').insert({
             'id_usuario_destino': dt['id_tecnico'],
             'tipo': 'diagnostico_aprobado',
@@ -404,6 +430,7 @@ def aprobar_diagnostico(current_user):
             'fecha_envio': ahora,
             'leida': False
         }).execute()
+        print("  ✓ Notificación enviada")
         
         print("🎉 DIAGNÓSTICO APROBADO CON ÉXITO!")
         print("=" * 60)
@@ -421,22 +448,38 @@ def aprobar_diagnostico(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# 4. RECHAZAR DIAGNÓSTICO CON OBSERVACIÓN
+# 4. RECHAZAR DIAGNÓSTICO
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/rechazar-diagnostico', methods=['POST'])
 @jefe_taller_required
 def rechazar_diagnostico(current_user):
+    print("🔴 RECHAZAR DIAGNÓSTICO")
+    
     try:
-        data = request.get_json()
-        diagnostico_id = data.get('diagnostico_id')
-        observacion = data.get('observacion')
-        grabacion_url = data.get('grabacion_url')
+        diagnostico_id = None
+        observacion = ''
+        grabacion_url = None
+        
+        # Intentar obtener datos
+        if request.is_json:
+            data = request.get_json(silent=True)
+            if data:
+                diagnostico_id = data.get('diagnostico_id') or data.get('id')
+                observacion = data.get('observacion', '')
+                grabacion_url = data.get('grabacion_url')
+        
+        if not diagnostico_id and request.form:
+            diagnostico_id = request.form.get('diagnostico_id') or request.form.get('id')
+            observacion = request.form.get('observacion', '')
+            grabacion_url = request.form.get('grabacion_url')
         
         if not diagnostico_id:
             return jsonify({'error': 'ID de diagnóstico requerido'}), 400
         
         if not observacion and not grabacion_url:
             return jsonify({'error': 'Debe proporcionar una observación o grabación'}), 400
+        
+        diagnostico_id = int(diagnostico_id)
         
         diagnostico = supabase.table('diagnostico_tecnico') \
             .select('id, id_orden_trabajo, id_tecnico, version') \
@@ -476,7 +519,7 @@ def rechazar_diagnostico(current_user):
             'leida': False
         }).execute()
         
-        logger.info(f"Diagnóstico {diagnostico_id} rechazado")
+        print(f"✅ Diagnóstico {diagnostico_id} rechazado")
         
         return jsonify({'success': True, 'message': 'Diagnóstico rechazado correctamente'}), 200
         
@@ -491,7 +534,9 @@ def rechazar_diagnostico(current_user):
 @jefe_taller_required
 def solicitar_cotizacion_repuesto(current_user):
     try:
-        data = request.get_json()
+        data = request.get_json(force=True, silent=True)
+        if not data:
+            data = request.form.to_dict()
         
         orden_id = data.get('orden_id')
         servicio_id = data.get('servicio_id')
@@ -514,12 +559,12 @@ def solicitar_cotizacion_repuesto(current_user):
         encargado_id = obtener_encargado_repuestos()
         
         solicitud_data = {
-            'id_orden_trabajo': orden_id,
-            'id_servicio': servicio_id,
+            'id_orden_trabajo': int(orden_id),
+            'id_servicio': int(servicio_id),
             'id_jefe_taller': current_user['id'],
             'id_encargado_repuestos': encargado_id,
             'descripcion_pieza': descripcion_pieza,
-            'cantidad': cantidad,
+            'cantidad': int(cantidad),
             'urgencia': urgencia,
             'observacion_jefe_taller': observacion,
             'estado': 'pendiente',
@@ -552,7 +597,10 @@ def solicitar_cotizacion_repuesto(current_user):
 @jefe_taller_required
 def subir_audio_observacion(current_user):
     try:
-        data = request.get_json()
+        data = request.get_json(force=True, silent=True)
+        if not data:
+            data = request.form.to_dict()
+        
         audio_base64 = data.get('audio')
         
         if not audio_base64:
@@ -581,11 +629,11 @@ def diagnosticos_stats(current_user):
         stats = {}
         
         for estado in estados:
-            count = supabase.table('diagnostico_tecnico') \
+            result = supabase.table('diagnostico_tecnico') \
                 .select('id', count='exact') \
                 .eq('estado', estado) \
                 .execute()
-            stats[estado] = count.count if hasattr(count, 'count') else len(count.data) if count.data else 0
+            stats[estado] = result.count if hasattr(result, 'count') else len(result.data) if result.data else 0
         
         return jsonify({'success': True, 'stats': stats}), 200
         
@@ -598,5 +646,75 @@ def diagnosticos_stats(current_user):
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/test', methods=['GET'])
 def test_endpoint():
-    """Endpoint de prueba para verificar que el blueprint funciona"""
-    return jsonify({'success': True, 'message': 'Endpoint de diagnóstico funcionando'}), 200
+    """Endpoint de prueba"""
+    return jsonify({
+        'success': True,
+        'message': 'Endpoint de diagnóstico funcionando'
+    }), 200
+
+# Agrega esto al final de diagnostico.py
+@jefe_taller_diagnostico_bp.route('/aprobar-diagnostico-simple', methods=['POST'])
+def aprobar_diagnostico_simple():
+    """Versión simple sin autenticación para probar"""
+    print("=" * 60)
+    print("🔵 APROBAR DIAGNÓSTICO - VERSIÓN SIMPLE")
+    
+    try:
+        # Obtener datos de FormData
+        diagnostico_id = request.form.get('diagnostico_id') or request.form.get('id')
+        
+        if not diagnostico_id:
+            # Intentar obtener de JSON
+            if request.is_json:
+                data = request.get_json(silent=True)
+                if data:
+                    diagnostico_id = data.get('diagnostico_id') or data.get('id')
+        
+        print(f"ID recibido: {diagnostico_id}")
+        print(f"Content-Type: {request.content_type}")
+        print(f"Form: {request.form}")
+        print(f"Data: {request.data}")
+        
+        if not diagnostico_id:
+            return jsonify({'error': 'ID no recibido', 'content_type': request.content_type}), 400
+        
+        diagnostico_id = int(diagnostico_id)
+        
+        # Verificar diagnóstico
+        diagnostico = supabase.table('diagnostico_tecnico') \
+            .select('*') \
+            .eq('id', diagnostico_id) \
+            .execute()
+        
+        if not diagnostico.data:
+            return jsonify({'error': 'Diagnóstico no encontrado'}), 404
+        
+        dt = diagnostico.data[0]
+        
+        if dt['estado'] != 'pendiente':
+            return jsonify({'error': f'Estado actual: {dt["estado"]}'}), 400
+        
+        ahora = datetime.datetime.now().isoformat()
+        
+        # Actualizar diagnóstico
+        supabase.table('diagnostico_tecnico') \
+            .update({'estado': 'aprobado', 'fecha_modificacion': ahora}) \
+            .eq('id', diagnostico_id) \
+            .execute()
+        
+        # Actualizar orden
+        supabase.table('ordentrabajo') \
+            .update({'estado_global': 'Cotizacion'}) \
+            .eq('id', dt['id_orden_trabajo']) \
+            .execute()
+        
+        print("🎉 ÉXITO!")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Diagnóstico aprobado correctamente'
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return jsonify({'error': str(e)}), 500

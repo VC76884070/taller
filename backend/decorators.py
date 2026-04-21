@@ -1,5 +1,5 @@
 # =====================================================
-# backend/decorators.py
+# backend/decorators.py (VERSIÓN CORREGIDA)
 # =====================================================
 
 from functools import wraps
@@ -61,6 +61,7 @@ def verificar_rol(roles_permitidos):
         def decorated(*args, **kwargs):
             token = None
             
+            # Obtener token del header Authorization
             if 'Authorization' in request.headers:
                 auth_header = request.headers['Authorization']
                 try:
@@ -72,6 +73,7 @@ def verificar_rol(roles_permitidos):
                 return jsonify({'error': 'Token requerido'}), 401
             
             try:
+                # Decodificar token
                 data = jwt.decode(token, config.SECRET_KEY, algorithms=["HS256"])
                 current_user = data['user']
                 usuario_id = current_user.get('id')
@@ -93,7 +95,6 @@ def verificar_rol(roles_permitidos):
                 tiene_rol = any(rol in roles_usuario for rol in roles_permitidos)
                 
                 if not tiene_rol:
-                    # Solo log de advertencia cuando realmente no tiene permiso
                     logger.warning(f"Acceso denegado: Usuario {current_user.get('nombre')} (ID: {usuario_id}) - Roles: {roles_usuario} - Requeridos: {roles_permitidos}")
                     return jsonify({'error': f'No autorizado. Se requiere rol: {", ".join(roles_permitidos)}'}), 403
                     
@@ -107,6 +108,7 @@ def verificar_rol(roles_permitidos):
                 logger.error(f"Error en autenticación: {str(e)}")
                 return jsonify({'error': 'Error de autenticación'}), 401
             
+            # Pasar el usuario a la función
             return f(current_user, *args, **kwargs)
         return decorated
     return decorator
@@ -125,4 +127,4 @@ def encargado_repuestos_required(f):
     return verificar_rol(['encargado_repuestos'])(f)
 
 def jefe_taller_o_operativo_required(f):
-    return verificar_rol(['jefe_taller', 'jefe_operativo'])(f)
+    return verificar_rol(['jefe_taller', 'jefe_operativo'])(f)  

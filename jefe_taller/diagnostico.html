@@ -15,64 +15,6 @@
     <!-- Estilos -->
     <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
     <link rel="stylesheet" href="/jefe_taller/css/diagnostico.css">
-
-    <style>
-        /* Estilos adicionales para asegurar que los modales funcionen */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(4px);
-            z-index: 1100;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal.show {
-            display: flex !important;
-        }
-
-        .modal-imagen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 2000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-        }
-
-        .modal-imagen-content {
-            position: relative;
-            max-width: 90%;
-            max-height: 90%;
-        }
-
-        .modal-imagen-close {
-            position: absolute;
-            top: -40px;
-            right: 0;
-            background: none;
-            border: none;
-            color: white;
-            font-size: 30px;
-            cursor: pointer;
-        }
-
-        .modal-imagen img {
-            max-width: 100%;
-            max-height: 90vh;
-            object-fit: contain;
-        }
-    </style>
 </head>
 
 <body>
@@ -191,21 +133,25 @@
         </main>
     </div>
 
-    <!-- Modal para ver detalle del diagnóstico -->
+    <!-- ===================================================== -->
+    <!-- MODAL DE DIAGNÓSTICO - VERSIÓN MEJORADA -->
+    <!-- ===================================================== -->
     <div class="modal" id="modalDiagnostico">
-        <div class="modal-content modal-lg">
+        <div class="modal-content modal-xl">
             <div class="modal-header">
-                <h2><i class="fas fa-stethoscope"></i> Detalle del Diagnóstico</h2>
+                <h2><i class="fas fa-stethoscope"></i> Detalle del Diagnóstico Técnico</h2>
                 <button class="modal-close" onclick="window.cerrarModalDiagnostico()">&times;</button>
             </div>
             <div class="modal-body" id="modalDiagnosticoBody">
                 <div class="loading-state">
                     <i class="fas fa-spinner fa-spin"></i>
-                    <p>Cargando detalles...</p>
+                    <p>Cargando detalles del diagnóstico...</p>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="window.cerrarModalDiagnostico()">Cerrar</button>
+                <button class="btn-secondary" onclick="window.cerrarModalDiagnostico()">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
             </div>
         </div>
     </div>
@@ -300,27 +246,11 @@
         </div>
     </div>
 
-    <!-- Modal para ver fotos del diagnóstico -->
-    <div class="modal" id="modalFotos">
-        <div class="modal-content modal-md">
-            <div class="modal-header">
-                <h2><i class="fas fa-images"></i> Fotos del Diagnóstico</h2>
-                <button class="modal-close" onclick="window.cerrarModalFotos()">&times;</button>
-            </div>
-            <div class="modal-body" id="modalFotosBody">
-                <!-- Contenido dinámico -->
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="window.cerrarModalFotos()">Cerrar</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Toast Notifications -->
     <div id="toastContainer" class="toast-container"></div>
 
-    <script src="/jefe_taller/js/include.js"></script>
-    <script src="/jefe_taller/js/diagnostico.js"></script>
+    <script src="js/include.js"></script>
+    <script src="js/diagnostico.js"></script>
 </body>
 
 </html>

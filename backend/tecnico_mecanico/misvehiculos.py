@@ -1,6 +1,6 @@
 # =====================================================
 # MIS VEHÍCULOS - TÉCNICO MECÁNICO
-# FLUJO: DIAGNÓSTICO → APROBACIÓN → REPARACIÓN
+# FLUJO: EMPEZAR TRABAJO → DIAGNÓSTICO → APROBACIÓN → REPARACIÓN
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
@@ -221,96 +221,6 @@ def obtener_comunicado_tecnico_detalle(current_user, id_comunicado):
 
 
 # =====================================================
-# API: OBTENER ÓRDENES PARA TÉCNICO (DIAGNÓSTICO)
-# =====================================================
-@mis_vehiculos_bp.route('/api/ordenes-tecnico', methods=['GET'])
-@tecnico_required
-def obtener_ordenes_tecnico(current_user):
-    """Obtener órdenes asignadas al técnico para diagnóstico"""
-    try:
-        tecnico_id = current_user['id']
-        
-        # Obtener asignaciones de diagnóstico activas
-        asignaciones = supabase.table('asignaciontecnico') \
-            .select('id_orden_trabajo, fecha_hora_inicio') \
-            .eq('id_tecnico', tecnico_id) \
-            .eq('tipo_asignacion', 'diagnostico') \
-            .is_('fecha_hora_final', 'null') \
-            .execute()
-        
-        if not asignaciones.data:
-            return jsonify({'success': True, 'ordenes': []}), 200
-        
-        orden_ids = [a['id_orden_trabajo'] for a in asignaciones.data]
-        
-        # Obtener órdenes con vehículo y cliente
-        ordenes = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, estado_global, fecha_ingreso, id_vehiculo') \
-            .in_('id', orden_ids) \
-            .execute()
-        
-        resultado = []
-        for orden in ordenes.data:
-            # Obtener vehículo
-            vehiculo = supabase.table('vehiculo') \
-                .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
-                .eq('id', orden['id_vehiculo']) \
-                .single() \
-                .execute()
-            
-            vehiculo_data = vehiculo.data if vehiculo.data else {}
-            
-            # Obtener cliente
-            cliente_nombre = 'No registrado'
-            if vehiculo_data.get('id_cliente'):
-                cliente = supabase.table('cliente') \
-                    .select('id_usuario') \
-                    .eq('id', vehiculo_data['id_cliente']) \
-                    .single() \
-                    .execute()
-                if cliente.data and cliente.data.get('id_usuario'):
-                    usuario = supabase.table('usuario') \
-                        .select('nombre') \
-                        .eq('id', cliente.data['id_usuario']) \
-                        .single() \
-                        .execute()
-                    if usuario.data:
-                        cliente_nombre = usuario.data['nombre']
-            
-            # Obtener diagnóstico existente
-            diagnostico = supabase.table('diagnostico_tecnico') \
-                .select('id, informe, estado, version') \
-                .eq('id_orden_trabajo', orden['id']) \
-                .order('version', desc=True) \
-                .limit(1) \
-                .execute()
-            
-            diagnostico_data = diagnostico.data[0] if diagnostico.data else None
-            
-            resultado.append({
-                'id': orden['id'],
-                'codigo_unico': orden['codigo_unico'],
-                'estado_global': orden['estado_global'],
-                'fecha_ingreso': orden['fecha_ingreso'],
-                'vehiculo': {
-                    'placa': vehiculo_data.get('placa', ''),
-                    'marca': vehiculo_data.get('marca', ''),
-                    'modelo': vehiculo_data.get('modelo', ''),
-                    'anio': vehiculo_data.get('anio'),
-                    'kilometraje': vehiculo_data.get('kilometraje')
-                },
-                'cliente_nombre': cliente_nombre,
-                'diagnostico': diagnostico_data
-            })
-        
-        return jsonify({'success': True, 'ordenes': resultado}), 200
-        
-    except Exception as e:
-        logger.error(f"Error obteniendo órdenes para técnico: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-# =====================================================
 # API: OBTENER VEHÍCULOS ASIGNADOS (DIAGNÓSTICO + REPARACIÓN)
 # =====================================================
 @mis_vehiculos_bp.route('/api/mis-vehiculos', methods=['GET'])
@@ -496,6 +406,96 @@ def obtener_mis_vehiculos(current_user):
         logger.error(f"Error obteniendo vehículos: {str(e)}")
         import traceback
         traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# API: EMPEZAR TRABAJO DE DIAGNÓSTICO (OCUPA BAHÍA)
+# =====================================================
+@mis_vehiculos_bp.route('/api/empezar-diagnostico', methods=['POST'])
+@tecnico_required
+def empezar_diagnostico(current_user):
+    """El técnico comienza el trabajo de diagnóstico - OCUPA LA BAHÍA"""
+    try:
+        data = request.get_json()
+        id_orden = data.get('id_orden')
+        
+        if not id_orden:
+            return jsonify({'error': 'ID de orden requerido'}), 400
+        
+        # Verificar asignación de diagnóstico
+        asignacion = supabase.table('asignaciontecnico') \
+            .select('id') \
+            .eq('id_orden_trabajo', id_orden) \
+            .eq('id_tecnico', current_user['id']) \
+            .eq('tipo_asignacion', 'diagnostico') \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
+        if not asignacion.data:
+            return jsonify({'error': 'No tienes esta orden asignada para diagnóstico'}), 403
+        
+        # Verificar si ya se empezó el trabajo
+        planificacion_existente = supabase.table('planificacion') \
+            .select('fecha_hora_inicio_real') \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
+        if planificacion_existente.data and planificacion_existente.data[0].get('fecha_hora_inicio_real'):
+            return jsonify({'error': 'Ya has empezado este trabajo'}), 400
+        
+        # Obtener la bahía asignada por el Jefe Taller
+        planificacion = supabase.table('planificacion') \
+            .select('bahia_asignada') \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
+        bahia_asignada = planificacion.data[0].get('bahia_asignada') if planificacion.data else None
+        
+        if not bahia_asignada:
+            return jsonify({'error': 'No hay bahía asignada para esta orden'}), 400
+        
+        # Verificar si la bahía está disponible
+        bahia_ocupada = supabase.table('planificacion') \
+            .select('id_orden_trabajo') \
+            .eq('bahia_asignada', bahia_asignada) \
+            .not_.is_('fecha_hora_inicio_real', 'null') \
+            .is_('fecha_hora_fin_real', 'null') \
+            .execute()
+        
+        if bahia_ocupada.data and len(bahia_ocupada.data) > 0:
+            if bahia_ocupada.data[0]['id_orden_trabajo'] != id_orden:
+                return jsonify({
+                    'error': f'La bahía {bahia_asignada} ya está ocupada por otra orden',
+                    'bahia_ocupada': True
+                }), 409
+        
+        ahora = datetime.datetime.now()
+        ahora_str = ahora.isoformat()
+        
+        # Actualizar planificación con inicio real (OCUPA BAHÍA)
+        supabase.table('planificacion') \
+            .update({'fecha_hora_inicio_real': ahora_str}) \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
+        # Cambiar estado de la orden a EnProceso (diagnóstico en curso)
+        supabase.table('ordentrabajo') \
+            .update({'estado_global': 'EnProceso'}) \
+            .eq('id', id_orden) \
+            .execute()
+        
+        logger.info(f"🔧 Diagnóstico iniciado en orden {id_orden}, bahía {bahia_asignada}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Trabajo iniciado en bahía {bahia_asignada}',
+            'fecha_inicio': ahora_str,
+            'bahia': bahia_asignada
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error iniciando diagnóstico: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -724,7 +724,7 @@ def iniciar_reparacion(current_user):
                     'bahia_ocupada': True
                 }), 409
         
-        # Actualizar planificación con inicio real
+        # Actualizar planificación con inicio real (ya debería estar, pero por si acaso)
         supabase.table('planificacion') \
             .update({'fecha_hora_inicio_real': ahora_str}) \
             .eq('id_orden_trabajo', id_orden) \

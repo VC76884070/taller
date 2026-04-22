@@ -1,6 +1,6 @@
 // =====================================================
 // MIS VEHÍCULOS - TÉCNICO MECÁNICO
-// FLUJO: DIAGNÓSTICO → APROBACIÓN → REPARACIÓN
+// FLUJO: EMPEZAR TRABAJO → DIAGNÓSTICO → APROBACIÓN → REPARACIÓN
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
@@ -354,18 +354,40 @@ function renderVehiculos() {
                 </span>
             `;
             
-            if (!diagnosticoEnviado && !diagnosticoRechazado) {
-                // Diagnóstico no enviado
+            // MOSTRAR LA BAHÍA ASIGNADA SIEMPRE
+            const bahiaInfo = vehiculo.bahia_asignada ? 
+                `<div class="bahia-info" style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(37, 99, 235, 0.1); border-radius: var(--radius-sm);">
+                    <i class="fas fa-warehouse"></i> <strong>Bahía asignada:</strong> ${vehiculo.bahia_asignada}
+                </div>` : '';
+            
+            // CASO 1: No ha empezado el trabajo - Mostrar "EMPEZAR TRABAJO"
+            if (!trabajoIniciado && !diagnosticoEnviado && !diagnosticoRechazado) {
                 botonesHtml = `
-                    <button class="btn-sm btn-primary-sm" onclick="crearDiagnostico(${vehiculo.orden_id})">
+                    <button class="btn-sm btn-primary-sm" onclick="empezarTrabajoDiagnostico(${vehiculo.orden_id})">
+                        <i class="fas fa-play-circle"></i> Empezar Trabajo
+                    </button>
+                    <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
+                        <i class="fas fa-eye"></i> Ver Detalle
+                    </button>
+                    ${bahiaInfo}
+                `;
+            } 
+            // CASO 2: Trabajo empezado, diagnóstico no enviado - Mostrar "Realizar Diagnóstico"
+            else if (trabajoIniciado && !diagnosticoEnviado && !diagnosticoRechazado) {
+                botonesHtml = `
+                    <button class="btn-sm btn-warning-sm" onclick="crearDiagnostico(${vehiculo.orden_id})">
                         <i class="fas fa-stethoscope"></i> Realizar Diagnóstico
                     </button>
                     <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
                         <i class="fas fa-eye"></i> Ver Detalle
                     </button>
+                    <div class="bahia-info" style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.1); border-radius: var(--radius-sm);">
+                        <i class="fas fa-warehouse"></i> <strong>Bahía ocupada:</strong> ${vehiculo.bahia_asignada}
+                    </div>
                 `;
-            } else if (diagnosticoEstado === 'pendiente') {
-                // Esperando aprobación
+            } 
+            // CASO 3: Diagnóstico enviado, esperando aprobación
+            else if (diagnosticoEstado === 'pendiente') {
                 botonesHtml = `
                     <button class="btn-sm btn-warning-sm" disabled>
                         <i class="fas fa-hourglass-half"></i> Diagnóstico en revisión
@@ -373,9 +395,13 @@ function renderVehiculos() {
                     <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
                         <i class="fas fa-eye"></i> Ver Detalle
                     </button>
+                    <div class="bahia-info" style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.1); border-radius: var(--radius-sm);">
+                        <i class="fas fa-warehouse"></i> <strong>Bahía ocupada:</strong> ${vehiculo.bahia_asignada}
+                    </div>
                 `;
-            } else if (diagnosticoEstado === 'aprobado') {
-                // Diagnóstico aprobado
+            } 
+            // CASO 4: Diagnóstico aprobado
+            else if (diagnosticoEstado === 'aprobado') {
                 botonesHtml = `
                     <button class="btn-sm btn-success-sm" disabled>
                         <i class="fas fa-check-circle"></i> Diagnóstico Aprobado
@@ -383,9 +409,13 @@ function renderVehiculos() {
                     <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
                         <i class="fas fa-eye"></i> Ver Detalle
                     </button>
+                    <div class="bahia-info" style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.1); border-radius: var(--radius-sm);">
+                        <i class="fas fa-warehouse"></i> <strong>Bahía ocupada:</strong> ${vehiculo.bahia_asignada}
+                    </div>
                 `;
-            } else if (diagnosticoRechazado) {
-                // Diagnóstico rechazado - permitir rehacer
+            } 
+            // CASO 5: Diagnóstico rechazado - rehacer
+            else if (diagnosticoRechazado) {
                 botonesHtml = `
                     <button class="btn-sm btn-warning-sm" onclick="crearDiagnostico(${vehiculo.orden_id})">
                         <i class="fas fa-edit"></i> Rehacer Diagnóstico
@@ -393,6 +423,9 @@ function renderVehiculos() {
                     <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
                         <i class="fas fa-eye"></i> Ver Detalle
                     </button>
+                    <div class="bahia-info" style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.1); border-radius: var(--radius-sm);">
+                        <i class="fas fa-warehouse"></i> <strong>Bahía ocupada:</strong> ${vehiculo.bahia_asignada}
+                    </div>
                 `;
             }
         } else if (esReparacion) {
@@ -402,7 +435,6 @@ function renderVehiculos() {
                 </span>
             `;
             
-            // Mostrar la bahía asignada por el Jefe de Taller
             const bahiaInfo = vehiculo.bahia_asignada ? 
                 `<div class="bahia-info" style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(37, 99, 235, 0.1); border-radius: var(--radius-sm);">
                     <i class="fas fa-warehouse"></i> <strong>Bahía asignada:</strong> ${vehiculo.bahia_asignada}
@@ -515,6 +547,69 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// =====================================================
+// DIAGNÓSTICO - EMPEZAR TRABAJO (OCUPA BAHÍA)
+// =====================================================
+let ordenSeleccionadaParaEmpezar = null;
+
+window.empezarTrabajoDiagnostico = function(ordenId) {
+    ordenSeleccionadaParaEmpezar = ordenId;
+    
+    const vehiculo = vehiculosAsignados.find(v => v.orden_id === ordenId);
+    if (vehiculo) {
+        const infoHtml = `
+            <p><strong>Vehículo:</strong> ${escapeHtml(vehiculo.vehiculo.marca)} ${escapeHtml(vehiculo.vehiculo.modelo)}</p>
+            <p><strong>Placa:</strong> ${escapeHtml(vehiculo.vehiculo.placa)}</p>
+            <p><strong>Orden:</strong> ${escapeHtml(vehiculo.codigo_unico)}</p>
+            ${vehiculo.bahia_asignada ? `<p><strong>Bahía asignada:</strong> ${vehiculo.bahia_asignada}</p>` : '<p class="text-warning"><i class="fas fa-exclamation-triangle"></i> No hay bahía asignada</p>'}
+        `;
+        document.getElementById('empezarInfo').innerHTML = infoHtml;
+    }
+    document.getElementById('ordenIdEmpezar').value = ordenId;
+    document.getElementById('empezarModal').classList.add('show');
+};
+
+window.cerrarEmpezarModal = function() {
+    document.getElementById('empezarModal').classList.remove('show');
+    document.getElementById('empezarInfo').innerHTML = '';
+    document.getElementById('ordenIdEmpezar').value = '';
+    ordenSeleccionadaParaEmpezar = null;
+};
+
+async function confirmarEmpezarDiagnostico() {
+    const ordenId = document.getElementById('ordenIdEmpezar').value;
+    
+    cerrarEmpezarModal();
+    showToast('Iniciando trabajo...', 'info');
+    
+    try {
+        const response = await fetch('/tecnico/api/empezar-diagnostico', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ id_orden: parseInt(ordenId) })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast(data.message || 'Trabajo iniciado correctamente', 'success');
+            cargarVehiculos();
+        } else {
+            if (data.bahia_ocupada) {
+                showToast(data.error, 'warning');
+            } else {
+                showToast(data.error || 'Error al iniciar', 'error');
+            }
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    }
 }
 
 // =====================================================
@@ -1173,6 +1268,9 @@ estilosAdicionales.textContent = `
         border-radius: var(--radius-sm);
         font-size: 0.75rem;
     }
+    .text-warning {
+        color: var(--ambar-alerta);
+    }
 `;
 document.head.appendChild(estilosAdicionales);
 
@@ -1188,6 +1286,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     mostrarIndicadorRoles();
     await cargarVehiculos();
     await cargarComunicados();
+    
+    const confirmarEmpezarBtn = document.getElementById('confirmarEmpezarBtn');
+    if (confirmarEmpezarBtn) {
+        confirmarEmpezarBtn.onclick = confirmarEmpezarDiagnostico;
+    }
     
     const confirmarInicioBtn = document.getElementById('confirmarInicioBtn');
     if (confirmarInicioBtn) {

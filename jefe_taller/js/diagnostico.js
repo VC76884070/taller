@@ -1,6 +1,6 @@
 // =====================================================
-// DIAGNOSTICO.JS - JEFE DE TALLER (VERSIÓN DEFINITIVA CON ENDPOINT SIMPLE)
-// Gestión de diagnósticos técnicos
+// DIAGNOSTICO.JS - JEFE DE TALLER (VERSIÓN CORREGIDA CON MODAL FUNCIONAL)
+// Gestión de diagnósticos técnicos con filtros funcionales
 // =====================================================
 
 const API_URL = 'http://localhost:5000/api';
@@ -148,10 +148,14 @@ function initEventListeners() {
     const btnLimpiar = document.getElementById('btnLimpiar');
     const refreshBtn = document.getElementById('refreshBtn');
     
-    if (filterEstado) filterEstado.addEventListener('change', applyFilters);
+    if (filterEstado) filterEstado.addEventListener('change', () => {
+        loadDiagnosticos();
+    });
+    
     if (searchInput) searchInput.addEventListener('input', applyFilters);
     if (fechaDesde) fechaDesde.addEventListener('change', applyFilters);
     if (fechaHasta) fechaHasta.addEventListener('change', applyFilters);
+    
     if (btnBuscar) btnBuscar.addEventListener('click', () => loadDiagnosticos());
     if (btnLimpiar) btnLimpiar.addEventListener('click', limpiarFiltros);
     if (refreshBtn) refreshBtn.addEventListener('click', () => {
@@ -283,7 +287,16 @@ async function loadDiagnosticos() {
     mostrarLoading(true);
     
     try {
-        const response = await fetch(`${API_URL}/jefe-taller/diagnosticos-pendientes`, {
+        const estadoFiltro = document.getElementById('filterEstado')?.value || 'todos';
+        
+        let url = `${API_URL}/jefe-taller/diagnosticos`;
+        if (estadoFiltro !== 'todos') {
+            url += `?estado=${encodeURIComponent(estadoFiltro)}`;
+        }
+        
+        console.log(`📡 Cargando diagnósticos desde: ${url}`);
+        
+        const response = await fetch(url, {
             headers: getHeaders()
         });
         
@@ -300,13 +313,14 @@ async function loadDiagnosticos() {
         
         if (data.success) {
             currentDiagnosticos = data.diagnosticos || [];
+            console.log(`✅ Cargados ${currentDiagnosticos.length} diagnósticos`);
             applyFilters();
         } else {
             mostrarNotificacion(data.error || 'Error cargando diagnósticos', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        mostrarNotificacion('Error de conexión', 'error');
+        mostrarNotificacion('Error de conexión: ' + error.message, 'error');
         mostrarResultadosVacio();
     } finally {
         mostrarLoading(false);
@@ -339,27 +353,25 @@ async function loadStats() {
 }
 
 function applyFilters() {
-    currentFilters.estado = document.getElementById('filterEstado')?.value || 'todos';
     currentFilters.search = document.getElementById('searchInput')?.value.toLowerCase() || '';
     currentFilters.fechaDesde = document.getElementById('fechaDesde')?.value || '';
     currentFilters.fechaHasta = document.getElementById('fechaHasta')?.value || '';
     
     let filtered = [...currentDiagnosticos];
     
-    if (currentFilters.estado !== 'todos') {
-        filtered = filtered.filter(d => d.estado === currentFilters.estado);
-    }
-    
     if (currentFilters.search) {
         filtered = filtered.filter(d => 
             (d.codigo_unico || '').toLowerCase().includes(currentFilters.search) ||
             (d.tecnico_nombre || '').toLowerCase().includes(currentFilters.search) ||
-            (d.placa || '').toLowerCase().includes(currentFilters.search)
+            (d.placa || '').toLowerCase().includes(currentFilters.search) ||
+            (d.marca || '').toLowerCase().includes(currentFilters.search) ||
+            (d.modelo || '').toLowerCase().includes(currentFilters.search)
         );
     }
     
     if (currentFilters.fechaDesde) {
         const desde = new Date(currentFilters.fechaDesde);
+        desde.setHours(0, 0, 0, 0);
         filtered = filtered.filter(d => {
             if (!d.fecha_envio) return false;
             return new Date(d.fecha_envio) >= desde;
@@ -368,7 +380,7 @@ function applyFilters() {
     
     if (currentFilters.fechaHasta) {
         const hasta = new Date(currentFilters.fechaHasta);
-        hasta.setHours(23, 59, 59);
+        hasta.setHours(23, 59, 59, 999);
         filtered = filtered.filter(d => {
             if (!d.fecha_envio) return false;
             return new Date(d.fecha_envio) <= hasta;
@@ -378,6 +390,9 @@ function applyFilters() {
     renderDiagnosticosList(filtered);
 }
 
+// ====================================================
+// RENDERIZAR LISTA - CORREGIDO
+// ====================================================
 function renderDiagnosticosList(diagnosticos) {
     const container = document.getElementById('resultadosContainer');
     if (!container) return;
@@ -420,14 +435,14 @@ function renderDiagnosticosList(diagnosticos) {
                         ${getEstadoTexto(d.estado)}
                     </span>
                     <div class="action-buttons">
-                        <button class="action-btn view" onclick="verDiagnostico(${d.diagnostico_id})" title="Ver detalle">
+                        <button class="action-btn view" onclick="window.verDiagnostico(${d.diagnostico_id})" title="Ver detalle">
                             <i class="fas fa-eye"></i>
                         </button>
                         ${d.estado === 'pendiente' ? `
-                            <button class="action-btn approve" onclick="aprobarDiagnostico(${d.diagnostico_id})" title="Aprobar">
+                            <button class="action-btn approve" onclick="window.aprobarDiagnostico(${d.diagnostico_id})" title="Aprobar">
                                 <i class="fas fa-check-circle"></i>
                             </button>
-                            <button class="action-btn reject" onclick="abrirModalObservacion(${d.diagnostico_id})" title="Rechazar">
+                            <button class="action-btn reject" onclick="window.abrirModalObservacion(${d.diagnostico_id})" title="Rechazar">
                                 <i class="fas fa-times-circle"></i>
                             </button>
                         ` : ''}
@@ -445,7 +460,7 @@ function mostrarResultadosVacio() {
     container.innerHTML = `
         <div class="empty-state">
             <i class="fas fa-search"></i>
-            <p>No hay diagnósticos pendientes</p>
+            <p>No hay diagnósticos para mostrar</p>
         </div>
     `;
 }
@@ -461,14 +476,262 @@ function limpiarFiltros() {
     if (fechaDesde) fechaDesde.value = '';
     if (fechaHasta) fechaHasta.value = '';
     
-    currentFilters = { estado: 'todos', search: '', fechaDesde: '', fechaHasta: '' };
-    renderDiagnosticosList(currentDiagnosticos);
+    loadDiagnosticos();
 }
 
 // ====================================================
-// APROBAR DIAGNÓSTICO - VERSIÓN CON ENDPOINT SIMPLE
+// VER DIAGNÓSTICO - CORREGIDO
 // ====================================================
-async function aprobarDiagnostico(diagnosticoId) {
+window.verDiagnostico = async function(diagnosticoId) {
+    console.log('👁️ Ver diagnóstico ID:', diagnosticoId);
+    
+    const modal = document.getElementById('modalDiagnostico');
+    const modalBody = document.getElementById('modalDiagnosticoBody');
+    
+    if (!modal) {
+        console.error('❌ Modal no encontrado');
+        return;
+    }
+    if (!modalBody) {
+        console.error('❌ Modal body no encontrado');
+        return;
+    }
+    
+    modalBody.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i><p>Cargando detalles del diagnóstico...</p></div>`;
+    modal.classList.add('show');
+    
+    try {
+        const response = await fetch(`${API_URL}/jefe-taller/diagnostico/${diagnosticoId}`, {
+            headers: getHeaders()
+        });
+        
+        console.log('📡 Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📦 Datos recibidos:', data);
+        
+        if (data.success && data.diagnostico) {
+            mostrarModalDiagnostico(data.diagnostico);
+        } else {
+            throw new Error(data.error || 'Datos inválidos');
+        }
+    } catch (error) {
+        console.error('❌ Error:', error);
+        modalBody.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>Error: ${error.message}</p><p>Verifica la consola para más detalles.</p></div>`;
+        mostrarNotificacion('Error al cargar el diagnóstico: ' + error.message, 'error');
+    }
+};
+
+function mostrarModalDiagnostico(diagnostico) {
+    const modalBody = document.getElementById('modalDiagnosticoBody');
+    if (!modalBody) return;
+    
+    console.log('🎨 Renderizando diagnóstico:', diagnostico);
+    
+    const servicios = diagnostico.servicios || [];
+    const solicitudes = diagnostico.solicitudes_repuestos || [];
+    const fotos = diagnostico.fotos || [];
+    const observaciones = diagnostico.observaciones || [];
+    const estadoActual = diagnostico.estado;
+    
+    // Timeline HTML
+    const timelineHtml = `
+        <div class="status-timeline">
+            <h4 style="margin-bottom: 1rem; color: var(--blanco);">
+                <i class="fas fa-chart-line"></i> Estado del Diagnóstico
+            </h4>
+            <div class="timeline-steps">
+                <div class="step ${estadoActual === 'pendiente' ? 'active' : estadoActual === 'aprobado' || estadoActual === 'rechazado' ? 'completed' : ''}">
+                    <div class="step-icon"><i class="fas fa-file-alt"></i></div>
+                    <div class="step-label">Enviado</div>
+                </div>
+                <div class="step ${estadoActual === 'aprobado' ? 'active' : ''}">
+                    <div class="step-icon"><i class="fas fa-check"></i></div>
+                    <div class="step-label">Aprobado</div>
+                </div>
+                <div class="step ${estadoActual === 'rechazado' ? 'active' : ''}">
+                    <div class="step-icon"><i class="fas fa-times"></i></div>
+                    <div class="step-label">Rechazado</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    modalBody.innerHTML = `
+        <div class="diagnostico-detalle-modern">
+            <!-- Header -->
+            <div class="diagnostico-header-modern">
+                <h2><i class="fas fa-stethoscope"></i> Diagnóstico Técnico</h2>
+                <div class="codigo-orden">
+                    <i class="fas fa-hashtag"></i> Orden: ${escapeHtml(diagnostico.codigo_unico || 'N/A')}
+                </div>
+                <div class="vehiculo-info-modern">
+                    <div class="info-item"><i class="fas fa-car"></i> ${escapeHtml(diagnostico.placa || 'N/A')}</div>
+                    <div class="info-item"><i class="fas fa-tag"></i> ${escapeHtml(diagnostico.marca || '')} ${escapeHtml(diagnostico.modelo || '')}</div>
+                    <div class="info-item"><i class="fas fa-user"></i> Técnico: ${escapeHtml(diagnostico.tecnico_nombre || 'N/A')}</div>
+                    <div class="info-item"><i class="fas fa-calendar"></i> ${formatDate(diagnostico.fecha_envio)}</div>
+                </div>
+            </div>
+            
+            ${timelineHtml}
+            
+            <!-- Tabs -->
+            <div class="diagnostico-tabs">
+                <button class="tab-btn active" data-tab="info">📋 Información General</button>
+                <button class="tab-btn" data-tab="servicios">🔧 Servicios (${servicios.length})</button>
+                <button class="tab-btn" data-tab="repuestos">🛒 Repuestos (${solicitudes.length})</button>
+                ${fotos.length > 0 ? `<button class="tab-btn" data-tab="fotos">📸 Fotos (${fotos.length})</button>` : ''}
+                ${observaciones.length > 0 ? `<button class="tab-btn" data-tab="observaciones">💬 Observaciones (${observaciones.length})</button>` : ''}
+            </div>
+            
+            <!-- Tab: Información General -->
+            <div class="tab-content active" id="tab-info">
+                <div class="info-grid-modern">
+                    <div class="info-card">
+                        <div class="info-card-header">
+                            <i class="fas fa-file-alt"></i>
+                            <h4>Informe del Técnico</h4>
+                        </div>
+                        <div class="info-card-content">
+                            <p>${escapeHtml(diagnostico.informe || 'Sin informe proporcionado')}</p>
+                            ${diagnostico.url_grabacion_informe ? `
+                                <div style="margin-top: 1rem;">
+                                    <label style="color: var(--gris-texto); font-size: 0.7rem;">🎙️ Grabación del informe:</label>
+                                    <audio controls src="${diagnostico.url_grabacion_informe}" style="width: 100%; margin-top: 0.5rem;"></audio>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    
+                    <div class="info-card">
+                        <div class="info-card-header">
+                            <i class="fas fa-info-circle"></i>
+                            <h4>Detalles Adicionales</h4>
+                        </div>
+                        <div class="info-card-content">
+                            <p><strong>Versión:</strong> ${diagnostico.version || 1}</p>
+                            <p><strong>Fecha de modificación:</strong> ${formatDate(diagnostico.fecha_modificacion)}</p>
+                            <p><strong>Estado actual:</strong> <span class="estado-badge ${diagnostico.estado}">${getEstadoTexto(diagnostico.estado)}</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tab: Servicios -->
+            <div class="tab-content" id="tab-servicios">
+                ${servicios.length > 0 ? `
+                    <div class="servicios-list-modern">
+                        ${servicios.map(s => `
+                            <div class="servicio-card-modern">
+                                <div class="servicio-nombre">
+                                    <i class="fas fa-wrench"></i>
+                                    ${escapeHtml(s.descripcion)}
+                                </div>
+                                <div class="servicio-precios">
+                                    ${s.precio_estimado ? `<span><i class="fas fa-dollar-sign"></i> Estimado: $${s.precio_estimado}</span>` : ''}
+                                    ${s.precio_final ? `<span><i class="fas fa-check-circle"></i> Final: $${s.precio_final}</span>` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '<div class="empty-state"><i class="fas fa-tools"></i><p>No hay servicios registrados</p></div>'}
+            </div>
+            
+            <!-- Tab: Repuestos -->
+            <div class="tab-content" id="tab-repuestos">
+                ${solicitudes.length > 0 ? `
+                    <div class="solicitudes-list-modern">
+                        ${solicitudes.map(s => `
+                            <div class="solicitud-card">
+                                <div class="solicitud-info">
+                                    <h4>${escapeHtml(s.descripcion_pieza)}</h4>
+                                    <p>Cantidad: ${s.cantidad} | Urgencia: ${s.urgencia || 'Normal'}</p>
+                                </div>
+                                <div class="solicitud-estado-badge ${s.estado}">
+                                    ${s.estado === 'pendiente' ? 'Pendiente' : s.estado === 'cotizado' ? 'Cotizado' : s.estado}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '<div class="empty-state"><i class="fas fa-shopping-cart"></i><p>No hay solicitudes de repuestos</p></div>'}
+            </div>
+            
+            <!-- Tab: Fotos -->
+            ${fotos.length > 0 ? `
+                <div class="tab-content" id="tab-fotos">
+                    <div class="fotos-grid-modern">
+                        ${fotos.map(f => `
+                            <div class="foto-card" onclick="window.verImagenAmpliada('${f.url_foto}')">
+                                <img src="${f.url_foto}" alt="Foto diagnóstico" loading="lazy" onerror="this.src='https://placehold.co/150x100?text=Error+Carga'">
+                                <div class="foto-card-info">
+                                    <span>${escapeHtml(f.descripcion || 'Sin descripción')}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+            
+            <!-- Tab: Observaciones -->
+            ${observaciones.length > 0 ? `
+                <div class="tab-content" id="tab-observaciones">
+                    <div class="observaciones-list-modern">
+                        ${observaciones.map(obs => `
+                            <div class="observacion-card">
+                                <div class="observacion-header">
+                                    <div class="observacion-autor">
+                                        <i class="fas fa-user-tie"></i>
+                                        <strong>${escapeHtml(obs.jefe_taller_nombre || 'Jefe Taller')}</strong>
+                                    </div>
+                                    <div class="observacion-fecha">
+                                        <i class="far fa-clock"></i> ${formatDate(obs.fecha_hora)}
+                                    </div>
+                                </div>
+                                <div class="observacion-texto">
+                                    ${escapeHtml(obs.observacion || 'Sin texto')}
+                                </div>
+                                ${obs.url_grabacion ? `
+                                    <div class="observacion-audio">
+                                        <audio controls src="${obs.url_grabacion}"></audio>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    // Inicializar tabs
+    const tabs = modalBody.querySelectorAll('.tab-btn');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            const tabId = tab.getAttribute('data-tab');
+            const contents = modalBody.querySelectorAll('.tab-content');
+            contents.forEach(content => content.classList.remove('active'));
+            const targetContent = modalBody.querySelector(`#tab-${tabId}`);
+            if (targetContent) targetContent.classList.add('active');
+        });
+    });
+}
+
+window.cerrarModalDiagnostico = function() {
+    const modal = document.getElementById('modalDiagnostico');
+    if (modal) modal.classList.remove('show');
+};
+
+// ====================================================
+// APROBAR DIAGNÓSTICO
+// ====================================================
+window.aprobarDiagnostico = async function(diagnosticoId) {
     console.log('📝 Aprobando diagnóstico ID:', diagnosticoId);
     
     if (!diagnosticoId) {
@@ -485,7 +748,6 @@ async function aprobarDiagnostico(diagnosticoId) {
     }
     
     try {
-        // Usar la versión simple del endpoint (sin autenticación en el endpoint)
         const formData = new FormData();
         formData.append('diagnostico_id', diagnosticoId);
         
@@ -497,16 +759,13 @@ async function aprobarDiagnostico(diagnosticoId) {
             body: formData
         });
         
-        console.log('Response status:', response.status);
-        
         const data = await response.json();
-        console.log('Respuesta:', data);
         
         if (response.ok && data.success) {
             mostrarNotificacion(data.message || 'Diagnóstico aprobado correctamente', 'success');
             await loadDiagnosticos();
             await loadStats();
-            cerrarModalDiagnostico();
+            window.cerrarModalDiagnostico();
         } else {
             mostrarNotificacion(data.error || 'Error al aprobar', 'error');
         }
@@ -514,112 +773,35 @@ async function aprobarDiagnostico(diagnosticoId) {
         console.error('Error:', error);
         mostrarNotificacion('Error de conexión: ' + error.message, 'error');
     }
-}
-
-// ====================================================
-// VER DIAGNÓSTICO
-// ====================================================
-async function verDiagnostico(diagnosticoId) {
-    console.log('👁️ Ver diagnóstico ID:', diagnosticoId);
-    
-    const modal = document.getElementById('modalDiagnostico');
-    const modalBody = document.getElementById('modalDiagnosticoBody');
-    
-    if (!modal || !modalBody) return;
-    
-    modalBody.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i><p>Cargando...</p></div>`;
-    modal.classList.add('show');
-    
-    try {
-        const response = await fetch(`${API_URL}/jefe-taller/diagnostico/${diagnosticoId}`, {
-            headers: getHeaders()
-        });
-        
-        if (!response.ok) throw new Error('Error');
-        
-        const data = await response.json();
-        
-        if (data.success && data.diagnostico) {
-            mostrarModalDiagnostico(data.diagnostico);
-        } else {
-            throw new Error(data.error || 'Datos inválidos');
-        }
-    } catch (error) {
-        modalBody.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>Error: ${error.message}</p></div>`;
-    }
-}
-
-function mostrarModalDiagnostico(diagnostico) {
-    const modalBody = document.getElementById('modalDiagnosticoBody');
-    if (!modalBody) return;
-    
-    const servicios = diagnostico.servicios || [];
-    const solicitudes = diagnostico.solicitudes_repuestos || [];
-    const fotos = diagnostico.fotos || [];
-    const observaciones = diagnostico.observaciones || [];
-    
-    modalBody.innerHTML = `
-        <div class="diagnostico-detalle">
-            <div class="info-section">
-                <h3><i class="fas fa-info-circle"></i> Información General</h3>
-                <div class="info-grid">
-                    <div class="info-grid-item"><strong>Código:</strong> ${escapeHtml(diagnostico.codigo_unico || 'N/A')}</div>
-                    <div class="info-grid-item"><strong>Técnico:</strong> ${escapeHtml(diagnostico.tecnico_nombre || 'N/A')}</div>
-                    <div class="info-grid-item"><strong>Vehículo:</strong> ${escapeHtml(diagnostico.placa || 'N/A')}</div>
-                    <div class="info-grid-item"><strong>Estado:</strong> <span class="estado-badge ${diagnostico.estado}">${getEstadoTexto(diagnostico.estado)}</span></div>
-                    <div class="info-grid-item"><strong>Fecha:</strong> ${formatDate(diagnostico.fecha_envio)}</div>
-                    <div class="info-grid-item"><strong>Versión:</strong> ${diagnostico.version || 1}</div>
-                </div>
-            </div>
-            
-            <div class="info-section">
-                <h3><i class="fas fa-file-alt"></i> Informe del Técnico</h3>
-                <p>${escapeHtml(diagnostico.informe || 'Sin informe')}</p>
-                ${diagnostico.url_grabacion_informe ? `<audio controls src="${diagnostico.url_grabacion_informe}"></audio>` : ''}
-            </div>
-            
-            <div class="info-section">
-                <h3><i class="fas fa-tools"></i> Servicios (${servicios.length})</h3>
-                ${servicios.map(s => `<div class="servicio-item">• ${escapeHtml(s.descripcion)}</div>`).join('') || '<p>Sin servicios</p>'}
-            </div>
-            
-            ${observaciones.length > 0 ? `
-            <div class="info-section">
-                <h3><i class="fas fa-comments"></i> Observaciones</h3>
-                ${observaciones.map(obs => `<div class="observacion-item"><strong>${escapeHtml(obs.jefe_taller_nombre || 'Jefe')}:</strong> ${escapeHtml(obs.observacion || 'Sin texto')}</div>`).join('')}
-            </div>
-            ` : ''}
-        </div>
-    `;
-}
-
-function cerrarModalDiagnostico() {
-    const modal = document.getElementById('modalDiagnostico');
-    if (modal) modal.classList.remove('show');
-}
+};
 
 // ====================================================
 // RECHAZAR DIAGNÓSTICO
 // ====================================================
-function abrirModalObservacion(diagnosticoId) {
+window.abrirModalObservacion = function(diagnosticoId) {
     currentDiagnosticoId = diagnosticoId;
     const obsInput = document.getElementById('obsDiagnosticoId');
     const obsTexto = document.getElementById('observacionTexto');
     const audioPreview = document.getElementById('audioPreview');
+    const grabacionUrl = document.getElementById('grabacionUrl');
     
     if (obsInput) obsInput.value = diagnosticoId;
     if (obsTexto) obsTexto.value = '';
-    if (audioPreview) audioPreview.style.display = 'none';
+    if (audioPreview) {
+        audioPreview.src = '';
+        audioPreview.style.display = 'none';
+    }
+    if (grabacionUrl) grabacionUrl.value = '';
     
     const modal = document.getElementById('modalObservacion');
     if (modal) modal.classList.add('show');
-}
+};
 
-function cerrarModalObservacion() {
+window.cerrarModalObservacion = function() {
     const modal = document.getElementById('modalObservacion');
     if (modal) modal.classList.remove('show');
     if (mediaRecorder && isRecording) stopRecording();
-}
+};
 
 async function enviarObservacion(event) {
     event.preventDefault();
@@ -651,14 +833,15 @@ async function enviarObservacion(event) {
         
         if (data.success) {
             mostrarNotificacion('Diagnóstico rechazado correctamente');
-            cerrarModalObservacion();
+            window.cerrarModalObservacion();
             loadDiagnosticos();
             loadStats();
         } else {
             mostrarNotificacion(data.error || 'Error al rechazar', 'error');
         }
     } catch (error) {
-        mostrarNotificacion('Error de conexión', 'error');
+        console.error('Error:', error);
+        mostrarNotificacion('Error de conexión: ' + error.message, 'error');
     }
 }
 
@@ -687,16 +870,24 @@ async function startRecording() {
                 formData.append('audio', reader.result);
                 formData.append('tipo', 'observacion');
                 
-                const response = await fetch(`${API_URL}/jefe-taller/subir-audio-observacion`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${getAuthToken()}`
-                    },
-                    body: formData
-                });
-                const data = await response.json();
-                const grabacionUrl = document.getElementById('grabacionUrl');
-                if (grabacionUrl && data.url) grabacionUrl.value = data.url;
+                try {
+                    const response = await fetch(`${API_URL}/jefe-taller/subir-audio-observacion`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${getAuthToken()}`
+                        },
+                        body: formData
+                    });
+                    const data = await response.json();
+                    const grabacionUrl = document.getElementById('grabacionUrl');
+                    if (grabacionUrl && data.url) grabacionUrl.value = data.url;
+                    if (data.url) {
+                        mostrarNotificacion('Audio subido correctamente', 'success');
+                    }
+                } catch (error) {
+                    console.error('Error subiendo audio:', error);
+                    mostrarNotificacion('Error al subir el audio', 'error');
+                }
             };
             reader.readAsDataURL(audioBlob);
             stream.getTracks().forEach(track => track.stop());
@@ -710,7 +901,8 @@ async function startRecording() {
         if (stopBtn) stopBtn.disabled = false;
         mostrarNotificacion('Grabando...', 'warning');
     } catch (error) {
-        mostrarNotificacion('No se pudo acceder al micrófono', 'error');
+        console.error('Error accediendo al micrófono:', error);
+        mostrarNotificacion('No se pudo acceder al micrófono. Verifica los permisos.', 'error');
     }
 }
 
@@ -729,21 +921,26 @@ function stopRecording() {
 // ====================================================
 // SOLICITAR REPUESTO
 // ====================================================
-function abrirModalSolicitarRepuesto(ordenId, servicioId, servicioDescripcion) {
+window.abrirModalSolicitarRepuesto = function(ordenId, servicioId, servicioDescripcion) {
     const ordenInput = document.getElementById('solicitudOrdenId');
     const servicioInput = document.getElementById('solicitudServicioId');
+    const descripcionPieza = document.getElementById('descripcionPieza');
     
     if (ordenInput) ordenInput.value = ordenId;
     if (servicioInput) servicioInput.value = servicioId;
+    if (descripcionPieza) {
+        descripcionPieza.value = servicioDescripcion ? 
+            `Para el servicio: ${servicioDescripcion}\n` : '';
+    }
     
     const modal = document.getElementById('modalSolicitarRepuesto');
     if (modal) modal.classList.add('show');
-}
+};
 
-function cerrarModalSolicitud() {
+window.cerrarModalSolicitud = function() {
     const modal = document.getElementById('modalSolicitarRepuesto');
     if (modal) modal.classList.remove('show');
-}
+};
 
 async function enviarSolicitudRepuesto(event) {
     event.preventDefault();
@@ -764,9 +961,9 @@ async function enviarSolicitudRepuesto(event) {
     formData.append('orden_id', ordenId);
     formData.append('servicio_id', servicioId);
     formData.append('descripcion_pieza', descripcion);
-    formData.append('cantidad', cantidad);
-    formData.append('urgencia', urgencia);
-    formData.append('observacion', observacion);
+    formData.append('cantidad', cantidad || 1);
+    formData.append('urgencia', urgencia || 'normal');
+    formData.append('observacion', observacion || '');
     
     try {
         const response = await fetch(`${API_URL}/jefe-taller/solicitar-cotizacion-repuesto`, {
@@ -780,17 +977,22 @@ async function enviarSolicitudRepuesto(event) {
         const result = await response.json();
         
         if (result.success) {
-            mostrarNotificacion('Solicitud enviada');
-            cerrarModalSolicitud();
+            mostrarNotificacion('Solicitud enviada correctamente', 'success');
+            window.cerrarModalSolicitud();
+            document.getElementById('descripcionPieza').value = '';
+            document.getElementById('cantidad').value = '1';
+            document.getElementById('urgencia').value = 'normal';
+            document.getElementById('obsJefeTaller').value = '';
         } else {
-            mostrarNotificacion(result.error || 'Error', 'error');
+            mostrarNotificacion(result.error || 'Error al enviar solicitud', 'error');
         }
     } catch (error) {
-        mostrarNotificacion('Error de conexión', 'error');
+        console.error('Error:', error);
+        mostrarNotificacion('Error de conexión: ' + error.message, 'error');
     }
 }
 
-function verImagenAmpliada(url) {
+window.verImagenAmpliada = function(url) {
     const modal = document.createElement('div');
     modal.className = 'modal-imagen';
     modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:2000;display:flex;align-items:center;justify-content:center;cursor:pointer';
@@ -805,26 +1007,15 @@ function verImagenAmpliada(url) {
         if (e.target === modal) modal.remove();
     });
     modal.querySelector('button')?.addEventListener('click', () => modal.remove());
-}
+};
 
-// ====================================================
-// EXPONER FUNCIONES GLOBALES
-// ====================================================
-window.verDiagnostico = verDiagnostico;
-window.cerrarModalDiagnostico = cerrarModalDiagnostico;
-window.aprobarDiagnostico = aprobarDiagnostico;
-window.abrirModalObservacion = abrirModalObservacion;
-window.cerrarModalObservacion = cerrarModalObservacion;
-window.abrirModalSolicitarRepuesto = abrirModalSolicitarRepuesto;
-window.cerrarModalSolicitud = cerrarModalSolicitud;
-window.verImagenAmpliada = verImagenAmpliada;
 window.logout = logout;
 
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        cerrarModalDiagnostico();
-        cerrarModalObservacion();
-        cerrarModalSolicitud();
+        window.cerrarModalDiagnostico();
+        window.cerrarModalObservacion();
+        window.cerrarModalSolicitud();
     }
 });
 

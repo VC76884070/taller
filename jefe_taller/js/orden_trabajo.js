@@ -1,13 +1,12 @@
 // =====================================================
-// ÓRDENES DE TRABAJO - JEFE TALLER (CORREGIDO)
+// ÓRDENES DE TRABAJO - JEFE TALLER (COMPLETO)
 // =====================================================
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = '/api';
 let userInfo = null;
 let pollingInterval = null;
 let rolesUsuario = [];
 
-// Variables de estado
 let ordenesActivas = [];
 let ordenesFinalizadas = [];
 let tecnicosDisponibles = [];
@@ -16,6 +15,31 @@ let audioBlob = null;
 let audioChunks = [];
 let isRecording = false;
 let mediaRecorder = null;
+
+// =====================================================
+// VERIFICAR SI LA ORDEN PUEDE SER EDITADA
+// SOLO SE BLOQUEA CUANDO EL TÉCNICO PRESIONA "EMPEZAR TRABAJO"
+// =====================================================
+
+function puedeEditarOrden(estadoGlobal, trabajoIniciado = false) {
+    if (trabajoIniciado) {
+        return { 
+            editable: false, 
+            mensaje: `🔒 El técnico ya comenzó el trabajo en esta orden. No se puede modificar hasta que complete el diagnóstico.` 
+        };
+    }
+    
+    const estadosBloqueados = ['Finalizado', 'Entregado'];
+    
+    if (estadosBloqueados.includes(estadoGlobal)) {
+        return { 
+            editable: false, 
+            mensaje: `❌ La orden está en estado "${estadoGlobal}". No se puede modificar.` 
+        };
+    }
+    
+    return { editable: true, mensaje: null };
+}
 
 // =====================================================
 // INICIALIZACIÓN
@@ -44,36 +68,22 @@ async function checkAuth() {
     }
     
     try {
-        // Decodificar token para obtener información del usuario
         const payload = JSON.parse(atob(token.split('.')[1]));
         userInfo = payload.user;
         
-        // Obtener roles del usuario
-        if (userInfo.roles && Array.isArray(userInfo.roles)) {
+        if (userInfo && userInfo.roles && Array.isArray(userInfo.roles)) {
             rolesUsuario = userInfo.roles;
         } else if (userData) {
             const user = JSON.parse(userData);
             rolesUsuario = user.roles || [];
-            userInfo.roles = rolesUsuario;
+            if (userInfo) userInfo.roles = rolesUsuario;
         }
         
-        // Verificar si tiene rol de jefe_taller o jefe_operativo
-        const tieneRolPermitido = rolesUsuario.includes('jefe_taller') || 
-                                   rolesUsuario.includes('jefe_operativo') ||
-                                   userInfo.rol === 'jefe_taller' ||
-                                   userInfo.id_rol === 2 || 
-                                   userInfo.id_rol === 3;
+        const tieneRolPermitido = rolesUsuario.includes('jefe_taller') || rolesUsuario.includes('jefe_operativo');
         
         if (!tieneRolPermitido) {
-            console.warn('Usuario no tiene permisos de jefe_taller o jefe_operativo');
             window.location.href = '/';
             return false;
-        }
-        
-        // Actualizar localStorage con roles si es necesario
-        if (userInfo && !userInfo.roles) {
-            userInfo.roles = rolesUsuario;
-            localStorage.setItem('furia_user', JSON.stringify(userInfo));
         }
         
         return true;
@@ -95,34 +105,9 @@ function initPage() {
         dateDisplay.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
     }
     
-    // Mostrar nombre de usuario y roles
     const userNombreSpan = document.getElementById('userNombre');
     if (userNombreSpan && userInfo) {
         userNombreSpan.textContent = userInfo.nombre || userInfo.email || 'Usuario';
-        
-        // Agregar badge de roles si tiene múltiples
-        if (rolesUsuario.length > 1) {
-            const rolesBadge = document.createElement('span');
-            rolesBadge.className = 'user-roles-badge';
-            rolesBadge.style.cssText = `
-                font-size: 0.7rem;
-                background: var(--gris-200);
-                padding: 0.2rem 0.5rem;
-                border-radius: 12px;
-                margin-left: 0.5rem;
-            `;
-            const nombresRoles = rolesUsuario.map(r => {
-                const nombres = {
-                    'jefe_taller': 'Jefe Taller',
-                    'jefe_operativo': 'Jefe Operativo',
-                    'tecnico': 'Técnico',
-                    'encargado_repuestos': 'Repuestos'
-                };
-                return nombres[r] || r;
-            }).join(', ');
-            rolesBadge.textContent = nombresRoles;
-            userNombreSpan.parentElement?.appendChild(rolesBadge);
-        }
     }
 }
 
@@ -135,14 +120,9 @@ function setupEventListeners() {
         });
     });
     
-    document.getElementById('refreshActivas')?.addEventListener('click', () => {
-        cargarOrdenesActivas();
-    });
-    document.getElementById('refreshFinalizadas')?.addEventListener('click', () => {
-        cargarOrdenesFinalizadas();
-    });
+    document.getElementById('refreshActivas')?.addEventListener('click', () => cargarOrdenesActivas());
+    document.getElementById('refreshFinalizadas')?.addEventListener('click', () => cargarOrdenesFinalizadas());
     
-    // Filtros para activas
     const searchActivas = document.getElementById('searchActivas');
     const tecnicoFiltro = document.getElementById('tecnicoFiltro');
     const estadoFiltroActivas = document.getElementById('estadoFiltroActivas');
@@ -151,7 +131,6 @@ function setupEventListeners() {
     if (tecnicoFiltro) tecnicoFiltro.addEventListener('change', () => filtrarOrdenesActivas());
     if (estadoFiltroActivas) estadoFiltroActivas.addEventListener('change', () => filtrarOrdenesActivas());
     
-    // Filtros para finalizadas
     const searchFinalizadas = document.getElementById('searchFinalizadas');
     const fechaDesdeFinalizadas = document.getElementById('fechaDesdeFinalizadas');
     const fechaHastaFinalizadas = document.getElementById('fechaHastaFinalizadas');
@@ -165,21 +144,8 @@ function cambiarPestana(tabId) {
     const tabs = document.querySelectorAll('.tab-btn');
     const panels = document.querySelectorAll('.tab-panel');
     
-    tabs.forEach(tab => {
-        if (tab.dataset.tab === tabId) {
-            tab.classList.add('active');
-        } else {
-            tab.classList.remove('active');
-        }
-    });
-    
-    panels.forEach(panel => {
-        if (panel.id === `panel-${tabId}`) {
-            panel.classList.add('active');
-        } else {
-            panel.classList.remove('active');
-        }
-    });
+    tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.tab === tabId));
+    panels.forEach(panel => panel.classList.toggle('active', panel.id === `panel-${tabId}`));
 }
 
 // =====================================================
@@ -193,6 +159,8 @@ async function cargarTecnicos() {
         });
         
         const data = await response.json();
+        console.log('📋 Técnicos cargados:', data);
+        
         if (response.ok && data.tecnicos) {
             tecnicosDisponibles = data.tecnicos;
             
@@ -250,12 +218,7 @@ function renderOrdenesActivas(ordenes) {
     if (!container) return;
     
     if (ordenes.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-tasks"></i>
-                <p>No hay órdenes activas</p>
-            </div>
-        `;
+        container.innerHTML = `<div class="empty-state"><i class="fas fa-tasks"></i><p>No hay órdenes activas</p></div>`;
         return;
     }
     
@@ -264,10 +227,7 @@ function renderOrdenesActivas(ordenes) {
             <div class="orden-card-header">
                 <span class="orden-codigo">${escapeHtml(orden.codigo_unico)}</span>
                 <span class="orden-estado ${orden.estado_global}">${orden.estado_global}</span>
-                <span class="recepcion-fecha">
-                    <i class="far fa-calendar-alt"></i>
-                    ${new Date(orden.fecha_ingreso).toLocaleDateString()}
-                </span>
+                <span class="recepcion-fecha"><i class="far fa-calendar-alt"></i> ${new Date(orden.fecha_ingreso).toLocaleDateString()}</span>
             </div>
             <div class="orden-card-body">
                 <div class="orden-info-item">
@@ -279,42 +239,19 @@ function renderOrdenesActivas(ordenes) {
                     <span class="orden-info-value">${escapeHtml(orden.marca || '')} ${escapeHtml(orden.modelo || '')} (${escapeHtml(orden.placa || '')})</span>
                 </div>
                 <div class="orden-info-item">
-                    <span class="orden-info-label">Jefes Operativos</span>
-                    <div class="orden-tecnicos">
-                        ${orden.jefe_operativo_nombre ? `<span class="tecnico-badge"><i class="fas fa-user-tie"></i> ${escapeHtml(orden.jefe_operativo_nombre)}</span>` : ''}
-                        ${orden.jefe_operativo_2_nombre ? `<span class="tecnico-badge"><i class="fas fa-user-tie"></i> ${escapeHtml(orden.jefe_operativo_2_nombre)}</span>` : ''}
-                        ${!orden.jefe_operativo_nombre && !orden.jefe_operativo_2_nombre ? '<span class="tecnico-badge">No registrado</span>' : ''}
-                    </div>
-                </div>
-                <div class="orden-info-item">
-                    <span class="orden-info-label">Técnicos asignados</span>
+                    <span class="orden-info-label">Técnicos</span>
                     <div class="orden-tecnicos">
                         ${orden.tecnicos && orden.tecnicos.length > 0 ? 
                             orden.tecnicos.map(t => `<span class="tecnico-badge"><i class="fas fa-user"></i> ${escapeHtml(t.nombre)}</span>`).join('') :
                             '<span class="tecnico-badge">Sin asignar</span>'}
                     </div>
                 </div>
-                ${orden.bahia_asignada ? `
-                    <div class="orden-info-item">
-                        <span class="orden-info-label">Bahía</span>
-                        <span class="orden-info-value">Bahía ${orden.bahia_asignada}</span>
-                    </div>
-                ` : ''}
-                ${orden.fecha_hora_inicio_estimado ? `
-                    <div class="orden-info-item">
-                        <span class="orden-info-label">Inicio estimado</span>
-                        <span class="orden-info-value">${new Date(orden.fecha_hora_inicio_estimado).toLocaleString()}</span>
-                    </div>
-                ` : ''}
-                ${orden.transcripcion_problema ? `
-                    <div class="orden-info-item">
-                        <span class="orden-info-label">Problema</span>
-                        <span class="orden-info-value">${escapeHtml(orden.transcripcion_problema.substring(0, 80))}${orden.transcripcion_problema.length > 80 ? '...' : ''}</span>
-                    </div>
-                ` : ''}
+                ${orden.bahia_asignada ? `<div class="orden-info-item"><span class="orden-info-label">Bahía</span><span class="orden-info-value">Bahía ${orden.bahia_asignada}</span></div>` : ''}
+                ${orden.fecha_hora_inicio_estimado ? `<div class="orden-info-item"><span class="orden-info-label">Inicio estimado</span><span class="orden-info-value">${new Date(orden.fecha_hora_inicio_estimado).toLocaleString()}</span></div>` : ''}
+                ${orden.trabajo_iniciado ? `<div class="orden-info-item trabajo-iniciado"><i class="fas fa-play-circle"></i> <strong>Trabajo iniciado por el técnico</strong></div>` : ''}
             </div>
             <div class="orden-card-footer">
-                <button class="btn-accion-orden btn-gestionar" onclick="window.abrirModalGestionOrden(${orden.id})">
+                <button class="btn-accion-orden btn-gestionar" onclick="window.abrirModalGestionOrden(${orden.id})" ${orden.trabajo_iniciado ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
                     <i class="fas fa-edit"></i> Gestionar Orden
                 </button>
                 <button class="btn-accion-orden btn-ver-detalle-orden" onclick="window.verDetalleOrden(${orden.id})">
@@ -330,12 +267,7 @@ function renderOrdenesFinalizadas(ordenes) {
     if (!container) return;
     
     if (ordenes.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-check-circle"></i>
-                <p>No hay órdenes finalizadas</p>
-            </div>
-        `;
+        container.innerHTML = `<div class="empty-state"><i class="fas fa-check-circle"></i><p>No hay órdenes finalizadas</p></div>`;
         return;
     }
     
@@ -344,37 +276,19 @@ function renderOrdenesFinalizadas(ordenes) {
             <div class="orden-card-header">
                 <span class="orden-codigo">${escapeHtml(orden.codigo_unico)}</span>
                 <span class="orden-estado ${orden.estado_global}">${orden.estado_global}</span>
-                <span class="recepcion-fecha">
-                    <i class="far fa-calendar-alt"></i>
-                    ${new Date(orden.fecha_ingreso).toLocaleDateString()}
-                </span>
+                <span class="recepcion-fecha"><i class="far fa-calendar-alt"></i> ${new Date(orden.fecha_ingreso).toLocaleDateString()}</span>
             </div>
             <div class="orden-card-body">
-                <div class="orden-info-item">
-                    <span class="orden-info-label">Cliente</span>
-                    <span class="orden-info-value">${escapeHtml(orden.cliente_nombre || 'N/A')}</span>
-                </div>
-                <div class="orden-info-item">
-                    <span class="orden-info-label">Vehículo</span>
-                    <span class="orden-info-value">${escapeHtml(orden.marca || '')} ${escapeHtml(orden.modelo || '')} (${escapeHtml(orden.placa || '')})</span>
-                </div>
-                <div class="orden-info-item">
-                    <span class="orden-info-label">Fecha entrega</span>
-                    <span class="orden-info-value">${orden.fecha_entrega ? new Date(orden.fecha_entrega).toLocaleDateString() : 'N/A'}</span>
-                </div>
+                <div class="orden-info-item"><span class="orden-info-label">Cliente</span><span class="orden-info-value">${escapeHtml(orden.cliente_nombre || 'N/A')}</span></div>
+                <div class="orden-info-item"><span class="orden-info-label">Vehículo</span><span class="orden-info-value">${escapeHtml(orden.marca || '')} ${escapeHtml(orden.modelo || '')} (${escapeHtml(orden.placa || '')})</span></div>
+                <div class="orden-info-item"><span class="orden-info-label">Fecha entrega</span><span class="orden-info-value">${orden.fecha_entrega ? new Date(orden.fecha_entrega).toLocaleDateString() : 'N/A'}</span></div>
             </div>
             <div class="orden-card-footer">
-                <button class="btn-accion-orden btn-ver-detalle-orden" onclick="window.verDetalleOrden(${orden.id})">
-                    <i class="fas fa-eye"></i> Ver Detalle
-                </button>
+                <button class="btn-accion-orden btn-ver-detalle-orden" onclick="window.verDetalleOrden(${orden.id})"><i class="fas fa-eye"></i> Ver Detalle</button>
             </div>
         </div>
     `).join('');
 }
-
-// =====================================================
-// FUNCIONES DE FILTRADO
-// =====================================================
 
 function filtrarOrdenesActivas() {
     const searchTerm = document.getElementById('searchActivas')?.value?.toLowerCase() || '';
@@ -390,17 +304,12 @@ function filtrarOrdenesActivas() {
             (o.cliente_nombre?.toLowerCase().includes(searchTerm))
         );
     }
-    
     if (tecnicoFiltro) {
-        filtradas = filtradas.filter(o => 
-            o.tecnicos && o.tecnicos.some(t => t.id == tecnicoFiltro)
-        );
+        filtradas = filtradas.filter(o => o.tecnicos && o.tecnicos.some(t => t.id == tecnicoFiltro));
     }
-    
     if (estadoFiltro) {
         filtradas = filtradas.filter(o => o.estado_global === estadoFiltro);
     }
-    
     renderOrdenesActivas(filtradas);
 }
 
@@ -418,241 +327,119 @@ function filtrarOrdenesFinalizadas() {
             (o.cliente_nombre?.toLowerCase().includes(searchTerm))
         );
     }
-    
-    if (fechaDesde) {
-        filtradas = filtradas.filter(o => o.fecha_ingreso >= fechaDesde);
-    }
-    if (fechaHasta) {
-        filtradas = filtradas.filter(o => o.fecha_ingreso <= fechaHasta + 'T23:59:59');
-    }
+    if (fechaDesde) filtradas = filtradas.filter(o => o.fecha_ingreso >= fechaDesde);
+    if (fechaHasta) filtradas = filtradas.filter(o => o.fecha_ingreso <= fechaHasta + 'T23:59:59');
     
     renderOrdenesFinalizadas(filtradas);
 }
 
 // =====================================================
-// MODAL UNIFICADO DE GESTIÓN
+// GENERAR GRID DE BAHÍAS VISUAL
 // =====================================================
 
-async function abrirModalGestionOrden(idOrden) {
-    try {
-        mostrarNotificacion('Cargando datos de la orden...', 'info');
+function generarGridBahias(bahiasEstado, bahiaActual) {
+    if (!bahiasEstado || bahiasEstado.length === 0) {
+        bahiasEstado = Array.from({ length: 12 }, (_, i) => ({ numero: i + 1, estado: 'libre', orden_codigo: null }));
+    }
+    
+    return bahiasEstado.map(bahia => {
+        const num = bahia.numero;
+        const estado = bahia.estado;
+        const esActual = bahiaActual === num;
         
-        const response = await fetch(`${API_URL}/jefe-taller/detalle-orden/${idOrden}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
-        });
+        let puedeSeleccionar = (estado === 'libre') || (estado === 'reservado' && esActual);
         
-        const data = await response.json();
-        if (!response.ok || !data.detalle) throw new Error(data.error || 'Error cargando datos');
-        
-        ordenEnGestion = data.detalle;
-        
-        // Cargar bahías ocupadas
-        let bahiasOcupadas = [];
-        try {
-            const bahiasResponse = await fetch(`${API_URL}/jefe-taller/bahias-ocupadas`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
-            });
-            const bahiasData = await bahiasResponse.json();
-            if (bahiasData.success) {
-                bahiasOcupadas = bahiasData.bahias_ocupadas || [];
-            }
-        } catch (error) {
-            console.error('Error cargando bahías ocupadas:', error);
+        let estadoClass = '', estadoIcono = '', estadoTexto = '';
+        switch (estado) {
+            case 'ocupado': estadoClass = 'ocupada'; estadoIcono = '🔴'; estadoTexto = 'Ocupada'; puedeSeleccionar = false; break;
+            case 'reservado': estadoClass = esActual ? 'reservada actual' : 'reservada'; estadoIcono = '🟡'; estadoTexto = esActual ? 'Actual' : 'Reservada'; break;
+            default: estadoClass = 'libre'; estadoIcono = '🟢'; estadoTexto = 'Libre';
         }
         
-        const modal = document.getElementById('modalGestionOrden');
-        const body = document.getElementById('modalGestionOrdenBody');
-        const footer = document.getElementById('modalGestionOrdenFooter');
+        let infoAdicional = '';
+        if (estado === 'reservado' && bahia.fecha_inicio_estimado && !esActual) {
+            const fecha = new Date(bahia.fecha_inicio_estimado);
+            infoAdicional = `<div class="bahia-hora">${fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>`;
+        }
+        if (estado === 'reservado' && esActual) infoAdicional = `<div class="bahia-hora actual-hora">Tu reserva</div>`;
         
-        const tecnicosSeleccionados = ordenEnGestion.tecnicos?.map(t => t.id) || [];
-        const planificacionExistente = ordenEnGestion.planificacion || {};
-        const hoy = new Date().toISOString().slice(0, 16);
-        const fechaInicio = planificacionExistente.fecha_hora_inicio_estimado ? 
-            planificacionExistente.fecha_hora_inicio_estimado.slice(0, 16) : hoy;
-        
-        const diagnosticoAudioUrl = ordenEnGestion.diagnostico_audio_url || null;
-        const MAX_ORDENES_POR_TECNICO = 2;
-        const bahiaActual = planificacionExistente.bahia_asignada;
-        
-        const opcionesBahias = Array.from({length: 12}, (_, i) => {
-            const num = i + 1;
-            const bahiaOcupada = bahiasOcupadas.find(b => b.bahia_asignada === num);
-            const estaOcupada = bahiaOcupada?.esta_ocupada === true;
-            const esLaActual = bahiaActual === num;
-            const deshabilitar = estaOcupada && !esLaActual;
-            const ordenQueOcupa = bahiaOcupada?.codigo_unico || '';
-            const tooltip = deshabilitar ? `title="Ocupada por orden ${ordenQueOcupa}"` : '';
-            
-            let estadoIcono = '🟢';
-            let estadoTexto = 'Disponible';
-            if (deshabilitar) {
-                estadoIcono = '🔴';
-                estadoTexto = `Ocupada por ${ordenQueOcupa}`;
-            } else if (esLaActual) {
-                estadoIcono = '🟡';
-                estadoTexto = 'Actual';
-            }
-            
-            return `<option value="${num}" ${bahiaActual === num ? 'selected' : ''} ${deshabilitar ? 'disabled' : ''} ${tooltip} style="${deshabilitar ? 'color: #ff6b6b; background-color: rgba(193,18,31,0.1);' : ''}">
-                ${estadoIcono} Bahía ${num} - ${estadoTexto}
-            </option>`;
-        }).join('');
-        
-        body.innerHTML = `
-            <div class="gestion-orden">
-                <!-- Sección: Asignación de Técnicos -->
-                <div class="gestion-section">
-                    <div class="gestion-section-header">
-                        <h3><i class="fas fa-users"></i> Asignación de Técnicos</h3>
-                        <span class="section-status ${tecnicosSeleccionados.length > 0 ? 'completado' : 'pendiente'}">
-                            ${tecnicosSeleccionados.length > 0 ? `${tecnicosSeleccionados.length}/2 técnicos` : 'Pendiente'}
-                        </span>
-                    </div>
-                    <div class="gestion-section-body">
-                        <div class="tecnicos-grid" id="tecnicosGrid">
-                            ${tecnicosDisponibles.map(t => {
-                                const ordenesActivasTec = t.ordenes_activas || 0;
-                                const estaCompleto = ordenesActivasTec >= MAX_ORDENES_POR_TECNICO;
-                                const estaSeleccionado = tecnicosSeleccionados.includes(t.id);
-                                const puedeSeleccionar = !estaCompleto || estaSeleccionado;
-                                const disabledAttr = !puedeSeleccionar ? 'disabled' : '';
-                                
-                                let cargaMensaje = `${ordenesActivasTec}/${MAX_ORDENES_POR_TECNICO} vehículos`;
-                                if (estaCompleto) {
-                                    cargaMensaje += ' (Completo)';
-                                } else if (ordenesActivasTec === 1) {
-                                    cargaMensaje += ' (1 cupo)';
-                                } else {
-                                    cargaMensaje += ' (Disponible)';
-                                }
-                                
-                                return `
-                                    <div class="tecnico-option ${estaSeleccionado ? 'selected' : ''}" data-id="${t.id}" style="${!puedeSeleccionar ? 'opacity: 0.6;' : ''}">
-                                        <input type="checkbox" value="${t.id}" ${estaSeleccionado ? 'checked' : ''} ${disabledAttr}>
-                                        <div class="tecnico-info">
-                                            <div class="tecnico-nombre">${escapeHtml(t.nombre)}</div>
-                                            <div class="tecnico-carga">${cargaMensaje}</div>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                        <p class="modal-hint">
-                            <i class="fas fa-info-circle"></i> 
-                            * Máximo 2 técnicos por orden | Cada técnico puede tener hasta ${MAX_ORDENES_POR_TECNICO} órdenes activas
-                        </p>
-                    </div>
-                </div>
-                
-                <!-- Sección: Planificación -->
-                <div class="gestion-section">
-                    <div class="gestion-section-header">
-                        <h3><i class="fas fa-calendar-alt"></i> Planificación</h3>
-                        <span class="section-status ${planificacionExistente.bahia_asignada ? 'completado' : 'pendiente'}">
-                            ${planificacionExistente.bahia_asignada ? 'Planificado' : 'Pendiente'}
-                        </span>
-                    </div>
-                    <div class="gestion-section-body">
-                        <div class="planificacion-grid">
-                            <div class="form-group">
-                                <label class="form-label"><i class="fas fa-warehouse"></i> Bahía asignada</label>
-                                <select id="bahiaSelect" class="form-select">
-                                    <option value="">-- Seleccionar bahía --</option>
-                                    ${opcionesBahias}
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label"><i class="fas fa-calendar"></i> Fecha y hora inicio</label>
-                                <input type="datetime-local" id="fechaInicio" class="form-input" value="${fechaInicio}">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label"><i class="fas fa-hourglass-half"></i> Horas estimadas</label>
-                                <input type="number" id="horasEstimadas" class="form-input" step="0.5" min="0.5" 
-                                       placeholder="Ej: 2.5" value="${planificacionExistente.horas_estimadas || ''}">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Sección: Diagnóstico Inicial -->
-                <div class="gestion-section">
-                    <div class="gestion-section-header">
-                        <h3><i class="fas fa-stethoscope"></i> Diagnóstico Inicial</h3>
-                        <span class="section-status ${ordenEnGestion.diagnostico_inicial ? 'completado' : 'pendiente'}">
-                            ${ordenEnGestion.diagnostico_inicial ? 'Completado' : 'Pendiente'}
-                        </span>
-                    </div>
-                    <div class="gestion-section-body">
-                        <div class="form-group">
-                            <label class="form-label">Diagnóstico</label>
-                            <textarea id="diagnosticoTexto" rows="5" class="form-textarea" 
-                                placeholder="Describe el diagnóstico inicial...">${ordenEnGestion.diagnostico_inicial || ''}</textarea>
-                        </div>
-                        <div class="diagnostico-audio">
-                            <div class="diagnostico-audio-controls">
-                                <button type="button" class="btn-audio" id="btnGrabarDiagnostico">
-                                    <i class="fas fa-microphone"></i> Grabar Audio
-                                </button>
-                                <button type="button" class="btn-secondary" id="btnTranscribirDiagnostico" style="display: none;">
-                                    <i class="fas fa-language"></i> Transcribir Audio
-                                </button>
-                                <button type="button" class="btn-secondary" id="btnEliminarAudioDiagnostico" style="display: none;">
-                                    <i class="fas fa-trash-alt"></i> Eliminar Audio
-                                </button>
-                            </div>
-                            <audio id="audioPreviewDiagnostico" controls style="display: ${diagnosticoAudioUrl ? 'block' : 'none'}; width: 100%; margin-top: 0.5rem;">
-                                ${diagnosticoAudioUrl ? `<source src="${diagnosticoAudioUrl}" type="audio/mpeg">` : ''}
-                            </audio>
-                            <div id="transcripcionLoading" style="display: none; margin-top: 0.5rem; text-align: center;">
-                                <i class="fas fa-spinner fa-spin"></i> Transcribiendo audio...
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        return `
+            <div class="bahia-item ${estadoClass} ${esActual ? 'selected' : ''}" 
+                 data-bahia="${num}" data-estado="${estado}"
+                 style="${!puedeSeleccionar ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
+                <div class="bahia-numero">${num}</div>
+                <div class="bahia-estado-icono">${estadoIcono}</div>
+                <div class="bahia-estado-texto">${estadoTexto}</div>
+                ${bahia.orden_codigo ? `<div class="bahia-orden">${bahia.orden_codigo.substring(0, 8)}</div>` : ''}
+                ${infoAdicional}
             </div>
         `;
-        
-        footer.innerHTML = `
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="window.cerrarModalGestionOrden()">Cancelar</button>
-                <button class="btn-primary" onclick="window.guardarGestionOrden()">
-                    <i class="fas fa-save"></i> Guardar Cambios
-                </button>
-            </div>
-        `;
-        
-        configurarSeleccionTecnicos();
-        configurarAudioDiagnostico(diagnosticoAudioUrl);
-        
-        modal.classList.add('show');
-        
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion(error.message || 'Error cargando datos', 'error');
-    }
+    }).join('');
 }
+
+function configurarSeleccionBahiasVisual() {
+    document.querySelectorAll('.bahia-item').forEach(item => {
+        const bahiaNum = parseInt(item.dataset.bahia);
+        const estado = item.dataset.estado;
+        const esActual = item.classList.contains('actual');
+        
+        let puedeSeleccionar = false;
+        let mensaje = '';
+        
+        if (estado === 'libre') puedeSeleccionar = true;
+        else if (estado === 'reservado' && esActual) puedeSeleccionar = true;
+        else if (estado === 'ocupado') mensaje = `Bahía ${bahiaNum} está ocupada`;
+        else if (estado === 'reservado') mensaje = `Bahía ${bahiaNum} está reservada`;
+        
+        if (!puedeSeleccionar) {
+            item.style.cursor = 'not-allowed';
+            item.onclick = () => mostrarNotificacion(mensaje, 'warning');
+        } else {
+            item.style.cursor = 'pointer';
+            item.onclick = () => window.seleccionarBahiaVisual(bahiaNum);
+        }
+    });
+}
+
+window.seleccionarBahiaVisual = function(bahiaNum) {
+    const bahiaItem = document.querySelector(`.bahia-item[data-bahia="${bahiaNum}"]`);
+    if (!bahiaItem) return;
+    
+    const estado = bahiaItem.dataset.estado;
+    const esActual = bahiaItem.classList.contains('actual');
+    
+    if (estado === 'ocupado') return mostrarNotificacion(`❌ Bahía ${bahiaNum} está ocupada`, 'error');
+    if (estado === 'reservado' && !esActual) return mostrarNotificacion(`❌ Bahía ${bahiaNum} está reservada`, 'error');
+    
+    document.querySelectorAll('.bahia-item').forEach(i => i.classList.remove('selected'));
+    bahiaItem.classList.add('selected');
+    document.getElementById('bahiaSeleccionada').value = bahiaNum;
+    
+    const sectionHeader = bahiaItem.closest('.gestion-section')?.querySelector('.section-status');
+    if (sectionHeader) {
+        sectionHeader.textContent = 'Planificado';
+        sectionHeader.classList.add('completado');
+        sectionHeader.classList.remove('pendiente');
+    }
+    
+    mostrarNotificacion(estado === 'reservado' ? `🟡 Bahía ${bahiaNum} (tu reserva) seleccionada` : `🟢 Bahía ${bahiaNum} seleccionada`, 'success');
+};
 
 function configurarSeleccionTecnicos() {
     const checkboxes = document.querySelectorAll('#tecnicosGrid input[type="checkbox"]');
     const maxTecnicos = 2;
-    const MAX_ORDENES_POR_TECNICO = 2;
     
     checkboxes.forEach(checkbox => {
         checkbox.addEventListener('change', (e) => {
             const seleccionados = Array.from(checkboxes).filter(cb => cb.checked && !cb.disabled).length;
-            
             if (seleccionados > maxTecnicos) {
                 checkbox.checked = false;
                 mostrarNotificacion(`Máximo ${maxTecnicos} técnicos por orden`, 'warning');
                 return;
             }
-            
             const parent = checkbox.closest('.tecnico-option');
-            if (checkbox.checked) {
-                parent.classList.add('selected');
-            } else {
-                parent.classList.remove('selected');
-            }
+            if (checkbox.checked) parent.classList.add('selected');
+            else parent.classList.remove('selected');
             
             const sectionHeader = checkbox.closest('.gestion-section').querySelector('.section-status');
             const nuevosSeleccionados = Array.from(checkboxes).filter(cb => cb.checked && !cb.disabled).length;
@@ -669,10 +456,7 @@ function configurarAudioDiagnostico(existingAudioUrl) {
     const audioPreview = document.getElementById('audioPreviewDiagnostico');
     const loadingDiv = document.getElementById('transcripcionLoading');
     
-    let mediaRecorderLocal = null;
-    let isRecordingLocal = false;
-    let audioBlobLocal = null;
-    let audioChunksLocal = [];
+    let mediaRecorderLocal = null, isRecordingLocal = false, audioBlobLocal = null, audioChunksLocal = [];
     
     if (existingAudioUrl) {
         btnTranscribir.style.display = 'flex';
@@ -685,27 +469,20 @@ function configurarAudioDiagnostico(existingAudioUrl) {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 mediaRecorderLocal = new MediaRecorder(stream);
                 audioChunksLocal = [];
-                
-                mediaRecorderLocal.ondataavailable = (event) => {
-                    audioChunksLocal.push(event.data);
-                };
-                
+                mediaRecorderLocal.ondataavailable = (event) => audioChunksLocal.push(event.data);
                 mediaRecorderLocal.onstop = () => {
                     audioBlobLocal = new Blob(audioChunksLocal, { type: 'audio/wav' });
-                    const audioUrl = URL.createObjectURL(audioBlobLocal);
-                    audioPreview.src = audioUrl;
+                    audioPreview.src = URL.createObjectURL(audioBlobLocal);
                     audioPreview.style.display = 'block';
                     btnTranscribir.style.display = 'flex';
                     btnEliminar.style.display = 'flex';
                     stream.getTracks().forEach(track => track.stop());
                 };
-                
                 mediaRecorderLocal.start();
                 isRecordingLocal = true;
                 btnGrabar.innerHTML = '<i class="fas fa-stop"></i> Detener Grabación';
                 btnGrabar.classList.add('recording');
             } catch (error) {
-                console.error('Error accediendo al micrófono:', error);
                 mostrarNotificacion('Error accediendo al micrófono', 'error');
             }
         } else {
@@ -717,11 +494,7 @@ function configurarAudioDiagnostico(existingAudioUrl) {
     });
     
     btnTranscribir.addEventListener('click', async () => {
-        if (!audioBlobLocal) {
-            mostrarNotificacion('Primero graba un audio', 'warning');
-            return;
-        }
-        
+        if (!audioBlobLocal) return mostrarNotificacion('Primero graba un audio', 'warning');
         try {
             btnTranscribir.disabled = true;
             btnTranscribir.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Transcribiendo...';
@@ -729,32 +502,21 @@ function configurarAudioDiagnostico(existingAudioUrl) {
             
             const reader = new FileReader();
             reader.onload = async () => {
-                const audioBase64 = reader.result;
                 const response = await fetch(`${API_URL}/jefe-taller/transcribir-audio`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-                    },
-                    body: JSON.stringify({ audio: audioBase64 })
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` },
+                    body: JSON.stringify({ audio: reader.result })
                 });
-                
                 const data = await response.json();
                 if (response.ok && data.transcripcion) {
                     const textarea = document.getElementById('diagnosticoTexto');
                     const textoActual = textarea.value;
-                    const nuevaTranscripcion = data.transcripcion;
-                    
-                    const nuevoTexto = textoActual + (textoActual ? '\n\n' : '') + `[Transcripción del audio]:\n${nuevaTranscripcion}`;
-                    textarea.value = nuevoTexto;
+                    textarea.value = textoActual + (textoActual ? '\n\n' : '') + `[Transcripción del audio]:\n${data.transcripcion}`;
                     mostrarNotificacion('Audio transcrito correctamente', 'success');
-                } else {
-                    throw new Error(data.error || 'Error al transcribir');
-                }
+                } else throw new Error(data.error || 'Error al transcribir');
             };
             reader.readAsDataURL(audioBlobLocal);
         } catch (error) {
-            console.error('Error en transcripción:', error);
             mostrarNotificacion(error.message, 'error');
         } finally {
             btnTranscribir.disabled = false;
@@ -774,25 +536,328 @@ function configurarAudioDiagnostico(existingAudioUrl) {
     });
 }
 
+// =====================================================
+// ABRIR MODAL DE GESTIÓN DE ORDEN
+// =====================================================
+
+async function abrirModalGestionOrden(idOrden) {
+    try {
+        mostrarNotificacion('Cargando datos de la orden...', 'info');
+        
+        const response = await fetch(`${API_URL}/jefe-taller/detalle-orden/${idOrden}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+        });
+        
+        const data = await response.json();
+        if (!response.ok || !data.detalle) throw new Error(data.error || 'Error cargando datos');
+        
+        ordenEnGestion = data.detalle;
+        
+        const trabajoIniciado = ordenEnGestion.planificacion?.fecha_hora_inicio_real ? true : false;
+        const estadoGlobal = ordenEnGestion.estado_global;
+        
+        const { editable: puedeEditar, mensaje: mensajeBloqueo } = puedeEditarOrden(estadoGlobal, trabajoIniciado);
+        
+        let diagnosticoInfo = { enviado: false };
+        try {
+            const diagResponse = await fetch(`${API_URL}/jefe-taller/diagnostico-pendiente/${idOrden}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+            });
+            diagnosticoInfo = await diagResponse.json();
+        } catch (error) {}
+        
+        let bahiasEstado = [];
+        try {
+            const bahiasResponse = await fetch(`${API_URL}/jefe-taller/bahias/estado`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+            });
+            const bahiasData = await bahiasResponse.json();
+            if (bahiasData.success && bahiasData.bahias) bahiasEstado = bahiasData.bahias;
+        } catch (error) {
+            bahiasEstado = Array.from({ length: 12 }, (_, i) => ({ numero: i + 1, estado: 'libre' }));
+        }
+        
+        const modal = document.getElementById('modalGestionOrden');
+        const body = document.getElementById('modalGestionOrdenBody');
+        const footer = document.getElementById('modalGestionOrdenFooter');
+        
+        const tecnicosSeleccionados = ordenEnGestion.tecnicos?.map(t => t.id) || [];
+        const planificacionExistente = ordenEnGestion.planificacion || {};
+        const hoy = new Date().toISOString().slice(0, 16);
+        const fechaInicio = planificacionExistente.fecha_hora_inicio_estimado ? planificacionExistente.fecha_hora_inicio_estimado.slice(0, 16) : hoy;
+        const bahiaActual = planificacionExistente.bahia_asignada;
+        const MAX_ORDENES_POR_TECNICO = 2;
+        
+        const bahiasGridHtml = generarGridBahias(bahiasEstado, bahiaActual);
+        
+        console.log('📋 Técnicos disponibles para mostrar:', tecnicosDisponibles);
+        
+        const bloqueoBanner = trabajoIniciado ? `
+            <div class="bloqueo-banner">
+                <i class="fas fa-play-circle"></i>
+                <div>
+                    <strong>🔒 Orden Bloqueada - Trabajo en Curso</strong>
+                    <p>El técnico ya presionó "Empezar Trabajo" en esta orden. No se pueden realizar modificaciones.</p>
+                </div>
+            </div>
+        ` : '';
+        
+        const diagnosticoBloqueadoBanner = (diagnosticoInfo.enviado && diagnosticoInfo.estado === 'pendiente') ? `
+            <div class="bloqueo-banner warning">
+                <i class="fas fa-hourglass-half"></i>
+                <div>
+                    <strong>Diagnóstico en revisión</strong>
+                    <p>El técnico ${diagnosticoInfo.tecnico_nombre || 'asignado'} envió un diagnóstico. Esperando tu aprobación.</p>
+                </div>
+            </div>
+        ` : '';
+        
+        body.innerHTML = `
+            <div class="gestion-orden">
+                ${bloqueoBanner}
+                ${diagnosticoBloqueadoBanner}
+                
+                <!-- Técnicos -->
+                <div class="gestion-section ${!puedeEditar ? 'bloqueada' : ''}">
+                    <div class="gestion-section-header">
+                        <h3><i class="fas fa-users"></i> Asignación de Técnicos</h3>
+                        <span class="section-status ${tecnicosSeleccionados.length > 0 ? 'completado' : 'pendiente'}">${tecnicosSeleccionados.length > 0 ? `${tecnicosSeleccionados.length}/2 técnicos` : 'Pendiente'}</span>
+                        ${!puedeEditar ? '<i class="fas fa-lock"></i>' : ''}
+                    </div>
+                    <div class="gestion-section-body">
+                        <div class="tecnicos-grid" id="tecnicosGrid">
+                            ${tecnicosDisponibles.length > 0 ? tecnicosDisponibles.map(t => {
+                                const ordenesActivasTec = t.ordenes_activas || 0;
+                                const estaCompleto = ordenesActivasTec >= MAX_ORDENES_POR_TECNICO;
+                                const estaSeleccionado = tecnicosSeleccionados.includes(t.id);
+                                const puedeSeleccionar = (!estaCompleto || estaSeleccionado) && puedeEditar;
+                                const disabledAttr = !puedeSeleccionar ? 'disabled' : '';
+                                return `
+                                    <div class="tecnico-option ${estaSeleccionado ? 'selected' : ''}" data-id="${t.id}" style="${!puedeSeleccionar ? 'opacity: 0.6;' : ''}">
+                                        <input type="checkbox" value="${t.id}" id="tecnico_${t.id}" ${estaSeleccionado ? 'checked' : ''} ${disabledAttr}>
+                                        <label for="tecnico_${t.id}" class="tecnico-info">
+                                            <div class="tecnico-nombre">${escapeHtml(t.nombre)}</div>
+                                            <div class="tecnico-carga">${ordenesActivasTec}/${MAX_ORDENES_POR_TECNICO} vehículos</div>
+                                        </label>
+                                    </div>
+                                `;
+                            }).join('') : '<div class="sin-tecnicos">No hay técnicos disponibles</div>'}
+                        </div>
+                        <p class="modal-hint"><i class="fas fa-info-circle"></i> Máximo 2 técnicos por orden</p>
+                    </div>
+                </div>
+                
+                <!-- Planificación -->
+                <div class="gestion-section ${!puedeEditar ? 'bloqueada' : ''}">
+                    <div class="gestion-section-header">
+                        <h3><i class="fas fa-calendar-alt"></i> Planificación</h3>
+                        <span class="section-status ${planificacionExistente.bahia_asignada ? 'completado' : 'pendiente'}">${planificacionExistente.bahia_asignada ? 'Planificado' : 'Pendiente'}</span>
+                        ${!puedeEditar ? '<i class="fas fa-lock"></i>' : ''}
+                    </div>
+                    <div class="gestion-section-body">
+                        <div class="bahias-seleccion-section">
+                            <label class="form-label required"><i class="fas fa-warehouse"></i> Selecciona una bahía:</label>
+                            <div class="bahias-grid-seleccion" id="bahiasGridSeleccion">${bahiasGridHtml}</div>
+                            <input type="hidden" id="bahiaSeleccionada" value="${bahiaActual || ''}">
+                        </div>
+                        <div class="planificacion-grid">
+                            <div class="form-group">
+                                <label class="form-label required"><i class="fas fa-calendar"></i> Fecha y hora inicio</label>
+                                <input type="datetime-local" id="fechaInicio" class="form-input" value="${fechaInicio}" ${!puedeEditar ? 'disabled' : ''}>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label required"><i class="fas fa-hourglass-half"></i> Horas estimadas</label>
+                                <input type="number" id="horasEstimadas" class="form-input" step="0.5" min="0.5" placeholder="Ej: 2.5" value="${planificacionExistente.horas_estimadas || ''}" ${!puedeEditar ? 'disabled' : ''}>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Diagnóstico (OBLIGATORIO) -->
+                <div class="gestion-section ${!puedeEditar ? 'bloqueada' : ''}">
+                    <div class="gestion-section-header">
+                        <h3><i class="fas fa-stethoscope"></i> Diagnóstico Inicial</h3>
+                        <span class="section-status ${ordenEnGestion.diagnostico_inicial ? 'completado' : 'pendiente'}">${ordenEnGestion.diagnostico_inicial ? 'Completado' : 'Pendiente'}</span>
+                        ${!puedeEditar ? '<i class="fas fa-lock"></i>' : ''}
+                    </div>
+                    <div class="gestion-section-body">
+                        <div class="form-group">
+                            <label class="form-label required"><i class="fas fa-file-alt"></i> Diagnóstico (obligatorio)</label>
+                            <textarea id="diagnosticoTexto" rows="5" class="form-textarea" placeholder="Describe el diagnóstico inicial... Este campo es obligatorio." ${!puedeEditar ? 'disabled' : ''}>${ordenEnGestion.diagnostico_inicial || ''}</textarea>
+                        </div>
+                        <div class="diagnostico-audio">
+                            <div class="diagnostico-audio-controls">
+                                <button type="button" class="btn-audio" id="btnGrabarDiagnostico" ${!puedeEditar ? 'disabled' : ''}><i class="fas fa-microphone"></i> Grabar Audio</button>
+                                <button type="button" class="btn-secondary" id="btnTranscribirDiagnostico" style="display: none;" ${!puedeEditar ? 'disabled' : ''}><i class="fas fa-language"></i> Transcribir Audio</button>
+                                <button type="button" class="btn-secondary" id="btnEliminarAudioDiagnostico" style="display: none;" ${!puedeEditar ? 'disabled' : ''}><i class="fas fa-trash-alt"></i> Eliminar Audio</button>
+                            </div>
+                            <audio id="audioPreviewDiagnostico" controls style="display: ${ordenEnGestion.diagnostico_audio_url ? 'block' : 'none'}; width: 100%; margin-top: 0.5rem;">
+                                ${ordenEnGestion.diagnostico_audio_url ? `<source src="${ordenEnGestion.diagnostico_audio_url}" type="audio/mpeg">` : ''}
+                            </audio>
+                            <div id="transcripcionLoading" style="display: none; text-align: center;"><i class="fas fa-spinner fa-spin"></i> Transcribiendo audio...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        if (puedeEditar && !diagnosticoInfo.enviado) {
+            footer.innerHTML = `
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="window.cerrarModalGestionOrden()">Cancelar</button>
+                    <button class="btn-primary" onclick="window.guardarGestionOrden()"><i class="fas fa-save"></i> Guardar Cambios</button>
+                </div>
+            `;
+        } else if (diagnosticoInfo.enviado && diagnosticoInfo.estado === 'pendiente') {
+            footer.innerHTML = `
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="window.cerrarModalGestionOrden()">Cerrar</button>
+                    <button class="btn-primary" onclick="window.irAprobarDiagnostico(${idOrden})"><i class="fas fa-check-circle"></i> Revisar Diagnóstico</button>
+                </div>
+            `;
+        } else {
+            footer.innerHTML = `<div class="modal-footer"><button class="btn-secondary" onclick="window.cerrarModalGestionOrden()">Cerrar</button></div>`;
+        }
+        
+        if (puedeEditar) {
+            configurarSeleccionTecnicos();
+            configurarSeleccionBahiasVisual();
+            configurarAudioDiagnostico(ordenEnGestion.diagnostico_audio_url);
+        }
+        
+        modal.classList.add('show');
+        
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion(error.message || 'Error cargando datos', 'error');
+    }
+}
+
+// =====================================================
+// GUARDAR GESTIÓN DE ORDEN - CON VALIDACIÓN COMPLETA
+// =====================================================
+
 async function guardarGestionOrden() {
     if (!ordenEnGestion) return;
     
+    let errores = [];
+    
     try {
-        mostrarNotificacion('Guardando cambios...', 'info');
-        
+        // =====================================================
+        // 1. VALIDAR TÉCNICOS SELECCIONADOS
+        // =====================================================
         const checkboxes = document.querySelectorAll('#tecnicosGrid input[type="checkbox"]');
         const tecnicosSeleccionados = Array.from(checkboxes)
             .filter(cb => cb.checked && !cb.disabled)
             .map(cb => parseInt(cb.value));
         
-        const bahia = document.getElementById('bahiaSelect')?.value;
-        const fechaInicio = document.getElementById('fechaInicio')?.value;
-        const horasEstimadas = parseFloat(document.getElementById('horasEstimadas')?.value);
-        const diagnostico = document.getElementById('diagnosticoTexto')?.value || '';
-        let audioUrl = ordenEnGestion.diagnostico_audio_url || null;
+        if (tecnicosSeleccionados.length === 0) {
+            errores.push('❌ Debes seleccionar al menos un técnico');
+            const tecnicosSection = document.querySelector('#tecnicosGrid')?.closest('.gestion-section');
+            if (tecnicosSection) {
+                tecnicosSection.classList.add('validation-error');
+                setTimeout(() => tecnicosSection.classList.remove('validation-error'), 3000);
+            }
+        }
         
-        // Validar disponibilidad de bahía
-        if (bahia && fechaInicio && horasEstimadas > 0) {
+        // =====================================================
+        // 2. VALIDAR BAHÍA SELECCIONADA
+        // =====================================================
+        let bahia = document.getElementById('bahiaSeleccionada')?.value;
+        if (!bahia) {
+            const bahiaSeleccionada = document.querySelector('.bahia-item.selected');
+            if (bahiaSeleccionada) {
+                bahia = bahiaSeleccionada.dataset.bahia;
+            }
+        }
+        
+        if (!bahia) {
+            errores.push('❌ Debes seleccionar una bahía');
+            const bahiaSection = document.querySelector('.bahias-grid-seleccion')?.closest('.gestion-section');
+            if (bahiaSection) {
+                bahiaSection.classList.add('validation-error');
+                setTimeout(() => bahiaSection.classList.remove('validation-error'), 3000);
+            }
+        }
+        
+        // =====================================================
+        // 3. VALIDAR FECHA DE INICIO
+        // =====================================================
+        const fechaInicio = document.getElementById('fechaInicio')?.value;
+        if (!fechaInicio) {
+            errores.push('❌ Debes seleccionar una fecha y hora de inicio');
+            const fechaInput = document.getElementById('fechaInicio');
+            if (fechaInput) {
+                fechaInput.classList.add('validation-error');
+                setTimeout(() => fechaInput.classList.remove('validation-error'), 3000);
+            }
+        } else {
+            const fechaInicioDate = new Date(fechaInicio);
+            const ahora = new Date();
+            const fechaMinima = new Date(ahora.getTime() - 5 * 60000);
+            
+            if (fechaInicioDate < fechaMinima) {
+                errores.push('❌ La fecha de inicio no puede ser anterior a la fecha y hora actual');
+                const fechaInput = document.getElementById('fechaInicio');
+                if (fechaInput) {
+                    fechaInput.classList.add('validation-error');
+                    setTimeout(() => fechaInput.classList.remove('validation-error'), 3000);
+                }
+            }
+        }
+        
+        // =====================================================
+        // 4. VALIDAR HORAS ESTIMADAS
+        // =====================================================
+        const horasEstimadas = parseFloat(document.getElementById('horasEstimadas')?.value);
+        if (!horasEstimadas || isNaN(horasEstimadas)) {
+            errores.push('❌ Debes ingresar horas estimadas válidas');
+            const horasInput = document.getElementById('horasEstimadas');
+            if (horasInput) {
+                horasInput.classList.add('validation-error');
+                setTimeout(() => horasInput.classList.remove('validation-error'), 3000);
+            }
+        } else if (horasEstimadas <= 0) {
+            errores.push('❌ Las horas estimadas deben ser mayores a 0');
+            const horasInput = document.getElementById('horasEstimadas');
+            if (horasInput) {
+                horasInput.classList.add('validation-error');
+                setTimeout(() => horasInput.classList.remove('validation-error'), 3000);
+            }
+        } else if (horasEstimadas > 24) {
+            const confirmar = confirm('⚠️ Las horas estimadas exceden 24 horas. ¿Deseas continuar de todos modos?');
+            if (!confirmar) {
+                errores.push('❌ Horas estimadas exceden el límite de 24 horas');
+            }
+        }
+        
+        // =====================================================
+        // 5. VALIDAR DIAGNÓSTICO INICIAL (OBLIGATORIO)
+        // =====================================================
+        const diagnostico = document.getElementById('diagnosticoTexto')?.value?.trim() || '';
+        if (!diagnostico) {
+            errores.push('❌ El diagnóstico inicial es obligatorio. Debes completarlo antes de guardar.');
+            const diagnosticoTextarea = document.getElementById('diagnosticoTexto');
+            if (diagnosticoTextarea) {
+                diagnosticoTextarea.classList.add('validation-error');
+                setTimeout(() => diagnosticoTextarea.classList.remove('validation-error'), 3000);
+            }
+        }
+        
+        // =====================================================
+        // SI HAY ERRORES, MOSTRAR Y DETENER
+        // =====================================================
+        if (errores.length > 0) {
+            const mensajeError = errores.join('\n');
+            mostrarNotificacion(mensajeError, 'error');
+            return;
+        }
+        
+        mostrarNotificacion('Guardando cambios...', 'info');
+        
+        // Verificar disponibilidad de bahía
+        const bahiaActual = ordenEnGestion.planificacion?.bahia_asignada;
+        if (parseInt(bahia) !== bahiaActual && fechaInicio && horasEstimadas > 0) {
             const disponibilidadResponse = await fetch(`${API_URL}/jefe-taller/verificar-bahia`, {
                 method: 'POST',
                 headers: {
@@ -809,12 +874,20 @@ async function guardarGestionOrden() {
             
             const disponibilidadData = await disponibilidadResponse.json();
             if (!disponibilidadData.disponible) {
-                throw new Error(`La Bahía ${bahia} no está disponible en el horario seleccionado`);
+                mostrarNotificacion(`❌ La Bahía ${bahia} no está disponible en el horario seleccionado`, 'error');
+                const bahiaSection = document.querySelector('.bahias-grid-seleccion')?.closest('.gestion-section');
+                if (bahiaSection) {
+                    bahiaSection.classList.add('validation-error');
+                    setTimeout(() => bahiaSection.classList.remove('validation-error'), 3000);
+                }
+                return;
             }
         }
         
         // Procesar audio
+        let audioUrl = ordenEnGestion.diagnostico_audio_url || null;
         const audioPreview = document.getElementById('audioPreviewDiagnostico');
+        
         if (audioPreview && audioPreview.src && audioPreview.src.startsWith('blob:')) {
             try {
                 const response = await fetch(audioPreview.src);
@@ -836,11 +909,11 @@ async function guardarGestionOrden() {
                 }
             } catch (audioError) {
                 console.error('Error subiendo audio:', audioError);
+                mostrarNotificacion('⚠️ Error al subir el audio, pero se guardarán los demás datos', 'warning');
             }
         }
         
         // Guardar técnicos
-        // En la función guardarGestionOrden(), reemplaza la parte de asignar técnicos:
         await fetch(`${API_URL}/jefe-taller/asignar-tecnicos`, {
             method: 'POST',
             headers: {
@@ -850,25 +923,24 @@ async function guardarGestionOrden() {
             body: JSON.stringify({ 
                 id_orden: ordenEnGestion.id, 
                 tecnicos: tecnicosSeleccionados,
-                tipo_asignacion: 'diagnostico'  // ✅ Agrega esta línea
+                tipo_asignacion: 'diagnostico'
             })
         });
+        
         // Guardar planificación
-        if (bahia && fechaInicio && horasEstimadas > 0) {
-            await fetch(`${API_URL}/jefe-taller/planificar`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-                },
-                body: JSON.stringify({ 
-                    id_orden: ordenEnGestion.id, 
-                    bahia: parseInt(bahia), 
-                    fecha_inicio: fechaInicio, 
-                    horas_estimadas: horasEstimadas 
-                })
-            });
-        }
+        await fetch(`${API_URL}/jefe-taller/planificar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            },
+            body: JSON.stringify({ 
+                id_orden: ordenEnGestion.id, 
+                bahia: parseInt(bahia), 
+                fecha_inicio: fechaInicio, 
+                horas_estimadas: horasEstimadas 
+            })
+        });
         
         // Guardar diagnóstico
         await fetch(`${API_URL}/jefe-taller/diagnostico-inicial`, {
@@ -885,7 +957,7 @@ async function guardarGestionOrden() {
         });
         
         cerrarModalGestionOrden();
-        mostrarNotificacion('Cambios guardados correctamente', 'success');
+        mostrarNotificacion('✅ Todos los cambios han sido guardados correctamente', 'success');
         
         await Promise.all([
             cargarTecnicos(),
@@ -908,10 +980,16 @@ function getAudioBase64FromBlob(blob) {
 }
 
 function cerrarModalGestionOrden() {
-    const modal = document.getElementById('modalGestionOrden');
-    if (modal) modal.classList.remove('show');
+    document.getElementById('modalGestionOrden')?.classList.remove('show');
     ordenEnGestion = null;
 }
+
+window.irAprobarDiagnostico = function(idOrden) {
+    cerrarModalGestionOrden();
+    mostrarNotificacion('Redirigiendo a Diagnósticos...', 'info');
+    const tabDiagnosticos = document.querySelector('.tab-btn[data-tab="diagnosticos"]');
+    if (tabDiagnosticos) tabDiagnosticos.click();
+};
 
 // =====================================================
 // VER DETALLE DE ORDEN
@@ -919,12 +997,10 @@ function cerrarModalGestionOrden() {
 
 async function verDetalleOrden(idOrden) {
     try {
-        mostrarNotificacion('Cargando detalle de orden...', 'info');
-        
+        mostrarNotificacion('Cargando detalle...', 'info');
         const response = await fetch(`${API_URL}/jefe-taller/detalle-orden/${idOrden}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
         });
-        
         const data = await response.json();
         if (!response.ok || !data.detalle) throw new Error(data.error || 'Error cargando detalle');
         
@@ -932,151 +1008,46 @@ async function verDetalleOrden(idOrden) {
         const modal = document.getElementById('modalDetalleOrden');
         const body = document.getElementById('modalDetalleOrdenBody');
         
-        const fotosHtml = detalle.fotos ? renderFotosDetalle(detalle.fotos) : '';
-        
         body.innerHTML = `
             <div class="detalle-orden">
-                <div class="detalle-seccion">
-                    <h4><i class="fas fa-info-circle"></i> Información General</h4>
+                <div class="detalle-seccion"><h4><i class="fas fa-info-circle"></i> Información General</h4>
                     <div class="detalle-grid">
-                        <div class="detalle-item">
-                            <span class="detalle-label">Código</span>
-                            <span class="detalle-value">${escapeHtml(detalle.codigo_unico)}</span>
-                        </div>
-                        <div class="detalle-item">
-                            <span class="detalle-label">Estado</span>
-                            <span class="detalle-value ${detalle.estado_global}">${detalle.estado_global}</span>
-                        </div>
-                        <div class="detalle-item">
-                            <span class="detalle-label">Fecha ingreso</span>
-                            <span class="detalle-value">${new Date(detalle.fecha_ingreso).toLocaleString()}</span>
-                        </div>
-                        ${detalle.fecha_salida ? `
-                            <div class="detalle-item">
-                                <span class="detalle-label">Fecha salida</span>
-                                <span class="detalle-value">${new Date(detalle.fecha_salida).toLocaleString()}</span>
-                            </div>
-                        ` : ''}
+                        <div class="detalle-item"><span class="detalle-label">Código</span><span class="detalle-value">${escapeHtml(detalle.codigo_unico)}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Estado</span><span class="detalle-value ${detalle.estado_global}">${detalle.estado_global}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Fecha ingreso</span><span class="detalle-value">${new Date(detalle.fecha_ingreso).toLocaleString()}</span></div>
                     </div>
                 </div>
-                
-                <div class="detalle-seccion">
-                    <h4><i class="fas fa-user"></i> Datos del Cliente</h4>
+                <div class="detalle-seccion"><h4><i class="fas fa-user"></i> Datos del Cliente</h4>
                     <div class="detalle-grid">
-                        <div class="detalle-item">
-                            <span class="detalle-label">Nombre</span>
-                            <span class="detalle-value">${escapeHtml(detalle.cliente?.nombre || 'No registrado')}</span>
-                        </div>
-                        <div class="detalle-item">
-                            <span class="detalle-label">Teléfono</span>
-                            <span class="detalle-value">${escapeHtml(detalle.cliente?.telefono || 'No registrado')}</span>
-                        </div>
+                        <div class="detalle-item"><span class="detalle-label">Nombre</span><span class="detalle-value">${escapeHtml(detalle.cliente?.nombre || 'No registrado')}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Teléfono</span><span class="detalle-value">${escapeHtml(detalle.cliente?.telefono || 'No registrado')}</span></div>
                     </div>
                 </div>
-                
-                <div class="detalle-seccion">
-                    <h4><i class="fas fa-car"></i> Datos del Vehículo</h4>
+                <div class="detalle-seccion"><h4><i class="fas fa-car"></i> Datos del Vehículo</h4>
                     <div class="detalle-grid">
-                        <div class="detalle-item">
-                            <span class="detalle-label">Placa</span>
-                            <span class="detalle-value">${escapeHtml(detalle.placa)}</span>
-                        </div>
-                        <div class="detalle-item">
-                            <span class="detalle-label">Marca/Modelo</span>
-                            <span class="detalle-value">${escapeHtml(detalle.marca)} ${escapeHtml(detalle.modelo)}</span>
-                        </div>
-                        <div class="detalle-item">
-                            <span class="detalle-label">Kilometraje</span>
-                            <span class="detalle-value">${detalle.kilometraje?.toLocaleString() || '0'} km</span>
-                        </div>
+                        <div class="detalle-item"><span class="detalle-label">Placa</span><span class="detalle-value">${escapeHtml(detalle.placa)}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Marca/Modelo</span><span class="detalle-value">${escapeHtml(detalle.marca)} ${escapeHtml(detalle.modelo)}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Kilometraje</span><span class="detalle-value">${detalle.kilometraje?.toLocaleString() || '0'} km</span></div>
                     </div>
                 </div>
-                
-                <div class="detalle-seccion">
-                    <h4><i class="fas fa-pencil-alt"></i> Descripción del Problema</h4>
+                <div class="detalle-seccion"><h4><i class="fas fa-pencil-alt"></i> Descripción del Problema</h4>
                     <div class="detalle-descripcion">${escapeHtml(detalle.transcripcion_problema || 'No registrada')}</div>
                 </div>
-                
-                ${fotosHtml}
-                
-                ${detalle.diagnostico_inicial ? `
-                    <div class="detalle-seccion">
-                        <h4><i class="fas fa-stethoscope"></i> Diagnóstico Inicial</h4>
-                        <div class="detalle-descripcion">${escapeHtml(detalle.diagnostico_inicial)}</div>
-                    </div>
-                ` : ''}
-                
-                <div class="detalle-seccion">
-                    <h4><i class="fas fa-users"></i> Técnicos Asignados</h4>
-                    <div class="orden-tecnicos">
-                        ${detalle.tecnicos && detalle.tecnicos.length > 0 ? 
-                            detalle.tecnicos.map(t => `<span class="tecnico-badge"><i class="fas fa-user"></i> ${escapeHtml(t.nombre)}</span>`).join('') :
-                            '<span>Sin técnicos asignados</span>'}
-                    </div>
+                ${detalle.diagnostico_inicial ? `<div class="detalle-seccion"><h4><i class="fas fa-stethoscope"></i> Diagnóstico Inicial</h4><div class="detalle-descripcion">${escapeHtml(detalle.diagnostico_inicial)}</div></div>` : ''}
+                <div class="detalle-seccion"><h4><i class="fas fa-users"></i> Técnicos Asignados</h4>
+                    <div class="orden-tecnicos">${detalle.tecnicos && detalle.tecnicos.length > 0 ? detalle.tecnicos.map(t => `<span class="tecnico-badge"><i class="fas fa-user"></i> ${escapeHtml(t.nombre)}</span>`).join('') : '<span>Sin técnicos asignados</span>'}</div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="window.cerrarModalDetalleOrden()">Cerrar</button>
-            </div>
+            <div class="modal-footer"><button class="btn-secondary" onclick="window.cerrarModalDetalleOrden()">Cerrar</button></div>
         `;
-        
         modal.classList.add('show');
     } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion(error.message || 'Error cargando detalle', 'error');
+        mostrarNotificacion(error.message, 'error');
     }
-}
-
-function renderFotosDetalle(fotos) {
-    if (!fotos) return '';
-    
-    // Mapeo de campos a nombres legibles
-    const camposMap = {
-        'url_lateral_izquierda': 'Lateral Izquierdo',
-        'url_lateral_derecha': 'Lateral Derecho',
-        'url_foto_frontal': 'Frontal',
-        'url_foto_trasera': 'Trasera',
-        'url_foto_superior': 'Superior',
-        'url_foto_inferior': 'Inferior',
-        'url_foto_tablero': 'Tablero'
-    };
-    
-    // Convertir objeto a array de fotos con url y nombre
-    let fotosConUrl = [];
-    
-    if (typeof fotos === 'object' && !Array.isArray(fotos)) {
-        // Es un objeto con claves
-        fotosConUrl = Object.entries(fotos)
-            .filter(([key, url]) => url && camposMap[key])
-            .map(([key, url]) => ({ url, nombre: camposMap[key] }));
-    } else if (Array.isArray(fotos)) {
-        // Ya es un array
-        fotosConUrl = fotos.filter(f => f.url);
-    }
-    
-    if (fotosConUrl.length === 0) return '';
-    
-    return `
-        <div class="detalle-seccion">
-            <h4><i class="fas fa-camera"></i> Fotos de Recepción (${fotosConUrl.length}/7)</h4>
-            <div class="detalle-fotos-grid">
-                ${fotosConUrl.map(foto => `
-                    <div class="detalle-foto-item" onclick="window.verImagenAmpliada('${foto.url}')">
-                        <img src="${foto.url}" alt="${foto.nombre}" onerror="this.src='https://placehold.co/400x300/2C2C2E/8E8E93?text=Imagen+no+disponible'">
-                        <span class="detalle-foto-label">${foto.nombre}</span>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
 }
 
 function cerrarModalDetalleOrden() {
-    document.getElementById('modalDetalleOrden').classList.remove('show');
-}
-
-function cerrarModalHistorialDiagnostico() {
-    document.getElementById('modalHistorialDiagnostico').classList.remove('show');
+    document.getElementById('modalDetalleOrden')?.classList.remove('show');
 }
 
 // =====================================================
@@ -1085,36 +1056,7 @@ function cerrarModalHistorialDiagnostico() {
 
 function iniciarPolling() {
     if (pollingInterval) clearInterval(pollingInterval);
-    pollingInterval = setInterval(() => {
-        cargarOrdenesActivas();
-    }, 10000);
-}
-
-function verImagenAmpliada(url) {
-    // Crear modal si no existe
-    let modal = document.querySelector('.modal-imagen');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.className = 'modal-imagen';
-        modal.innerHTML = `
-            <div class="modal-imagen-content">
-                <button class="modal-imagen-close">&times;</button>
-                <img src="" alt="Imagen ampliada">
-            </div>
-        `;
-        document.body.appendChild(modal);
-        
-        // Evento para cerrar
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal || e.target.classList.contains('modal-imagen-close')) {
-                modal.style.display = 'none';
-            }
-        });
-    }
-    
-    const img = modal.querySelector('img');
-    img.src = url;
-    modal.style.display = 'flex';
+    pollingInterval = setInterval(() => cargarOrdenesActivas(), 10000);
 }
 
 function escapeHtml(text) {
@@ -1130,115 +1072,20 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
     
     const toast = document.createElement('div');
     toast.className = `toast-notification ${tipo}`;
-    
-    const iconos = {
-        success: 'fa-check-circle',
-        error: 'fa-exclamation-circle',
-        warning: 'fa-exclamation-triangle',
-        info: 'fa-info-circle'
-    };
-    
+    const iconos = { success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
     toast.innerHTML = `<i class="fas ${iconos[tipo] || iconos.info}"></i><span>${escapeHtml(mensaje)}</span>`;
     document.body.appendChild(toast);
-    
     setTimeout(() => {
         toast.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => { if (document.body.contains(toast)) document.body.removeChild(toast); }, 300);
+        setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
 
-// =====================================================
-// FUNCIONES ADICIONALES (para compatibilidad)
-// =====================================================
-
-async function iniciarTrabajo(idOrden) {
-    if (!confirm('¿Estás seguro de que deseas INICIAR el trabajo?')) return;
-    try {
-        const response = await fetch(`${API_URL}/jefe-taller/iniciar-trabajo`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-            },
-            body: JSON.stringify({ id_orden: idOrden })
-        });
-        const data = await response.json();
-        if (response.ok) {
-            mostrarNotificacion(data.message, 'success');
-            await cargarOrdenesActivas();
-        } else {
-            throw new Error(data.error);
-        }
-    } catch (error) {
-        mostrarNotificacion(error.message, 'error');
-    }
-}
-
-async function reanudarOrden(idOrden) {
-    try {
-        const response = await fetch(`${API_URL}/jefe-taller/reanudar-orden`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-            },
-            body: JSON.stringify({ id_orden: idOrden })
-        });
-        const data = await response.json();
-        if (response.ok) {
-            mostrarNotificacion('Orden reanudada correctamente', 'success');
-            await cargarOrdenesActivas();
-        } else {
-            throw new Error(data.error);
-        }
-    } catch (error) {
-        mostrarNotificacion(error.message, 'error');
-    }
-}
-
-async function aprobarEntrega(idOrden, aprobado) {
-    const mensaje = aprobado ? '¿Confirmas que el trabajo está correcto?' : '¿Rechazas el trabajo?';
-    if (!confirm(mensaje)) return;
-    
-    let observaciones = '';
-    if (!aprobado) {
-        observaciones = prompt('Indica el motivo del rechazo:');
-        if (!observaciones) return;
-    }
-    
-    try {
-        const response = await fetch(`${API_URL}/jefe-taller/aprobar-entrega`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-            },
-            body: JSON.stringify({ id_orden: idOrden, aprobado, observaciones })
-        });
-        const data = await response.json();
-        if (response.ok) {
-            mostrarNotificacion(data.message, 'success');
-            await cargarOrdenesActivas();
-            await cargarOrdenesFinalizadas();
-        } else {
-            throw new Error(data.error);
-        }
-    } catch (error) {
-        mostrarNotificacion(error.message, 'error');
-    }
-}
-
-// =====================================================
-// EXPONER FUNCIONES GLOBALES
-// =====================================================
-
-window.iniciarTrabajo = iniciarTrabajo;
-window.reanudarOrden = reanudarOrden;
-window.aprobarEntrega = aprobarEntrega;
+// Exponer funciones globales
 window.verDetalleOrden = verDetalleOrden;
-window.verImagenAmpliada = verImagenAmpliada;
+window.cerrarModalDetalleOrden = cerrarModalDetalleOrden;
 window.abrirModalGestionOrden = abrirModalGestionOrden;
 window.cerrarModalGestionOrden = cerrarModalGestionOrden;
-window.cerrarModalDetalleOrden = cerrarModalDetalleOrden;
-window.cerrarModalHistorialDiagnostico = cerrarModalHistorialDiagnostico;
 window.guardarGestionOrden = guardarGestionOrden;
+window.seleccionarBahiaVisual = seleccionarBahiaVisual;
+window.irAprobarDiagnostico = irAprobarDiagnostico;

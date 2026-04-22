@@ -1,5 +1,5 @@
 # =====================================================
-# DIAGNÓSTICO - JEFE DE TALLER (VERSIÓN DEFINITIVA)
+# DIAGNÓSTICO - JEFE DE TALLER (VERSIÓN CORREGIDA)
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -97,14 +97,122 @@ def obtener_encargado_repuestos():
         return None
 
 # =====================================================
-# 1. LISTAR DIAGNÓSTICOS PENDIENTES
+# 1. LISTAR TODOS LOS DIAGNÓSTICOS (CON FILTRO POR ESTADO)
+# =====================================================
+@jefe_taller_diagnostico_bp.route('/diagnosticos', methods=['GET'])
+@jefe_taller_required
+def listar_diagnosticos(current_user):
+    """Lista todos los diagnósticos con filtro opcional por estado"""
+    try:
+        # Obtener parámetro de filtro de estado
+        estado_filtro = request.args.get('estado', 'todos')
+        logger.info(f"📋 Listando diagnósticos - Filtro estado: {estado_filtro}")
+        
+        # Consulta base - obtener todos los diagnósticos
+        query = supabase.table('diagnostico_tecnico').select('*')
+        
+        # Aplicar filtro de estado si no es 'todos'
+        if estado_filtro != 'todos':
+            query = query.eq('estado', estado_filtro)
+        
+        diagnosticos = query.order('fecha_envio', desc=True).execute()
+        
+        if not diagnosticos.data:
+            return jsonify({'success': True, 'diagnosticos': []}), 200
+        
+        # Obtener IDs de órdenes y técnicos
+        ordenes_ids = list(set([d['id_orden_trabajo'] for d in diagnosticos.data if d.get('id_orden_trabajo')]))
+        tecnicos_ids = list(set([d['id_tecnico'] for d in diagnosticos.data if d.get('id_tecnico')]))
+        
+        # Mapear órdenes
+        ordenes_map = {}
+        if ordenes_ids:
+            ordenes = supabase.table('ordentrabajo') \
+                .select('id, codigo_unico, id_vehiculo') \
+                .in_('id', ordenes_ids) \
+                .execute()
+            for o in (ordenes.data or []):
+                ordenes_map[o['id']] = o
+        
+        # Mapear vehículos
+        vehiculos_ids = list(set([o.get('id_vehiculo') for o in ordenes_map.values() if o.get('id_vehiculo')]))
+        vehiculos_map = {}
+        if vehiculos_ids:
+            vehiculos = supabase.table('vehiculo') \
+                .select('id, placa, marca, modelo') \
+                .in_('id', vehiculos_ids) \
+                .execute()
+            for v in (vehiculos.data or []):
+                vehiculos_map[v['id']] = v
+        
+        # Mapear técnicos
+        tecnicos_map = {}
+        if tecnicos_ids:
+            for tecnico_id in tecnicos_ids:
+                tecnico = supabase.table('usuario') \
+                    .select('id, nombre') \
+                    .eq('id', tecnico_id) \
+                    .execute()
+                if tecnico.data:
+                    tecnicos_map[tecnico_id] = tecnico.data[0]['nombre']
+        
+        # Mapear servicios
+        diagnosticos_ids = [d['id'] for d in diagnosticos.data]
+        servicios_map = {}
+        if diagnosticos_ids:
+            servicios = supabase.table('servicio_tecnico') \
+                .select('id, descripcion, id_diagnostico_tecnico') \
+                .in_('id_diagnostico_tecnico', diagnosticos_ids) \
+                .execute()
+            for s in (servicios.data or []):
+                diag_id = s['id_diagnostico_tecnico']
+                if diag_id not in servicios_map:
+                    servicios_map[diag_id] = []
+                servicios_map[diag_id].append({'id': s['id'], 'descripcion': s['descripcion']})
+        
+        # Construir resultado
+        resultado = []
+        for dt in diagnosticos.data:
+            orden = ordenes_map.get(dt['id_orden_trabajo'], {})
+            vehiculo = vehiculos_map.get(orden.get('id_vehiculo'), {})
+            tecnico_nombre = tecnicos_map.get(dt['id_tecnico'], '')
+            
+            resultado.append({
+                'diagnostico_id': dt['id'],
+                'id_orden_trabajo': dt['id_orden_trabajo'],
+                'id_tecnico': dt['id_tecnico'],
+                'tecnico_nombre': tecnico_nombre,
+                'informe': dt.get('informe', ''),
+                'estado': dt['estado'],
+                'version': dt.get('version', 1),
+                'es_borrador': dt.get('es_borrador', False),
+                'fecha_envio': dt.get('fecha_envio'),
+                'codigo_unico': orden.get('codigo_unico', ''),
+                'placa': vehiculo.get('placa', ''),
+                'marca': vehiculo.get('marca', ''),
+                'modelo': vehiculo.get('modelo', ''),
+                'servicios': servicios_map.get(dt['id'], [])
+            })
+        
+        logger.info(f"✅ {len(resultado)} diagnósticos encontrados")
+        return jsonify({'success': True, 'diagnosticos': resultado}), 200
+        
+    except Exception as e:
+        logger.error(f"Error listando diagnósticos: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# 1b. LISTAR DIAGNÓSTICOS PENDIENTES (MANTENER POR COMPATIBILIDAD)
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/diagnosticos-pendientes', methods=['GET'])
 @jefe_taller_required
 def listar_diagnosticos_pendientes(current_user):
+    """Endpoint legacy - redirige al nuevo endpoint con filtro pendiente"""
     try:
-        logger.info("📋 Listando diagnósticos pendientes")
-        
+        # Redirigir al nuevo endpoint con filtro de estado pendiente
         diagnosticos = supabase.table('diagnostico_tecnico') \
             .select('*') \
             .in_('estado', ['pendiente', 'borrador']) \
@@ -182,14 +290,15 @@ def listar_diagnosticos_pendientes(current_user):
                 'servicios': servicios_map.get(dt['id'], [])
             })
         
-        logger.info(f"✅ {len(resultado)} diagnósticos encontrados")
+        logger.info(f"✅ {len(resultado)} diagnósticos pendientes/borradores encontrados")
         return jsonify({'success': True, 'diagnosticos': resultado}), 200
         
     except Exception as e:
-        logger.error(f"Error listando diagnósticos: {str(e)}")
+        logger.error(f"Error listando diagnósticos pendientes: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
 
 # =====================================================
 # 2. OBTENER DETALLE DE UN DIAGNÓSTICO
@@ -325,8 +434,9 @@ def obtener_diagnostico(current_user, diagnostico_id):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
-# 3. APROBAR DIAGNÓSTICO - VERSIÓN QUE ACEPTA TODO
+# 3. APROBAR DIAGNÓSTICO
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/aprobar-diagnostico', methods=['POST'])
 @jefe_taller_required
@@ -447,6 +557,7 @@ def aprobar_diagnostico(current_user):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
 # 4. RECHAZAR DIAGNÓSTICO
 # =====================================================
@@ -527,6 +638,7 @@ def rechazar_diagnostico(current_user):
         logger.error(f"Error rechazando diagnóstico: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
 # 5. SOLICITAR COTIZACIÓN DE REPUESTO
 # =====================================================
@@ -590,6 +702,7 @@ def solicitar_cotizacion_repuesto(current_user):
         logger.error(f"Error creando solicitud: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
 # 6. SUBIR AUDIO DE OBSERVACIÓN
 # =====================================================
@@ -618,6 +731,7 @@ def subir_audio_observacion(current_user):
         logger.error(f"Error subiendo audio: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
 # 7. ESTADÍSTICAS PARA DASHBOARD
 # =====================================================
@@ -641,6 +755,7 @@ def diagnosticos_stats(current_user):
         logger.error(f"Error obteniendo stats: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
 # 8. ENDPOINT DE PRUEBA
 # =====================================================
@@ -652,7 +767,10 @@ def test_endpoint():
         'message': 'Endpoint de diagnóstico funcionando'
     }), 200
 
-# Agrega esto al final de diagnostico.py
+
+# =====================================================
+# 9. APROBAR DIAGNÓSTICO - VERSIÓN SIMPLE (SIN AUTH)
+# =====================================================
 @jefe_taller_diagnostico_bp.route('/aprobar-diagnostico-simple', methods=['POST'])
 def aprobar_diagnostico_simple():
     """Versión simple sin autenticación para probar"""

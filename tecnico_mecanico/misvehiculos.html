@@ -101,6 +101,28 @@
         </main>
     </div>
 
+    <!-- Modal de EMPEZAR TRABAJO (DIAGNÓSTICO) -->
+    <div class="modal" id="empezarModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2><i class="fas fa-play-circle"></i> Empezar Trabajo</h2>
+                <button class="modal-close" onclick="cerrarEmpezarModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás listo para comenzar el trabajo de diagnóstico en la bahía asignada?</p>
+                <p class="text-warning" style="color: var(--ambar-alerta); margin-top: 0.5rem;">
+                    <i class="fas fa-exclamation-triangle"></i> Al empezar, la bahía quedará ocupada
+                </p>
+                <div id="empezarInfo" class="modal-info"></div>
+                <input type="hidden" id="ordenIdEmpezar">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarEmpezarModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmarEmpezarBtn">Empezar Trabajo</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal de CONFIRMACIÓN PARA INICIAR REPARACIÓN -->
     <div class="modal" id="iniciarModal">
         <div class="modal-content modal-sm">

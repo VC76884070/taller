@@ -1770,3 +1770,292 @@ select option.bahia-ocupada::before {
 .modal-imagen-close:hover {
     color: var(--rojo-primario);
 }
+/* =====================================================
+   GRID DE BAHÍAS VISUAL PARA GESTIÓN DE ORDEN
+   ===================================================== */
+
+.bahias-seleccion-section {
+    margin-bottom: 1.5rem;
+}
+
+.bahias-seleccion-section .form-label {
+    display: block;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+    color: var(--blanco);
+}
+
+.bahias-grid-seleccion {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.bahia-item {
+    background: var(--gris-oscuro);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 0.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+}
+
+.bahia-item:hover:not([style*="cursor: not-allowed"]) {
+    transform: translateY(-2px);
+    border-color: var(--rojo-primario);
+}
+
+.bahia-item.selected {
+    border-color: var(--verde-exito);
+    background: rgba(16, 185, 129, 0.1);
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+}
+
+.bahia-item.ocupada {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.bahia-item.actual {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.5);
+}
+
+.bahia-item.actual.selected {
+    border-color: var(--verde-exito);
+}
+
+.bahia-numero {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--blanco);
+}
+
+.bahia-estado-icono {
+    font-size: 0.9rem;
+    margin: 0.2rem 0;
+}
+
+.bahia-estado-texto {
+    font-size: 0.65rem;
+    color: var(--gris-texto);
+}
+
+.bahia-orden {
+    font-size: 0.6rem;
+    color: var(--gris-texto);
+    margin-top: 0.25rem;
+    font-family: monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Validación de errores en secciones */
+.gestion-section.validation-error {
+    animation: shake 0.3s ease;
+    border: 1px solid var(--rojo-primario);
+    box-shadow: 0 0 0 2px rgba(193, 18, 31, 0.3);
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .bahias-grid-seleccion {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
+    }
+    
+    .bahia-item {
+        padding: 0.5rem 0.25rem;
+    }
+    
+    .bahia-numero {
+        font-size: 0.9rem;
+    }
+    
+    .bahia-estado-texto {
+        font-size: 0.55rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .bahias-grid-seleccion {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+/* Estilos para bahías reservadas en el grid visual */
+.bahia-item.reservada {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.4);
+}
+
+.bahia-item.reservada.actual {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: rgba(245, 158, 11, 0.7);
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.5);
+}
+
+.bahia-item.reservada .bahia-estado-texto {
+    color: #FBBF24;
+}
+
+.bahia-item.reservada.actual .bahia-estado-texto {
+    color: #F59E0B;
+    font-weight: 600;
+}
+
+.bahia-hora {
+    font-size: 0.6rem;
+    color: var(--gris-texto);
+    margin-top: 0.25rem;
+    font-family: monospace;
+}
+
+.bahia-hora.actual-hora {
+    color: #F59E0B;
+    font-weight: 500;
+}
+
+/* Tooltip personalizado para bahías */
+.bahia-item[title] {
+    position: relative;
+}
+
+.bahia-item[title]:hover:after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--negro);
+    color: var(--blanco);
+    font-size: 0.7rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+    z-index: 10;
+    margin-bottom: 5px;
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-color);
+}
+/* Estilos para secciones bloqueadas */
+.gestion-section.bloqueada {
+    opacity: 0.85;
+    position: relative;
+}
+
+.gestion-section.bloqueada::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-lg);
+    pointer-events: none;
+}
+
+.gestion-section.bloqueada .gestion-section-header i.fa-lock {
+    display: inline-block;
+}
+
+.bloqueo-banner {
+    background: rgba(239, 68, 68, 0.15);
+    border-left: 4px solid var(--rojo-primario);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.bloqueo-banner i {
+    font-size: 1.2rem;
+    color: var(--rojo-primario);
+}
+
+.bloqueo-banner.warning {
+    background: rgba(245, 158, 11, 0.15);
+    border-left-color: var(--ambar-alerta);
+}
+
+.bloqueo-banner.warning i {
+    color: var(--ambar-alerta);
+}
+
+.bloqueo-banner strong {
+    display: block;
+    font-size: 0.85rem;
+    margin-bottom: 0.2rem;
+}
+
+.bloqueo-banner p {
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+    margin: 0;
+}
+
+/* =====================================================
+   ESTILOS PARA VALIDACIÓN DE ERRORES
+   ===================================================== */
+
+/* Error en secciones */
+.gestion-section.validation-error {
+    animation: shake 0.3s ease;
+    border: 2px solid var(--rojo-primario) !important;
+    box-shadow: 0 0 0 3px rgba(193, 18, 31, 0.3);
+    transition: all 0.2s ease;
+}
+
+/* Error en inputs */
+.form-input.validation-error,
+.form-textarea.validation-error,
+#fechaInicio.validation-error,
+#horasEstimadas.validation-error {
+    border: 2px solid var(--rojo-primario) !important;
+    box-shadow: 0 0 0 3px rgba(193, 18, 31, 0.2);
+    animation: pulse-red 0.5s ease;
+}
+
+/* Advertencia en diagnóstico */
+.form-textarea.validation-warning {
+    border: 2px solid var(--ambar-alerta) !important;
+    background: rgba(245, 158, 11, 0.05);
+}
+
+/* Animaciones */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-3px); }
+    20%, 40%, 60%, 80% { transform: translateX(3px); }
+}
+
+@keyframes pulse-red {
+    0% { border-color: var(--rojo-primario); box-shadow: 0 0 0 0 rgba(193, 18, 31, 0.4); }
+    70% { box-shadow: 0 0 0 5px rgba(193, 18, 31, 0); }
+    100% { border-color: var(--rojo-primario); box-shadow: 0 0 0 0 rgba(193, 18, 31, 0); }
+}
+
+/* Resaltado de campos requeridos */
+.form-label.required::after {
+    content: '*';
+    color: var(--rojo-primario);
+    margin-left: 4px;
+}
+
+/* Mejora visual para campos vacíos en error */
+.bahia-item.validation-error {
+    border: 2px solid var(--rojo-primario) !important;
+    animation: pulse-red 0.5s ease;
+}

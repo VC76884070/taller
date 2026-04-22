@@ -168,12 +168,18 @@ def listar_estado_bahias(current_user):
     try:
         logger.info("🏭 Obteniendo estado de bahías")
         
+        ahora = datetime.datetime.now()
+        
         # 1. Bahías OCUPADAS (con inicio_real y sin fin_real)
         planificaciones_ocupadas = supabase.table('planificacion') \
             .select('bahia_asignada, id_orden_trabajo, fecha_hora_inicio_real, horas_estimadas') \
             .not_.is_('fecha_hora_inicio_real', 'null') \
             .is_('fecha_hora_fin_real', 'null') \
             .execute()
+        
+        logger.info(f"📊 Planificaciones ocupadas encontradas: {len(planificaciones_ocupadas.data or [])}")
+        for p in (planificaciones_ocupadas.data or []):
+            logger.info(f"   - Bahía {p.get('bahia_asignada')}: inicio={p.get('fecha_hora_inicio_real')}")
         
         # 2. Bahías RESERVADAS (con planificación pero sin inicio_real)
         planificaciones_reservadas = supabase.table('planificacion') \
@@ -182,7 +188,7 @@ def listar_estado_bahias(current_user):
             .is_('fecha_hora_fin_real', 'null') \
             .execute()
         
-        # Obtener códigos de orden
+        # Obtener códigos de orden y estados
         todas_ordenes_ids = []
         for p in (planificaciones_ocupadas.data or []):
             todas_ordenes_ids.append(p['id_orden_trabajo'])
@@ -201,16 +207,24 @@ def listar_estado_bahias(current_user):
                     'estado': o['estado_global']
                 }
         
-        # Mapear bahías ocupadas
+        # Mapear bahías ocupadas con cálculo de horas transcurridas
         bahias_ocupadas = {}
         for p in (planificaciones_ocupadas.data or []):
             bahia_num = p.get('bahia_asignada')
             if bahia_num and p['id_orden_trabajo'] in ordenes_info:
+                # Calcular horas transcurridas
+                horas_transcurridas = None
+                if p.get('fecha_hora_inicio_real'):
+                    inicio = datetime.datetime.fromisoformat(p['fecha_hora_inicio_real'].replace('Z', '+00:00'))
+                    diff = ahora - inicio
+                    horas_transcurridas = round(diff.total_seconds() / 3600, 1)
+                
                 bahias_ocupadas[bahia_num] = {
                     'estado': 'ocupado',
                     'orden_codigo': ordenes_info[p['id_orden_trabajo']]['codigo'],
                     'orden_estado': ordenes_info[p['id_orden_trabajo']]['estado'],
                     'horas_estimadas': p.get('horas_estimadas'),
+                    'horas_transcurridas': horas_transcurridas,
                     'fecha_inicio_real': p.get('fecha_hora_inicio_real')
                 }
         
@@ -238,6 +252,7 @@ def listar_estado_bahias(current_user):
                     'orden_codigo': info['orden_codigo'],
                     'orden_estado': info['orden_estado'],
                     'horas_estimadas': info.get('horas_estimadas'),
+                    'horas_transcurridas': info.get('horas_transcurridas'),
                     'fecha_inicio_real': info.get('fecha_inicio_real')
                 })
             elif i in bahias_reservadas:
@@ -256,7 +271,8 @@ def listar_estado_bahias(current_user):
                     'estado': 'libre',
                     'orden_codigo': None,
                     'orden_estado': None,
-                    'horas_estimadas': None
+                    'horas_estimadas': None,
+                    'horas_transcurridas': None
                 })
         
         ocupadas_count = len([b for b in bahias if b['estado'] == 'ocupado'])
@@ -277,6 +293,8 @@ def listar_estado_bahias(current_user):
         
     except Exception as e:
         logger.error(f"Error listando estado de bahías: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 

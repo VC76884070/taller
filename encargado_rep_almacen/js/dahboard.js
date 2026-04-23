@@ -1,5 +1,5 @@
 // =====================================================
-// DASHBOARD ENCARGADO DE REPUESTOS - CORREGIDO PARA MULTI-ROL
+// DASHBOARD ENCARGADO DE REPUESTOS - VERSIÓN CORREGIDA
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
@@ -25,7 +25,7 @@ const ROLE_CONFIG = {
     }
 };
 
-// Elementos DOM
+// Elementos DOM del Dashboard
 const currentDateSpan = document.getElementById('currentDate');
 const totalRepuestos = document.getElementById('totalRepuestos');
 const stockBajo = document.getElementById('stockBajo');
@@ -43,10 +43,48 @@ let rolesUsuario = [];
 let token = null;
 
 // Variables para gráficos
-let categoriasChart = null;
+let inventoryChart = null;
 
 // =====================================================
-// VERIFICAR AUTENTICACIÓN - CORREGIDO PARA MULTI-ROL
+// DATOS DE EJEMPLO PARA LAS NUEVAS PESTAÑAS
+// =====================================================
+
+// Solicitudes de Cotización
+let solicitudesCotizacion = [
+    { id: 'COT-001', repuesto: 'Filtro de Aceite', cantidad: 50, fecha: '2024-01-15', estado: 'pendiente', proveedor: 'Autorepuestos López' },
+    { id: 'COT-002', repuesto: 'Pastillas de Freno', cantidad: 30, fecha: '2024-01-14', estado: 'aprobado', proveedor: 'Distribuidora Gómez' },
+    { id: 'COT-003', repuesto: 'Bujías NGK', cantidad: 100, fecha: '2024-01-13', estado: 'cotizando', proveedor: 'Importadora Vargas' },
+    { id: 'COT-004', repuesto: 'Correa de Distribución', cantidad: 20, fecha: '2024-01-12', estado: 'pendiente', proveedor: 'Repuestos Rápidos' },
+    { id: 'COT-005', repuesto: 'Amortiguadores', cantidad: 15, fecha: '2024-01-11', estado: 'rechazado', proveedor: 'Suspensiones Total' }
+];
+
+// Solicitudes de Compra
+let solicitudesCompra = [
+    { id: 'COM-001', proveedor: 'Autorepuestos López', repuesto: 'Filtro de Aceite', cantidad: 100, monto: 12500, fecha: '2024-01-15', estado: 'pendiente' },
+    { id: 'COM-002', proveedor: 'Distribuidora Gómez', repuesto: 'Pastillas de Freno', cantidad: 60, monto: 8400, fecha: '2024-01-14', estado: 'aprobado' },
+    { id: 'COM-003', proveedor: 'Importadora Vargas', repuesto: 'Bujías NGK', cantidad: 200, monto: 18000, fecha: '2024-01-13', estado: 'pendiente' },
+    { id: 'COM-004', proveedor: 'Repuestos Rápidos', repuesto: 'Correa Distribución', cantidad: 40, monto: 12000, fecha: '2024-01-12', estado: 'aprobado' }
+];
+
+// Proveedores
+let proveedores = [
+    { id: 'PROV-001', nombre: 'Autorepuestos López', contacto: 'Carlos López', telefono: '71234567', email: 'ventas@autorepuestos.com', direccion: 'Av. Libertador 123' },
+    { id: 'PROV-002', nombre: 'Distribuidora Gómez', contacto: 'María Gómez', telefono: '71234568', email: 'mgomez@distribuidora.com', direccion: 'Calle Comercio 456' },
+    { id: 'PROV-003', nombre: 'Importadora Vargas', contacto: 'Juan Vargas', telefono: '71234569', email: 'jvargas@importadora.com', direccion: 'Zona Industrial 789' },
+    { id: 'PROV-004', nombre: 'Repuestos Rápidos', contacto: 'Ana Condori', telefono: '71234570', email: 'acondori@repuestosrapidos.com', direccion: 'Av. 6 de Agosto 321' }
+];
+
+// Historial
+let historialMovimientos = [
+    { fecha: '2024-01-15 10:30', tipo: 'compra', repuesto: 'Filtro de Aceite', cantidad: 100, usuario: 'Roberto Vargas', estado: 'completado' },
+    { fecha: '2024-01-15 09:15', tipo: 'cotizacion', repuesto: 'Pastillas de Freno', cantidad: 30, usuario: 'Roberto Vargas', estado: 'enviado' },
+    { fecha: '2024-01-14 16:45', tipo: 'compra', repuesto: 'Bujías NGK', cantidad: 200, usuario: 'Roberto Vargas', estado: 'pendiente' },
+    { fecha: '2024-01-14 11:20', tipo: 'cotizacion', repuesto: 'Correa Distribución', cantidad: 20, usuario: 'Roberto Vargas', estado: 'aprobado' },
+    { fecha: '2024-01-13 14:50', tipo: 'compra', repuesto: 'Amortiguadores', cantidad: 15, usuario: 'Roberto Vargas', estado: 'completado' }
+];
+
+// =====================================================
+// VERIFICAR AUTENTICACIÓN
 // =====================================================
 async function checkAuth() {
     token = localStorage.getItem('furia_token');
@@ -59,13 +97,11 @@ async function checkAuth() {
     }
     
     try {
-        // Obtener usuario del localStorage
         if (userData) {
             usuarioActual = JSON.parse(userData);
             rolesUsuario = usuarioActual.roles || [];
         }
         
-        // Decodificar token para verificar roles
         const payload = JSON.parse(atob(token.split('.')[1]));
         if (payload.user) {
             usuarioActual = { ...usuarioActual, ...payload.user };
@@ -74,13 +110,11 @@ async function checkAuth() {
             }
         }
         
-        // Obtener rol seleccionado
         const selectedRole = usuarioActual?.selected_role;
         
         console.log('📋 Roles del usuario:', rolesUsuario);
         console.log('🎯 Rol seleccionado:', selectedRole);
         
-        // Roles válidos para encargado de repuestos
         const rolesValidos = ['encargado_repuestos', 'encargado_rep_almacen'];
         const tieneRolRepuestos = rolesUsuario.some(r => rolesValidos.includes(r));
         
@@ -88,7 +122,6 @@ async function checkAuth() {
             console.warn('❌ Usuario no tiene permiso de Encargado de Repuestos');
             mostrarNotificacion('No tienes permisos para acceder a esta sección', 'error');
             
-            // Redirigir según el rol que tenga
             if (rolesUsuario.includes('jefe_operativo')) {
                 window.location.href = '/jefe_operativo/dashboard.html';
             } else if (rolesUsuario.includes('jefe_taller')) {
@@ -101,7 +134,6 @@ async function checkAuth() {
             return false;
         }
         
-        // Si el usuario seleccionó otro rol diferente a repuestos, redirigir
         if (selectedRole && selectedRole !== 'encargado_repuestos' && selectedRole !== 'encargado_rep_almacen') {
             if (ROLE_CONFIG[selectedRole]) {
                 console.log(`🔄 Usuario seleccionó ${selectedRole}, redirigiendo...`);
@@ -113,9 +145,7 @@ async function checkAuth() {
         // Verificar token con el backend
         const response = await fetch(`${API_URL}/verify-token`, {
             method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
         
         const data = await response.json();
@@ -129,7 +159,6 @@ async function checkAuth() {
         
         console.log('✅ Autenticación correcta para Encargado de Repuestos');
         
-        // Actualizar localStorage con datos actualizados
         if (usuarioActual) {
             localStorage.setItem('furia_user', JSON.stringify(usuarioActual));
         }
@@ -143,7 +172,83 @@ async function checkAuth() {
     }
 }
 
-// Mostrar indicador de roles múltiples
+// =====================================================
+// INICIALIZACIÓN
+// =====================================================
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 Inicializando dashboard Encargado de Repuestos');
+    
+    const autenticado = await checkAuth();
+    if (!autenticado) return;
+    
+    initPage();
+    mostrarNombreUsuario();
+    mostrarIndicadorRoles();
+    
+    // Cargar datos de todas las pestañas
+    await loadDashboardData();
+    await loadCotizacionesData();
+    await loadComprasData();
+    await loadProveedoresData();
+    await loadHistorialData();
+    
+    setupEventListeners();
+    setupTabs();
+});
+
+// Inicializar página
+function initPage() {
+    const now = new Date();
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const dateStr = now.toLocaleDateString('es-ES', options);
+    
+    if (currentDateSpan) {
+        currentDateSpan.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+    }
+}
+
+// Configurar tabs
+function setupTabs() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tabId = btn.getAttribute('data-tab');
+            
+            // Actualizar botones activos
+            tabBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Actualizar contenidos activos
+            tabContents.forEach(content => content.classList.remove('active'));
+            const activeContent = document.getElementById(tabId);
+            if (activeContent) activeContent.classList.add('active');
+        });
+    });
+}
+
+function setupEventListeners() {
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+            loadDashboardData();
+            loadCotizacionesData();
+            loadComprasData();
+            loadProveedoresData();
+            loadHistorialData();
+            mostrarNotificacion('Datos actualizados', 'success');
+        });
+    }
+}
+
+function mostrarNombreUsuario() {
+    const userNameSpan = document.getElementById('userName');
+    if (userNameSpan && usuarioActual) {
+        userNameSpan.textContent = usuarioActual.nombre || usuarioActual.email || 'Roberto Vargas';
+    }
+}
+
 function mostrarIndicadorRoles() {
     const headerUserInfo = document.querySelector('.user-info');
     if (headerUserInfo && rolesUsuario && rolesUsuario.length > 1) {
@@ -153,7 +258,7 @@ function mostrarIndicadorRoles() {
         rolesBadge.className = 'roles-badge';
         rolesBadge.style.cssText = `
             font-size: 0.7rem;
-            background: var(--gris-200);
+            background: var(--gris-oscuro);
             padding: 0.2rem 0.5rem;
             border-radius: 12px;
             margin-top: 0.25rem;
@@ -180,76 +285,17 @@ function mostrarIndicadorRoles() {
     }
 }
 
-// Mostrar nombre de usuario
-function mostrarNombreUsuario() {
-    const userNameSpan = document.getElementById('userName');
-    if (userNameSpan && usuarioActual) {
-        userNameSpan.textContent = usuarioActual.nombre || usuarioActual.email || 'Usuario';
-    }
-}
-
 // =====================================================
-// INICIALIZACIÓN
-// =====================================================
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 Inicializando dashboard Encargado de Repuestos');
-    
-    const autenticado = await checkAuth();
-    if (!autenticado) return;
-    
-    initPage();
-    mostrarNombreUsuario();
-    mostrarIndicadorRoles();
-    await loadDashboardData();
-    setupEventListeners();
-});
-
-// Inicializar página
-function initPage() {
-    const now = new Date();
-    const options = { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-    };
-    const dateStr = now.toLocaleDateString('es-ES', options);
-    
-    if (currentDateSpan) {
-        currentDateSpan.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
-    }
-}
-
-// Configurar event listeners
-function setupEventListeners() {
-    // Botón de refrescar
-    const refreshBtn = document.getElementById('refreshBtn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', () => loadDashboardData());
-    }
-}
-
-// =====================================================
-// CARGAR DATOS
+// CARGAR DATOS DEL DASHBOARD
 // =====================================================
 async function loadDashboardData() {
     try {
         mostrarLoading(true);
         
-        // Intentar cargar datos reales desde la API
         const response = await fetch(`${API_URL}/encargado-repuestos/dashboard`, {
             method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
-        
-        if (response.status === 401) {
-            localStorage.clear();
-            window.location.href = '/';
-            return;
-        }
         
         let data;
         
@@ -258,10 +304,9 @@ async function loadDashboardData() {
             if (result.success) {
                 data = result.data;
             } else {
-                throw new Error(result.error || 'Error al cargar datos');
+                throw new Error(result.error);
             }
         } else {
-            // Si la API no está disponible, usar datos de ejemplo
             console.log('Usando datos de ejemplo para demostración');
             data = generarDatosEjemplo();
         }
@@ -274,15 +319,11 @@ async function loadDashboardData() {
             renderizarGrafico(data.categorias);
         }
         
-        // Actualizar badge de stock bajo en sidebar
         const stockBajoCount = (data.alertas || []).length;
         localStorage.setItem('stock_bajo_count', stockBajoCount.toString());
         
     } catch (error) {
         console.error('Error cargando dashboard:', error);
-        mostrarNotificacion('Error al cargar datos del dashboard', 'error');
-        
-        // Usar datos de ejemplo como fallback
         const data = generarDatosEjemplo();
         actualizarKPIs(data);
         renderizarAlertas(data.alertas);
@@ -294,15 +335,6 @@ async function loadDashboardData() {
     }
 }
 
-// Mostrar/ocultar loading
-function mostrarLoading(mostrar) {
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    if (loadingOverlay) {
-        loadingOverlay.style.display = mostrar ? 'flex' : 'none';
-    }
-}
-
-// Generar datos de ejemplo
 function generarDatosEjemplo() {
     return {
         kpis: {
@@ -312,87 +344,19 @@ function generarDatosEjemplo() {
             proveedoresActivos: 8
         },
         alertas: [
-            {
-                id: 1,
-                titulo: 'Filtros de aceite',
-                descripcion: 'Stock crítico - Solo 2 unidades',
-                cantidad: 2,
-                unidad: 'uds'
-            },
-            {
-                id: 2,
-                titulo: 'Pastillas de freno delanteras',
-                descripcion: 'Stock bajo - 5 unidades',
-                cantidad: 5,
-                unidad: 'uds'
-            },
-            {
-                id: 3,
-                titulo: 'Bujías NGK',
-                descripcion: 'Agotándose rápidamente - 8 unidades',
-                cantidad: 8,
-                unidad: 'uds'
-            }
+            { id: 1, titulo: 'Filtros de aceite', descripcion: 'Stock crítico - Solo 2 unidades', cantidad: 2, unidad: 'uds' },
+            { id: 2, titulo: 'Pastillas de freno delanteras', descripcion: 'Stock bajo - 5 unidades', cantidad: 5, unidad: 'uds' },
+            { id: 3, titulo: 'Bujías NGK', descripcion: 'Agotándose rápidamente - 8 unidades', cantidad: 8, unidad: 'uds' }
         ],
         compras: [
-            {
-                id: 1,
-                proveedor: 'Autorepuestos López',
-                fecha: 'Hoy',
-                items: 12,
-                monto: 2450
-            },
-            {
-                id: 2,
-                proveedor: 'Distribuidora Gómez',
-                fecha: 'Ayer',
-                items: 8,
-                monto: 1890
-            },
-            {
-                id: 3,
-                proveedor: 'Importadora Vargas',
-                fecha: 'Hace 2 días',
-                items: 15,
-                monto: 3200
-            }
+            { id: 1, proveedor: 'Autorepuestos López', fecha: 'Hoy', items: 12, monto: 2450 },
+            { id: 2, proveedor: 'Distribuidora Gómez', fecha: 'Ayer', items: 8, monto: 1890 },
+            { id: 3, proveedor: 'Importadora Vargas', fecha: 'Hace 2 días', items: 15, monto: 3200 }
         ],
         criticos: [
-            {
-                id: 1,
-                nombre: 'Filtro de aceite',
-                codigo: 'FA-001',
-                stock: 2,
-                minimo: 10
-            },
-            {
-                id: 2,
-                nombre: 'Pastilla freno delantera',
-                codigo: 'PF-023',
-                stock: 4,
-                minimo: 15
-            },
-            {
-                id: 3,
-                nombre: 'Bujía NGK',
-                codigo: 'BJ-112',
-                stock: 5,
-                minimo: 20
-            },
-            {
-                id: 4,
-                nombre: 'Correa de distribución',
-                codigo: 'CD-045',
-                stock: 1,
-                minimo: 8
-            },
-            {
-                id: 5,
-                nombre: 'Amortiguador delantero',
-                codigo: 'AD-078',
-                stock: 3,
-                minimo: 12
-            }
+            { id: 1, nombre: 'Filtro de aceite', codigo: 'FA-001', stock: 2, minimo: 10 },
+            { id: 2, nombre: 'Pastilla freno delantera', codigo: 'PF-023', stock: 4, minimo: 15 },
+            { id: 3, nombre: 'Bujía NGK', codigo: 'BJ-112', stock: 5, minimo: 20 }
         ],
         categorias: {
             labels: ['Filtros', 'Frenos', 'Motor', 'Eléctrico', 'Suspensión', 'Transmisión'],
@@ -401,7 +365,6 @@ function generarDatosEjemplo() {
     };
 }
 
-// Actualizar KPIs
 function actualizarKPIs(data) {
     if (totalRepuestos) totalRepuestos.textContent = (data.kpis.totalRepuestos || 0).toLocaleString();
     if (stockBajo) stockBajo.textContent = data.kpis.stockBajo || 0;
@@ -409,27 +372,18 @@ function actualizarKPIs(data) {
     if (proveedoresActivos) proveedoresActivos.textContent = data.kpis.proveedoresActivos || 0;
 }
 
-// Renderizar alertas
 function renderizarAlertas(alertas) {
     if (alertasCount) alertasCount.textContent = alertas.length;
-    
     if (!alertasList) return;
     
     if (alertas.length === 0) {
-        alertasList.innerHTML = `
-            <div style="text-align: center; padding: 2rem; color: var(--gris-texto);">
-                <i class="fas fa-check-circle" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
-                <p>No hay alertas de stock bajo</p>
-            </div>
-        `;
+        alertasList.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--gris-medio);"><i class="fas fa-check-circle" style="font-size: 2rem;"></i><p>No hay alertas</p></div>`;
         return;
     }
     
     alertasList.innerHTML = alertas.map(alerta => `
         <div class="alerta-item">
-            <div class="alerta-icon">
-                <i class="fas fa-exclamation-triangle"></i>
-            </div>
+            <div class="alerta-icon"><i class="fas fa-exclamation-triangle"></i></div>
             <div class="alerta-content">
                 <div class="alerta-titulo">${escapeHtml(alerta.titulo)}</div>
                 <div class="alerta-desc">${escapeHtml(alerta.descripcion)}</div>
@@ -442,50 +396,32 @@ function renderizarAlertas(alertas) {
     `).join('');
 }
 
-// Renderizar compras recientes
 function renderizarCompras(compras) {
     if (!comprasList) return;
     
     if (compras.length === 0) {
-        comprasList.innerHTML = `
-            <div style="text-align: center; padding: 2rem; color: var(--gris-texto);">
-                <i class="fas fa-receipt" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
-                <p>No hay compras recientes</p>
-            </div>
-        `;
+        comprasList.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--gris-medio);"><i class="fas fa-receipt"></i><p>No hay compras recientes</p></div>`;
         return;
     }
     
     comprasList.innerHTML = compras.map(compra => `
         <div class="compra-item">
-            <div class="compra-icon">
-                <i class="fas fa-receipt"></i>
-            </div>
+            <div class="compra-icon"><i class="fas fa-receipt"></i></div>
             <div class="compra-content">
                 <div class="compra-proveedor">${escapeHtml(compra.proveedor)}</div>
-                <div class="compra-info">
-                    <span><i class="far fa-clock"></i> ${compra.fecha}</span>
-                    <span><i class="fas fa-boxes"></i> ${compra.items} items</span>
-                </div>
+                <div class="compra-info"><span><i class="far fa-clock"></i> ${compra.fecha}</span><span><i class="fas fa-boxes"></i> ${compra.items} items</span></div>
             </div>
             <div class="compra-monto">Bs. ${(compra.monto || 0).toLocaleString()}</div>
         </div>
     `).join('');
 }
 
-// Renderizar repuestos críticos
 function renderizarCriticos(criticos) {
     if (criticosCount) criticosCount.textContent = criticos.length;
-    
     if (!criticosList) return;
     
     if (criticos.length === 0) {
-        criticosList.innerHTML = `
-            <div style="text-align: center; padding: 2rem; color: var(--gris-texto);">
-                <i class="fas fa-check" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
-                <p>No hay repuestos críticos</p>
-            </div>
-        `;
+        criticosList.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--gris-medio);"><i class="fas fa-check"></i><p>No hay repuestos críticos</p></div>`;
         return;
     }
     
@@ -495,28 +431,21 @@ function renderizarCriticos(criticos) {
                 <h4>${escapeHtml(critico.nombre)}</h4>
                 <p>${escapeHtml(critico.codigo)} | Mínimo: ${critico.minimo}</p>
             </div>
-            <div class="critico-stock ${critico.stock <= (critico.minimo / 2) ? 'critico' : 'bajo'}">
-                <span>${critico.stock}</span>
-                <small>uds</small>
-            </div>
+            <div class="critico-stock">${critico.stock}<small>uds</small></div>
         </div>
     `).join('');
 }
 
-// Renderizar gráfico circular
 function renderizarGrafico(categorias) {
-    const canvas = document.getElementById('categoriasChart');
+    const canvas = document.getElementById('inventoryChart');
     if (!canvas) return;
     
     const ctx = canvas.getContext('2d');
-    
     const colores = ['#C1121F', '#2C3E50', '#1E3A5F', '#10B981', '#F59E0B', '#6B7280'];
     
-    if (categoriasChart) {
-        categoriasChart.destroy();
-    }
+    if (inventoryChart) inventoryChart.destroy();
     
-    categoriasChart = new Chart(ctx, {
+    inventoryChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
             labels: categorias.labels,
@@ -533,38 +462,288 @@ function renderizarGrafico(categorias) {
             maintainAspectRatio: false,
             cutout: '70%',
             plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        usePointStyle: true,
-                        boxWidth: 8,
-                        font: {
-                            size: 11,
-                            family: 'Plus Jakarta Sans'
-                        },
-                        color: '#8E8E93'
-                    }
-                },
-                tooltip: {
-                    backgroundColor: '#1C1C1E',
-                    titleColor: '#FFFFFF',
-                    bodyColor: '#FFFFFF',
-                    cornerRadius: 8,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = ((context.raw / total) * 100).toFixed(1);
-                            return `${context.raw} unidades (${percentage}%)`;
-                        }
-                    }
-                }
+                legend: { position: 'bottom', labels: { usePointStyle: true, font: { size: 11 } } },
+                tooltip: { callbacks: { label: function(context) {
+                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                    const percentage = ((context.raw / total) * 100).toFixed(1);
+                    return `${context.raw} unidades (${percentage}%)`;
+                } } }
             }
         }
     });
 }
 
-// Escapar HTML
+// =====================================================
+// FUNCIONES PARA SOLICITUDES DE COTIZACIÓN
+// =====================================================
+async function loadCotizacionesData() {
+    const tbody = document.getElementById('cotizacionesList');
+    if (!tbody) return;
+    
+    tbody.innerHTML = solicitudesCotizacion.map(cot => `
+        <tr>
+            <td>${cot.id}</td>
+            <td>${escapeHtml(cot.repuesto)}</td>
+            <td>${cot.cantidad}</td>
+            <td>${cot.fecha}</td>
+            <td><span class="status-badge status-${cot.estado}">${getEstadoTexto(cot.estado)}</span></td>
+            <td>
+                <button class="btn-icon" onclick="verDetalleCotizacion('${cot.id}')" title="Ver"><i class="fas fa-eye"></i></button>
+                <button class="btn-icon" onclick="editarCotizacion('${cot.id}')" title="Editar"><i class="fas fa-edit"></i></button>
+                <button class="btn-icon" onclick="eliminarCotizacion('${cot.id}')" title="Eliminar"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openNuevaCotizacionModal() {
+    document.getElementById('nuevaCotizacionModal').classList.add('active');
+    cargarProveedoresSelect('cotizacionProveedor');
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('active');
+}
+
+function enviarCotizacion(event) {
+    event.preventDefault();
+    const nuevaCot = {
+        id: `COT-${String(solicitudesCotizacion.length + 1).padStart(3, '0')}`,
+        repuesto: document.getElementById('cotizacionRepuesto').value,
+        cantidad: parseInt(document.getElementById('cotizacionCantidad').value),
+        fecha: new Date().toISOString().split('T')[0],
+        estado: 'pendiente',
+        proveedor: document.getElementById('cotizacionProveedor').value || 'Sin asignar'
+    };
+    
+    solicitudesCotizacion.unshift(nuevaCot);
+    loadCotizacionesData();
+    closeModal('nuevaCotizacionModal');
+    document.getElementById('cotizacionForm').reset();
+    mostrarNotificacion('Solicitud de cotización enviada', 'success');
+}
+
+function verDetalleCotizacion(id) {
+    const cot = solicitudesCotizacion.find(c => c.id === id);
+    if (cot) {
+        alert(`Detalle de ${id}:\nRepuesto: ${cot.repuesto}\nCantidad: ${cot.cantidad}\nEstado: ${cot.estado}\nProveedor: ${cot.proveedor}`);
+    }
+}
+
+function editarCotizacion(id) {
+    mostrarNotificacion('Función de edición en desarrollo', 'info');
+}
+
+function eliminarCotizacion(id) {
+    if (confirm('¿Eliminar esta solicitud?')) {
+        solicitudesCotizacion = solicitudesCotizacion.filter(c => c.id !== id);
+        loadCotizacionesData();
+        mostrarNotificacion('Solicitud eliminada', 'success');
+    }
+}
+
+// =====================================================
+// FUNCIONES PARA SOLICITUDES DE COMPRA
+// =====================================================
+async function loadComprasData() {
+    const tbody = document.getElementById('comprasList');
+    if (!tbody) return;
+    
+    tbody.innerHTML = solicitudesCompra.map(comp => `
+        <tr>
+            <td>${comp.id}</td>
+            <td>${escapeHtml(comp.proveedor)}</td>
+            <td>${escapeHtml(comp.repuesto)}</td>
+            <td>${comp.cantidad}</td>
+            <td>Bs. ${comp.monto.toLocaleString()}</td>
+            <td><span class="status-badge status-${comp.estado}">${getEstadoTexto(comp.estado)}</span></td>
+            <td>
+                <button class="btn-icon" onclick="verDetalleCompra('${comp.id}')" title="Ver"><i class="fas fa-eye"></i></button>
+                <button class="btn-icon" onclick="aprobarCompra('${comp.id}')" title="Aprobar"><i class="fas fa-check-circle"></i></button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openNuevaCompraModal() {
+    document.getElementById('nuevaCompraModal').classList.add('active');
+    cargarProveedoresSelect('compraProveedor');
+}
+
+function enviarCompra(event) {
+    event.preventDefault();
+    const nuevaComp = {
+        id: `COM-${String(solicitudesCompra.length + 1).padStart(3, '0')}`,
+        proveedor: document.getElementById('compraProveedor').value,
+        repuesto: document.getElementById('compraRepuesto').value,
+        cantidad: parseInt(document.getElementById('compraCantidad').value),
+        monto: parseFloat(document.getElementById('compraMonto').value),
+        fecha: new Date().toISOString().split('T')[0],
+        estado: 'pendiente'
+    };
+    
+    solicitudesCompra.unshift(nuevaComp);
+    loadComprasData();
+    closeModal('nuevaCompraModal');
+    document.getElementById('compraForm').reset();
+    mostrarNotificacion('Solicitud de compra enviada', 'success');
+}
+
+function verDetalleCompra(id) {
+    const comp = solicitudesCompra.find(c => c.id === id);
+    if (comp) {
+        alert(`Detalle de ${id}:\nProveedor: ${comp.proveedor}\nRepuesto: ${comp.repuesto}\nCantidad: ${comp.cantidad}\nMonto: Bs. ${comp.monto.toLocaleString()}`);
+    }
+}
+
+function aprobarCompra(id) {
+    const comp = solicitudesCompra.find(c => c.id === id);
+    if (comp && comp.estado === 'pendiente') {
+        comp.estado = 'aprobado';
+        loadComprasData();
+        mostrarNotificacion(`Compra ${id} aprobada`, 'success');
+    }
+}
+
+// =====================================================
+// FUNCIONES PARA PROVEEDORES
+// =====================================================
+async function loadProveedoresData() {
+    const tbody = document.getElementById('proveedoresList');
+    if (!tbody) return;
+    
+    tbody.innerHTML = proveedores.map(prov => `
+        <tr>
+            <td>${prov.id}</td>
+            <td>${escapeHtml(prov.nombre)}</td>
+            <td>${escapeHtml(prov.contacto)}</td>
+            <td>${prov.telefono}</td>
+            <td>${prov.email}</td>
+            <td>
+                <button class="btn-icon" onclick="editarProveedor('${prov.id}')" title="Editar"><i class="fas fa-edit"></i></button>
+                <button class="btn-icon" onclick="eliminarProveedor('${prov.id}')" title="Eliminar"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function cargarProveedoresSelect(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">Seleccionar proveedor</option>' + 
+        proveedores.map(prov => `<option value="${escapeHtml(prov.nombre)}">${escapeHtml(prov.nombre)}</option>`).join('');
+}
+
+function openNuevoProveedorModal() {
+    document.getElementById('nuevoProveedorModal').classList.add('active');
+}
+
+function guardarProveedor(event) {
+    event.preventDefault();
+    const nuevoProv = {
+        id: `PROV-${String(proveedores.length + 1).padStart(3, '0')}`,
+        nombre: document.getElementById('provNombre').value,
+        contacto: document.getElementById('provContacto').value,
+        telefono: document.getElementById('provTelefono').value,
+        email: document.getElementById('provEmail').value,
+        direccion: document.getElementById('provDireccion').value
+    };
+    
+    proveedores.push(nuevoProv);
+    loadProveedoresData();
+    closeModal('nuevoProveedorModal');
+    document.getElementById('proveedorForm').reset();
+    mostrarNotificacion('Proveedor agregado', 'success');
+}
+
+function editarProveedor(id) {
+    mostrarNotificacion('Función de edición en desarrollo', 'info');
+}
+
+function eliminarProveedor(id) {
+    if (confirm('¿Eliminar este proveedor?')) {
+        proveedores = proveedores.filter(p => p.id !== id);
+        loadProveedoresData();
+        mostrarNotificacion('Proveedor eliminado', 'success');
+    }
+}
+
+// =====================================================
+// FUNCIONES PARA HISTORIAL
+// =====================================================
+async function loadHistorialData() {
+    const tbody = document.getElementById('historialList');
+    if (!tbody) return;
+    
+    tbody.innerHTML = historialMovimientos.map(hist => `
+        <tr>
+            <td>${hist.fecha}</td>
+            <td><span class="status-badge">${hist.tipo.toUpperCase()}</span></td>
+            <td>${escapeHtml(hist.repuesto)}</td>
+            <td>${hist.cantidad}</td>
+            <td>${escapeHtml(hist.usuario)}</td>
+            <td><span class="status-badge status-${hist.estado}">${getEstadoTexto(hist.estado)}</span></td>
+        </tr>
+    `).join('');
+}
+
+// =====================================================
+// FUNCIONES PARA PERFIL
+// =====================================================
+let editMode = false;
+
+function toggleEditProfile() {
+    editMode = !editMode;
+    const profileInfo = document.getElementById('profileInfo');
+    const profileEdit = document.getElementById('profileEdit');
+    
+    if (editMode) {
+        profileInfo.style.display = 'none';
+        profileEdit.style.display = 'block';
+        document.getElementById('editNombre').value = document.getElementById('profileNombre').innerText;
+        document.getElementById('editEmail').value = document.getElementById('profileEmail').innerText;
+        document.getElementById('editTelefono').value = document.getElementById('profileTelefono').innerText;
+    } else {
+        profileInfo.style.display = 'block';
+        profileEdit.style.display = 'none';
+    }
+}
+
+function saveProfile() {
+    const nuevoNombre = document.getElementById('editNombre').value;
+    const nuevoEmail = document.getElementById('editEmail').value;
+    const nuevoTelefono = document.getElementById('editTelefono').value;
+    
+    document.getElementById('profileNombre').innerText = nuevoNombre;
+    document.getElementById('profileEmail').innerText = nuevoEmail;
+    document.getElementById('profileTelefono').innerText = nuevoTelefono;
+    
+    if (usuarioActual) {
+        usuarioActual.nombre = nuevoNombre;
+        usuarioActual.email = nuevoEmail;
+        localStorage.setItem('furia_user', JSON.stringify(usuarioActual));
+    }
+    
+    toggleEditProfile();
+    mostrarNotificacion('Perfil actualizado', 'success');
+}
+
+// =====================================================
+// FUNCIONES UTILITARIAS
+// =====================================================
+function getEstadoTexto(estado) {
+    const estados = {
+        'pendiente': 'Pendiente',
+        'aprobado': 'Aprobado',
+        'rechazado': 'Rechazado',
+        'cotizando': 'Cotizando',
+        'completado': 'Completado',
+        'enviado': 'Enviado'
+    };
+    return estados[estado] || estado;
+}
+
 function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
@@ -572,79 +751,56 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// =====================================================
-// NOTIFICACIONES
-// =====================================================
+function mostrarLoading(mostrar) {
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.style.display = mostrar ? 'flex' : 'none';
+    }
+}
+
 function mostrarNotificacion(mensaje, tipo = 'info') {
     let toastContainer = document.querySelector('.toast-container');
     
     if (!toastContainer) {
         toastContainer = document.createElement('div');
         toastContainer.className = 'toast-container';
-        toastContainer.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        `;
+        toastContainer.style.cssText = `position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;`;
         document.body.appendChild(toastContainer);
     }
     
     const toast = document.createElement('div');
-    toast.className = `toast-notification ${tipo}`;
+    const iconos = { success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
     
-    const iconos = {
-        success: 'fa-check-circle',
-        error: 'fa-exclamation-circle',
-        warning: 'fa-exclamation-triangle',
-        info: 'fa-info-circle'
-    };
-    
-    toast.innerHTML = `
-        <i class="fas ${iconos[tipo] || iconos.info}"></i>
-        <span>${mensaje}</span>
-    `;
-    
-    toast.style.cssText = `
-        background: var(--bg-card);
-        color: var(--blanco);
-        padding: 0.75rem 1.25rem;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        border-left: 4px solid ${tipo === 'success' ? '#10B981' : tipo === 'error' ? '#C1121F' : tipo === 'warning' ? '#F59E0B' : '#1E3A5F'};
-        animation: slideIn 0.3s ease;
-    `;
+    toast.innerHTML = `<i class="fas ${iconos[tipo] || iconos.info}"></i><span>${mensaje}</span>`;
+    toast.style.cssText = `background: var(--negro); color: var(--blanco); padding: 0.75rem 1.25rem; border-radius: 10px; display: flex; align-items: center; gap: 0.75rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-left: 4px solid ${tipo === 'success' ? '#10B981' : tipo === 'error' ? '#C1121F' : '#F59E0B'}; animation: slideIn 0.3s ease;`;
     
     toastContainer.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateX(100%)';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    setTimeout(() => { toast.remove(); }, 3000);
 }
 
-// =====================================================
-// LOGOUT - CORREGIDO
-// =====================================================
+// Funciones globales
 window.logout = () => {
-    localStorage.removeItem('furia_token');
-    localStorage.removeItem('furia_user');
-    localStorage.removeItem('furia_remembered');
-    localStorage.removeItem('furia_remembered_type');
-    localStorage.removeItem('furia_selected_role');
-    localStorage.removeItem('furia_selected_role_user');
-    localStorage.removeItem('stock_bajo_count');
-    window.location.href = '/';
+    if (confirm('¿Cerrar sesión?')) {
+        localStorage.clear();
+        window.location.href = '/';
+    }
 };
 
-// Funciones globales
-window.recargarDatos = () => loadDashboardData();
+window.openNuevaCotizacionModal = openNuevaCotizacionModal;
+window.closeModal = closeModal;
+window.enviarCotizacion = enviarCotizacion;
+window.verDetalleCotizacion = verDetalleCotizacion;
+window.editarCotizacion = editarCotizacion;
+window.eliminarCotizacion = eliminarCotizacion;
+window.openNuevaCompraModal = openNuevaCompraModal;
+window.enviarCompra = enviarCompra;
+window.verDetalleCompra = verDetalleCompra;
+window.aprobarCompra = aprobarCompra;
+window.openNuevoProveedorModal = openNuevoProveedorModal;
+window.guardarProveedor = guardarProveedor;
+window.editarProveedor = editarProveedor;
+window.eliminarProveedor = eliminarProveedor;
+window.toggleEditProfile = toggleEditProfile;
+window.saveProfile = saveProfile;
 
 console.log('✅ dashboard.js de Encargado de Repuestos cargado correctamente');

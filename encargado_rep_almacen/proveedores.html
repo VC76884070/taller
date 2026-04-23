@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proveedores | Encargado Repuestos - FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/proveedores.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- SIDEBAR -->
+        <div id="sidebar-container"></div>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <div class="top-bar">
+                <div class="page-title">
+                    <h1>Proveedores</h1>
+                    <p>Gestión de proveedores de repuestos</p>
+                </div>
+                <div class="top-actions">
+                    <button id="btnNuevoProveedor" class="btn-primary">
+                        <i class="fas fa-plus"></i> Nuevo Proveedor
+                    </button>
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtros y búsqueda -->
+            <div class="filtros-bar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Buscar por nombre, contacto o teléfono...">
+                </div>
+                <select id="filtroEstado">
+                    <option value="all">Todos los estados</option>
+                    <option value="activo">Activos</option>
+                    <option value="inactivo">Inactivos</option>
+                </select>
+                <button id="refreshBtn" class="btn-secondary">
+                    <i class="fas fa-sync-alt"></i> Actualizar
+                </button>
+            </div>
+
+            <!-- Grid de proveedores -->
+            <div id="proveedoresGrid" class="proveedores-grid">
+                <!-- Se llena dinámicamente -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal para crear/editar proveedor -->
+    <div id="modalProveedor" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3 id="modalTitle"><i class="fas fa-truck"></i> Nuevo Proveedor</h3>
+                <span class="close-modal" onclick="cerrarModal('modalProveedor')">&times;</span>
+            </div>
+            <form id="proveedorForm" onsubmit="guardarProveedor(event)">
+                <input type="hidden" id="proveedorId">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nombre *</label>
+                        <input type="text" id="nombre" required placeholder="Ej: Autorepuestos López">
+                    </div>
+                    <div class="form-group">
+                        <label>RUC/NIT</label>
+                        <input type="text" id="ruc" placeholder="Número de identificación tributaria">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Contacto Principal</label>
+                        <input type="text" id="contacto" placeholder="Nombre del contacto">
+                    </div>
+                    <div class="form-group">
+                        <label>Cargo del Contacto</label>
+                        <input type="text" id="cargo" placeholder="Ej: Gerente de Ventas">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Teléfono *</label>
+                        <input type="tel" id="telefono" required placeholder="Ej: 71234567">
+                    </div>
+                    <div class="form-group">
+                        <label>Teléfono Alternativo</label>
+                        <input type="tel" id="telefono2" placeholder="Opcional">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="email" placeholder="ventas@proveedor.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Sitio Web</label>
+                        <input type="url" id="website" placeholder="www.proveedor.com">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Dirección</label>
+                    <textarea id="direccion" rows="2" placeholder="Dirección completa"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Categorías de repuestos</label>
+                        <select id="categorias" multiple>
+                            <option value="filtros">Filtros</option>
+                            <option value="frenos">Frenos</option>
+                            <option value="motor">Motor</option>
+                            <option value="electrico">Eléctrico</option>
+                            <option value="suspension">Suspensión</option>
+                            <option value="transmision">Transmisión</option>
+                            <option value="lubricantes">Lubricantes</option>
+                            <option value="herramientas">Herramientas</option>
+                        </select>
+                        <small>Mantén presionado Ctrl para seleccionar múltiples</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Estado</label>
+                        <select id="estado">
+                            <option value="activo">Activo</option>
+                            <option value="inactivo">Inactivo</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notas / Observaciones</label>
+                    <textarea id="notas" rows="2" placeholder="Información adicional sobre el proveedor..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary"
+                        onclick="cerrarModal('modalProveedor')">Cancelar</button>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> Guardar Proveedor
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para ver detalle -->
+    <div id="modalDetalle" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3><i class="fas fa-info-circle"></i> Detalle de Proveedor</h3>
+                <span class="close-modal" onclick="cerrarModal('modalDetalle')">&times;</span>
+            </div>
+            <div id="modalDetalleBody"></div>
+            <div class="detalle-actions">
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalle')">Cerrar</button>
+                <button class="btn-primary" id="btnEditarDesdeDetalle" onclick="editarDesdeDetalle()">
+                    <i class="fas fa-edit"></i> Editar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para confirmar eliminación -->
+    <div id="modalEliminar" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3><i class="fas fa-trash-alt"></i> Eliminar Proveedor</h3>
+                <span class="close-modal" onclick="cerrarModal('modalEliminar')">&times;</span>
+            </div>
+            <div id="modalEliminarBody">
+                <p>¿Estás seguro de que deseas eliminar este proveedor?</p>
+                <p class="text-warning" id="proveedorNombreEliminar"></p>
+                <p><small>Esta acción no se puede deshacer.</small></p>
+            </div>
+            <div class="form-actions">
+                <button class="btn-secondary" onclick="cerrarModal('modalEliminar')">Cancelar</button>
+                <button class="btn-danger" onclick="confirmarEliminar()">
+                    <i class="fas fa-trash-alt"></i> Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOADING OVERLAY -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <script src="js/include.js"></script>
+    <script src="js/proveedores.js"></script>
+</body>
+
+</html>

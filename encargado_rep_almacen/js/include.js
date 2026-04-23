@@ -1,5 +1,6 @@
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA ENCARGADO DE REPUESTOS
+// VERSIÓN CORREGIDA CON LAS NUEVAS PESTAÑAS
 // =====================================================
 
 // Configuración
@@ -8,6 +9,16 @@ const CONFIG = {
     logoPath: '../../img/logoblanco.jpeg',
     defaultUserName: 'Roberto Vargas',
     userRole: 'Encargado de Repuestos'
+};
+
+// Mapeo de páginas a archivos
+const PAGE_FILES = {
+    'dashboard': 'dashboard.html',
+    'cotizaciones': 'solicitudes_cotizacion.html',
+    'compras': 'solicitudes_compra.html',
+    'proveedores': 'proveedores.html',
+    'historial': 'historial.html',
+    'perfil': 'perfil.html'
 };
 
 // =====================================================
@@ -60,7 +71,7 @@ function crearSidebarRespaldo(container) {
     container.innerHTML = `
         <aside class="sidebar">
             <div class="sidebar-header">
-                <img src="${CONFIG.logoPath}" alt="FURIA MOTOR" class="sidebar-logo">
+                <img src="${CONFIG.logoPath}" alt="FURIA MOTOR" class="sidebar-logo" onerror="this.src='https://via.placeholder.com/40'">
                 <span class="sidebar-brand">FURIA MOTOR</span>
             </div>
             <div class="sidebar-user">
@@ -74,13 +85,12 @@ function crearSidebarRespaldo(container) {
             </div>
             <nav class="sidebar-nav">
                 <ul>
-                    ${crearMenuItem('dashboard', 'Dashboard Inventario', 'chart-pie', currentPage, '')}
-                    ${crearMenuItem('inventario', 'Inventario', 'cubes', currentPage, '<span class="badge" id="stockBajoBadge">3</span>')}
-                    ${crearMenuItem('compras', 'Compras', 'shopping-cart', currentPage, '')}
+                    ${crearMenuItem('dashboard', 'Dashboard', 'chart-pie', currentPage, '')}
+                    ${crearMenuItem('cotizaciones', 'Solicitudes de Cotización', 'file-invoice-dollar', currentPage, '')}
+                    ${crearMenuItem('compras', 'Solicitudes de Compra', 'shopping-cart', currentPage, '')}
                     ${crearMenuItem('proveedores', 'Proveedores', 'truck', currentPage, '')}
-                    ${crearMenuItem('herramientas', 'Herramientas', 'tools', currentPage, '')}
-                    ${crearMenuItem('rendicion', 'Rendición Diaria', 'hand-holding-usd', currentPage, '')}
                     ${crearMenuItem('historial', 'Historial', 'history', currentPage, '')}
+                    ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage, '')}
                 </ul>
                 <ul class="sidebar-bottom">
                     <li class="nav-item">
@@ -97,18 +107,7 @@ function crearSidebarRespaldo(container) {
 
 function crearMenuItem(page, label, icon, currentPage, badge) {
     const isActive = currentPage === page ? 'active' : '';
-    
-    const pageToFile = {
-        'dashboard': 'dashboard.html',
-        'inventario': 'inventario.html',
-        'compras': 'compras.html',
-        'proveedores': 'proveedores.html',
-        'herramientas': 'herramientas.html',
-        'rendicion': 'rendicion.html',
-        'historial': 'historial.html'
-    };
-    
-    const href = pageToFile[page] || `${page}.html`;
+    const href = PAGE_FILES[page] || `${page}.html`;
     
     return `
         <li class="nav-item ${isActive}" data-page="${page}">
@@ -126,27 +125,44 @@ function inicializarSidebar() {
         const currentPage = obtenerPaginaActual();
         marcarItemActivo(currentPage);
         actualizarNombreUsuario();
-        actualizarBadgeStockBajo();
+        actualizarBadgeNotificaciones();
     }, 100);
 }
 
 function obtenerPaginaActual() {
     const path = window.location.pathname;
     const filename = path.split('/').pop() || 'dashboard.html';
-    return filename.replace('.html', '');
+    const pageName = filename.replace('.html', '');
+    
+    // Buscar coincidencia en PAGE_FILES
+    for (const [key, value] of Object.entries(PAGE_FILES)) {
+        if (value === filename || key === pageName) {
+            return key;
+        }
+    }
+    
+    return 'dashboard';
 }
 
 function marcarItemActivo(currentPage) {
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
+        const link = item.querySelector('.nav-link');
+        if (link) link.classList.remove('active');
     });
     
     const activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
     if (activeItem) {
         activeItem.classList.add('active');
+        const activeLink = activeItem.querySelector('.nav-link');
+        if (activeLink) activeLink.classList.add('active');
     } else {
         const defaultItem = document.querySelector('.nav-item[data-page="dashboard"]');
-        if (defaultItem) defaultItem.classList.add('active');
+        if (defaultItem) {
+            defaultItem.classList.add('active');
+            const defaultLink = defaultItem.querySelector('.nav-link');
+            if (defaultLink) defaultLink.classList.add('active');
+        }
     }
 }
 
@@ -174,28 +190,33 @@ function actualizarNombreUsuario() {
     userNameSpan.textContent = user.nombre;
 }
 
-function actualizarBadgeStockBajo() {
-    const badge = document.getElementById('stockBajoBadge');
-    if (!badge) return;
-    
-    // Obtener datos de stock bajo desde localStorage o API
-    const stockBajo = localStorage.getItem('stock_bajo_count') || '3';
-    badge.textContent = stockBajo;
-    
-    if (stockBajo === '0') {
-        badge.style.display = 'none';
-    } else {
-        badge.style.display = 'inline';
+function actualizarBadgeNotificaciones() {
+    // Actualizar badge de notificaciones si existe
+    const badge = document.getElementById('notificacionesBadge');
+    if (badge) {
+        const stockBajo = localStorage.getItem('stock_bajo_count') || '0';
+        if (stockBajo !== '0') {
+            badge.textContent = stockBajo;
+            badge.style.display = 'inline';
+        } else {
+            badge.style.display = 'none';
+        }
     }
 }
 
+// Función global de logout
 window.logout = function() {
     if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
         localStorage.removeItem('furia_token');
         localStorage.removeItem('furia_user');
+        localStorage.removeItem('furia_remembered');
+        localStorage.removeItem('furia_remembered_type');
+        localStorage.removeItem('furia_selected_role');
+        localStorage.removeItem('furia_selected_role_user');
         localStorage.removeItem('stock_bajo_count');
         window.location.href = '../../login.html';
     }
 };
 
+// Inicializar cuando el DOM esté listo
 document.addEventListener('DOMContentLoaded', includeSidebar);

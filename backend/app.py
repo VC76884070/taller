@@ -39,14 +39,11 @@ CORS(app,
 @app.before_request
 def before_request():
     """Configuración antes de cada request para asegurar JSON"""
-    # Solo para peticiones POST que deberían ser JSON
     if request.method == 'POST' and request.endpoint and 'api' in request.endpoint:
-        # Log para depuración
         logger.debug(f"📥 Request a {request.endpoint}")
         logger.debug(f"   Content-Type: {request.content_type}")
         logger.debug(f"   Data length: {len(request.data) if request.data else 0}")
         
-        # Intentar pre-cargar JSON para detectar errores temprano
         if request.is_json:
             try:
                 request.get_json(force=True)
@@ -62,7 +59,7 @@ from login import login_bp
 app.register_blueprint(login_bp)
 
 # Decorators (centralizado)
-from decorators import verificar_rol, jefe_taller_required, jefe_operativo_required
+from decorators import verificar_rol, jefe_taller_required, jefe_operativo_required, encargado_repuestos_required
 
 # Técnico Mecánico - Mis Vehículos
 try:
@@ -115,6 +112,51 @@ except Exception as e:
     logger.warning(f"⚠️ Error registrando blueprints de Jefe Taller: {e}")
 
 # =====================================================
+# ENCARGADO DE REPUESTOS - MÓDULOS
+# =====================================================
+try:
+    from encargado_rep_almacen.solicitudes_cotizacion import solicitudes_cotizacion_bp
+    app.register_blueprint(solicitudes_cotizacion_bp)
+    logger.info("✅ Blueprint de Solicitudes Cotización registrado")
+except Exception as e:
+    logger.warning(f"⚠️ Error registrando blueprint de Solicitudes Cotización: {e}")
+
+try:
+    from encargado_rep_almacen.solicitudes_compra import solicitudes_compra_bp
+    app.register_blueprint(solicitudes_compra_bp)
+    logger.info("✅ Blueprint de Solicitudes Compra registrado")
+except Exception as e:
+    logger.warning(f"⚠️ Error registrando blueprint de Solicitudes Compra: {e}")
+
+try:
+    from encargado_rep_almacen.proveedores import proveedores_bp
+    app.register_blueprint(proveedores_bp)
+    logger.info("✅ Blueprint de Proveedores registrado")
+except Exception as e:
+    logger.warning(f"⚠️ Error registrando blueprint de Proveedores: {e}")
+
+try:
+    from encargado_rep_almacen.historial import historial_repuestos_bp
+    app.register_blueprint(historial_repuestos_bp)
+    logger.info("✅ Blueprint de Historial registrado")
+except Exception as e:
+    logger.warning(f"⚠️ Error registrando blueprint de Historial: {e}")
+
+try:
+    from encargado_rep_almacen.perfil import perfil_repuestos_bp
+    app.register_blueprint(perfil_repuestos_bp)
+    logger.info("✅ Blueprint de Perfil registrado")
+except Exception as e:
+    logger.warning(f"⚠️ Error registrando blueprint de Perfil: {e}")
+
+try:
+    from encargado_rep_almacen.dashboard import dashboard_repuestos_bp
+    app.register_blueprint(dashboard_repuestos_bp)
+    logger.info("✅ Blueprint de Dashboard registrado")
+except Exception as e:
+    logger.warning(f"⚠️ Error registrando blueprint de Dashboard: {e}")
+
+# =====================================================
 # RUTAS ESPECÍFICAS PARA ARCHIVOS ESTÁTICOS
 # =====================================================
 
@@ -133,8 +175,12 @@ def serve_css(filename):
     jefe_taller_path = os.path.join('../jefe_taller/css', filename)
     if os.path.exists(jefe_taller_path):
         return send_from_directory('../jefe_taller/css', filename)
+    # Buscar en encargado_rep_almacen/css
+    encargado_path = os.path.join('../encargado_rep_almacen/css', filename)
+    if os.path.exists(encargado_path):
+        return send_from_directory('../encargado_rep_almacen/css', filename)
     # Buscar en otras carpetas
-    roles = ['admin_general', 'tecnico_mecanico', 'encargado_rep_almacen', 'cliente']
+    roles = ['tecnico_mecanico', 'cliente']
     for role in roles:
         role_path = os.path.join(f'../{role}/css', filename)
         if os.path.exists(role_path):
@@ -156,8 +202,12 @@ def serve_js(filename):
     jefe_taller_path = os.path.join('../jefe_taller/js', filename)
     if os.path.exists(jefe_taller_path):
         return send_from_directory('../jefe_taller/js', filename)
+    # Buscar en encargado_rep_almacen/js
+    encargado_path = os.path.join('../encargado_rep_almacen/js', filename)
+    if os.path.exists(encargado_path):
+        return send_from_directory('../encargado_rep_almacen/js', filename)
     # Buscar en otras carpetas
-    roles = ['admin_general', 'tecnico_mecanico', 'encargado_rep_almacen', 'cliente']
+    roles = ['tecnico_mecanico', 'cliente']
     for role in roles:
         role_path = os.path.join(f'../{role}/js', filename)
         if os.path.exists(role_path):
@@ -167,7 +217,6 @@ def serve_js(filename):
 @app.route('/img/<path:filename>')
 def serve_img(filename):
     """Servir imágenes"""
-    # Buscar en img
     img_path = os.path.join('../img', filename)
     if os.path.exists(img_path):
         return send_from_directory('../img', filename)
@@ -217,21 +266,17 @@ def serve_jefe_taller(path):
     """Servir archivos de Jefe Taller"""
     return send_from_directory('../jefe_taller', path)
 
-# Rutas para otros roles
-@app.route('/admin_general/<path:path>')
-def serve_admin_general(path):
-    """Servir archivos de Administrador General"""
-    return send_from_directory('../admin_general', path)
-
-@app.route('/tecnico_mecanico/<path:path>')
-def serve_tecnico_mecanico(path):
-    """Servir archivos de Técnico Mecánico"""
-    return send_from_directory('../tecnico_mecanico', path)
-
+# Rutas para Encargado de Repuestos
 @app.route('/encargado_rep_almacen/<path:path>')
 def serve_encargado_repuestos(path):
     """Servir archivos de Encargado de Repuestos"""
     return send_from_directory('../encargado_rep_almacen', path)
+
+# Rutas para otros roles
+@app.route('/tecnico_mecanico/<path:path>')
+def serve_tecnico_mecanico(path):
+    """Servir archivos de Técnico Mecánico"""
+    return send_from_directory('../tecnico_mecanico', path)
 
 @app.route('/cliente/<path:path>')
 def serve_cliente(path):
@@ -247,7 +292,7 @@ def favicon():
     favicon_path = os.path.join('../img', 'favicon.ico')
     if os.path.exists(favicon_path):
         return send_from_directory('../img', 'favicon.ico')
-    return '', 204  # No content
+    return '', 204
 
 # =====================================================
 # RUTA PARA ARCHIVOS ESTÁTICOS GENERALES
@@ -255,7 +300,6 @@ def favicon():
 @app.route('/<path:path>')
 def serve_static(path):
     """Servir cualquier otro archivo estático"""
-    # Extensiones de archivos estáticos
     static_extensions = ['.css', '.js', '.jpg', '.jpeg', '.png', '.gif', '.svg', '.ico', '.json', '.woff', '.woff2', '.ttf']
     
     if any(path.endswith(ext) for ext in static_extensions):
@@ -265,8 +309,7 @@ def serve_static(path):
             return send_from_directory('../login', path)
         
         # Buscar en carpetas de roles
-        roles = ['admin_general', 'jefe_operativo', 'jefe_taller', 
-                 'tecnico_mecanico', 'encargado_rep_almacen', 'cliente']
+        roles = ['jefe_operativo', 'jefe_taller', 'tecnico_mecanico', 'encargado_rep_almacen', 'cliente']
         
         for role in roles:
             role_path = os.path.join(f'../{role}', path)
@@ -277,8 +320,8 @@ def serve_static(path):
 
 def serve_html(path):
     """Servir archivos HTML"""
-    # Mapeo de rutas de acceso directo
     html_routes = {
+        # Login
         'registro-personal.html': '../login/registro-personal.html',
         'recuperar-contrasena.html': '../login/recuperar-contrasena.html',
         
@@ -305,27 +348,30 @@ def serve_html(path):
         'jefe_taller/control_calidad': '../jefe_taller/control_calidad.html',
         'jefe_taller/perfil': '../jefe_taller/perfil.html',
         
-        # Admin General
-        'admin_general': '../admin_general/dashboard.html',
-        'admin_general/dashboard': '../admin_general/dashboard.html',
+        # Encargado de Repuestos
+        'encargado_rep_almacen': '../encargado_rep_almacen/dashboard.html',
+        'encargado_rep_almacen/dashboard': '../encargado_rep_almacen/dashboard.html',
+        'encargado_rep_almacen/solicitudes_cotizacion': '../encargado_rep_almacen/solicitudes_cotizacion.html',
+        'encargado_rep_almacen/solicitudes_compra': '../encargado_rep_almacen/solicitudes_compra.html',
+        'encargado_rep_almacen/proveedores': '../encargado_rep_almacen/proveedores.html',
+        'encargado_rep_almacen/historial': '../encargado_rep_almacen/historial.html',
+        'encargado_rep_almacen/perfil': '../encargado_rep_almacen/perfil.html',
         
         # Técnico Mecánico
         'tecnico_mecanico': '../tecnico_mecanico/misvehiculos.html',
-        
-        # Encargado Repuestos
-        'encargado_rep_almacen': '../encargado_rep_almacen/dashboard.html',
-        'encargado_rep_almacen/dashboard': '../encargado_rep_almacen/dashboard.html',
+        'tecnico_mecanico/misvehiculos': '../tecnico_mecanico/misvehiculos.html',
+        'tecnico_mecanico/diagnostico': '../tecnico_mecanico/diagnostico.html',
+        'tecnico_mecanico/historial': '../tecnico_mecanico/historial.html',
+        'tecnico_mecanico/perfil': '../tecnico_mecanico/perfil.html',
         
         # Cliente
         'cliente': '../cliente/dashboard.html',
         'cliente/dashboard': '../cliente/dashboard.html'
     }
     
-    # Verificar si es una ruta mapeada
     if path in html_routes:
         return send_from_directory('..', html_routes[path])
     
-    # Si es un archivo HTML, buscarlo en las carpetas correspondientes
     if path.endswith('.html'):
         # Buscar en login
         login_html = os.path.join('../login', path)
@@ -333,15 +379,13 @@ def serve_html(path):
             return send_from_directory('../login', path)
         
         # Buscar en cada rol
-        roles = ['admin_general', 'jefe_operativo', 'jefe_taller', 
-                 'tecnico_mecanico', 'encargado_rep_almacen', 'cliente']
+        roles = ['jefe_operativo', 'jefe_taller', 'tecnico_mecanico', 'encargado_rep_almacen', 'cliente']
         
         for role in roles:
             role_html = os.path.join(f'../{role}', path)
             if os.path.exists(role_html):
                 return send_from_directory(f'../{role}', path)
     
-    # Si no se encuentra, devolver página de login
     return send_from_directory('../login', 'index.html')
 
 # =====================================================
@@ -392,8 +436,19 @@ if __name__ == '__main__':
     print("   📄 http://localhost:5000/recuperar-contrasena.html - Recuperar Contraseña")
     print("")
     print("📁 Frontend accesible en:")
-    print("   • Jefe Operativo: http://localhost:5000/jefe_operativo")
-    print("   • Jefe Taller:    http://localhost:5000/jefe_taller")
+    print("   • Jefe Operativo:       http://localhost:5000/jefe_operativo")
+    print("   • Jefe Taller:          http://localhost:5000/jefe_taller")
+    print("   • Encargado Repuestos:  http://localhost:5000/encargado_rep_almacen")
+    print("   • Técnico Mecánico:     http://localhost:5000/tecnico_mecanico")
+    print("   • Cliente:              http://localhost:5000/cliente")
+    print("="*60)
+    print("📁 Módulos de Encargado de Repuestos:")
+    print("   • Dashboard:            /encargado_rep_almacen/dashboard")
+    print("   • Solicitudes Cotización: /encargado_rep_almacen/solicitudes_cotizacion")
+    print("   • Solicitudes Compra:    /encargado_rep_almacen/solicitudes_compra")
+    print("   • Proveedores:           /encargado_rep_almacen/proveedores")
+    print("   • Historial:             /encargado_rep_almacen/historial")
+    print("   • Perfil:                /encargado_rep_almacen/perfil")
     print("="*60)
     
-    app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)   
+    app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)

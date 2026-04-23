@@ -17,6 +17,331 @@
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/dashboard.css">
+
+    <style>
+        /* Estilos adicionales para las nuevas pestañas */
+        .tabs-container {
+            background: var(--blanco);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+            margin-top: 1rem;
+        }
+
+        .tabs-header {
+            display: flex;
+            gap: 0.5rem;
+            padding: 1rem 1.5rem 0 1.5rem;
+            background: var(--blanco);
+            border-bottom: 2px solid var(--gris-claro);
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: none;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--gris-medio);
+            cursor: pointer;
+            transition: var(--transition);
+            border-radius: var(--radius-md) var(--radius-md) 0 0;
+            position: relative;
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            color: var(--rojo-primario);
+            background: rgba(193, 18, 31, 0.05);
+        }
+
+        .tab-btn.active {
+            color: var(--rojo-primario);
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--rojo-primario);
+            border-radius: 3px 3px 0 0;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 2rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Estilos para tablas */
+        .table-responsive {
+            overflow-x: auto;
+            margin-top: 1rem;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--blanco);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .data-table thead {
+            background: var(--gris-claro);
+        }
+
+        .data-table th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--gris-oscuro);
+            border-bottom: 2px solid var(--gris-medio);
+        }
+
+        .data-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--gris-claro);
+            color: var(--negro);
+        }
+
+        .data-table tbody tr:hover {
+            background: rgba(193, 18, 31, 0.02);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: var(--radius-full);
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-pendiente {
+            background: var(--ambar-alerta);
+            color: var(--blanco);
+        }
+
+        .status-aprobado {
+            background: var(--verde-exito);
+            color: var(--blanco);
+        }
+
+        .status-rechazado {
+            background: var(--rojo-primario);
+            color: var(--blanco);
+        }
+
+        .status-cotizando {
+            background: var(--azul-profundo);
+            color: var(--blanco);
+        }
+
+        .status-completado {
+            background: var(--verde-exito);
+            color: var(--blanco);
+        }
+
+        .status-enviado {
+            background: var(--azul-profundo);
+            color: var(--blanco);
+        }
+
+        .btn-icon {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+            transition: var(--transition);
+            color: var(--gris-medio);
+        }
+
+        .btn-icon:hover {
+            background: var(--gris-claro);
+            color: var(--rojo-primario);
+        }
+
+        .btn-primary {
+            background: var(--rojo-primario);
+            color: var(--blanco);
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary:hover {
+            background: var(--rojo-oscuro);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-red);
+        }
+
+        .btn-secondary {
+            background: var(--blanco);
+            color: var(--gris-oscuro);
+            border: 1px solid var(--gris-medio);
+            padding: 0.6rem 1.2rem;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--rojo-primario);
+            color: var(--rojo-primario);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--blanco);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-header h3 {
+            color: var(--gris-oscuro);
+            font-size: 1.3rem;
+        }
+
+        .close-modal {
+            cursor: pointer;
+            font-size: 1.5rem;
+            color: var(--gris-medio);
+            transition: var(--transition);
+        }
+
+        .close-modal:hover {
+            color: var(--rojo-primario);
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--gris-oscuro);
+            font-size: 0.9rem;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.6rem;
+            border: 1px solid var(--gris-medio);
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            transition: var(--transition);
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--rojo-primario);
+            box-shadow: 0 0 0 3px rgba(193, 18, 31, 0.1);
+        }
+
+        /* Perfil */
+        .profile-container {
+            max-width: 600px;
+        }
+
+        .profile-info p {
+            padding: 0.5rem;
+            background: var(--gris-claro);
+            border-radius: var(--radius-sm);
+            margin-top: 0.25rem;
+        }
+
+        /* Loading */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--gris-claro);
+            border-top-color: var(--rojo-primario);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
 </head>
 
 <body>
@@ -29,14 +354,17 @@
             <!-- Top Bar -->
             <header class="top-bar">
                 <div class="page-title">
-                    <h1>Dashboard Inventario</h1>
-                    <p>Control y gestión de repuestos y proveedores</p>
+                    <h1>Panel de Control</h1>
+                    <p>Gestión de repuestos y solicitudes</p>
                 </div>
 
                 <div class="top-actions">
+                    <button class="btn-secondary" id="refreshBtn" style="padding: 0.5rem 1rem;">
+                        <i class="fas fa-sync-alt"></i> Actualizar
+                    </button>
                     <div class="notification-icon">
                         <i class="fas fa-bell"></i>
-                        <span class="notification-badge" id="notificacionesBadge">5</span>
+                        <span class="notification-badge" id="notificacionesBadge">0</span>
                     </div>
                     <div class="date-display">
                         <i class="far fa-calendar-alt"></i>
@@ -45,102 +373,400 @@
                 </div>
             </header>
 
-            <!-- CONTENT -->
-            <div class="content">
-                <!-- KPIs -->
-                <div class="kpi-grid">
-                    <div class="kpi-card">
-                        <div class="kpi-icon" style="background: rgba(33, 150, 243, 0.1);">
-                            <i class="fas fa-cubes" style="color: #2196F3;"></i>
+            <!-- TABS CONTAINER -->
+            <div class="tabs-container">
+                <div class="tabs-header">
+                    <button class="tab-btn active" data-tab="dashboard-tab">
+                        <i class="fas fa-chart-pie"></i> Dashboard
+                    </button>
+                    <button class="tab-btn" data-tab="cotizaciones-tab">
+                        <i class="fas fa-file-invoice-dollar"></i> Solicitudes Cotización
+                    </button>
+                    <button class="tab-btn" data-tab="compras-tab">
+                        <i class="fas fa-shopping-cart"></i> Solicitudes Compra
+                    </button>
+                    <button class="tab-btn" data-tab="proveedores-tab">
+                        <i class="fas fa-truck"></i> Proveedores
+                    </button>
+                    <button class="tab-btn" data-tab="historial-tab">
+                        <i class="fas fa-history"></i> Historial
+                    </button>
+                    <button class="tab-btn" data-tab="perfil-tab">
+                        <i class="fas fa-user-circle"></i> Perfil
+                    </button>
+                </div>
+
+                <!-- ==================== TAB 1: DASHBOARD ==================== -->
+                <div id="dashboard-tab" class="tab-content active">
+                    <!-- KPIs -->
+                    <div class="kpi-grid">
+                        <div class="kpi-card">
+                            <div class="kpi-icon" style="background: rgba(33, 150, 243, 0.1);">
+                                <i class="fas fa-cubes" style="color: #2196F3;"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <span class="kpi-label">Total repuestos en stock</span>
+                                <span class="kpi-value" id="totalRepuestos">1,284</span>
+                            </div>
                         </div>
-                        <div class="kpi-content">
-                            <span class="kpi-label">Total repuestos en stock</span>
-                            <span class="kpi-value" id="totalRepuestos">1,284</span>
+
+                        <div class="kpi-card warning">
+                            <div class="kpi-icon" style="background: rgba(193, 18, 31, 0.1);">
+                                <i class="fas fa-exclamation-triangle" style="color: #C1121F;"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <span class="kpi-label">Stock bajo</span>
+                                <span class="kpi-value" id="stockBajo">23</span>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-icon" style="background: rgba(76, 175, 80, 0.1);">
+                                <i class="fas fa-shopping-cart" style="color: #4CAF50;"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <span class="kpi-label">Compras del mes</span>
+                                <span class="kpi-value" id="comprasMes">Bs. 12,450</span>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-icon" style="background: rgba(255, 152, 0, 0.1);">
+                                <i class="fas fa-truck" style="color: #FF9800;"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <span class="kpi-label">Proveedores activos</span>
+                                <span class="kpi-value" id="proveedoresActivos">8</span>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="kpi-card warning">
-                        <div class="kpi-icon" style="background: rgba(193, 18, 31, 0.1);">
-                            <i class="fas fa-exclamation-triangle" style="color: #C1121F;"></i>
-                        </div>
-                        <div class="kpi-content">
-                            <span class="kpi-label">Stock bajo</span>
-                            <span class="kpi-value" id="stockBajo">23</span>
-                        </div>
-                    </div>
+                    <!-- Grid de dos columnas -->
+                    <div class="dashboard-grid">
+                        <div class="left-column">
+                            <div class="card alertas-card">
+                                <div class="card-header">
+                                    <h3><i class="fas fa-exclamation-circle" style="color: #FF3B30;"></i> Alertas
+                                        Urgentes</h3>
+                                    <span class="badge-danger" id="alertasCount">0</span>
+                                </div>
+                                <div class="alertas-list" id="alertasList">
+                                    <!-- Se llena dinámicamente -->
+                                </div>
+                            </div>
 
-                    <div class="kpi-card">
-                        <div class="kpi-icon" style="background: rgba(76, 175, 80, 0.1);">
-                            <i class="fas fa-shopping-cart" style="color: #4CAF50;"></i>
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3><i class="fas fa-clock"></i> Últimas Compras</h3>
+                                    <a href="#" class="card-link" onclick="cambiarTab('compras-tab')">Ver todas</a>
+                                </div>
+                                <div class="compras-list" id="comprasList">
+                                    <!-- Se llena dinámicamente -->
+                                </div>
+                            </div>
                         </div>
-                        <div class="kpi-content">
-                            <span class="kpi-label">Compras del mes</span>
-                            <span class="kpi-value" id="comprasMes">Bs. 12,450</span>
-                        </div>
-                    </div>
 
-                    <div class="kpi-card">
-                        <div class="kpi-icon" style="background: rgba(255, 152, 0, 0.1);">
-                            <i class="fas fa-truck" style="color: #FF9800;"></i>
-                        </div>
-                        <div class="kpi-content">
-                            <span class="kpi-label">Proveedores activos</span>
-                            <span class="kpi-value" id="proveedoresActivos">8</span>
+                        <div class="right-column">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3><i class="fas fa-chart-pie"></i> Distribución por Categoría</h3>
+                                </div>
+                                <div class="chart-container">
+                                    <canvas id="categoriasChart"></canvas>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3><i class="fas fa-tag"></i> Repuestos con Stock Crítico</h3>
+                                    <span class="badge-danger" id="criticosCount">0</span>
+                                </div>
+                                <div class="criticos-list" id="criticosList">
+                                    <!-- Se llena dinámicamente -->
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Grid de dos columnas -->
-                <div class="dashboard-grid">
-                    <!-- Columna Izquierda - Alertas -->
-                    <div class="left-column">
-                        <div class="card alertas-card">
-                            <div class="card-header">
-                                <h3><i class="fas fa-exclamation-circle" style="color: #FF3B30;"></i> Alertas Urgentes
-                                </h3>
-                                <span class="badge-danger" id="alertasCount">3</span>
-                            </div>
-                            <div class="alertas-list" id="alertasList">
-                                <!-- Se llena dinámicamente -->
-                            </div>
-                        </div>
-
-                        <div class="card">
-                            <div class="card-header">
-                                <h3><i class="fas fa-clock"></i> Últimas Compras</h3>
-                                <a href="compras.html" class="card-link">Ver todas</a>
-                            </div>
-                            <div class="compras-list" id="comprasList">
-                                <!-- Se llena dinámicamente -->
-                            </div>
-                        </div>
+                <!-- ==================== TAB 2: SOLICITUDES DE COTIZACIÓN ==================== -->
+                <div id="cotizaciones-tab" class="tab-content">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2>Solicitudes de Cotización</h2>
+                        <button class="btn-primary" onclick="openNuevaCotizacionModal()">
+                            <i class="fas fa-plus"></i> Nueva Solicitud
+                        </button>
                     </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Repuesto</th>
+                                    <th>Cantidad</th>
+                                    <th>Fecha Solicitud</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cotizacionesList">
+                                <!-- Datos dinámicos -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
 
-                    <!-- Columna Derecha - Gráfico -->
-                    <div class="right-column">
+                <!-- ==================== TAB 3: SOLICITUDES DE COMPRA ==================== -->
+                <div id="compras-tab" class="tab-content">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2>Solicitudes de Compra</h2>
+                        <button class="btn-primary" onclick="openNuevaCompraModal()">
+                            <i class="fas fa-plus"></i> Nueva Solicitud
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Proveedor</th>
+                                    <th>Repuesto</th>
+                                    <th>Cantidad</th>
+                                    <th>Monto</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="comprasSolicitudesList">
+                                <!-- Datos dinámicos -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ==================== TAB 4: PROVEEDORES ==================== -->
+                <div id="proveedores-tab" class="tab-content">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2>Proveedores</h2>
+                        <button class="btn-primary" onclick="openNuevoProveedorModal()">
+                            <i class="fas fa-plus"></i> Nuevo Proveedor
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nombre</th>
+                                    <th>Contacto</th>
+                                    <th>Teléfono</th>
+                                    <th>Email</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="proveedoresList">
+                                <!-- Datos dinámicos -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ==================== TAB 5: HISTORIAL ==================== -->
+                <div id="historial-tab" class="tab-content">
+                    <h2>Historial de Movimientos</h2>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Tipo</th>
+                                    <th>Repuesto</th>
+                                    <th>Cantidad</th>
+                                    <th>Usuario</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historialList">
+                                <!-- Datos dinámicos -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ==================== TAB 6: PERFIL ==================== -->
+                <div id="perfil-tab" class="tab-content">
+                    <div class="profile-container">
                         <div class="card">
                             <div class="card-header">
-                                <h3><i class="fas fa-chart-pie"></i> Distribución por Categoría</h3>
-                                <div class="chart-legend" id="chartLegend"></div>
+                                <h3><i class="fas fa-user"></i> Información Personal</h3>
+                                <button class="btn-secondary" onclick="toggleEditProfile()">
+                                    <i class="fas fa-edit"></i> Editar
+                                </button>
                             </div>
-                            <div class="chart-container">
-                                <canvas id="categoriasChart"></canvas>
+                            <div id="profileInfo">
+                                <div class="form-group">
+                                    <label>Nombre Completo</label>
+                                    <p id="profileNombre">Roberto Vargas</p>
+                                </div>
+                                <div class="form-group">
+                                    <label>Email</label>
+                                    <p id="profileEmail">roberto.vargas@furiamotor.com</p>
+                                </div>
+                                <div class="form-group">
+                                    <label>Teléfono</label>
+                                    <p id="profileTelefono">+591 71234567</p>
+                                </div>
+                                <div class="form-group">
+                                    <label>Rol</label>
+                                    <p>Encargado de Repuestos</p>
+                                </div>
                             </div>
-                        </div>
-
-                        <div class="card">
-                            <div class="card-header">
-                                <h3><i class="fas fa-tag"></i> Repuestos con Stock Crítico</h3>
-                                <span class="badge-danger" id="criticosCount">8</span>
-                            </div>
-                            <div class="criticos-list" id="criticosList">
-                                <!-- Se llena dinámicamente -->
+                            <div id="profileEdit" style="display: none;">
+                                <div class="form-group">
+                                    <label>Nombre Completo</label>
+                                    <input type="text" id="editNombre" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label>Email</label>
+                                    <input type="email" id="editEmail" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label>Teléfono</label>
+                                    <input type="tel" id="editTelefono" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label>Nueva Contraseña</label>
+                                    <input type="password" id="editPassword" class="form-control"
+                                        placeholder="Dejar en blanco para no cambiar">
+                                </div>
+                                <div style="display: flex; gap: 1rem;">
+                                    <button class="btn-primary" onclick="saveProfile()">Guardar Cambios</button>
+                                    <button class="btn-secondary" onclick="toggleEditProfile()">Cancelar</button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- LOADING OVERLAY -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <!-- ==================== MODALES ==================== -->
+
+    <!-- Modal Nueva Cotización -->
+    <div id="nuevaCotizacionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-file-invoice-dollar"></i> Nueva Solicitud de Cotización</h3>
+                <span class="close-modal" onclick="closeModal('nuevaCotizacionModal')">&times;</span>
+            </div>
+            <form id="cotizacionForm" onsubmit="enviarCotizacion(event)">
+                <div class="form-group">
+                    <label>Repuesto *</label>
+                    <input type="text" id="cotizacionRepuesto" required>
+                </div>
+                <div class="form-group">
+                    <label>Cantidad *</label>
+                    <input type="number" id="cotizacionCantidad" required min="1">
+                </div>
+                <div class="form-group">
+                    <label>Proveedor Preferido</label>
+                    <select id="cotizacionProveedor">
+                        <option value="">Seleccionar proveedor</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Notas Adicionales</label>
+                    <textarea id="cotizacionNotas" rows="3"
+                        placeholder="Especificaciones técnicas, marcas preferidas, etc."></textarea>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                    <button type="button" class="btn-secondary"
+                        onclick="closeModal('nuevaCotizacionModal')">Cancelar</button>
+                    <button type="submit" class="btn-primary">Enviar Solicitud</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Nueva Compra -->
+    <div id="nuevaCompraModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-shopping-cart"></i> Nueva Solicitud de Compra</h3>
+                <span class="close-modal" onclick="closeModal('nuevaCompraModal')">&times;</span>
+            </div>
+            <form id="compraForm" onsubmit="enviarCompra(event)">
+                <div class="form-group">
+                    <label>Proveedor *</label>
+                    <select id="compraProveedor" required>
+                        <option value="">Seleccionar proveedor</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Repuesto *</label>
+                    <input type="text" id="compraRepuesto" required>
+                </div>
+                <div class="form-group">
+                    <label>Cantidad *</label>
+                    <input type="number" id="compraCantidad" required min="1">
+                </div>
+                <div class="form-group">
+                    <label>Monto Unitario (Bs.) *</label>
+                    <input type="number" id="compraMontoUnitario" required min="0" step="0.01">
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                    <button type="button" class="btn-secondary"
+                        onclick="closeModal('nuevaCompraModal')">Cancelar</button>
+                    <button type="submit" class="btn-primary">Enviar Solicitud</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Nuevo Proveedor -->
+    <div id="nuevoProveedorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-truck"></i> Nuevo Proveedor</h3>
+                <span class="close-modal" onclick="closeModal('nuevoProveedorModal')">&times;</span>
+            </div>
+            <form id="proveedorForm" onsubmit="guardarProveedor(event)">
+                <div class="form-group">
+                    <label>Nombre *</label>
+                    <input type="text" id="provNombre" required>
+                </div>
+                <div class="form-group">
+                    <label>Contacto</label>
+                    <input type="text" id="provContacto">
+                </div>
+                <div class="form-group">
+                    <label>Teléfono *</label>
+                    <input type="tel" id="provTelefono" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="provEmail">
+                </div>
+                <div class="form-group">
+                    <label>Dirección</label>
+                    <textarea id="provDireccion" rows="2"></textarea>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                    <button type="button" class="btn-secondary"
+                        onclick="closeModal('nuevoProveedorModal')">Cancelar</button>
+                    <button type="submit" class="btn-primary">Guardar Proveedor</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script src="js/include.js"></script>

@@ -402,6 +402,15 @@ def obtener_servicios_cotizados(current_user):
             id_orden = s.get('id_orden_trabajo')
             id_servicio = s.get('id_servicio')
             
+            # 🔥 FILTRO IMPORTANTE: Saltar solicitudes sin servicio válido
+            if not id_servicio:
+                logger.warning(f"Solicitud {s.get('id')} no tiene id_servicio, omitiendo...")
+                continue
+            
+            if not id_orden:
+                logger.warning(f"Solicitud {s.get('id')} no tiene id_orden_trabajo, omitiendo...")
+                continue
+            
             if id_orden not in ordenes_map:
                 orden_info = supabase.table('ordentrabajo') \
                     .select('id, codigo_unico, id_vehiculo, vehiculo!inner(marca, modelo, placa, cliente!inner(usuario!inner(nombre)))') \
@@ -430,21 +439,36 @@ def obtener_servicios_cotizados(current_user):
                 except:
                     items = [{'descripcion': s.get('descripcion_pieza'), 'cantidad': s.get('cantidad', 1)}]
             
+            # 🔥 OBTENER SERVICIO CON MANEJO DE ERRORES
             servicio_info = supabase.table('servicio_tecnico') \
                 .select('descripcion') \
                 .eq('id', id_servicio) \
                 .execute()
             
+            descripcion_servicio = 'Servicio'
+            if servicio_info.data:
+                descripcion_servicio = servicio_info.data[0].get('descripcion', 'Servicio')
+            else:
+                logger.warning(f"No se encontró servicio con id {id_servicio}")
+            
             if id_orden in ordenes_map:
                 ordenes_map[id_orden]['servicios'].append({
                     'id_servicio': id_servicio,
                     'id_solicitud': s.get('id'),
-                    'descripcion': servicio_info.data[0]['descripcion'] if servicio_info.data else 'Servicio',
+                    'descripcion': descripcion_servicio,
                     'precio_cotizado': float(s.get('precio_cotizado')) if s.get('precio_cotizado') else 0,
                     'items': items
                 })
         
-        return jsonify({'success': True, 'servicios': list(ordenes_map.values())}), 200
+        # 🔥 FILTRAR órdenes que tienen al menos un servicio con precio > 0
+        ordenes_con_precio = []
+        for orden_key, orden_data in ordenes_map.items():
+            servicios_con_precio = [s for s in orden_data['servicios'] if s.get('precio_cotizado', 0) > 0]
+            if servicios_con_precio:
+                orden_data['servicios'] = servicios_con_precio
+                ordenes_con_precio.append(orden_data)
+        
+        return jsonify({'success': True, 'servicios': ordenes_con_precio}), 200
         
     except Exception as e:
         logger.error(f"Error obteniendo servicios cotizados: {str(e)}")

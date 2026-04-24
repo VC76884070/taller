@@ -99,6 +99,7 @@ try:
     from jefe_taller.diagnostico import jefe_taller_diagnostico_bp
     from jefe_taller.cotizaciones import cotizaciones_bp
     from jefe_taller.admin_roles import admin_roles_bp  
+    from jefe_taller.reservas_solicitudes import reservas_solicitudes_bp  # NUEVO
 
     app.register_blueprint(jefe_taller_ordenes_bp)
     app.register_blueprint(calendario_bahias_bp)
@@ -106,7 +107,8 @@ try:
     app.register_blueprint(perfil_bp)
     app.register_blueprint(jefe_taller_diagnostico_bp)
     app.register_blueprint(cotizaciones_bp)
-    app.register_blueprint(admin_roles_bp) 
+    app.register_blueprint(admin_roles_bp)
+    app.register_blueprint(reservas_solicitudes_bp)  # NUEVO
     logger.info("✅ Blueprints de Jefe Taller registrados")
 except Exception as e:
     logger.warning(f"⚠️ Error registrando blueprints de Jefe Taller: {e}")
@@ -347,6 +349,7 @@ def serve_html(path):
         'jefe_taller/planificacion': '../jefe_taller/planificacion.html',
         'jefe_taller/control_calidad': '../jefe_taller/control_calidad.html',
         'jefe_taller/perfil': '../jefe_taller/perfil.html',
+        'jefe_taller/reservas_solicitudes': '../jefe_taller/reservas_solicitudes.html',  # NUEVO
         
         # Encargado de Repuestos
         'encargado_rep_almacen': '../encargado_rep_almacen/dashboard.html',
@@ -441,6 +444,17 @@ if __name__ == '__main__':
     print("   • Encargado Repuestos:  http://localhost:5000/encargado_rep_almacen")
     print("   • Técnico Mecánico:     http://localhost:5000/tecnico_mecanico")
     print("   • Cliente:              http://localhost:5000/cliente")
+    print("="*60)
+    print("📁 Módulos de Jefe Taller:")
+    print("   • Dashboard:            /jefe_taller/dashboard")
+    print("   • Ordenes Trabajo:      /jefe_taller/orden_trabajo")
+    print("   • Calendario Bahías:    /jefe_taller/calendario_bahias")
+    print("   • Historial Vehículos:  /jefe_taller/historial_vehiculos")
+    print("   • Diagnóstico:          /jefe_taller/diagnostico")
+    print("   • Planificación:        /jefe_taller/planificacion")
+    print("   • Control Calidad:      /jefe_taller/control_calidad")
+    print("   • Perfil:               /jefe_taller/perfil")
+    print("   🆕 Reservas y Solicitudes: /jefe_taller/reservas_solicitudes")  # NUEVO
     print("="*60)
     print("📁 Módulos de Encargado de Repuestos:")
     print("   • Dashboard:            /encargado_rep_almacen/dashboard")

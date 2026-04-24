@@ -54,7 +54,7 @@ def obtener_nombre_usuario(usuario_id):
         return None
 
 def obtener_tecnicos_por_orden(orden_id):
-    """Obtener técnicos asignados a una orden (solo los que tienen rol técnico)"""
+    """Obtener técnicos asignados a una orden (SIN DUPLICADOS)"""
     try:
         asignaciones = supabase.table('asignaciontecnico') \
             .select('id_tecnico') \
@@ -64,15 +64,20 @@ def obtener_tecnicos_por_orden(orden_id):
         if not asignaciones.data:
             return []
         
+        # Usar un set para evitar duplicados
+        tecnicos_set = set()
         tecnicos = []
+        
         for asignacion in asignaciones.data:
             tecnico_id = asignacion.get('id_tecnico')
-            if tecnico_id:
+            if tecnico_id and tecnico_id not in tecnicos_set:
                 # Verificar que realmente tenga rol de técnico
                 es_tecnico = verificar_rol_usuario(tecnico_id, 'tecnico')
                 if es_tecnico:
                     nombre = obtener_nombre_usuario(tecnico_id)
-                    tecnicos.append({'id': tecnico_id, 'nombre': nombre or 'Técnico'})
+                    if nombre:
+                        tecnicos_set.add(tecnico_id)
+                        tecnicos.append({'id': tecnico_id, 'nombre': nombre})
         
         return tecnicos
     except Exception as e:
@@ -80,7 +85,7 @@ def obtener_tecnicos_por_orden(orden_id):
         return []
 
 def obtener_tecnicos_actuales_orden(orden_id):
-    """Obtener técnicos actualmente asignados a una orden"""
+    """Obtener técnicos actualmente asignados a una orden (SIN DUPLICADOS)"""
     try:
         asignaciones = supabase.table('asignaciontecnico') \
             .select('id_tecnico') \
@@ -91,14 +96,19 @@ def obtener_tecnicos_actuales_orden(orden_id):
         if not asignaciones.data:
             return []
         
+        # Usar un set para evitar duplicados
+        tecnicos_set = set()
         tecnicos = []
+        
         for asignacion in asignaciones.data:
             tecnico_id = asignacion.get('id_tecnico')
-            if tecnico_id:
+            if tecnico_id and tecnico_id not in tecnicos_set:
                 es_tecnico = verificar_rol_usuario(tecnico_id, 'tecnico')
                 if es_tecnico:
                     nombre = obtener_nombre_usuario(tecnico_id)
-                    tecnicos.append({'id': tecnico_id, 'nombre': nombre or 'Técnico'})
+                    if nombre:
+                        tecnicos_set.add(tecnico_id)
+                        tecnicos.append({'id': tecnico_id, 'nombre': nombre})
         
         return tecnicos
     except Exception as e:
@@ -113,7 +123,7 @@ def obtener_tecnicos_actuales_orden(orden_id):
 @historial_vehiculos_bp.route('/historial-vehiculo', methods=['GET'])
 @jefe_taller_required
 def obtener_historial_vehiculo(current_user):
-    """Obtener historial completo de un vehículo por placa (optimizado)"""
+    """Obtener historial completo de un vehículo por placa (optimizado y SIN DUPLICADOS)"""
     try:
         placa = request.args.get('placa', '').upper().strip()
         fecha_desde = request.args.get('fecha_desde')
@@ -198,23 +208,33 @@ def obtener_historial_vehiculo(current_user):
         for d in (diagnosticos.data or []):
             diagnosticos_map[d['id_orden_trabajo']] = d.get('diagnostigo')
         
-        # 6. Obtener técnicos de una vez (verificando rol)
+        # 6. Obtener técnicos de una vez (SIN DUPLICADOS)
         tecnicos_map = {}
         asignaciones = supabase.table('asignaciontecnico') \
             .select('id_orden_trabajo, id_tecnico') \
             .in_('id_orden_trabajo', ordenes_ids) \
             .execute()
         
+        # Procesar asignaciones para evitar duplicados
         for a in (asignaciones.data or []):
-            if a['id_orden_trabajo'] not in tecnicos_map:
-                tecnicos_map[a['id_orden_trabajo']] = []
+            orden_id = a['id_orden_trabajo']
+            tecnico_id = a['id_tecnico']
             
-            # Verificar que el usuario tenga rol técnico
-            es_tecnico = verificar_rol_usuario(a['id_tecnico'], 'tecnico')
-            if es_tecnico:
-                nombre = obtener_nombre_usuario(a['id_tecnico'])
-                if nombre:
-                    tecnicos_map[a['id_orden_trabajo']].append({'nombre': nombre})
+            if orden_id not in tecnicos_map:
+                tecnicos_map[orden_id] = {}
+            
+            # Verificar que el usuario tenga rol técnico y no esté duplicado
+            if tecnico_id not in tecnicos_map[orden_id]:
+                es_tecnico = verificar_rol_usuario(tecnico_id, 'tecnico')
+                if es_tecnico:
+                    nombre = obtener_nombre_usuario(tecnico_id)
+                    if nombre:
+                        tecnicos_map[orden_id][tecnico_id] = {'nombre': nombre}
+        
+        # Convertir el mapa a lista para cada orden
+        tecnicos_lista_map = {}
+        for orden_id, tecnicos_dict in tecnicos_map.items():
+            tecnicos_lista_map[orden_id] = list(tecnicos_dict.values())
         
         # 7. Construir respuesta
         ordenes_resultado = []
@@ -226,7 +246,7 @@ def obtener_historial_vehiculo(current_user):
                 'fecha_ingreso': orden['fecha_ingreso'],
                 'fecha_salida': orden.get('fecha_salida'),
                 'jefe_operativo_nombre': jefes_map.get(orden.get('id_jefe_operativo')),
-                'tecnicos': tecnicos_map.get(orden['id'], []),
+                'tecnicos': tecnicos_lista_map.get(orden['id'], []),
                 'diagnostico_inicial': diagnosticos_map.get(orden['id']),
                 'tiene_fotos': True
             })
@@ -323,7 +343,7 @@ def obtener_fotos_orden(current_user, id_orden):
 @historial_vehiculos_bp.route('/ultimas-ordenes', methods=['GET'])
 @jefe_taller_required
 def obtener_ultimas_ordenes(current_user):
-    """Obtener las últimas órdenes de trabajo (optimizado)"""
+    """Obtener las últimas órdenes de trabajo (optimizado y SIN DUPLICADOS)"""
     try:
         limite = request.args.get('limite', 10, type=int)
         
@@ -376,22 +396,33 @@ def obtener_ultimas_ordenes(current_user):
         for d in (diagnosticos.data or []):
             diagnosticos_map[d['id_orden_trabajo']] = d.get('diagnostigo', '')[:100]
         
-        # Obtener técnicos verificando rol
+        # Obtener técnicos verificando rol (SIN DUPLICADOS)
         tecnicos_map = {}
         asignaciones = supabase.table('asignaciontecnico') \
             .select('id_orden_trabajo, id_tecnico') \
             .in_('id_orden_trabajo', ordenes_ids) \
             .execute()
         
+        # Procesar asignaciones para evitar duplicados
         for a in (asignaciones.data or []):
-            if a['id_orden_trabajo'] not in tecnicos_map:
-                tecnicos_map[a['id_orden_trabajo']] = []
+            orden_id = a['id_orden_trabajo']
+            tecnico_id = a['id_tecnico']
             
-            es_tecnico = verificar_rol_usuario(a['id_tecnico'], 'tecnico')
-            if es_tecnico:
-                nombre = obtener_nombre_usuario(a['id_tecnico'])
-                if nombre:
-                    tecnicos_map[a['id_orden_trabajo']].append({'nombre': nombre})
+            if orden_id not in tecnicos_map:
+                tecnicos_map[orden_id] = {}
+            
+            # Verificar que el usuario tenga rol técnico y no esté duplicado
+            if tecnico_id not in tecnicos_map[orden_id]:
+                es_tecnico = verificar_rol_usuario(tecnico_id, 'tecnico')
+                if es_tecnico:
+                    nombre = obtener_nombre_usuario(tecnico_id)
+                    if nombre:
+                        tecnicos_map[orden_id][tecnico_id] = {'nombre': nombre}
+        
+        # Convertir el mapa a lista para cada orden
+        tecnicos_lista_map = {}
+        for orden_id, tecnicos_dict in tecnicos_map.items():
+            tecnicos_lista_map[orden_id] = list(tecnicos_dict.values())
         
         ordenes_resultado = []
         for orden in ordenes:
@@ -407,7 +438,7 @@ def obtener_ultimas_ordenes(current_user):
                 'marca': v.get('marca', ''),
                 'modelo': v.get('modelo', ''),
                 'jefe_operativo_nombre': jefes_map.get(orden.get('id_jefe_operativo')),
-                'tecnicos': tecnicos_map.get(orden['id'], []),
+                'tecnicos': tecnicos_lista_map.get(orden['id'], []),
                 'diagnostico_inicial': diagnosticos_map.get(orden['id']),
                 'tiene_fotos': True
             })
@@ -433,7 +464,7 @@ def obtener_ultimas_ordenes(current_user):
 
 
 # =====================================================
-# NUEVO ENDPOINT: DETALLE COMPLETO CON DIAGNÓSTICOS TÉCNICOS
+# ENDPOINT: DETALLE COMPLETO CON DIAGNÓSTICOS TÉCNICOS
 # =====================================================
 
 @historial_vehiculos_bp.route('/detalle-completo-orden/<int:id_orden>', methods=['GET'])
@@ -545,7 +576,7 @@ def obtener_detalle_completo_orden(current_user, id_orden):
                     jefe_taller_nombre = obtener_nombre_usuario(id_jefe_taller)
         
         # =====================================================
-        # 7. OBTENER TÉCNICOS ASIGNADOS ACTUALMENTE
+        # 7. OBTENER TÉCNICOS ASIGNADOS ACTUALMENTE (SIN DUPLICADOS)
         # =====================================================
         tecnicos_asignados = obtener_tecnicos_actuales_orden(id_orden)
         

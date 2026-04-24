@@ -1,6 +1,6 @@
 // =====================================================
-// COTIZACIONES.JS - JEFE DE TALLER (VERSIÓN COMPLETA CON ITEMS DINÁMICOS)
-// FURIA MOTOR COMPANY SRL
+// COTIZACIONES.JS - JEFE DE TALLER
+// VERSIÓN PROFESIONAL - COMPLETA Y CORREGIDA
 // =====================================================
 
 const API_URL = window.location.origin + '/api/jefe-taller';
@@ -9,15 +9,22 @@ let currentUserRoles = [];
 
 // Datos globales
 let ordenesAprobadas = [];
+let ordenesConServicios = [];
 let encargadosRepuestos = [];
 let solicitudesCotizacion = [];
-let serviciosCotizados = [];
 let cotizacionesEnviadas = [];
 let solicitudesCompra = [];
 
 // Items dinámicos
 let itemsSolicitud = [];
 let itemsCompra = [];
+
+// Editor Quill y datos
+let quillEditor = null;
+let currentCotizacionData = null;
+let currentOrdenData = null;
+let serviciosActuales = [];
+let firmaBase64 = null;
 
 // =====================================================
 // FUNCIONES DE UTILIDAD
@@ -27,7 +34,6 @@ function getAuthHeaders() {
     let token = localStorage.getItem('furia_token');
     if (!token) token = localStorage.getItem('token');
     if (!token) token = sessionStorage.getItem('token');
-    
     return {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -83,6 +89,13 @@ function abrirModal(modalId) {
     if (modal) modal.classList.add('show');
 }
 
+function mostrarLoading(mostrar) {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.style.display = mostrar ? 'flex' : 'none';
+    }
+}
+
 function statusBadge(estado) {
     const map = {
         'pendiente': 'status-pendiente',
@@ -90,37 +103,24 @@ function statusBadge(estado) {
         'aprobado': 'status-aprobado',
         'rechazado': 'status-rechazado',
         'comprado': 'status-comprado',
-        'enviada': 'status-enviado',
-        'aprobado_total': 'status-aprobado',
-        'aprobado_parcial': 'status-cotizado'
+        'enviada': 'status-enviado'
     };
     
     const texto = {
         'pendiente': 'Pendiente',
         'cotizado': 'Cotizado',
         'aprobado': 'Aprobado',
-        'rechazado': 'Rechazado',
-        'comprado': 'Comprado',
         'enviada': 'Enviada',
-        'aprobado_total': 'Aprobado Total',
-        'aprobado_parcial': 'Aprobado Parcial'
-    };
-    
-    const iconos = {
-        'pendiente': 'fa-clock',
-        'cotizado': 'fa-check-circle',
-        'aprobado': 'fa-check-double',
-        'comprado': 'fa-shopping-cart',
-        'enviada': 'fa-paper-plane'
+        'comprado': 'Comprado'
     };
     
     return `<span class="status-badge ${map[estado] || 'status-pendiente'}">
-        <i class="fas ${iconos[estado] || 'fa-clock'}"></i> ${texto[estado] || estado}
+        <i class="fas ${estado === 'cotizado' || estado === 'comprado' ? 'fa-check-circle' : 'fa-clock'}"></i> ${texto[estado] || estado}
     </span>`;
 }
 
 // =====================================================
-// FUNCIONES PARA LISTA DINÁMICA DE ITEMS (SOLICITUD)
+// FUNCIONES PARA LISTA DINÁMICA DE ITEMS
 // =====================================================
 
 function renderItemsSolicitud() {
@@ -128,68 +128,35 @@ function renderItemsSolicitud() {
     if (!container) return;
     
     if (itemsSolicitud.length === 0) {
-        container.innerHTML = `
-            <div class="item-empty">
-                <i class="fas fa-box-open"></i>
-                <p>No hay items agregados</p>
-                <small>Haz clic en "Agregar item" para comenzar</small>
-            </div>
-        `;
+        container.innerHTML = `<div class="item-empty"><i class="fas fa-box-open"></i><p>No hay items agregados</p><small>Haz clic en "Agregar item" para comenzar</small></div>`;
         return;
     }
     
     container.innerHTML = itemsSolicitud.map((item, index) => `
         <div class="item-row" data-index="${index}">
             <div class="item-fields">
-                <input type="text" class="item-descripcion" 
-                       value="${escapeHtml(item.descripcion)}" 
-                       placeholder="Ej: Aceite de motor, Filtro de aire, Bujías..."
-                       onchange="actualizarItemSolicitud(${index}, 'descripcion', this.value)">
-                
-                <input type="number" class="item-cantidad" 
-                       value="${item.cantidad}" min="1"
-                       placeholder="Cantidad"
-                       onchange="actualizarItemSolicitud(${index}, 'cantidad', parseInt(this.value))">
-                
-                <input type="text" class="item-detalle" 
-                       value="${escapeHtml(item.detalle || '')}" 
-                       placeholder="Detalle adicional (marca, especificaciones...)"
-                       onchange="actualizarItemSolicitud(${index}, 'detalle', this.value)">
+                <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Descripción del item" onchange="actualizarItemSolicitud(${index}, 'descripcion', this.value)">
+                <input type="number" class="item-cantidad" value="${item.cantidad}" min="1" onchange="actualizarItemSolicitud(${index}, 'cantidad', parseInt(this.value))">
+                <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle (marca, especificaciones...)" onchange="actualizarItemSolicitud(${index}, 'detalle', this.value)">
             </div>
             <div class="item-actions">
-                <button type="button" class="btn-remove-item" onclick="eliminarItemSolicitud(${index})" title="Eliminar">
-                    <i class="fas fa-trash-alt"></i>
-                </button>
+                <button class="btn-remove-item" onclick="eliminarItemSolicitud(${index})"><i class="fas fa-trash-alt"></i></button>
             </div>
         </div>
     `).join('');
-    
-    // Actualizar resumen
-    const summaryContainer = document.getElementById('itemsSummarySolicitud');
-    if (summaryContainer) {
-        const totalItems = itemsSolicitud.length;
-        summaryContainer.innerHTML = `<i class="fas fa-cubes"></i> ${totalItems} item(s) agregado(s)`;
-    }
 }
 
 function agregarItemSolicitud() {
-    itemsSolicitud.push({
-        descripcion: '',
-        cantidad: 1,
-        detalle: ''
-    });
+    itemsSolicitud.push({ descripcion: '', cantidad: 1, detalle: '' });
     renderItemsSolicitud();
-    
     setTimeout(() => {
-        const lastItem = document.querySelector('#itemsListSolicitud .item-row:last-child .item-descripcion');
-        if (lastItem) lastItem.focus();
+        const lastInput = document.querySelector('#itemsListSolicitud .item-row:last-child .item-descripcion');
+        if (lastInput) lastInput.focus();
     }, 100);
 }
 
 function actualizarItemSolicitud(index, campo, valor) {
-    if (itemsSolicitud[index]) {
-        itemsSolicitud[index][campo] = valor;
-    }
+    if (itemsSolicitud[index]) itemsSolicitud[index][campo] = valor;
 }
 
 function eliminarItemSolicitud(index) {
@@ -202,77 +169,36 @@ function limpiarItemsSolicitud() {
     renderItemsSolicitud();
 }
 
-// =====================================================
-// FUNCIONES PARA LISTA DINÁMICA DE ITEMS (COMPRA)
-// =====================================================
-
 function renderItemsCompra() {
     const container = document.getElementById('itemsListCompra');
     if (!container) return;
     
     if (itemsCompra.length === 0) {
-        container.innerHTML = `
-            <div class="item-empty">
-                <i class="fas fa-box-open"></i>
-                <p>No hay items agregados</p>
-                <small>Haz clic en "Agregar item" para comenzar</small>
-            </div>
-        `;
+        container.innerHTML = `<div class="item-empty"><i class="fas fa-box-open"></i><p>No hay items agregados</p><small>Haz clic en "Agregar item" para comenzar</small></div>`;
         return;
     }
     
     container.innerHTML = itemsCompra.map((item, index) => `
-        <div class="item-row" data-index="${index}">
+        <div class="item-row">
             <div class="item-fields">
-                <input type="text" class="item-descripcion" 
-                       value="${escapeHtml(item.descripcion)}" 
-                       placeholder="Ej: Aceite de motor, Filtro de aire, Bujías..."
-                       onchange="actualizarItemCompra(${index}, 'descripcion', this.value)">
-                
-                <input type="number" class="item-cantidad" 
-                       value="${item.cantidad}" min="1"
-                       placeholder="Cantidad"
-                       onchange="actualizarItemCompra(${index}, 'cantidad', parseInt(this.value))">
-                
-                <input type="text" class="item-detalle" 
-                       value="${escapeHtml(item.detalle || '')}" 
-                       placeholder="Detalle adicional (marca, especificaciones...)"
-                       onchange="actualizarItemCompra(${index}, 'detalle', this.value)">
+                <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Descripción" onchange="actualizarItemCompra(${index}, 'descripcion', this.value)">
+                <input type="number" class="item-cantidad" value="${item.cantidad}" min="1" onchange="actualizarItemCompra(${index}, 'cantidad', parseInt(this.value))">
+                <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle" onchange="actualizarItemCompra(${index}, 'detalle', this.value)">
             </div>
             <div class="item-actions">
-                <button type="button" class="btn-remove-item" onclick="eliminarItemCompra(${index})" title="Eliminar">
-                    <i class="fas fa-trash-alt"></i>
-                </button>
+                <button class="btn-remove-item" onclick="eliminarItemCompra(${index})"><i class="fas fa-trash-alt"></i></button>
             </div>
         </div>
     `).join('');
-    
-    // Actualizar resumen
-    const summaryContainer = document.getElementById('itemsSummaryCompra');
-    if (summaryContainer) {
-        const totalItems = itemsCompra.length;
-        summaryContainer.innerHTML = `<i class="fas fa-cubes"></i> ${totalItems} item(s) agregado(s)`;
-    }
 }
 
 function agregarItemCompra() {
-    itemsCompra.push({
-        descripcion: '',
-        cantidad: 1,
-        detalle: ''
-    });
+    itemsCompra.push({ descripcion: '', cantidad: 1, detalle: '' });
     renderItemsCompra();
-    
-    setTimeout(() => {
-        const lastItem = document.querySelector('#itemsListCompra .item-row:last-child .item-descripcion');
-        if (lastItem) lastItem.focus();
-    }, 100);
 }
 
 function actualizarItemCompra(index, campo, valor) {
-    if (itemsCompra[index]) {
-        itemsCompra[index][campo] = valor;
-    }
+    if (itemsCompra[index]) itemsCompra[index][campo] = valor;
 }
 
 function eliminarItemCompra(index) {
@@ -286,61 +212,30 @@ function limpiarItemsCompra() {
 }
 
 // =====================================================
-// CARGA DE DATOS DESDE API
+// CARGA DE DATOS
 // =====================================================
 
-async function cargarOrdenesAprobadas() {
+async function cargarOrdenesConServicios() {
     try {
-        const response = await fetch(`${API_URL}/ordenes-aprobadas`, {
-            headers: getAuthHeaders()
-        });
-        
-        if (response.status === 401) {
-            window.location.href = '/';
-            return;
-        }
-        
+        const response = await fetch(`${API_URL}/ordenes-con-servicios`, { headers: getAuthHeaders() });
         const data = await response.json();
         if (data.success) {
-            ordenesAprobadas = data.ordenes || [];
+            ordenesConServicios = data.ordenes || [];
+            renderOrdenes();
         }
     } catch (error) {
-        console.error('Error cargando órdenes aprobadas:', error);
-        ordenesAprobadas = [];
-    }
-}
-
-async function cargarEncargadosRepuestos() {
-    try {
-        const response = await fetch(`${API_URL}/encargados-repuestos`, {
-            headers: getAuthHeaders()
-        });
-        
-        const data = await response.json();
-        if (data.success) {
-            encargadosRepuestos = data.encargados || [];
-        }
-    } catch (error) {
-        console.error('Error cargando encargados:', error);
-        encargadosRepuestos = [];
+        console.error('Error cargando órdenes:', error);
+        ordenesConServicios = [];
     }
 }
 
 async function cargarSolicitudesCotizacion() {
     try {
-        const filtroOrden = document.getElementById('filtroOrdenSolicitud')?.value || 'all';
-        const filtroEstado = document.getElementById('filtroEstadoSolicitud')?.value || 'all';
-        
-        let url = `${API_URL}/solicitudes-cotizacion`;
-        const params = new URLSearchParams();
-        if (filtroOrden !== 'all') params.append('id_orden_trabajo', filtroOrden);
-        if (filtroEstado !== 'all') params.append('estado', filtroEstado);
-        if (params.toString()) url += `?${params.toString()}`;
-        
-        const response = await fetch(url, { headers: getAuthHeaders() });
+        const response = await fetch(`${API_URL}/solicitudes-cotizacion`, { headers: getAuthHeaders() });
         const data = await response.json();
         if (data.success) {
             solicitudesCotizacion = data.solicitudes || [];
+            renderSolicitudesCotizacion();
         }
     } catch (error) {
         console.error('Error cargando solicitudes:', error);
@@ -348,53 +243,27 @@ async function cargarSolicitudesCotizacion() {
     }
 }
 
-async function cargarServiciosCotizados() {
-    try {
-        const response = await fetch(`${API_URL}/servicios-cotizados`, {
-            headers: getAuthHeaders()
-        });
-        
-        const data = await response.json();
-        if (data.success) {
-            serviciosCotizados = data.servicios || [];
-        }
-    } catch (error) {
-        console.error('Error cargando servicios cotizados:', error);
-        serviciosCotizados = [];
-    }
-}
-
 async function cargarCotizacionesEnviadas() {
     try {
-        const response = await fetch(`${API_URL}/cotizaciones-enviadas`, {
-            headers: getAuthHeaders()
-        });
-        
+        const response = await fetch(`${API_URL}/cotizaciones-enviadas`, { headers: getAuthHeaders() });
         const data = await response.json();
         if (data.success) {
             cotizacionesEnviadas = data.cotizaciones || [];
+            renderCotizacionesEnviadas();
         }
     } catch (error) {
-        console.error('Error cargando cotizaciones enviadas:', error);
+        console.error('Error cargando cotizaciones:', error);
         cotizacionesEnviadas = [];
     }
 }
 
 async function cargarSolicitudesCompra() {
     try {
-        const filtroOrden = document.getElementById('filtroOrdenCompra')?.value || 'all';
-        const filtroEstado = document.getElementById('filtroEstadoCompra')?.value || 'all';
-        
-        let url = `${API_URL}/solicitudes-compra`;
-        const params = new URLSearchParams();
-        if (filtroOrden !== 'all') params.append('id_orden_trabajo', filtroOrden);
-        if (filtroEstado !== 'all') params.append('estado', filtroEstado);
-        if (params.toString()) url += `?${params.toString()}`;
-        
-        const response = await fetch(url, { headers: getAuthHeaders() });
+        const response = await fetch(`${API_URL}/solicitudes-compra`, { headers: getAuthHeaders() });
         const data = await response.json();
         if (data.success) {
             solicitudesCompra = data.solicitudes || [];
+            renderSolicitudesCompra();
         }
     } catch (error) {
         console.error('Error cargando solicitudes de compra:', error);
@@ -402,149 +271,74 @@ async function cargarSolicitudesCompra() {
     }
 }
 
+async function cargarEncargadosRepuestos() {
+    try {
+        const response = await fetch(`${API_URL}/encargados-repuestos`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        if (data.success) {
+            encargadosRepuestos = data.encargados || [];
+            renderSelects();
+        }
+    } catch (error) {
+        console.error('Error cargando encargados:', error);
+        encargadosRepuestos = [];
+    }
+}
+
+async function cargarOrdenesAprobadas() {
+    try {
+        const response = await fetch(`${API_URL}/ordenes-aprobadas`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        if (data.success) {
+            ordenesAprobadas = data.ordenes || [];
+            renderSelects();
+        }
+    } catch (error) {
+        console.error('Error cargando órdenes aprobadas:', error);
+        ordenesAprobadas = [];
+    }
+}
+
 async function cargarDatosIniciales() {
+    mostrarLoading(true);
     try {
         await Promise.all([
-            cargarOrdenesAprobadas(),
-            cargarEncargadosRepuestos(),
+            cargarOrdenesConServicios(),
             cargarSolicitudesCotizacion(),
-            cargarServiciosCotizados(),
             cargarCotizacionesEnviadas(),
-            cargarSolicitudesCompra()
+            cargarSolicitudesCompra(),
+            cargarEncargadosRepuestos(),
+            cargarOrdenesAprobadas()
         ]);
-        
-        renderAll();
     } catch (error) {
         console.error('Error cargando datos:', error);
         showToast('Error al cargar los datos', 'error');
+    } finally {
+        mostrarLoading(false);
     }
 }
 
 // =====================================================
-// RENDERIZADO DE TABLAS
+// RENDERIZADO DE ÓRDENES
 // =====================================================
 
-function renderAll() {
-    renderSelects();
-    renderSolicitudesCotizacion();
-    renderServiciosCotizados();
-    renderCotizacionesEnviadas();
-    renderSolicitudesCompra();
-}
-
-function renderSelects() {
-    // Select de órdenes en el modal
-    const selectOrden = document.getElementById('solicitud_id_orden_trabajo');
-    if (selectOrden) {
-        const currentValue = selectOrden.value;
-        selectOrden.innerHTML = '<option value="">Seleccionar orden</option>' + 
-            ordenesAprobadas.map(o => `<option value="${o.id_orden}">${escapeHtml(o.codigo_unico)} - ${escapeHtml(o.vehiculo)}</option>`).join('');
-        if (currentValue) selectOrden.value = currentValue;
-    }
-    
-    // Select de encargados
-    const selectEncargado = document.getElementById('solicitud_id_encargado');
-    if (selectEncargado) {
-        selectEncargado.innerHTML = '<option value="">Seleccionar encargado</option>' +
-            encargadosRepuestos.map(e => `<option value="${e.id}">${escapeHtml(e.nombre)}</option>`).join('');
-    }
-    
-    // Filtros de órdenes
-    const filterIds = ['filtroOrdenSolicitud', 'filtroOrdenServicio', 'filtroOrdenCompra'];
-    filterIds.forEach(id => {
-        const sel = document.getElementById(id);
-        if (sel) {
-            const currentValue = sel.value;
-            sel.innerHTML = '<option value="all">Todas las órdenes</option>' +
-                ordenesAprobadas.map(o => `<option value="${o.id_orden}">${escapeHtml(o.codigo_unico)}</option>`).join('');
-            if (currentValue !== 'all' && currentValue) sel.value = currentValue;
-        }
-    });
-}
-
-function renderSolicitudesCotizacion() {
-    const tbody = document.getElementById('tablaSolicitudesCotizacion');
-    if (!tbody) return;
-    
-    const searchTerm = document.getElementById('searchSolicitud')?.value.toLowerCase() || '';
-    
-    let filtered = [...solicitudesCotizacion];
-    if (searchTerm) {
-        filtered = filtered.filter(s => 
-            (s.descripcion_pieza || '').toLowerCase().includes(searchTerm) ||
-            (s.orden_codigo || '').toLowerCase().includes(searchTerm)
-        );
-    }
-    
-    if (filtered.length === 0) {
-        tbody.innerHTML = `
-            <tr class="empty-row">
-                <td colspan="9">
-                    <div class="empty-state">
-                        <i class="fas fa-inbox"></i>
-                        <p>No hay solicitudes de cotización</p>
-                        <button class="btn-primary btn-sm" onclick="document.getElementById('btnNuevaSolicitudCotizacion').click()">
-                            <i class="fas fa-plus"></i> Crear primera solicitud
-                        </button>
-                    </div>
-                    </td>
-                </tr>
-        `;
-        return;
-    }
-    
-    tbody.innerHTML = filtered.map(solicitud => `
-        <tr>
-            <td>${solicitud.id}</td>
-            <td><strong>${escapeHtml(solicitud.orden_codigo || 'N/A')}</strong></td>
-            <td>${escapeHtml(solicitud.vehiculo || 'N/A')}</td>
-            <td>${escapeHtml(solicitud.servicio_descripcion || '-')}</td>
-            <td>${solicitud.items?.length || 1} item(s)</td>
-            <td>${statusBadge(solicitud.estado)}</td>
-            <td>${solicitud.precio_cotizado ? `Bs. ${solicitud.precio_cotizado.toFixed(2)}` : '-'}</td>
-            <td>${formatDate(solicitud.fecha_solicitud)}</td>
-            <td class="action-buttons">
-                ${solicitud.estado === 'pendiente' ? `
-                    <button class="action-btn delete" onclick="eliminarSolicitud(${solicitud.id})" title="Eliminar">
-                        <i class="fas fa-trash-alt"></i>
-                    </button>
-                ` : ''}
-                ${solicitud.estado === 'cotizado' ? `
-                    <button class="action-btn send" onclick="solicitarCompraDesdeCotizacion(${solicitud.id})" title="Solicitar Compra">
-                        <i class="fas fa-shopping-cart"></i>
-                    </button>
-                ` : ''}
-            </td>
-        </tr>
-    `).join('');
-}
-
-function renderServiciosCotizados() {
-    const container = document.getElementById('ordenesPendientesContainer');
+function renderOrdenes() {
+    const container = document.getElementById('ordenesContainer');
     if (!container) return;
     
-    const filtroOrden = document.getElementById('filtroOrdenServicio')?.value || 'all';
-    const searchTerm = document.getElementById('searchServicio')?.value.toLowerCase() || '';
+    const searchTerm = document.getElementById('searchOrden')?.value.toLowerCase() || '';
+    let filtered = [...ordenesConServicios];
     
-    let filtered = [...serviciosCotizados];
-    if (filtroOrden !== 'all') {
-        filtered = filtered.filter(o => o.id_orden == filtroOrden);
-    }
     if (searchTerm) {
         filtered = filtered.filter(o => 
             (o.codigo_unico || '').toLowerCase().includes(searchTerm) ||
-            (o.vehiculo || '').toLowerCase().includes(searchTerm) ||
-            (o.cliente_nombre || '').toLowerCase().includes(searchTerm)
+            (o.cliente_nombre || '').toLowerCase().includes(searchTerm) ||
+            (o.vehiculo || '').toLowerCase().includes(searchTerm)
         );
     }
     
     if (filtered.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-clipboard-list"></i>
-                <p>No hay servicios con precios cotizados</p>
-            </div>
-        `;
+        container.innerHTML = `<div class="empty-state"><i class="fas fa-clipboard-list"></i><p>No hay órdenes con servicios disponibles</p></div>`;
         return;
     }
     
@@ -552,25 +346,29 @@ function renderServiciosCotizados() {
         <div class="orden-card">
             <div class="orden-header">
                 <div>
-                    <span class="orden-codigo">${escapeHtml(orden.codigo_unico)}</span>
-                    <span class="orden-vehiculo"> ${escapeHtml(orden.vehiculo)}</span>
+                    <span class="orden-codigo"><i class="fas fa-tag"></i> ${escapeHtml(orden.codigo_unico)}</span>
+                    <span class="orden-vehiculo"><i class="fas fa-car"></i> ${escapeHtml(orden.vehiculo)}</span>
                 </div>
                 <div>
                     <span class="orden-cliente"><i class="fas fa-user"></i> ${escapeHtml(orden.cliente_nombre)}</span>
+                    <span class="orden-total"><i class="fas fa-dollar-sign"></i> Total: Bs. ${orden.total_orden?.toFixed(2) || '0.00'}</span>
                 </div>
             </div>
-            <div class="servicios-list">
+            <div class="servicios-container">
                 ${orden.servicios.map(serv => `
-                    <div class="servicio-item">
-                        <div class="servicio-descripcion">
-                            <strong>${escapeHtml(serv.descripcion)}</strong>
-                            ${serv.items && serv.items.length > 0 ? `
-                                <div style="font-size: 0.7rem; color: var(--gris-texto); margin-top: 0.25rem;">
-                                    ${serv.items.map(item => `• ${item.cantidad}x ${escapeHtml(item.descripcion)} ${item.detalle ? `(${escapeHtml(item.detalle)})` : ''}`).join('<br>')}
-                                </div>
-                            ` : ''}
+                    <div class="servicio-row">
+                        <div class="servicio-info">
+                            <div class="servicio-nombre">${escapeHtml(serv.descripcion)}</div>
+                            ${serv.items && serv.items.length > 0 ? `<div class="servicio-items">📦 ${serv.items.length} repuesto(s)</div>` : ''}
                         </div>
-                        <div class="servicio-precio">Precio: Bs. ${serv.precio_cotizado?.toFixed(2)}</div>
+                        <div class="servicio-estado estado-${serv.estado_cotizacion}">
+                            <i class="fas ${serv.estado_cotizacion === 'cotizado' ? 'fa-check-circle' : 'fa-clock'}"></i>
+                            ${serv.estado_cotizacion === 'cotizado' ? 'Cotizado' : (serv.estado_cotizacion === 'solicitado' ? 'Cotización solicitada' : 'Pendiente')}
+                        </div>
+                        <div class="servicio-precio">Bs. ${serv.precio_cotizado?.toFixed(2) || '0.00'}</div>
+                        <div class="action-buttons">
+                            <button class="action-btn edit" onclick="editarServicioCotizacion(${orden.id_orden}, ${serv.id_servicio})" title="Editar"><i class="fas fa-edit"></i></button>
+                        </div>
                     </div>
                 `).join('')}
             </div>
@@ -578,8 +376,38 @@ function renderServiciosCotizados() {
                 <button class="btn-primary" onclick="abrirModalGenerarCotizacion(${orden.id_orden})">
                     <i class="fas fa-file-invoice"></i> Generar Cotización
                 </button>
+                <button class="btn-outline" onclick="editarServiciosOrden(${orden.id_orden})">
+                    <i class="fas fa-edit"></i> Editar Servicios
+                </button>
             </div>
         </div>
+    `).join('');
+}
+
+function renderSolicitudesCotizacion() {
+    const tbody = document.getElementById('tablaSolicitudesCotizacion');
+    if (!tbody) return;
+    
+    if (solicitudesCotizacion.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes de cotización</p></div></td></tr>`;
+        return;
+    }
+    
+    tbody.innerHTML = solicitudesCotizacion.map(s => `
+        <tr>
+            <td>${s.id}</td>
+            <td><strong>${escapeHtml(s.orden_codigo)}</strong></td>
+            <td>${escapeHtml(s.vehiculo)}</strong></td>
+            <td>${escapeHtml(s.servicio_descripcion || '-')}</strong></td>
+            <td>${s.items?.length || 1} item(s)</td>
+            <td>${statusBadge(s.estado)}</strong></td>
+            <td>${s.precio_cotizado ? `Bs. ${s.precio_cotizado.toFixed(2)}` : '-'}</td>
+            <td>${formatDate(s.fecha_solicitud)}</strong></td>
+            <td class="action-buttons">
+                ${s.estado === 'pendiente' ? `<button class="action-btn delete" onclick="eliminarSolicitudCotizacion(${s.id})"><i class="fas fa-trash-alt"></i></button>` : ''}
+                ${s.estado === 'cotizado' ? `<button class="action-btn send" onclick="solicitarCompraDesdeCotizacion(${s.id})"><i class="fas fa-shopping-cart"></i></button>` : ''}
+            </strong>
+        </tr>
     `).join('');
 }
 
@@ -588,32 +416,19 @@ function renderCotizacionesEnviadas() {
     if (!tbody) return;
     
     if (cotizacionesEnviadas.length === 0) {
-        tbody.innerHTML = `
-            <tr class="empty-row">
-                <td colspan="7">
-                    <div class="empty-state">
-                        <i class="fas fa-envelope"></i>
-                        <p>No hay cotizaciones enviadas</p>
-                    </div>
-                    </td>
-                </tr>
-        `;
+        tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="fas fa-envelope"></i><p>No hay cotizaciones enviadas</p></div></td></tr>`;
         return;
     }
     
     tbody.innerHTML = cotizacionesEnviadas.map(cot => `
         <tr>
-            <td>${escapeHtml(cot.orden_codigo)}</td>
-            <td>${escapeHtml(cot.vehiculo)}</td>
-            <td>${escapeHtml(cot.cliente_nombre)}</td>
+            <td><strong>${escapeHtml(cot.orden_codigo)}</strong></td>
+            <td>${escapeHtml(cot.vehiculo)}</strong></td>
+            <td>${escapeHtml(cot.cliente_nombre)}</strong></td>
             <td><strong>Bs. ${cot.total?.toFixed(2) || '0.00'}</strong></td>
-            <td>${cot.servicios_aprobados || 0} servicios</td>
-            <td>${statusBadge(cot.estado_cliente)}</td>
-            <td class="action-buttons">
-                <button class="action-btn view" onclick="verDetalleCotizacion(${cot.id})" title="Ver Detalle">
-                    <i class="fas fa-eye"></i>
-                </button>
-            </td>
+            <td>${cot.servicios_aprobados || 0}/${cot.total_servicios || 0} servicios</strong></td>
+            <td>${statusBadge(cot.estado || 'enviada')}</strong></td>
+            <td><button class="action-btn view" onclick="verDetalleCotizacion(${cot.id})"><i class="fas fa-eye"></i></button></strong>
         </tr>
     `).join('');
 }
@@ -622,365 +437,644 @@ function renderSolicitudesCompra() {
     const tbody = document.getElementById('tablaSolicitudesCompra');
     if (!tbody) return;
     
-    const searchTerm = document.getElementById('searchCompra')?.value.toLowerCase() || '';
-    
-    let filtered = [...solicitudesCompra];
-    if (searchTerm) {
-        filtered = filtered.filter(s => 
-            (s.descripcion_pieza || '').toLowerCase().includes(searchTerm) ||
-            (s.orden_codigo || '').toLowerCase().includes(searchTerm)
-        );
-    }
-    
-    if (filtered.length === 0) {
-        tbody.innerHTML = `
-            <tr class="empty-row">
-                <td colspan="8">
-                    <div class="empty-state">
-                        <i class="fas fa-shopping-cart"></i>
-                        <p>No hay solicitudes de compra</p>
-                    </div>
-                    </td>
-                </tr>
-        `;
+    if (solicitudesCompra.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="fas fa-shopping-cart"></i><p>No hay solicitudes de compra</p></div></strong></tr>`;
         return;
     }
     
-    tbody.innerHTML = filtered.map(s => `
+    tbody.innerHTML = solicitudesCompra.map(s => `
         <tr>
-            <td>${s.id}</td>
-            <td>${escapeHtml(s.orden_codigo)}</td>
-            <td>${escapeHtml(s.vehiculo)}</td>
-            <td>${escapeHtml(s.servicio_descripcion || '-')}</td>
-            <td>${s.items?.length || 1} item(s)</td>
-            <td>${statusBadge(s.estado)}</td>
-            <td>${formatDate(s.fecha_solicitud)}</td>
+            <td>${s.id}</strong></td>
+            <td><strong>${escapeHtml(s.orden_codigo)}</strong></td>
+            <td>${escapeHtml(s.vehiculo)}</strong></td>
+            <td>${escapeHtml(s.servicio_descripcion || '-')}</strong></strong>
+            <td>${s.items?.length || 1} item(s)</strong></strong>
+            <td>${statusBadge(s.estado)}</strong></strong>
+            <td>${formatDate(s.fecha_solicitud)}</strong></strong>
             <td class="action-buttons">
-                <button class="action-btn view" onclick="verSolicitudCompra(${s.id})" title="Ver Detalle">
-                    <i class="fas fa-eye"></i>
-                </button>
-                ${s.estado === 'pendiente' ? `
-                    <button class="action-btn approve" onclick="aprobarCompra(${s.id})" title="Marcar como Comprado">
-                        <i class="fas fa-check-circle"></i>
-                    </button>
-                ` : ''}
-            </td>
+                <button class="action-btn view" onclick="verSolicitudCompra(${s.id})"><i class="fas fa-eye"></i></button>
+                ${s.estado === 'pendiente' ? `<button class="action-btn approve" onclick="aprobarCompra(${s.id})"><i class="fas fa-check-circle"></i></button>` : ''}
+            </strong>
         </tr>
     `).join('');
+}
+
+function renderSelects() {
+    const selectOrden = document.getElementById('solicitud_id_orden_trabajo');
+    if (selectOrden && ordenesAprobadas.length > 0) {
+        const currentValue = selectOrden.value;
+        selectOrden.innerHTML = '<option value="">Seleccionar orden</option>' + 
+            ordenesAprobadas.map(o => `<option value="${o.id_orden}">${escapeHtml(o.codigo_unico)} - ${escapeHtml(o.vehiculo)}</option>`).join('');
+        if (currentValue) selectOrden.value = currentValue;
+    }
+    
+    const selectEncargado = document.getElementById('solicitud_id_encargado');
+    if (selectEncargado && encargadosRepuestos.length > 0) {
+        selectEncargado.innerHTML = '<option value="">Seleccionar encargado</option>' +
+            encargadosRepuestos.map(e => `<option value="${e.id}">${escapeHtml(e.nombre)}</option>`).join('');
+    }
 }
 
 // =====================================================
 // ACCIONES - SOLICITUDES DE COTIZACIÓN
 // =====================================================
 
-async function crearSolicitudCotizacion() {
-    const id_orden = document.getElementById('solicitud_id_orden_trabajo')?.value;
-    const id_servicio = document.getElementById('solicitud_id_servicio')?.value;
-    const id_encargado = document.getElementById('solicitud_id_encargado')?.value;
-    const observacion = document.getElementById('solicitud_observacion')?.value;
-    
-    if (!id_orden) {
-        showToast('Seleccione una orden de trabajo', 'error');
-        return;
-    }
-    
-    if (!id_servicio) {
-        showToast('Seleccione un servicio', 'error');
-        return;
-    }
-    
-    if (!id_encargado) {
-        showToast('Seleccione un encargado de repuestos', 'error');
-        return;
-    }
-    
-    // Validar items
-    const itemsValidos = itemsSolicitud.filter(item => item.descripcion && item.descripcion.trim() !== '');
-    if (itemsValidos.length === 0) {
-        showToast('Agregue al menos un item con descripción', 'error');
-        return;
-    }
-    
+async function eliminarSolicitudCotizacion(id) {
+    if (!confirm('¿Eliminar esta solicitud?')) return;
+    mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/solicitudes-cotizacion`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                id_orden_trabajo: parseInt(id_orden),
-                id_servicio: parseInt(id_servicio),
-                id_encargado_repuestos: parseInt(id_encargado),
-                items: itemsValidos,
-                observacion_jefe_taller: observacion || ''
-            })
-        });
-        
+        const response = await fetch(`${API_URL}/solicitudes-cotizacion/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
         const data = await response.json();
-        
-        if (data.success) {
-            showToast('Solicitud de cotización creada exitosamente', 'success');
-            cerrarModal('modalSolicitudCotizacion');
-            limpiarItemsSolicitud();
-            document.getElementById('solicitud_observacion').value = '';
-            await cargarDatosIniciales();
-        } else {
-            showToast(data.error || 'Error al crear solicitud', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    }
-}
-
-async function eliminarSolicitud(id) {
-    if (!confirm('¿Estás seguro de eliminar esta solicitud?')) return;
-    
-    try {
-        const response = await fetch(`${API_URL}/solicitudes-cotizacion/${id}`, {
-            method: 'DELETE',
-            headers: getAuthHeaders()
-        });
-        
-        const data = await response.json();
-        
         if (data.success) {
             showToast('Solicitud eliminada', 'success');
-            await cargarDatosIniciales();
+            await cargarSolicitudesCotizacion();
         } else {
             showToast(data.error || 'Error al eliminar', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
         showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
     }
 }
 
 // =====================================================
-// ACCIONES - COTIZACIÓN AL CLIENTE
+// EDITOR DE SERVICIOS
 // =====================================================
 
-async function abrirModalGenerarCotizacion(id_orden) {
-    const orden = serviciosCotizados.find(o => o.id_orden === id_orden);
-    if (!orden) {
-        showToast('Orden no encontrada', 'error');
+async function editarServiciosOrden(id_orden) {
+    currentOrdenData = { id_orden };
+    mostrarLoading(true);
+    try {
+        const orden = ordenesConServicios.find(o => o.id_orden === id_orden);
+        if (orden && orden.servicios) {
+            serviciosActuales = orden.servicios.map(s => ({
+                id_servicio: s.id_servicio,
+                descripcion: s.descripcion,
+                precio: s.precio_cotizado || 0,
+                items: s.items || []
+            }));
+        } else {
+            serviciosActuales = [];
+        }
+        renderEditorServicios();
+        abrirModal('modalEditorServicios');
+    } catch (error) {
+        showToast('Error al cargar servicios', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+function renderEditorServicios() {
+    const container = document.getElementById('serviciosEditablesContainer');
+    if (!container) return;
+    
+    if (serviciosActuales.length === 0) {
+        container.innerHTML = `<div class="empty-state"><i class="fas fa-plus-circle"></i><p>No hay servicios. Haz clic en "Agregar Servicio"</p></div>`;
         return;
     }
     
-    const fecha = new Date().toLocaleDateString('es-BO');
-    let serviciosHtml = '';
-    let totalGeneral = 0;
-    
-    orden.servicios.forEach((serv, idx) => {
-        const precio = serv.precio_cotizado || 0;
-        totalGeneral += precio;
-        
-        // Generar tabla de items
-        let itemsHtml = '';
-        if (serv.items && serv.items.length > 0) {
-            itemsHtml = `
-                <tr style="background: #f0f0f0;">
-                    <th colspan="4" style="padding: 0.5rem;">📦 Items incluidos:</th>
-                </tr>
-                ${serv.items.map(item => `
-                    <tr>
-                        <td>${item.cantidad}</td>
-                        <td>${escapeHtml(item.descripcion)} ${item.detalle ? `<br><small>${escapeHtml(item.detalle)}</small>` : ''}</td>
-                        <td>-</td>
-                        <td>-</td>
-                    </tr>
-                `).join('')}
-            `;
-        }
-        
-        serviciosHtml += `
-            <div class="servicio-cotizacion" id="servicio-cotizacion-${serv.id_servicio}">
-                <h4>Servicio ${idx + 1}: ${escapeHtml(serv.descripcion)}</h4>
-                <table class="cotizacion-tabla">
-                    <thead>
-                        <tr>
-                            <th>Cantidad</th>
-                            <th>Descripción</th>
-                            <th>Precio Unitario</th>
-                            <th>Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>1</td>
-                            <td>${escapeHtml(serv.descripcion)}</td>
-                            <td>Bs. ${precio.toFixed(2)}</td>
-                            <td>Bs. ${precio.toFixed(2)}</td>
-                        </tr>
-                        ${itemsHtml}
-                    </tbody>
-                </table>
-                <div class="subtotal">Subtotal del servicio: Bs. ${precio.toFixed(2)}</div>
-                <div style="margin-top: 0.5rem;">
-                    <textarea class="form-input" id="sugerencias_${serv.id_servicio}" rows="2" placeholder="Sugerencias para este servicio..."></textarea>
+    container.innerHTML = serviciosActuales.map((serv, idx) => `
+        <div class="servicio-editable-card">
+            <div class="servicio-editable-header" onclick="toggleServicioEditable(${idx})">
+                <div class="servicio-editable-titulo">${escapeHtml(serv.descripcion || 'Nuevo Servicio')}</div>
+                <div class="servicio-editable-precio">Bs. ${(serv.precio || 0).toFixed(2)}</div>
+            </div>
+            <div class="servicio-editable-body" id="servicio-body-${idx}">
+                <div class="form-group">
+                    <label>Nombre del Servicio</label>
+                    <input type="text" class="form-input" value="${escapeHtml(serv.descripcion || '')}" onchange="actualizarServicio(${idx}, 'descripcion', this.value)">
+                </div>
+                <div class="form-group">
+                    <label>Precio del Servicio</label>
+                    <input type="number" class="form-input" step="0.01" value="${serv.precio || 0}" onchange="actualizarServicio(${idx}, 'precio', parseFloat(this.value))">
+                </div>
+                <div class="form-group">
+                    <label>Repuestos/Items</label>
+                    <div id="items-servicio-${idx}">
+                        ${(serv.items || []).map((item, itemIdx) => `
+                            <div class="item-row">
+                                <div class="item-fields">
+                                    <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Descripción" onchange="actualizarItemServicio(${idx}, ${itemIdx}, 'descripcion', this.value)">
+                                    <input type="number" class="item-cantidad" value="${item.cantidad || 1}" min="1" onchange="actualizarItemServicio(${idx}, ${itemIdx}, 'cantidad', parseInt(this.value))">
+                                    <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle" onchange="actualizarItemServicio(${idx}, ${itemIdx}, 'detalle', this.value)">
+                                </div>
+                                <div class="item-actions">
+                                    <button class="btn-remove-item" onclick="eliminarItemServicio(${idx}, ${itemIdx})"><i class="fas fa-trash-alt"></i></button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button class="btn-add-item" style="margin-top: 0.5rem;" onclick="agregarItemServicio(${idx})">
+                        <i class="fas fa-plus-circle"></i> Agregar item
+                    </button>
+                </div>
+                <div class="action-buttons" style="margin-top: 1rem;">
+                    <button class="action-btn delete" onclick="eliminarServicio(${idx})"><i class="fas fa-trash-alt"></i> Eliminar Servicio</button>
                 </div>
             </div>
-        `;
-    });
-    
-    const container = document.getElementById('generarCotizacionBody');
-    container.innerHTML = `
-        <div class="cotizacion-preview">
-            <div class="cotizacion-header">
-                <h1>INFORME DE COTIZACIÓN</h1>
-                <div class="cotizacion-fecha">Fecha: ${fecha}</div>
-            </div>
-            <div class="cotizacion-datos">
-                <h3>Datos del Cliente</h3>
-                <p><strong>Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}</p>
-                <p><strong>Vehículo:</strong> ${escapeHtml(orden.vehiculo)}</p>
-                <p><strong>Orden:</strong> ${escapeHtml(orden.codigo_unico)}</p>
-            </div>
-            ${serviciosHtml}
-            <div class="total-general">Total General: Bs. ${totalGeneral.toFixed(2)}</div>
-            <div class="sugerencias">
-                <strong>Sugerencias generales:</strong>
-                <textarea id="sugerencias_generales" class="form-input" rows="3" placeholder="Observaciones adicionales para el cliente..."></textarea>
-            </div>
         </div>
-    `;
-    
-    window.currentCotizacionData = { id_orden, servicios: orden.servicios };
-    abrirModal('modalGenerarCotizacion');
+    `).join('');
 }
 
-async function enviarCotizacionCliente() {
-    if (!window.currentCotizacionData) return;
+function toggleServicioEditable(idx) {
+    const body = document.getElementById(`servicio-body-${idx}`);
+    if (body) body.classList.toggle('active');
+}
+
+function actualizarServicio(idx, campo, valor) {
+    if (serviciosActuales[idx]) serviciosActuales[idx][campo] = valor;
+}
+
+function agregarItemServicio(servIdx) {
+    if (!serviciosActuales[servIdx].items) serviciosActuales[servIdx].items = [];
+    serviciosActuales[servIdx].items.push({ descripcion: '', cantidad: 1, detalle: '', precio_unitario: 0 });
+    renderEditorServicios();
+}
+
+function actualizarItemServicio(servIdx, itemIdx, campo, valor) {
+    if (serviciosActuales[servIdx]?.items?.[itemIdx]) {
+        serviciosActuales[servIdx].items[itemIdx][campo] = valor;
+    }
+}
+
+function eliminarItemServicio(servIdx, itemIdx) {
+    serviciosActuales[servIdx].items.splice(itemIdx, 1);
+    renderEditorServicios();
+}
+
+function agregarServicio() {
+    serviciosActuales.push({ descripcion: 'Nuevo Servicio', precio: 0, items: [] });
+    renderEditorServicios();
+}
+
+function eliminarServicio(idx) {
+    serviciosActuales.splice(idx, 1);
+    renderEditorServicios();
+}
+
+async function guardarServiciosEditados() {
+    if (!currentOrdenData) {
+        showToast('No hay orden seleccionada', 'error');
+        return;
+    }
     
-    const { id_orden, servicios } = window.currentCotizacionData;
-    const sugerenciasGenerales = document.getElementById('sugerencias_generales')?.value || '';
-    
-    const serviciosConSugerencias = servicios.map(serv => ({
-        id_servicio: serv.id_servicio,
-        precio: serv.precio_cotizado,
-        sugerencias: document.getElementById(`sugerencias_${serv.id_servicio}`)?.value || ''
-    }));
-    
+    mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/enviar-cotizacion-cliente`, {
+        const response = await fetch(`${API_URL}/servicios-cotizacion/${currentOrdenData.id_orden}`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ servicios: serviciosActuales })
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast('Servicios guardados correctamente', 'success');
+            cerrarModal('modalEditorServicios');
+            await cargarOrdenesConServicios();
+        } else {
+            showToast(data.error || 'Error al guardar', 'error');
+        }
+    } catch (error) {
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+async function editarServicioCotizacion(id_orden, id_servicio) {
+    currentOrdenData = { id_orden };
+    const orden = ordenesConServicios.find(o => o.id_orden === id_orden);
+    const servicio = orden?.servicios.find(s => s.id_servicio === id_servicio);
+    
+    serviciosActuales = [{
+        id_servicio: servicio.id_servicio,
+        descripcion: servicio.descripcion,
+        precio: servicio.precio_cotizado || 0,
+        items: servicio.items || []
+    }];
+    
+    renderEditorServicios();
+    abrirModal('modalEditorServicios');
+}
+
+// =====================================================
+// COTIZACIÓN AL CLIENTE - EDITOR PROFESIONAL
+// =====================================================
+
+async function abrirModalGenerarCotizacion(id_orden) {
+    mostrarLoading(true);
+    try {
+        const orden = ordenesConServicios.find(o => o.id_orden === id_orden);
+        if (!orden) {
+            showToast('Orden no encontrada', 'error');
+            return;
+        }
+        
+        const datosOrden = await obtenerDatosOrden(id_orden);
+        currentOrdenData = { id_orden, datosOrden };
+        serviciosActuales = orden.servicios.map(s => ({
+            id_servicio: s.id_servicio,
+            descripcion: s.descripcion,
+            precio: s.precio_cotizado || 0,
+            items: s.items || []
+        }));
+        
+        const fecha = new Date();
+        const fechaFormateada = `${fecha.getDate()} de ${fecha.toLocaleString('es-BO', { month: 'long' })} de ${fecha.getFullYear()}`;
+        const contenidoInicial = generarHTMLCotizacion(orden, datosOrden, fechaFormateada);
+        
+        const container = document.getElementById('generarCotizacionBody');
+        container.innerHTML = `
+            <div class="formato-rapido">
+                <button class="btn-formato" onclick="insertarTextoRapido('vehiculo')"><i class="fas fa-car"></i> Vehículo</button>
+                <button class="btn-formato" onclick="insertarTextoRapido('diagnostico')"><i class="fas fa-stethoscope"></i> Diagnóstico</button>
+                <button class="btn-formato" onclick="insertarTextoRapido('costos')"><i class="fas fa-table"></i> Tabla Costos</button>
+                <button class="btn-formato" onclick="insertarTextoRapido('sugerencias')"><i class="fas fa-lightbulb"></i> Sugerencias</button>
+                <button class="btn-formato" onclick="insertarTextoRapido('firma')"><i class="fas fa-signature"></i> Firma</button>
+                <button class="btn-formato" onclick="abrirEditorServicios()"><i class="fas fa-edit"></i> Editar Servicios</button>
+                <button class="btn-formato" onclick="subirFirmaDigital()"><i class="fas fa-upload"></i> Subir Firma</button>
+                <button class="btn-formato" onclick="limpiarEditor()"><i class="fas fa-trash-alt"></i> Limpiar</button>
+            </div>
+            <div id="quillEditorContainer" style="background: white; border-radius: 8px; min-height: 500px;"></div>
+            <div class="form-group" style="margin-top: 1rem;">
+                <textarea id="notasAdicionales" class="form-textarea" rows="2" placeholder="Notas adicionales para el cliente..."></textarea>
+            </div>
+        `;
+        
+        setTimeout(() => {
+            if (quillEditor) quillEditor = null;
+            const editorContainer = document.getElementById('quillEditorContainer');
+            if (editorContainer) {
+                quillEditor = new Quill(editorContainer, {
+                    theme: 'snow',
+                    modules: {
+                        toolbar: [
+                            [{ 'font': ['arial', 'times-new-roman', 'courier-new', 'georgia'] }],
+                            [{ 'size': ['10px', '12px', '14px', '16px', '18px', '24px'] }],
+                            ['bold', 'italic', 'underline', 'strike'],
+                            [{ 'color': [] }, { 'background': [] }],
+                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                            [{ 'indent': '-1'}, { 'indent': '+1' }],
+                            [{ 'align': [] }],
+                            ['blockquote', 'code-block'],
+                            ['link', 'clean']
+                        ]
+                    },
+                    placeholder: 'Escribe tu cotización profesional aquí...'
+                });
+                quillEditor.root.style.fontFamily = "'Times New Roman', Times, serif";
+                quillEditor.root.style.fontSize = '14px';
+                quillEditor.root.style.lineHeight = '1.6';
+                quillEditor.root.style.color = '#1a1a2e';
+                quillEditor.root.innerHTML = contenidoInicial;
+            }
+        }, 100);
+        
+        abrirModal('modalGenerarCotizacion');
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error al cargar la cotización', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+function limpiarEditor() {
+    if (quillEditor && confirm('¿Estás seguro de limpiar todo el contenido del editor?')) {
+        quillEditor.root.innerHTML = '';
+        showToast('Editor limpiado', 'success');
+    }
+}
+
+async function obtenerDatosOrden(id_orden) {
+    try {
+        const response = await fetch(`${API_URL}/datos-orden/${id_orden}`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        return data.success ? data.datos : {};
+    } catch (error) {
+        console.error('Error obteniendo datos de orden:', error);
+        return {};
+    }
+}
+
+function generarHTMLCotizacion(orden, datosOrden, fecha) {
+    let tablaCostos = `
+        <h2 style="color: #C1121F;">Detalle de Trabajos y Repuestos</h2>
+        <table style="width:100%; border-collapse: collapse; margin: 15px 0;">
+            <thead>
+                <tr style="background: #C1121F; color: white;">
+                    <th style="padding: 10px;">Descripción</th>
+                    <th style="padding: 10px; text-align: center;">Cantidad</th>
+                    <th style="padding: 10px; text-align: right;">Precio Unit.</th>
+                    <th style="padding: 10px; text-align: right;">Total</th>
+                </table>
+            </thead>
+            <tbody>
+    `;
+    let totalGeneral = 0;
+    
+    serviciosActuales.forEach(serv => {
+        if (serv.items && serv.items.length > 0) {
+            serv.items.forEach(item => {
+                const precioUnitario = item.precio_unitario || (serv.precio / serv.items.length) || 0;
+                const subtotal = precioUnitario * (item.cantidad || 1);
+                totalGeneral += subtotal;
+                tablaCostos += `
+                    <tr>
+                        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${escapeHtml(item.descripcion)}</td>
+                        <td style="padding: 8px; text-align: center; border-bottom: 1px solid #ddd;">${item.cantidad || 1}</td>
+                        <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">Bs. ${precioUnitario.toFixed(2)}</td>
+                        <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">Bs. ${subtotal.toFixed(2)}</td>
+                    </tr>
+                `;
+            });
+        } else {
+            totalGeneral += serv.precio;
+            tablaCostos += `
+                <tr>
+                    <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>${escapeHtml(serv.descripcion)}</strong></td>
+                    <td style="padding: 8px; text-align: center; border-bottom: 1px solid #ddd;">1</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">Bs. ${serv.precio.toFixed(2)}</td>
+                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">Bs. ${serv.precio.toFixed(2)}</td>
+                </tr>
+            `;
+        }
+    });
+    
+    tablaCostos += `
+                <tr style="background: #f5f5f5;">
+                    <td colspan="3" style="padding: 10px; text-align: right;"><strong>TOTAL GENERAL</strong></td>
+                    <td style="padding: 10px; text-align: right;"><strong style="color: #C1121F;">Bs. ${totalGeneral.toFixed(2)}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    `;
+    
+    return `
+        <h1 style="color: #C1121F; text-align: center;">INFORME DE COTIZACIÓN</h1>
+        <p style="text-align: right;">${fecha}</p>
+        
+        <h2 style="color: #C1121F;">Datos del Cliente y Vehículo</h2>
+        <p><strong>Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}</p>
+        <p><strong>Vehículo:</strong> ${escapeHtml(orden.vehiculo)}</p>
+        <p><strong>Marca:</strong> ${escapeHtml(datosOrden.marca || '')} | <strong>Modelo:</strong> ${escapeHtml(datosOrden.modelo || '')} | <strong>Placa:</strong> ${escapeHtml(datosOrden.placa || '')}</p>
+        
+        <h2 style="color: #C1121F;">Diagnóstico</h2>
+        <ul>
+            ${serviciosActuales.map(s => `<li><strong>${escapeHtml(s.descripcion)}</strong>${s.items && s.items.length > 0 ? `<ul>${s.items.map(i => `<li>${escapeHtml(i.descripcion)}</li>`).join('')}</ul>` : ''}</li>`).join('')}
+        </ul>
+        
+        ${tablaCostos}
+        
+        <h2 style="color: #C1121F;">Sugerencias</h2>
+        <ul>
+            <li>Cambio de aceite cada 5,000 km</li>
+            <li>Revisión de frenos cada 10,000 km</li>
+            <li>Mantenimiento preventivo regular</li>
+        </ul>
+    `;
+}
+
+function insertarTextoRapido(tipo) {
+    if (!quillEditor) return;
+    const range = quillEditor.getSelection();
+    const index = range ? range.index : 0;
+    
+    const textos = {
+        'vehiculo': `<h2 style="color: #C1121F;">Características del Vehículo</h2><p><strong>Marca:</strong> ${escapeHtml(currentOrdenData?.datosOrden?.marca || '')}<br><strong>Modelo:</strong> ${escapeHtml(currentOrdenData?.datosOrden?.modelo || '')}<br><strong>Año:</strong> ${escapeHtml(currentOrdenData?.datosOrden?.anio || '')}<br><strong>Placa:</strong> ${escapeHtml(currentOrdenData?.datosOrden?.placa || '')}</p>`,
+        'diagnostico': `<h2 style="color: #C1121F;">Diagnóstico</h2><ul><li>Revisión general del vehículo</li><li>Componentes desgastados por uso</li><li>Mantenimiento necesario según kilometraje</li></ul>`,
+        'costos': `<h2 style="color: #C1121F;">Detalle de Costos</h2>${generarTablaCostosHTML()}`,
+        'sugerencias': `<h2 style="color: #C1121F;">Sugerencias de Mantenimiento</h2><ul><li>Cambio de aceite cada 5,000 km</li><li>Revisión de frenos cada 10,000 km</li><li>Rotación de neumáticos cada 10,000 km</li></ul>`,
+        'firma': `<div style="margin-top: 40px; text-align: center;"><div class="firma-container">${firmaBase64 ? `<img src="${firmaBase64}" class="firma-imagen" style="max-width:200px; max-height:80px;">` : ''}<p><strong>Ing. Carlos Bello Málaga</strong><br>FURIA MOTOR COMPANY S.R.L.<br>68176122 - 74080830 - 78753973</p></div></div>`
+    };
+    
+    quillEditor.clipboard.dangerouslyPasteHTML(index, textos[tipo] || '');
+    showToast(`Bloque "${tipo}" insertado`, 'success');
+}
+
+function generarTablaCostosHTML() {
+    let html = `<table style="width:100%; border-collapse: collapse; margin: 15px 0;"><thead><tr style="background:#C1121F; color:white;"><th style="padding:8px;">Descripción</th><th style="padding:8px; text-align:center;">Cantidad</th><th style="padding:8px; text-align:right;">Precio Unit.</th><th style="padding:8px; text-align:right;">Total</th></tr></thead><tbody>`;
+    serviciosActuales.forEach(serv => {
+        if (serv.items && serv.items.length > 0) {
+            serv.items.forEach(item => {
+                const precioUnitario = item.precio_unitario || (serv.precio / serv.items.length) || 0;
+                const subtotal = precioUnitario * (item.cantidad || 1);
+                html += `<tr><td style="padding:8px; border-bottom:1px solid #ddd;">${escapeHtml(item.descripcion)}</td><td style="padding:8px; text-align:center;">${item.cantidad || 1}</td><td style="padding:8px; text-align:right;">Bs. ${precioUnitario.toFixed(2)}</td><td style="padding:8px; text-align:right;">Bs. ${subtotal.toFixed(2)}</td></tr>`;
+            });
+        } else {
+            html += `<tr><td style="padding:8px; border-bottom:1px solid #ddd;"><strong>${escapeHtml(serv.descripcion)}</strong></td><td style="padding:8px; text-align:center;">1</td><td style="padding:8px; text-align:right;">Bs. ${serv.precio.toFixed(2)}</td><td style="padding:8px; text-align:right;">Bs. ${serv.precio.toFixed(2)}</td></tr>`;
+        }
+    });
+    html += `</tbody></table>`;
+    return html;
+}
+
+function abrirEditorServicios() {
+    renderEditorServicios();
+    abrirModal('modalEditorServicios');
+}
+
+function subirFirmaDigital() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            firmaBase64 = event.target.result;
+            showToast('Firma cargada exitosamente', 'success');
+            if (quillEditor) insertarTextoRapido('firma');
+        };
+        reader.readAsDataURL(file);
+    };
+    input.click();
+}
+
+async function guardarBorradorCotizacion() {
+    if (!quillEditor || !currentOrdenData) {
+        showToast('No hay datos para guardar', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/guardar-cotizacion`, {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({
-                id_orden: id_orden,
-                servicios: serviciosConSugerencias,
-                sugerencias_generales: sugerenciasGenerales
+                id_orden: currentOrdenData.id_orden,
+                contenido_html: quillEditor.root.innerHTML,
+                servicios: serviciosActuales,
+                firma_base64: firmaBase64 || '',
+                notas: document.getElementById('notasAdicionales')?.value || ''
             })
         });
-        
         const data = await response.json();
-        
+        if (data.success) {
+            showToast('Borrador guardado correctamente', 'success');
+        } else {
+            showToast(data.error || 'Error al guardar', 'error');
+        }
+    } catch (error) {
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+async function enviarCotizacionCliente() {
+    if (!quillEditor || !currentOrdenData) {
+        showToast('No hay datos para enviar', 'warning');
+        return;
+    }
+    
+    if (!confirm('¿Confirmas enviar esta cotización al cliente?')) return;
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/enviar-cotizacion`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                id_orden: currentOrdenData.id_orden,
+                contenido_html: quillEditor.root.innerHTML,
+                servicios: serviciosActuales,
+                firma_base64: firmaBase64 || '',
+                notas: document.getElementById('notasAdicionales')?.value || ''
+            })
+        });
+        const data = await response.json();
         if (data.success) {
             showToast('Cotización enviada al cliente exitosamente', 'success');
             cerrarModal('modalGenerarCotizacion');
-            await cargarDatosIniciales();
+            await cargarOrdenesConServicios();
+            await cargarCotizacionesEnviadas();
         } else {
-            showToast(data.error || 'Error al enviar cotización', 'error');
+            showToast(data.error || 'Error al enviar', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
         showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
     }
 }
 
-async function verDetalleCotizacion(id_cotizacion) {
+// =====================================================
+// VISTA PREVIA Y PDF
+// =====================================================
+
+function verVistaPrevia() {
+    if (!quillEditor) {
+        showToast('No hay contenido para previsualizar', 'warning');
+        return;
+    }
+    
+    const contenido = quillEditor.root.innerHTML;
+    const ventana = window.open('', '_blank');
+    ventana.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Vista Previa Cotización</title>
+            <style>
+                body { font-family: 'Times New Roman', Arial, sans-serif; padding: 40px; background: #e0e0e0; margin: 0; }
+                .preview { max-width: 900px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+                h1 { color: #C1121F; text-align: center; }
+                h2 { color: #C1121F; border-left: 4px solid #C1121F; padding-left: 10px; }
+                table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+                th { background: #C1121F; color: white; padding: 8px; }
+                td { border-bottom: 1px solid #ddd; padding: 8px; }
+                .firma { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #ccc; }
+                @media print {
+                    body { background: white; padding: 0; }
+                    .preview { padding: 20px; box-shadow: none; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="preview">${contenido}</div>
+            <div style="text-align: center; margin-top: 20px;">
+                <button onclick="window.print()" style="background: #C1121F; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">🖨️ Imprimir / Guardar PDF</button>
+                <button onclick="window.close()" style="background: #666; color: white; border: none; padding: 10px 20px; border-radius: 5px; margin-left: 10px; cursor: pointer;">✖️ Cerrar</button>
+            </div>
+        </body>
+        </html>
+    `);
+    ventana.document.close();
+}
+
+async function exportarPDF() {
+    if (!quillEditor) {
+        showToast('No hay contenido para exportar', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/detalle-cotizacion/${id_cotizacion}`, {
-            headers: getAuthHeaders()
-        });
+        const contenido = quillEditor.root.innerHTML;
+        const element = document.createElement('div');
+        element.innerHTML = `
+            <div style="padding: 40px; font-family: 'Times New Roman', Arial, sans-serif; max-width: 900px; margin: 0 auto;">
+                ${contenido}
+            </div>
+        `;
+        document.body.appendChild(element);
         
-        const data = await response.json();
+        const opt = {
+            margin: [0.5, 0.5, 0.5, 0.5],
+            filename: `Cotizacion_${currentOrdenData?.codigo_unico || currentOrdenData?.id_orden || 'orden'}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, letterRendering: true },
+            jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+        };
         
-        if (data.success) {
-            const d = data.detalle;
-            const container = document.getElementById('detalleCotizacionContainer');
-            
-            container.innerHTML = `
-                <div class="orden-info-card">
-                    <p><strong>Orden:</strong> ${escapeHtml(d.orden_codigo)}</p>
-                    <p><strong>Vehículo:</strong> ${escapeHtml(d.vehiculo)}</p>
-                    <p><strong>Fecha:</strong> ${formatDate(d.fecha_generacion)}</p>
-                    <p><strong>Estado:</strong> ${statusBadge(d.estado_cliente)}</p>
-                    <p><strong>Total:</strong> Bs. ${d.total?.toFixed(2)}</p>
-                </div>
-                <h4 style="margin: 1rem 0; color: var(--blanco);">Servicios</h4>
-                ${d.servicios.map(s => `
-                    <div class="servicio-item">
-                        <div class="servicio-descripcion">
-                            <strong>${escapeHtml(s.descripcion)}</strong>
-                            ${s.items && s.items.length > 0 ? `
-                                <div style="font-size: 0.7rem; margin-top: 0.25rem;">
-                                    ${s.items.map(item => `• ${item.cantidad}x ${escapeHtml(item.descripcion)}`).join('<br>')}
-                                </div>
-                            ` : ''}
-                        </div>
-                        <div class="servicio-precio">
-                            Bs. ${s.precio?.toFixed(2)}
-                            ${s.aprobado_por_cliente ? 
-                                '<span class="status-badge status-aprobado" style="margin-left: 0.5rem;"><i class="fas fa-check"></i> Aprobado</span>' : 
-                                '<span class="status-badge status-pendiente" style="margin-left: 0.5rem;"><i class="fas fa-clock"></i> Pendiente</span>'}
-                        </div>
-                    </div>
-                `).join('')}
-            `;
-            
-            abrirModal('modalDetalleCotizacion');
-        } else {
-            showToast(data.error || 'Error al cargar detalle', 'error');
-        }
+        await html2pdf().set(opt).from(element).save();
+        document.body.removeChild(element);
+        showToast('PDF generado exitosamente', 'success');
     } catch (error) {
         console.error('Error:', error);
-        showToast('Error de conexión', 'error');
+        showToast('Error al generar PDF', 'error');
+    } finally {
+        mostrarLoading(false);
     }
 }
 
 // =====================================================
-// ACCIONES - SOLICITUDES DE COMPRA
+// SOLICITUDES DE COMPRA
 // =====================================================
 
-async function solicitarCompraDesdeCotizacion(id_solicitud_cotizacion) {
-    const solicitud = solicitudesCotizacion.find(s => s.id === id_solicitud_cotizacion);
+async function solicitarCompraDesdeCotizacion(id_solicitud) {
+    const solicitud = solicitudesCotizacion.find(s => s.id === id_solicitud);
     if (!solicitud) return;
     
     limpiarItemsCompra();
-    
-    // Pre-cargar el item principal
     if (solicitud.descripcion_pieza) {
-        itemsCompra.push({
-            descripcion: solicitud.descripcion_pieza,
-            cantidad: solicitud.cantidad || 1,
-            detalle: ''
-        });
+        itemsCompra.push({ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad || 1, detalle: '' });
         renderItemsCompra();
     }
     
-    window.currentCompraData = { id_solicitud_cotizacion: id_solicitud_cotizacion };
-    
-    const infoContainer = document.getElementById('solicitudCompraInfo');
-    infoContainer.innerHTML = `
+    window.currentCompraData = { id_solicitud_cotizacion: id_solicitud };
+    document.getElementById('solicitudCompraInfo').innerHTML = `
         <p><strong>Orden:</strong> ${escapeHtml(solicitud.orden_codigo)}</p>
         <p><strong>Vehículo:</strong> ${escapeHtml(solicitud.vehiculo)}</p>
-        <p><strong>Servicio:</strong> ${escapeHtml(solicitud.servicio_descripcion || '-')}</p>
         <p><strong>Precio cotizado:</strong> ${solicitud.precio_cotizado ? `Bs. ${solicitud.precio_cotizado.toFixed(2)}` : 'No especificado'}</p>
     `;
-    
     abrirModal('modalSolicitarCompra');
 }
 
 async function confirmarSolicitudCompra() {
     if (!window.currentCompraData) return;
     
-    // Validar items
     const itemsValidos = itemsCompra.filter(item => item.descripcion && item.descripcion.trim() !== '');
     if (itemsValidos.length === 0) {
-        showToast('Agregue al menos un item con descripción', 'error');
+        showToast('Agregue al menos un item', 'error');
         return;
     }
     
-    const mensaje = document.getElementById('compra_mensaje')?.value || '';
-    
+    mostrarLoading(true);
     try {
         const response = await fetch(`${API_URL}/solicitudes-compra`, {
             method: 'POST',
@@ -988,291 +1082,181 @@ async function confirmarSolicitudCompra() {
             body: JSON.stringify({
                 id_solicitud_cotizacion: window.currentCompraData.id_solicitud_cotizacion,
                 items: itemsValidos,
-                mensaje: mensaje
+                mensaje: document.getElementById('compra_mensaje')?.value || ''
             })
         });
-        
         const data = await response.json();
-        
         if (data.success) {
             showToast('Solicitud de compra creada exitosamente', 'success');
             cerrarModal('modalSolicitarCompra');
             limpiarItemsCompra();
-            document.getElementById('compra_mensaje').value = '';
-            await cargarDatosIniciales();
+            await cargarSolicitudesCompra();
         } else {
-            showToast(data.error || 'Error al crear solicitud de compra', 'error');
+            showToast(data.error || 'Error al crear solicitud', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
         showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
     }
 }
 
 async function verSolicitudCompra(id) {
     const solicitud = solicitudesCompra.find(s => s.id === id);
-    if (!solicitud) return;
-    
-    let itemsHtml = '';
-    if (solicitud.items && solicitud.items.length > 0) {
-        itemsHtml = solicitud.items.map(item => `
-            <div class="servicio-item" style="margin-top: 0.5rem;">
-                <div class="servicio-descripcion">
-                    <strong>${escapeHtml(item.descripcion)}</strong>
-                    ${item.detalle ? `<br><small>${escapeHtml(item.detalle)}</small>` : ''}
-                </div>
-                <div class="servicio-precio">Cantidad: ${item.cantidad}</div>
-            </div>
-        `).join('');
+    if (solicitud) {
+        showToast(`Solicitud #${id} - Estado: ${solicitud.estado}`, 'info');
     }
-    
-    showToast(`
-        Solicitud #${solicitud.id}
-        Pieza: ${solicitud.descripcion_pieza}
-        Estado: ${solicitud.estado}
-        ${itemsHtml}
-    `, 'info');
 }
 
 async function aprobarCompra(id) {
-    if (!confirm('¿Confirmas que esta compra se ha realizado?')) return;
-    
+    if (!confirm('¿Confirmar que la compra se realizó?')) return;
+    mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/solicitudes-compra/${id}/aprobar`, {
-            method: 'PUT',
-            headers: getAuthHeaders()
-        });
-        
+        const response = await fetch(`${API_URL}/solicitudes-compra/${id}/aprobar`, { method: 'PUT', headers: getAuthHeaders() });
         const data = await response.json();
-        
         if (data.success) {
             showToast('Compra registrada exitosamente', 'success');
-            await cargarDatosIniciales();
+            await cargarSolicitudesCompra();
         } else {
-            showToast(data.error || 'Error al registrar compra', 'error');
+            showToast(data.error || 'Error al registrar', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
         showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+async function verDetalleCotizacion(id_cotizacion) {
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/detalle-cotizacion/${id_cotizacion}`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        if (data.success) {
+            const d = data.detalle;
+            const container = document.getElementById('detalleCotizacionContainer');
+            container.innerHTML = `
+                <div class="orden-info-card">
+                    <p><strong>Orden:</strong> ${escapeHtml(d.orden_codigo)}</p>
+                    <p><strong>Cliente:</strong> ${escapeHtml(d.cliente_nombre)}</p>
+                    <p><strong>Vehículo:</strong> ${escapeHtml(d.vehiculo_marca)} ${escapeHtml(d.vehiculo_modelo)} - ${escapeHtml(d.vehiculo_placa)}</p>
+                    <p><strong>Fecha Envío:</strong> ${formatDate(d.fecha_envio)}</p>
+                </div>
+                <h4>Servicios</h4>
+                ${d.servicios.map(s => `<div class="servicio-item"><div class="servicio-descripcion"><strong>${escapeHtml(s.descripcion)}</strong></div><div class="servicio-precio">Bs. ${s.precio?.toFixed(2)} ${s.aprobado_por_cliente ? '✅ Aprobado' : '⏳ Pendiente'}</div></div>`).join('')}
+            `;
+            abrirModal('modalDetalleCotizacion');
+        } else {
+            showToast('Error al cargar detalle', 'error');
+        }
+    } catch (error) {
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
     }
 }
 
 // =====================================================
-// EVENTOS Y TABS
+// EVENTOS Y AUTENTICACIÓN
 // =====================================================
 
 function setupEventListeners() {
-    // Botones principales
-    const btnNueva = document.getElementById('btnNuevaSolicitudCotizacion');
-    if (btnNueva) btnNueva.addEventListener('click', () => {
-        limpiarItemsSolicitud();
-        abrirModal('modalSolicitudCotizacion');
+    document.getElementById('saveSolicitudModal')?.addEventListener('click', () => {
+        showToast('Función en desarrollo', 'info');
     });
+    document.getElementById('guardarBorradorBtn')?.addEventListener('click', guardarBorradorCotizacion);
+    document.getElementById('enviarCotizacionBtn')?.addEventListener('click', enviarCotizacionCliente);
+    document.getElementById('verVistaPreviaBtn')?.addEventListener('click', verVistaPrevia);
+    document.getElementById('exportarPDFPreviaBtn')?.addEventListener('click', exportarPDF);
+    document.getElementById('confirmarSolicitudCompra')?.addEventListener('click', confirmarSolicitudCompra);
+    document.getElementById('btnAgregarItemCompra')?.addEventListener('click', agregarItemCompra);
+    document.getElementById('btnAgregarServicio')?.addEventListener('click', agregarServicio);
+    document.getElementById('guardarServiciosBtn')?.addEventListener('click', guardarServiciosEditados);
+    document.getElementById('refreshOrdenesBtn')?.addEventListener('click', () => cargarOrdenesConServicios());
     
-    const saveBtn = document.getElementById('saveSolicitudModal');
-    if (saveBtn) saveBtn.addEventListener('click', crearSolicitudCotizacion);
-    
-    const enviarBtn = document.getElementById('confirmarEnvioCotizacion');
-    if (enviarBtn) enviarBtn.addEventListener('click', enviarCotizacionCliente);
-    
-    const confirmarBtn = document.getElementById('confirmarSolicitudCompra');
-    if (confirmarBtn) confirmarBtn.addEventListener('click', confirmarSolicitudCompra);
-    
-    // Botones para agregar items
-    const btnAgregarItemSolicitud = document.getElementById('btnAgregarItemSolicitud');
-    if (btnAgregarItemSolicitud) btnAgregarItemSolicitud.addEventListener('click', agregarItemSolicitud);
-    
-    const btnAgregarItemCompra = document.getElementById('btnAgregarItemCompra');
-    if (btnAgregarItemCompra) btnAgregarItemCompra.addEventListener('click', agregarItemCompra);
-    
-    // Refresh buttons
-    const refreshBtns = ['refreshSolicitudes', 'refreshServicios', 'refreshCompras'];
-    refreshBtns.forEach(id => {
+    const refreshBtns = ['refreshSolicitudes', 'refreshCompras'];
+    refreshBtns.forEach(id => { 
         const btn = document.getElementById(id);
-        if (btn) {
-            btn.addEventListener('click', async () => {
-                showToast('Actualizando datos...', 'info');
-                await cargarDatosIniciales();
-            });
-        }
+        if (btn) btn.addEventListener('click', () => cargarDatosIniciales());
     });
     
-    // Logout
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) logoutBtn.addEventListener('click', logout);
+    const searchOrden = document.getElementById('searchOrden');
+    if (searchOrden) searchOrden.addEventListener('input', () => renderOrdenes());
     
-    // Cerrar modales al hacer click fuera
     document.querySelectorAll('.modal').forEach(modal => {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.classList.remove('show');
-        });
-    });
-    
-    // Cargar servicios al seleccionar orden
-    const selectOrden = document.getElementById('solicitud_id_orden_trabajo');
-    if (selectOrden) {
-        selectOrden.addEventListener('change', async (e) => {
-            const id_orden = e.target.value;
-            if (id_orden) {
-                try {
-                    const response = await fetch(`${API_URL}/servicios-por-orden/${id_orden}`, {
-                        headers: getAuthHeaders()
-                    });
-                    const data = await response.json();
-                    if (data.success) {
-                        const selectServicio = document.getElementById('solicitud_id_servicio');
-                        selectServicio.innerHTML = '<option value="">Seleccionar servicio</option>' +
-                            data.servicios.map(s => `<option value="${s.id}">${escapeHtml(s.descripcion)}</option>`).join('');
-                    }
-                } catch (error) {
-                    console.error('Error cargando servicios:', error);
-                }
-            }
-        });
-    }
-    
-    // Filtros
-    const filtros = ['filtroOrdenSolicitud', 'filtroEstadoSolicitud', 'searchSolicitud',
-                     'filtroOrdenServicio', 'searchServicio', 'filtroOrdenCompra', 'filtroEstadoCompra', 'searchCompra'];
-    filtros.forEach(id => {
-        const elemento = document.getElementById(id);
-        if (elemento) {
-            elemento.addEventListener('change', () => {
-                Promise.all([cargarSolicitudesCotizacion(), cargarSolicitudesCompra()]);
-                renderSolicitudesCotizacion();
-                renderSolicitudesCompra();
-            });
-            if (elemento.tagName === 'INPUT' && elemento.type !== 'checkbox' && elemento.type !== 'radio') {
-                elemento.addEventListener('input', () => {
-                    renderSolicitudesCotizacion();
-                    renderSolicitudesCompra();
-                });
-            }
-        }
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
     });
 }
 
 function setupTabs() {
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    
-    if (tabBtns.length === 0) return;
-    
-    tabBtns.forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
             const tabId = this.getAttribute('data-tab');
-            
-            if (!tabId) return;
-            
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            
             this.classList.add('active');
-            const targetContent = document.getElementById(tabId);
-            if (targetContent) targetContent.classList.add('active');
+            document.getElementById(tabId)?.classList.add('active');
         });
     });
 }
 
-// =====================================================
-// AUTENTICACIÓN Y LOGOUT
-// =====================================================
-
 async function cargarUsuarioActual() {
     try {
-        let token = localStorage.getItem('furia_token');
-        if (!token) token = localStorage.getItem('token');
-        
-        if (!token) {
-            window.location.href = '/';
-            return null;
+        let token = localStorage.getItem('furia_token') || localStorage.getItem('token');
+        if (!token) { 
+            window.location.href = '/'; 
+            return null; 
         }
-        
         const payload = JSON.parse(atob(token.split('.')[1]));
-        
-        let userData = null;
-        try {
-            const userStr = localStorage.getItem('furia_user');
-            if (userStr) userData = JSON.parse(userStr);
-        } catch (e) {}
-        
-        currentUser = {
-            id: payload.user?.id || payload.id || payload.user_id || userData?.id,
-            nombre: payload.user?.nombre || payload.nombre || userData?.nombre || 'Usuario',
-            email: payload.user?.email || payload.email || userData?.email,
-            roles: payload.user?.roles || payload.roles || userData?.roles || [],
-            rol_principal: payload.user?.rol_principal || payload.rol_principal || userData?.rol_principal
+        const userData = JSON.parse(localStorage.getItem('furia_user') || '{}');
+        currentUser = { 
+            id: payload.user?.id || payload.id || userData?.id, 
+            nombre: payload.user?.nombre || payload.nombre || userData?.nombre || 'Usuario', 
+            roles: payload.user?.roles || payload.roles || userData?.roles || [] 
         };
+        currentUserRoles = currentUser.roles || [];
         
-        if (currentUser.roles && Array.isArray(currentUser.roles)) {
-            currentUserRoles = currentUser.roles;
-        } else if (currentUser.rol_principal) {
-            currentUserRoles = [currentUser.rol_principal];
+        const tieneRolJefeTaller = currentUserRoles.some(rol => 
+            rol === 'jefe_taller' || rol === 'jefe_taller_principal' || rol === 'admin'
+        );
+        
+        if (!tieneRolJefeTaller) { 
+            showToast('No tienes permisos para acceder a esta sección', 'error'); 
+            setTimeout(() => { window.location.href = '/'; }, 2000); 
+            return null; 
         }
         
-        const tieneRolJefeTaller = currentUserRoles.includes('jefe_taller') || 
-                                    currentUser.rol_principal === 'jefe_taller';
-        
-        if (!tieneRolJefeTaller) {
-            console.warn('Usuario no tiene rol de jefe_taller', currentUserRoles);
-            showToast('No tienes permisos para acceder a esta sección', 'error');
-            setTimeout(() => {
-                window.location.href = '/';
-            }, 2000);
-            return null;
-        }
-        
-        // Mostrar nombre de usuario
-        const userNombreSpan = document.getElementById('userNombre');
-        if (userNombreSpan) {
-            userNombreSpan.textContent = currentUser.nombre || 'Usuario';
-        }
-        
-        // Mostrar fecha actual
         const fechaElement = document.getElementById('currentDate');
         if (fechaElement) {
-            const hoy = new Date();
-            const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
-            fechaElement.textContent = hoy.toLocaleDateString('es-ES', opciones);
+            fechaElement.innerHTML = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
         }
-        
         console.log('✅ Usuario autenticado:', currentUser.nombre);
         return currentUser;
-        
-    } catch (error) {
-        console.error('Error obteniendo usuario:', error);
-        window.location.href = '/';
-        return null;
+    } catch (error) { 
+        console.error('Error al cargar usuario:', error);
+        window.location.href = '/'; 
+        return null; 
     }
 }
 
-function logout() {
-    localStorage.removeItem('furia_token');
-    localStorage.removeItem('furia_user');
-    localStorage.removeItem('token');
-    sessionStorage.removeItem('token');
-    window.location.href = '/';
+function logout() { 
+    localStorage.clear(); 
+    sessionStorage.clear(); 
+    window.location.href = '/'; 
 }
 
-// =====================================================
-// INICIALIZACIÓN
-// =====================================================
-
 async function inicializar() {
-    console.log('🚀 Inicializando cotizaciones.js');
-    
+    console.log('🚀 Inicializando cotizaciones.js versión profesional');
     const user = await cargarUsuarioActual();
     if (!user) return;
-    
     await cargarDatosIniciales();
     setupTabs();
     setupEventListeners();
-    
     console.log('✅ cotizaciones.js inicializado correctamente');
 }
 
 // Exponer funciones globales
-window.eliminarSolicitud = eliminarSolicitud;
+window.eliminarSolicitudCotizacion = eliminarSolicitudCotizacion;
 window.solicitarCompraDesdeCotizacion = solicitarCompraDesdeCotizacion;
 window.abrirModalGenerarCotizacion = abrirModalGenerarCotizacion;
 window.verDetalleCotizacion = verDetalleCotizacion;
@@ -1286,5 +1270,18 @@ window.actualizarItemSolicitud = actualizarItemSolicitud;
 window.eliminarItemSolicitud = eliminarItemSolicitud;
 window.actualizarItemCompra = actualizarItemCompra;
 window.eliminarItemCompra = eliminarItemCompra;
+window.insertarTextoRapido = insertarTextoRapido;
+window.toggleServicioEditable = toggleServicioEditable;
+window.actualizarServicio = actualizarServicio;
+window.agregarItemServicio = agregarItemServicio;
+window.actualizarItemServicio = actualizarItemServicio;
+window.eliminarItemServicio = eliminarItemServicio;
+window.eliminarServicio = eliminarServicio;
+window.editarServicioCotizacion = editarServicioCotizacion;
+window.editarServiciosOrden = editarServiciosOrden;
+window.abrirEditorServicios = abrirEditorServicios;
+window.subirFirmaDigital = subirFirmaDigital;
+window.limpiarEditor = limpiarEditor;
+window.exportarPDF = exportarPDF;
 
 document.addEventListener('DOMContentLoaded', inicializar);

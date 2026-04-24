@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reservas y Solicitudes | FURIA MOTOR - Jefe Taller</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- FullCalendar CSS (solo vista mensual) -->
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css' rel='stylesheet' />
+
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Estilos -->
+    <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_taller/css/reservas_solicitudes.css">
+
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-calendar-check"></i> Reservas y Solicitudes</h1>
+                    <p>Gestiona las solicitudes de los clientes y administra el calendario de reservas</p>
+                </div>
+                <div class="top-actions">
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificacionesCount">0</span>
+                    </div>
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content">
+                <!-- Pestañas -->
+                <div class="tabs-container">
+                    <button class="tab-btn active" data-tab="solicitudes">
+                        <i class="fas fa-envelope"></i> Solicitudes de Clientes
+                        <span id="solicitudesPendientesBadge" class="badge-pendiente" style="display: none;">0</span>
+                    </button>
+                    <button class="tab-btn" data-tab="calendario">
+                        <i class="fas fa-calendar-alt"></i> Calendario de Reservas
+                    </button>
+                    <button class="tab-btn" data-tab="nueva-reserva">
+                        <i class="fas fa-plus-circle"></i> Nueva Reserva Manual
+                    </button>
+                </div>
+
+                <!-- Tab: Solicitudes de Clientes -->
+                <div id="tab-solicitudes" class="tab-content active">
+                    <div class="solicitudes-header">
+                        <div class="filtro-solicitudes">
+                            <select id="filtroEstadoSolicitud">
+                                <option value="todos">Todos los estados</option>
+                                <option value="pendiente">Pendientes</option>
+                                <option value="confirmada">Confirmadas</option>
+                                <option value="cancelada">Canceladas</option>
+                                <option value="completada">Completadas</option>
+                            </select>
+                        </div>
+                        <button class="btn-refresh" id="btnRefreshSolicitudes">
+                            <i class="fas fa-sync-alt"></i> Actualizar
+                        </button>
+                    </div>
+                    <div class="solicitudes-lista" id="solicitudesLista">
+                        <div class="loading-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Cargando solicitudes...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Calendario -->
+                <div id="tab-calendario" class="tab-content">
+                    <div class="calendario-container">
+                        <div class="calendario-filtros">
+                            <div class="filtro-grupo">
+                                <label><i class="fas fa-filter"></i> Filtrar por estado:</label>
+                                <select id="filtroEstadoReserva">
+                                    <option value="todos">Todos</option>
+                                    <option value="pendiente">Pendientes</option>
+                                    <option value="confirmada">Confirmadas</option>
+                                    <option value="cancelada">Canceladas</option>
+                                    <option value="completada">Completadas</option>
+                                </select>
+                            </div>
+                            <button class="btn-refresh" id="btnRefreshCalendario">
+                                <i class="fas fa-sync-alt"></i> Actualizar
+                            </button>
+                        </div>
+                        <div id="calendario"></div>
+                    </div>
+                </div>
+
+                <!-- Tab: Nueva Reserva Manual -->
+                <div id="tab-nueva-reserva" class="tab-content">
+                    <div class="form-container">
+                        <h3><i class="fas fa-calendar-plus"></i> Crear nueva reserva manual</h3>
+                        <form id="formNuevaReserva">
+                            <div class="form-grid">
+                                <div class="form-group full-width">
+                                    <label><i class="fas fa-user"></i> Cliente *</label>
+                                    <div style="display: flex; gap: 0.75rem;">
+                                        <select id="reservaCliente" class="form-input" required style="flex: 1;">
+                                            <option value="">Seleccionar cliente...</option>
+                                        </select>
+                                        <button type="button" class="btn-secondary" id="btnNuevoCliente" style="padding: 0.75rem 1.25rem; white-space: nowrap;">
+                                            <i class="fas fa-plus"></i> Nuevo Cliente
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="form-group full-width">
+                                    <label><i class="fas fa-car"></i> Vehículo *</label>
+                                    <select id="reservaVehiculo" class="form-input" required disabled>
+                                        <option value="">Primero selecciona un cliente</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-calendar-day"></i> Fecha *</label>
+                                    <input type="date" id="reservaFecha" class="form-input" required>
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-clock"></i> Hora *</label>
+                                    <input type="time" id="reservaHora" class="form-input" required>
+                                </div>
+                                <div class="form-group full-width">
+                                    <label><i class="fas fa-stethoscope"></i> Descripción del problema *</label>
+                                    <textarea id="reservaProblema" rows="4" class="form-input" placeholder="Describe el problema que presenta el vehículo..." required></textarea>
+                                </div>
+                                <div class="form-group full-width">
+                                    <label><i class="fas fa-comment"></i> Notas adicionales</label>
+                                    <textarea id="reservaNotas" rows="2" class="form-input" placeholder="Notas adicionales para el taller..."></textarea>
+                                </div>
+                            </div>
+                            <div class="form-buttons">
+                                <button type="submit" class="btn-primary">
+                                    <i class="fas fa-save"></i> Guardar Reserva
+                                </button>
+                                <button type="button" class="btn-secondary" id="btnLimpiarForm">
+                                    <i class="fas fa-eraser"></i> Limpiar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal para ver detalle de solicitud/reserva -->
+    <div class="modal" id="modalSolicitud">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-calendar-check"></i> <span id="modalTitulo">Detalle de Solicitud</span></h2>
+                <button class="modal-close" onclick="cerrarModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer" id="modalFooter">
+                <button class="btn-secondary" onclick="cerrarModal()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para registrar nuevo cliente -->
+    <div class="modal" id="modalNuevoCliente">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2><i class="fas fa-user-plus"></i> Registrar Nuevo Cliente</h2>
+                <button class="modal-close" onclick="cerrarModalNuevoCliente()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="formNuevoCliente">
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Nombre completo *</label>
+                        <input type="text" id="nuevoClienteNombre" class="form-input" required placeholder="Ej: Juan Pérez">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-envelope"></i> Email *</label>
+                        <input type="email" id="nuevoClienteEmail" class="form-input" required placeholder="cliente@ejemplo.com">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-phone"></i> Teléfono / Contacto *</label>
+                        <input type="text" id="nuevoClienteContacto" class="form-input" required placeholder="Ej: 70000000">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-map-marker-alt"></i> Ubicación / Dirección</label>
+                        <input type="text" id="nuevoClienteUbicacion" class="form-input" placeholder="Ej: Zona Central, Calle #123">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-car"></i> Placa del vehículo *</label>
+                        <input type="text" id="nuevoClientePlaca" class="form-input" required placeholder="Ej: 123ABC" style="text-transform: uppercase;">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-car"></i> Marca del vehículo</label>
+                        <input type="text" id="nuevoClienteMarca" class="form-input" placeholder="Ej: Toyota">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-car"></i> Modelo del vehículo</label>
+                        <input type="text" id="nuevoClienteModelo" class="form-input" placeholder="Ej: Corolla">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar"></i> Año del vehículo</label>
+                        <input type="number" id="nuevoClienteAnio" class="form-input" placeholder="Ej: 2020">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalNuevoCliente()">Cancelar</button>
+                <button class="btn-primary" onclick="registrarNuevoCliente()">
+                    <i class="fas fa-save"></i> Registrar Cliente
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/locales/es.global.min.js"></script>
+    <script src="/jefe_taller/js/include.js"></script>
+    <script src="/jefe_taller/js/reservas_solicitudes.js"></script>
+</body>
+
+</html>

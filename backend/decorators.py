@@ -1,5 +1,5 @@
 # =====================================================
-# backend/decorators.py (VERSIÓN CORREGIDA)
+# backend/decorators.py (VERSIÓN CORREGIDA CON CLIENTE)
 # =====================================================
 
 from functools import wraps
@@ -40,11 +40,11 @@ def obtener_roles_usuario(usuario_id):
                     nombre = rol_obj.get('nombre_rol')
                     if nombre:
                         # Normalizar nombre de rol
-                        if nombre in ['jefe_taller', 'jefe_operativo', 'tecnico', 'encargado_repuestos']:
+                        if nombre in ['jefe_taller', 'jefe_operativo', 'tecnico', 'encargado_repuestos', 'cliente']:
                             roles.append(nombre)
                 elif isinstance(rol_obj, list) and len(rol_obj) > 0:
                     nombre = rol_obj[0].get('nombre_rol')
-                    if nombre and nombre in ['jefe_taller', 'jefe_operativo', 'tecnico', 'encargado_repuestos']:
+                    if nombre and nombre in ['jefe_taller', 'jefe_operativo', 'tecnico', 'encargado_repuestos', 'cliente']:
                         roles.append(nombre)
     except Exception as e:
         logger.debug(f"Error consultando roles: {e}")
@@ -89,7 +89,7 @@ def verificar_rol(roles_permitidos):
                 if not roles_usuario:
                     roles_token = current_user.get('roles', [])
                     if roles_token:
-                        roles_usuario = [r for r in roles_token if r in ['jefe_taller', 'jefe_operativo', 'tecnico', 'encargado_repuestos']]
+                        roles_usuario = [r for r in roles_token if r in ['jefe_taller', 'jefe_operativo', 'tecnico', 'encargado_repuestos', 'cliente']]
                 
                 # Verificar si tiene al menos un rol permitido
                 tiene_rol = any(rol in roles_usuario for rol in roles_permitidos)
@@ -126,5 +126,13 @@ def tecnico_required(f):
 def encargado_repuestos_required(f):
     return verificar_rol(['encargado_repuestos'])(f)
 
+def cliente_required(f):
+    """Decorador para verificar que el usuario tiene rol de cliente"""
+    return verificar_rol(['cliente'])(f)
+
 def jefe_taller_o_operativo_required(f):
-    return verificar_rol(['jefe_taller', 'jefe_operativo'])(f)  
+    return verificar_rol(['jefe_taller', 'jefe_operativo'])(f)
+
+def admin_required(f):
+    """Decorador para verificar que el usuario tiene rol de administrador"""
+    return verificar_rol(['admin'])(f)

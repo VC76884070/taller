@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # =====================================================
 # BLUEPRINT - NOMBRE CORREGIDO
 # =====================================================
-tecnico_mecanico_perfil_bp = Blueprint('tecnico_mecanico_perfil', __name__, url_prefix='/tecnico')
+tecnico_mecanico_perfil_bp = Blueprint('tecnico_mecanico_perfil', __name__)  # Sin url_prefix
 
 # Configuración
 SECRET_KEY = config.SECRET_KEY

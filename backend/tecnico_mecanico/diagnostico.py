@@ -17,7 +17,7 @@ import tempfile
 
 logger = logging.getLogger(__name__)
 
-diagnostico_bp = Blueprint('diagnostico', __name__, url_prefix='/tecnico')
+diagnostico_bp = Blueprint('diagnostico', __name__) 
 
 # Configuración
 SECRET_KEY = config.SECRET_KEY

@@ -15,7 +15,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
-mis_vehiculos_bp = Blueprint('mis_vehiculos', __name__, url_prefix='/tecnico')
+mis_vehiculos_bp = Blueprint('tecnico_misvehiculos', __name__)  # Sin url_prefix, porque se pondrá en app.py
 
 SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase

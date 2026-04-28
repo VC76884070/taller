@@ -12,7 +12,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-historial_bp = Blueprint('historial', __name__, url_prefix='/tecnico')
+historial_bp = Blueprint('historial', __name__)
 
 # Configuración
 SECRET_KEY = config.SECRET_KEY

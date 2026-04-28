@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial | Cliente - FURIA MOTOR</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <link rel="stylesheet" href="css/misvehiculos.css">
+    <link rel="stylesheet" href="css/historial.css">
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <div class="top-bar">
+                <div class="page-title">
+                    <h1>Historial de Servicios</h1>
+                    <p>Consulta el historial completo de reparaciones de tus vehículos</p>
+                </div>
+                <div class="top-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pestañas de historial -->
+            <div class="historial-tabs">
+                <button class="tab-btn-historial active" data-tab="vehiculos">
+                    <i class="fas fa-car"></i> Mis Vehículos
+                </button>
+                <button class="tab-btn-historial" data-tab="servicios">
+                    <i class="fas fa-tools"></i> Servicios Realizados
+                </button>
+                <button class="tab-btn-historial" data-tab="estadisticas">
+                    <i class="fas fa-chart-line"></i> Estadísticas
+                </button>
+                <button class="tab-btn-historial" data-tab="documentos">
+                    <i class="fas fa-file-alt"></i> Documentos
+                </button>
+            </div>
+
+            <!-- Tab Vehículos -->
+            <div id="tab-vehiculos" class="tab-historial active">
+                <div class="filtros-bar">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchVehiculo" placeholder="Buscar por placa o modelo...">
+                    </div>
+                    <button id="refreshVehiculos" class="btn-secondary">
+                        <i class="fas fa-sync-alt"></i> Actualizar
+                    </button>
+                </div>
+                <div id="vehiculosList" class="vehiculos-historial">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Tab Servicios Realizados -->
+            <div id="tab-servicios" class="tab-historial">
+                <div class="filtros-bar">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchServicio" placeholder="Buscar por orden o vehículo...">
+                    </div>
+                    <select id="filtroAnio">
+                        <option value="all">Todos los años</option>
+                    </select>
+                    <button id="refreshServicios" class="btn-secondary">
+                        <i class="fas fa-sync-alt"></i> Actualizar
+                    </button>
+                    <button id="exportarServicios" class="btn-primary">
+                        <i class="fas fa-download"></i> Exportar
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Orden</th>
+                                <th>Vehículo</th>
+                                <th>Servicios</th>
+                                <th>Monto Total</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="serviciosList">
+                            <!-- Datos dinámicos -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="paginationServicios">
+                    <!-- Paginación dinámica -->
+                </div>
+            </div>
+
+            <!-- Tab Estadísticas -->
+            <div id="tab-estadisticas" class="tab-historial">
+                <div class="stats-grid">
+                    <div class="stats-card">
+                        <h3><i class="fas fa-chart-pie"></i> Resumen General</h3>
+                        <div class="stats-summary">
+                            <div class="summary-item">
+                                <span class="summary-label">Total Servicios</span>
+                                <span class="summary-value" id="totalServicios">0</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Total Gastado</span>
+                                <span class="summary-value" id="totalGastado">Bs. 0</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Vehículos Registrados</span>
+                                <span class="summary-value" id="totalVehiculos">0</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Promedio por Servicio</span>
+                                <span class="summary-value" id="promedioServicio">Bs. 0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="stats-card">
+                        <h3><i class="fas fa-chart-line"></i> Gastos por Mes</h3>
+                        <canvas id="gastosChart" height="250"></canvas>
+                    </div>
+
+                    <div class="stats-card">
+                        <h3><i class="fas fa-chart-bar"></i> Servicios por Vehículo</h3>
+                        <canvas id="serviciosVehiculoChart" height="250"></canvas>
+                    </div>
+
+                    <div class="stats-card">
+                        <h3><i class="fas fa-chart-pie"></i> Distribución por Estado</h3>
+                        <canvas id="estadoChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Documentos -->
+            <div id="tab-documentos" class="tab-historial">
+                <div class="filtros-bar">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchDocumento" placeholder="Buscar documento...">
+                    </div>
+                    <select id="filtroTipoDocumento">
+                        <option value="all">Todos los tipos</option>
+                        <option value="cotizacion">Cotizaciones</option>
+                        <option value="factura">Facturas</option>
+                        <option value="orden">Órdenes de Trabajo</option>
+                    </select>
+                    <button id="refreshDocumentos" class="btn-secondary">
+                        <i class="fas fa-sync-alt"></i> Actualizar
+                    </button>
+                </div>
+                <div id="documentosList" class="documentos-list">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal de detalle de servicio -->
+    <div id="modalDetalleServicio" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3><i class="fas fa-clipboard-list"></i> Detalle del Servicio</h3>
+                <span class="close-modal" onclick="cerrarModal('modalDetalleServicio')">&times;</span>
+            </div>
+            <div id="modalDetalleServicioBody"></div>
+            <div class="detalle-actions">
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalleServicio')">Cerrar</button>
+                <button class="btn-primary" onclick="imprimirDetalle()">
+                    <i class="fas fa-print"></i> Imprimir
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de documentos -->
+    <div id="modalDocumento" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3 id="modalDocumentoTitulo"><i class="fas fa-file-alt"></i> Documento</h3>
+                <span class="close-modal" onclick="cerrarModal('modalDocumento')">&times;</span>
+            </div>
+            <div id="modalDocumentoBody"></div>
+            <div class="detalle-actions">
+                <button class="btn-secondary" onclick="cerrarModal('modalDocumento')">Cerrar</button>
+                <button class="btn-primary" id="btnImprimirDocumento" onclick="imprimirDocumento()">
+                    <i class="fas fa-print"></i> Imprimir
+                </button>
+                <button class="btn-primary" id="btnDescargarDocumento" onclick="descargarDocumento()">
+                    <i class="fas fa-download"></i> Descargar PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <script src="js/include.js"></script>
+    <script src="js/historial.js"></script>
+</body>
+
+</html>

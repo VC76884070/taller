@@ -1,6 +1,6 @@
 // =====================================================
 // COTIZACIONES.JS - JEFE DE TALLER
-// VERSIÓN PROFESIONAL - COMPLETA Y CORREGIDA
+// VERSIÓN SIMPLIFICADA - CON BOTONES DINÁMICOS
 // =====================================================
 
 const API_URL = window.location.origin + '/api/jefe-taller';
@@ -12,19 +12,21 @@ let ordenesAprobadas = [];
 let ordenesConServicios = [];
 let encargadosRepuestos = [];
 let solicitudesCotizacion = [];
-let cotizacionesEnviadas = [];
+let cotizacionesMap = {}; // Mapa de orden_id -> cotizacion
 let solicitudesCompra = [];
 
 // Items dinámicos
 let itemsSolicitud = [];
 let itemsCompra = [];
 
-// Editor Quill y datos
-let quillEditor = null;
-let currentCotizacionData = null;
+// Variables para archivo y servicios
+let currentFileData = null;
+let currentFileName = null;
 let currentOrdenData = null;
+let currentCotizacionId = null;
 let serviciosActuales = [];
-let firmaBase64 = null;
+let serviciosCotizables = [];
+let isEditingCotizacion = false;
 
 // =====================================================
 // FUNCIONES DE UTILIDAD
@@ -51,7 +53,7 @@ function formatDate(dateStr) {
     if (!dateStr) return '-';
     try {
         const date = new Date(dateStr);
-        return date.toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        return date.toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     } catch {
         return dateStr.split('T')[0];
     }
@@ -103,19 +105,29 @@ function statusBadge(estado) {
         'aprobado': 'status-aprobado',
         'rechazado': 'status-rechazado',
         'comprado': 'status-comprado',
-        'enviada': 'status-enviado'
+        'enviada': 'status-enviado',
+        'aprobada': 'status-aprobado',
+        'expirada': 'status-pendiente'
     };
     
     const texto = {
         'pendiente': 'Pendiente',
         'cotizado': 'Cotizado',
         'aprobado': 'Aprobado',
+        'rechazado': 'Rechazado',
         'enviada': 'Enviada',
+        'aprobada': 'Aprobada',
+        'expirada': 'Expirada',
         'comprado': 'Comprado'
     };
     
+    let icon = 'fa-clock';
+    if (estado === 'aprobado' || estado === 'aprobada' || estado === 'comprado') icon = 'fa-check-circle';
+    if (estado === 'rechazado') icon = 'fa-times-circle';
+    if (estado === 'enviada') icon = 'fa-paper-plane';
+    
     return `<span class="status-badge ${map[estado] || 'status-pendiente'}">
-        <i class="fas ${estado === 'cotizado' || estado === 'comprado' ? 'fa-check-circle' : 'fa-clock'}"></i> ${texto[estado] || estado}
+        <i class="fas ${icon}"></i> ${texto[estado] || estado}
     </span>`;
 }
 
@@ -243,17 +255,19 @@ async function cargarSolicitudesCotizacion() {
     }
 }
 
-async function cargarCotizacionesEnviadas() {
+async function cargarCotizacionesMap() {
     try {
         const response = await fetch(`${API_URL}/cotizaciones-enviadas`, { headers: getAuthHeaders() });
         const data = await response.json();
         if (data.success) {
-            cotizacionesEnviadas = data.cotizaciones || [];
-            renderCotizacionesEnviadas();
+            cotizacionesMap = {};
+            data.cotizaciones.forEach(cot => {
+                cotizacionesMap[cot.id_orden_trabajo] = cot;
+            });
         }
     } catch (error) {
         console.error('Error cargando cotizaciones:', error);
-        cotizacionesEnviadas = [];
+        cotizacionesMap = {};
     }
 }
 
@@ -305,7 +319,7 @@ async function cargarDatosIniciales() {
         await Promise.all([
             cargarOrdenesConServicios(),
             cargarSolicitudesCotizacion(),
-            cargarCotizacionesEnviadas(),
+            cargarCotizacionesMap(),
             cargarSolicitudesCompra(),
             cargarEncargadosRepuestos(),
             cargarOrdenesAprobadas()
@@ -319,7 +333,7 @@ async function cargarDatosIniciales() {
 }
 
 // =====================================================
-// RENDERIZADO DE ÓRDENES
+// RENDERIZADO DE ÓRDENES (con botones dinámicos)
 // =====================================================
 
 function renderOrdenes() {
@@ -327,8 +341,11 @@ function renderOrdenes() {
     if (!container) return;
     
     const searchTerm = document.getElementById('searchOrden')?.value.toLowerCase() || '';
+    const filtroEstado = document.getElementById('filtroEstadoCotizacion')?.value || 'all';
+    
     let filtered = [...ordenesConServicios];
     
+    // Filtrar por búsqueda
     if (searchTerm) {
         filtered = filtered.filter(o => 
             (o.codigo_unico || '').toLowerCase().includes(searchTerm) ||
@@ -337,12 +354,22 @@ function renderOrdenes() {
         );
     }
     
+    // Filtrar por estado de cotización
+    if (filtroEstado === 'pendiente') {
+        filtered = filtered.filter(o => !cotizacionesMap[o.id_orden]);
+    } else if (filtroEstado === 'enviada') {
+        filtered = filtered.filter(o => cotizacionesMap[o.id_orden]);
+    }
+    
     if (filtered.length === 0) {
         container.innerHTML = `<div class="empty-state"><i class="fas fa-clipboard-list"></i><p>No hay órdenes con servicios disponibles</p></div>`;
         return;
     }
     
-    container.innerHTML = filtered.map(orden => `
+    container.innerHTML = filtered.map(orden => {
+        const tieneCotizacion = cotizacionesMap[orden.id_orden];
+        
+        return `
         <div class="orden-card">
             <div class="orden-header">
                 <div>
@@ -367,21 +394,30 @@ function renderOrdenes() {
                         </div>
                         <div class="servicio-precio">Bs. ${serv.precio_cotizado?.toFixed(2) || '0.00'}</div>
                         <div class="action-buttons">
-                            <button class="action-btn edit" onclick="editarServicioCotizacion(${orden.id_orden}, ${serv.id_servicio})" title="Editar"><i class="fas fa-edit"></i></button>
+                            <button class="action-btn edit" onclick="editarServicioCotizacion(${orden.id_orden}, ${serv.id_servicio})" title="Editar servicio"><i class="fas fa-edit"></i></button>
                         </div>
                     </div>
                 `).join('')}
             </div>
             <div class="orden-footer">
-                <button class="btn-primary" onclick="abrirModalGenerarCotizacion(${orden.id_orden})">
-                    <i class="fas fa-file-invoice"></i> Generar Cotización
-                </button>
+                ${tieneCotizacion ? `
+                    <button class="btn-outline" onclick="editarCotizacionExistente(${orden.id_orden})">
+                        <i class="fas fa-edit"></i> Editar Cotización
+                    </button>
+                    <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                        <i class="fas fa-eye"></i> Ver Detalles
+                    </button>
+                ` : `
+                    <button class="btn-primary" onclick="abrirModalGenerarCotizacion(${orden.id_orden})">
+                        <i class="fas fa-file-invoice"></i> Generar Cotización
+                    </button>
+                `}
                 <button class="btn-outline" onclick="editarServiciosOrden(${orden.id_orden})">
                     <i class="fas fa-edit"></i> Editar Servicios
                 </button>
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 function renderSolicitudesCotizacion() {
@@ -399,9 +435,9 @@ function renderSolicitudesCotizacion() {
             <td><strong>${escapeHtml(s.orden_codigo)}</strong></td>
             <td>${escapeHtml(s.vehiculo)}</strong></td>
             <td>${escapeHtml(s.servicio_descripcion || '-')}</strong></td>
-            <td>${s.items?.length || 1} item(s)</td>
+            <td>${s.items?.length || 1} item(s)</strong></td>
             <td>${statusBadge(s.estado)}</strong></td>
-            <td>${s.precio_cotizado ? `Bs. ${s.precio_cotizado.toFixed(2)}` : '-'}</td>
+            <td>${s.precio_cotizado ? `Bs. ${s.precio_cotizado.toFixed(2)}` : '-'}</strong></td>
             <td>${formatDate(s.fecha_solicitud)}</strong></td>
             <td class="action-buttons">
                 ${s.estado === 'pendiente' ? `<button class="action-btn delete" onclick="eliminarSolicitudCotizacion(${s.id})"><i class="fas fa-trash-alt"></i></button>` : ''}
@@ -411,46 +447,24 @@ function renderSolicitudesCotizacion() {
     `).join('');
 }
 
-function renderCotizacionesEnviadas() {
-    const tbody = document.getElementById('tablaCotizacionesEnviadas');
-    if (!tbody) return;
-    
-    if (cotizacionesEnviadas.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="fas fa-envelope"></i><p>No hay cotizaciones enviadas</p></div></td></tr>`;
-        return;
-    }
-    
-    tbody.innerHTML = cotizacionesEnviadas.map(cot => `
-        <tr>
-            <td><strong>${escapeHtml(cot.orden_codigo)}</strong></td>
-            <td>${escapeHtml(cot.vehiculo)}</strong></td>
-            <td>${escapeHtml(cot.cliente_nombre)}</strong></td>
-            <td><strong>Bs. ${cot.total?.toFixed(2) || '0.00'}</strong></td>
-            <td>${cot.servicios_aprobados || 0}/${cot.total_servicios || 0} servicios</strong></td>
-            <td>${statusBadge(cot.estado || 'enviada')}</strong></td>
-            <td><button class="action-btn view" onclick="verDetalleCotizacion(${cot.id})"><i class="fas fa-eye"></i></button></strong>
-        </tr>
-    `).join('');
-}
-
 function renderSolicitudesCompra() {
     const tbody = document.getElementById('tablaSolicitudesCompra');
     if (!tbody) return;
     
     if (solicitudesCompra.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="fas fa-shopping-cart"></i><p>No hay solicitudes de compra</p></div></strong></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="fas fa-shopping-cart"></i><p>No hay solicitudes de compra</p></div></td></tr>`;
         return;
     }
     
     tbody.innerHTML = solicitudesCompra.map(s => `
         <tr>
-            <td>${s.id}</strong></td>
+            <td>${s.id}</td>
             <td><strong>${escapeHtml(s.orden_codigo)}</strong></td>
             <td>${escapeHtml(s.vehiculo)}</strong></td>
-            <td>${escapeHtml(s.servicio_descripcion || '-')}</strong></strong>
-            <td>${s.items?.length || 1} item(s)</strong></strong>
-            <td>${statusBadge(s.estado)}</strong></strong>
-            <td>${formatDate(s.fecha_solicitud)}</strong></strong>
+            <td>${escapeHtml(s.servicio_descripcion || '-')}</strong></td>
+            <td>${s.items?.length || 1} item(s)</strong></td>
+            <td>${statusBadge(s.estado)}</strong></td>
+            <td>${formatDate(s.fecha_solicitud)}</strong></td>
             <td class="action-buttons">
                 <button class="action-btn view" onclick="verSolicitudCompra(${s.id})"><i class="fas fa-eye"></i></button>
                 ${s.estado === 'pendiente' ? `<button class="action-btn approve" onclick="aprobarCompra(${s.id})"><i class="fas fa-check-circle"></i></button>` : ''}
@@ -472,6 +486,702 @@ function renderSelects() {
     if (selectEncargado && encargadosRepuestos.length > 0) {
         selectEncargado.innerHTML = '<option value="">Seleccionar encargado</option>' +
             encargadosRepuestos.map(e => `<option value="${e.id}">${escapeHtml(e.nombre)}</option>`).join('');
+    }
+}
+
+// =====================================================
+// FUNCIONES PARA SERVICIOS COTIZABLES (EDITOR)
+// =====================================================
+
+function renderServiciosCotizables() {
+    const container = document.getElementById('serviciosCotizacionContainer');
+    if (!container) return;
+    
+    if (serviciosCotizables.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-plus-circle"></i>
+                <p>No hay servicios agregados</p>
+                <small>Haz clic en "Agregar Servicio" para comenzar</small>
+            </div>
+        `;
+        actualizarTotalCotizacion();
+        return;
+    }
+    
+    container.innerHTML = serviciosCotizables.map((serv, idx) => `
+        <div class="servicio-cotizable-card" data-servicio-index="${idx}">
+            <div class="servicio-cotizable-header" onclick="toggleServicioCotizable(${idx})">
+                <div class="servicio-cotizable-nombre">
+                    <input type="text" class="form-input" value="${escapeHtml(serv.nombre)}" 
+                           style="background: transparent; border: none; padding: 0; font-weight: 600; width: auto;"
+                           onchange="actualizarServicioCotizable(${idx}, 'nombre', this.value)" 
+                           onclick="event.stopPropagation()">
+                </div>
+                <div class="servicio-cotizable-precio">
+                    Bs. <input type="number" class="servicio-precio-input" value="${serv.precio || 0}" step="0.01"
+                               style="width: 100px; background: transparent; border: none; text-align: right; font-weight: bold; color: var(--verde-exito);"
+                               onchange="actualizarServicioCotizable(${idx}, 'precio', parseFloat(this.value))"
+                               onclick="event.stopPropagation()">
+                </div>
+                <div class="action-buttons" onclick="event.stopPropagation()">
+                    <button class="action-btn delete" onclick="eliminarServicioCotizable(${idx})" title="Eliminar servicio">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="servicio-cotizable-body" id="servicio-cotizable-body-${idx}">
+                <div class="form-group">
+                    <label>Descripción detallada del servicio</label>
+                    <textarea class="form-textarea" rows="2" 
+                              onchange="actualizarServicioCotizable(${idx}, 'descripcion', this.value)"
+                              placeholder="Describe el servicio en detalle...">${escapeHtml(serv.descripcion || '')}</textarea>
+                </div>
+                <div class="servicio-items-container">
+                    <label><i class="fas fa-boxes"></i> Repuestos / Materiales</label>
+                    <div id="items-cotizacion-${idx}">
+                        ${(serv.items || []).map((item, itemIdx) => `
+                            <div class="servicio-item-row">
+                                <input type="text" class="servicio-item-descripcion" 
+                                       value="${escapeHtml(item.descripcion)}" 
+                                       placeholder="Descripción del repuesto"
+                                       onchange="actualizarItemCotizable(${idx}, ${itemIdx}, 'descripcion', this.value)">
+                                <input type="number" class="servicio-item-cantidad" 
+                                       value="${item.cantidad || 1}" min="1"
+                                       onchange="actualizarItemCotizable(${idx}, ${itemIdx}, 'cantidad', parseInt(this.value))">
+                                <input type="number" class="servicio-item-precio" 
+                                       value="${item.precio_unitario || 0}" step="0.01" 
+                                       placeholder="Precio unitario"
+                                       onchange="actualizarItemCotizable(${idx}, ${itemIdx}, 'precio_unitario', parseFloat(this.value))">
+                                <div class="item-actions">
+                                    <button class="btn-remove-item" onclick="eliminarItemCotizable(${idx}, ${itemIdx})">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button class="btn-add-item" style="margin-top: 0.5rem;" onclick="agregarItemCotizable(${idx})">
+                        <i class="fas fa-plus-circle"></i> Agregar repuesto
+                    </button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    actualizarTotalCotizacion();
+}
+
+function toggleServicioCotizable(idx) {
+    const body = document.getElementById(`servicio-cotizable-body-${idx}`);
+    if (body) body.classList.toggle('active');
+}
+
+function actualizarServicioCotizable(idx, campo, valor) {
+    if (serviciosCotizables[idx]) {
+        serviciosCotizables[idx][campo] = valor;
+        if (campo === 'precio') {
+            actualizarTotalCotizacion();
+        }
+        renderServiciosCotizables();
+    }
+}
+
+function agregarItemCotizable(servIdx) {
+    if (!serviciosCotizables[servIdx].items) {
+        serviciosCotizables[servIdx].items = [];
+    }
+    serviciosCotizables[servIdx].items.push({
+        descripcion: '',
+        cantidad: 1,
+        precio_unitario: 0
+    });
+    renderServiciosCotizables();
+    const body = document.getElementById(`servicio-cotizable-body-${servIdx}`);
+    if (body) body.classList.add('active');
+}
+
+function actualizarItemCotizable(servIdx, itemIdx, campo, valor) {
+    if (serviciosCotizables[servIdx]?.items?.[itemIdx]) {
+        serviciosCotizables[servIdx].items[itemIdx][campo] = valor;
+        recalcularPrecioServicio(servIdx);
+    }
+}
+
+function eliminarItemCotizable(servIdx, itemIdx) {
+    serviciosCotizables[servIdx].items.splice(itemIdx, 1);
+    recalcularPrecioServicio(servIdx);
+    renderServiciosCotizables();
+}
+
+function recalcularPrecioServicio(servIdx) {
+    const servicio = serviciosCotizables[servIdx];
+    if (!servicio) return;
+    
+    let totalItems = 0;
+    if (servicio.items && servicio.items.length > 0) {
+        totalItems = servicio.items.reduce((sum, item) => {
+            return sum + ((item.precio_unitario || 0) * (item.cantidad || 1));
+        }, 0);
+    }
+    
+    if (totalItems > 0) {
+        servicio.precio = totalItems;
+        actualizarTotalCotizacion();
+    }
+}
+
+function agregarServicioCotizable() {
+    serviciosCotizables.push({
+        id_servicio: null,
+        nombre: 'Nuevo Servicio',
+        descripcion: '',
+        precio: 0,
+        items: []
+    });
+    renderServiciosCotizables();
+    const nuevoIdx = serviciosCotizables.length - 1;
+    setTimeout(() => {
+        const body = document.getElementById(`servicio-cotizable-body-${nuevoIdx}`);
+        if (body) body.classList.add('active');
+    }, 100);
+}
+
+function eliminarServicioCotizable(idx) {
+    if (confirm('¿Eliminar este servicio de la cotización?')) {
+        serviciosCotizables.splice(idx, 1);
+        renderServiciosCotizables();
+    }
+}
+
+function actualizarTotalCotizacion() {
+    const total = serviciosCotizables.reduce((sum, serv) => sum + (serv.precio || 0), 0);
+    const totalSpan = document.getElementById('totalCotizacion');
+    if (totalSpan) {
+        totalSpan.textContent = `Bs. ${total.toFixed(2)}`;
+    }
+}
+
+function cargarServiciosDesdeDiagnostico(orden) {
+    serviciosCotizables = [];
+    
+    if (orden.servicios && orden.servicios.length > 0) {
+        orden.servicios.forEach(serv => {
+            serviciosCotizables.push({
+                id_servicio: serv.id_servicio,
+                nombre: serv.descripcion,
+                descripcion: serv.descripcion || '',
+                precio: serv.precio_cotizado || 0,
+                items: (serv.items || []).map(item => ({
+                    descripcion: item.descripcion || '',
+                    cantidad: item.cantidad || 1,
+                    precio_unitario: item.precio_unitario || 0
+                }))
+            });
+        });
+    }
+    
+    if (serviciosCotizables.length === 0) {
+        serviciosCotizables.push({
+            id_servicio: null,
+            nombre: 'Mano de obra',
+            descripcion: 'Trabajos de reparación y mantenimiento',
+            precio: 0,
+            items: []
+        });
+    }
+    
+    renderServiciosCotizables();
+}
+
+// =====================================================
+// FUNCIONES PARA SUBIDA DE ARCHIVOS
+// =====================================================
+
+function setupFileUpload() {
+    const dropArea = document.getElementById('fileUploadArea');
+    const fileInput = document.getElementById('cotizacionFile');
+    const selectBtn = document.getElementById('selectFileBtn');
+    
+    if (!dropArea) return;
+    
+    dropArea.addEventListener('click', (e) => {
+        if (e.target !== selectBtn && !selectBtn?.contains(e.target)) {
+            fileInput.click();
+        }
+    });
+    
+    selectBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fileInput.click();
+    });
+    
+    fileInput?.addEventListener('change', (e) => {
+        handleFileSelect(e.target.files[0]);
+    });
+    
+    dropArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropArea.classList.add('dragover');
+    });
+    
+    dropArea.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropArea.classList.remove('dragover');
+    });
+    
+    dropArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropArea.classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        handleFileSelect(file);
+    });
+    
+    document.getElementById('removeFileBtn')?.addEventListener('click', () => {
+        clearFileSelection();
+    });
+}
+
+function handleFileSelect(file) {
+    if (!file) return;
+    
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(file.type)) {
+        showToast('Solo se permiten archivos PDF o Word (DOC, DOCX)', 'error');
+        return;
+    }
+    
+    if (file.size > 10 * 1024 * 1024) {
+        showToast('El archivo no debe superar los 10MB', 'error');
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        currentFileData = e.target.result;
+        currentFileName = file.name;
+        displayFileInfo(file);
+        showToast('Archivo cargado correctamente', 'success');
+    };
+    reader.onerror = () => {
+        showToast('Error al leer el archivo', 'error');
+    };
+    reader.readAsDataURL(file);
+}
+
+function displayFileInfo(file) {
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const pdfIcon = document.querySelector('#fileInfo .fa-file-pdf');
+    const wordIcon = document.querySelector('#fileInfo .fa-file-word');
+    const uploadArea = document.getElementById('fileUploadArea');
+    
+    if (fileInfo && fileName && fileSize) {
+        fileName.textContent = file.name;
+        fileSize.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+        
+        if (pdfIcon && wordIcon) {
+            if (file.type === 'application/pdf') {
+                pdfIcon.style.display = 'block';
+                wordIcon.style.display = 'none';
+            } else {
+                pdfIcon.style.display = 'none';
+                wordIcon.style.display = 'block';
+            }
+        }
+        
+        fileInfo.style.display = 'block';
+        fileInfo.classList.add('file-uploaded');
+        
+        if (uploadArea) {
+            uploadArea.style.opacity = '0.6';
+        }
+        
+        setTimeout(() => {
+            fileInfo.classList.remove('file-uploaded');
+        }, 300);
+    }
+}
+
+function clearFileSelection() {
+    currentFileData = null;
+    currentFileName = null;
+    
+    const fileInfo = document.getElementById('fileInfo');
+    const fileInput = document.getElementById('cotizacionFile');
+    const uploadArea = document.getElementById('fileUploadArea');
+    
+    if (fileInfo) fileInfo.style.display = 'none';
+    if (fileInput) fileInput.value = '';
+    if (uploadArea) uploadArea.style.opacity = '1';
+}
+
+function setupModalTabs() {
+    const tabs = document.querySelectorAll('.modal-tab-btn');
+    tabs.forEach(btn => {
+        btn.removeEventListener('click', handleModalTabClick);
+        btn.addEventListener('click', handleModalTabClick);
+    });
+}
+
+function handleModalTabClick(e) {
+    const btn = e.currentTarget;
+    const tabId = btn.getAttribute('data-modal-tab');
+    
+    document.querySelectorAll('.modal-tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    
+    document.querySelectorAll('.modal-tab-content').forEach(content => content.classList.remove('active'));
+    document.getElementById(`modal-${tabId}`).classList.add('active');
+}
+
+// =====================================================
+// COTIZACIÓN AL CLIENTE
+// =====================================================
+
+async function abrirModalGenerarCotizacion(id_orden) {
+    mostrarLoading(true);
+    isEditingCotizacion = false;
+    currentCotizacionId = null;
+    
+    try {
+        const orden = ordenesConServicios.find(o => o.id_orden === id_orden);
+        if (!orden) {
+            showToast('Orden no encontrada', 'error');
+            return;
+        }
+        
+        const datosOrden = await obtenerDatosOrden(id_orden);
+        currentOrdenData = { id_orden, datosOrden };
+        
+        document.getElementById('modalCotizacionTitle').innerHTML = '<i class="fas fa-file-invoice"></i> Generar Cotización';
+        
+        cargarServiciosDesdeDiagnostico(orden);
+        clearFileSelection();
+        
+        const ordenInfoDiv = document.getElementById('ordenInfoPreview');
+        if (ordenInfoDiv) {
+            ordenInfoDiv.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(orden.codigo_unico)}<br>
+                        <strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}<br>
+                        <strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(orden.vehiculo)}
+                    </div>
+                    <div>
+                        <strong>Total estimado:</strong> Bs. ${orden.total_orden?.toFixed(2) || '0.00'}
+                    </div>
+                </div>
+            `;
+        }
+        
+        setupFileUpload();
+        setupModalTabs();
+        
+        abrirModal('modalGenerarCotizacion');
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error al cargar la cotización', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+async function editarCotizacionExistente(id_orden) {
+    mostrarLoading(true);
+    try {
+        const cotizacionExistente = cotizacionesMap[id_orden];
+        if (!cotizacionExistente) {
+            abrirModalGenerarCotizacion(id_orden);
+            return;
+        }
+        
+        await editarCotizacionPorId(cotizacionExistente.id);
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error al cargar la cotización para editar', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+async function editarCotizacionPorId(id_cotizacion) {
+    mostrarLoading(true);
+    isEditingCotizacion = true;
+    currentCotizacionId = id_cotizacion;
+    
+    try {
+        const response = await fetch(`${API_URL}/detalle-cotizacion/${id_cotizacion}`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        
+        if (!data.success) {
+            showToast('Error al cargar la cotización', 'error');
+            return;
+        }
+        
+        const cotizacion = data.detalle;
+        currentOrdenData = { id_orden: cotizacion.id_orden_trabajo };
+        
+        document.getElementById('modalCotizacionTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Cotización';
+        
+        if (cotizacion.servicios && cotizacion.servicios.length > 0) {
+            serviciosCotizables = cotizacion.servicios.map(serv => ({
+                id_servicio: serv.id_servicio,
+                nombre: serv.nombre || serv.descripcion,
+                descripcion: serv.descripcion || '',
+                precio: serv.precio || 0,
+                items: serv.items || []
+            }));
+        } else {
+            serviciosCotizables = [];
+        }
+        
+        renderServiciosCotizables();
+        
+        if (cotizacion.notas) {
+            document.getElementById('notasAdicionales').value = cotizacion.notas;
+        }
+        
+        const orden = ordenesConServicios.find(o => o.id_orden === cotizacion.id_orden_trabajo);
+        const ordenInfoDiv = document.getElementById('ordenInfoPreview');
+        if (ordenInfoDiv && orden) {
+            ordenInfoDiv.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(orden.codigo_unico)}<br>
+                        <strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}<br>
+                        <strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(orden.vehiculo)}
+                    </div>
+                    <div>
+                        <strong>Total cotizado:</strong> Bs. ${cotizacion.total?.toFixed(2) || '0.00'}
+                    </div>
+                </div>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color);">
+                    <small><i class="fas fa-info-circle"></i> Editando cotización enviada el ${formatDate(cotizacion.fecha_envio)}</small>
+                </div>
+            `;
+        }
+        
+        clearFileSelection();
+        setupFileUpload();
+        setupModalTabs();
+        
+        abrirModal('modalGenerarCotizacion');
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error al cargar la cotización para editar', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+async function obtenerDatosOrden(id_orden) {
+    try {
+        const response = await fetch(`${API_URL}/datos-orden/${id_orden}`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        return data.success ? data.datos : {};
+    } catch (error) {
+        console.error('Error obteniendo datos de orden:', error);
+        return {};
+    }
+}
+
+async function enviarCotizacionCliente() {
+    if (!currentOrdenData) {
+        showToast('No hay datos para enviar', 'warning');
+        return;
+    }
+    
+    if (!currentFileData) {
+        showToast('Debes subir un archivo PDF o Word para la cotización', 'warning');
+        return;
+    }
+    
+    const serviciosConPrecio = serviciosCotizables.filter(s => s.precio > 0);
+    if (serviciosConPrecio.length === 0) {
+        showToast('Debes asignar precios a al menos un servicio', 'warning');
+        return;
+    }
+    
+    const mensaje = isEditingCotizacion ? '¿Confirmas actualizar y reenviar esta cotización al cliente?' : '¿Confirmas enviar esta cotización al cliente?';
+    if (!confirm(mensaje)) return;
+    
+    mostrarLoading(true);
+    try {
+        const serviciosParaEnviar = serviciosCotizables.map(serv => ({
+            id_servicio: serv.id_servicio,
+            nombre: serv.nombre,
+            descripcion: serv.descripcion,
+            precio: serv.precio,
+            items: serv.items || []
+        }));
+        
+        const url = isEditingCotizacion && currentCotizacionId 
+            ? `${API_URL}/actualizar-cotizacion/${currentCotizacionId}`
+            : `${API_URL}/enviar-cotizacion`;
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                id_orden: currentOrdenData.id_orden,
+                archivo_base64: currentFileData,
+                nombre_archivo: currentFileName,
+                notas: document.getElementById('notasAdicionales')?.value || '',
+                servicios: serviciosParaEnviar
+            })
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast(isEditingCotizacion ? 'Cotización actualizada y reenviada exitosamente' : 'Cotización enviada al cliente exitosamente', 'success');
+            cerrarModal('modalGenerarCotizacion');
+            clearFileSelection();
+            serviciosCotizables = [];
+            isEditingCotizacion = false;
+            currentCotizacionId = null;
+            await cargarCotizacionesMap();
+            await cargarOrdenesConServicios();
+        } else {
+            showToast(data.error || 'Error al enviar', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// =====================================================
+// VER DETALLE DE COTIZACIÓN
+// =====================================================
+
+async function verDetalleCotizacion(id_cotizacion) {
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/detalle-cotizacion/${id_cotizacion}`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        if (data.success) {
+            const d = data.detalle;
+            const container = document.getElementById('detalleCotizacionContainer');
+            
+            let archivoHTML = '';
+            if (d.nombre_archivo) {
+                const iconClass = d.nombre_archivo.toLowerCase().endsWith('.pdf') ? 'fa-file-pdf' : 'fa-file-word';
+                const iconColor = d.nombre_archivo.toLowerCase().endsWith('.pdf') ? '#dc3545' : '#2b5797';
+                archivoHTML = `
+                    <div class="file-preview-card" style="margin-top: 15px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <i class="fas ${iconClass}" style="font-size: 40px; color: ${iconColor};"></i>
+                                <div>
+                                    <strong>${escapeHtml(d.nombre_archivo)}</strong>
+                                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">Documento de cotización</p>
+                                </div>
+                            </div>
+                            <button class="btn-primary" onclick="descargarCotizacion(${id_cotizacion})">
+                                <i class="fas fa-download"></i> Descargar
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            let serviciosHTML = '';
+            if (d.servicios && d.servicios.length > 0) {
+                serviciosHTML = `
+                    <div style="margin-top: 20px;">
+                        <h4><i class="fas fa-clipboard-list"></i> Servicios Cotizados</h4>
+                        <table class="data-table" style="margin-top: 10px;">
+                            <thead>
+                                <tr><th>Servicio</th><th style="text-align: center;">Cantidad</th><th style="text-align: right;">Precio</th><th style="text-align: center;">Estado</th></tr>
+                            </thead>
+                            <tbody>
+                                ${d.servicios.map(serv => `
+                                    <tr>
+                                        <td>
+                                            <strong>${escapeHtml(serv.nombre || serv.descripcion)}</strong>
+                                            ${serv.items && serv.items.length > 0 ? `<br><small style="color: var(--gris-texto);">${serv.items.map(i => `📦 ${escapeHtml(i.descripcion)} x${i.cantidad}`).join(', ')}</small>` : ''}
+                                         </strong>
+                                        <td style="text-align: center;">${serv.items ? serv.items.reduce((sum, i) => sum + (i.cantidad || 1), 0) : 1}</strong>
+                                        <td style="text-align: right;">Bs. ${(serv.precio || 0).toFixed(2)}</strong>
+                                        <td style="text-align: center;">
+                                            ${serv.aprobado_por_cliente 
+                                                ? '<span class="status-badge status-aprobado"><i class="fas fa-check-circle"></i> Aprobado</span>'
+                                                : '<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> Pendiente</span>'}
+                                        </strong>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        <div style="text-align: right; margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color);">
+                            <strong>TOTAL: Bs. ${d.total?.toFixed(2) || '0.00'}</strong>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = `
+                <div class="orden-info-card">
+                    <p><strong>Orden:</strong> ${escapeHtml(d.orden_codigo)}</p>
+                    <p><strong>Cliente:</strong> ${escapeHtml(d.cliente_nombre)}</p>
+                    <p><strong>Vehículo:</strong> ${escapeHtml(d.vehiculo_marca)} ${escapeHtml(d.vehiculo_modelo)} - ${escapeHtml(d.vehiculo_placa)}</p>
+                    <p><strong>Fecha Envío:</strong> ${formatDate(d.fecha_envio)}</p>
+                    <p><strong>Estado:</strong> ${statusBadge(d.estado || 'enviada')}</p>
+                    ${d.notas ? `<p><strong>Mensaje:</strong> ${escapeHtml(d.notas)}</p>` : ''}
+                </div>
+                ${serviciosHTML}
+                ${archivoHTML}
+            `;
+            
+            const btnDescarga = document.getElementById('exportarPDFDetalleBtn');
+            if (btnDescarga) {
+                btnDescarga.onclick = () => descargarCotizacion(id_cotizacion);
+            }
+            
+            abrirModal('modalDetalleCotizacion');
+        } else {
+            showToast('Error al cargar detalle', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+async function verDetalleCotizacionByOrden(id_orden) {
+    const cotizacion = cotizacionesMap[id_orden];
+    if (cotizacion) {
+        await verDetalleCotizacion(cotizacion.id);
+    } else {
+        showToast('No se encontró cotización para esta orden', 'warning');
+    }
+}
+
+async function descargarCotizacion(id_cotizacion) {
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/descargar-cotizacion/${id_cotizacion}`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        if (data.success && data.archivo_base64) {
+            const link = document.createElement('a');
+            link.href = data.archivo_base64;
+            link.download = data.nombre_archivo || 'cotizacion.pdf';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('Descargando archivo...', 'success');
+        } else {
+            showToast('Error al descargar el archivo', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
     }
 }
 
@@ -499,7 +1209,7 @@ async function eliminarSolicitudCotizacion(id) {
 }
 
 // =====================================================
-// EDITOR DE SERVICIOS
+// EDITOR DE SERVICIOS (para editar antes de cotizar)
 // =====================================================
 
 async function editarServiciosOrden(id_orden) {
@@ -659,390 +1369,6 @@ async function editarServicioCotizacion(id_orden, id_servicio) {
 }
 
 // =====================================================
-// COTIZACIÓN AL CLIENTE - EDITOR PROFESIONAL
-// =====================================================
-
-async function abrirModalGenerarCotizacion(id_orden) {
-    mostrarLoading(true);
-    try {
-        const orden = ordenesConServicios.find(o => o.id_orden === id_orden);
-        if (!orden) {
-            showToast('Orden no encontrada', 'error');
-            return;
-        }
-        
-        const datosOrden = await obtenerDatosOrden(id_orden);
-        currentOrdenData = { id_orden, datosOrden };
-        serviciosActuales = orden.servicios.map(s => ({
-            id_servicio: s.id_servicio,
-            descripcion: s.descripcion,
-            precio: s.precio_cotizado || 0,
-            items: s.items || []
-        }));
-        
-        const fecha = new Date();
-        const fechaFormateada = `${fecha.getDate()} de ${fecha.toLocaleString('es-BO', { month: 'long' })} de ${fecha.getFullYear()}`;
-        const contenidoInicial = generarHTMLCotizacion(orden, datosOrden, fechaFormateada);
-        
-        const container = document.getElementById('generarCotizacionBody');
-        container.innerHTML = `
-            <div class="formato-rapido">
-                <button class="btn-formato" onclick="insertarTextoRapido('vehiculo')"><i class="fas fa-car"></i> Vehículo</button>
-                <button class="btn-formato" onclick="insertarTextoRapido('diagnostico')"><i class="fas fa-stethoscope"></i> Diagnóstico</button>
-                <button class="btn-formato" onclick="insertarTextoRapido('costos')"><i class="fas fa-table"></i> Tabla Costos</button>
-                <button class="btn-formato" onclick="insertarTextoRapido('sugerencias')"><i class="fas fa-lightbulb"></i> Sugerencias</button>
-                <button class="btn-formato" onclick="insertarTextoRapido('firma')"><i class="fas fa-signature"></i> Firma</button>
-                <button class="btn-formato" onclick="abrirEditorServicios()"><i class="fas fa-edit"></i> Editar Servicios</button>
-                <button class="btn-formato" onclick="subirFirmaDigital()"><i class="fas fa-upload"></i> Subir Firma</button>
-                <button class="btn-formato" onclick="limpiarEditor()"><i class="fas fa-trash-alt"></i> Limpiar</button>
-            </div>
-            <div id="quillEditorContainer" style="background: white; border-radius: 8px; min-height: 500px;"></div>
-            <div class="form-group" style="margin-top: 1rem;">
-                <textarea id="notasAdicionales" class="form-textarea" rows="2" placeholder="Notas adicionales para el cliente..."></textarea>
-            </div>
-        `;
-        
-        setTimeout(() => {
-            if (quillEditor) quillEditor = null;
-            const editorContainer = document.getElementById('quillEditorContainer');
-            if (editorContainer) {
-                quillEditor = new Quill(editorContainer, {
-                    theme: 'snow',
-                    modules: {
-                        toolbar: [
-                            [{ 'font': ['arial', 'times-new-roman', 'courier-new', 'georgia'] }],
-                            [{ 'size': ['10px', '12px', '14px', '16px', '18px', '24px'] }],
-                            ['bold', 'italic', 'underline', 'strike'],
-                            [{ 'color': [] }, { 'background': [] }],
-                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                            [{ 'indent': '-1'}, { 'indent': '+1' }],
-                            [{ 'align': [] }],
-                            ['blockquote', 'code-block'],
-                            ['link', 'clean']
-                        ]
-                    },
-                    placeholder: 'Escribe tu cotización profesional aquí...'
-                });
-                quillEditor.root.style.fontFamily = "'Times New Roman', Times, serif";
-                quillEditor.root.style.fontSize = '14px';
-                quillEditor.root.style.lineHeight = '1.6';
-                quillEditor.root.style.color = '#1a1a2e';
-                quillEditor.root.innerHTML = contenidoInicial;
-            }
-        }, 100);
-        
-        abrirModal('modalGenerarCotizacion');
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error al cargar la cotización', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-function limpiarEditor() {
-    if (quillEditor && confirm('¿Estás seguro de limpiar todo el contenido del editor?')) {
-        quillEditor.root.innerHTML = '';
-        showToast('Editor limpiado', 'success');
-    }
-}
-
-async function obtenerDatosOrden(id_orden) {
-    try {
-        const response = await fetch(`${API_URL}/datos-orden/${id_orden}`, { headers: getAuthHeaders() });
-        const data = await response.json();
-        return data.success ? data.datos : {};
-    } catch (error) {
-        console.error('Error obteniendo datos de orden:', error);
-        return {};
-    }
-}
-
-function generarHTMLCotizacion(orden, datosOrden, fecha) {
-    let tablaCostos = `
-        <h2 style="color: #C1121F;">Detalle de Trabajos y Repuestos</h2>
-        <table style="width:100%; border-collapse: collapse; margin: 15px 0;">
-            <thead>
-                <tr style="background: #C1121F; color: white;">
-                    <th style="padding: 10px;">Descripción</th>
-                    <th style="padding: 10px; text-align: center;">Cantidad</th>
-                    <th style="padding: 10px; text-align: right;">Precio Unit.</th>
-                    <th style="padding: 10px; text-align: right;">Total</th>
-                </table>
-            </thead>
-            <tbody>
-    `;
-    let totalGeneral = 0;
-    
-    serviciosActuales.forEach(serv => {
-        if (serv.items && serv.items.length > 0) {
-            serv.items.forEach(item => {
-                const precioUnitario = item.precio_unitario || (serv.precio / serv.items.length) || 0;
-                const subtotal = precioUnitario * (item.cantidad || 1);
-                totalGeneral += subtotal;
-                tablaCostos += `
-                    <tr>
-                        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${escapeHtml(item.descripcion)}</td>
-                        <td style="padding: 8px; text-align: center; border-bottom: 1px solid #ddd;">${item.cantidad || 1}</td>
-                        <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">Bs. ${precioUnitario.toFixed(2)}</td>
-                        <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">Bs. ${subtotal.toFixed(2)}</td>
-                    </tr>
-                `;
-            });
-        } else {
-            totalGeneral += serv.precio;
-            tablaCostos += `
-                <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>${escapeHtml(serv.descripcion)}</strong></td>
-                    <td style="padding: 8px; text-align: center; border-bottom: 1px solid #ddd;">1</td>
-                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">Bs. ${serv.precio.toFixed(2)}</td>
-                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd;">Bs. ${serv.precio.toFixed(2)}</td>
-                </tr>
-            `;
-        }
-    });
-    
-    tablaCostos += `
-                <tr style="background: #f5f5f5;">
-                    <td colspan="3" style="padding: 10px; text-align: right;"><strong>TOTAL GENERAL</strong></td>
-                    <td style="padding: 10px; text-align: right;"><strong style="color: #C1121F;">Bs. ${totalGeneral.toFixed(2)}</strong></td>
-                </tr>
-            </tbody>
-        </table>
-    `;
-    
-    return `
-        <h1 style="color: #C1121F; text-align: center;">INFORME DE COTIZACIÓN</h1>
-        <p style="text-align: right;">${fecha}</p>
-        
-        <h2 style="color: #C1121F;">Datos del Cliente y Vehículo</h2>
-        <p><strong>Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}</p>
-        <p><strong>Vehículo:</strong> ${escapeHtml(orden.vehiculo)}</p>
-        <p><strong>Marca:</strong> ${escapeHtml(datosOrden.marca || '')} | <strong>Modelo:</strong> ${escapeHtml(datosOrden.modelo || '')} | <strong>Placa:</strong> ${escapeHtml(datosOrden.placa || '')}</p>
-        
-        <h2 style="color: #C1121F;">Diagnóstico</h2>
-        <ul>
-            ${serviciosActuales.map(s => `<li><strong>${escapeHtml(s.descripcion)}</strong>${s.items && s.items.length > 0 ? `<ul>${s.items.map(i => `<li>${escapeHtml(i.descripcion)}</li>`).join('')}</ul>` : ''}</li>`).join('')}
-        </ul>
-        
-        ${tablaCostos}
-        
-        <h2 style="color: #C1121F;">Sugerencias</h2>
-        <ul>
-            <li>Cambio de aceite cada 5,000 km</li>
-            <li>Revisión de frenos cada 10,000 km</li>
-            <li>Mantenimiento preventivo regular</li>
-        </ul>
-    `;
-}
-
-function insertarTextoRapido(tipo) {
-    if (!quillEditor) return;
-    const range = quillEditor.getSelection();
-    const index = range ? range.index : 0;
-    
-    const textos = {
-        'vehiculo': `<h2 style="color: #C1121F;">Características del Vehículo</h2><p><strong>Marca:</strong> ${escapeHtml(currentOrdenData?.datosOrden?.marca || '')}<br><strong>Modelo:</strong> ${escapeHtml(currentOrdenData?.datosOrden?.modelo || '')}<br><strong>Año:</strong> ${escapeHtml(currentOrdenData?.datosOrden?.anio || '')}<br><strong>Placa:</strong> ${escapeHtml(currentOrdenData?.datosOrden?.placa || '')}</p>`,
-        'diagnostico': `<h2 style="color: #C1121F;">Diagnóstico</h2><ul><li>Revisión general del vehículo</li><li>Componentes desgastados por uso</li><li>Mantenimiento necesario según kilometraje</li></ul>`,
-        'costos': `<h2 style="color: #C1121F;">Detalle de Costos</h2>${generarTablaCostosHTML()}`,
-        'sugerencias': `<h2 style="color: #C1121F;">Sugerencias de Mantenimiento</h2><ul><li>Cambio de aceite cada 5,000 km</li><li>Revisión de frenos cada 10,000 km</li><li>Rotación de neumáticos cada 10,000 km</li></ul>`,
-        'firma': `<div style="margin-top: 40px; text-align: center;"><div class="firma-container">${firmaBase64 ? `<img src="${firmaBase64}" class="firma-imagen" style="max-width:200px; max-height:80px;">` : ''}<p><strong>Ing. Carlos Bello Málaga</strong><br>FURIA MOTOR COMPANY S.R.L.<br>68176122 - 74080830 - 78753973</p></div></div>`
-    };
-    
-    quillEditor.clipboard.dangerouslyPasteHTML(index, textos[tipo] || '');
-    showToast(`Bloque "${tipo}" insertado`, 'success');
-}
-
-function generarTablaCostosHTML() {
-    let html = `<table style="width:100%; border-collapse: collapse; margin: 15px 0;"><thead><tr style="background:#C1121F; color:white;"><th style="padding:8px;">Descripción</th><th style="padding:8px; text-align:center;">Cantidad</th><th style="padding:8px; text-align:right;">Precio Unit.</th><th style="padding:8px; text-align:right;">Total</th></tr></thead><tbody>`;
-    serviciosActuales.forEach(serv => {
-        if (serv.items && serv.items.length > 0) {
-            serv.items.forEach(item => {
-                const precioUnitario = item.precio_unitario || (serv.precio / serv.items.length) || 0;
-                const subtotal = precioUnitario * (item.cantidad || 1);
-                html += `<tr><td style="padding:8px; border-bottom:1px solid #ddd;">${escapeHtml(item.descripcion)}</td><td style="padding:8px; text-align:center;">${item.cantidad || 1}</td><td style="padding:8px; text-align:right;">Bs. ${precioUnitario.toFixed(2)}</td><td style="padding:8px; text-align:right;">Bs. ${subtotal.toFixed(2)}</td></tr>`;
-            });
-        } else {
-            html += `<tr><td style="padding:8px; border-bottom:1px solid #ddd;"><strong>${escapeHtml(serv.descripcion)}</strong></td><td style="padding:8px; text-align:center;">1</td><td style="padding:8px; text-align:right;">Bs. ${serv.precio.toFixed(2)}</td><td style="padding:8px; text-align:right;">Bs. ${serv.precio.toFixed(2)}</td></tr>`;
-        }
-    });
-    html += `</tbody></table>`;
-    return html;
-}
-
-function abrirEditorServicios() {
-    renderEditorServicios();
-    abrirModal('modalEditorServicios');
-}
-
-function subirFirmaDigital() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = (e) => {
-        const file = e.target.files[0];
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            firmaBase64 = event.target.result;
-            showToast('Firma cargada exitosamente', 'success');
-            if (quillEditor) insertarTextoRapido('firma');
-        };
-        reader.readAsDataURL(file);
-    };
-    input.click();
-}
-
-async function guardarBorradorCotizacion() {
-    if (!quillEditor || !currentOrdenData) {
-        showToast('No hay datos para guardar', 'warning');
-        return;
-    }
-    
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/guardar-cotizacion`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                id_orden: currentOrdenData.id_orden,
-                contenido_html: quillEditor.root.innerHTML,
-                servicios: serviciosActuales,
-                firma_base64: firmaBase64 || '',
-                notas: document.getElementById('notasAdicionales')?.value || ''
-            })
-        });
-        const data = await response.json();
-        if (data.success) {
-            showToast('Borrador guardado correctamente', 'success');
-        } else {
-            showToast(data.error || 'Error al guardar', 'error');
-        }
-    } catch (error) {
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-async function enviarCotizacionCliente() {
-    if (!quillEditor || !currentOrdenData) {
-        showToast('No hay datos para enviar', 'warning');
-        return;
-    }
-    
-    if (!confirm('¿Confirmas enviar esta cotización al cliente?')) return;
-    
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/enviar-cotizacion`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                id_orden: currentOrdenData.id_orden,
-                contenido_html: quillEditor.root.innerHTML,
-                servicios: serviciosActuales,
-                firma_base64: firmaBase64 || '',
-                notas: document.getElementById('notasAdicionales')?.value || ''
-            })
-        });
-        const data = await response.json();
-        if (data.success) {
-            showToast('Cotización enviada al cliente exitosamente', 'success');
-            cerrarModal('modalGenerarCotizacion');
-            await cargarOrdenesConServicios();
-            await cargarCotizacionesEnviadas();
-        } else {
-            showToast(data.error || 'Error al enviar', 'error');
-        }
-    } catch (error) {
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-// =====================================================
-// VISTA PREVIA Y PDF
-// =====================================================
-
-function verVistaPrevia() {
-    if (!quillEditor) {
-        showToast('No hay contenido para previsualizar', 'warning');
-        return;
-    }
-    
-    const contenido = quillEditor.root.innerHTML;
-    const ventana = window.open('', '_blank');
-    ventana.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Vista Previa Cotización</title>
-            <style>
-                body { font-family: 'Times New Roman', Arial, sans-serif; padding: 40px; background: #e0e0e0; margin: 0; }
-                .preview { max-width: 900px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
-                h1 { color: #C1121F; text-align: center; }
-                h2 { color: #C1121F; border-left: 4px solid #C1121F; padding-left: 10px; }
-                table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-                th { background: #C1121F; color: white; padding: 8px; }
-                td { border-bottom: 1px solid #ddd; padding: 8px; }
-                .firma { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #ccc; }
-                @media print {
-                    body { background: white; padding: 0; }
-                    .preview { padding: 20px; box-shadow: none; }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="preview">${contenido}</div>
-            <div style="text-align: center; margin-top: 20px;">
-                <button onclick="window.print()" style="background: #C1121F; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">🖨️ Imprimir / Guardar PDF</button>
-                <button onclick="window.close()" style="background: #666; color: white; border: none; padding: 10px 20px; border-radius: 5px; margin-left: 10px; cursor: pointer;">✖️ Cerrar</button>
-            </div>
-        </body>
-        </html>
-    `);
-    ventana.document.close();
-}
-
-async function exportarPDF() {
-    if (!quillEditor) {
-        showToast('No hay contenido para exportar', 'warning');
-        return;
-    }
-    
-    mostrarLoading(true);
-    try {
-        const contenido = quillEditor.root.innerHTML;
-        const element = document.createElement('div');
-        element.innerHTML = `
-            <div style="padding: 40px; font-family: 'Times New Roman', Arial, sans-serif; max-width: 900px; margin: 0 auto;">
-                ${contenido}
-            </div>
-        `;
-        document.body.appendChild(element);
-        
-        const opt = {
-            margin: [0.5, 0.5, 0.5, 0.5],
-            filename: `Cotizacion_${currentOrdenData?.codigo_unico || currentOrdenData?.id_orden || 'orden'}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, letterRendering: true },
-            jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-        };
-        
-        await html2pdf().set(opt).from(element).save();
-        document.body.removeChild(element);
-        showToast('PDF generado exitosamente', 'success');
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error al generar PDF', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-// =====================================================
 // SOLICITUDES DE COMPRA
 // =====================================================
 
@@ -1051,8 +1377,8 @@ async function solicitarCompraDesdeCotizacion(id_solicitud) {
     if (!solicitud) return;
     
     limpiarItemsCompra();
-    if (solicitud.descripcion_pieza) {
-        itemsCompra.push({ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad || 1, detalle: '' });
+    if (solicitud.items && solicitud.items.length > 0) {
+        itemsCompra = [...solicitud.items];
         renderItemsCompra();
     }
     
@@ -1127,35 +1453,6 @@ async function aprobarCompra(id) {
     }
 }
 
-async function verDetalleCotizacion(id_cotizacion) {
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/detalle-cotizacion/${id_cotizacion}`, { headers: getAuthHeaders() });
-        const data = await response.json();
-        if (data.success) {
-            const d = data.detalle;
-            const container = document.getElementById('detalleCotizacionContainer');
-            container.innerHTML = `
-                <div class="orden-info-card">
-                    <p><strong>Orden:</strong> ${escapeHtml(d.orden_codigo)}</p>
-                    <p><strong>Cliente:</strong> ${escapeHtml(d.cliente_nombre)}</p>
-                    <p><strong>Vehículo:</strong> ${escapeHtml(d.vehiculo_marca)} ${escapeHtml(d.vehiculo_modelo)} - ${escapeHtml(d.vehiculo_placa)}</p>
-                    <p><strong>Fecha Envío:</strong> ${formatDate(d.fecha_envio)}</p>
-                </div>
-                <h4>Servicios</h4>
-                ${d.servicios.map(s => `<div class="servicio-item"><div class="servicio-descripcion"><strong>${escapeHtml(s.descripcion)}</strong></div><div class="servicio-precio">Bs. ${s.precio?.toFixed(2)} ${s.aprobado_por_cliente ? '✅ Aprobado' : '⏳ Pendiente'}</div></div>`).join('')}
-            `;
-            abrirModal('modalDetalleCotizacion');
-        } else {
-            showToast('Error al cargar detalle', 'error');
-        }
-    } catch (error) {
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
 // =====================================================
 // EVENTOS Y AUTENTICACIÓN
 // =====================================================
@@ -1164,24 +1461,35 @@ function setupEventListeners() {
     document.getElementById('saveSolicitudModal')?.addEventListener('click', () => {
         showToast('Función en desarrollo', 'info');
     });
-    document.getElementById('guardarBorradorBtn')?.addEventListener('click', guardarBorradorCotizacion);
     document.getElementById('enviarCotizacionBtn')?.addEventListener('click', enviarCotizacionCliente);
-    document.getElementById('verVistaPreviaBtn')?.addEventListener('click', verVistaPrevia);
-    document.getElementById('exportarPDFPreviaBtn')?.addEventListener('click', exportarPDF);
     document.getElementById('confirmarSolicitudCompra')?.addEventListener('click', confirmarSolicitudCompra);
     document.getElementById('btnAgregarItemCompra')?.addEventListener('click', agregarItemCompra);
     document.getElementById('btnAgregarServicio')?.addEventListener('click', agregarServicio);
     document.getElementById('guardarServiciosBtn')?.addEventListener('click', guardarServiciosEditados);
-    document.getElementById('refreshOrdenesBtn')?.addEventListener('click', () => cargarOrdenesConServicios());
+    document.getElementById('refreshOrdenesBtn')?.addEventListener('click', () => {
+        cargarCotizacionesMap();
+        cargarOrdenesConServicios();
+    });
+    document.getElementById('btnAgregarItemSolicitud')?.addEventListener('click', agregarItemSolicitud);
+    document.getElementById('btnNuevaSolicitudCotizacion')?.addEventListener('click', () => {
+        limpiarItemsSolicitud();
+        abrirModal('modalSolicitudCotizacion');
+    });
+    document.getElementById('btnAgregarServicioCotizacion')?.addEventListener('click', agregarServicioCotizable);
+    
+    // Filtros
+    document.getElementById('filtroEstadoCotizacion')?.addEventListener('change', () => {
+        renderOrdenes();
+    });
+    document.getElementById('searchOrden')?.addEventListener('input', () => {
+        renderOrdenes();
+    });
     
     const refreshBtns = ['refreshSolicitudes', 'refreshCompras'];
     refreshBtns.forEach(id => { 
         const btn = document.getElementById(id);
         if (btn) btn.addEventListener('click', () => cargarDatosIniciales());
     });
-    
-    const searchOrden = document.getElementById('searchOrden');
-    if (searchOrden) searchOrden.addEventListener('input', () => renderOrdenes());
     
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
@@ -1246,7 +1554,7 @@ function logout() {
 }
 
 async function inicializar() {
-    console.log('🚀 Inicializando cotizaciones.js versión profesional');
+    console.log('🚀 Inicializando cotizaciones.js versión simplificada');
     const user = await cargarUsuarioActual();
     if (!user) return;
     await cargarDatosIniciales();
@@ -1259,7 +1567,9 @@ async function inicializar() {
 window.eliminarSolicitudCotizacion = eliminarSolicitudCotizacion;
 window.solicitarCompraDesdeCotizacion = solicitarCompraDesdeCotizacion;
 window.abrirModalGenerarCotizacion = abrirModalGenerarCotizacion;
+window.editarCotizacionExistente = editarCotizacionExistente;
 window.verDetalleCotizacion = verDetalleCotizacion;
+window.verDetalleCotizacionByOrden = verDetalleCotizacionByOrden;
 window.verSolicitudCompra = verSolicitudCompra;
 window.aprobarCompra = aprobarCompra;
 window.cerrarModal = cerrarModal;
@@ -1270,18 +1580,21 @@ window.actualizarItemSolicitud = actualizarItemSolicitud;
 window.eliminarItemSolicitud = eliminarItemSolicitud;
 window.actualizarItemCompra = actualizarItemCompra;
 window.eliminarItemCompra = eliminarItemCompra;
-window.insertarTextoRapido = insertarTextoRapido;
 window.toggleServicioEditable = toggleServicioEditable;
+window.toggleServicioCotizable = toggleServicioCotizable;
 window.actualizarServicio = actualizarServicio;
+window.actualizarServicioCotizable = actualizarServicioCotizable;
 window.agregarItemServicio = agregarItemServicio;
 window.actualizarItemServicio = actualizarItemServicio;
 window.eliminarItemServicio = eliminarItemServicio;
 window.eliminarServicio = eliminarServicio;
 window.editarServicioCotizacion = editarServicioCotizacion;
 window.editarServiciosOrden = editarServiciosOrden;
-window.abrirEditorServicios = abrirEditorServicios;
-window.subirFirmaDigital = subirFirmaDigital;
-window.limpiarEditor = limpiarEditor;
-window.exportarPDF = exportarPDF;
+window.descargarCotizacion = descargarCotizacion;
+window.agregarItemCotizable = agregarItemCotizable;
+window.actualizarItemCotizable = actualizarItemCotizable;
+window.eliminarItemCotizable = eliminarItemCotizable;
+window.agregarServicioCotizable = agregarServicioCotizable;
+window.eliminarServicioCotizable = eliminarServicioCotizable;
 
 document.addEventListener('DOMContentLoaded', inicializar);

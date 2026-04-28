@@ -7,15 +7,10 @@
     <title>Cotizaciones | FURIA MOTOR - Jefe Taller</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Editor WYSIWYG - Quill -->
-    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
-    
-    <!-- Librería para generar PDF -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/cotizaciones.css">
 </head>
@@ -42,7 +37,7 @@
             </header>
 
             <div class="content">
-                <!-- TABS -->
+                <!-- TABS PRINCIPALES -->
                 <div class="tabs-container">
                     <div class="tabs">
                         <button class="tab-btn active" data-tab="tab-solicitar-cotizacion">
@@ -94,10 +89,26 @@
                     <div class="table-container">
                         <table class="data-table">
                             <thead>
-                                <tr><th>ID</th><th>Orden</th><th>Vehículo</th><th>Servicio</th><th>Items</th><th>Estado</th><th>Precio</th><th>Fecha</th><th>Acciones</th></tr>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Orden</th>
+                                    <th>Vehículo</th>
+                                    <th>Servicio</th>
+                                    <th>Items</th>
+                                    <th>Estado</th>
+                                    <th>Precio</th>
+                                    <th>Fecha</th>
+                                    <th>Acciones</th>
+                                </tr>
                             </thead>
                             <tbody id="tablaSolicitudesCotizacion">
-                                <tr class="empty-row"><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes</p></div></td></tr>
+                                <tr class="empty-row">
+                                    <td colspan="9">
+                                        <div class="empty-state"><i class="fas fa-inbox"></i>
+                                            <p>No hay solicitudes</p>
+                                        </div>
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -108,37 +119,30 @@
                     <div class="panel-header">
                         <div class="panel-header-left">
                             <h3><i class="fas fa-clipboard-list"></i> Órdenes con Servicios</h3>
-                            <p>Selecciona una orden para generar cotización profesional</p>
+                            <p>Selecciona una orden para generar o editar cotización</p>
                         </div>
                         <button class="btn-outline" id="refreshOrdenesBtn">
                             <i class="fas fa-sync-alt"></i> Actualizar
                         </button>
                     </div>
 
+                    <!-- FILTROS -->
                     <div class="filters-bar">
+                        <div class="filter-group">
+                            <select id="filtroEstadoCotizacion" class="form-select-sm">
+                                <option value="all">Todas las órdenes</option>
+                                <option value="pendiente">Sin cotización</option>
+                                <option value="enviada">Con cotización</option>
+                            </select>
+                        </div>
                         <div class="search-box">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="searchOrden" placeholder="Buscar orden o cliente...">
+                            <input type="text" id="searchOrden" placeholder="Buscar orden, cliente o vehículo...">
                         </div>
                     </div>
 
+                    <!-- ÓRDENES CON SERVICIOS -->
                     <div id="ordenesContainer"></div>
-
-                    <div class="panel-header" style="margin-top: 2rem;">
-                        <div class="panel-header-left">
-                            <h3><i class="fas fa-envelope-open-text"></i> Cotizaciones Enviadas</h3>
-                            <p>Respuestas de clientes</p>
-                        </div>
-                    </div>
-
-                    <div class="table-container">
-                        <table class="data-table">
-                            <thead><tr><th>Orden</th><th>Vehículo</th><th>Cliente</th><th>Total Aprobado</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
-                            <tbody id="tablaCotizacionesEnviadas">
-                                <tr class="empty-row"><td colspan="7"><div class="empty-state"><i class="fas fa-envelope"></i><p>No hay cotizaciones enviadas</p></div></td></tr>
-                            </tbody>
-                        </table>
-                    </div>
                 </div>
 
                 <!-- TAB 3: SOLICITAR COMPRA -->
@@ -170,9 +174,26 @@
 
                     <div class="table-container">
                         <table class="data-table">
-                            <thead><tr><th>ID</th><th>Orden</th><th>Vehículo</th><th>Servicio</th><th>Items</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Orden</th>
+                                    <th>Vehículo</th>
+                                    <th>Servicio</th>
+                                    <th>Items</th>
+                                    <th>Estado</th>
+                                    <th>Fecha</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
                             <tbody id="tablaSolicitudesCompra">
-                                <tr class="empty-row"><td colspan="8"><div class="empty-state"><i class="fas fa-shopping-cart"></i><p>No hay solicitudes</p></div></td></tr>
+                                <tr class="empty-row">
+                                    <td colspan="8">
+                                        <div class="empty-state"><i class="fas fa-shopping-cart"></i>
+                                            <p>No hay solicitudes</p>
+                                        </div>
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -242,24 +263,93 @@
         </div>
     </div>
 
-    <!-- Modal: Generar Cotización (EDITOR PROFESIONAL) -->
+    <!-- Modal: Generar/Editar Cotización -->
     <div class="modal" id="modalGenerarCotizacion">
         <div class="modal-content modal-xl">
             <div class="modal-header">
-                <h2><i class="fas fa-file-invoice"></i> Generar Cotización Profesional</h2>
-                <div>
-                    <button class="btn-outline" id="verVistaPreviaBtn" style="margin-right: 0.5rem;">
-                        <i class="fas fa-eye"></i> Vista Previa
+                <h2 id="modalCotizacionTitle"><i class="fas fa-file-invoice"></i> Generar Cotización</h2>
+                <button class="modal-close" onclick="cerrarModal('modalGenerarCotizacion')">&times;</button>
+            </div>
+            <div class="modal-body" id="generarCotizacionBody">
+                <div class="modal-tabs">
+                    <button class="modal-tab-btn active" data-modal-tab="tab-servicios">
+                        <i class="fas fa-tools"></i> Servicios y Repuestos
                     </button>
-                    <button class="modal-close" onclick="cerrarModal('modalGenerarCotizacion')">&times;</button>
+                    <button class="modal-tab-btn" data-modal-tab="tab-documento">
+                        <i class="fas fa-file-pdf"></i> Documento de Cotización
+                    </button>
+                </div>
+
+                <!-- TAB 1: SERVICIOS EDITABLES -->
+                <div id="modal-tab-servicios" class="modal-tab-content active">
+                    <div class="panel-header" style="margin-bottom: 1rem;">
+                        <div class="panel-header-left">
+                            <h3><i class="fas fa-clipboard-list"></i> Servicios a Cotizar</h3>
+                            <p>Administra los servicios y repuestos que se enviarán al cliente</p>
+                        </div>
+                        <button class="btn-primary btn-sm" id="btnAgregarServicioCotizacion">
+                            <i class="fas fa-plus"></i> Agregar Servicio
+                        </button>
+                    </div>
+
+                    <div class="orden-info-card" id="ordenInfoPreview" style="margin-bottom: 1rem;"></div>
+                    <div id="serviciosCotizacionContainer"
+                        style="max-height: 400px; overflow-y: auto; margin-bottom: 1rem;"></div>
+
+                    <div class="total-cotizacion"
+                        style="text-align: right; padding: 1rem; background: var(--gris-oscuro); border-radius: var(--radius-md); margin-top: 1rem;">
+                        <h3>Total: <span id="totalCotizacion" style="color: var(--verde-exito);">Bs. 0.00</span></h3>
+                    </div>
+                </div>
+
+                <!-- TAB 2: SUBIDA DE DOCUMENTO -->
+                <div id="modal-tab-documento" class="modal-tab-content">
+                    <div class="upload-section">
+                        <div class="file-upload-area" id="fileUploadArea">
+                            <i class="fas fa-cloud-upload-alt"
+                                style="font-size: 48px; color: var(--rojo-primario); margin-bottom: 15px;"></i>
+                            <h3 style="margin-bottom: 10px;">Subir Documento de Cotización</h3>
+                            <p style="color: var(--text-muted); margin-bottom: 10px;">Arrastra un archivo PDF o Word o
+                                haz clic para seleccionar</p>
+                            <p style="color: var(--text-muted); font-size: 12px;">Formatos permitidos: PDF, DOC, DOCX
+                                (Máx. 10MB)</p>
+                            <input type="file" id="cotizacionFile" accept=".pdf,.doc,.docx" style="display: none;">
+                            <button class="btn-outline" id="selectFileBtn" style="margin-top: 15px;">
+                                <i class="fas fa-folder-open"></i> Seleccionar archivo
+                            </button>
+                        </div>
+
+                        <div id="fileInfo"
+                            style="display: none; margin-top: 20px; padding: 15px; background: var(--bg-card); border-radius: var(--radius-md);">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <i class="fas fa-file-pdf" style="font-size: 32px; color: #dc3545;"></i>
+                                    <i class="fas fa-file-word"
+                                        style="font-size: 32px; color: #2b5797; display: none;"></i>
+                                    <div>
+                                        <strong id="fileName"></strong>
+                                        <p id="fileSize"
+                                            style="font-size: 12px; color: var(--text-muted); margin-top: 5px;"></p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <button class="action-btn delete" id="removeFileBtn" title="Eliminar archivo">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-top: 20px;">
+                            <label><i class="fas fa-comment-dots"></i> Mensaje para el cliente</label>
+                            <textarea id="notasAdicionales" class="form-textarea" rows="3"
+                                placeholder="Escribe un mensaje adicional para el cliente..."></textarea>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="modal-body" id="generarCotizacionBody"></div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalGenerarCotizacion')">Cancelar</button>
-                <button class="btn-success" id="guardarBorradorBtn">
-                    <i class="fas fa-save"></i> Guardar Borrador
-                </button>
                 <button class="btn-primary" id="enviarCotizacionBtn">
                     <i class="fas fa-paper-plane"></i> Enviar al Cliente
                 </button>
@@ -267,18 +357,18 @@
         </div>
     </div>
 
-    <!-- Modal: Vista Previa PDF -->
-    <div class="modal" id="modalVistaPrevia">
-        <div class="modal-content modal-xl">
+    <!-- Modal: Ver Detalle Cotización -->
+    <div class="modal" id="modalDetalleCotizacion">
+        <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h2><i class="fas fa-file-pdf"></i> Vista Previa - Cotización</h2>
-                <button class="modal-close" onclick="cerrarModal('modalVistaPrevia')">&times;</button>
+                <h2><i class="fas fa-receipt"></i> Detalle de Cotización</h2>
+                <button class="modal-close" onclick="cerrarModal('modalDetalleCotizacion')">&times;</button>
             </div>
-            <div class="modal-body" id="vistaPreviaBody" style="background: #e0e0e0;"></div>
+            <div class="modal-body" id="detalleCotizacionContainer"></div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalVistaPrevia')">Cerrar</button>
-                <button class="btn-success" id="exportarPDFPreviaBtn">
-                    <i class="fas fa-download"></i> Descargar PDF
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalleCotizacion')">Cerrar</button>
+                <button class="btn-success" id="exportarPDFDetalleBtn">
+                    <i class="fas fa-download"></i> Descargar Documento
                 </button>
             </div>
         </div>
@@ -304,23 +394,6 @@
                 <button class="btn-secondary" onclick="cerrarModal('modalEditorServicios')">Cancelar</button>
                 <button class="btn-primary" id="guardarServiciosBtn">
                     <i class="fas fa-save"></i> Guardar Cambios
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Detalle Cotización -->
-    <div class="modal" id="modalDetalleCotizacion">
-        <div class="modal-content modal-lg">
-            <div class="modal-header">
-                <h2><i class="fas fa-receipt"></i> Detalle de Cotización</h2>
-                <button class="modal-close" onclick="cerrarModal('modalDetalleCotizacion')">&times;</button>
-            </div>
-            <div class="modal-body" id="detalleCotizacionContainer"></div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalDetalleCotizacion')">Cerrar</button>
-                <button class="btn-success" id="exportarPDFDetalleBtn">
-                    <i class="fas fa-file-pdf"></i> Exportar PDF
                 </button>
             </div>
         </div>
@@ -364,8 +437,8 @@
     </div>
 
     <!-- Loading Overlay -->
-    <div id="loadingOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center;">
-        <div style="background: var(--bg-card); padding: 1.5rem 2rem; border-radius: var(--radius-lg); text-align: center;">
+    <div id="loadingOverlay" style="display: none;">
+        <div>
             <i class="fas fa-spinner fa-pulse fa-2x" style="color: var(--rojo-primario);"></i>
             <p style="margin-top: 0.5rem;">Cargando...</p>
         </div>

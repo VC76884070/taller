@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informes de Cotización | Cliente - FURIA MOTOR</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="css/misvehiculos.css">
+    <link rel="stylesheet" href="css/cliente.css">
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <div class="top-bar">
+                <div class="page-title">
+                    <h1>Informes de Cotización</h1>
+                    <p>Revisa y aprueba las cotizaciones de tus vehículos</p>
+                </div>
+                <div class="top-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="filtros-bar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Buscar por orden o vehículo...">
+                </div>
+                <select id="filtroEstado">
+                    <option value="all">Todos los estados</option>
+                    <option value="enviada">Enviada</option>
+                    <option value="aprobado_total">Aprobada Total</option>
+                    <option value="aprobado_parcial">Aprobada Parcial</option>
+                    <option value="rechazada">Rechazada</option>
+                </select>
+                <button id="refreshBtn" class="btn-secondary">
+                    <i class="fas fa-sync-alt"></i> Actualizar
+                </button>
+            </div>
+
+            <!-- Grid de cotizaciones -->
+            <div id="cotizacionesGrid" class="cotizaciones-grid">
+                <!-- Se llena dinámicamente -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal de detalle de cotización -->
+    <div id="modalDetalleCotizacion" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3><i class="fas fa-file-invoice-dollar"></i> Detalle de Cotización</h3>
+                <span class="close-modal" onclick="cerrarModal('modalDetalleCotizacion')">&times;</span>
+            </div>
+            <div id="modalDetalleBody"></div>
+            <div class="detalle-actions" id="cotizacionActions">
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalleCotizacion')">Cerrar</button>
+                <button class="btn-primary" id="btnAprobarTodo" onclick="aprobarCotizacionCompleta()"
+                    style="display: none;">
+                    <i class="fas fa-check-circle"></i> Aprobar Todo
+                </button>
+                <button class="btn-primary" id="btnAprobarSeleccion" onclick="aprobarServiciosSeleccionados()"
+                    style="display: none;">
+                    <i class="fas fa-check-double"></i> Aprobar Seleccionados
+                </button>
+                <button class="btn-danger" id="btnRechazar" onclick="rechazarCotizacion()" style="display: none;">
+                    <i class="fas fa-times-circle"></i> Rechazar Cotización
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para imprimir cotización -->
+    <div id="modalImprimir" class="modal">
+        <div class="modal-content modal-print">
+            <div class="modal-header">
+                <h3><i class="fas fa-print"></i> Vista Previa de Cotización</h3>
+                <span class="close-modal" onclick="cerrarModal('modalImprimir')">&times;</span>
+            </div>
+            <div id="printContent"></div>
+            <div class="detalle-actions">
+                <button class="btn-secondary" onclick="cerrarModal('modalImprimir')">Cerrar</button>
+                <button class="btn-primary" onclick="imprimirCotizacion()">
+                    <i class="fas fa-print"></i> Imprimir
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <script src="js/include.js"></script>
+    <script src="js/cotizaciones.js"></script>
+</body>
+
+</html>

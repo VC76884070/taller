@@ -128,6 +128,31 @@
         .password-toggle:hover {
             color: var(--rojo-primario);
         }
+
+        /* Mensaje de información para clientes */
+        .client-info-message {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: var(--radius-md);
+            padding: 0.75rem;
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        .client-info-message i {
+            color: var(--verde-exito);
+            margin-right: 0.5rem;
+        }
+
+        .client-info-message p {
+            font-size: 0.75rem;
+            color: var(--gris-texto);
+            margin: 0;
+        }
+
+        .client-info-message strong {
+            color: var(--verde-exito);
+        }
     </style>
 </head>
 
@@ -257,13 +282,13 @@
                             <span class="input-placeholder">Número de documento</span>
                         </div>
 
-                        <!-- Campo para clientes (email o placa) -->
+                        <!-- Campo para clientes (SOLO PLACA) -->
                         <div class="input-group" id="plateGroup" style="display: none;">
                             <div class="input-icon">
                                 <i class="fas fa-car"></i>
                             </div>
-                            <input type="text" id="plate" placeholder="ABC123 o email@ejemplo.com" maxlength="50">
-                            <span class="input-placeholder">Placa</span>
+                            <input type="text" id="plate" placeholder="ABC123" maxlength="10" autocomplete="off">
+                            <span class="input-placeholder">Número de placa</span>
                         </div>
 
                         <!-- Campo contraseña -->
@@ -295,22 +320,15 @@
                         </button>
                     </form>
 
-                    <!-- Mensaje para clientes -->
-                    <div class="client-quick-access" id="clientQuickAccess" style="display: none;">
-                        <p class="quick-title">¿No tienes cuenta?</p>
-                        <button class="quick-register-btn" onclick="openRegisterModal()">
-                            <i class="fas fa-user-plus"></i>
-                            Registrarse como nuevo cliente
-                        </button>
-                        <p class="quick-title" style="margin-top: 1rem;">¿Ya tienes vehículo registrado?</p>
-                        <button class="quick-register-btn" onclick="openVehicleRegisterModal()">
-                            <i class="fas fa-car"></i>
-                            Registrar mi vehículo existente
-                        </button>
+                    <!-- Mensaje de información para clientes (sin botones de registro) -->
+                    <div class="client-info-message" id="clientInfoMessage" style="display: none;">
+                        <i class="fas fa-info-circle"></i>
+                        <p>Si ya has llevado tu vehículo al taller, puedes acceder con tu <strong>número de
+                                placa</strong> y tu <strong>número de teléfono</strong> como contraseña.</p>
                     </div>
 
-                    <!-- Enlace para registro de personal -->
-                    <div class="personal-register-link">
+                    <!-- Enlace para registro de personal (SOLO visible en pestaña staff) -->
+                    <div class="personal-register-link" id="personalRegisterLink">
                         <a href="/registro-personal.html">
                             <i class="fas fa-user-tie"></i>
                             ¿Eres personal? Solicita tu acceso
@@ -330,7 +348,7 @@
     <!-- MODALES -->
     <!-- ===================================================== -->
 
-    <!-- Modal Recuperar Contraseña (Mantener por compatibilidad, pero ya no se usa) -->
+    <!-- Modal Recuperar Contraseña -->
     <div class="modal" id="recoverModal" style="display: none;">
         <div class="modal-content">
             <div class="modal-header">
@@ -343,148 +361,6 @@
         </div>
     </div>
 
-    <!-- Modal Registro Cliente -->
-    <div class="modal" id="registerModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-user-plus"></i> Registro de Cliente</h2>
-                <button class="modal-close" onclick="closeRegisterModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div id="registerStep1">
-                    <p>Completa tus datos para registrarte en el sistema.</p>
-                    <div class="form-group">
-                        <label>Nombre completo *</label>
-                        <input type="text" id="regNombre" class="form-control" placeholder="Juan Pérez" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Correo electrónico *</label>
-                        <input type="email" id="regEmail" class="form-control" placeholder="juan@ejemplo.com" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Teléfono *</label>
-                        <input type="tel" id="regTelefono" class="form-control" placeholder="77712345" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Dirección</label>
-                        <input type="text" id="regDireccion" class="form-control" placeholder="Av. Principal #123">
-                    </div>
-                    <div class="form-group">
-                        <label>Contraseña *</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="regPassword" class="form-control" placeholder="••••••••"
-                                required>
-                            <button type="button" class="password-toggle"
-                                onclick="togglePasswordField('regPassword', 'regToggleIcon')">
-                                <i class="fas fa-eye" id="regToggleIcon"></i>
-                            </button>
-                        </div>
-                        <small>Mínimo 6 caracteres</small>
-                    </div>
-                    <div class="form-group">
-                        <label>Confirmar contraseña *</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="regConfirmPassword" class="form-control" placeholder="••••••••"
-                                required>
-                            <button type="button" class="password-toggle"
-                                onclick="togglePasswordField('regConfirmPassword', 'regConfirmToggleIcon')">
-                                <i class="fas fa-eye" id="regConfirmToggleIcon"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="modal-footer" style="justify-content: center;">
-                        <button class="btn-secondary" onclick="closeRegisterModal()">Cancelar</button>
-                        <button class="btn-primary" onclick="sendRegisterCode()">Registrarse</button>
-                    </div>
-                </div>
-                <div id="registerStep2" style="display: none;">
-                    <p>Ingresa el código de verificación enviado a <strong id="registerEmailDisplay"></strong></p>
-                    <div class="code-inputs">
-                        <input type="text" maxlength="1" class="code-digit" data-index="0" data-reg="true">
-                        <input type="text" maxlength="1" class="code-digit" data-index="1" data-reg="true">
-                        <input type="text" maxlength="1" class="code-digit" data-index="2" data-reg="true">
-                        <input type="text" maxlength="1" class="code-digit" data-index="3" data-reg="true">
-                        <input type="text" maxlength="1" class="code-digit" data-index="4" data-reg="true">
-                        <input type="text" maxlength="1" class="code-digit" data-index="5" data-reg="true">
-                    </div>
-                    <div class="resend-code">
-                        <button type="button" onclick="resendRegisterCode()" id="resendRegisterCodeBtn">
-                            <i class="fas fa-redo-alt"></i> Reenviar código
-                        </button>
-                        <div id="registerTimerText" class="timer-text"></div>
-                    </div>
-                    <div class="modal-footer" style="justify-content: center;">
-                        <button class="btn-secondary" onclick="goBackToRegisterStep1()">Volver</button>
-                        <button class="btn-primary" onclick="verifyRegisterCode()">Verificar</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Registro Vehículo Existente -->
-    <div class="modal" id="vehicleRegisterModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-car"></i> Registrar mi vehículo</h2>
-                <button class="modal-close" onclick="closeVehicleRegisterModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p>Ingresa los datos de tu vehículo para registrarlo en el sistema.</p>
-                <div class="form-group">
-                    <label>Número de placa *</label>
-                    <input type="text" id="vehPlaca" class="form-control" placeholder="ABC123"
-                        style="text-transform: uppercase;" required>
-                </div>
-                <div class="form-group">
-                    <label>Marca *</label>
-                    <input type="text" id="vehMarca" class="form-control" placeholder="Toyota" required>
-                </div>
-                <div class="form-group">
-                    <label>Modelo *</label>
-                    <input type="text" id="vehModelo" class="form-control" placeholder="Corolla" required>
-                </div>
-                <div class="form-group">
-                    <label>Año</label>
-                    <input type="number" id="vehAnio" class="form-control" placeholder="2020">
-                </div>
-                <div class="form-group">
-                    <label>Color</label>
-                    <input type="text" id="vehColor" class="form-control" placeholder="Rojo">
-                </div>
-                <div class="info-text">
-                    <i class="fas fa-info-circle"></i> Necesitas tener una cuenta de cliente primero
-                </div>
-                <div class="modal-footer" style="justify-content: center;">
-                    <button class="btn-secondary" onclick="closeVehicleRegisterModal()">Cancelar</button>
-                    <button class="btn-primary" onclick="registerVehicle()">Registrar vehículo</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast notifications -->
-    <div class="toast-container" id="toastContainer"></div>
-
-    <script src="js/login.js"></script>
-    <script>
-        // Función adicional para toggle de contraseña en modales
-        function togglePasswordField(inputId, iconId) {
-            const input = document.getElementById(inputId);
-            const icon = document.getElementById(iconId);
-
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.className = 'fas fa-eye-slash';
-            } else {
-                input.type = 'password';
-                icon.className = 'fas fa-eye';
-            }
-        }
-
-        // Exponer función globalmente
-        window.togglePasswordField = togglePasswordField;
-    </script>
     <!-- Modal de Selección de Rol para usuarios multi-rol -->
     <div class="modal" id="roleSelectionModal">
         <div class="modal-content modal-role">
@@ -503,11 +379,37 @@
                 <div class="role-selection-footer">
                     <label class="checkbox-container">
                         <input type="checkbox" id="rememberRoleChoice">
+                        <span class="checkmark"></span>
+                        <span class="checkbox-text">Recordar mi elección</span>
                     </label>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Toast notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="js/login.js"></script>
+    <script>
+        // Función para toggle de contraseña en modales
+        function togglePasswordField(inputId, iconId) {
+            const input = document.getElementById(inputId);
+            const icon = document.getElementById(iconId);
+            if (!input || !icon) return;
+
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+
+        // Exponer función globalmente
+        window.togglePasswordField = togglePasswordField;
+    </script>
 </body>
 
 </html>

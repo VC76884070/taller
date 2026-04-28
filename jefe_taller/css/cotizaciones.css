@@ -1,10 +1,10 @@
 /* =====================================================
    COTIZACIONES CSS - FURIA MOTOR
-   JEFE DE TALLER - VERSIÓN PROFESIONAL COMPLETA
+   JEFE DE TALLER - VERSIÓN MEJORADA
    ===================================================== */
 
 /* =====================================================
-   TABS
+   TABS PRINCIPALES
    ===================================================== */
 .tabs-container {
     margin-bottom: 1.5rem;
@@ -262,68 +262,6 @@
 }
 
 /* =====================================================
-   BOTONES DE FORMATO RÁPIDO - ESTILOS MEJORADOS
-   ===================================================== */
-.formato-rapido {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-    flex-wrap: wrap;
-    background: var(--gris-oscuro);
-    padding: 0.75rem;
-    border-radius: 12px 12px 0 0;
-    border-bottom: 1px solid var(--border-color);
-    position: sticky;
-    top: 0;
-    z-index: 10;
-}
-
-.btn-formato {
-    background: linear-gradient(135deg, #2a2a3e 0%, #1a1a2e 100%);
-    border: 1px solid var(--border-color);
-    color: var(--blanco);
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
-    font-size: 0.75rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.btn-formato:hover {
-    background: var(--rojo-primario);
-    border-color: var(--rojo-primario);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(193, 18, 31, 0.3);
-}
-
-.btn-formato:active {
-    transform: translateY(0);
-}
-
-.btn-formato i {
-    font-size: 0.8rem;
-}
-
-/* Colores específicos para cada botón */
-.btn-formato:nth-child(1) i { color: #3B82F6; }
-.btn-formato:nth-child(2) i { color: #10B981; }
-.btn-formato:nth-child(3) i { color: #F59E0B; }
-.btn-formato:nth-child(4) i { color: #8B5CF6; }
-.btn-formato:nth-child(5) i { color: #EC4899; }
-.btn-formato:nth-child(6) i { color: #06B6D4; }
-.btn-formato:nth-child(7) i { color: #84CC16; }
-.btn-formato:nth-child(8) i { color: #EF4444; }
-
-.btn-formato:hover i {
-    color: white !important;
-}
-
-/* =====================================================
    TARJETAS DE ÓRDENES
    ===================================================== */
 .orden-card {
@@ -441,10 +379,11 @@
     display: flex;
     justify-content: flex-end;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 /* =====================================================
-   LISTA DINÁMICA DE ITEMS
+   LISTA DINÁMICA DE ITEMS (Solicitudes)
    ===================================================== */
 .items-list-container {
     background: var(--gris-oscuro);
@@ -483,7 +422,7 @@
     align-items: center;
 }
 
-.item-descripcion, .item-unidad {
+.item-descripcion {
     width: 100%;
     padding: 0.5rem 0.7rem;
     background: var(--gris-oscuro);
@@ -493,7 +432,7 @@
     font-size: 0.8rem;
 }
 
-.item-cantidad, .item-precio {
+.item-cantidad {
     width: 100%;
     padding: 0.5rem 0.7rem;
     background: var(--gris-oscuro);
@@ -502,6 +441,16 @@
     color: var(--blanco);
     font-size: 0.8rem;
     text-align: center;
+}
+
+.item-detalle {
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    background: var(--gris-oscuro);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--blanco);
+    font-size: 0.8rem;
 }
 
 .item-subtotal {
@@ -569,123 +518,7 @@
 }
 
 /* =====================================================
-   EDITOR QUILL - ESTILOS PROFESIONALES
-   ===================================================== */
-
-#quillEditorContainer {
-    background: white !important;
-    border-radius: 12px !important;
-    overflow: hidden !important;
-    border: 1px solid #e0e0e0 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    margin-top: 0 !important;
-}
-
-#quillEditorContainer .ql-toolbar.ql-snow {
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 100 !important;
-    background: #f5f5f5 !important;
-    border-bottom: 1px solid #ddd !important;
-    border-radius: 12px 12px 0 0 !important;
-    padding: 8px !important;
-}
-
-#quillEditorContainer .ql-container.ql-snow {
-    flex: 1 !important;
-    overflow-y: auto !important;
-    min-height: 450px !important;
-    max-height: none !important;
-    font-family: 'Times New Roman', Arial, sans-serif;
-}
-
-#quillEditorContainer .ql-editor {
-    background: white !important;
-    color: #1a1a2e !important;
-    line-height: 1.6;
-    padding: 20px;
-    min-height: 400px;
-}
-
-#quillEditorContainer .ql-editor h1 {
-    color: #C1121F !important;
-    font-size: 28px;
-    text-align: center;
-    margin-bottom: 20px;
-}
-
-#quillEditorContainer .ql-editor h2 {
-    color: #C1121F !important;
-    font-size: 20px;
-    border-left: 4px solid #C1121F;
-    padding-left: 10px;
-    margin-top: 20px;
-    margin-bottom: 10px;
-}
-
-#quillEditorContainer .ql-editor h3 {
-    color: #C1121F !important;
-    font-size: 18px;
-}
-
-#quillEditorContainer .ql-editor table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 15px 0;
-}
-
-#quillEditorContainer .ql-editor th {
-    background: #C1121F;
-    color: white !important;
-    padding: 10px;
-    border: 1px solid #C1121F;
-}
-
-#quillEditorContainer .ql-editor td {
-    padding: 8px;
-    border: 1px solid #ddd;
-    color: #1a1a2e !important;
-}
-
-/* Scrollbar personalizado */
-.ql-container.ql-snow::-webkit-scrollbar {
-    width: 8px;
-}
-
-.ql-container.ql-snow::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-
-.ql-container.ql-snow::-webkit-scrollbar-thumb {
-    background: #C1121F;
-    border-radius: 4px;
-}
-
-.ql-container.ql-snow::-webkit-scrollbar-thumb:hover {
-    background: #8b0000;
-}
-
-/* Fuentes personalizadas */
-.ql-font-arial {
-    font-family: Arial, sans-serif;
-}
-
-.ql-font-times-new-roman {
-    font-family: 'Times New Roman', Times, serif;
-}
-
-.ql-font-courier-new {
-    font-family: 'Courier New', Courier, monospace;
-}
-
-.ql-font-georgia {
-    font-family: Georgia, 'Times New Roman', serif;
-}
-
-/* =====================================================
-   SERVICIOS EDITABLES
+   SERVICIOS EDITABLES (Editor de Servicios)
    ===================================================== */
 .servicio-editable-card {
     background: var(--bg-card);
@@ -724,6 +557,158 @@
 }
 
 .servicio-editable-body.active {
+    display: block;
+}
+
+/* =====================================================
+   SERVICIOS COTIZABLES (Modal Generar Cotización)
+   ===================================================== */
+.servicio-cotizable-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.servicio-cotizable-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--gris-oscuro);
+    cursor: pointer;
+}
+
+.servicio-cotizable-header:hover {
+    background: rgba(193, 18, 31, 0.1);
+}
+
+.servicio-cotizable-nombre {
+    font-weight: 600;
+    color: var(--blanco);
+    flex: 1;
+}
+
+.servicio-cotizable-nombre input {
+    width: 100%;
+    max-width: 300px;
+}
+
+.servicio-cotizable-precio {
+    font-weight: bold;
+    color: var(--verde-exito);
+    margin-right: 1rem;
+}
+
+.servicio-cotizable-body {
+    padding: 1rem;
+    display: none;
+}
+
+.servicio-cotizable-body.active {
+    display: block;
+}
+
+.servicio-items-container {
+    margin-top: 1rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.servicio-item-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.5rem;
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.servicio-item-descripcion {
+    flex: 2;
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--blanco);
+    font-size: 0.8rem;
+}
+
+.servicio-item-cantidad {
+    width: 70px;
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--blanco);
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.servicio-item-precio {
+    width: 100px;
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--blanco);
+    font-size: 0.8rem;
+    text-align: right;
+}
+
+.total-cotizacion {
+    border-top: 2px solid var(--rojo-primario);
+}
+
+/* =====================================================
+   MODAL TABS (Dentro del modal)
+   ===================================================== */
+.modal-tabs {
+    display: flex;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 1.5rem;
+    padding-bottom: 0;
+}
+
+.modal-tab-btn {
+    padding: 0.75rem 1.5rem;
+    background: transparent;
+    border: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--gris-texto);
+    cursor: pointer;
+    transition: var(--transition);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.modal-tab-btn i {
+    font-size: 1rem;
+}
+
+.modal-tab-btn:hover {
+    color: var(--rojo-primario);
+    background: rgba(193, 18, 31, 0.1);
+}
+
+.modal-tab-btn.active {
+    color: var(--rojo-primario);
+    border-bottom: 2px solid var(--rojo-primario);
+}
+
+.modal-tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.modal-tab-content.active {
     display: block;
 }
 
@@ -837,6 +822,53 @@
 .action-btn.edit:hover { color: #3B82F6; }
 
 /* =====================================================
+   SUBIDA DE ARCHIVOS
+   ===================================================== */
+.file-upload-area {
+    transition: all 0.3s ease;
+    background: var(--gris-oscuro);
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+}
+
+.file-upload-area.dragover {
+    border-color: var(--rojo-primario) !important;
+    background: rgba(193, 18, 31, 0.1) !important;
+    transform: scale(1.02);
+}
+
+.file-upload-area:hover {
+    border-color: var(--rojo-primario);
+    background: rgba(193, 18, 31, 0.05);
+}
+
+.file-uploaded {
+    animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.file-preview-card {
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-lg);
+    padding: 15px;
+    border: 1px solid var(--border-color);
+    margin-top: 15px;
+}
+
+/* =====================================================
    MODALES
    ===================================================== */
 .modal {
@@ -934,6 +966,33 @@
     background: var(--gris-oscuro);
 }
 
+/* Scrollbar personalizado */
+.modal-body::-webkit-scrollbar,
+.items-list::-webkit-scrollbar,
+.servicios-cotizacion-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.modal-body::-webkit-scrollbar-track,
+.items-list::-webkit-scrollbar-track,
+.servicios-cotizacion-container::-webkit-scrollbar-track {
+    background: var(--gris-oscuro);
+    border-radius: 4px;
+}
+
+.modal-body::-webkit-scrollbar-thumb,
+.items-list::-webkit-scrollbar-thumb,
+.servicios-cotizacion-container::-webkit-scrollbar-thumb {
+    background: var(--rojo-primario);
+    border-radius: 4px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover,
+.items-list::-webkit-scrollbar-thumb:hover,
+.servicios-cotizacion-container::-webkit-scrollbar-thumb:hover {
+    background: var(--rojo-oscuro);
+}
+
 /* =====================================================
    FORMULARIOS
    ===================================================== */
@@ -1007,37 +1066,28 @@
 }
 
 /* =====================================================
-   VISTA PREVIA
+   EMPTY STATE
    ===================================================== */
-#vistaPreviaBody {
-    background: #e0e0e0;
-    padding: 20px;
-}
-
-.preview-content {
-    background: white;
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 40px;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-}
-
-/* =====================================================
-   FIRMA DIGITAL
-   ===================================================== */
-.firma-container {
-    margin-top: 1rem;
-    padding: 1rem;
-    background: var(--gris-oscuro);
-    border-radius: var(--radius-md);
+.empty-state {
     text-align: center;
+    padding: 2rem;
+    color: var(--gris-texto);
 }
 
-.firma-imagen {
-    max-width: 200px;
-    max-height: 80px;
-    margin-bottom: 0.5rem;
+.empty-state i {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    opacity: 0.5;
+}
+
+.empty-state p {
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+.empty-state small {
+    font-size: 0.7rem;
+    opacity: 0.7;
 }
 
 /* =====================================================
@@ -1072,26 +1122,6 @@
 }
 
 /* =====================================================
-   EMPTY STATE
-   ===================================================== */
-.empty-state {
-    text-align: center;
-    padding: 2rem;
-    color: var(--gris-texto);
-}
-
-.empty-state i {
-    font-size: 2.5rem;
-    margin-bottom: 0.75rem;
-    opacity: 0.5;
-}
-
-.empty-state p {
-    font-size: 0.85rem;
-    margin-bottom: 1rem;
-}
-
-/* =====================================================
    TOAST NOTIFICATIONS
    ===================================================== */
 .toast-notification {
@@ -1109,6 +1139,7 @@
     animation: slideInToast 0.3s ease;
     box-shadow: var(--shadow-lg);
     font-size: 0.85rem;
+    max-width: 350px;
 }
 
 .toast-notification.success { border-left-color: var(--verde-exito); }
@@ -1148,7 +1179,7 @@
         gap: 0.5rem;
     }
     
-    .item-cantidad, .item-precio {
+    .item-cantidad {
         width: 100% !important;
     }
     
@@ -1182,9 +1213,42 @@
         flex-wrap: wrap;
     }
     
-    .formato-rapido {
-        justify-content: center;
+    .modal-tabs {
         flex-wrap: wrap;
+    }
+    
+    .servicio-item-row {
+        flex-wrap: wrap;
+    }
+    
+    .servicio-item-descripcion {
+        flex: 1 1 100%;
+        margin-bottom: 0.5rem;
+    }
+    
+    .servicio-item-cantidad,
+    .servicio-item-precio {
+        flex: 1;
+    }
+    
+    .servicio-cotizable-header {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    .servicio-cotizable-nombre input {
+        max-width: 100%;
+    }
+    
+    .orden-footer {
+        justify-content: center;
+    }
+    
+    .toast-notification {
+        max-width: 90%;
+        left: 5%;
+        right: 5%;
+        bottom: 10px;
     }
 }
 
@@ -1205,8 +1269,12 @@
         padding: 0.6rem 0.8rem;
     }
     
-    .btn-formato {
-        padding: 0.35rem 0.7rem;
-        font-size: 0.65rem;
+    .modal-tab-btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.75rem;
+    }
+    
+    .servicio-cotizable-precio input {
+        width: 80px !important;
     }
 }

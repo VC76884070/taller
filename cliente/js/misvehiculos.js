@@ -1,435 +1,563 @@
 // =====================================================
-// MIS VEHÍCULOS - CLIENTE
+// MISVEHICULOS.JS - CLIENTE
+// FURIA MOTOR COMPANY SRL
 // =====================================================
 
-// Configuración
-const API_URL = 'http://localhost:5000/api';
-
-// Elementos DOM
-const currentDateSpan = document.getElementById('currentDate');
-const vehiculosGrid = document.getElementById('vehiculosGrid');
-const loadingContainer = document.getElementById('loadingContainer');
-const emptyState = document.getElementById('emptyState');
-const detalleModal = document.getElementById('detalleModal');
-const detalleModalBody = document.getElementById('detalleModalBody');
-const btnVerCotizacion = document.getElementById('btnVerCotizacion');
-
-// Variables de estado
-let vehiculosData = [];
-let vehiculoSeleccionado = null;
-
-// Mapeo de estados
-const estadoConfig = {
-    'recepcion': { texto: 'Recepción', color: '#2196F3' },
-    'diagnostico': { texto: 'Diagnóstico', color: '#F59E0B' },
-    'cotizacion': { texto: 'Cotización', color: '#2C3E50' },
-    'reparacion': { texto: 'Reparación', color: '#C1121F' },
-    'finalizado': { texto: 'Finalizado', color: '#10B981' }
-};
+const API_URL = window.location.origin + '/api/cliente';
+let currentUser = null;
+let vehiculos = [];
+let currentVehiculoId = null;
 
 // =====================================================
-// INICIALIZACIÓN
+// FUNCIONES DE UTILIDAD
 // =====================================================
-document.addEventListener('DOMContentLoaded', async () => {
-    const autenticado = await checkAuth();
-    if (autenticado) {
-        initPage();
-        await loadVehiculos();
-        setupEventListeners();
-    }
-});
 
-// Verificar autenticación
-async function checkAuth() {
-    const token = localStorage.getItem('furia_token');
-    const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
+function getAuthHeaders() {
+    let token = localStorage.getItem('furia_token');
+    if (!token) token = localStorage.getItem('token');
     
-    if (!token) {
-        window.location.href = '../../login.html';
-        return false;
-    }
-    
-    if (user.type !== 'client') {
-        window.location.href = '../../login.html';
-        return false;
-    }
-    
-    return true;
-}
-
-// Inicializar página
-function initPage() {
-    const now = new Date();
-    const options = { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
+    return {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
     };
-    const dateStr = now.toLocaleDateString('es-ES', options);
-    
-    if (currentDateSpan) {
-        currentDateSpan.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    try {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch {
+        return dateStr.split('T')[0];
     }
 }
 
-// Configurar event listeners
-function setupEventListeners() {
-    // Cerrar modal con ESC
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && detalleModal.classList.contains('show')) {
-            cerrarDetalleModal();
-        }
-    });
+function formatDateTime(dateStr) {
+    if (!dateStr) return '-';
+    try {
+        const date = new Date(dateStr);
+        return date.toLocaleString('es-BO');
+    } catch {
+        return dateStr;
+    }
+}
+
+function showToast(message, type = 'info') {
+    const existingToast = document.querySelector('.toast-notification');
+    if (existingToast) existingToast.remove();
     
-    // Cerrar modal haciendo clic fuera
-    detalleModal.addEventListener('click', (e) => {
-        if (e.target === detalleModal) {
-            cerrarDetalleModal();
-        }
-    });
+    const toast = document.createElement('div');
+    toast.className = `toast-notification ${type}`;
+    
+    let icon = 'fa-info-circle';
+    if (type === 'success') icon = 'fa-check-circle';
+    if (type === 'error') icon = 'fa-exclamation-circle';
+    if (type === 'warning') icon = 'fa-exclamation-triangle';
+    
+    toast.innerHTML = `<i class="fas ${icon}"></i> ${message}`;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function cerrarModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.remove('active');
+}
+
+function abrirModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.add('active');
+}
+
+function mostrarLoading(mostrar) {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.style.display = mostrar ? 'flex' : 'none';
+    }
+}
+
+function getEstadoTexto(estado) {
+    const estados = {
+        'EnRecepcion': 'En Recepción',
+        'EnDiagnostico': 'En Diagnóstico',
+        'CotizacionEnviada': 'Cotización Enviada',
+        'EnReparacion': 'En Reparación',
+        'ControlCalidad': 'Control de Calidad',
+        'Finalizado': 'Finalizado',
+        'Entregado': 'Entregado'
+    };
+    return estados[estado] || estado;
+}
+
+function getProgresoPorEstado(estado) {
+    const progreso = {
+        'EnRecepcion': 10,
+        'EnDiagnostico': 25,
+        'CotizacionEnviada': 40,
+        'EnReparacion': 60,
+        'ControlCalidad': 80,
+        'Finalizado': 95,
+        'Entregado': 100
+    };
+    return progreso[estado] || 0;
 }
 
 // =====================================================
-// CARGAR VEHÍCULOS
+// CARGA DE DATOS
 // =====================================================
-async function loadVehiculos() {
+
+async function cargarVehiculos() {
+    mostrarLoading(true);
+    
     try {
-        mostrarLoading(true);
+        const search = document.getElementById('searchInput')?.value.toLowerCase() || '';
+        const estado = document.getElementById('filtroEstado')?.value || 'all';
         
-        // Simulación - Reemplazar con llamada real a la API
-        await new Promise(resolve => setTimeout(resolve, 1200));
+        let url = `${API_URL}/mis-vehiculos`;
+        const params = new URLSearchParams();
+        if (estado !== 'all') params.append('estado', estado);
+        if (params.toString()) url += `?${params.toString()}`;
         
-        // Datos de ejemplo - Obtener del localStorage o API
-        const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
+        const response = await fetch(url, { headers: getAuthHeaders() });
         
-        vehiculosData = generarVehiculosEjemplo(user);
+        if (response.status === 401) {
+            window.location.href = '/';
+            return;
+        }
         
-        renderizarVehiculos();
+        const data = await response.json();
         
+        if (data.success) {
+            let vehiculosList = data.vehiculos || [];
+            
+            if (search) {
+                vehiculosList = vehiculosList.filter(v => 
+                    (v.placa || '').toLowerCase().includes(search) ||
+                    (v.marca || '').toLowerCase().includes(search) ||
+                    (v.modelo || '').toLowerCase().includes(search)
+                );
+            }
+            
+            vehiculos = vehiculosList;
+            renderizarVehiculos(vehiculosList);
+        } else {
+            showToast(data.error || 'Error al cargar vehículos', 'error');
+        }
     } catch (error) {
         console.error('Error:', error);
-        mostrarError('Error al cargar tus vehículos');
+        showToast('Error de conexión', 'error');
     } finally {
         mostrarLoading(false);
     }
 }
 
-// Generar vehículos de ejemplo
-function generarVehiculosEjemplo(user) {
-    // Datos de ejemplo para el cliente
-    const vehiculosEjemplo = [
-        {
-            id: 1,
-            marca: 'Toyota',
-            modelo: 'Corolla',
-            placa: 'ABC123',
-            año: 2020,
-            color: 'Gris',
-            estado: 'reparacion',
-            fechaIngreso: '2026-03-15T10:30:00',
-            imagen: 'https://www.pngmart.com/files/22/Toyota-Corolla-PNG-Photo.png',
-            diagnostico: 'Ruido en motor al acelerar. Se requiere revisión de bujías y limpieza de inyectores.',
-            cotizacion: {
-                total: 1250,
-                items: [
-                    { descripcion: 'Diagnóstico', precio: 200 },
-                    { descripcion: 'Cambio de bujías', precio: 450 },
-                    { descripcion: 'Limpieza de inyectores', precio: 600 }
-                ]
-            },
-            timeline: [
-                { estado: 'Recepción', fecha: '2026-03-15T10:30:00' },
-                { estado: 'Diagnóstico', fecha: '2026-03-15T14:00:00' },
-                { estado: 'Reparación', fecha: '2026-03-16T09:00:00' }
-            ]
-        },
-        {
-            id: 2,
-            marca: 'Honda',
-            modelo: 'Civic',
-            placa: 'XYZ789',
-            año: 2021,
-            color: 'Blanco',
-            estado: 'cotizacion',
-            fechaIngreso: '2026-03-18T08:15:00',
-            imagen: 'https://www.pngmart.com/files/22/Honda-Civic-PNG-Image.png',
-            diagnostico: 'Vibración en frenos delanteros. Se recomienda cambio de pastillas y rectificado de discos.',
-            cotizacion: {
-                total: 980,
-                items: [
-                    { descripcion: 'Diagnóstico', precio: 200 },
-                    { descripcion: 'Cambio pastillas freno', precio: 480 },
-                    { descripcion: 'Rectificado discos', precio: 300 }
-                ]
-            },
-            timeline: [
-                { estado: 'Recepción', fecha: '2026-03-18T08:15:00' },
-                { estado: 'Diagnóstico', fecha: '2026-03-18T11:30:00' }
-            ]
-        }
-    ];
+function renderizarVehiculos(vehiculosList) {
+    const container = document.getElementById('vehiculosGrid');
+    if (!container) return;
     
-    return vehiculosEjemplo;
-}
-
-// Renderizar vehículos
-function renderizarVehiculos() {
-    if (vehiculosData.length === 0) {
-        vehiculosGrid.style.display = 'none';
-        emptyState.style.display = 'block';
+    if (vehiculosList.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-car"></i>
+                <p>No tienes vehículos registrados</p>
+                <small>Cuando lleves tu vehículo al taller, aparecerá aquí</small>
+            </div>
+        `;
         return;
     }
     
-    vehiculosGrid.style.display = 'grid';
-    emptyState.style.display = 'none';
-    
-    const estadoTexto = (estado) => estadoConfig[estado]?.texto || estado;
-    const estadoClass = (estado) => {
-        const map = {
-            'recepcion': 'recepcion',
-            'diagnostico': 'diagnostico',
-            'cotizacion': 'cotizacion',
-            'reparacion': 'reparacion',
-            'finalizado': 'finalizado'
-        };
-        return map[estado] || 'recepcion';
-    };
-    
-    const formatFecha = (fecha) => {
-        const date = new Date(fecha);
-        return date.toLocaleDateString('es-ES', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        });
-    };
-    
-    vehiculosGrid.innerHTML = vehiculosData.map(vehiculo => `
-        <div class="vehiculo-card">
-            <div class="vehiculo-imagen">
-                <img src="${vehiculo.imagen}" alt="${vehiculo.marca} ${vehiculo.modelo}" 
-                     onerror="this.src='https://placehold.co/400x300/e5e5e5/6B7280?text=${vehiculo.marca}'">
-                <span class="estado-badge ${estadoClass(vehiculo.estado)}">
-                    ${estadoTexto(vehiculo.estado)}
-                </span>
-            </div>
-            <div class="vehiculo-info">
-                <div class="vehiculo-titulo">
-                    <h3>${vehiculo.marca} ${vehiculo.modelo}</h3>
-                    <span class="vehiculo-placa">${vehiculo.placa}</span>
-                </div>
-                <div class="vehiculo-detalles">
-                    <div class="detalle-item">
-                        <i class="fas fa-calendar"></i>
-                        <span>${vehiculo.año}</span>
+    container.innerHTML = vehiculosList.map(vehiculo => {
+        const progreso = getProgresoPorEstado(vehiculo.estado_global);
+        
+        return `
+            <div class="vehiculo-card" onclick="verDetalleVehiculo(${vehiculo.id})">
+                <div class="vehiculo-header">
+                    <div class="vehiculo-placa">
+                        <i class="fas fa-car"></i>
+                        ${escapeHtml(vehiculo.placa)}
                     </div>
-                    <div class="detalle-item">
-                        <i class="fas fa-palette"></i>
-                        <span>${vehiculo.color}</span>
+                    <span class="vehiculo-estado estado-${vehiculo.estado_global}">
+                        ${getEstadoTexto(vehiculo.estado_global)}
+                    </span>
+                </div>
+                <div class="vehiculo-body">
+                    <div class="vehiculo-info">
+                        <div class="info-item">
+                            <i class="fas fa-tag"></i>
+                            <span>${escapeHtml(vehiculo.marca)} ${escapeHtml(vehiculo.modelo)}</span>
+                        </div>
+                        <div class="info-item">
+                            <i class="fas fa-calendar"></i>
+                            <span>Ingreso: ${formatDate(vehiculo.fecha_ingreso)}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="progreso-container">
+                        <div class="progreso-label">
+                            <span>Progreso</span>
+                            <span>${progreso}%</span>
+                        </div>
+                        <div class="progreso-bar">
+                            <div class="progreso-fill" style="width: ${progreso}%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="vehiculo-footer">
+                        <button class="btn-ver-detalle" onclick="event.stopPropagation(); verDetalleVehiculo(${vehiculo.id})">
+                            <i class="fas fa-eye"></i> Ver detalles
+                        </button>
                     </div>
                 </div>
-                <div class="fecha-item">
-                    <i class="fas fa-clock"></i>
-                    <span>Ingreso: ${formatFecha(vehiculo.fechaIngreso)}</span>
-                </div>
-                <button class="btn-detalle" onclick="verDetalle(${vehiculo.id})">
-                    <i class="fas fa-eye"></i>
-                    Ver Detalle
-                </button>
             </div>
-        </div>
-    `).join('');
-}
-
-// =====================================================
-// DETALLE DEL VEHÍCULO
-// =====================================================
-window.verDetalle = (id) => {
-    vehiculoSeleccionado = vehiculosData.find(v => v.id === id);
-    
-    if (!vehiculoSeleccionado) return;
-    
-    const formatFecha = (fecha) => {
-        const date = new Date(fecha);
-        return date.toLocaleString('es-ES', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
-    
-    const estadoTexto = estadoConfig[vehiculoSeleccionado.estado]?.texto || vehiculoSeleccionado.estado;
-    const estadoClass = (estado) => {
-        const map = {
-            'recepcion': '#2196F3',
-            'diagnostico': '#F59E0B',
-            'cotizacion': '#2C3E50',
-            'reparacion': '#C1121F',
-            'finalizado': '#10B981'
-        };
-        return map[estado] || '#6B7280';
-    };
-    
-    const timelineHtml = vehiculoSeleccionado.timeline.map(item => `
-        <div class="timeline-item">
-            <div class="timeline-icon">
-                <i class="fas fa-check"></i>
-            </div>
-            <div class="timeline-content">
-                <div class="timeline-title">${item.estado}</div>
-                <div class="timeline-date">${formatFecha(item.fecha)}</div>
-            </div>
-        </div>
-    `).join('');
-    
-    detalleModalBody.innerHTML = `
-        <div class="detalle-grid">
-            <div>
-                <div class="detalle-seccion">
-                    <h4>Información del Vehículo</h4>
-                    <p>${vehiculoSeleccionado.marca} ${vehiculoSeleccionado.modelo}</p>
-                    <p class="small">Placa: ${vehiculoSeleccionado.placa}</p>
-                    <p class="small">Año: ${vehiculoSeleccionado.año} | Color: ${vehiculoSeleccionado.color}</p>
-                </div>
-                <div class="detalle-seccion">
-                    <h4>Estado Actual</h4>
-                    <p style="color: ${estadoClass(vehiculoSeleccionado.estado)}; font-weight: 600;">
-                        ${estadoTexto}
-                    </p>
-                </div>
-                <div class="detalle-seccion">
-                    <h4>Diagnóstico</h4>
-                    <p>${vehiculoSeleccionado.diagnostico}</p>
-                </div>
-            </div>
-            <div>
-                <div class="detalle-seccion">
-                    <h4>Línea de Tiempo</h4>
-                    ${timelineHtml}
-                </div>
-            </div>
-        </div>
-    `;
-    
-    detalleModal.classList.add('show');
-};
-
-window.cerrarDetalleModal = () => {
-    detalleModal.classList.remove('show');
-    vehiculoSeleccionado = null;
-};
-
-window.verCotizacion = () => {
-    if (vehiculoSeleccionado && vehiculoSeleccionado.cotizacion) {
-        cerrarDetalleModal();
-        mostrarNotificacion('Abriendo cotización...', 'info');
-        setTimeout(() => {
-            window.location.href = `cotizacion.html?id=${vehiculoSeleccionado.id}`;
-        }, 500);
-    } else {
-        mostrarNotificacion('Cotización no disponible', 'warning');
-    }
-};
-
-// =====================================================
-// AGREGAR VEHÍCULO
-// =====================================================
-window.agregarVehiculo = () => {
-    mostrarNotificacion('Función disponible próximamente', 'info');
-};
-
-// =====================================================
-// UTILIDADES
-// =====================================================
-function mostrarLoading(show) {
-    if (show) {
-        loadingContainer.style.display = 'block';
-        vehiculosGrid.style.display = 'none';
-        emptyState.style.display = 'none';
-    } else {
-        loadingContainer.style.display = 'none';
-    }
-}
-
-function mostrarError(mensaje) {
-    vehiculosGrid.innerHTML = `
-        <div style="grid-column: 1/-1; text-align: center; padding: 3rem;">
-            <i class="fas fa-exclamation-circle" style="font-size: 3rem; color: var(--rojo-primario); margin-bottom: 1rem;"></i>
-            <p style="color: var(--gris-medio);">${mensaje}</p>
-            <button onclick="location.reload()" class="btn-agregar" style="margin-top: 1rem;">
-                <i class="fas fa-sync-alt"></i> Reintentar
-            </button>
-        </div>
-    `;
-    vehiculosGrid.style.display = 'grid';
-}
-
-function mostrarNotificacion(mensaje, tipo = 'info') {
-    let toastContainer = document.querySelector('.toast-container');
-    
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.className = 'toast-container';
-        toastContainer.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
         `;
-        document.body.appendChild(toastContainer);
-    }
-    
-    const toast = document.createElement('div');
-    toast.className = `toast-notification ${tipo}`;
-    
-    const iconos = {
-        success: 'fa-check-circle',
-        error: 'fa-exclamation-circle',
-        warning: 'fa-exclamation-triangle',
-        info: 'fa-info-circle'
-    };
-    
-    toast.innerHTML = `
-        <i class="fas ${iconos[tipo] || iconos.info}"></i>
-        <span>${mensaje}</span>
-    `;
-    
-    toast.style.cssText = `
-        background: white;
-        padding: 1rem 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        margin-bottom: 0.5rem;
-        animation: slideIn 0.3s ease;
-        border-left: 4px solid ${tipo === 'success' ? '#10B981' : tipo === 'error' ? '#C1121F' : tipo === 'warning' ? '#F59E0B' : '#2196F3'};
-        min-width: 300px;
-    `;
-    
-    toastContainer.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => {
-            if (toastContainer.contains(toast)) {
-                toastContainer.removeChild(toast);
-            }
-        }, 300);
-    }, 3000);
+    }).join('');
 }
 
 // =====================================================
-// LOGOUT
+// DETALLE DE VEHÍCULO
 // =====================================================
-window.logout = () => {
-    if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
-        localStorage.removeItem('furia_token');
-        localStorage.removeItem('furia_user');
-        window.location.href = '../../login.html';
+
+async function verDetalleVehiculo(id) {
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/detalle-vehiculo/${id}`, {
+            headers: getAuthHeaders()
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            currentVehiculoId = id;
+            mostrarDetalle(data.detalle);
+        } else {
+            showToast(data.error || 'Error al cargar detalle', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
     }
-};
+}
+
+function mostrarDetalle(detalle) {
+    // Información básica
+    const progreso = getProgresoPorEstado(detalle.estado_global);
+    
+    // Fotos
+    const fotosHtml = generarFotosHtml(detalle.fotos);
+    
+    // Timeline de avances (simulado basado en estado)
+    const timelineHtml = generarTimelineHtml(detalle);
+    
+    // Verificar si tiene cotización
+    const tieneCotizacion = detalle.estado_global === 'CotizacionEnviado' || 
+                           detalle.estado_global === 'EnReparacion' ||
+                           detalle.estado_global === 'ControlCalidad';
+    
+    const modalBody = document.getElementById('modalDetalleBody');
+    modalBody.innerHTML = `
+        <div class="detalle-seccion">
+            <h4><i class="fas fa-info-circle"></i> Información General</h4>
+            <div class="detalle-grid">
+                <div class="detalle-item">
+                    <span class="detalle-label">Código de Trabajo</span>
+                    <span class="detalle-value">${escapeHtml(detalle.codigo_unico || 'N/A')}</span>
+                </div>
+                <div class="detalle-item">
+                    <span class="detalle-label">Estado</span>
+                    <span class="detalle-value">${getEstadoTexto(detalle.estado_global)}</span>
+                </div>
+                <div class="detalle-item">
+                    <span class="detalle-label">Fecha de Ingreso</span>
+                    <span class="detalle-value">${formatDateTime(detalle.fecha_ingreso)}</span>
+                </div>
+                <div class="detalle-item">
+                    <span class="detalle-label">Progreso</span>
+                    <span class="detalle-value">${progreso}%</span>
+                </div>
+            </div>
+            <div class="progreso-bar" style="margin-top: 0.5rem;">
+                <div class="progreso-fill" style="width: ${progreso}%"></div>
+            </div>
+        </div>
+        
+        <div class="detalle-seccion">
+            <h4><i class="fas fa-user"></i> Datos del Cliente</h4>
+            <div class="detalle-grid">
+                <div class="detalle-item">
+                    <span class="detalle-label">Nombre</span>
+                    <span class="detalle-value">${escapeHtml(detalle.cliente_nombre || 'N/A')}</span>
+                </div>
+                <div class="detalle-item">
+                    <span class="detalle-label">Teléfono</span>
+                    <span class="detalle-value">${escapeHtml(detalle.cliente_telefono || 'N/A')}</span>
+                </div>
+                <div class="detalle-item">
+                    <span class="detalle-label">Email</span>
+                    <span class="detalle-value">${escapeHtml(detalle.cliente_email || 'N/A')}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="detalle-seccion">
+            <h4><i class="fas fa-car"></i> Datos del Vehículo</h4>
+            <div class="detalle-grid">
+                <div class="detalle-item">
+                    <span class="detalle-label">Placa</span>
+                    <span class="detalle-value">${escapeHtml(detalle.placa)}</span>
+                </div>
+                <div class="detalle-item">
+                    <span class="detalle-label">Marca/Modelo</span>
+                    <span class="detalle-value">${escapeHtml(detalle.marca)} ${escapeHtml(detalle.modelo)}</span>
+                </div>
+                <div class="detalle-item">
+                    <span class="detalle-label">Año</span>
+                    <span class="detalle-value">${detalle.anio || 'N/A'}</span>
+                </div>
+                <div class="detalle-item">
+                    <span class="detalle-label">Kilometraje</span>
+                    <span class="detalle-value">${detalle.kilometraje?.toLocaleString() || '0'} km</span>
+                </div>
+            </div>
+        </div>
+        
+        ${fotosHtml ? `
+            <div class="detalle-seccion">
+                <h4><i class="fas fa-camera"></i> Registro Fotográfico</h4>
+                ${fotosHtml}
+            </div>
+        ` : ''}
+        
+        <div class="detalle-seccion">
+            <h4><i class="fas fa-pencil-alt"></i> Descripción del Problema</h4>
+            <div class="detalle-descripcion">
+                ${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}
+            </div>
+            ${detalle.audio_url ? `
+                <div class="detalle-audio">
+                    <audio controls>
+                        <source src="${detalle.audio_url}" type="audio/wav">
+                        Tu navegador no soporta audio.
+                    </audio>
+                </div>
+            ` : ''}
+        </div>
+        
+        <div class="detalle-seccion">
+            <h4><i class="fas fa-chart-line"></i> Avance de la Reparación</h4>
+            ${timelineHtml}
+        </div>
+    `;
+    
+    // Mostrar/ocultar botón de cotización
+    const btnCotizacion = document.getElementById('btnVerCotizacion');
+    if (btnCotizacion) {
+        btnCotizacion.style.display = tieneCotizacion ? 'flex' : 'none';
+    }
+    
+    abrirModal('modalDetalleVehiculo');
+}
+
+function generarFotosHtml(fotos) {
+    if (!fotos) return '';
+    
+    const camposFotos = [
+        { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo' },
+        { campo: 'url_lateral_derecha', label: 'Lateral Derecho' },
+        { campo: 'url_foto_frontal', label: 'Frontal' },
+        { campo: 'url_foto_trasera', label: 'Trasera' },
+        { campo: 'url_foto_superior', label: 'Superior' },
+        { campo: 'url_foto_inferior', label: 'Inferior' },
+        { campo: 'url_foto_tablero', label: 'Tablero' }
+    ];
+    
+    const fotosExistentes = camposFotos.filter(f => {
+        const url = fotos[f.campo];
+        return url && url !== 'null' && url !== 'None' && url !== '';
+    });
+    
+    if (fotosExistentes.length === 0) return '';
+    
+    return `
+        <div class="detalle-fotos">
+            ${fotosExistentes.map(f => `
+                <div class="detalle-foto" onclick="verImagenAmpliada('${fotos[f.campo]}', '${f.label}')">
+                    <img src="${fotos[f.campo]}" alt="${f.label}" onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%25%22%20height%3D%22100%25%22%20viewBox%3D%220%200%20200%20200%22%3E%3Crect%20width%3D%22200%22%20height%3D%22200%22%20fill%3D%22%23333%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dy%3D%22.3em%22%20fill%3D%22%23999%22%3ESin%20imagen%3C%2Ftext%3E%3C%2Fsvg%3E'">
+                    <div class="detalle-foto-label">${f.label}</div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function generarTimelineHtml(detalle) {
+    // Estados en orden
+    const estados = [
+        { key: 'EnRecepcion', label: 'Recepción del Vehículo', desc: 'Vehículo ingresado al taller' },
+        { key: 'EnDiagnostico', label: 'Diagnóstico', desc: 'Técnico realizando diagnóstico' },
+        { key: 'CotizacionEnviada', label: 'Cotización', desc: 'Cotización enviada al cliente' },
+        { key: 'EnReparacion', label: 'Reparación', desc: 'Vehículo en proceso de reparación' },
+        { key: 'ControlCalidad', label: 'Control de Calidad', desc: 'Verificación final de la reparación' },
+        { key: 'Finalizado', label: 'Finalizado', desc: 'Reparación completada' },
+        { key: 'Entregado', label: 'Entregado', desc: 'Vehículo entregado al cliente' }
+    ];
+    
+    const estadoActual = detalle.estado_global;
+    let encontrado = false;
+    
+    const timelineItems = estados.map(estado => {
+        const isCompleted = encontrado ? false : (estado.key === estadoActual || encontrado);
+        if (estado.key === estadoActual) encontrado = true;
+        
+        let fecha = '';
+        if (estado.key === 'EnRecepcion' && detalle.fecha_ingreso) {
+            fecha = formatDate(detalle.fecha_ingreso);
+        }
+        
+        return `
+            <div class="timeline-item">
+                <div class="timeline-dot ${isCompleted ? 'completed' : ''} ${estado.key === estadoActual ? 'current' : ''}"></div>
+                <div class="timeline-content">
+                    <div class="timeline-title">${estado.label}</div>
+                    ${fecha ? `<div class="timeline-date">${fecha}</div>` : ''}
+                    <div class="timeline-desc">${estado.desc}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    return `<div class="timeline">${timelineItems}</div>`;
+}
+
+function verImagenAmpliada(url, label) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-imagen';
+    modal.innerHTML = `
+        <div class="modal-imagen-content">
+            <button class="modal-imagen-close" onclick="this.parentElement.parentElement.remove()">&times;</button>
+            <img src="${url}" alt="${label}">
+            <p>${label}</p>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+}
+
+function verCotizacion() {
+    if (currentVehiculoId) {
+        window.location.href = `cotizaciones.html?id=${currentVehiculoId}`;
+    }
+}
+
+// =====================================================
+// AUTENTICACIÓN
+// =====================================================
+
+async function cargarUsuarioActual() {
+    try {
+        let token = localStorage.getItem('furia_token');
+        if (!token) token = localStorage.getItem('token');
+        
+        if (!token) {
+            window.location.href = '/';
+            return null;
+        }
+        
+        const response = await fetch(`${API_URL}/perfil`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.status === 401) {
+            localStorage.clear();
+            window.location.href = '/';
+            return null;
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            currentUser = data.usuario;
+            
+            // Actualizar nombre en sidebar
+            const userNameSpan = document.getElementById('userName');
+            if (userNameSpan) {
+                userNameSpan.textContent = currentUser.nombre || currentUser.placa || 'Cliente';
+            }
+            
+            // Mostrar fecha
+            const fechaElement = document.getElementById('currentDate');
+            if (fechaElement) {
+                const hoy = new Date();
+                fechaElement.textContent = hoy.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+            }
+            
+            return currentUser;
+        }
+        
+        return null;
+    } catch (error) {
+        console.error('Error:', error);
+        window.location.href = '/';
+        return null;
+    }
+}
+
+// =====================================================
+// INICIALIZACIÓN
+// =====================================================
+
+function setupEventListeners() {
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+            cargarVehiculos();
+            showToast('Actualizando...', 'info');
+        });
+    }
+    
+    const filtroEstado = document.getElementById('filtroEstado');
+    if (filtroEstado) {
+        filtroEstado.addEventListener('change', () => cargarVehiculos());
+    }
+    
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', () => cargarVehiculos());
+    }
+    
+    // Cerrar modales
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.classList.remove('active');
+        });
+    });
+}
+
+async function inicializar() {
+    console.log('🚀 Inicializando misvehiculos.js');
+    
+    const user = await cargarUsuarioActual();
+    if (!user) return;
+    
+    await cargarVehiculos();
+    setupEventListeners();
+    
+    console.log('✅ misvehiculos.js inicializado correctamente');
+}
+
+// Exponer funciones globales
+window.verDetalleVehiculo = verDetalleVehiculo;
+window.verCotizacion = verCotizacion;
+window.verImagenAmpliada = verImagenAmpliada;
+window.cerrarModal = cerrarModal;
+
+document.addEventListener('DOMContentLoaded', inicializar);

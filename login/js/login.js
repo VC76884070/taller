@@ -1,31 +1,39 @@
 // =====================================================
-// LOGIN - FURIA MOTOR COMPANY - CORREGIDO
+// LOGIN - FURIA MOTOR COMPANY - VERSIÓN SIMPLIFICADA
 // =====================================================
 
-// Configuración
 const API_URL = 'http://localhost:5000/api';
 
-// Configuración de roles
 const ROLE_CONFIG = {
     'jefe_taller': {
         nombre: 'Jefe de Taller',
         icono: 'fa-user-tie',
-        redirect: '/jefe_taller/dashboard.html'
+        redirect: '/jefe_taller/dashboard.html',
+        descripcion: 'Gestión de órdenes, diagnóstico y control de calidad'
     },
     'jefe_operativo': {
         nombre: 'Jefe Operativo',
         icono: 'fa-chart-line',
-        redirect: '/jefe_operativo/dashboard.html'
+        redirect: '/jefe_operativo/dashboard.html',
+        descripcion: 'Recepción de vehículos y gestión de clientes'
     },
     'tecnico': {
         nombre: 'Técnico Mecánico',
         icono: 'fa-wrench',
-        redirect: '/tecnico_mecanico/misvehiculos.html'
+        redirect: '/tecnico_mecanico/misvehiculos.html',
+        descripcion: 'Diagnóstico y reparación de vehículos'
     },
     'encargado_repuestos': {
         nombre: 'Encargado de Repuestos',
         icono: 'fa-boxes',
-        redirect: '/encargado_rep_almacen/dashboard.html'
+        redirect: '/encargado_rep_almacen/dashboard.html',
+        descripcion: 'Gestión de inventario y cotizaciones'
+    },
+    'cliente': {
+        nombre: 'Cliente',
+        icono: 'fa-user',
+        redirect: '/cliente/misvehiculos.html',
+        descripcion: 'Seguimiento de tus vehículos'
     }
 };
 
@@ -35,7 +43,8 @@ const documentGroup = document.getElementById('documentGroup');
 const plateGroup = document.getElementById('plateGroup');
 const welcomeTitle = document.getElementById('welcomeTitle');
 const welcomeSubtitle = document.getElementById('welcomeSubtitle');
-const clientQuickAccess = document.getElementById('clientQuickAccess');
+const personalRegisterLink = document.getElementById('personalRegisterLink');
+const clientInfoMessage = document.getElementById('clientInfoMessage');
 const loginForm = document.getElementById('loginForm');
 const documentInput = document.getElementById('document');
 const plateInput = document.getElementById('plate');
@@ -44,7 +53,6 @@ const loginBtn = document.getElementById('loginBtn');
 const rememberCheck = document.getElementById('remember');
 const toastContainer = document.getElementById('toastContainer');
 
-// Variables de estado
 let selectedType = 'staff';
 let pendingLoginData = null;
 let pendingToken = null;
@@ -56,15 +64,6 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Inicializando login');
     setupEventListeners();
     checkSavedSession();
-    setupCodeInputs();
-    
-    // Verificar si hay un modal de roles y configurarlo
-    const modal = document.getElementById('roleSelectionModal');
-    if (modal) {
-        console.log('✅ Modal de roles encontrado');
-    } else {
-        console.error('❌ Modal de roles NO encontrado - Verifica que el HTML tenga el modal');
-    }
 });
 
 function setupEventListeners() {
@@ -93,15 +92,17 @@ function toggleLoginFields() {
         documentGroup.style.display = 'block';
         plateGroup.style.display = 'none';
         welcomeTitle.textContent = 'Acceso Personal Taller';
-        welcomeSubtitle.textContent = 'Ingresa con tu número de documento o correo electrónico';
-        clientQuickAccess.style.display = 'none';
+        welcomeSubtitle.textContent = 'Ingresa con tu número de documento';
+        personalRegisterLink.style.display = 'block';
+        if (clientInfoMessage) clientInfoMessage.style.display = 'none';
         if (documentInput) documentInput.focus();
     } else {
         documentGroup.style.display = 'none';
         plateGroup.style.display = 'block';
         welcomeTitle.textContent = 'Acceso Cliente';
-        welcomeSubtitle.textContent = 'Ingresa con tu correo electrónico o placa';
-        clientQuickAccess.style.display = 'block';
+        welcomeSubtitle.textContent = 'Ingresa con tu número de placa';
+        personalRegisterLink.style.display = 'none';
+        if (clientInfoMessage) clientInfoMessage.style.display = 'block';
         if (plateInput) plateInput.focus();
     }
 }
@@ -146,15 +147,12 @@ async function handleLogin(e) {
             const isMultiRole = userRoles.length > 1;
             
             console.log('📋 Roles del usuario:', userRoles);
-            console.log('🎭 Es multi-rol:', isMultiRole);
             
-            // Verificar si tiene un rol guardado
             const savedRole = localStorage.getItem('furia_selected_role');
             const savedUserId = localStorage.getItem('furia_selected_role_user');
             const hasSavedRole = savedRole && savedUserId == data.user.id && userRoles.includes(savedRole);
             
             if (isMultiRole && !hasSavedRole) {
-                console.log('🎯 Mostrando modal de selección de roles');
                 pendingLoginData = data.user;
                 pendingToken = data.token;
                 showRoleModal();
@@ -162,29 +160,29 @@ async function handleLogin(e) {
                 return;
             }
             
-            // Determinar redirección
             let redirectUrl = null;
             let selectedRole = null;
             
             if (hasSavedRole) {
                 selectedRole = savedRole;
                 redirectUrl = ROLE_CONFIG[savedRole]?.redirect;
-                console.log('✅ Usando rol guardado:', savedRole);
             } else if (userRoles.length === 1) {
                 selectedRole = userRoles[0];
                 redirectUrl = ROLE_CONFIG[selectedRole]?.redirect;
-                console.log('✅ Un solo rol:', selectedRole);
             } else {
                 selectedRole = userRoles[0];
                 redirectUrl = ROLE_CONFIG[selectedRole]?.redirect;
-                console.log('⚠️ Múltiples roles sin selección, usando primero:', selectedRole);
+            }
+            
+            if (!redirectUrl && selectedType === 'client') {
+                redirectUrl = '/cliente/misvehiculos.html';
+                selectedRole = 'cliente';
             }
             
             if (!redirectUrl) {
                 throw new Error('No se pudo determinar la redirección');
             }
             
-            // Guardar datos
             const finalUser = { ...data.user, selected_role: selectedRole };
             localStorage.setItem('furia_token', data.token);
             localStorage.setItem('furia_user', JSON.stringify(finalUser));
@@ -228,16 +226,7 @@ function showRoleModal() {
     const rolesGrid = document.getElementById('rolesGrid');
     const userNameSpan = document.getElementById('roleUserName');
     
-    if (!modal) {
-        console.error('❌ Modal no encontrado');
-        alert('Error: No se encontró el modal de selección de roles');
-        return;
-    }
-    
-    if (!pendingLoginData) {
-        console.error('❌ No hay datos pendientes');
-        return;
-    }
+    if (!modal || !pendingLoginData) return;
     
     if (userNameSpan) {
         userNameSpan.textContent = pendingLoginData.nombre || 'Usuario';
@@ -246,16 +235,11 @@ function showRoleModal() {
     const userRoles = pendingLoginData.roles || [];
     const availableRoles = userRoles.filter(rol => ROLE_CONFIG[rol]);
     
-    console.log('🎨 Roles disponibles:', availableRoles);
-    
-    if (availableRoles.length === 0) {
-        console.error('No hay roles disponibles');
-        return;
-    }
+    if (availableRoles.length === 0) return;
     
     if (rolesGrid) {
         rolesGrid.innerHTML = availableRoles.map(rol => `
-            <div class="role-card" onclick="selectRoleHandler('${rol}')">
+            <div class="role-card" data-role="${rol}" onclick="selectRoleHandler('${rol}')">
                 <div class="role-icon">
                     <i class="fas ${ROLE_CONFIG[rol].icono}"></i>
                 </div>
@@ -267,7 +251,6 @@ function showRoleModal() {
     
     modal.style.display = 'flex';
     modal.classList.add('show');
-    console.log('✅ Modal mostrado');
 }
 
 function closeRoleModal() {
@@ -280,10 +263,7 @@ function closeRoleModal() {
     pendingToken = null;
 }
 
-// Handler global para seleccionar rol
 window.selectRoleHandler = function(selectedRole) {
-    console.log('🎯 Rol seleccionado:', selectedRole);
-    
     if (!pendingLoginData || !pendingToken) {
         showToast('Error: No hay datos de sesión', 'error');
         closeRoleModal();
@@ -300,12 +280,11 @@ window.selectRoleHandler = function(selectedRole) {
     if (rememberChoice) {
         localStorage.setItem('furia_selected_role', selectedRole);
         localStorage.setItem('furia_selected_role_user', pendingLoginData.id);
-        console.log('💾 Rol guardado');
     }
     
     const redirectUrl = ROLE_CONFIG[selectedRole]?.redirect;
     if (!redirectUrl) {
-        showToast('Error: URL no encontrada', 'error');
+        showToast('Error: URL de redirección no encontrada', 'error');
         return;
     }
     
@@ -330,7 +309,6 @@ async function checkSavedSession() {
     
     if (!token) return;
     
-    // Solo en página de login
     if (currentPath === '/' || currentPath === '/login.html') {
         try {
             const response = await fetch(`${API_URL}/verify-token`, {
@@ -344,26 +322,20 @@ async function checkSavedSession() {
                 const user = data.user;
                 let redirect = null;
                 
-                // Verificar si hay un rol seleccionado
                 const savedUser = localStorage.getItem('furia_user');
                 if (savedUser) {
                     const userData = JSON.parse(savedUser);
                     if (userData.selected_role && ROLE_CONFIG[userData.selected_role]) {
-                        redirect = ROLE_CONFIG[userData.selected_role].redirect;
+                        redirect = ROLE_CONFIG[userData.selected_role]?.redirect;
                     }
                 }
                 
-                // Si no hay rol seleccionado y tiene múltiples roles, mostrar login
-                if (!redirect && user.roles && user.roles.length > 1) {
-                    console.log('Múltiples roles sin selección, forzando login');
-                    localStorage.removeItem('furia_token');
-                    localStorage.removeItem('furia_user');
-                    return;
-                }
-                
-                // Si solo tiene un rol, usar ese
                 if (!redirect && user.roles && user.roles.length === 1) {
                     redirect = ROLE_CONFIG[user.roles[0]]?.redirect;
+                }
+                
+                if (!redirect && user.type === 'client') {
+                    redirect = '/cliente/misvehiculos.html';
                 }
                 
                 if (redirect && redirect !== '/') {
@@ -377,7 +349,6 @@ async function checkSavedSession() {
         }
     }
     
-    // Cargar credenciales recordadas
     const remembered = localStorage.getItem('furia_remembered');
     const rememberedType = localStorage.getItem('furia_remembered_type');
     
@@ -407,75 +378,21 @@ function togglePassword() {
     if (icon) icon.className = type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
 }
 
-function setupCodeInputs() {
-    document.addEventListener('input', (e) => {
-        if (e.target.classList.contains('code-digit')) {
-            const inputs = document.querySelectorAll('.code-digit');
-            const index = parseInt(e.target.dataset.index);
-            if (e.target.value.length === 1 && index < inputs.length - 1) {
-                inputs[index + 1].focus();
-            }
-        }
-    });
-    
-    document.addEventListener('keydown', (e) => {
-        if (e.target.classList.contains('code-digit') && e.key === 'Backspace') {
-            const inputs = document.querySelectorAll('.code-digit');
-            const index = parseInt(e.target.dataset.index);
-            if (e.target.value === '' && index > 0) {
-                inputs[index - 1].focus();
-            }
-        }
-    });
-}
-
-function getCodeFromInputs(selector) {
-    let code = '';
-    document.querySelectorAll(selector).forEach(input => {
-        code += input.value;
-    });
-    return code;
-}
-
-function setModalLoading(loading) {
-    const buttons = document.querySelectorAll('.modal .btn-primary, .modal .btn-secondary');
-    buttons.forEach(btn => {
-        btn.disabled = loading;
-        btn.style.opacity = loading ? '0.6' : '1';
-    });
-}
-
 function showToast(message, type = 'info') {
     if (!toastContainer) return;
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    const icons = { success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
+    const icons = { 
+        success: 'fa-check-circle', 
+        error: 'fa-exclamation-circle', 
+        warning: 'fa-exclamation-triangle', 
+        info: 'fa-info-circle' 
+    };
     toast.innerHTML = `<i class="fas ${icons[type]}"></i><span>${message}</span>`;
     toastContainer.appendChild(toast);
     setTimeout(() => toast.remove(), 4000);
 }
 
-// =====================================================
-// RECUPERAR CONTRASEÑA (Placeholders)
-// =====================================================
-window.openRecoverModal = () => showToast('Función en desarrollo', 'info');
-window.closeRecoverModal = () => {};
-window.sendRecoveryCode = () => showToast('Función en desarrollo', 'info');
-window.verifyAndChangePassword = () => showToast('Función en desarrollo', 'info');
-
-// =====================================================
-// REGISTRO (Placeholders)
-// =====================================================
-window.openRegisterModal = () => showToast('Función en desarrollo', 'info');
-window.closeRegisterModal = () => {};
-window.sendRegisterCode = () => showToast('Función en desarrollo', 'info');
-window.verifyRegisterCode = () => showToast('Función en desarrollo', 'info');
-window.openVehicleRegisterModal = () => showToast('Función en desarrollo', 'info');
-window.closeVehicleRegisterModal = () => {};
-window.registerVehicle = () => showToast('Función en desarrollo', 'info');
-
-// =====================================================
-// LOGOUT
 // =====================================================
 window.logout = () => {
     localStorage.clear();

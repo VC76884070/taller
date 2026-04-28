@@ -1,8 +1,8 @@
 // =====================================================
-// INCLUDE.JS - SIDEBAR PARA CLIENTE
+// INCLUDE.JS - CLIENTE
+// FURIA MOTOR COMPANY SRL
 // =====================================================
 
-// Configuración
 const CONFIG = {
     sidebarPath: 'components/sidebar.html',
     logoPath: '../../img/logoblanco.jpeg',
@@ -10,9 +10,14 @@ const CONFIG = {
     userRole: 'Cliente'
 };
 
-// =====================================================
-// FUNCIÓN PRINCIPAL PARA INCLUIR EL SIDEBAR
-// =====================================================
+const PAGE_FILES = {
+    'misvehiculos': 'misvehiculos.html',
+    'cotizaciones': 'cotizaciones.html',
+    'avances': 'avances.html',
+    'historial': 'historial.html',
+    'perfil': 'perfil.html'
+};
+
 async function includeSidebar() {
     const sidebarContainer = document.getElementById('sidebar-container');
     
@@ -74,13 +79,11 @@ function crearSidebarRespaldo(container) {
             </div>
             <nav class="sidebar-nav">
                 <ul>
-                    ${crearMenuItem('misvehiculos', 'Mis Vehículos', 'car', currentPage, '')}
-                    ${crearMenuItem('diagnostico', 'Diagnóstico', 'stethoscope', currentPage, '')}
-                    ${crearMenuItem('cotizacion', 'Cotización', 'file-invoice-dollar', currentPage, '')}
-                    ${crearMenuItem('seguimiento', 'Seguimiento', 'chart-line', currentPage, '')}
-                    ${crearMenuItem('historial', 'Historial', 'history', currentPage, '')}
-                    ${crearMenuItem('recomendaciones', 'Recomendaciones', 'lightbulb', currentPage, '<span class="badge">2</span>')}
-                    ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage, '')}
+                    ${crearMenuItem('misvehiculos', 'Mis Vehículos', 'car', currentPage)}
+                    ${crearMenuItem('cotizaciones', 'Informes de Cotización', 'file-invoice-dollar', currentPage)}
+                    ${crearMenuItem('avances', 'Avances de Reparación', 'chart-line', currentPage)}
+                    ${crearMenuItem('historial', 'Historial', 'history', currentPage)}
+                    ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage)}
                 </ul>
                 <ul class="sidebar-bottom">
                     <li class="nav-item">
@@ -95,28 +98,15 @@ function crearSidebarRespaldo(container) {
     `;
 }
 
-function crearMenuItem(page, label, icon, currentPage, badge) {
+function crearMenuItem(page, label, icon, currentPage) {
     const isActive = currentPage === page ? 'active' : '';
-    const badgeHtml = badge || '';
-    
-    const pageToFile = {
-        'misvehiculos': 'misvehiculos.html',
-        'diagnostico': 'diagnostico.html',
-        'cotizacion': 'cotizacion.html',
-        'seguimiento': 'seguimiento.html',
-        'historial': 'historial.html',
-        'recomendaciones': 'recomendaciones.html',
-        'perfil': 'perfil.html'
-    };
-    
-    const href = pageToFile[page] || `${page}.html`;
+    const href = PAGE_FILES[page] || `${page}.html`;
     
     return `
         <li class="nav-item ${isActive}" data-page="${page}">
             <a href="${href}" class="nav-link">
                 <i class="fas fa-${icon}"></i>
                 <span>${label}</span>
-                ${badgeHtml}
             </a>
         </li>
     `;
@@ -133,20 +123,29 @@ function inicializarSidebar() {
 function obtenerPaginaActual() {
     const path = window.location.pathname;
     const filename = path.split('/').pop() || 'misvehiculos.html';
-    return filename.replace('.html', '');
+    const pageName = filename.replace('.html', '');
+    
+    for (const [key, value] of Object.entries(PAGE_FILES)) {
+        if (value === filename || key === pageName) {
+            return key;
+        }
+    }
+    
+    return 'misvehiculos';
 }
 
 function marcarItemActivo(currentPage) {
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
+        const link = item.querySelector('.nav-link');
+        if (link) link.classList.remove('active');
     });
     
     const activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
     if (activeItem) {
         activeItem.classList.add('active');
-    } else {
-        const defaultItem = document.querySelector('.nav-item[data-page="misvehiculos"]');
-        if (defaultItem) defaultItem.classList.add('active');
+        const activeLink = activeItem.querySelector('.nav-link');
+        if (activeLink) activeLink.classList.add('active');
     }
 }
 
@@ -156,8 +155,8 @@ function obtenerUsuarioActual() {
         if (userStr) {
             const user = JSON.parse(userStr);
             return {
-                nombre: user.nombre || CONFIG.defaultUserName,
-                rol: user.rol || 'cliente'
+                nombre: user.nombre || user.placa || CONFIG.defaultUserName,
+                rol: 'cliente'
             };
         }
     } catch (error) {
@@ -178,6 +177,7 @@ window.logout = function() {
     if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
         localStorage.removeItem('furia_token');
         localStorage.removeItem('furia_user');
+        localStorage.removeItem('furia_remembered');
         window.location.href = '../../login.html';
     }
 };

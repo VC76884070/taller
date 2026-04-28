@@ -1,14 +1,15 @@
 // =====================================================
-// COTIZACIONES.JS - CLIENTE
+// COTIZACIONES.JS - CLIENTE (VERSIÓN CORREGIDA)
+// CON COSTO DE DIAGNÓSTICO DE Bs. 200 AL RECHAZAR
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
-const API_URL = window.location.origin + '/api/cliente';
+const API_URL = '/api/cliente';
 let currentUser = null;
 let cotizaciones = [];
 let currentCotizacion = null;
 let currentCotizacionId = null;
-let currentVehiculoId = null;
+const COSTO_DIAGNOSTICO = 200;
 
 // =====================================================
 // FUNCIONES DE UTILIDAD
@@ -17,7 +18,6 @@ let currentVehiculoId = null;
 function getAuthHeaders() {
     let token = localStorage.getItem('furia_token');
     if (!token) token = localStorage.getItem('token');
-    
     return {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -70,17 +70,17 @@ function showToast(message, type = 'info') {
     toast.innerHTML = `<i class="fas ${icon}"></i> ${message}`;
     document.body.appendChild(toast);
     
-    setTimeout(() => toast.remove(), 3000);
+    setTimeout(() => toast.remove(), 5000);
 }
 
 function cerrarModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) modal.classList.remove('active');
+    if (modal) modal.classList.remove('show');
 }
 
 function abrirModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) modal.classList.add('active');
+    if (modal) modal.classList.add('show');
 }
 
 function mostrarLoading(mostrar) {
@@ -95,7 +95,7 @@ function getEstadoTexto(estado) {
         'enviada': 'Enviada',
         'aprobado_total': 'Aprobada Totalmente',
         'aprobado_parcial': 'Aprobada Parcialmente',
-        'rechazada': 'Rechazada'
+        'rechazada': 'Rechazada (Costo Diagnóstico Bs. 200)'
     };
     return estados[estado] || estado;
 }
@@ -129,6 +129,7 @@ async function cargarCotizaciones() {
         const response = await fetch(url, { headers: getAuthHeaders() });
         
         if (response.status === 401) {
+            localStorage.clear();
             window.location.href = '/';
             return;
         }
@@ -169,6 +170,9 @@ function renderizarCotizaciones(cotizacionesList) {
                 <i class="fas fa-file-invoice-dollar"></i>
                 <p>No hay cotizaciones disponibles</p>
                 <small>Las cotizaciones aparecerán aquí cuando el taller las genere</small>
+                <button onclick="cargarCotizaciones()" class="btn-retry">
+                    <i class="fas fa-sync-alt"></i> Actualizar
+                </button>
             </div>
         `;
         return;
@@ -176,6 +180,25 @@ function renderizarCotizaciones(cotizacionesList) {
     
     container.innerHTML = cotizacionesList.map(cotizacion => {
         const puedeAprobar = cotizacion.estado === 'enviada';
+        const esRechazada = cotizacion.estado === 'rechazada';
+        
+        // CORRECCIÓN: Si la cotización está rechazada, mostrar Bs. 200.00 (costo de diagnóstico)
+        // Si no está rechazada, mostrar el total de servicios
+        let montoMostrar = cotizacion.monto_total || 0;
+        let mostrarDiagnosticoBadge = false;
+        
+        if (esRechazada) {
+            // Si está rechazada, siempre mostrar el costo de diagnóstico
+            montoMostrar = COSTO_DIAGNOSTICO;
+            mostrarDiagnosticoBadge = true;
+        } else if (cotizacion.estado === 'aprobado_parcial' || cotizacion.estado === 'aprobado_total') {
+            // Si está aprobada, mostrar el total de servicios aprobados
+            // (esto ya viene en monto_total desde el backend)
+            montoMostrar = cotizacion.monto_total || 0;
+        } else if (cotizacion.estado === 'enviada') {
+            // Si está enviada (pendiente), mostrar el total de servicios cotizados
+            montoMostrar = cotizacion.monto_total || 0;
+        }
         
         return `
             <div class="cotizacion-card ${getEstadoClass(cotizacion.estado)}">
@@ -209,19 +232,24 @@ function renderizarCotizaciones(cotizacionesList) {
                     <div class="servicios-resumen">
                         <div class="servicios-count">
                             <i class="fas fa-tools"></i>
-                            ${cotizacion.servicios_count} servicio(s)
+                            ${cotizacion.servicios_count || 0} servicio(s)
                         </div>
                         <div class="monto-total">
-                            Total: ${formatCurrency(cotizacion.monto_total)}
+                            Total: ${formatCurrency(montoMostrar)}
+                            ${mostrarDiagnosticoBadge ? `
+                                <span class="diagnostico-badge">
+                                    <i class="fas fa-stethoscope"></i> Diagnóstico
+                                </span>
+                            ` : ''}
                         </div>
                     </div>
                     
                     <div class="cotizacion-footer">
-                        <button class="btn-ver-detalle" onclick="verDetalleCotizacion(${cotizacion.id}, '${escapeHtml(cotizacion.codigo_orden)}')">
+                        <button class="btn-ver-detalle" onclick="verDetalleCotizacion(${cotizacion.id})">
                             <i class="fas fa-eye"></i> Ver Detalle
                         </button>
                         ${puedeAprobar ? `
-                            <button class="btn-aprobar" onclick="verDetalleCotizacion(${cotizacion.id}, '${escapeHtml(cotizacion.codigo_orden)}')">
+                            <button class="btn-aprobar" onclick="verDetalleCotizacion(${cotizacion.id})">
                                 <i class="fas fa-check-circle"></i> Revisar y Aprobar
                             </button>
                         ` : ''}
@@ -239,19 +267,25 @@ function renderizarCotizaciones(cotizacionesList) {
 // DETALLE DE COTIZACIÓN
 // =====================================================
 
-async function verDetalleCotizacion(id, codigoOrden) {
+async function verDetalleCotizacion(id) {
     mostrarLoading(true);
     try {
         const response = await fetch(`${API_URL}/cotizacion/${id}`, {
             headers: getAuthHeaders()
         });
         
+        if (response.status === 401) {
+            localStorage.clear();
+            window.location.href = '/';
+            return;
+        }
+        
         const data = await response.json();
         
         if (data.success) {
             currentCotizacionId = id;
             currentCotizacion = data.cotizacion;
-            mostrarDetalleCotizacion(data.cotizacion, codigoOrden);
+            mostrarDetalleCotizacion(data.cotizacion);
         } else {
             showToast(data.error || 'Error al cargar cotización', 'error');
         }
@@ -263,11 +297,33 @@ async function verDetalleCotizacion(id, codigoOrden) {
     }
 }
 
-function mostrarDetalleCotizacion(cotizacion, codigoOrden) {
+function mostrarDetalleCotizacion(cotizacion) {
     const puedeAprobar = cotizacion.estado === 'enviada';
-    const tieneAprobados = cotizacion.servicios.some(s => s.aprobado_por_cliente);
+    const esRechazada = cotizacion.estado === 'rechazada';
+    const tieneServicios = cotizacion.servicios && cotizacion.servicios.length > 0;
     
-    const serviciosHtml = cotizacion.servicios.map((servicio, index) => `
+    // Determinar si mostrar costo de diagnóstico (cuando está rechazada o no hay servicios aprobados)
+    const serviciosAprobados = (cotizacion.servicios || []).filter(s => s.aprobado_por_cliente).length;
+    const noHayServiciosAprobados = serviciosAprobados === 0;
+    const mostrarDiagnostico = esRechazada || (noHayServiciosAprobados && !puedeAprobar);
+    
+    // Calcular totales
+    let totalServicios = cotizacion.total || 0;
+    let totalConDiagnostico = totalServicios;
+    let mensajeDiagnostico = '';
+    
+    if (mostrarDiagnostico) {
+        totalConDiagnostico = COSTO_DIAGNOSTICO;
+        mensajeDiagnostico = `
+            <div class="diagnostico-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>⚠️ Costo de Diagnóstico Aplicado</strong>
+                <p>Esta cotización ha sido rechazada o no tiene servicios aprobados. Se aplicará el costo de diagnóstico de <strong>${formatCurrency(COSTO_DIAGNOSTICO)}</strong> por la revisión realizada al vehículo.</p>
+            </div>
+        `;
+    }
+    
+    const serviciosHtml = (cotizacion.servicios || []).map((servicio, index) => `
         <div class="servicio-cotizacion-item ${servicio.aprobado_por_cliente ? 'aprobado' : ''}">
             <div class="servicio-info">
                 <div class="servicio-descripcion">
@@ -280,7 +336,7 @@ function mostrarDetalleCotizacion(cotizacion, codigoOrden) {
             ${puedeAprobar && !servicio.aprobado_por_cliente ? `
                 <div class="servicio-actions">
                     <label class="checkbox-container">
-                        <input type="checkbox" class="servicio-checkbox" data-index="${index}" data-id="${servicio.id_servicio || index}">
+                        <input type="checkbox" class="servicio-checkbox" data-index="${index}" data-id="${servicio.id_servicio}">
                         <span class="checkmark"></span>
                         Aprobar este servicio
                     </label>
@@ -293,64 +349,80 @@ function mostrarDetalleCotizacion(cotizacion, codigoOrden) {
         </div>
     `).join('');
     
-    const modalBody = document.getElementById('modalDetalleBody');
-    modalBody.innerHTML = `
-        <div class="detalle-seccion">
-            <h4><i class="fas fa-info-circle"></i> Información de la Cotización</h4>
-            <div class="detalle-grid">
-                <div class="detalle-item">
-                    <span class="detalle-label">Orden de Trabajo</span>
-                    <span class="detalle-value"><strong>${escapeHtml(codigoOrden)}</strong></span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Fecha de Emisión</span>
-                    <span class="detalle-value">${formatDateTime(cotizacion.fecha_generacion)}</span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Estado</span>
-                    <span class="detalle-value">${getEstadoTexto(cotizacion.estado)}</span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Total</span>
-                    <span class="detalle-value total-monto">${formatCurrency(cotizacion.total)}</span>
-                </div>
-            </div>
+    const noServiciosHtml = !tieneServicios ? `
+        <div class="empty-state" style="padding: 2rem;">
+            <i class="fas fa-tools"></i>
+            <p>No hay servicios en esta cotización</p>
+            <small>Se aplicará el costo de diagnóstico de ${formatCurrency(COSTO_DIAGNOSTICO)}</small>
         </div>
-        
-        <div class="detalle-seccion">
-            <h4><i class="fas fa-tools"></i> Servicios Cotizados</h4>
-            <div class="servicios-lista">
-                ${serviciosHtml}
-            </div>
-            <div class="total-general">
-                <strong>Total General:</strong> ${formatCurrency(cotizacion.total)}
-            </div>
-        </div>
-        
-        ${cotizacion.sugerencias_generales ? `
-            <div class="detalle-seccion">
-                <h4><i class="fas fa-comment-dots"></i> Sugerencias del Taller</h4>
-                <div class="detalle-descripcion">
-                    ${escapeHtml(cotizacion.sugerencias_generales)}
-                </div>
-            </div>
-        ` : ''}
-    `;
+    ` : '';
     
-    // Configurar botones según estado
+    const modalBody = document.getElementById('modalDetalleBody');
+    if (modalBody) {
+        modalBody.innerHTML = `
+            ${mensajeDiagnostico}
+            <div class="detalle-seccion">
+                <h4><i class="fas fa-info-circle"></i> Información de la Cotización</h4>
+                <div class="detalle-grid">
+                    <div class="detalle-item">
+                        <span class="detalle-label">Orden de Trabajo</span>
+                        <span class="detalle-value"><strong>${escapeHtml(cotizacion.codigo_orden)}</strong></span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Vehículo</span>
+                        <span class="detalle-value">${escapeHtml(cotizacion.vehiculo)} - ${escapeHtml(cotizacion.placa)}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Fecha de Emisión</span>
+                        <span class="detalle-value">${formatDateTime(cotizacion.fecha_generacion)}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Estado</span>
+                        <span class="detalle-value">${getEstadoTexto(cotizacion.estado)}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="detalle-seccion">
+                <h4><i class="fas fa-tools"></i> Servicios Cotizados</h4>
+                <div class="servicios-lista">
+                    ${tieneServicios ? serviciosHtml : noServiciosHtml}
+                </div>
+                ${tieneServicios ? `
+                    <div class="total-general">
+                        <strong>Total Servicios:</strong> ${formatCurrency(totalServicios)}
+                    </div>
+                ` : ''}
+                ${mostrarDiagnostico ? `
+                    <div class="diagnostico-message">
+                        <i class="fas fa-stethoscope"></i>
+                        <span>Costo de Diagnóstico: ${formatCurrency(COSTO_DIAGNOSTICO)}</span>
+                        <p>Este cargo aplica por la revisión y diagnóstico del vehículo</p>
+                    </div>
+                    <div class="total-general" style="margin-top: 1rem; border-top-color: var(--ambar-alerta);">
+                        <strong>Total a Pagar:</strong> ${formatCurrency(COSTO_DIAGNOSTICO)}
+                    </div>
+                ` : ''}
+                ${!mostrarDiagnostico && tieneServicios ? `
+                    <div class="total-general">
+                        <strong>Total General:</strong> ${formatCurrency(totalServicios)}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    // Configurar botones
     const btnAprobarTodo = document.getElementById('btnAprobarTodo');
     const btnAprobarSeleccion = document.getElementById('btnAprobarSeleccion');
     const btnRechazar = document.getElementById('btnRechazar');
     
-    if (puedeAprobar) {
-        btnAprobarTodo.style.display = 'flex';
-        btnAprobarSeleccion.style.display = 'flex';
-        btnRechazar.style.display = 'flex';
-    } else {
-        btnAprobarTodo.style.display = 'none';
-        btnAprobarSeleccion.style.display = 'none';
-        btnRechazar.style.display = 'none';
-    }
+    // Si está rechazada, ocultar botones de aprobación
+    const mostrarBotonesAprobacion = puedeAprobar && tieneServicios;
+    
+    if (btnAprobarTodo) btnAprobarTodo.style.display = mostrarBotonesAprobacion ? 'inline-flex' : 'none';
+    if (btnAprobarSeleccion) btnAprobarSeleccion.style.display = mostrarBotonesAprobacion ? 'inline-flex' : 'none';
+    if (btnRechazar) btnRechazar.style.display = puedeAprobar ? 'inline-flex' : 'none';
     
     abrirModal('modalDetalleCotizacion');
 }
@@ -364,55 +436,34 @@ function obtenerServiciosSeleccionados() {
     const indices = Array.from(checkboxes).map(cb => parseInt(cb.dataset.index));
     
     if (currentCotizacion && currentCotizacion.servicios) {
-        return indices.map(idx => ({
-            id_servicio: currentCotizacion.servicios[idx].id_servicio,
-            descripcion: currentCotizacion.servicios[idx].descripcion
-        }));
+        return indices.map(idx => currentCotizacion.servicios[idx].id_servicio);
     }
     return [];
 }
 
 async function aprobarCotizacionCompleta() {
-    if (!confirm('¿Estás seguro de que deseas aprobar todos los servicios de esta cotización?')) return;
-    
-    const servicios = currentCotizacion.servicios.map((_, idx) => ({
-        id_servicio: currentCotizacion.servicios[idx].id_servicio
-    }));
-    
-    await enviarAprobacion(servicios, 'total');
-}
-
-async function aprobarServiciosSeleccionados() {
-    const serviciosSeleccionados = obtenerServiciosSeleccionados();
-    
-    if (serviciosSeleccionados.length === 0) {
-        showToast('Selecciona al menos un servicio para aprobar', 'warning');
+    if (!currentCotizacion.servicios || currentCotizacion.servicios.length === 0) {
+        showToast('No hay servicios para aprobar', 'warning');
         return;
     }
     
-    if (!confirm(`¿Aprobar ${serviciosSeleccionados.length} servicio(s)?`)) return;
-    
-    await enviarAprobacion(serviciosSeleccionados, 'parcial');
-}
-
-async function rechazarCotizacion() {
-    if (!confirm('¿Estás seguro de que deseas rechazar esta cotización? Podrás solicitar una nueva cotización más tarde.')) return;
+    if (!confirm('¿Estás seguro de que deseas aprobar TODOS los servicios? Esto iniciará el trabajo en tu vehículo. El costo de diagnóstico NO aplicará.')) return;
     
     mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/cotizacion/${currentCotizacionId}/rechazar`, {
-            method: 'PUT',
+        const response = await fetch(`${API_URL}/cotizacion/${currentCotizacionId}/aprobar-total`, {
+            method: 'POST',
             headers: getAuthHeaders()
         });
         
         const data = await response.json();
         
         if (data.success) {
-            showToast('Cotización rechazada', 'warning');
+            showToast('✅ ¡Cotización aprobada! El taller comenzará los trabajos.', 'success');
             cerrarModal('modalDetalleCotizacion');
             await cargarCotizaciones();
         } else {
-            showToast(data.error || 'Error al rechazar', 'error');
+            showToast(data.error || 'Error al aprobar', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -422,23 +473,83 @@ async function rechazarCotizacion() {
     }
 }
 
-async function enviarAprobacion(servicios, tipo) {
+async function aprobarServiciosSeleccionados() {
+    if (!currentCotizacion.servicios || currentCotizacion.servicios.length === 0) {
+        showToast('No hay servicios disponibles para aprobar', 'warning');
+        return;
+    }
+    
+    const serviciosSeleccionados = obtenerServiciosSeleccionados();
+    
+    if (serviciosSeleccionados.length === 0) {
+        showToast('Selecciona al menos un servicio para aprobar', 'warning');
+        return;
+    }
+    
+    if (!confirm(`¿Aprobar ${serviciosSeleccionados.length} servicio(s)? Los servicios no seleccionados quedarán pendientes.`)) return;
+    
     mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/cotizacion/${currentCotizacionId}/aprobar`, {
-            method: 'PUT',
+        const response = await fetch(`${API_URL}/cotizacion/${currentCotizacionId}/aprobar-parcial`, {
+            method: 'POST',
             headers: getAuthHeaders(),
-            body: JSON.stringify({ servicios: servicios })
+            body: JSON.stringify({
+                servicios_aprobados: serviciosSeleccionados,
+                comentarios: ''
+            })
         });
         
         const data = await response.json();
         
         if (data.success) {
-            showToast(`Cotización ${tipo === 'total' ? 'completamente' : 'parcialmente'} aprobada`, 'success');
+            showToast('✅ Cotización aprobada parcialmente', 'success');
             cerrarModal('modalDetalleCotizacion');
             await cargarCotizaciones();
         } else {
             showToast(data.error || 'Error al aprobar', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// =====================================================
+// RECHAZAR COTIZACIÓN (CON COSTO DE DIAGNÓSTICO)
+// =====================================================
+
+async function rechazarCotizacion() {
+    const motivo = prompt('¿Por qué rechazas esta cotización? (Opcional)');
+    
+    const confirmarRechazo = confirm(
+        `⚠️ IMPORTANTE\n\n` +
+        `Si rechazas esta cotización:\n` +
+        `• Se aplicará el costo de diagnóstico de ${formatCurrency(COSTO_DIAGNOSTICO)}\n` +
+        `• Este costo cubre la revisión y diagnóstico ya realizado\n` +
+        `• El taller preparará una nueva cotización si lo deseas\n\n` +
+        `¿Estás seguro de rechazar esta cotización?`
+    );
+    
+    if (!confirmarRechazo) return;
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/cotizacion/${currentCotizacionId}/rechazar`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ motivo: motivo || '' })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast(`⚠️ Cotización rechazada. Se aplicará el costo de diagnóstico de ${formatCurrency(COSTO_DIAGNOSTICO)}.`, 'warning');
+            cerrarModal('modalDetalleCotizacion');
+            await cargarCotizaciones();
+        } else {
+            showToast(data.error || 'Error al rechazar', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -475,7 +586,16 @@ async function imprimirCotizacionDirecta(id) {
 }
 
 function mostrarVistaPreviaImpresion(cotizacion) {
-    const serviciosHtml = cotizacion.servicios.map(servicio => `
+    const esRechazada = cotizacion.estado === 'rechazada';
+    const tieneServicios = cotizacion.servicios && cotizacion.servicios.length > 0;
+    const serviciosAprobados = (cotizacion.servicios || []).filter(s => s.aprobado_por_cliente).length;
+    const noHayServiciosAprobados = serviciosAprobados === 0;
+    const mostrarDiagnostico = esRechazada || (noHayServiciosAprobados && cotizacion.estado !== 'aprobado_total');
+    
+    const totalServicios = cotizacion.total || 0;
+    const totalFinal = mostrarDiagnostico ? COSTO_DIAGNOSTICO : totalServicios;
+    
+    const serviciosHtml = (cotizacion.servicios || []).map(servicio => `
         <tr>
             <td style="padding: 8px; border-bottom: 1px solid #eee;">${escapeHtml(servicio.descripcion)}</td>
             <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${formatCurrency(servicio.precio)}</td>
@@ -485,65 +605,101 @@ function mostrarVistaPreviaImpresion(cotizacion) {
         </tr>
     `).join('');
     
+    const diagnosticoRow = mostrarDiagnostico && !esRechazada ? `
+        <tr style="background: #fff3e0;">
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                <strong>🔧 Servicio de Diagnóstico</strong><br>
+                <small style="color: #666;">Revisión y diagnóstico del vehículo</small>
+            </td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">
+                <strong>${formatCurrency(COSTO_DIAGNOSTICO)}</strong>
+            </td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
+                ⚠️ Aplicado por rechazo
+            </td>
+        </tr>
+    ` : '';
+    
+    const diagnosticoRowRechazada = esRechazada ? `
+        <tr style="background: #fff3e0;">
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                <strong>🔧 Diagnóstico Técnico</strong><br>
+                <small style="color: #666;">Revisión completa del vehículo</small>
+            </td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">
+                <strong>${formatCurrency(COSTO_DIAGNOSTICO)}</strong>
+            </td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
+                ⚠️ Cotización rechazada
+            </td>
+        </tr>
+    ` : '';
+    
     const printContent = document.getElementById('printContent');
-    printContent.innerHTML = `
-        <div class="cotizacion-print" style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 20px; max-width: 800px; margin: 0 auto;">
-            <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #C1121F; margin-bottom: 5px;">FURIA MOTOR COMPANY</h1>
-                <p style="color: #666;">Centro de Servicio Automotriz</p>
-                <hr style="border: 1px solid #C1121F;">
-                <h2>INFORME DE COTIZACIÓN</h2>
-            </div>
-            
-            <div style="margin-bottom: 20px;">
-                <p><strong>Fecha de Emisión:</strong> ${formatDateTime(cotizacion.fecha_generacion)}</p>
-                <p><strong>Estado:</strong> ${getEstadoTexto(cotizacion.estado)}</p>
-            </div>
-            
-            <div style="margin-bottom: 20px;">
-                <h3 style="color: #333; border-bottom: 2px solid #C1121F; padding-bottom: 5px;">Servicios Cotizados</h3>
-                <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
-                    <thead>
-                        <tr style="background: #f5f5f5;">
-                            <th style="padding: 8px; text-align: left;">Descripción</th>
-                            <th style="padding: 8px; text-align: right;">Precio</th>
-                            <th style="padding: 8px; text-align: center;">Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${serviciosHtml}
-                    </tbody>
-                    <tfoot>
-                        <tr style="background: #f5f5f5;">
-                            <td style="padding: 10px; text-align: right;"><strong>Total General:</strong></td>
-                            <td style="padding: 10px; text-align: right;"><strong>${formatCurrency(cotizacion.total)}</strong></td>
-                            <td style="padding: 10px;"></td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-            
-            ${cotizacion.sugerencias_generales ? `
-                <div style="margin-bottom: 20px;">
-                    <h3 style="color: #333; border-bottom: 2px solid #C1121F; padding-bottom: 5px;">Sugerencias del Taller</h3>
-                    <p style="background: #f9f9f9; padding: 10px; border-radius: 5px;">${escapeHtml(cotizacion.sugerencias_generales)}</p>
+    if (printContent) {
+        printContent.innerHTML = `
+            <div class="cotizacion-print" style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; background: white; border-radius: 16px;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #C1121F; margin-bottom: 5px;">FURIA MOTOR COMPANY</h1>
+                    <p style="color: #666;">Centro de Servicio Automotriz</p>
+                    <hr style="border: 1px solid #C1121F;">
+                    <h2>INFORME DE COTIZACIÓN</h2>
                 </div>
-            ` : ''}
-            
-            <div style="margin-top: 30px; text-align: center; font-size: 12px; color: #999;">
-                <hr>
-                <p>Este documento es un informe de cotización generado automáticamente por FURIA MOTOR.</p>
-                <p>Para cualquier consulta, contáctanos al teléfono: (591) 2-1234567</p>
+                
+                <div style="margin-bottom: 20px;">
+                    <p><strong>Orden de Trabajo:</strong> ${escapeHtml(cotizacion.codigo_orden)}</p>
+                    <p><strong>Vehículo:</strong> ${escapeHtml(cotizacion.vehiculo)} - ${escapeHtml(cotizacion.placa)}</p>
+                    <p><strong>Fecha de Emisión:</strong> ${formatDateTime(cotizacion.fecha_generacion)}</p>
+                    <p><strong>Estado:</strong> ${getEstadoTexto(cotizacion.estado)}</p>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <h3 style="color: #333; border-bottom: 2px solid #C1121F; padding-bottom: 5px;">Servicios Cotizados</h3>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                        <thead>
+                            <tr style="background: #f5f5f5;">
+                                <th style="padding: 8px; text-align: left;">Descripción</th>
+                                <th style="padding: 8px; text-align: right;">Precio</th>
+                                <th style="padding: 8px; text-align: center;">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${serviciosHtml}
+                            ${diagnosticoRow}
+                            ${diagnosticoRowRechazada}
+                        </tbody>
+                        <tfoot>
+                            <tr style="background: #f5f5f5;">
+                                <td style="padding: 10px; text-align: right;"><strong>Total General:</strong></td>
+                                <td style="padding: 10px; text-align: right;"><strong>${formatCurrency(totalFinal)}</strong></td>
+                                <td style="padding: 10px;"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                
+                ${mostrarDiagnostico || esRechazada ? `
+                    <div style="margin-top: 15px; padding: 10px; background: #fff3e0; border-left: 4px solid #F59E0B; border-radius: 5px;">
+                        <p style="margin: 0; color: #333; font-size: 12px;">
+                            <strong>⚠️ Nota:</strong> ${esRechazada ? 'Esta cotización fue rechazada.' : 'Esta cotización no tiene servicios aprobados.'} Se aplica el costo de diagnóstico de ${formatCurrency(COSTO_DIAGNOSTICO)} por la revisión realizada.
+                        </p>
+                    </div>
+                ` : ''}
+                
+                <div style="margin-top: 30px; text-align: center; font-size: 12px; color: #999;">
+                    <hr>
+                    <p>Este documento es un informe de cotización generado automáticamente por FURIA MOTOR.</p>
+                </div>
             </div>
-        </div>
-    `;
+        `;
+    }
     
     abrirModal('modalImprimir');
 }
 
 function imprimirCotizacion() {
     const printContent = document.getElementById('printContent');
-    const originalContent = printContent.innerHTML;
+    const originalContent = printContent ? printContent.innerHTML : '';
     
     const ventana = window.open('', '_blank');
     ventana.document.write(`
@@ -554,7 +710,6 @@ function imprimirCotizacion() {
                     body { font-family: 'Plus Jakarta Sans', Arial, sans-serif; margin: 0; padding: 20px; }
                     @media print {
                         body { margin: 0; padding: 0; }
-                        .no-print { display: none; }
                     }
                 </style>
             </head>
@@ -634,12 +789,16 @@ function setupEventListeners() {
     
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
-        searchInput.addEventListener('input', () => cargarCotizaciones());
+        let timeout;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => cargarCotizaciones(), 500);
+        });
     }
     
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.classList.remove('active');
+            if (e.target === modal) modal.classList.remove('show');
         });
     });
 }
@@ -647,13 +806,21 @@ function setupEventListeners() {
 async function inicializar() {
     console.log('🚀 Inicializando cotizaciones.js');
     
-    const user = await cargarUsuarioActual();
-    if (!user) return;
+    mostrarLoading(true);
     
-    await cargarCotizaciones();
-    setupEventListeners();
-    
-    console.log('✅ cotizaciones.js inicializado correctamente');
+    try {
+        const user = await cargarUsuarioActual();
+        if (!user) return;
+        
+        await cargarCotizaciones();
+        setupEventListeners();
+        
+        console.log('✅ cotizaciones.js inicializado correctamente');
+    } catch (error) {
+        console.error('Error en inicialización:', error);
+    } finally {
+        mostrarLoading(false);
+    }
 }
 
 // Exponer funciones globales
@@ -664,5 +831,6 @@ window.rechazarCotizacion = rechazarCotizacion;
 window.imprimirCotizacionDirecta = imprimirCotizacionDirecta;
 window.imprimirCotizacion = imprimirCotizacion;
 window.cerrarModal = cerrarModal;
+window.cargarCotizaciones = cargarCotizaciones;
 
 document.addEventListener('DOMContentLoaded', inicializar);

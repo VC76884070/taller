@@ -6,20 +6,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Avances de Reparación | Cliente - FURIA MOTOR</title>
 
+    <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
     <link
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
+    <!-- Estilos -->
     <link rel="stylesheet" href="css/misvehiculos.css">
     <link rel="stylesheet" href="css/avances.css">
 </head>
 
 <body>
     <div class="app">
+        <!-- Sidebar container -->
         <div id="sidebar-container"></div>
 
+        <!-- Main Content -->
         <main class="main-content">
+            <!-- Top Bar -->
             <div class="top-bar">
                 <div class="page-title">
                     <h1>Avances de Reparación</h1>
@@ -33,7 +40,7 @@
                 </div>
             </div>
 
-            <!-- Filtros -->
+            <!-- Filtros Bar -->
             <div class="filtros-bar">
                 <div class="search-box">
                     <i class="fas fa-search"></i>
@@ -51,21 +58,38 @@
 
             <!-- Grid de avances -->
             <div id="avancesGrid" class="avances-grid">
-                <!-- Se llena dinámicamente -->
+                <!-- Se llena dinámicamente con JavaScript -->
+                <div class="empty-state">
+                    <i class="fas fa-chart-line"></i>
+                    <p>Cargando avances de reparación...</p>
+                </div>
             </div>
         </main>
     </div>
 
-    <!-- Modal de detalle de avance -->
+    <!-- Modal de detalle de avance MEJORADO -->
     <div id="modalDetalleAvance" class="modal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h3><i class="fas fa-chart-line"></i> Detalle del Avance</h3>
-                <span class="close-modal" onclick="cerrarModal('modalDetalleAvance')">&times;</span>
+                <h3>
+                    <i class="fas fa-chart-line"></i>
+                    Detalle del Avance
+                </h3>
+                <button class="close-modal" onclick="cerrarModal('modalDetalleAvance')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div id="modalDetalleBody"></div>
+            <div id="modalDetalleBody">
+                <!-- Contenido dinámico -->
+                <div class="empty-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando detalles...</p>
+                </div>
+            </div>
             <div class="detalle-actions">
-                <button class="btn-secondary" onclick="cerrarModal('modalDetalleAvance')">Cerrar</button>
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalleAvance')">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
                 <button class="btn-primary" id="btnVerOrden" onclick="verOrdenCompleta()" style="display: none;">
                     <i class="fas fa-eye"></i> Ver Orden Completa
                 </button>
@@ -73,16 +97,29 @@
         </div>
     </div>
 
-    <!-- Modal para ver órden completada -->
+    <!-- Modal para ver orden completada MEJORADO -->
     <div id="modalOrdenCompleta" class="modal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h3><i class="fas fa-clipboard-list"></i> Orden de Trabajo Completada</h3>
-                <span class="close-modal" onclick="cerrarModal('modalOrdenCompleta')">&times;</span>
+                <h3>
+                    <i class="fas fa-clipboard-list"></i>
+                    Orden de Trabajo Completada
+                </h3>
+                <button class="close-modal" onclick="cerrarModal('modalOrdenCompleta')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div id="modalOrdenBody"></div>
+            <div id="modalOrdenBody">
+                <!-- Contenido dinámico -->
+                <div class="empty-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando orden...</p>
+                </div>
+            </div>
             <div class="detalle-actions">
-                <button class="btn-secondary" onclick="cerrarModal('modalOrdenCompleta')">Cerrar</button>
+                <button class="btn-secondary" onclick="cerrarModal('modalOrdenCompleta')">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
                 <button class="btn-primary" onclick="imprimirOrden()">
                     <i class="fas fa-print"></i> Imprimir
                 </button>
@@ -90,10 +127,12 @@
         </div>
     </div>
 
+    <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
     </div>
 
+    <!-- Scripts -->
     <script src="js/include.js"></script>
     <script src="js/avances.js"></script>
 </body>

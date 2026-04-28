@@ -1,12 +1,13 @@
 // =====================================================
-// MISVEHICULOS.JS - CLIENTE
+// MISVEHICULOS.JS - CLIENTE (CORREGIDO)
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
-const API_URL = window.location.origin + '/api/cliente';
+const API_URL = '/api/cliente';  // CAMBIADO: sin window.location.origin
 let currentUser = null;
 let vehiculos = [];
 let currentVehiculoId = null;
+let currentOrdenId = null;
 
 // =====================================================
 // FUNCIONES DE UTILIDAD
@@ -69,12 +70,12 @@ function showToast(message, type = 'info') {
 
 function cerrarModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) modal.classList.remove('active');
+    if (modal) modal.classList.remove('show');
 }
 
 function abrirModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) modal.classList.add('active');
+    if (modal) modal.classList.add('show');
 }
 
 function mostrarLoading(mostrar) {
@@ -92,9 +93,27 @@ function getEstadoTexto(estado) {
         'EnReparacion': 'En Reparación',
         'ControlCalidad': 'Control de Calidad',
         'Finalizado': 'Finalizado',
-        'Entregado': 'Entregado'
+        'Entregado': 'Entregado',
+        'EnProceso': 'En Proceso',
+        'EnPausa': 'En Pausa',
+        'PendienteAprobacion': 'Pendiente de Aprobación'
     };
     return estados[estado] || estado;
+}
+
+function getEstadoClass(estado) {
+    const classes = {
+        'EnRecepcion': 'estado-EnRecepcion',
+        'EnDiagnostico': 'estado-EnDiagnostico',
+        'CotizacionEnviada': 'estado-CotizacionEnviada',
+        'EnReparacion': 'estado-EnReparacion',
+        'ControlCalidad': 'estado-ControlCalidad',
+        'Finalizado': 'estado-Finalizado',
+        'Entregado': 'estado-Entregado',
+        'EnProceso': 'estado-EnProceso',
+        'EnPausa': 'estado-EnPausa'
+    };
+    return classes[estado] || 'estado-EnRecepcion';
 }
 
 function getProgresoPorEstado(estado) {
@@ -102,6 +121,7 @@ function getProgresoPorEstado(estado) {
         'EnRecepcion': 10,
         'EnDiagnostico': 25,
         'CotizacionEnviada': 40,
+        'PendienteAprobacion': 45,
         'EnReparacion': 60,
         'ControlCalidad': 80,
         'Finalizado': 95,
@@ -111,7 +131,7 @@ function getProgresoPorEstado(estado) {
 }
 
 // =====================================================
-// CARGA DE DATOS
+// CARGA DE DATOS (CORREGIDO - ENDPOINTS CORRECTOS)
 // =====================================================
 
 async function cargarVehiculos() {
@@ -119,16 +139,15 @@ async function cargarVehiculos() {
     
     try {
         const search = document.getElementById('searchInput')?.value.toLowerCase() || '';
-        const estado = document.getElementById('filtroEstado')?.value || 'all';
+        const filtroEstado = document.getElementById('filtroEstado')?.value || 'all';
         
-        let url = `${API_URL}/mis-vehiculos`;
-        const params = new URLSearchParams();
-        if (estado !== 'all') params.append('estado', estado);
-        if (params.toString()) url += `?${params.toString()}`;
-        
-        const response = await fetch(url, { headers: getAuthHeaders() });
+        // ENDPOINT CORREGIDO: /vehiculos (no /mis-vehiculos)
+        const response = await fetch(`${API_URL}/vehiculos`, { 
+            headers: getAuthHeaders() 
+        });
         
         if (response.status === 401) {
+            localStorage.clear();
             window.location.href = '/';
             return;
         }
@@ -138,22 +157,68 @@ async function cargarVehiculos() {
         if (data.success) {
             let vehiculosList = data.vehiculos || [];
             
+            // Para cada vehículo, obtener sus órdenes
+            const vehiculosConOrdenes = await Promise.all(vehiculosList.map(async (vehiculo) => {
+                try {
+                    const ordenesResponse = await fetch(`${API_URL}/vehiculo/${vehiculo.id}/ordenes`, {
+                        headers: getAuthHeaders()
+                    });
+                    const ordenesData = await ordenesResponse.json();
+                    
+                    if (ordenesData.success && ordenesData.ordenes && ordenesData.ordenes.length > 0) {
+                        const ultimaOrden = ordenesData.ordenes[0];
+                        return {
+                            ...vehiculo,
+                            orden_actual: ultimaOrden,
+                            estado_global: ultimaOrden.estado_global || 'EnRecepcion',
+                            fecha_ingreso: ultimaOrden.fecha_ingreso,
+                            codigo_unico: ultimaOrden.codigo_unico
+                        };
+                    }
+                    return { ...vehiculo, orden_actual: null, estado_global: null };
+                } catch (error) {
+                    console.error(`Error obteniendo órdenes para vehículo ${vehiculo.id}:`, error);
+                    return { ...vehiculo, orden_actual: null, estado_global: null };
+                }
+            }));
+            
+            // Filtrar por estado si es necesario
+            let filteredVehiculos = vehiculosConOrdenes;
+            if (filtroEstado !== 'all') {
+                filteredVehiculos = vehiculosConOrdenes.filter(v => v.estado_global === filtroEstado);
+            }
+            
+            // Filtrar por búsqueda
             if (search) {
-                vehiculosList = vehiculosList.filter(v => 
+                filteredVehiculos = filteredVehiculos.filter(v => 
                     (v.placa || '').toLowerCase().includes(search) ||
                     (v.marca || '').toLowerCase().includes(search) ||
                     (v.modelo || '').toLowerCase().includes(search)
                 );
             }
             
-            vehiculos = vehiculosList;
-            renderizarVehiculos(vehiculosList);
+            vehiculos = filteredVehiculos;
+            renderizarVehiculos(filteredVehiculos);
         } else {
             showToast(data.error || 'Error al cargar vehículos', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        showToast('Error de conexión', 'error');
+        showToast('Error de conexión con el servidor', 'error');
+        
+        const container = document.getElementById('vehiculosGrid');
+        if (container) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Error de conexión</p>
+                    <small>No se pudieron cargar los vehículos</small>
+                    <button onclick="cargarVehiculos()" class="btn-retry">
+                        <i class="fas fa-sync-alt"></i> Reintentar
+                    </button>
+                </div>
+            `;
+        }
     } finally {
         mostrarLoading(false);
     }
@@ -166,55 +231,72 @@ function renderizarVehiculos(vehiculosList) {
     if (vehiculosList.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
-                <i class="fas fa-car"></i>
-                <p>No tienes vehículos registrados</p>
-                <small>Cuando lleves tu vehículo al taller, aparecerá aquí</small>
+                <i class="fas fa-car-side"></i>
+                <p>No tienes vehículos en el taller actualmente</p>
+                <small>Cuando lleves tu vehículo al taller, aparecerá aquí con el estado de la reparación</small>
             </div>
         `;
         return;
     }
     
     container.innerHTML = vehiculosList.map(vehiculo => {
-        const progreso = getProgresoPorEstado(vehiculo.estado_global);
+        const estado = vehiculo.estado_global || 'Sin orden';
+        const progreso = getProgresoPorEstado(estado);
         
         return `
             <div class="vehiculo-card" onclick="verDetalleVehiculo(${vehiculo.id})">
                 <div class="vehiculo-header">
-                    <div class="vehiculo-placa">
+                    <h3>
                         <i class="fas fa-car"></i>
                         ${escapeHtml(vehiculo.placa)}
-                    </div>
-                    <span class="vehiculo-estado estado-${vehiculo.estado_global}">
-                        ${getEstadoTexto(vehiculo.estado_global)}
-                    </span>
+                    </h3>
+                    <span class="placa-badge">${escapeHtml(vehiculo.placa)}</span>
                 </div>
                 <div class="vehiculo-body">
                     <div class="vehiculo-info">
                         <div class="info-item">
                             <i class="fas fa-tag"></i>
-                            <span>${escapeHtml(vehiculo.marca)} ${escapeHtml(vehiculo.modelo)}</span>
+                            <span><strong>${escapeHtml(vehiculo.marca)}</strong> ${escapeHtml(vehiculo.modelo)}</span>
                         </div>
                         <div class="info-item">
-                            <i class="fas fa-calendar"></i>
-                            <span>Ingreso: ${formatDate(vehiculo.fecha_ingreso)}</span>
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>Año: ${vehiculo.anio || 'N/A'}</span>
                         </div>
+                        ${vehiculo.fecha_ingreso ? `
+                            <div class="info-item">
+                                <i class="fas fa-clock"></i>
+                                <span>Ingreso: ${formatDate(vehiculo.fecha_ingreso)}</span>
+                            </div>
+                        ` : ''}
                     </div>
                     
-                    <div class="progreso-container">
-                        <div class="progreso-label">
-                            <span>Progreso</span>
-                            <span>${progreso}%</span>
+                    ${vehiculo.estado_global ? `
+                        <div class="estado-badge ${getEstadoClass(vehiculo.estado_global)}">
+                            <i class="fas fa-chart-simple"></i>
+                            ${getEstadoTexto(vehiculo.estado_global)}
                         </div>
-                        <div class="progreso-bar">
-                            <div class="progreso-fill" style="width: ${progreso}%"></div>
+                        
+                        <div class="progreso-container">
+                            <div class="progreso-label">
+                                <span>Progreso de reparación</span>
+                                <span>${progreso}%</span>
+                            </div>
+                            <div class="progreso-bar">
+                                <div class="progreso-fill" style="width: ${progreso}%"></div>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="vehiculo-footer">
-                        <button class="btn-ver-detalle" onclick="event.stopPropagation(); verDetalleVehiculo(${vehiculo.id})">
-                            <i class="fas fa-eye"></i> Ver detalles
-                        </button>
-                    </div>
+                    ` : `
+                        <div class="estado-badge" style="background: rgba(107, 114, 128, 0.15); color: #6B7280;">
+                            <i class="fas fa-clock"></i>
+                            Sin órdenes activas
+                        </div>
+                    `}
+                </div>
+                <div class="vehiculo-footer">
+                    <span>Última actualización: ${formatDate(new Date())}</span>
+                    <button class="btn-ver-detalle" onclick="event.stopPropagation(); verDetalleVehiculo(${vehiculo.id})">
+                        <i class="fas fa-eye"></i> Ver detalles
+                    </button>
                 </div>
             </div>
         `;
@@ -222,214 +304,164 @@ function renderizarVehiculos(vehiculosList) {
 }
 
 // =====================================================
-// DETALLE DE VEHÍCULO
+// DETALLE DE VEHÍCULO (CORREGIDO)
 // =====================================================
 
 async function verDetalleVehiculo(id) {
     mostrarLoading(true);
+    
     try {
-        const response = await fetch(`${API_URL}/detalle-vehiculo/${id}`, {
+        // Obtener el vehículo
+        const vehiculoResponse = await fetch(`${API_URL}/vehiculos`, { 
+            headers: getAuthHeaders() 
+        });
+        const vehiculoData = await vehiculoResponse.json();
+        
+        if (!vehiculoData.success) {
+            throw new Error('Error al cargar datos del vehículo');
+        }
+        
+        const vehiculo = vehiculoData.vehiculos.find(v => v.id === id);
+        if (!vehiculo) {
+            throw new Error('Vehículo no encontrado');
+        }
+        
+        // Obtener órdenes del vehículo
+        const ordenesResponse = await fetch(`${API_URL}/vehiculo/${id}/ordenes`, {
             headers: getAuthHeaders()
         });
+        const ordenesData = await ordenesResponse.json();
         
-        const data = await response.json();
+        currentVehiculoId = id;
+        currentOrdenId = ordenesData.ordenes?.[0]?.id || null;
         
-        if (data.success) {
-            currentVehiculoId = id;
-            mostrarDetalle(data.detalle);
-        } else {
-            showToast(data.error || 'Error al cargar detalle', 'error');
-        }
+        mostrarDetalleVehiculo(vehiculo, ordenesData.ordenes || []);
+        
     } catch (error) {
         console.error('Error:', error);
-        showToast('Error de conexión', 'error');
+        showToast(error.message || 'Error al cargar detalle', 'error');
     } finally {
         mostrarLoading(false);
     }
 }
 
-function mostrarDetalle(detalle) {
-    // Información básica
-    const progreso = getProgresoPorEstado(detalle.estado_global);
-    
-    // Fotos
-    const fotosHtml = generarFotosHtml(detalle.fotos);
-    
-    // Timeline de avances (simulado basado en estado)
-    const timelineHtml = generarTimelineHtml(detalle);
-    
-    // Verificar si tiene cotización
-    const tieneCotizacion = detalle.estado_global === 'CotizacionEnviado' || 
-                           detalle.estado_global === 'EnReparacion' ||
-                           detalle.estado_global === 'ControlCalidad';
+function mostrarDetalleVehiculo(vehiculo, ordenes) {
+    const ordenActual = ordenes[0] || null;
+    const estado = ordenActual?.estado_global || 'Sin orden';
+    const progreso = getProgresoPorEstado(estado);
     
     const modalBody = document.getElementById('modalDetalleBody');
+    if (!modalBody) return;
+    
     modalBody.innerHTML = `
         <div class="detalle-seccion">
-            <h4><i class="fas fa-info-circle"></i> Información General</h4>
+            <h4><i class="fas fa-car"></i> Información del Vehículo</h4>
             <div class="detalle-grid">
                 <div class="detalle-item">
-                    <span class="detalle-label">Código de Trabajo</span>
-                    <span class="detalle-value">${escapeHtml(detalle.codigo_unico || 'N/A')}</span>
+                    <span class="label">Placa</span>
+                    <span class="value"><strong>${escapeHtml(vehiculo.placa)}</strong></span>
                 </div>
                 <div class="detalle-item">
-                    <span class="detalle-label">Estado</span>
-                    <span class="detalle-value">${getEstadoTexto(detalle.estado_global)}</span>
+                    <span class="label">Marca / Modelo</span>
+                    <span class="value">${escapeHtml(vehiculo.marca)} ${escapeHtml(vehiculo.modelo || '')}</span>
                 </div>
                 <div class="detalle-item">
-                    <span class="detalle-label">Fecha de Ingreso</span>
-                    <span class="detalle-value">${formatDateTime(detalle.fecha_ingreso)}</span>
+                    <span class="label">Año</span>
+                    <span class="value">${vehiculo.anio || 'N/A'}</span>
                 </div>
                 <div class="detalle-item">
-                    <span class="detalle-label">Progreso</span>
-                    <span class="detalle-value">${progreso}%</span>
-                </div>
-            </div>
-            <div class="progreso-bar" style="margin-top: 0.5rem;">
-                <div class="progreso-fill" style="width: ${progreso}%"></div>
-            </div>
-        </div>
-        
-        <div class="detalle-seccion">
-            <h4><i class="fas fa-user"></i> Datos del Cliente</h4>
-            <div class="detalle-grid">
-                <div class="detalle-item">
-                    <span class="detalle-label">Nombre</span>
-                    <span class="detalle-value">${escapeHtml(detalle.cliente_nombre || 'N/A')}</span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Teléfono</span>
-                    <span class="detalle-value">${escapeHtml(detalle.cliente_telefono || 'N/A')}</span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Email</span>
-                    <span class="detalle-value">${escapeHtml(detalle.cliente_email || 'N/A')}</span>
+                    <span class="label">Kilometraje</span>
+                    <span class="value">${vehiculo.kilometraje?.toLocaleString() || '0'} km</span>
                 </div>
             </div>
         </div>
         
-        <div class="detalle-seccion">
-            <h4><i class="fas fa-car"></i> Datos del Vehículo</h4>
-            <div class="detalle-grid">
-                <div class="detalle-item">
-                    <span class="detalle-label">Placa</span>
-                    <span class="detalle-value">${escapeHtml(detalle.placa)}</span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Marca/Modelo</span>
-                    <span class="detalle-value">${escapeHtml(detalle.marca)} ${escapeHtml(detalle.modelo)}</span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Año</span>
-                    <span class="detalle-value">${detalle.anio || 'N/A'}</span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Kilometraje</span>
-                    <span class="detalle-value">${detalle.kilometraje?.toLocaleString() || '0'} km</span>
-                </div>
-            </div>
-        </div>
-        
-        ${fotosHtml ? `
+        ${ordenActual ? `
             <div class="detalle-seccion">
-                <h4><i class="fas fa-camera"></i> Registro Fotográfico</h4>
-                ${fotosHtml}
-            </div>
-        ` : ''}
-        
-        <div class="detalle-seccion">
-            <h4><i class="fas fa-pencil-alt"></i> Descripción del Problema</h4>
-            <div class="detalle-descripcion">
-                ${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}
-            </div>
-            ${detalle.audio_url ? `
-                <div class="detalle-audio">
-                    <audio controls>
-                        <source src="${detalle.audio_url}" type="audio/wav">
-                        Tu navegador no soporta audio.
-                    </audio>
+                <h4><i class="fas fa-clipboard-list"></i> Orden de Trabajo Actual</h4>
+                <div class="detalle-grid">
+                    <div class="detalle-item">
+                        <span class="label">Código</span>
+                        <span class="value"><strong>${escapeHtml(ordenActual.codigo_unico || 'N/A')}</strong></span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="label">Estado</span>
+                        <span class="value estado-badge ${getEstadoClass(ordenActual.estado_global)}" style="display: inline-block;">
+                            ${getEstadoTexto(ordenActual.estado_global)}
+                        </span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="label">Fecha de Ingreso</span>
+                        <span class="value">${formatDateTime(ordenActual.fecha_ingreso)}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="label">Progreso</span>
+                        <span class="value">${progreso}%</span>
+                    </div>
                 </div>
-            ` : ''}
-        </div>
-        
-        <div class="detalle-seccion">
-            <h4><i class="fas fa-chart-line"></i> Avance de la Reparación</h4>
-            ${timelineHtml}
-        </div>
+                <div class="progreso-container" style="margin-top: 1rem;">
+                    <div class="progreso-bar">
+                        <div class="progreso-fill" style="width: ${progreso}%"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="detalle-seccion">
+                <h4><i class="fas fa-chart-line"></i> Línea de Tiempo</h4>
+                ${generarTimelineHtml(ordenActual.estado_global)}
+            </div>
+        ` : `
+            <div class="detalle-seccion">
+                <div class="empty-state" style="padding: 2rem; text-align: center;">
+                    <i class="fas fa-check-circle" style="font-size: 3rem; color: var(--verde-exito);"></i>
+                    <p style="margin-top: 1rem;">No hay órdenes de trabajo activas para este vehículo</p>
+                    <small>Si deseas realizar un servicio, agenda una cita con nosotros</small>
+                </div>
+            </div>
+        `}
     `;
     
     // Mostrar/ocultar botón de cotización
     const btnCotizacion = document.getElementById('btnVerCotizacion');
     if (btnCotizacion) {
-        btnCotizacion.style.display = tieneCotizacion ? 'flex' : 'none';
+        const tieneCotizacion = ordenActual && 
+            ['CotizacionEnviada', 'EnReparacion', 'ControlCalidad', 'PendienteAprobacion'].includes(ordenActual.estado_global);
+        btnCotizacion.style.display = tieneCotizacion ? 'inline-flex' : 'none';
     }
     
     abrirModal('modalDetalleVehiculo');
 }
 
-function generarFotosHtml(fotos) {
-    if (!fotos) return '';
-    
-    const camposFotos = [
-        { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo' },
-        { campo: 'url_lateral_derecha', label: 'Lateral Derecho' },
-        { campo: 'url_foto_frontal', label: 'Frontal' },
-        { campo: 'url_foto_trasera', label: 'Trasera' },
-        { campo: 'url_foto_superior', label: 'Superior' },
-        { campo: 'url_foto_inferior', label: 'Inferior' },
-        { campo: 'url_foto_tablero', label: 'Tablero' }
-    ];
-    
-    const fotosExistentes = camposFotos.filter(f => {
-        const url = fotos[f.campo];
-        return url && url !== 'null' && url !== 'None' && url !== '';
-    });
-    
-    if (fotosExistentes.length === 0) return '';
-    
-    return `
-        <div class="detalle-fotos">
-            ${fotosExistentes.map(f => `
-                <div class="detalle-foto" onclick="verImagenAmpliada('${fotos[f.campo]}', '${f.label}')">
-                    <img src="${fotos[f.campo]}" alt="${f.label}" onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%25%22%20height%3D%22100%25%22%20viewBox%3D%220%200%20200%20200%22%3E%3Crect%20width%3D%22200%22%20height%3D%22200%22%20fill%3D%22%23333%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dy%3D%22.3em%22%20fill%3D%22%23999%22%3ESin%20imagen%3C%2Ftext%3E%3C%2Fsvg%3E'">
-                    <div class="detalle-foto-label">${f.label}</div>
-                </div>
-            `).join('')}
-        </div>
-    `;
-}
-
-function generarTimelineHtml(detalle) {
-    // Estados en orden
+function generarTimelineHtml(estadoActual) {
     const estados = [
-        { key: 'EnRecepcion', label: 'Recepción del Vehículo', desc: 'Vehículo ingresado al taller' },
-        { key: 'EnDiagnostico', label: 'Diagnóstico', desc: 'Técnico realizando diagnóstico' },
-        { key: 'CotizacionEnviada', label: 'Cotización', desc: 'Cotización enviada al cliente' },
-        { key: 'EnReparacion', label: 'Reparación', desc: 'Vehículo en proceso de reparación' },
-        { key: 'ControlCalidad', label: 'Control de Calidad', desc: 'Verificación final de la reparación' },
-        { key: 'Finalizado', label: 'Finalizado', desc: 'Reparación completada' },
-        { key: 'Entregado', label: 'Entregado', desc: 'Vehículo entregado al cliente' }
+        { key: 'EnRecepcion', label: 'Recepción del Vehículo', icon: 'fa-clipboard-list' },
+        { key: 'EnDiagnostico', label: 'Diagnóstico', icon: 'fa-stethoscope' },
+        { key: 'CotizacionEnviada', label: 'Cotización', icon: 'fa-file-invoice-dollar' },
+        { key: 'PendienteAprobacion', label: 'Aprobación', icon: 'fa-check-circle' },
+        { key: 'EnReparacion', label: 'Reparación', icon: 'fa-wrench' },
+        { key: 'ControlCalidad', label: 'Control de Calidad', icon: 'fa-clipboard-check' },
+        { key: 'Finalizado', label: 'Finalizado', icon: 'fa-flag-checkered' },
+        { key: 'Entregado', label: 'Entregado', icon: 'fa-handshake' }
     ];
     
-    const estadoActual = detalle.estado_global;
     let encontrado = false;
     
     const timelineItems = estados.map(estado => {
-        const isCompleted = encontrado ? false : (estado.key === estadoActual || encontrado);
-        if (estado.key === estadoActual) encontrado = true;
+        const isCompleted = encontrado ? false : (estado.key === estadoActual);
+        const isCurrent = estado.key === estadoActual;
         
-        let fecha = '';
-        if (estado.key === 'EnRecepcion' && detalle.fecha_ingreso) {
-            fecha = formatDate(detalle.fecha_ingreso);
+        if (estado.key === estadoActual) {
+            encontrado = true;
         }
         
         return `
-            <div class="timeline-item">
-                <div class="timeline-dot ${isCompleted ? 'completed' : ''} ${estado.key === estadoActual ? 'current' : ''}"></div>
+            <div class="timeline-item ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''}">
+                <div class="timeline-dot">
+                    <i class="fas ${estado.icon}"></i>
+                </div>
                 <div class="timeline-content">
                     <div class="timeline-title">${estado.label}</div>
-                    ${fecha ? `<div class="timeline-date">${fecha}</div>` : ''}
-                    <div class="timeline-desc">${estado.desc}</div>
+                    ${isCurrent ? '<div class="timeline-status">En curso...</div>' : ''}
                 </div>
             </div>
         `;
@@ -438,28 +470,16 @@ function generarTimelineHtml(detalle) {
     return `<div class="timeline">${timelineItems}</div>`;
 }
 
-function verImagenAmpliada(url, label) {
-    const modal = document.createElement('div');
-    modal.className = 'modal-imagen';
-    modal.innerHTML = `
-        <div class="modal-imagen-content">
-            <button class="modal-imagen-close" onclick="this.parentElement.parentElement.remove()">&times;</button>
-            <img src="${url}" alt="${label}">
-            <p>${label}</p>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    modal.style.display = 'flex';
-}
-
 function verCotizacion() {
-    if (currentVehiculoId) {
-        window.location.href = `cotizaciones.html?id=${currentVehiculoId}`;
+    if (currentOrdenId) {
+        window.location.href = `/cliente/cotizaciones.html?orden=${currentOrdenId}`;
+    } else {
+        showToast('No hay cotización disponible para este vehículo', 'warning');
     }
 }
 
 // =====================================================
-// AUTENTICACIÓN
+// AUTENTICACIÓN (CORREGIDO)
 // =====================================================
 
 async function cargarUsuarioActual() {
@@ -468,6 +488,7 @@ async function cargarUsuarioActual() {
         if (!token) token = localStorage.getItem('token');
         
         if (!token) {
+            console.log('❌ No hay token');
             window.location.href = '/';
             return null;
         }
@@ -477,27 +498,37 @@ async function cargarUsuarioActual() {
         });
         
         if (response.status === 401) {
+            console.log('❌ Token inválido');
             localStorage.clear();
             window.location.href = '/';
             return null;
         }
         
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
         
-        if (data.success) {
+        if (data.success && data.usuario) {
             currentUser = data.usuario;
+            console.log('✅ Usuario cargado:', currentUser.nombre);
             
             // Actualizar nombre en sidebar
-            const userNameSpan = document.getElementById('userName');
+            const userNameSpan = document.querySelector('.user-name');
             if (userNameSpan) {
-                userNameSpan.textContent = currentUser.nombre || currentUser.placa || 'Cliente';
+                userNameSpan.textContent = currentUser.nombre || 'Cliente';
             }
             
             // Mostrar fecha
             const fechaElement = document.getElementById('currentDate');
             if (fechaElement) {
                 const hoy = new Date();
-                fechaElement.textContent = hoy.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+                fechaElement.textContent = hoy.toLocaleDateString('es-ES', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
             }
             
             return currentUser;
@@ -505,7 +536,7 @@ async function cargarUsuarioActual() {
         
         return null;
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error cargando usuario:', error);
         window.location.href = '/';
         return null;
     }
@@ -531,13 +562,17 @@ function setupEventListeners() {
     
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
-        searchInput.addEventListener('input', () => cargarVehiculos());
+        let timeout;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => cargarVehiculos(), 500);
+        });
     }
     
     // Cerrar modales
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.classList.remove('active');
+            if (e.target === modal) modal.classList.remove('show');
         });
     });
 }
@@ -545,19 +580,28 @@ function setupEventListeners() {
 async function inicializar() {
     console.log('🚀 Inicializando misvehiculos.js');
     
-    const user = await cargarUsuarioActual();
-    if (!user) return;
+    mostrarLoading(true);
     
-    await cargarVehiculos();
-    setupEventListeners();
-    
-    console.log('✅ misvehiculos.js inicializado correctamente');
+    try {
+        const user = await cargarUsuarioActual();
+        if (!user) return;
+        
+        await cargarVehiculos();
+        setupEventListeners();
+        
+        console.log('✅ misvehiculos.js inicializado correctamente');
+    } catch (error) {
+        console.error('Error en inicialización:', error);
+    } finally {
+        mostrarLoading(false);
+    }
 }
 
 // Exponer funciones globales
 window.verDetalleVehiculo = verDetalleVehiculo;
 window.verCotizacion = verCotizacion;
-window.verImagenAmpliada = verImagenAmpliada;
 window.cerrarModal = cerrarModal;
+window.cargarVehiculos = cargarVehiculos;
 
+// Iniciar cuando el DOM esté listo
 document.addEventListener('DOMContentLoaded', inicializar);

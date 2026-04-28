@@ -7,9 +7,7 @@
     <title>Cotizaciones | FURIA MOTOR - Jefe Taller</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/cotizaciones.css">
@@ -23,7 +21,7 @@
             <header class="top-bar">
                 <div class="page-title">
                     <h1><i class="fas fa-file-invoice-dollar"></i> Cotizaciones</h1>
-                    <p>Gestiona cotizaciones, solicitudes de repuestos y envíos al cliente</p>
+                    <p>Gestiona cotizaciones, solicitudes de repuestos y envía instrucciones al técnico</p>
                 </div>
                 <div class="top-actions">
                     <div class="date-display">
@@ -48,6 +46,9 @@
                         </button>
                         <button class="tab-btn" data-tab="tab-solicitar-compra">
                             <i class="fas fa-shopping-cart"></i> Solicitar Compra
+                        </button>
+                        <button class="tab-btn" data-tab="tab-ordenes-rechazadas">
+                            <i class="fas fa-times-circle"></i> Órdenes Rechazadas
                         </button>
                     </div>
                 </div>
@@ -103,11 +104,7 @@
                             </thead>
                             <tbody id="tablaSolicitudesCotizacion">
                                 <tr class="empty-row">
-                                    <td colspan="9">
-                                        <div class="empty-state"><i class="fas fa-inbox"></i>
-                                            <p>No hay solicitudes</p>
-                                        </div>
-                                    </td>
+                                    <td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes</p></div></td>
                                 </tr>
                             </tbody>
                         </table>
@@ -126,7 +123,6 @@
                         </button>
                     </div>
 
-                    <!-- FILTROS -->
                     <div class="filters-bar">
                         <div class="filter-group">
                             <select id="filtroEstadoCotizacion" class="form-select-sm">
@@ -141,7 +137,6 @@
                         </div>
                     </div>
 
-                    <!-- ÓRDENES CON SERVICIOS -->
                     <div id="ordenesContainer"></div>
                 </div>
 
@@ -188,15 +183,40 @@
                             </thead>
                             <tbody id="tablaSolicitudesCompra">
                                 <tr class="empty-row">
-                                    <td colspan="8">
-                                        <div class="empty-state"><i class="fas fa-shopping-cart"></i>
-                                            <p>No hay solicitudes</p>
-                                        </div>
-                                    </td>
+                                    <td colspan="8"><div class="empty-state"><i class="fas fa-shopping-cart"></i><p>No hay solicitudes</p></div></td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
+                </div>
+
+                <!-- TAB 4: ÓRDENES RECHAZADAS TOTALMENTE -->
+                <div id="tab-ordenes-rechazadas" class="tab-content">
+                    <div class="panel-header">
+                        <div class="panel-header-left">
+                            <h3><i class="fas fa-times-circle"></i> Órdenes Rechazadas Totalmente</h3>
+                            <p>Cotizaciones donde el cliente rechazó TODOS los servicios - Diagnóstico: Bs. 200</p>
+                        </div>
+                        <button class="btn-outline" id="refreshRechazadasBtn">
+                            <i class="fas fa-sync-alt"></i> Actualizar
+                        </button>
+                    </div>
+
+                    <div class="filters-bar">
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchRechazadas" placeholder="Buscar orden o vehículo...">
+                        </div>
+                        <div class="filter-group">
+                            <select id="filtroInstrucciones" class="form-select-sm">
+                                <option value="all">Todas</option>
+                                <option value="pendiente">Sin instrucciones</option>
+                                <option value="enviadas">Con instrucciones</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="ordenesRechazadasContainer" class="ordenes-container"></div>
                 </div>
             </div>
         </main>
@@ -237,15 +257,9 @@
                         <label><i class="fas fa-list"></i> Items a cotizar</label>
                         <div class="items-list-container">
                             <div class="items-list" id="itemsListSolicitud">
-                                <div class="item-empty">
-                                    <i class="fas fa-box-open"></i>
-                                    <p>No hay items agregados</p>
-                                    <small>Haz clic en "Agregar item" para comenzar</small>
-                                </div>
+                                <div class="item-empty"><i class="fas fa-box-open"></i><p>No hay items agregados</p><small>Haz clic en "Agregar item" para comenzar</small></div>
                             </div>
-                            <button type="button" class="btn-add-item" id="btnAgregarItemSolicitud">
-                                <i class="fas fa-plus-circle"></i> Agregar item
-                            </button>
+                            <button type="button" class="btn-add-item" id="btnAgregarItemSolicitud"><i class="fas fa-plus-circle"></i> Agregar item</button>
                         </div>
                     </div>
                     <div class="form-group">
@@ -256,9 +270,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalSolicitudCotizacion')">Cancelar</button>
-                <button class="btn-primary" id="saveSolicitudModal">
-                    <i class="fas fa-paper-plane"></i> Enviar Solicitud
-                </button>
+                <button class="btn-primary" id="saveSolicitudModal"><i class="fas fa-paper-plane"></i> Enviar Solicitud</button>
             </div>
         </div>
     </div>
@@ -272,87 +284,52 @@
             </div>
             <div class="modal-body" id="generarCotizacionBody">
                 <div class="modal-tabs">
-                    <button class="modal-tab-btn active" data-modal-tab="tab-servicios">
-                        <i class="fas fa-tools"></i> Servicios y Repuestos
-                    </button>
-                    <button class="modal-tab-btn" data-modal-tab="tab-documento">
-                        <i class="fas fa-file-pdf"></i> Documento de Cotización
-                    </button>
+                    <button class="modal-tab-btn active" data-modal-tab="tab-servicios"><i class="fas fa-tools"></i> Servicios y Repuestos</button>
+                    <button class="modal-tab-btn" data-modal-tab="tab-documento"><i class="fas fa-file-pdf"></i> Documento de Cotización</button>
                 </div>
 
-                <!-- TAB 1: SERVICIOS EDITABLES -->
                 <div id="modal-tab-servicios" class="modal-tab-content active">
                     <div class="panel-header" style="margin-bottom: 1rem;">
-                        <div class="panel-header-left">
-                            <h3><i class="fas fa-clipboard-list"></i> Servicios a Cotizar</h3>
-                            <p>Administra los servicios y repuestos que se enviarán al cliente</p>
-                        </div>
-                        <button class="btn-primary btn-sm" id="btnAgregarServicioCotizacion">
-                            <i class="fas fa-plus"></i> Agregar Servicio
-                        </button>
+                        <div class="panel-header-left"><h3><i class="fas fa-clipboard-list"></i> Servicios a Cotizar</h3><p>Administra los servicios y repuestos que se enviarán al cliente</p></div>
+                        <button class="btn-primary btn-sm" id="btnAgregarServicioCotizacion"><i class="fas fa-plus"></i> Agregar Servicio</button>
                     </div>
-
                     <div class="orden-info-card" id="ordenInfoPreview" style="margin-bottom: 1rem;"></div>
-                    <div id="serviciosCotizacionContainer"
-                        style="max-height: 400px; overflow-y: auto; margin-bottom: 1rem;"></div>
-
-                    <div class="total-cotizacion"
-                        style="text-align: right; padding: 1rem; background: var(--gris-oscuro); border-radius: var(--radius-md); margin-top: 1rem;">
+                    <div id="serviciosCotizacionContainer" style="max-height: 400px; overflow-y: auto; margin-bottom: 1rem;"></div>
+                    <div class="total-cotizacion" style="text-align: right; padding: 1rem; background: var(--gris-oscuro); border-radius: var(--radius-md); margin-top: 1rem;">
                         <h3>Total: <span id="totalCotizacion" style="color: var(--verde-exito);">Bs. 0.00</span></h3>
                     </div>
                 </div>
 
-                <!-- TAB 2: SUBIDA DE DOCUMENTO -->
                 <div id="modal-tab-documento" class="modal-tab-content">
                     <div class="upload-section">
                         <div class="file-upload-area" id="fileUploadArea">
-                            <i class="fas fa-cloud-upload-alt"
-                                style="font-size: 48px; color: var(--rojo-primario); margin-bottom: 15px;"></i>
+                            <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: var(--rojo-primario); margin-bottom: 15px;"></i>
                             <h3 style="margin-bottom: 10px;">Subir Documento de Cotización</h3>
-                            <p style="color: var(--text-muted); margin-bottom: 10px;">Arrastra un archivo PDF o Word o
-                                haz clic para seleccionar</p>
-                            <p style="color: var(--text-muted); font-size: 12px;">Formatos permitidos: PDF, DOC, DOCX
-                                (Máx. 10MB)</p>
+                            <p style="color: var(--text-muted); margin-bottom: 10px;">Arrastra un archivo PDF o Word o haz clic para seleccionar</p>
+                            <p style="color: var(--text-muted); font-size: 12px;">Formatos permitidos: PDF, DOC, DOCX (Máx. 10MB)</p>
                             <input type="file" id="cotizacionFile" accept=".pdf,.doc,.docx" style="display: none;">
-                            <button class="btn-outline" id="selectFileBtn" style="margin-top: 15px;">
-                                <i class="fas fa-folder-open"></i> Seleccionar archivo
-                            </button>
+                            <button class="btn-outline" id="selectFileBtn" style="margin-top: 15px;"><i class="fas fa-folder-open"></i> Seleccionar archivo</button>
                         </div>
-
-                        <div id="fileInfo"
-                            style="display: none; margin-top: 20px; padding: 15px; background: var(--bg-card); border-radius: var(--radius-md);">
+                        <div id="fileInfo" style="display: none; margin-top: 20px; padding: 15px; background: var(--bg-card); border-radius: var(--radius-md);">
                             <div style="display: flex; align-items: center; justify-content: space-between;">
                                 <div style="display: flex; align-items: center; gap: 10px;">
                                     <i class="fas fa-file-pdf" style="font-size: 32px; color: #dc3545;"></i>
-                                    <i class="fas fa-file-word"
-                                        style="font-size: 32px; color: #2b5797; display: none;"></i>
-                                    <div>
-                                        <strong id="fileName"></strong>
-                                        <p id="fileSize"
-                                            style="font-size: 12px; color: var(--text-muted); margin-top: 5px;"></p>
-                                    </div>
+                                    <i class="fas fa-file-word" style="font-size: 32px; color: #2b5797; display: none;"></i>
+                                    <div><strong id="fileName"></strong><p id="fileSize" style="font-size: 12px; color: var(--text-muted); margin-top: 5px;"></p></div>
                                 </div>
-                                <div>
-                                    <button class="action-btn delete" id="removeFileBtn" title="Eliminar archivo">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
-                                </div>
+                                <div><button class="action-btn delete" id="removeFileBtn" title="Eliminar archivo"><i class="fas fa-trash-alt"></i></button></div>
                             </div>
                         </div>
-
                         <div class="form-group" style="margin-top: 20px;">
                             <label><i class="fas fa-comment-dots"></i> Mensaje para el cliente</label>
-                            <textarea id="notasAdicionales" class="form-textarea" rows="3"
-                                placeholder="Escribe un mensaje adicional para el cliente..."></textarea>
+                            <textarea id="notasAdicionales" class="form-textarea" rows="3" placeholder="Escribe un mensaje adicional para el cliente..."></textarea>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalGenerarCotizacion')">Cancelar</button>
-                <button class="btn-primary" id="enviarCotizacionBtn">
-                    <i class="fas fa-paper-plane"></i> Enviar al Cliente
-                </button>
+                <button class="btn-primary" id="enviarCotizacionBtn"><i class="fas fa-paper-plane"></i> Enviar al Cliente</button>
             </div>
         </div>
     </div>
@@ -367,9 +344,7 @@
             <div class="modal-body" id="detalleCotizacionContainer"></div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalDetalleCotizacion')">Cerrar</button>
-                <button class="btn-success" id="exportarPDFDetalleBtn">
-                    <i class="fas fa-download"></i> Descargar Documento
-                </button>
+                <button class="btn-success" id="exportarPDFDetalleBtn"><i class="fas fa-download"></i> Descargar Documento</button>
             </div>
         </div>
     </div>
@@ -382,19 +357,12 @@
                 <button class="modal-close" onclick="cerrarModal('modalEditorServicios')">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="panel-header" style="margin-bottom: 1rem;">
-                    <h3>Servicios y Repuestos</h3>
-                    <button class="btn-primary btn-sm" id="btnAgregarServicio">
-                        <i class="fas fa-plus"></i> Agregar Servicio
-                    </button>
-                </div>
+                <div class="panel-header" style="margin-bottom: 1rem;"><h3>Servicios y Repuestos</h3><button class="btn-primary btn-sm" id="btnAgregarServicio"><i class="fas fa-plus"></i> Agregar Servicio</button></div>
                 <div id="serviciosEditablesContainer" style="max-height: 500px; overflow-y: auto;"></div>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalEditorServicios')">Cancelar</button>
-                <button class="btn-primary" id="guardarServiciosBtn">
-                    <i class="fas fa-save"></i> Guardar Cambios
-                </button>
+                <button class="btn-primary" id="guardarServiciosBtn"><i class="fas fa-save"></i> Guardar Cambios</button>
             </div>
         </div>
     </div>
@@ -411,15 +379,8 @@
                 <div class="form-group">
                     <label><i class="fas fa-list"></i> Items a comprar</label>
                     <div class="items-list-container">
-                        <div class="items-list" id="itemsListCompra">
-                            <div class="item-empty">
-                                <i class="fas fa-box-open"></i>
-                                <p>No hay items agregados</p>
-                            </div>
-                        </div>
-                        <button type="button" class="btn-add-item" id="btnAgregarItemCompra">
-                            <i class="fas fa-plus-circle"></i> Agregar item
-                        </button>
+                        <div class="items-list" id="itemsListCompra"><div class="item-empty"><i class="fas fa-box-open"></i><p>No hay items agregados</p></div></div>
+                        <button type="button" class="btn-add-item" id="btnAgregarItemCompra"><i class="fas fa-plus-circle"></i> Agregar item</button>
                     </div>
                 </div>
                 <div class="form-group">
@@ -429,19 +390,60 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalSolicitarCompra')">Cancelar</button>
-                <button class="btn-primary" id="confirmarSolicitudCompra">
-                    <i class="fas fa-check"></i> Confirmar
-                </button>
+                <button class="btn-primary" id="confirmarSolicitudCompra"><i class="fas fa-check"></i> Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Enviar Instrucciones al Técnico -->
+    <div class="modal" id="modalInstruccionesTecnico">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2><i class="fas fa-clipboard-list"></i> Instrucciones para el Técnico</h2>
+                <button class="modal-close" onclick="cerrarModal('modalInstruccionesTecnico')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="orden-info-card" id="instruccionesOrdenInfo"></div>
+                <div class="precio-diagnostico-modal" style="background: linear-gradient(135deg, #1E3A5F, #0f2b3d); padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span><i class="fas fa-stethoscope"></i> Cargo por diagnóstico:</span>
+                        <span style="font-size: 1.2rem; font-weight: bold; color: #10B981;">Bs. 200.00</span>
+                    </div>
+                    <small style="color: #8E8E93;">Este cargo aplica por el diagnóstico realizado</small>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-comment-dots"></i> Instrucciones para el técnico</label>
+                    <textarea id="instruccionesTexto" class="form-textarea" rows="5" placeholder="Ejemplo:&#10;- Realizar una revisión más detallada del sistema eléctrico&#10;- Verificar nuevamente el diagnóstico del motor&#10;- Coordinar con el cliente para aclarar dudas"></textarea>
+                </div>
+                <div class="alert-info" style="background: rgba(59, 130, 246, 0.1); padding: 0.75rem; border-radius: 8px;">
+                    <i class="fas fa-info-circle"></i>
+                    <small>El técnico recibirá una notificación con estas instrucciones. La orden volverá a estado "En Diagnóstico".</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalInstruccionesTecnico')">Cancelar</button>
+                <button class="btn-primary" id="btnEnviarInstrucciones"><i class="fas fa-paper-plane"></i> Enviar Instrucciones</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Historial de Instrucciones -->
+    <div class="modal" id="modalHistorialInstrucciones">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2><i class="fas fa-history"></i> Historial de Instrucciones</h2>
+                <button class="modal-close" onclick="cerrarModal('modalHistorialInstrucciones')">&times;</button>
+            </div>
+            <div class="modal-body" id="historialInstruccionesContainer"></div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalHistorialInstrucciones')">Cerrar</button>
             </div>
         </div>
     </div>
 
     <!-- Loading Overlay -->
     <div id="loadingOverlay" style="display: none;">
-        <div>
-            <i class="fas fa-spinner fa-pulse fa-2x" style="color: var(--rojo-primario);"></i>
-            <p style="margin-top: 0.5rem;">Cargando...</p>
-        </div>
+        <div><i class="fas fa-spinner fa-pulse fa-2x" style="color: var(--rojo-primario);"></i><p style="margin-top: 0.5rem;">Cargando...</p></div>
     </div>
 
     <script src="js/include.js"></script>

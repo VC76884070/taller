@@ -1,6 +1,6 @@
 /* =====================================================
    COTIZACIONES CSS - FURIA MOTOR
-   JEFE DE TALLER - VERSIÓN MEJORADA
+   JEFE DE TALLER - VERSIÓN COMPLETA Y CORREGIDA
    ===================================================== */
 
 /* =====================================================
@@ -245,6 +245,46 @@
     box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
+.btn-warning {
+    background: var(--ambar-alerta);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.25rem;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-warning:hover {
+    background: #D97706;
+    transform: translateY(-1px);
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+    border: none;
+    padding: 0.6rem 1.25rem;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+    transform: translateY(-1px);
+}
+
 .btn-logout {
     background: transparent;
     border: none;
@@ -298,6 +338,12 @@
 .orden-cliente {
     font-size: 0.75rem;
     color: var(--gris-texto);
+}
+
+.orden-placa {
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+    font-family: monospace;
 }
 
 .orden-total {
@@ -422,27 +468,8 @@
     align-items: center;
 }
 
-.item-descripcion {
-    width: 100%;
-    padding: 0.5rem 0.7rem;
-    background: var(--gris-oscuro);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    color: var(--blanco);
-    font-size: 0.8rem;
-}
-
-.item-cantidad {
-    width: 100%;
-    padding: 0.5rem 0.7rem;
-    background: var(--gris-oscuro);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    color: var(--blanco);
-    font-size: 0.8rem;
-    text-align: center;
-}
-
+.item-descripcion,
+.item-cantidad,
 .item-detalle {
     width: 100%;
     padding: 0.5rem 0.7rem;
@@ -453,12 +480,8 @@
     font-size: 0.8rem;
 }
 
-.item-subtotal {
-    font-size: 0.8rem;
-    font-weight: bold;
-    color: var(--verde-exito);
-    text-align: right;
-    min-width: 80px;
+.item-cantidad {
+    text-align: center;
 }
 
 .item-actions {
@@ -850,14 +873,8 @@
 }
 
 @keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .file-preview-card {
@@ -900,9 +917,19 @@
     box-shadow: var(--shadow-xl);
 }
 
+.modal-sm {
+    width: 90%;
+    max-width: 450px;
+}
+
+.modal-md {
+    width: 90%;
+    max-width: 550px;
+}
+
 .modal-lg {
     width: 90%;
-    max-width: 700px;
+    max-width: 800px;
 }
 
 .modal-xl {
@@ -919,14 +946,14 @@
     background: var(--gris-oscuro);
 }
 
-.modal-header h2 {
+.modal-header h2, .modal-header h3 {
     font-size: 1rem;
     font-weight: 600;
     margin: 0;
     color: var(--blanco);
 }
 
-.modal-header h2 i {
+.modal-header h2 i, .modal-header h3 i {
     color: var(--rojo-primario);
     margin-right: 0.5rem;
 }
@@ -1082,12 +1109,28 @@
 
 .empty-state p {
     font-size: 0.85rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
 }
 
 .empty-state small {
     font-size: 0.7rem;
     opacity: 0.7;
+}
+
+.btn-retry {
+    margin-top: 1rem;
+    background: var(--gris-oscuro);
+    border: 1px solid var(--border-color);
+    color: var(--blanco);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-retry:hover {
+    border-color: var(--rojo-primario);
+    color: var(--rojo-primario);
 }
 
 /* =====================================================
@@ -1153,6 +1196,147 @@
 }
 
 /* =====================================================
+   ESTILOS PARA ÓRDENES RECHAZADAS (NUEVOS)
+   ===================================================== */
+.ordenes-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.rechazada-card {
+    border-left: 4px solid var(--rojo-primario);
+}
+
+.orden-body {
+    padding: 1rem 1.25rem;
+}
+
+.rechazo-info {
+    padding: 0.5rem 0;
+}
+
+.precio-diagnostico {
+    background: linear-gradient(135deg, var(--azul-profundo), #0f2b3d);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.precio-diagnostico span:first-child {
+    font-size: 0.85rem;
+    color: var(--gris-texto);
+}
+
+.precio-diagnostico span:last-child {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: var(--verde-exito);
+}
+
+.motivo-rechazo {
+    background: rgba(193, 18, 31, 0.1);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.motivo-rechazo i {
+    color: var(--rojo-primario);
+    margin-right: 0.5rem;
+}
+
+.motivo-rechazo p {
+    margin: 0.5rem 0 0 1.5rem;
+    font-size: 0.85rem;
+    color: var(--gris-texto);
+}
+
+.fecha-rechazo {
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+}
+
+/* =====================================================
+   ESTILOS PARA INSTRUCCIONES AL TÉCNICO (NUEVOS)
+   ===================================================== */
+.instruccion-item {
+    transition: all 0.2s;
+    background: var(--gris-oscuro);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--border-color);
+}
+
+.instruccion-item:hover {
+    transform: translateX(4px);
+    border-color: var(--rojo-primario);
+}
+
+.precio-diagnostico-modal {
+    background: linear-gradient(135deg, #1E3A5F, #0f2b3d);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.alert-info {
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-top: 1rem;
+}
+
+.alert-info i {
+    color: #3B82F6;
+    margin-right: 0.5rem;
+}
+
+.alert-warning {
+    background: rgba(245, 158, 11, 0.1);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.alert-warning i {
+    color: var(--ambar-alerta);
+    margin-right: 0.5rem;
+}
+
+/* =====================================================
+   TIEMPO RESTANTE PARA EDICIÓN (CLIENTE USADO EN JEFE)
+   ===================================================== */
+.tiempo-restante {
+    background: linear-gradient(135deg, #FFF3E0, #FFE0B2);
+    border-left: 4px solid var(--ambar-alerta);
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    color: #78350F;
+}
+
+.tiempo-restante i {
+    font-size: 1.1rem;
+    color: var(--ambar-alerta);
+}
+
+.tiempo-restante small {
+    font-size: 0.7rem;
+    color: #78350F;
+    margin-left: auto;
+}
+
+/* =====================================================
    RESPONSIVE
    ===================================================== */
 @media (max-width: 768px) {
@@ -1193,7 +1377,9 @@
     }
     
     .modal-lg,
-    .modal-xl {
+    .modal-xl,
+    .modal-md,
+    .modal-sm {
         width: 95%;
         margin: 1rem;
     }
@@ -1249,6 +1435,11 @@
         left: 5%;
         right: 5%;
         bottom: 10px;
+    }
+    
+    .precio-diagnostico {
+        flex-direction: column;
+        text-align: center;
     }
 }
 

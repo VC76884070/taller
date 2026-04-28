@@ -6,20 +6,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mi Perfil | Cliente - FURIA MOTOR</title>
 
+    <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
     <link
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
+    <!-- Estilos -->
     <link rel="stylesheet" href="css/misvehiculos.css">
     <link rel="stylesheet" href="css/perfil.css">
 </head>
 
 <body>
     <div class="app">
+        <!-- Sidebar container -->
         <div id="sidebar-container"></div>
 
+        <!-- Main Content -->
         <main class="main-content">
+            <!-- Top Bar -->
             <div class="top-bar">
                 <div class="page-title">
                     <h1>Mi Perfil</h1>
@@ -33,22 +40,27 @@
                 </div>
             </div>
 
-            <!-- Pestañas de perfil -->
+            <!-- Pestañas de perfil MEJORADAS -->
             <div class="perfil-tabs">
                 <button class="tab-btn-perfil active" data-tab="informacion">
-                    <i class="fas fa-user-circle"></i> Información Personal
+                    <i class="fas fa-user-circle"></i>
+                    <span>Información Personal</span>
                 </button>
                 <button class="tab-btn-perfil" data-tab="seguridad">
-                    <i class="fas fa-lock"></i> Seguridad
+                    <i class="fas fa-lock"></i>
+                    <span>Seguridad</span>
                 </button>
                 <button class="tab-btn-perfil" data-tab="vehiculos">
-                    <i class="fas fa-car"></i> Mis Vehículos
+                    <i class="fas fa-car"></i>
+                    <span>Mis Vehículos</span>
                 </button>
                 <button class="tab-btn-perfil" data-tab="preferencias">
-                    <i class="fas fa-bell"></i> Preferencias
+                    <i class="fas fa-bell"></i>
+                    <span>Preferencias</span>
                 </button>
                 <button class="tab-btn-perfil" data-tab="actividad">
-                    <i class="fas fa-history"></i> Actividad Reciente
+                    <i class="fas fa-history"></i>
+                    <span>Actividad Reciente</span>
                 </button>
             </div>
 
@@ -66,7 +78,9 @@
                         </div>
                         <div class="info-basica">
                             <h2 id="displayNombre">Cliente</h2>
-                            <p class="email-display" id="displayEmail">cliente@email.com</p>
+                            <p class="email-display" id="displayEmail">
+                                <i class="fas fa-envelope"></i> cliente@email.com
+                            </p>
                         </div>
                     </div>
 
@@ -107,8 +121,9 @@
                                 <input type="text" id="ciudad" class="form-control" disabled>
                             </div>
                             <div class="form-actions" id="infoActions" style="display: none;">
-                                <button type="button" class="btn-secondary"
-                                    onclick="cancelarEdicionInfo()">Cancelar</button>
+                                <button type="button" class="btn-secondary" onclick="cancelarEdicionInfo()">
+                                    <i class="fas fa-times"></i> Cancelar
+                                </button>
                                 <button type="submit" class="btn-primary">
                                     <i class="fas fa-save"></i> Guardar Cambios
                                 </button>
@@ -130,8 +145,7 @@
                                 <label>Contraseña Actual *</label>
                                 <div class="password-input-group">
                                     <input type="password" id="passwordActual" class="form-control" required>
-                                    <button type="button" class="toggle-password"
-                                        onclick="togglePassword('passwordActual')">
+                                    <button type="button" class="toggle-password" onclick="togglePassword('passwordActual')">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
@@ -140,22 +154,20 @@
                                 <label>Nueva Contraseña *</label>
                                 <div class="password-input-group">
                                     <input type="password" id="passwordNueva" class="form-control" required>
-                                    <button type="button" class="toggle-password"
-                                        onclick="togglePassword('passwordNueva')">
+                                    <button type="button" class="toggle-password" onclick="togglePassword('passwordNueva')">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
                                 <div class="password-strength" id="passwordStrength"></div>
                                 <div class="password-requirements">
-                                    <small>La contraseña debe tener al menos 6 caracteres</small>
+                                    <small><i class="fas fa-info-circle"></i> La contraseña debe tener al menos 6 caracteres</small>
                                 </div>
                             </div>
                             <div class="form-group">
                                 <label>Confirmar Nueva Contraseña *</label>
                                 <div class="password-input-group">
                                     <input type="password" id="passwordConfirmar" class="form-control" required>
-                                    <button type="button" class="toggle-password"
-                                        onclick="togglePassword('passwordConfirmar')">
+                                    <button type="button" class="toggle-password" onclick="togglePassword('passwordConfirmar')">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
@@ -176,7 +188,10 @@
                             </button>
                         </div>
                         <div id="sesionesList" class="sesiones-list">
-                            <!-- Sesiones activas se cargan dinámicamente -->
+                            <div class="empty-state">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Cargando sesiones...</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -192,7 +207,10 @@
                         </button>
                     </div>
                     <div id="vehiculosList" class="vehiculos-list">
-                        <!-- Vehículos se cargan dinámicamente -->
+                        <div class="empty-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Cargando vehículos...</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -215,7 +233,7 @@
                                 </div>
                                 <label class="switch">
                                     <input type="checkbox" id="notif_cotizacion" checked>
-                                    <span class="slider round"></span>
+                                    <span class="slider"></span>
                                 </label>
                             </div>
 
@@ -229,7 +247,7 @@
                                 </div>
                                 <label class="switch">
                                     <input type="checkbox" id="notif_avance" checked>
-                                    <span class="slider round"></span>
+                                    <span class="slider"></span>
                                 </label>
                             </div>
 
@@ -243,7 +261,7 @@
                                 </div>
                                 <label class="switch">
                                     <input type="checkbox" id="notif_completado" checked>
-                                    <span class="slider round"></span>
+                                    <span class="slider"></span>
                                 </label>
                             </div>
 
@@ -257,7 +275,7 @@
                                 </div>
                                 <label class="switch">
                                     <input type="checkbox" id="notif_promociones">
-                                    <span class="slider round"></span>
+                                    <span class="slider"></span>
                                 </label>
                             </div>
 
@@ -291,7 +309,12 @@
                                 </tr>
                             </thead>
                             <tbody id="actividadList">
-                                <!-- Se carga dinámicamente -->
+                                <tr>
+                                    <td colspan="4" class="empty-state">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        <p>Cargando actividad...</p>
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -303,15 +326,17 @@
         </main>
     </div>
 
-    <!-- Modales -->
+    <!-- Modal Avatar MEJORADO -->
     <div id="modalAvatar" class="modal">
         <div class="modal-content modal-sm">
             <div class="modal-header">
                 <h3><i class="fas fa-image"></i> Cambiar Avatar</h3>
-                <span class="close-modal" onclick="cerrarModal('modalAvatar')">&times;</span>
+                <button class="close-modal" onclick="cerrarModal('modalAvatar')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
             <div class="avatar-options">
-                <div class="avatar-option" onclick="seleccionarAvatar('user')">
+                <div class="avatar-option" onclick="seleccionarAvatar('user-circle')">
                     <i class="fas fa-user-circle"></i>
                     <span>Usuario</span>
                 </div>
@@ -329,55 +354,63 @@
                 </div>
             </div>
             <div class="form-actions">
-                <button class="btn-secondary" onclick="cerrarModal('modalAvatar')">Cancelar</button>
-                <button class="btn-primary" onclick="guardarAvatar()">Guardar</button>
+                <button class="btn-secondary" onclick="cerrarModal('modalAvatar')">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button class="btn-primary" onclick="guardarAvatar()">
+                    <i class="fas fa-save"></i> Guardar
+                </button>
             </div>
         </div>
     </div>
 
+    <!-- Modal Vehículo MEJORADO -->
     <div id="modalVehiculo" class="modal">
         <div class="modal-content modal-md">
             <div class="modal-header">
                 <h3 id="modalVehiculoTitle"><i class="fas fa-car"></i> Agregar Vehículo</h3>
-                <span class="close-modal" onclick="cerrarModal('modalVehiculo')">&times;</span>
+                <button class="close-modal" onclick="cerrarModal('modalVehiculo')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
             <form id="formVehiculo" onsubmit="guardarVehiculo(event)">
                 <input type="hidden" id="vehiculoId">
                 <div class="form-group">
                     <label>Placa *</label>
-                    <input type="text" id="vehiculoPlaca" required placeholder="Ej: 123ABC"
-                        style="text-transform: uppercase;">
+                    <input type="text" id="vehiculoPlaca" required placeholder="Ej: 123ABC" style="text-transform: uppercase;">
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label>Marca *</label>
-                        <input type="text" id="vehiculoMarca" required>
+                        <input type="text" id="vehiculoMarca" required placeholder="Ej: Toyota">
                     </div>
                     <div class="form-group">
                         <label>Modelo *</label>
-                        <input type="text" id="vehiculoModelo" required>
+                        <input type="text" id="vehiculoModelo" required placeholder="Ej: Corolla">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label>Año</label>
-                        <input type="number" id="vehiculoAnio" min="1900" max="2025">
+                        <input type="number" id="vehiculoAnio" min="1900" max="2025" placeholder="Ej: 2020">
                     </div>
                     <div class="form-group">
                         <label>Color</label>
-                        <input type="text" id="vehiculoColor">
+                        <input type="text" id="vehiculoColor" placeholder="Ej: Rojo">
                     </div>
                 </div>
                 <div class="form-group">
                     <label>Número de Motor</label>
-                    <input type="text" id="vehiculoMotor">
+                    <input type="text" id="vehiculoMotor" placeholder="Número de motor">
                 </div>
                 <div class="form-group">
                     <label>Número de Chasis</label>
-                    <input type="text" id="vehiculoChasis">
+                    <input type="text" id="vehiculoChasis" placeholder="Número de chasis">
                 </div>
                 <div class="form-actions">
-                    <button type="button" class="btn-secondary" onclick="cerrarModal('modalVehiculo')">Cancelar</button>
+                    <button type="button" class="btn-secondary" onclick="cerrarModal('modalVehiculo')">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
                     <button type="submit" class="btn-primary">
                         <i class="fas fa-save"></i> Guardar Vehículo
                     </button>
@@ -386,10 +419,12 @@
         </div>
     </div>
 
+    <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
     </div>
 
+    <!-- Scripts -->
     <script src="js/include.js"></script>
     <script src="js/perfil.js"></script>
 </body>

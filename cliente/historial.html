@@ -6,7 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Historial | Cliente - FURIA MOTOR</title>
 
+    <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
     <link
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
         rel="stylesheet">
@@ -14,15 +17,19 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
+    <!-- Estilos -->
     <link rel="stylesheet" href="css/misvehiculos.css">
     <link rel="stylesheet" href="css/historial.css">
 </head>
 
 <body>
     <div class="app">
+        <!-- Sidebar container -->
         <div id="sidebar-container"></div>
 
+        <!-- Main Content -->
         <main class="main-content">
+            <!-- Top Bar -->
             <div class="top-bar">
                 <div class="page-title">
                     <h1>Historial de Servicios</h1>
@@ -36,19 +43,23 @@
                 </div>
             </div>
 
-            <!-- Pestañas de historial -->
+            <!-- Pestañas de historial MEJORADAS -->
             <div class="historial-tabs">
                 <button class="tab-btn-historial active" data-tab="vehiculos">
-                    <i class="fas fa-car"></i> Mis Vehículos
+                    <i class="fas fa-car"></i>
+                    <span>Mis Vehículos</span>
                 </button>
                 <button class="tab-btn-historial" data-tab="servicios">
-                    <i class="fas fa-tools"></i> Servicios Realizados
+                    <i class="fas fa-tools"></i>
+                    <span>Servicios Realizados</span>
                 </button>
                 <button class="tab-btn-historial" data-tab="estadisticas">
-                    <i class="fas fa-chart-line"></i> Estadísticas
+                    <i class="fas fa-chart-line"></i>
+                    <span>Estadísticas</span>
                 </button>
                 <button class="tab-btn-historial" data-tab="documentos">
-                    <i class="fas fa-file-alt"></i> Documentos
+                    <i class="fas fa-file-alt"></i>
+                    <span>Documentos</span>
                 </button>
             </div>
 
@@ -64,7 +75,10 @@
                     </button>
                 </div>
                 <div id="vehiculosList" class="vehiculos-historial">
-                    <!-- Se llena dinámicamente -->
+                    <div class="empty-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Cargando vehículos...</p>
+                    </div>
                 </div>
             </div>
 
@@ -99,7 +113,12 @@
                             </tr>
                         </thead>
                         <tbody id="serviciosList">
-                            <!-- Datos dinámicos -->
+                            <tr>
+                                <td colspan="7" class="empty-state">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    <p>Cargando servicios...</p>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -168,22 +187,37 @@
                     </button>
                 </div>
                 <div id="documentosList" class="documentos-list">
-                    <!-- Se llena dinámicamente -->
+                    <div class="empty-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Cargando documentos...</p>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Modal de detalle de servicio -->
+    <!-- Modal de detalle de servicio MEJORADO -->
     <div id="modalDetalleServicio" class="modal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h3><i class="fas fa-clipboard-list"></i> Detalle del Servicio</h3>
-                <span class="close-modal" onclick="cerrarModal('modalDetalleServicio')">&times;</span>
+                <h3>
+                    <i class="fas fa-clipboard-list"></i>
+                    Detalle del Servicio
+                </h3>
+                <button class="close-modal" onclick="cerrarModal('modalDetalleServicio')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div id="modalDetalleServicioBody"></div>
+            <div id="modalDetalleServicioBody">
+                <div class="empty-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando detalles...</p>
+                </div>
+            </div>
             <div class="detalle-actions">
-                <button class="btn-secondary" onclick="cerrarModal('modalDetalleServicio')">Cerrar</button>
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalleServicio')">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
                 <button class="btn-primary" onclick="imprimirDetalle()">
                     <i class="fas fa-print"></i> Imprimir
                 </button>
@@ -191,16 +225,28 @@
         </div>
     </div>
 
-    <!-- Modal de documentos -->
+    <!-- Modal de documentos MEJORADO -->
     <div id="modalDocumento" class="modal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h3 id="modalDocumentoTitulo"><i class="fas fa-file-alt"></i> Documento</h3>
-                <span class="close-modal" onclick="cerrarModal('modalDocumento')">&times;</span>
+                <h3 id="modalDocumentoTitulo">
+                    <i class="fas fa-file-alt"></i>
+                    Documento
+                </h3>
+                <button class="close-modal" onclick="cerrarModal('modalDocumento')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div id="modalDocumentoBody"></div>
+            <div id="modalDocumentoBody">
+                <div class="empty-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando documento...</p>
+                </div>
+            </div>
             <div class="detalle-actions">
-                <button class="btn-secondary" onclick="cerrarModal('modalDocumento')">Cerrar</button>
+                <button class="btn-secondary" onclick="cerrarModal('modalDocumento')">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
                 <button class="btn-primary" id="btnImprimirDocumento" onclick="imprimirDocumento()">
                     <i class="fas fa-print"></i> Imprimir
                 </button>
@@ -211,10 +257,12 @@
         </div>
     </div>
 
+    <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
     </div>
 
+    <!-- Scripts -->
     <script src="js/include.js"></script>
     <script src="js/historial.js"></script>
 </body>

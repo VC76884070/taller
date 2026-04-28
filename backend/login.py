@@ -1,6 +1,6 @@
 # =====================================================
 # LOGIN Y AUTENTICACIÓN - FURIA MOTOR COMPANY SRL
-# VERSIÓN CORREGIDA - CON TABLAS CORRECTAS
+# VERSIÓN CORREGIDA - CON SOPORTE PARA CLIENTES
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -65,6 +65,7 @@ def enviar_email(destinatario, asunto, cuerpo_html):
         return False
 
 def obtener_roles_usuario(id_usuario):
+    """Obtener roles de un usuario desde la tabla usuario_rol"""
     try:
         result = supabase.table('usuario_rol') \
             .select('rol!inner(nombre_rol)') \
@@ -79,19 +80,25 @@ def obtener_roles_usuario(id_usuario):
                     nombre = rol_obj.get('nombre_rol')
                     if nombre:
                         roles.append(nombre)
+                elif isinstance(rol_obj, list) and len(rol_obj) > 0:
+                    nombre = rol_obj[0].get('nombre_rol')
+                    if nombre:
+                        roles.append(nombre)
         return roles
     except Exception as e:
         logger.error(f"Error obteniendo roles: {str(e)}")
         return []
 
 # =====================================================
-# DECORADOR PARA VERIFICAR TOKEN
+# DECORADOR PARA VERIFICAR TOKEN (VERSIÓN CORREGIDA)
 # =====================================================
 
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = None
+        
+        # Obtener token del header Authorization
         if 'Authorization' in request.headers:
             auth_header = request.headers['Authorization']
             try:
@@ -103,18 +110,32 @@ def token_required(f):
             return jsonify({'error': 'Token requerido'}), 401
         
         try:
+            # Decodificar token
             data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            current_user = data['user']
+            
+            # El token puede tener la estructura {'user': {...}} o ser directamente el usuario
+            if 'user' in data:
+                current_user = data['user']
+            else:
+                current_user = data
+            
+            # Verificar que el usuario tenga ID
+            if not current_user.get('id'):
+                logger.error("Usuario sin ID en token")
+                return jsonify({'error': 'Token inválido: ID de usuario no encontrado'}), 401
+                
         except jwt.ExpiredSignatureError:
+            logger.warning("Token expirado")
             return jsonify({'error': 'Token expirado'}), 401
-        except jwt.InvalidTokenError:
+        except jwt.InvalidTokenError as e:
+            logger.warning(f"Token inválido: {str(e)}")
             return jsonify({'error': 'Token inválido'}), 401
         
         return f(current_user, *args, **kwargs)
     return decorated
 
 # =====================================================
-# ENDPOINT PRINCIPAL DE LOGIN
+# ENDPOINT PRINCIPAL DE LOGIN (VERSIÓN CORREGIDA)
 # =====================================================
 
 @login_bp.route('/api/login', methods=['POST'])
@@ -152,17 +173,21 @@ def login():
             
             user = result.data[0]
             
+            # Verificar contraseña
             if not check_password_hash(user['contrasenia'], password):
                 return jsonify({'error': 'Credenciales inválidas'}), 401
             
+            # Obtener roles
             nombres_roles = obtener_roles_usuario(user['id'])
             
+            # Crear token con estructura correcta
             token = jwt.encode({
                 'user': {
                     'id': user['id'],
                     'nombre': user['nombre'],
-                    'documento': user.get('numero_documento', ''),
                     'email': user.get('email', ''),
+                    'documento': user.get('numero_documento', ''),
+                    'contacto': user.get('contacto', ''),
                     'roles': nombres_roles,
                     'type': 'staff'
                 },
@@ -175,8 +200,9 @@ def login():
                 'user': {
                     'id': user['id'],
                     'nombre': user['nombre'],
-                    'documento': user.get('numero_documento', ''),
                     'email': user.get('email', ''),
+                    'documento': user.get('numero_documento', ''),
+                    'contacto': user.get('contacto', ''),
                     'roles': nombres_roles,
                     'type': 'staff'
                 }
@@ -184,7 +210,7 @@ def login():
         
         elif user_type == 'client':
             # =====================================================
-            # LOGIN PARA CLIENTES - CORREGIDO
+            # LOGIN PARA CLIENTES - VERSIÓN CORREGIDA
             # =====================================================
             placa = identifier.upper()
             
@@ -204,7 +230,7 @@ def login():
             if not id_cliente:
                 return jsonify({'error': 'Cliente no asociado al vehículo'}), 401
             
-            # 2. Buscar cliente - SOLO id_usuario y email (telefono está en usuario)
+            # 2. Buscar cliente
             cliente_result = supabase.table('cliente') \
                 .select('id, email, id_usuario') \
                 .eq('id', id_cliente) \
@@ -219,9 +245,9 @@ def login():
             if not id_usuario:
                 return jsonify({'error': 'Usuario no asociado al cliente'}), 401
             
-            # 3. Verificar contraseña en la tabla usuario (aquí están nombre, contacto, email)
+            # 3. Verificar contraseña en la tabla usuario
             user_result = supabase.table('usuario') \
-                .select('id, nombre, contacto, contrasenia') \
+                .select('id, nombre, contacto, contrasenia, email') \
                 .eq('id', id_usuario) \
                 .execute()
             
@@ -230,25 +256,31 @@ def login():
             
             user = user_result.data[0]
             
+            # Verificar contraseña
             if not check_password_hash(user['contrasenia'], password):
                 logger.warning(f"Contraseña incorrecta para cliente con placa: {placa}")
                 return jsonify({'error': 'Credenciales inválidas'}), 401
             
             # 4. Obtener roles del usuario
             roles_usuario = obtener_roles_usuario(user['id'])
-            roles_usuario.append('cliente')
+            if 'cliente' not in roles_usuario:
+                roles_usuario.append('cliente')
             
-            # El email puede venir de cliente o de usuario
             email_cliente = cliente.get('email') or user.get('email', '')
             telefono_cliente = user.get('contacto', '')
             
+            # =====================================================
+            # IMPORTANTE: Crear objeto user con campo 'id' unificado
+            # =====================================================
             token = jwt.encode({
                 'user': {
+                    'id': user['id'],  # CLAVE: ID unificado para el decorador
                     'id_cliente': cliente['id'],
                     'id_usuario': user['id'],
                     'nombre': user['nombre'],
                     'email': email_cliente,
                     'telefono': telefono_cliente,
+                    'contacto': telefono_cliente,
                     'placa': vehiculo['placa'],
                     'id_vehiculo': vehiculo['id'],
                     'vehiculo': f"{vehiculo.get('marca', '')} {vehiculo.get('modelo', '')}".strip(),
@@ -262,11 +294,15 @@ def login():
                 'success': True,
                 'token': token,
                 'user': {
+                    'id': user['id'],  # CLAVE: ID unificado
                     'id_cliente': cliente['id'],
+                    'id_usuario': user['id'],
                     'nombre': user['nombre'],
                     'email': email_cliente,
                     'telefono': telefono_cliente,
+                    'contacto': telefono_cliente,
                     'placa': vehiculo['placa'],
+                    'id_vehiculo': vehiculo['id'],
                     'vehiculo': f"{vehiculo.get('marca', '')} {vehiculo.get('modelo', '')}".strip(),
                     'roles': roles_usuario,
                     'type': 'client'
@@ -380,6 +416,7 @@ def solicitar_recuperacion():
                     <p>Hola <strong>{nombre}</strong>,</p>
                     <div style="font-size: 32px; font-weight: bold; color: #C1121F; background: #f5f5f5; padding: 15px;">{codigo}</div>
                     <p>Expira en <strong>15 minutos</strong>.</p>
+                    <p>Si no solicitaste este cambio, ignora este mensaje.</p>
                 </div>
             </div>
         </body>
@@ -500,15 +537,17 @@ def solicitar_registro_personal():
         asunto = f"🔔 NUEVA SOLICITUD DE REGISTRO - {nombre}"
         cuerpo_html = f"""
         <html>
-        <body>
-            <h2>Nueva Solicitud de Registro</h2>
+        <body style="font-family: Arial; padding: 20px;">
+            <h2 style="color: #C1121F;">Nueva Solicitud de Registro</h2>
             <p><strong>Nombre:</strong> {nombre}</p>
             <p><strong>Email:</strong> {email}</p>
             <p><strong>Documento:</strong> {documento}</p>
             <p><strong>Teléfono:</strong> {telefono}</p>
+            <p><strong>Dirección:</strong> {direccion}</p>
             <p><strong>Rol ID:</strong> {id_rol}</p>
             <p><strong>Fecha:</strong> {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
-            <p>Revisa el panel de administración para aprobar o rechazar.</p>
+            <hr>
+            <p>Revisa el panel de administración para aprobar o rechazar esta solicitud.</p>
         </body>
         </html>
         """

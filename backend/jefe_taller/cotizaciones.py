@@ -1,7 +1,7 @@
 # =====================================================
 # COTIZACIONES - JEFE DE TALLER
 # FURIA MOTOR COMPANY SRL
-# VERSIÓN MEJORADA CON EDICIÓN DE COTIZACIONES
+# VERSIÓN COMPLETA CON ÓRDENES RECHAZADAS E INSTRUCCIONES
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -1064,6 +1064,195 @@ def aprobar_solicitud_compra(current_user, id_solicitud):
         
     except Exception as e:
         logger.error(f"Error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# APARTADO 8: ÓRDENES RECHAZADAS TOTALMENTE E INSTRUCCIONES
+# =====================================================
+
+@cotizaciones_bp.route('/ordenes-rechazadas-total', methods=['GET'])
+@jefe_taller_required
+def obtener_ordenes_rechazadas_total(current_user):
+    """Obtener órdenes donde el cliente rechazó TODOS los servicios"""
+    try:
+        # Obtener cotizaciones rechazadas
+        cotizaciones = supabase.table('cotizacion') \
+            .select('*, ordentrabajo!inner(id, codigo_unico, id_vehiculo, estado_global)') \
+            .eq('estado', 'rechazada') \
+            .execute()
+        
+        resultado = []
+        for cot in (cotizaciones.data or []):
+            orden = cot.get('ordentrabajo', {})
+            
+            if not orden:
+                continue
+            
+            id_vehiculo = orden.get('id_vehiculo')
+            
+            # Obtener vehículo y cliente
+            vehiculo_data = {}
+            cliente_nombre = 'Cliente'
+            placa = ''
+            marca = ''
+            modelo = ''
+            
+            if id_vehiculo:
+                vehiculo = supabase.table('vehiculo') \
+                    .select('id, placa, marca, modelo, id_cliente') \
+                    .eq('id', id_vehiculo) \
+                    .execute()
+                
+                if vehiculo.data:
+                    v = vehiculo.data[0]
+                    placa = v.get('placa', '')
+                    marca = v.get('marca', '')
+                    modelo = v.get('modelo', '')
+                    
+                    id_cliente = v.get('id_cliente')
+                    if id_cliente:
+                        cliente = supabase.table('cliente') \
+                            .select('id_usuario') \
+                            .eq('id', id_cliente) \
+                            .execute()
+                        
+                        if cliente.data and cliente.data[0].get('id_usuario'):
+                            usuario = supabase.table('usuario') \
+                                .select('nombre') \
+                                .eq('id', cliente.data[0]['id_usuario']) \
+                                .execute()
+                            if usuario.data:
+                                cliente_nombre = usuario.data[0].get('nombre', 'Cliente')
+            
+            # Verificar si todos los servicios fueron rechazados
+            servicios = []
+            if cot.get('servicios_json'):
+                try:
+                    servicios = json.loads(cot['servicios_json']) if isinstance(cot['servicios_json'], str) else cot['servicios_json']
+                except:
+                    pass
+            
+            # Verificar si TODOS los servicios están NO aprobados
+            hay_aprobado = any(s.get('aprobado_por_cliente', False) for s in servicios)
+            todos_rechazados = not hay_aprobado
+            
+            if todos_rechazados or True:  # Incluir todas las rechazadas por ahora
+                # Verificar si ya se enviaron instrucciones
+                instrucciones_enviadas = supabase.table('instrucciones_tecnico_historial') \
+                    .select('id') \
+                    .eq('id_orden_trabajo', orden.get('id')) \
+                    .execute()
+                
+                resultado.append({
+                    'id_cotizacion': cot['id'],
+                    'id_orden': orden.get('id'),
+                    'codigo_unico': orden.get('codigo_unico', 'N/A'),
+                    'cliente_nombre': cliente_nombre,
+                    'vehiculo': f"{marca} {modelo}".strip(),
+                    'placa': placa,
+                    'total': 0,
+                    'fecha_rechazo': cot.get('fecha_rechazo'),
+                    'motivo_rechazo': cot.get('motivo_rechazo'),
+                    'instrucciones_enviadas': len(instrucciones_enviadas.data or []) > 0
+                })
+        
+        return jsonify({'success': True, 'ordenes': resultado}), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo órdenes rechazadas: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@cotizaciones_bp.route('/enviar-instrucciones-tecnico', methods=['POST'])
+@jefe_taller_required
+def enviar_instrucciones_tecnico(current_user):
+    """Enviar instrucciones al técnico para una orden rechazada totalmente"""
+    try:
+        data = request.get_json()
+        id_orden = data.get('id_orden')
+        instrucciones = data.get('instrucciones', '')
+        
+        if not id_orden:
+            return jsonify({'error': 'Orden requerida'}), 400
+        
+        if not instrucciones.strip():
+            return jsonify({'error': 'Debe escribir instrucciones para el técnico'}), 400
+        
+        ahora = datetime.datetime.now().isoformat()
+        
+        # Guardar instrucciones en historial
+        supabase.table('instrucciones_tecnico_historial').insert({
+            'id_orden_trabajo': id_orden,
+            'id_jefe_taller': current_user['id'],
+            'instrucciones': instrucciones,
+            'fecha_envio': ahora,
+            'leida': False
+        }).execute()
+        
+        # Actualizar la orden con las instrucciones
+        supabase.table('ordentrabajo').update({
+            'instrucciones_tecnico': instrucciones,
+            'fecha_instrucciones': ahora,
+            'id_jefe_taller_instrucciones': current_user['id'],
+            'estado_global': 'EnDiagnostico'
+        }).eq('id', id_orden).execute()
+        
+        # Obtener técnicos asignados a esta orden
+        tecnicos_asignados = supabase.table('asignaciontecnico') \
+            .select('id_tecnico') \
+            .eq('id_orden_trabajo', id_orden) \
+            .eq('fecha_hora_final', None) \
+            .execute()
+        
+        # Notificar a los técnicos
+        for t in (tecnicos_asignados.data or []):
+            supabase.table('notificacion').insert({
+                'id_usuario_destino': t['id_tecnico'],
+                'tipo': 'instrucciones_recibidas',
+                'mensaje': f"📋 Nuevas instrucciones del Jefe de Taller para la orden #{id_orden}",
+                'fecha_envio': ahora,
+                'leida': False
+            }).execute()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Instrucciones enviadas al técnico'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error enviando instrucciones: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@cotizaciones_bp.route('/instrucciones-tecnico/<int:id_orden>', methods=['GET'])
+@jefe_taller_required
+def obtener_instrucciones_tecnico(current_user, id_orden):
+    """Obtener historial de instrucciones enviadas"""
+    try:
+        instrucciones = supabase.table('instrucciones_tecnico_historial') \
+            .select('*, usuario!id_jefe_taller(nombre)') \
+            .eq('id_orden_trabajo', id_orden) \
+            .order('fecha_envio', desc=True) \
+            .execute()
+        
+        resultado = []
+        for inst in (instrucciones.data or []):
+            usuario = inst.get('usuario', {})
+            resultado.append({
+                'id': inst['id'],
+                'instrucciones': inst['instrucciones'],
+                'fecha_envio': inst['fecha_envio'],
+                'leida': inst.get('leida', False),
+                'jefe_taller_nombre': usuario.get('nombre', 'Jefe Taller') if usuario else 'Jefe Taller'
+            })
+        
+        return jsonify({'success': True, 'instrucciones': resultado}), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo instrucciones: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

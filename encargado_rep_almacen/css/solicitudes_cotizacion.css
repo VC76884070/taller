@@ -1,6 +1,6 @@
 /* =====================================================
    SOLICITUDES_COTIZACION.CSS - ENCARGADO DE REPUESTOS
-   TEMA OSCURO - FURIA MOTOR
+   TEMA OSCURO - FURIA MOTOR (VERSIÓN MEJORADA)
    ===================================================== */
 
 /* Filtros bar */
@@ -16,34 +16,30 @@
     border: 1px solid var(--border-color);
 }
 
-.filtros-bar select {
-    padding: 0.5rem 1rem;
+.filtros-bar select,
+.filtros-bar input {
+    padding: 0.6rem 1rem;
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     font-family: 'Plus Jakarta Sans', sans-serif;
     background: var(--gris-oscuro);
     color: var(--blanco);
+    transition: var(--transition);
+}
+
+.filtros-bar select:focus,
+.filtros-bar input:focus {
+    outline: none;
+    border-color: var(--rojo-primario);
+    box-shadow: 0 0 0 3px rgba(193, 18, 31, 0.1);
+}
+
+.filtros-bar select {
     cursor: pointer;
     min-width: 150px;
 }
 
-.filtros-bar select:focus {
-    outline: none;
-    border-color: var(--rojo-primario);
-}
-
-.filtros-bar select option {
-    background: var(--gris-oscuro);
-    color: var(--blanco);
-}
-
 .filtros-bar input {
-    padding: 0.5rem 1rem;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    background: var(--gris-oscuro);
-    color: var(--blanco);
     flex: 1;
     max-width: 300px;
 }
@@ -52,36 +48,43 @@
     color: var(--gris-texto);
 }
 
-.filtros-bar input:focus {
-    outline: none;
-    border-color: var(--rojo-primario);
-}
-
-/* Solicitud Card */
+/* Solicitud Card - Animación mejorada */
 .solicitud-card {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
     margin-bottom: 1.5rem;
     box-shadow: var(--shadow-sm);
-    transition: var(--transition);
+    transition: all 0.3s ease;
     overflow: hidden;
     border: 1px solid var(--border-color);
+    animation: fadeInUp 0.4s ease backwards;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .solicitud-card:hover {
-    box-shadow: var(--shadow-lg);
-    transform: translateY(-2px);
-    border-color: rgba(193, 18, 31, 0.3);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    transform: translateY(-3px);
+    border-color: var(--rojo-primario);
 }
 
 .solicitud-header {
-    background: var(--gris-oscuro);
+    background: linear-gradient(135deg, var(--gris-oscuro) 0%, #1a1a2e 100%);
     padding: 1rem 1.5rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.75rem;
     border-bottom: 2px solid var(--rojo-primario);
 }
 
@@ -94,11 +97,15 @@
     gap: 0.5rem;
 }
 
+.solicitud-header h3 i {
+    color: var(--rojo-primario);
+}
+
 .solicitud-body {
     padding: 1.5rem;
 }
 
-/* Orden info */
+/* Orden info - Grid mejorado */
 .orden-info {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -149,8 +156,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.5rem;
+    padding: 0.75rem;
     border-bottom: 1px solid var(--border-color);
+    transition: background 0.2s ease;
+}
+
+.item-row-solicitud:hover {
+    background: rgba(255, 255, 255, 0.03);
 }
 
 .item-row-solicitud:last-child {
@@ -168,7 +180,7 @@
     flex: 0.5;
     text-align: center;
     color: var(--rojo-primario);
-    font-weight: 600;
+    font-weight: 700;
     font-size: 0.9rem;
 }
 
@@ -178,49 +190,10 @@
     color: var(--gris-texto);
 }
 
-/* Observaciones */
-.observacion-box {
-    background: var(--gris-oscuro);
-    padding: 0.75rem;
-    border-radius: var(--radius-md);
-    margin-bottom: 1rem;
-    border: 1px solid var(--border-color);
-}
-
-.observacion-box small {
-    color: var(--gris-texto);
-    font-size: 0.7rem;
-}
-
-.observacion-box p {
-    margin-top: 0.25rem;
-    font-size: 0.85rem;
-    color: var(--blanco);
-}
-
-/* Precio cotizado */
-.precio-cotizado-box {
-    background: rgba(16, 185, 129, 0.1);
-    padding: 0.75rem;
-    border-radius: var(--radius-md);
-    margin-bottom: 1rem;
-    border-left: 3px solid var(--verde-exito);
-}
-
-.precio-cotizado-box strong {
-    color: var(--verde-exito);
-}
-
-.precio-cotizado-box .precio-valor {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--verde-exito);
-}
-
-/* Action buttons */
+/* Action buttons mejorados */
 .action-buttons {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.75rem;
     justify-content: flex-end;
     margin-top: 1rem;
 }
@@ -229,59 +202,170 @@
     background: transparent;
     border: none;
     cursor: pointer;
-    padding: 0.5rem 1rem;
-    border-radius: var(--radius-sm);
-    transition: var(--transition);
-    font-weight: 500;
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-md);
+    transition: all 0.25s ease;
+    font-weight: 600;
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
+    font-size: 0.85rem;
 }
 
 .action-btn.view {
     color: var(--azul-acento);
     background: rgba(37, 99, 235, 0.1);
+    border: 1px solid rgba(37, 99, 235, 0.2);
 }
 
 .action-btn.view:hover {
     background: var(--azul-acento);
     color: var(--blanco);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 .action-btn.cotizar {
     color: var(--verde-exito);
     background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
 .action-btn.cotizar:hover {
     background: var(--verde-exito);
     color: var(--blanco);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
-/* Modal Cotizar */
-#modalCotizar .modal-content {
-    max-width: 600px;
+/* =====================================================
+   MODALES MEJORADOS
+   ===================================================== */
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 10000;
+    justify-content: center;
+    align-items: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.modal.active {
+    display: flex;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal-content {
     background: var(--bg-card);
+    border-radius: var(--radius-xl);
+    width: 90%;
+    max-width: 650px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
     border: 1px solid var(--border-color);
+    animation: slideUp 0.35s ease;
 }
 
-#modalDetalle .modal-content {
-    max-width: 700px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
+/* Scrollbar para modales */
+.modal-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+    background: var(--gris-oscuro);
+    border-radius: 10px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+    background: var(--rojo-primario);
+    border-radius: 10px;
+}
+
+.modal-header {
+    background: linear-gradient(135deg, var(--gris-oscuro) 0%, #1a1a2e 100%);
+    padding: 1.25rem 1.5rem;
+    border-bottom: 2px solid var(--rojo-primario);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: var(--blanco);
+    font-size: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.modal-header h3 i {
+    color: var(--rojo-primario);
+    font-size: 1.3rem;
+}
+
+.close-modal {
+    font-size: 1.8rem;
+    font-weight: 300;
+    cursor: pointer;
+    color: var(--gris-texto);
+    transition: all 0.2s ease;
+    line-height: 1;
+}
+
+.close-modal:hover {
+    color: var(--rojo-primario);
+    transform: rotate(90deg);
+}
+
+#modalCotizarBody,
+#modalDetalleBody {
+    padding: 1.5rem;
+}
+
+/* Items dentro del modal de cotización */
 .precio-item-row {
     margin-bottom: 1rem;
-    padding: 0.75rem;
+    padding: 1rem;
     background: var(--gris-oscuro);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
+    transition: border 0.2s ease;
+}
+
+.precio-item-row:hover {
+    border-color: var(--rojo-primario);
 }
 
 .precio-item-desc {
     font-weight: 600;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
     color: var(--blanco);
 }
 
@@ -289,12 +373,13 @@
     font-weight: normal;
     color: var(--gris-texto);
     font-size: 0.8rem;
+    margin-left: 0.5rem;
 }
 
 .precio-item-input {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.75rem;
     margin-top: 0.5rem;
     flex-wrap: wrap;
 }
@@ -302,51 +387,192 @@
 .precio-item-input label {
     font-size: 0.85rem;
     color: var(--gris-texto);
+    font-weight: 500;
 }
 
 .precio-item-input input {
-    width: 150px;
-    padding: 0.4rem;
+    width: 160px;
+    padding: 0.5rem 0.75rem;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     font-size: 1rem;
     font-weight: 600;
     background: var(--gris-medio);
     color: var(--verde-exito);
+    transition: all 0.2s ease;
 }
 
 .precio-item-input input:focus {
     outline: none;
-    border-color: var(--rojo-primario);
+    border-color: var(--verde-exito);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
-.btn-cotizar {
-    background: var(--verde-exito);
+/* Formularios en modales */
+.form-group {
+    margin-bottom: 1.25rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--gris-texto);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.form-group label i {
+    margin-right: 0.5rem;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 0.7rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--gris-oscuro);
     color: var(--blanco);
-    border: none;
-    padding: 0.6rem 1.2rem;
+    font-family: inherit;
+    transition: all 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--rojo-primario);
+    box-shadow: 0 0 0 3px rgba(193, 18, 31, 0.1);
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+/* Botones de acción en modales */
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.btn-secondary {
+    background: var(--gris-oscuro);
+    color: var(--blanco);
+    border: 1px solid var(--border-color);
+    padding: 0.7rem 1.5rem;
     border-radius: var(--radius-md);
     font-weight: 600;
     cursor: pointer;
-    transition: var(--transition);
+    transition: all 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-secondary:hover {
+    background: var(--gris-medio);
+    border-color: var(--rojo-primario);
+    color: var(--rojo-primario);
+    transform: translateY(-1px);
+}
+
+.btn-cotizar {
+    background: linear-gradient(135deg, var(--verde-exito) 0%, #0e9f6e 100%);
+    color: var(--blanco);
+    border: none;
+    padding: 0.7rem 1.8rem;
+    border-radius: var(--radius-md);
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.25s ease;
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
 }
 
 .btn-cotizar:hover {
-    background: #0e9f6e;
     transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
 }
 
-/* Modal Detalle */
-.detalle-actions {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 1.5rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border-color);
+.btn-cotizar:active {
+    transform: translateY(0);
+}
+
+/* Precio cotizado box */
+.precio-cotizado-box {
+    background: rgba(16, 185, 129, 0.1);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    border-left: 4px solid var(--verde-exito);
+}
+
+.precio-cotizado-box strong {
+    color: var(--verde-exito);
+}
+
+.precio-cotizado-box .precio-valor {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--verde-exito);
+}
+
+/* Observación box */
+.observacion-box {
+    background: var(--gris-oscuro);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    border-left: 4px solid var(--ambar-alerta);
+}
+
+.observacion-box small {
+    color: var(--gris-texto);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+
+.observacion-box p {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--blanco);
+    line-height: 1.4;
+}
+
+/* Status badges */
+.status-badge {
+    display: inline-block;
+    padding: 0.35rem 1rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-pendiente {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--ambar-alerta);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.status-cotizado, .status-aprobado {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--verde-exito);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-rechazado {
+    background: rgba(193, 18, 31, 0.15);
+    color: var(--rojo-primario);
+    border: 1px solid rgba(193, 18, 31, 0.3);
 }
 
 /* Empty state */
@@ -360,19 +586,19 @@
 }
 
 .empty-state i {
-    font-size: 3rem;
+    font-size: 3.5rem;
     margin-bottom: 1rem;
     color: var(--gris-texto);
 }
 
 .empty-state p {
     margin-bottom: 0.5rem;
-    font-size: 1rem;
+    font-size: 1.1rem;
     color: var(--blanco);
 }
 
 .empty-state small {
-    font-size: 0.8rem;
+    font-size: 0.85rem;
 }
 
 /* Loading overlay */
@@ -382,8 +608,9 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 9999;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    z-index: 20000;
     display: none;
     justify-content: center;
     align-items: center;
@@ -392,36 +619,38 @@
 .loading-spinner {
     width: 50px;
     height: 50px;
-    border: 4px solid var(--gris-medio);
+    border: 3px solid var(--gris-medio);
     border-top-color: var(--rojo-primario);
     border-radius: 50%;
-    animation: spin 1s linear infinite;
+    animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
 
-/* Toast notification */
+/* Toast notification mejorado */
 .toast-notification {
     position: fixed;
-    bottom: 20px;
-    right: 20px;
+    bottom: 30px;
+    right: 30px;
     background: var(--bg-card);
     color: var(--blanco);
-    padding: 0.75rem 1.25rem;
+    padding: 1rem 1.5rem;
     border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    z-index: 9999;
-    animation: slideIn 0.3s ease;
+    z-index: 20001;
+    animation: slideInRight 0.3s ease;
     border-left: 4px solid var(--rojo-primario);
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    font-weight: 500;
 }
 
 .toast-notification.success {
     border-left-color: var(--verde-exito);
+    background: linear-gradient(135deg, var(--bg-card) 0%, #1a1a2e 100%);
 }
 
 .toast-notification.error {
@@ -432,7 +661,7 @@
     border-left-color: var(--ambar-alerta);
 }
 
-@keyframes slideIn {
+@keyframes slideInRight {
     from {
         transform: translateX(100%);
         opacity: 0;
@@ -443,84 +672,7 @@
     }
 }
 
-/* Status badges específicos para cotizaciones */
-.status-badge {
-    display: inline-block;
-    padding: 0.25rem 0.75rem;
-    border-radius: var(--radius-full);
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.status-pendiente {
-    background: rgba(245, 158, 11, 0.15);
-    color: var(--ambar-alerta);
-}
-
-.status-cotizado, .status-aprobado {
-    background: rgba(16, 185, 129, 0.15);
-    color: var(--verde-exito);
-}
-
-.status-rechazado {
-    background: rgba(193, 18, 31, 0.15);
-    color: var(--rojo-primario);
-}
-
-/* Formularios en modales */
-.form-group {
-    margin-bottom: 1rem;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
-    color: var(--gris-texto);
-    font-size: 0.85rem;
-}
-
-.form-group input,
-.form-group textarea {
-    width: 100%;
-    padding: 0.6rem;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    background: var(--gris-oscuro);
-    color: var(--blanco);
-    font-family: inherit;
-}
-
-.form-group input:focus,
-.form-group textarea:focus {
-    outline: none;
-    border-color: var(--rojo-primario);
-}
-
-.form-group textarea {
-    resize: vertical;
-    min-height: 80px;
-}
-
-/* Botón secundario */
-.btn-secondary {
-    background: var(--gris-oscuro);
-    color: var(--blanco);
-    border: 1px solid var(--border-color);
-    padding: 0.6rem 1.2rem;
-    border-radius: var(--radius-md);
-    font-weight: 600;
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.btn-secondary:hover {
-    background: var(--gris-medio);
-    border-color: var(--rojo-primario);
-    color: var(--rojo-primario);
-}
-
-/* Responsive */
+/* Responsive Design para modales y cards */
 @media (max-width: 768px) {
     .filtros-bar {
         flex-direction: column;
@@ -533,13 +685,13 @@
     
     .orden-info {
         grid-template-columns: 1fr;
-        gap: 0.5rem;
+        gap: 0.75rem;
     }
     
     .item-row-solicitud {
         flex-direction: column;
         align-items: flex-start;
-        gap: 0.25rem;
+        gap: 0.5rem;
     }
     
     .item-cant {
@@ -566,5 +718,30 @@
     
     .precio-item-input input {
         width: 100%;
+    }
+    
+    .modal-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+    
+    .modal-header h3 {
+        font-size: 1.1rem;
+    }
+    
+    .modal-actions {
+        flex-direction: column;
+    }
+    
+    .btn-secondary,
+    .btn-cotizar {
+        justify-content: center;
+    }
+    
+    .toast-notification {
+        bottom: 20px;
+        right: 20px;
+        left: 20px;
+        padding: 0.85rem 1rem;
     }
 }

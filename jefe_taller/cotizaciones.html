@@ -35,7 +35,7 @@
             </header>
 
             <div class="content">
-                <!-- TABS PRINCIPALES -->
+                <!-- TABS PRINCIPALES (SOLO 3) -->
                 <div class="tabs-container">
                     <div class="tabs">
                         <button class="tab-btn active" data-tab="tab-solicitar-cotizacion">
@@ -46,9 +46,6 @@
                         </button>
                         <button class="tab-btn" data-tab="tab-solicitar-compra">
                             <i class="fas fa-shopping-cart"></i> Solicitar Compra
-                        </button>
-                        <button class="tab-btn" data-tab="tab-ordenes-rechazadas">
-                            <i class="fas fa-times-circle"></i> Órdenes Rechazadas
                         </button>
                     </div>
                 </div>
@@ -118,9 +115,14 @@
                             <h3><i class="fas fa-clipboard-list"></i> Órdenes con Servicios</h3>
                             <p>Selecciona una orden para generar o editar cotización</p>
                         </div>
-                        <button class="btn-outline" id="refreshOrdenesBtn">
-                            <i class="fas fa-sync-alt"></i> Actualizar
-                        </button>
+                        <div style="display: flex; gap: 0.75rem;">
+                            <button class="btn-outline" id="btnHistorialCotizaciones">
+                                <i class="fas fa-history"></i> 📋 Cotizaciones Anteriores
+                            </button>
+                            <button class="btn-outline" id="refreshOrdenesBtn">
+                                <i class="fas fa-sync-alt"></i> Actualizar
+                            </button>
+                        </div>
                     </div>
 
                     <div class="filters-bar">
@@ -129,6 +131,8 @@
                                 <option value="all">Todas las órdenes</option>
                                 <option value="pendiente">Sin cotización</option>
                                 <option value="enviada">Con cotización</option>
+                                <option value="aprobada">Aprobadas</option>
+                                <option value="rechazada">Rechazadas (Requieren acción)</option>
                             </select>
                         </div>
                         <div class="search-box">
@@ -188,35 +192,6 @@
                             </tbody>
                         </table>
                     </div>
-                </div>
-
-                <!-- TAB 4: ÓRDENES RECHAZADAS TOTALMENTE -->
-                <div id="tab-ordenes-rechazadas" class="tab-content">
-                    <div class="panel-header">
-                        <div class="panel-header-left">
-                            <h3><i class="fas fa-times-circle"></i> Órdenes Rechazadas Totalmente</h3>
-                            <p>Cotizaciones donde el cliente rechazó TODOS los servicios - Diagnóstico: Bs. 200</p>
-                        </div>
-                        <button class="btn-outline" id="refreshRechazadasBtn">
-                            <i class="fas fa-sync-alt"></i> Actualizar
-                        </button>
-                    </div>
-
-                    <div class="filters-bar">
-                        <div class="search-box">
-                            <i class="fas fa-search"></i>
-                            <input type="text" id="searchRechazadas" placeholder="Buscar orden o vehículo...">
-                        </div>
-                        <div class="filter-group">
-                            <select id="filtroInstrucciones" class="form-select-sm">
-                                <option value="all">Todas</option>
-                                <option value="pendiente">Sin instrucciones</option>
-                                <option value="enviadas">Con instrucciones</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div id="ordenesRechazadasContainer" class="ordenes-container"></div>
                 </div>
             </div>
         </main>
@@ -349,6 +324,37 @@
         </div>
     </div>
 
+    <!-- Modal: Historial de Cotizaciones Anteriores -->
+    <div class="modal" id="modalHistorialCotizaciones">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-history"></i> Historial de Cotizaciones Anteriores</h2>
+                <button class="modal-close" onclick="cerrarModal('modalHistorialCotizaciones')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="filters-bar" style="margin-bottom: 1rem;">
+                    <div class="search-box" style="flex: 1;">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchHistorial" placeholder="Buscar por orden, cliente o vehículo...">
+                    </div>
+                    <div class="filter-group">
+                        <select id="filtroEstadoHistorial" class="form-select-sm">
+                            <option value="all">Todos los estados</option>
+                            <option value="enviada">Enviadas</option>
+                            <option value="rechazada">Rechazadas</option>
+                            <option value="aprobada">Aprobadas</option>
+                        </select>
+                    </div>
+                    <button class="btn-outline" id="refreshHistorialBtn"><i class="fas fa-sync-alt"></i> Actualizar</button>
+                </div>
+                <div id="historialCotizacionesContainer" class="ordenes-container"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalHistorialCotizaciones')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Editor de Servicios -->
     <div class="modal" id="modalEditorServicios">
         <div class="modal-content modal-lg">
@@ -395,7 +401,7 @@
         </div>
     </div>
 
-    <!-- Modal: Enviar Instrucciones al Técnico -->
+    <!-- Modal: Enviar Instrucciones al Técnico (para ordenes rechazadas) -->
     <div class="modal" id="modalInstruccionesTecnico">
         <div class="modal-content modal-md">
             <div class="modal-header">
@@ -404,13 +410,7 @@
             </div>
             <div class="modal-body">
                 <div class="orden-info-card" id="instruccionesOrdenInfo"></div>
-                <div class="precio-diagnostico-modal" style="background: linear-gradient(135deg, #1E3A5F, #0f2b3d); padding: 1rem; border-radius: 8px; margin: 1rem 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span><i class="fas fa-stethoscope"></i> Cargo por diagnóstico:</span>
-                        <span style="font-size: 1.2rem; font-weight: bold; color: #10B981;">Bs. 200.00</span>
-                    </div>
-                    <small style="color: #8E8E93;">Este cargo aplica por el diagnóstico realizado</small>
-                </div>
+                <div id="mensajeExtraInstrucciones"></div>
                 <div class="form-group">
                     <label><i class="fas fa-comment-dots"></i> Instrucciones para el técnico</label>
                     <textarea id="instruccionesTexto" class="form-textarea" rows="5" placeholder="Ejemplo:&#10;- Realizar una revisión más detallada del sistema eléctrico&#10;- Verificar nuevamente el diagnóstico del motor&#10;- Coordinar con el cliente para aclarar dudas"></textarea>
@@ -423,6 +423,25 @@
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalInstruccionesTecnico')">Cancelar</button>
                 <button class="btn-primary" id="btnEnviarInstrucciones"><i class="fas fa-paper-plane"></i> Enviar Instrucciones</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Gestión de Técnicos (para órdenes aprobadas) -->
+    <div class="modal" id="modalGestionTecnicos">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-users"></i> Gestionar Técnicos</h2>
+                <button class="modal-close" onclick="cerrarModal('modalGestionTecnicos')">&times;</button>
+            </div>
+            <div class="modal-body" id="gestionTecnicosBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalGestionTecnicos')">Cancelar</button>
+                <button class="btn-primary" id="btnGuardarTecnicos" onclick="guardarAsignacionTecnicos()">
+                    <i class="fas fa-save"></i> Guardar Asignación
+                </button>
             </div>
         </div>
     </div>

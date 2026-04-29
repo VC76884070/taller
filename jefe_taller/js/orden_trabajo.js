@@ -1,5 +1,5 @@
 // =====================================================
-// ÓRDENES DE TRABAJO - JEFE TALLER (COMPLETO)
+// ÓRDENES DE TRABAJO - JEFE TALLER (OPTIMIZADO)
 // =====================================================
 
 const API_URL = '/api';
@@ -16,9 +16,44 @@ let audioChunks = [];
 let isRecording = false;
 let mediaRecorder = null;
 
+// Cache para datos que cambian poco
+const dataCache = {
+    tecnicos: { data: null, timestamp: null, ttl: 30000 }, // 30 segundos
+    bahias: { data: null, timestamp: null, ttl: 10000 },   // 10 segundos
+    
+    get(key) {
+        const item = this[key];
+        if (item.data && item.timestamp && (Date.now() - item.timestamp) < item.ttl) {
+            return item.data;
+        }
+        return null;
+    },
+    
+    set(key, data) {
+        const item = this[key];
+        if (item) {
+            item.data = data;
+            item.timestamp = Date.now();
+        }
+    },
+    
+    clear(key) {
+        if (key && this[key]) {
+            this[key].data = null;
+            this[key].timestamp = null;
+        } else {
+            Object.keys(this).forEach(k => {
+                if (this[k] && typeof this[k] === 'object' && this[k].hasOwnProperty('data')) {
+                    this[k].data = null;
+                    this[k].timestamp = null;
+                }
+            });
+        }
+    }
+};
+
 // =====================================================
 // VERIFICAR SI LA ORDEN PUEDE SER EDITADA
-// SOLO SE BLOQUEA CUANDO EL TÉCNICO PRESIONA "EMPEZAR TRABAJO"
 // =====================================================
 
 function puedeEditarOrden(estadoGlobal, trabajoIniciado = false) {
@@ -44,6 +79,7 @@ function puedeEditarOrden(estadoGlobal, trabajoIniciado = false) {
 // =====================================================
 // INICIALIZACIÓN
 // =====================================================
+
 document.addEventListener('DOMContentLoaded', async () => {
     const autenticado = await checkAuth();
     if (!autenticado) return;
@@ -51,11 +87,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     initPage();
     setupEventListeners();
     
-    await cargarTecnicos();
-    await cargarOrdenesActivas();
-    await cargarOrdenesFinalizadas();
+    // Cargar datos iniciales en paralelo
+    await Promise.all([
+        cargarTecnicos(),
+        cargarOrdenesActivas(),
+        cargarOrdenesFinalizadas()
+    ]);
     
     iniciarPolling();
+    
+    // Limpiar caché cuando la página se oculta
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            // Recargar datos al volver a la pestaña
+            cargarOrdenesActivas(true);
+            cargarOrdenesFinalizadas(true);
+        }
+    });
 });
 
 async function checkAuth() {
@@ -120,14 +168,16 @@ function setupEventListeners() {
         });
     });
     
-    document.getElementById('refreshActivas')?.addEventListener('click', () => cargarOrdenesActivas());
-    document.getElementById('refreshFinalizadas')?.addEventListener('click', () => cargarOrdenesFinalizadas());
+    document.getElementById('refreshActivas')?.addEventListener('click', () => cargarOrdenesActivas(true));
+    document.getElementById('refreshFinalizadas')?.addEventListener('click', () => cargarOrdenesFinalizadas(true));
     
     const searchActivas = document.getElementById('searchActivas');
     const tecnicoFiltro = document.getElementById('tecnicoFiltro');
     const estadoFiltroActivas = document.getElementById('estadoFiltroActivas');
     
-    if (searchActivas) searchActivas.addEventListener('input', () => filtrarOrdenesActivas());
+    if (searchActivas) {
+        searchActivas.addEventListener('input', debounce(() => filtrarOrdenesActivas(), 300));
+    }
     if (tecnicoFiltro) tecnicoFiltro.addEventListener('change', () => filtrarOrdenesActivas());
     if (estadoFiltroActivas) estadoFiltroActivas.addEventListener('change', () => filtrarOrdenesActivas());
     
@@ -135,9 +185,33 @@ function setupEventListeners() {
     const fechaDesdeFinalizadas = document.getElementById('fechaDesdeFinalizadas');
     const fechaHastaFinalizadas = document.getElementById('fechaHastaFinalizadas');
     
-    if (searchFinalizadas) searchFinalizadas.addEventListener('input', () => filtrarOrdenesFinalizadas());
+    if (searchFinalizadas) {
+        searchFinalizadas.addEventListener('input', debounce(() => filtrarOrdenesFinalizadas(), 300));
+    }
     if (fechaDesdeFinalizadas) fechaDesdeFinalizadas.addEventListener('change', () => filtrarOrdenesFinalizadas());
     if (fechaHastaFinalizadas) fechaHastaFinalizadas.addEventListener('change', () => filtrarOrdenesFinalizadas());
+    
+    // Cerrar modales con Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            cerrarModalGestionOrden();
+            cerrarModalDetalleOrden();
+            cerrarModalHistorialDiagnostico();
+        }
+    });
+}
+
+// Debounce utility
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
 
 function cambiarPestana(tabId) {
@@ -149,80 +223,125 @@ function cambiarPestana(tabId) {
 }
 
 // =====================================================
-// API CALLS
+// API CALLS OPTIMIZADOS
 // =====================================================
 
-async function cargarTecnicos() {
+async function cargarTecnicos(forceRefresh = false) {
     try {
+        // Usar caché si está disponible
+        if (!forceRefresh) {
+            const cachedTecnicos = dataCache.get('tecnicos');
+            if (cachedTecnicos) {
+                tecnicosDisponibles = cachedTecnicos;
+                actualizarFiltroTecnicos();
+                return;
+            }
+        }
+        
         const response = await fetch(`${API_URL}/jefe-taller/tecnicos`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
         });
         
         const data = await response.json();
-        console.log('📋 Técnicos cargados:', data);
         
         if (response.ok && data.tecnicos) {
             tecnicosDisponibles = data.tecnicos;
-            
-            const selectTecnico = document.getElementById('tecnicoFiltro');
-            if (selectTecnico) {
-                selectTecnico.innerHTML = '<option value="">Todos los técnicos</option>' +
-                    tecnicosDisponibles.map(t => `<option value="${t.id}">${escapeHtml(t.nombre)}</option>`).join('');
-            }
+            dataCache.set('tecnicos', tecnicosDisponibles);
+            actualizarFiltroTecnicos();
         }
     } catch (error) {
         console.error('Error cargando técnicos:', error);
+        mostrarNotificacion('Error al cargar técnicos', 'error');
     }
 }
 
-async function cargarOrdenesActivas() {
+function actualizarFiltroTecnicos() {
+    const selectTecnico = document.getElementById('tecnicoFiltro');
+    if (selectTecnico && tecnicosDisponibles.length > 0) {
+        selectTecnico.innerHTML = '<option value="">Todos los técnicos</option>' +
+            tecnicosDisponibles.map(t => `<option value="${t.id}">${escapeHtml(t.nombre)} (${t.ordenes_activas}/${t.max_vehiculos})</option>`).join('');
+    }
+}
+
+async function cargarOrdenesActivas(forceRefresh = false) {
     try {
+        // Mostrar loading solo si no hay datos
+        const container = document.getElementById('ordenesActivasList');
+        if (!ordenesActivas.length && container) {
+            container.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i><p>Cargando órdenes activas...</p></div>`;
+        }
+        
         const response = await fetch(`${API_URL}/jefe-taller/ordenes-activas`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
         });
         
         const data = await response.json();
+        
         if (response.ok && data.ordenes) {
             ordenesActivas = data.ordenes;
-            document.getElementById('activasCount').textContent = ordenesActivas.length;
+            const countElement = document.getElementById('activasCount');
+            if (countElement) countElement.textContent = ordenesActivas.length;
             renderOrdenesActivas(ordenesActivas);
+        } else {
+            throw new Error(data.error || 'Error al cargar órdenes');
         }
     } catch (error) {
         console.error('Error cargando órdenes activas:', error);
+        const container = document.getElementById('ordenesActivasList');
+        if (container) {
+            container.innerHTML = `<div class="error-state"><i class="fas fa-exclamation-circle"></i><p>Error al cargar órdenes: ${error.message}</p><button onclick="cargarOrdenesActivas(true)">Reintentar</button></div>`;
+        }
     }
 }
 
-async function cargarOrdenesFinalizadas() {
+async function cargarOrdenesFinalizadas(forceRefresh = false) {
     try {
+        const container = document.getElementById('ordenesFinalizadasList');
+        if (!ordenesFinalizadas.length && container) {
+            container.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i><p>Cargando órdenes finalizadas...</p></div>`;
+        }
+        
         const response = await fetch(`${API_URL}/jefe-taller/ordenes-finalizadas`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
         });
         
         const data = await response.json();
+        
         if (response.ok && data.ordenes) {
             ordenesFinalizadas = data.ordenes;
-            document.getElementById('finalizadasCount').textContent = ordenesFinalizadas.length;
+            const countElement = document.getElementById('finalizadasCount');
+            if (countElement) countElement.textContent = ordenesFinalizadas.length;
             renderOrdenesFinalizadas(ordenesFinalizadas);
+        } else {
+            throw new Error(data.error || 'Error al cargar órdenes');
         }
     } catch (error) {
         console.error('Error cargando órdenes finalizadas:', error);
+        const container = document.getElementById('ordenesFinalizadasList');
+        if (container) {
+            container.innerHTML = `<div class="error-state"><i class="fas fa-exclamation-circle"></i><p>Error al cargar órdenes: ${error.message}</p><button onclick="cargarOrdenesFinalizadas(true)">Reintentar</button></div>`;
+        }
     }
 }
 
 // =====================================================
-// RENDER FUNCTIONS
+// RENDER FUNCTIONS OPTIMIZADAS
 // =====================================================
 
 function renderOrdenesActivas(ordenes) {
     const container = document.getElementById('ordenesActivasList');
     if (!container) return;
     
-    if (ordenes.length === 0) {
+    if (!ordenes || ordenes.length === 0) {
         container.innerHTML = `<div class="empty-state"><i class="fas fa-tasks"></i><p>No hay órdenes activas</p></div>`;
         return;
     }
     
-    container.innerHTML = ordenes.map(orden => `
+    // Usar DocumentFragment para mejorar rendimiento
+    const fragment = document.createDocumentFragment();
+    const tempDiv = document.createElement('div');
+    
+    tempDiv.innerHTML = ordenes.map(orden => `
         <div class="orden-card" data-id="${orden.id}">
             <div class="orden-card-header">
                 <span class="orden-codigo">${escapeHtml(orden.codigo_unico)}</span>
@@ -260,13 +379,20 @@ function renderOrdenesActivas(ordenes) {
             </div>
         </div>
     `).join('');
+    
+    while (tempDiv.firstChild) {
+        fragment.appendChild(tempDiv.firstChild);
+    }
+    
+    container.innerHTML = '';
+    container.appendChild(fragment);
 }
 
 function renderOrdenesFinalizadas(ordenes) {
     const container = document.getElementById('ordenesFinalizadasList');
     if (!container) return;
     
-    if (ordenes.length === 0) {
+    if (!ordenes || ordenes.length === 0) {
         container.innerHTML = `<div class="empty-state"><i class="fas fa-check-circle"></i><p>No hay órdenes finalizadas</p></div>`;
         return;
     }
@@ -370,7 +496,7 @@ function generarGridBahias(bahiasEstado, bahiaActual) {
                 <div class="bahia-numero">${num}</div>
                 <div class="bahia-estado-icono">${estadoIcono}</div>
                 <div class="bahia-estado-texto">${estadoTexto}</div>
-                ${bahia.orden_codigo ? `<div class="bahia-orden">${bahia.orden_codigo.substring(0, 8)}</div>` : ''}
+                ${bahia.orden_codigo ? `<div class="bahia-orden">${escapeHtml(bahia.orden_codigo.substring(0, 8))}</div>` : ''}
                 ${infoAdicional}
             </div>
         `;
@@ -459,127 +585,144 @@ function configurarAudioDiagnostico(existingAudioUrl) {
     let mediaRecorderLocal = null, isRecordingLocal = false, audioBlobLocal = null, audioChunksLocal = [];
     
     if (existingAudioUrl) {
-        btnTranscribir.style.display = 'flex';
-        btnEliminar.style.display = 'flex';
+        if (btnTranscribir) btnTranscribir.style.display = 'flex';
+        if (btnEliminar) btnEliminar.style.display = 'flex';
+        if (audioPreview) {
+            audioPreview.style.display = 'block';
+            audioPreview.src = existingAudioUrl;
+        }
     }
     
-    btnGrabar.addEventListener('click', async () => {
-        if (!isRecordingLocal) {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorderLocal = new MediaRecorder(stream);
-                audioChunksLocal = [];
-                mediaRecorderLocal.ondataavailable = (event) => audioChunksLocal.push(event.data);
-                mediaRecorderLocal.onstop = () => {
-                    audioBlobLocal = new Blob(audioChunksLocal, { type: 'audio/wav' });
-                    audioPreview.src = URL.createObjectURL(audioBlobLocal);
-                    audioPreview.style.display = 'block';
-                    btnTranscribir.style.display = 'flex';
-                    btnEliminar.style.display = 'flex';
-                    stream.getTracks().forEach(track => track.stop());
-                };
-                mediaRecorderLocal.start();
-                isRecordingLocal = true;
-                btnGrabar.innerHTML = '<i class="fas fa-stop"></i> Detener Grabación';
-                btnGrabar.classList.add('recording');
-            } catch (error) {
-                mostrarNotificacion('Error accediendo al micrófono', 'error');
+    if (btnGrabar) {
+        btnGrabar.addEventListener('click', async () => {
+            if (!isRecordingLocal) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorderLocal = new MediaRecorder(stream);
+                    audioChunksLocal = [];
+                    mediaRecorderLocal.ondataavailable = (event) => audioChunksLocal.push(event.data);
+                    mediaRecorderLocal.onstop = () => {
+                        audioBlobLocal = new Blob(audioChunksLocal, { type: 'audio/wav' });
+                        if (audioPreview) {
+                            audioPreview.src = URL.createObjectURL(audioBlobLocal);
+                            audioPreview.style.display = 'block';
+                        }
+                        if (btnTranscribir) btnTranscribir.style.display = 'flex';
+                        if (btnEliminar) btnEliminar.style.display = 'flex';
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+                    mediaRecorderLocal.start();
+                    isRecordingLocal = true;
+                    btnGrabar.innerHTML = '<i class="fas fa-stop"></i> Detener Grabación';
+                    btnGrabar.classList.add('recording');
+                } catch (error) {
+                    mostrarNotificacion('Error accediendo al micrófono', 'error');
+                }
+            } else {
+                mediaRecorderLocal.stop();
+                isRecordingLocal = false;
+                btnGrabar.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
+                btnGrabar.classList.remove('recording');
             }
-        } else {
-            mediaRecorderLocal.stop();
-            isRecordingLocal = false;
-            btnGrabar.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
-            btnGrabar.classList.remove('recording');
-        }
-    });
+        });
+    }
     
-    btnTranscribir.addEventListener('click', async () => {
-        if (!audioBlobLocal) return mostrarNotificacion('Primero graba un audio', 'warning');
-        try {
-            btnTranscribir.disabled = true;
-            btnTranscribir.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Transcribiendo...';
-            loadingDiv.style.display = 'flex';
-            
-            const reader = new FileReader();
-            reader.onload = async () => {
-                const response = await fetch(`${API_URL}/jefe-taller/transcribir-audio`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` },
-                    body: JSON.stringify({ audio: reader.result })
-                });
-                const data = await response.json();
-                if (response.ok && data.transcripcion) {
-                    const textarea = document.getElementById('diagnosticoTexto');
-                    const textoActual = textarea.value;
-                    textarea.value = textoActual + (textoActual ? '\n\n' : '') + `[Transcripción del audio]:\n${data.transcripcion}`;
-                    mostrarNotificacion('Audio transcrito correctamente', 'success');
-                } else throw new Error(data.error || 'Error al transcribir');
-            };
-            reader.readAsDataURL(audioBlobLocal);
-        } catch (error) {
-            mostrarNotificacion(error.message, 'error');
-        } finally {
-            btnTranscribir.disabled = false;
-            btnTranscribir.innerHTML = '<i class="fas fa-language"></i> Transcribir Audio';
-            loadingDiv.style.display = 'none';
-        }
-    });
+    if (btnTranscribir) {
+        btnTranscribir.addEventListener('click', async () => {
+            if (!audioBlobLocal) return mostrarNotificacion('Primero graba un audio', 'warning');
+            try {
+                btnTranscribir.disabled = true;
+                btnTranscribir.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Transcribiendo...';
+                if (loadingDiv) loadingDiv.style.display = 'flex';
+                
+                const reader = new FileReader();
+                reader.onload = async () => {
+                    const response = await fetch(`${API_URL}/jefe-taller/transcribir-audio`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` },
+                        body: JSON.stringify({ audio: reader.result })
+                    });
+                    const data = await response.json();
+                    if (response.ok && data.transcripcion) {
+                        const textarea = document.getElementById('diagnosticoTexto');
+                        if (textarea) {
+                            const textoActual = textarea.value;
+                            textarea.value = textoActual + (textoActual ? '\n\n' : '') + `[Transcripción del audio]:\n${data.transcripcion}`;
+                        }
+                        mostrarNotificacion('Audio transcrito correctamente', 'success');
+                    } else throw new Error(data.error || 'Error al transcribir');
+                };
+                reader.readAsDataURL(audioBlobLocal);
+            } catch (error) {
+                mostrarNotificacion(error.message, 'error');
+            } finally {
+                btnTranscribir.disabled = false;
+                btnTranscribir.innerHTML = '<i class="fas fa-language"></i> Transcribir Audio';
+                if (loadingDiv) loadingDiv.style.display = 'none';
+            }
+        });
+    }
     
-    btnEliminar.addEventListener('click', () => {
-        audioBlobLocal = null;
-        audioChunksLocal = [];
-        audioPreview.src = '';
-        audioPreview.style.display = 'none';
-        btnTranscribir.style.display = 'none';
-        btnEliminar.style.display = 'none';
-        mostrarNotificacion('Audio eliminado', 'info');
-    });
+    if (btnEliminar) {
+        btnEliminar.addEventListener('click', () => {
+            audioBlobLocal = null;
+            audioChunksLocal = [];
+            if (audioPreview) {
+                audioPreview.src = '';
+                audioPreview.style.display = 'none';
+            }
+            if (btnTranscribir) btnTranscribir.style.display = 'none';
+            if (btnEliminar) btnEliminar.style.display = 'none';
+            mostrarNotificacion('Audio eliminado', 'info');
+        });
+    }
 }
 
 // =====================================================
-// ABRIR MODAL DE GESTIÓN DE ORDEN
+// ABRIR MODAL DE GESTIÓN DE ORDEN (OPTIMIZADO)
 // =====================================================
 
 async function abrirModalGestionOrden(idOrden) {
     try {
         mostrarNotificacion('Cargando datos de la orden...', 'info');
         
-        const response = await fetch(`${API_URL}/jefe-taller/detalle-orden/${idOrden}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
-        });
+        // Cargar datos en paralelo
+        const [detalleResponse, bahiasResponse, diagnosticoResponse] = await Promise.all([
+            fetch(`${API_URL}/jefe-taller/detalle-orden/${idOrden}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+            }),
+            fetch(`${API_URL}/jefe-taller/bahias/estado`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+            }),
+            fetch(`${API_URL}/jefe-taller/diagnostico-pendiente/${idOrden}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+            }).catch(() => ({ ok: true, json: () => ({ enviado: false }) }))
+        ]);
         
-        const data = await response.json();
-        if (!response.ok || !data.detalle) throw new Error(data.error || 'Error cargando datos');
+        const [detalleData, bahiasData, diagnosticoInfo] = await Promise.all([
+            detalleResponse.json(),
+            bahiasResponse.json(),
+            diagnosticoResponse.json()
+        ]);
         
-        ordenEnGestion = data.detalle;
+        if (!detalleResponse.ok || !detalleData.detalle) {
+            throw new Error(detalleData.error || 'Error cargando datos');
+        }
+        
+        ordenEnGestion = detalleData.detalle;
         
         const trabajoIniciado = ordenEnGestion.planificacion?.fecha_hora_inicio_real ? true : false;
         const estadoGlobal = ordenEnGestion.estado_global;
         
         const { editable: puedeEditar, mensaje: mensajeBloqueo } = puedeEditarOrden(estadoGlobal, trabajoIniciado);
         
-        let diagnosticoInfo = { enviado: false };
-        try {
-            const diagResponse = await fetch(`${API_URL}/jefe-taller/diagnostico-pendiente/${idOrden}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
-            });
-            diagnosticoInfo = await diagResponse.json();
-        } catch (error) {}
-        
-        let bahiasEstado = [];
-        try {
-            const bahiasResponse = await fetch(`${API_URL}/jefe-taller/bahias/estado`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
-            });
-            const bahiasData = await bahiasResponse.json();
-            if (bahiasData.success && bahiasData.bahias) bahiasEstado = bahiasData.bahias;
-        } catch (error) {
-            bahiasEstado = Array.from({ length: 12 }, (_, i) => ({ numero: i + 1, estado: 'libre' }));
-        }
+        const bahiasEstado = bahiasData.success && bahiasData.bahias ? bahiasData.bahias : [];
         
         const modal = document.getElementById('modalGestionOrden');
         const body = document.getElementById('modalGestionOrdenBody');
         const footer = document.getElementById('modalGestionOrdenFooter');
+        
+        if (!modal || !body) return;
         
         const tecnicosSeleccionados = ordenEnGestion.tecnicos?.map(t => t.id) || [];
         const planificacionExistente = ordenEnGestion.planificacion || {};
@@ -589,8 +732,6 @@ async function abrirModalGestionOrden(idOrden) {
         const MAX_ORDENES_POR_TECNICO = 2;
         
         const bahiasGridHtml = generarGridBahias(bahiasEstado, bahiaActual);
-        
-        console.log('📋 Técnicos disponibles para mostrar:', tecnicosDisponibles);
         
         const bloqueoBanner = trabajoIniciado ? `
             <div class="bloqueo-banner">
@@ -607,7 +748,7 @@ async function abrirModalGestionOrden(idOrden) {
                 <i class="fas fa-hourglass-half"></i>
                 <div>
                     <strong>Diagnóstico en revisión</strong>
-                    <p>El técnico ${diagnosticoInfo.tecnico_nombre || 'asignado'} envió un diagnóstico. Esperando tu aprobación.</p>
+                    <p>El técnico ${escapeHtml(diagnosticoInfo.tecnico_nombre || 'asignado')} envió un diagnóstico. Esperando tu aprobación.</p>
                 </div>
             </div>
         ` : '';
@@ -673,7 +814,7 @@ async function abrirModalGestionOrden(idOrden) {
                     </div>
                 </div>
                 
-                <!-- Diagnóstico (OBLIGATORIO) -->
+                <!-- Diagnóstico -->
                 <div class="gestion-section ${!puedeEditar ? 'bloqueada' : ''}">
                     <div class="gestion-section-header">
                         <h3><i class="fas fa-stethoscope"></i> Diagnóstico Inicial</h3>
@@ -683,7 +824,7 @@ async function abrirModalGestionOrden(idOrden) {
                     <div class="gestion-section-body">
                         <div class="form-group">
                             <label class="form-label required"><i class="fas fa-file-alt"></i> Diagnóstico (obligatorio)</label>
-                            <textarea id="diagnosticoTexto" rows="5" class="form-textarea" placeholder="Describe el diagnóstico inicial... Este campo es obligatorio." ${!puedeEditar ? 'disabled' : ''}>${ordenEnGestion.diagnostico_inicial || ''}</textarea>
+                            <textarea id="diagnosticoTexto" rows="5" class="form-textarea" placeholder="Describe el diagnóstico inicial... Este campo es obligatorio." ${!puedeEditar ? 'disabled' : ''}>${escapeHtml(ordenEnGestion.diagnostico_inicial || '')}</textarea>
                         </div>
                         <div class="diagnostico-audio">
                             <div class="diagnostico-audio-controls">
@@ -702,27 +843,35 @@ async function abrirModalGestionOrden(idOrden) {
         `;
         
         if (puedeEditar && !diagnosticoInfo.enviado) {
-            footer.innerHTML = `
-                <div class="modal-footer">
-                    <button class="btn-secondary" onclick="window.cerrarModalGestionOrden()">Cancelar</button>
-                    <button class="btn-primary" onclick="window.guardarGestionOrden()"><i class="fas fa-save"></i> Guardar Cambios</button>
-                </div>
-            `;
+            if (footer) {
+                footer.innerHTML = `
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="window.cerrarModalGestionOrden()">Cancelar</button>
+                        <button class="btn-primary" onclick="window.guardarGestionOrden()"><i class="fas fa-save"></i> Guardar Cambios</button>
+                    </div>
+                `;
+            }
         } else if (diagnosticoInfo.enviado && diagnosticoInfo.estado === 'pendiente') {
-            footer.innerHTML = `
-                <div class="modal-footer">
-                    <button class="btn-secondary" onclick="window.cerrarModalGestionOrden()">Cerrar</button>
-                    <button class="btn-primary" onclick="window.irAprobarDiagnostico(${idOrden})"><i class="fas fa-check-circle"></i> Revisar Diagnóstico</button>
-                </div>
-            `;
+            if (footer) {
+                footer.innerHTML = `
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="window.cerrarModalGestionOrden()">Cerrar</button>
+                        <button class="btn-primary" onclick="window.irAprobarDiagnostico(${idOrden})"><i class="fas fa-check-circle"></i> Revisar Diagnóstico</button>
+                    </div>
+                `;
+            }
         } else {
-            footer.innerHTML = `<div class="modal-footer"><button class="btn-secondary" onclick="window.cerrarModalGestionOrden()">Cerrar</button></div>`;
+            if (footer) {
+                footer.innerHTML = `<div class="modal-footer"><button class="btn-secondary" onclick="window.cerrarModalGestionOrden()">Cerrar</button></div>`;
+            }
         }
         
         if (puedeEditar) {
-            configurarSeleccionTecnicos();
-            configurarSeleccionBahiasVisual();
-            configurarAudioDiagnostico(ordenEnGestion.diagnostico_audio_url);
+            setTimeout(() => {
+                configurarSeleccionTecnicos();
+                configurarSeleccionBahiasVisual();
+                configurarAudioDiagnostico(ordenEnGestion.diagnostico_audio_url);
+            }, 100);
         }
         
         modal.classList.add('show');
@@ -743,9 +892,7 @@ async function guardarGestionOrden() {
     let errores = [];
     
     try {
-        // =====================================================
         // 1. VALIDAR TÉCNICOS SELECCIONADOS
-        // =====================================================
         const checkboxes = document.querySelectorAll('#tecnicosGrid input[type="checkbox"]');
         const tecnicosSeleccionados = Array.from(checkboxes)
             .filter(cb => cb.checked && !cb.disabled)
@@ -760,9 +907,7 @@ async function guardarGestionOrden() {
             }
         }
         
-        // =====================================================
         // 2. VALIDAR BAHÍA SELECCIONADA
-        // =====================================================
         let bahia = document.getElementById('bahiaSeleccionada')?.value;
         if (!bahia) {
             const bahiaSeleccionada = document.querySelector('.bahia-item.selected');
@@ -780,9 +925,7 @@ async function guardarGestionOrden() {
             }
         }
         
-        // =====================================================
         // 3. VALIDAR FECHA DE INICIO
-        // =====================================================
         const fechaInicio = document.getElementById('fechaInicio')?.value;
         if (!fechaInicio) {
             errores.push('❌ Debes seleccionar una fecha y hora de inicio');
@@ -806,9 +949,7 @@ async function guardarGestionOrden() {
             }
         }
         
-        // =====================================================
         // 4. VALIDAR HORAS ESTIMADAS
-        // =====================================================
         const horasEstimadas = parseFloat(document.getElementById('horasEstimadas')?.value);
         if (!horasEstimadas || isNaN(horasEstimadas)) {
             errores.push('❌ Debes ingresar horas estimadas válidas');
@@ -831,9 +972,7 @@ async function guardarGestionOrden() {
             }
         }
         
-        // =====================================================
-        // 5. VALIDAR DIAGNÓSTICO INICIAL (OBLIGATORIO)
-        // =====================================================
+        // 5. VALIDAR DIAGNÓSTICO INICIAL
         const diagnostico = document.getElementById('diagnosticoTexto')?.value?.trim() || '';
         if (!diagnostico) {
             errores.push('❌ El diagnóstico inicial es obligatorio. Debes completarlo antes de guardar.');
@@ -844,12 +983,8 @@ async function guardarGestionOrden() {
             }
         }
         
-        // =====================================================
-        // SI HAY ERRORES, MOSTRAR Y DETENER
-        // =====================================================
         if (errores.length > 0) {
-            const mensajeError = errores.join('\n');
-            mostrarNotificacion(mensajeError, 'error');
+            mostrarNotificacion(errores.join('\n'), 'error');
             return;
         }
         
@@ -913,55 +1048,56 @@ async function guardarGestionOrden() {
             }
         }
         
-        // Guardar técnicos
-        await fetch(`${API_URL}/jefe-taller/asignar-tecnicos`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-            },
-            body: JSON.stringify({ 
-                id_orden: ordenEnGestion.id, 
-                tecnicos: tecnicosSeleccionados,
-                tipo_asignacion: 'diagnostico'
+        // Guardar todo en paralelo
+        await Promise.all([
+            fetch(`${API_URL}/jefe-taller/asignar-tecnicos`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                },
+                body: JSON.stringify({ 
+                    id_orden: ordenEnGestion.id, 
+                    tecnicos: tecnicosSeleccionados,
+                    tipo_asignacion: 'diagnostico'
+                })
+            }),
+            fetch(`${API_URL}/jefe-taller/planificar`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                },
+                body: JSON.stringify({ 
+                    id_orden: ordenEnGestion.id, 
+                    bahia: parseInt(bahia), 
+                    fecha_inicio: fechaInicio, 
+                    horas_estimadas: horasEstimadas 
+                })
+            }),
+            fetch(`${API_URL}/jefe-taller/diagnostico-inicial`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                },
+                body: JSON.stringify({ 
+                    id_orden: ordenEnGestion.id, 
+                    diagnostico: diagnostico,
+                    audio_url: audioUrl
+                })
             })
-        });
-        
-        // Guardar planificación
-        await fetch(`${API_URL}/jefe-taller/planificar`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-            },
-            body: JSON.stringify({ 
-                id_orden: ordenEnGestion.id, 
-                bahia: parseInt(bahia), 
-                fecha_inicio: fechaInicio, 
-                horas_estimadas: horasEstimadas 
-            })
-        });
-        
-        // Guardar diagnóstico
-        await fetch(`${API_URL}/jefe-taller/diagnostico-inicial`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-            },
-            body: JSON.stringify({ 
-                id_orden: ordenEnGestion.id, 
-                diagnostico: diagnostico,
-                audio_url: audioUrl
-            })
-        });
+        ]);
         
         cerrarModalGestionOrden();
         mostrarNotificacion('✅ Todos los cambios han sido guardados correctamente', 'success');
         
+        // Limpiar cachés relacionados
+        dataCache.clear('tecnicos');
+        
         await Promise.all([
-            cargarTecnicos(),
-            cargarOrdenesActivas()
+            cargarTecnicos(true),
+            cargarOrdenesActivas(true)
         ]);
         
     } catch (error) {
@@ -980,7 +1116,8 @@ function getAudioBase64FromBlob(blob) {
 }
 
 function cerrarModalGestionOrden() {
-    document.getElementById('modalGestionOrden')?.classList.remove('show');
+    const modal = document.getElementById('modalGestionOrden');
+    if (modal) modal.classList.remove('show');
     ordenEnGestion = null;
 }
 
@@ -1008,6 +1145,8 @@ async function verDetalleOrden(idOrden) {
         const modal = document.getElementById('modalDetalleOrden');
         const body = document.getElementById('modalDetalleOrdenBody');
         
+        if (!modal || !body) return;
+        
         body.innerHTML = `
             <div class="detalle-orden">
                 <div class="detalle-seccion"><h4><i class="fas fa-info-circle"></i> Información General</h4>
@@ -1015,6 +1154,7 @@ async function verDetalleOrden(idOrden) {
                         <div class="detalle-item"><span class="detalle-label">Código</span><span class="detalle-value">${escapeHtml(detalle.codigo_unico)}</span></div>
                         <div class="detalle-item"><span class="detalle-label">Estado</span><span class="detalle-value ${detalle.estado_global}">${detalle.estado_global}</span></div>
                         <div class="detalle-item"><span class="detalle-label">Fecha ingreso</span><span class="detalle-value">${new Date(detalle.fecha_ingreso).toLocaleString()}</span></div>
+                        ${detalle.fecha_salida ? `<div class="detalle-item"><span class="detalle-label">Fecha salida</span><span class="detalle-value">${new Date(detalle.fecha_salida).toLocaleString()}</span></div>` : ''}
                     </div>
                 </div>
                 <div class="detalle-seccion"><h4><i class="fas fa-user"></i> Datos del Cliente</h4>
@@ -1027,6 +1167,7 @@ async function verDetalleOrden(idOrden) {
                     <div class="detalle-grid">
                         <div class="detalle-item"><span class="detalle-label">Placa</span><span class="detalle-value">${escapeHtml(detalle.placa)}</span></div>
                         <div class="detalle-item"><span class="detalle-label">Marca/Modelo</span><span class="detalle-value">${escapeHtml(detalle.marca)} ${escapeHtml(detalle.modelo)}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Año</span><span class="detalle-value">${detalle.anio || 'N/A'}</span></div>
                         <div class="detalle-item"><span class="detalle-label">Kilometraje</span><span class="detalle-value">${detalle.kilometraje?.toLocaleString() || '0'} km</span></div>
                     </div>
                 </div>
@@ -1034,9 +1175,20 @@ async function verDetalleOrden(idOrden) {
                     <div class="detalle-descripcion">${escapeHtml(detalle.transcripcion_problema || 'No registrada')}</div>
                 </div>
                 ${detalle.diagnostico_inicial ? `<div class="detalle-seccion"><h4><i class="fas fa-stethoscope"></i> Diagnóstico Inicial</h4><div class="detalle-descripcion">${escapeHtml(detalle.diagnostico_inicial)}</div></div>` : ''}
+                ${detalle.diagnostico_audio_url ? `<div class="detalle-seccion"><h4><i class="fas fa-microphone-alt"></i> Audio Diagnóstico</h4><audio controls src="${detalle.diagnostico_audio_url}" style="width: 100%;"></audio></div>` : ''}
                 <div class="detalle-seccion"><h4><i class="fas fa-users"></i> Técnicos Asignados</h4>
                     <div class="orden-tecnicos">${detalle.tecnicos && detalle.tecnicos.length > 0 ? detalle.tecnicos.map(t => `<span class="tecnico-badge"><i class="fas fa-user"></i> ${escapeHtml(t.nombre)}</span>`).join('') : '<span>Sin técnicos asignados</span>'}</div>
                 </div>
+                ${detalle.planificacion && Object.keys(detalle.planificacion).length > 0 ? `
+                <div class="detalle-seccion"><h4><i class="fas fa-calendar-alt"></i> Planificación</h4>
+                    <div class="detalle-grid">
+                        <div class="detalle-item"><span class="detalle-label">Bahía</span><span class="detalle-value">Bahía ${detalle.planificacion.bahia_asignada || 'No asignada'}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Horas estimadas</span><span class="detalle-value">${detalle.planificacion.horas_estimadas || 'N/A'} horas</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Inicio estimado</span><span class="detalle-value">${detalle.planificacion.fecha_hora_inicio_estimado ? new Date(detalle.planificacion.fecha_hora_inicio_estimado).toLocaleString() : 'N/A'}</span></div>
+                        ${detalle.planificacion.fecha_hora_inicio_real ? `<div class="detalle-item"><span class="detalle-label">Inicio real</span><span class="detalle-value">${new Date(detalle.planificacion.fecha_hora_inicio_real).toLocaleString()}</span></div>` : ''}
+                    </div>
+                </div>
+                ` : ''}
             </div>
             <div class="modal-footer"><button class="btn-secondary" onclick="window.cerrarModalDetalleOrden()">Cerrar</button></div>
         `;
@@ -1047,7 +1199,13 @@ async function verDetalleOrden(idOrden) {
 }
 
 function cerrarModalDetalleOrden() {
-    document.getElementById('modalDetalleOrden')?.classList.remove('show');
+    const modal = document.getElementById('modalDetalleOrden');
+    if (modal) modal.classList.remove('show');
+}
+
+function cerrarModalHistorialDiagnostico() {
+    const modal = document.getElementById('modalHistorialDiagnostico');
+    if (modal) modal.classList.remove('show');
 }
 
 // =====================================================
@@ -1056,7 +1214,12 @@ function cerrarModalDetalleOrden() {
 
 function iniciarPolling() {
     if (pollingInterval) clearInterval(pollingInterval);
-    pollingInterval = setInterval(() => cargarOrdenesActivas(), 10000);
+    // Polling cada 30 segundos en lugar de 10
+    pollingInterval = setInterval(() => {
+        if (!document.hidden) {
+            cargarOrdenesActivas();
+        }
+    }, 30000);
 }
 
 function escapeHtml(text) {
@@ -1075,17 +1238,21 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
     const iconos = { success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
     toast.innerHTML = `<i class="fas ${iconos[tipo] || iconos.info}"></i><span>${escapeHtml(mensaje)}</span>`;
     document.body.appendChild(toast);
+    
     setTimeout(() => {
         toast.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    }, 4000);
 }
 
 // Exponer funciones globales
 window.verDetalleOrden = verDetalleOrden;
 window.cerrarModalDetalleOrden = cerrarModalDetalleOrden;
+window.cerrarModalHistorialDiagnostico = cerrarModalHistorialDiagnostico;
 window.abrirModalGestionOrden = abrirModalGestionOrden;
 window.cerrarModalGestionOrden = cerrarModalGestionOrden;
 window.guardarGestionOrden = guardarGestionOrden;
 window.seleccionarBahiaVisual = seleccionarBahiaVisual;
 window.irAprobarDiagnostico = irAprobarDiagnostico;
+window.cargarOrdenesActivas = cargarOrdenesActivas;
+window.cargarOrdenesFinalizadas = cargarOrdenesFinalizadas;

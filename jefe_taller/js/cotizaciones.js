@@ -1,6 +1,7 @@
 // =====================================================
 // COTIZACIONES.JS - JEFE DE TALLER (COMPLETO)
-// CON GESTIÓN DE ÓRDENES RECHAZADAS E INSTRUCCIONES
+// CON HISTORIAL DE COTIZACIONES Y GESTIÓN DE RECHAZOS
+// VERSIÓN 2.0 - INTEGRADA
 // =====================================================
 
 const API_URL = window.location.origin + '/api/jefe-taller';
@@ -14,7 +15,7 @@ let encargadosRepuestos = [];
 let solicitudesCotizacion = [];
 let cotizacionesMap = {};
 let solicitudesCompra = [];
-let ordenesRechazadas = [];
+let historialCotizaciones = [];
 
 // Items dinámicos
 let itemsSolicitud = [];
@@ -113,7 +114,8 @@ function statusBadge(estado) {
         'comprado': 'status-comprado',
         'enviada': 'status-enviado',
         'aprobada': 'status-aprobado',
-        'expirada': 'status-pendiente'
+        'expirada': 'status-pendiente',
+        'rechazada_total': 'status-rechazado'
     };
     
     const texto = {
@@ -124,12 +126,13 @@ function statusBadge(estado) {
         'enviada': 'Enviada',
         'aprobada': 'Aprobada',
         'expirada': 'Expirada',
-        'comprado': 'Comprado'
+        'comprado': 'Comprado',
+        'rechazada_total': 'Rechazada Total'
     };
     
     let icon = 'fa-clock';
     if (estado === 'aprobado' || estado === 'aprobada' || estado === 'comprado') icon = 'fa-check-circle';
-    if (estado === 'rechazado') icon = 'fa-times-circle';
+    if (estado === 'rechazado' || estado === 'rechazada_total') icon = 'fa-times-circle';
     if (estado === 'enviada') icon = 'fa-paper-plane';
     
     return `<span class="status-badge ${map[estado] || 'status-pendiente'}">
@@ -254,6 +257,7 @@ async function cargarSolicitudesCotizacion() {
         if (data.success) {
             solicitudesCotizacion = data.solicitudes || [];
             renderSolicitudesCotizacion();
+            cargarSelectOrdenesSolicitud();
         }
     } catch (error) {
         console.error('Error cargando solicitudes:', error);
@@ -269,6 +273,7 @@ async function cargarCotizacionesMap() {
             cotizacionesMap = {};
             data.cotizaciones.forEach(cot => {
                 cotizacionesMap[cot.id_orden_trabajo] = cot;
+                console.log(`Cotización cargada: Orden ${cot.id_orden_trabajo} -> Estado: ${cot.estado}`); // Debug
             });
         }
     } catch (error) {
@@ -297,7 +302,11 @@ async function cargarEncargadosRepuestos() {
         const data = await response.json();
         if (data.success) {
             encargadosRepuestos = data.encargados || [];
-            renderSelects();
+            const selectEncargado = document.getElementById('solicitud_id_encargado');
+            if (selectEncargado) {
+                selectEncargado.innerHTML = '<option value="">Seleccionar encargado</option>' +
+                    encargadosRepuestos.map(e => `<option value="${e.id}">${escapeHtml(e.nombre)}</option>`).join('');
+            }
         }
     } catch (error) {
         console.error('Error cargando encargados:', error);
@@ -311,7 +320,7 @@ async function cargarOrdenesAprobadas() {
         const data = await response.json();
         if (data.success) {
             ordenesAprobadas = data.ordenes || [];
-            renderSelects();
+            cargarSelectOrdenesSolicitud();
         }
     } catch (error) {
         console.error('Error cargando órdenes aprobadas:', error);
@@ -319,17 +328,40 @@ async function cargarOrdenesAprobadas() {
     }
 }
 
-async function cargarOrdenesRechazadas() {
+async function cargarHistorialCotizaciones() {
     try {
-        const response = await fetch(`${API_URL}/ordenes-rechazadas-total`, { headers: getAuthHeaders() });
+        const response = await fetch(`${API_URL}/historial-cotizaciones`, { headers: getAuthHeaders() });
         const data = await response.json();
         if (data.success) {
-            ordenesRechazadas = data.ordenes || [];
-            renderOrdenesRechazadas();
+            historialCotizaciones = data.cotizaciones || [];
+            renderHistorialCotizaciones();
         }
     } catch (error) {
-        console.error('Error cargando órdenes rechazadas:', error);
-        ordenesRechazadas = [];
+        console.error('Error cargando historial:', error);
+        historialCotizaciones = [];
+    }
+}
+
+function cargarSelectOrdenesSolicitud() {
+    const selectOrden = document.getElementById('solicitud_id_orden_trabajo');
+    const selectServicio = document.getElementById('solicitud_id_servicio');
+    
+    if (selectOrden && ordenesAprobadas.length > 0) {
+        const currentValue = selectOrden.value;
+        selectOrden.innerHTML = '<option value="">Seleccionar orden</option>' + 
+            ordenesAprobadas.map(o => `<option value="${o.id_orden}">${escapeHtml(o.codigo_unico)} - ${escapeHtml(o.vehiculo)}</option>`).join('');
+        if (currentValue) selectOrden.value = currentValue;
+    }
+    
+    if (selectServicio && ordenesConServicios.length > 0) {
+        selectServicio.innerHTML = '<option value="">Seleccionar servicio</option>';
+        ordenesConServicios.forEach(orden => {
+            if (orden.servicios) {
+                orden.servicios.forEach(serv => {
+                    selectServicio.innerHTML += `<option value="${serv.id_servicio}">${escapeHtml(orden.codigo_unico)} - ${escapeHtml(serv.descripcion)}</option>`;
+                });
+            }
+        });
     }
 }
 
@@ -343,7 +375,7 @@ async function cargarDatosIniciales() {
             cargarSolicitudesCompra(),
             cargarEncargadosRepuestos(),
             cargarOrdenesAprobadas(),
-            cargarOrdenesRechazadas()
+            cargarHistorialCotizaciones()
         ]);
     } catch (error) {
         console.error('Error cargando datos:', error);
@@ -361,6 +393,9 @@ function renderOrdenes() {
     const container = document.getElementById('ordenesContainer');
     if (!container) return;
     
+    console.log("📢 [DEBUG] renderOrdenes - Iniciando");
+    console.log("📢 [DEBUG] cotizacionesMap actual:", cotizacionesMap);
+    
     const searchTerm = document.getElementById('searchOrden')?.value.toLowerCase() || '';
     const filtroEstado = document.getElementById('filtroEstadoCotizacion')?.value || 'all';
     
@@ -374,19 +409,171 @@ function renderOrdenes() {
         );
     }
     
-    if (filtroEstado === 'pendiente') {
-        filtered = filtered.filter(o => !cotizacionesMap[o.id_orden]);
-    } else if (filtroEstado === 'enviada') {
-        filtered = filtered.filter(o => cotizacionesMap[o.id_orden]);
+    // Clasificar órdenes según estado real de la cotización
+    const ordenesPendientes = [];
+    const ordenesEnviadas = [];
+    const ordenesRechazadas = [];
+    const ordenesAprobadas = [];
+    const ordenesRechazadasGestionadas = [];
+    const ordenesAprobadasGestionadas = [];
+    
+    for (const orden of filtered) {
+        const tieneCotizacion = cotizacionesMap[orden.id_orden];
+        const estadoCotizacion = tieneCotizacion ? cotizacionesMap[orden.id_orden].estado : null;
+        const instruccionesEnviadas = orden.instrucciones_enviadas || false;
+        const tecnicosAsignados = orden.tecnicos_asignados || false;
+        
+        console.log(`📢 [DEBUG] Orden ${orden.codigo_unico} (ID: ${orden.id_orden}): estado=${estadoCotizacion}, instruccionesEnviadas=${instruccionesEnviadas}, tecnicosAsignados=${tecnicosAsignados}`);
+        
+        if (estadoCotizacion === 'rechazada') {
+            if (instruccionesEnviadas) {
+                ordenesRechazadasGestionadas.push({ ...orden, cotizacion: cotizacionesMap[orden.id_orden] });
+            } else {
+                ordenesRechazadas.push({ ...orden, cotizacion: cotizacionesMap[orden.id_orden] });
+            }
+        } else if (estadoCotizacion === 'aprobado_total' || estadoCotizacion === 'aprobado_parcial') {
+            if (tecnicosAsignados) {
+                ordenesAprobadasGestionadas.push({ ...orden, cotizacion: cotizacionesMap[orden.id_orden] });
+            } else {
+                ordenesAprobadas.push({ ...orden, cotizacion: cotizacionesMap[orden.id_orden] });
+            }
+        } else if (tieneCotizacion && estadoCotizacion === 'enviada') {
+            ordenesEnviadas.push({ ...orden, cotizacion: cotizacionesMap[orden.id_orden] });
+        } else {
+            ordenesPendientes.push(orden);
+        }
     }
     
-    if (filtered.length === 0) {
+    console.log(`📢 [DEBUG] Clasificación: Pendientes=${ordenesPendientes.length}, Enviadas=${ordenesEnviadas.length}, Rechazadas=${ordenesRechazadas.length}, RechazadasGestionadas=${ordenesRechazadasGestionadas.length}, Aprobadas=${ordenesAprobadas.length}, AprobadasGestionadas=${ordenesAprobadasGestionadas.length}`);
+    
+    // Aplicar filtro
+    let ordenesMostrar = [];
+    if (filtroEstado === 'pendiente') {
+        ordenesMostrar = ordenesPendientes;
+    } else if (filtroEstado === 'enviada') {
+        ordenesMostrar = ordenesEnviadas;
+    } else if (filtroEstado === 'aprobada') {
+        ordenesMostrar = [...ordenesAprobadas, ...ordenesAprobadasGestionadas];
+    } else if (filtroEstado === 'rechazada') {
+        ordenesMostrar = [...ordenesRechazadas, ...ordenesRechazadasGestionadas];
+    } else {
+        ordenesMostrar = [...ordenesPendientes, ...ordenesEnviadas, ...ordenesRechazadas, ...ordenesRechazadasGestionadas, ...ordenesAprobadas, ...ordenesAprobadasGestionadas];
+    }
+    
+    if (ordenesMostrar.length === 0) {
         container.innerHTML = `<div class="empty-state"><i class="fas fa-clipboard-list"></i><p>No hay órdenes con servicios disponibles</p></div>`;
         return;
     }
     
-    container.innerHTML = filtered.map(orden => {
-        const tieneCotizacion = cotizacionesMap[orden.id_orden];
+    container.innerHTML = ordenesMostrar.map(ordenData => {
+        const orden = ordenData;
+        const cotizacion = ordenData.cotizacion || cotizacionesMap[orden.id_orden];
+        const estadoCotizacion = cotizacion ? cotizacion.estado : null;
+        const instruccionesEnviadas = orden.instrucciones_enviadas || false;
+        const tecnicosAsignados = orden.tecnicos_asignados || false;
+        
+        let estadoBadgeHtml = '';
+        let botonesHtml = '';
+        
+        console.log(`📢 [DEBUG] Renderizando orden ${orden.codigo_unico} -> estado=${estadoCotizacion}, instruccionesEnviadas=${instruccionesEnviadas}, tecnicosAsignados=${tecnicosAsignados}`);
+        
+        // Determinar badge y botones según estado
+        if (estadoCotizacion === 'rechazada') {
+            if (instruccionesEnviadas) {
+                // Ya se enviaron instrucciones - solo mostrar ver detalles
+                estadoBadgeHtml = `
+                    <div class="alert-success" style="padding: 0.5rem; margin-bottom: 0.5rem; width: 100%; border-radius: 8px; background: rgba(16, 185, 129, 0.15); border-left: 3px solid #10B981;">
+                        <i class="fas fa-check-circle" style="color: #10B981;"></i> 
+                        <strong>✅ INSTRUCCIONES ENVIADAS AL TÉCNICO</strong>
+                        <br><small>El técnico ya fue notificado para armar y lavar el vehículo</small>
+                    </div>
+                `;
+                botonesHtml = `
+                    <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                        <i class="fas fa-eye"></i> Ver Detalles
+                    </button>
+                `;
+            } else {
+                estadoBadgeHtml = `
+                    <div class="alert-warning" style="padding: 0.5rem; margin-bottom: 0.5rem; width: 100%; border-radius: 8px;">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        <strong>⚠️ COTIZACIÓN RECHAZADA</strong>
+                        <br><small>Motivo: ${escapeHtml(cotizacion.motivo_rechazo || 'No especificado')}</small>
+                        <br><small>Fecha: ${formatDate(cotizacion.fecha_rechazo)}</small>
+                    </div>
+                `;
+                botonesHtml = `
+                    <button class="btn-warning" onclick='abrirModalInstruccionesTecnico(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}", "${escapeHtml(orden.vehiculo)}", "${escapeHtml(orden.cliente_nombre)}", "rechazada")'>
+                        <i class="fas fa-tools"></i> 🔧 Notificar al Técnico (Diagnóstico Bs. 200)
+                    </button>
+                    <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                        <i class="fas fa-eye"></i> Ver Cotización Rechazada
+                    </button>
+                `;
+            }
+        } else if (estadoCotizacion === 'aprobado_total' || estadoCotizacion === 'aprobado_parcial') {
+            const esTotal = estadoCotizacion === 'aprobado_total';
+            if (tecnicosAsignados) {
+                // Ya se asignaron técnicos - solo mostrar ver detalles
+                estadoBadgeHtml = `
+                    <div class="alert-success" style="padding: 0.5rem; margin-bottom: 0.5rem; width: 100%; border-radius: 8px; background: rgba(16, 185, 129, 0.15); border-left: 3px solid #10B981;">
+                        <i class="fas fa-check-circle" style="color: #10B981;"></i> 
+                        <strong>✅ TRABAJO EN PROCESO</strong>
+                        <br><small>Técnicos asignados - Trabajo en curso</small>
+                    </div>
+                `;
+                botonesHtml = `
+                    <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                        <i class="fas fa-eye"></i> Ver Detalles
+                    </button>
+                `;
+            } else {
+                estadoBadgeHtml = `
+                    <div class="alert-success" style="padding: 0.5rem; margin-bottom: 0.5rem; width: 100%; border-radius: 8px; background: rgba(16, 185, 129, 0.15); border-left: 3px solid #10B981;">
+                        <i class="fas fa-check-circle" style="color: #10B981;"></i> 
+                        <strong>✅ COTIZACIÓN ${esTotal ? 'APROBADA TOTALMENTE' : 'APROBADA PARCIALMENTE'}</strong>
+                        <br><small>Total aprobado: Bs. ${(cotizacion.total || 0).toFixed(2)}</small>
+                    </div>
+                `;
+                botonesHtml = `
+                    <button class="btn-primary" onclick='abrirModalGestionTecnicos(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}", "${escapeHtml(orden.vehiculo)}", "${escapeHtml(orden.cliente_nombre)}")'>
+                        <i class="fas fa-users"></i> 👥 Gestionar Técnicos
+                    </button>
+                    <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                        <i class="fas fa-eye"></i> Ver Cotización Aprobada
+                    </button>
+                `;
+            }
+        } else if (cotizacion && estadoCotizacion === 'enviada') {
+            estadoBadgeHtml = `
+                <div class="alert-info" style="padding: 0.5rem; margin-bottom: 0.5rem; width: 100%; border-radius: 8px; background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3B82F6;">
+                    <i class="fas fa-paper-plane"></i> 
+                    <strong>📨 COTIZACIÓN ENVIADA - ESPERANDO RESPUESTA</strong>
+                    <br><small>Enviada el: ${formatDate(cotizacion.fecha_envio)}</small>
+                </div>
+            `;
+            botonesHtml = `
+                <button class="btn-outline" onclick="editarCotizacionExistente(${orden.id_orden})">
+                    <i class="fas fa-edit"></i> Editar Cotización
+                </button>
+                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                    <i class="fas fa-eye"></i> Ver Detalles
+                </button>
+            `;
+        } else {
+            estadoBadgeHtml = `
+                <div class="alert-secondary" style="padding: 0.5rem; margin-bottom: 0.5rem; width: 100%; border-radius: 8px; background: var(--gris-oscuro);">
+                    <i class="fas fa-clock"></i> 
+                    <strong>⏳ PENDIENTE DE COTIZACIÓN</strong>
+                    <br><small>Diagnóstico listo, esperando generar cotización</small>
+                </div>
+            `;
+            botonesHtml = `
+                <button class="btn-primary" onclick="abrirModalGenerarCotizacion(${orden.id_orden})">
+                    <i class="fas fa-file-invoice"></i> Generar Cotización
+                </button>
+            `;
+        }
         
         return `
         <div class="orden-card">
@@ -418,19 +605,9 @@ function renderOrdenes() {
                     </div>
                 `).join('')}
             </div>
+            ${estadoBadgeHtml}
             <div class="orden-footer">
-                ${tieneCotizacion ? `
-                    <button class="btn-outline" onclick="editarCotizacionExistente(${orden.id_orden})">
-                        <i class="fas fa-edit"></i> Editar Cotización
-                    </button>
-                    <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
-                        <i class="fas fa-eye"></i> Ver Detalles
-                    </button>
-                ` : `
-                    <button class="btn-primary" onclick="abrirModalGenerarCotizacion(${orden.id_orden})">
-                        <i class="fas fa-file-invoice"></i> Generar Cotización
-                    </button>
-                `}
+                ${botonesHtml}
                 <button class="btn-outline" onclick="editarServiciosOrden(${orden.id_orden})">
                     <i class="fas fa-edit"></i> Editar Servicios
                 </button>
@@ -439,12 +616,77 @@ function renderOrdenes() {
     `}).join('');
 }
 
+function renderHistorialCotizaciones() {
+    const container = document.getElementById('historialCotizacionesContainer');
+    if (!container) return;
+    
+    const searchTerm = document.getElementById('searchHistorial')?.value.toLowerCase() || '';
+    const filtroEstado = document.getElementById('filtroEstadoHistorial')?.value || 'all';
+    
+    let filtered = [...historialCotizaciones];
+    
+    if (searchTerm) {
+        filtered = filtered.filter(c => 
+            (c.orden_codigo || '').toLowerCase().includes(searchTerm) ||
+            (c.cliente_nombre || '').toLowerCase().includes(searchTerm) ||
+            (c.vehiculo || '').toLowerCase().includes(searchTerm)
+        );
+    }
+    
+    if (filtroEstado !== 'all') {
+        filtered = filtered.filter(c => c.estado === filtroEstado);
+    }
+    
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="empty-state"><i class="fas fa-history"></i><p>No hay cotizaciones en el historial</p></div>`;
+        return;
+    }
+    
+    container.innerHTML = filtered.map(cot => `
+        <div class="orden-card">
+            <div class="orden-header">
+                <div>
+                    <span class="orden-codigo"><i class="fas fa-tag"></i> ${escapeHtml(cot.orden_codigo)}</span>
+                    <span class="orden-vehiculo"><i class="fas fa-car"></i> ${escapeHtml(cot.vehiculo)}</span>
+                </div>
+                <div>
+                    <span class="orden-cliente"><i class="fas fa-user"></i> ${escapeHtml(cot.cliente_nombre)}</span>
+                    <span class="orden-total"><i class="fas fa-dollar-sign"></i> Total: ${formatCurrency(cot.total)}</span>
+                </div>
+            </div>
+            <div class="orden-body" style="padding: 0.75rem 1.25rem;">
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+                    <div><strong>Fecha envío:</strong> ${formatDate(cot.fecha_envio)}</div>
+                    <div>${statusBadge(cot.estado)}</div>
+                    ${cot.fecha_rechazo ? `<div><strong>Rechazado:</strong> ${formatDate(cot.fecha_rechazo)}</div>` : ''}
+                </div>
+                ${cot.motivo_rechazo ? `
+                    <div class="motivo-rechazo" style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(193,18,31,0.1); border-radius: 6px;">
+                        <i class="fas fa-comment-dots"></i> <strong>Motivo de rechazo:</strong>
+                        <p style="margin: 0.25rem 0 0 1.5rem; font-size: 0.8rem;">${escapeHtml(cot.motivo_rechazo)}</p>
+                    </div>
+                ` : ''}
+            </div>
+            <div class="orden-footer">
+                <button class="btn-outline" onclick="verDetalleCotizacion(${cot.id})">
+                    <i class="fas fa-eye"></i> Ver Detalle
+                </button>
+                ${cot.estado === 'rechazada' ? `
+                    <button class="btn-primary" onclick="reutilizarCotizacionRechazada(${cot.id_orden_trabajo}, ${cot.id})">
+                        <i class="fas fa-copy"></i> Generar Nueva Cotización
+                    </button>
+                ` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
 function renderSolicitudesCotizacion() {
     const tbody = document.getElementById('tablaSolicitudesCotizacion');
     if (!tbody) return;
     
     if (solicitudesCotizacion.length === 0) {
-        tbody.innerHTML = `<td><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes de cotización</p></div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes de cotización</p></div></td></tr>`;
         return;
     }
     
@@ -490,100 +732,6 @@ function renderSolicitudesCompra() {
             </td>
         </tr>
     `).join('');
-}
-
-function renderOrdenesRechazadas() {
-    const container = document.getElementById('ordenesRechazadasContainer');
-    if (!container) return;
-    
-    const searchTerm = document.getElementById('searchRechazadas')?.value.toLowerCase() || '';
-    const filtroInstrucciones = document.getElementById('filtroInstrucciones')?.value || 'all';
-    
-    let filtered = [...ordenesRechazadas];
-    
-    if (searchTerm) {
-        filtered = filtered.filter(o => 
-            (o.codigo_unico || '').toLowerCase().includes(searchTerm) ||
-            (o.vehiculo || '').toLowerCase().includes(searchTerm) ||
-            (o.cliente_nombre || '').toLowerCase().includes(searchTerm) ||
-            (o.placa || '').toLowerCase().includes(searchTerm)
-        );
-    }
-    
-    if (filtroInstrucciones === 'pendiente') {
-        filtered = filtered.filter(o => !o.instrucciones_enviadas);
-    } else if (filtroInstrucciones === 'enviadas') {
-        filtered = filtered.filter(o => o.instrucciones_enviadas);
-    }
-    
-    if (filtered.length === 0) {
-        container.innerHTML = `<div class="empty-state"><i class="fas fa-check-circle"></i><p>No hay órdenes con rechazo total</p><small>Cuando un cliente rechace todos los servicios, aparecerán aquí</small></div>`;
-        return;
-    }
-    
-    container.innerHTML = filtered.map(orden => `
-        <div class="orden-card rechazada-card">
-            <div class="orden-header">
-                <div>
-                    <span class="orden-codigo"><i class="fas fa-tag"></i> ${escapeHtml(orden.codigo_unico)}</span>
-                    <span class="orden-vehiculo"><i class="fas fa-car"></i> ${escapeHtml(orden.vehiculo)}</span>
-                </div>
-                <div>
-                    <span class="orden-cliente"><i class="fas fa-user"></i> ${escapeHtml(orden.cliente_nombre)}</span>
-                    <span class="orden-placa"><i class="fas fa-id-card"></i> ${escapeHtml(orden.placa)}</span>
-                </div>
-            </div>
-            <div class="orden-body">
-                <div class="rechazo-info">
-                    <div class="precio-diagnostico">
-                        <span><i class="fas fa-stethoscope"></i> Diagnóstico técnico:</span>
-                        <span>Bs. 200.00</span>
-                    </div>
-                    ${orden.motivo_rechazo ? `
-                        <div class="motivo-rechazo">
-                            <i class="fas fa-comment-dots"></i>
-                            <strong>Motivo del cliente:</strong>
-                            <p>${escapeHtml(orden.motivo_rechazo)}</p>
-                        </div>
-                    ` : ''}
-                    <div class="fecha-rechazo">
-                        <i class="fas fa-calendar-alt"></i>
-                        Rechazado el: ${formatDate(orden.fecha_rechazo)}
-                    </div>
-                </div>
-            </div>
-            <div class="orden-footer">
-                ${!orden.instrucciones_enviadas ? `
-                    <button class="btn-primary" onclick="abrirModalInstrucciones(${orden.id_orden}, '${escapeHtml(orden.codigo_unico)}', '${escapeHtml(orden.vehiculo)}', '${escapeHtml(orden.cliente_nombre)}')">
-                        <i class="fas fa-paper-plane"></i> Notificar al Técnico
-                    </button>
-                ` : `
-                    <button class="btn-outline" onclick="verHistorialInstrucciones(${orden.id_orden})">
-                        <i class="fas fa-history"></i> Ver Instrucciones Enviadas
-                    </button>
-                    <button class="btn-primary" onclick="abrirModalInstrucciones(${orden.id_orden}, '${escapeHtml(orden.codigo_unico)}', '${escapeHtml(orden.vehiculo)}', '${escapeHtml(orden.cliente_nombre)}')">
-                        <i class="fas fa-plus"></i> Agregar Instrucciones
-                    </button>
-                `}
-            </div>
-        </div>
-    `).join('');
-}
-
-function renderSelects() {
-    const selectOrden = document.getElementById('solicitud_id_orden_trabajo');
-    if (selectOrden && ordenesAprobadas.length > 0) {
-        const currentValue = selectOrden.value;
-        selectOrden.innerHTML = '<option value="">Seleccionar orden</option>' + 
-            ordenesAprobadas.map(o => `<option value="${o.id_orden}">${escapeHtml(o.codigo_unico)} - ${escapeHtml(o.vehiculo)}</option>`).join('');
-        if (currentValue) selectOrden.value = currentValue;
-    }
-    
-    const selectEncargado = document.getElementById('solicitud_id_encargado');
-    if (selectEncargado && encargadosRepuestos.length > 0) {
-        selectEncargado.innerHTML = '<option value="">Seleccionar encargado</option>' +
-            encargadosRepuestos.map(e => `<option value="${e.id}">${escapeHtml(e.nombre)}</option>`).join('');
-    }
 }
 
 // =====================================================
@@ -1138,12 +1286,75 @@ async function enviarCotizacionCliente() {
             currentCotizacionId = null;
             await cargarCotizacionesMap();
             await cargarOrdenesConServicios();
+            await cargarHistorialCotizaciones();
         } else {
             showToast(data.error || 'Error al enviar', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
         showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+async function reutilizarCotizacionRechazada(id_orden, id_cotizacion) {
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/detalle-cotizacion/${id_cotizacion}`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        
+        if (!data.success) {
+            showToast('Error al cargar la cotización rechazada', 'error');
+            return;
+        }
+        
+        const cotizacion = data.detalle;
+        currentOrdenData = { id_orden: cotizacion.id_orden_trabajo };
+        
+        document.getElementById('modalCotizacionTitle').innerHTML = '<i class="fas fa-copy"></i> Nueva Cotización (basada en rechazada)';
+        
+        if (cotizacion.servicios && cotizacion.servicios.length > 0) {
+            serviciosCotizables = cotizacion.servicios.map(serv => ({
+                id_servicio: serv.id_servicio,
+                nombre: serv.nombre || serv.descripcion,
+                descripcion: serv.descripcion || '',
+                precio: serv.precio || 0,
+                items: serv.items || []
+            }));
+        } else {
+            serviciosCotizables = [];
+        }
+        
+        renderServiciosCotizables();
+        
+        const orden = ordenesConServicios.find(o => o.id_orden === id_orden);
+        const ordenInfoDiv = document.getElementById('ordenInfoPreview');
+        if (ordenInfoDiv && orden) {
+            ordenInfoDiv.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(orden.codigo_unico)}<br>
+                        <strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}<br>
+                        <strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(orden.vehiculo)}
+                    </div>
+                </div>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color);">
+                    <small><i class="fas fa-info-circle"></i> Basado en cotización rechazada el ${formatDate(cotizacion.fecha_rechazo)}</small>
+                </div>
+            `;
+        }
+        
+        isEditingCotizacion = false;
+        currentCotizacionId = null;
+        clearFileSelection();
+        setupFileUpload();
+        setupModalTabs();
+        
+        abrirModal('modalGenerarCotizacion');
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error al cargar la cotización rechazada', 'error');
     } finally {
         mostrarLoading(false);
     }
@@ -1431,8 +1642,16 @@ async function enviarInstrucciones() {
         if (data.success) {
             showToast('✅ Instrucciones enviadas al técnico', 'success');
             cerrarModal('modalInstruccionesTecnico');
-            await cargarOrdenesRechazadas();
+            
+            // Marcar la orden como instrucciones_enviadas en el objeto local
+            const ordenIndex = ordenesConServicios.findIndex(o => o.id_orden === currentInstruccionesOrden.id_orden);
+            if (ordenIndex !== -1) {
+                ordenesConServicios[ordenIndex].instrucciones_enviadas = true;
+            }
+            
+            await cargarHistorialCotizaciones();
             await cargarOrdenesConServicios();
+            await cargarCotizacionesMap(); // Recargar para actualizar estados
         } else {
             showToast(data.error || 'Error al enviar instrucciones', 'error');
         }
@@ -1443,7 +1662,6 @@ async function enviarInstrucciones() {
         mostrarLoading(false);
     }
 }
-
 async function verHistorialInstrucciones(id_orden) {
     mostrarLoading(true);
     
@@ -1645,6 +1863,12 @@ async function editarServicioCotizacion(id_orden, id_servicio) {
     abrirModal('modalEditorServicios');
 }
 
+function abrirHistorialCotizaciones() {
+    cargarHistorialCotizaciones().then(() => {
+        abrirModal('modalHistorialCotizaciones');
+    });
+}
+
 // =====================================================
 // EVENTOS Y AUTENTICACIÓN
 // =====================================================
@@ -1663,7 +1887,8 @@ function setupEventListeners() {
         cargarCotizacionesMap();
         cargarOrdenesConServicios();
     });
-    document.getElementById('refreshRechazadasBtn')?.addEventListener('click', cargarOrdenesRechazadas);
+    document.getElementById('btnHistorialCotizaciones')?.addEventListener('click', abrirHistorialCotizaciones);
+    document.getElementById('refreshHistorialBtn')?.addEventListener('click', cargarHistorialCotizaciones);
     document.getElementById('btnAgregarItemSolicitud')?.addEventListener('click', agregarItemSolicitud);
     document.getElementById('btnNuevaSolicitudCotizacion')?.addEventListener('click', () => {
         limpiarItemsSolicitud();
@@ -1671,18 +1896,17 @@ function setupEventListeners() {
     });
     document.getElementById('btnAgregarServicioCotizacion')?.addEventListener('click', agregarServicioCotizable);
     
-    // Filtros
     document.getElementById('filtroEstadoCotizacion')?.addEventListener('change', () => {
         renderOrdenes();
     });
     document.getElementById('searchOrden')?.addEventListener('input', () => {
         renderOrdenes();
     });
-    document.getElementById('searchRechazadas')?.addEventListener('input', () => {
-        renderOrdenesRechazadas();
+    document.getElementById('searchHistorial')?.addEventListener('input', () => {
+        renderHistorialCotizaciones();
     });
-    document.getElementById('filtroInstrucciones')?.addEventListener('change', () => {
-        renderOrdenesRechazadas();
+    document.getElementById('filtroEstadoHistorial')?.addEventListener('change', () => {
+        renderHistorialCotizaciones();
     });
     
     const refreshBtns = ['refreshSolicitudes', 'refreshCompras'];
@@ -1704,9 +1928,6 @@ function setupTabs() {
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             this.classList.add('active');
             document.getElementById(tabId)?.classList.add('active');
-            if (tabId === 'tab-ordenes-rechazadas') {
-                cargarOrdenesRechazadas();
-            }
         });
     });
 }
@@ -1757,13 +1978,248 @@ function logout() {
 }
 
 async function inicializar() {
-    console.log('🚀 Inicializando cotizaciones.js versión completa');
+    console.log('🚀 Inicializando cotizaciones.js versión 2.0');
     const user = await cargarUsuarioActual();
     if (!user) return;
     await cargarDatosIniciales();
     setupTabs();
     setupEventListeners();
     console.log('✅ cotizaciones.js inicializado correctamente');
+}
+// =====================================================
+// GESTIÓN DE TÉCNICOS PARA ÓRDENES APROBADAS
+// =====================================================
+
+let currentGestionTecnicosOrden = null;
+
+async function abrirModalGestionTecnicos(id_orden, codigo, vehiculo, cliente) {
+    currentGestionTecnicosOrden = { id_orden, codigo, vehiculo, cliente };
+    mostrarLoading(true);
+    
+    try {
+        // Obtener técnicos disponibles
+        const response = await fetch(`${API_URL}/tecnicos-disponibles`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        
+        // Obtener técnicos ya asignados a esta orden
+        const asignadosResponse = await fetch(`${API_URL}/orden/${id_orden}/tecnicos-asignados`, { headers: getAuthHeaders() });
+        const asignadosData = await asignadosResponse.json();
+        
+        const tecnicosDisponibles = data.success ? data.tecnicos : [];
+        const tecnicosAsignados = asignadosData.success ? asignadosData.tecnicos : [];
+        
+        const modalBody = document.getElementById('gestionTecnicosBody');
+        if (modalBody) {
+            modalBody.innerHTML = `
+                <div class="orden-info-card" style="margin-bottom: 1rem;">
+                    <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(codigo)}</p>
+                    <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(vehiculo)}</p>
+                    <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(cliente)}</p>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-users"></i> Técnicos Asignados</label>
+                    <div id="tecnicosSeleccionados" class="tecnicos-seleccionados">
+                        ${tecnicosAsignados.map(t => `
+                            <div class="tecnico-tag" data-id="${t.id}">
+                                ${escapeHtml(t.nombre)}
+                                <button type="button" class="remove-tecnico" onclick="removerTecnico(${t.id})">&times;</button>
+                            </div>
+                        `).join('')}
+                        ${tecnicosAsignados.length === 0 ? '<small class="text-muted">No hay técnicos asignados aún</small>' : ''}
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-user-plus"></i> Agregar Técnico</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <select id="selectTecnico" class="form-select" style="flex: 1;">
+                            <option value="">Seleccionar técnico...</option>
+                            ${tecnicosDisponibles.map(t => `
+                                <option value="${t.id}" data-nombre="${escapeHtml(t.nombre)}">${escapeHtml(t.nombre)} - ${escapeHtml(t.especialidad || 'General')}</option>
+                            `).join('')}
+                        </select>
+                        <button class="btn-primary btn-sm" onclick="agregarTecnicoSeleccionado()">
+                            <i class="fas fa-plus"></i> Agregar
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-clock"></i> Tiempo Estimado de Reparación</label>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <input type="number" id="tiempoEstimado" class="form-input" style="width: 100px;" placeholder="Cantidad" value="1">
+                        <select id="tiempoUnidad" class="form-select" style="width: 120px;">
+                            <option value="horas">Horas</option>
+                            <option value="dias">Días</option>
+                        </select>
+                        <span class="text-muted">(tiempo estimado para completar el trabajo)</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-calendar-alt"></i> Fecha Estimada de Entrega</label>
+                    <input type="date" id="fechaEstimada" class="form-input">
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-comment-dots"></i> Instrucciones para el Técnico</label>
+                    <textarea id="instruccionesTecnico" class="form-textarea" rows="4" placeholder="Escribe las instrucciones detalladas para el técnico..."></textarea>
+                </div>
+            `;
+        }
+        
+        abrirModal('modalGestionTecnicos');
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error al cargar datos', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+let tecnicosSeleccionadosLista = [];
+
+function agregarTecnicoSeleccionado() {
+    const select = document.getElementById('selectTecnico');
+    const option = select.options[select.selectedIndex];
+    const id = select.value;
+    const nombre = option.getAttribute('data-nombre');
+    
+    if (!id) {
+        showToast('Selecciona un técnico', 'warning');
+        return;
+    }
+    
+    // Verificar si ya está seleccionado
+    if (tecnicosSeleccionadosLista.some(t => t.id == id)) {
+        showToast('Este técnico ya está asignado', 'warning');
+        return;
+    }
+    
+    tecnicosSeleccionadosLista.push({ id, nombre });
+    renderTecnicosSeleccionados();
+    select.value = '';
+}
+
+function removerTecnico(id) {
+    tecnicosSeleccionadosLista = tecnicosSeleccionadosLista.filter(t => t.id != id);
+    renderTecnicosSeleccionados();
+}
+
+function renderTecnicosSeleccionados() {
+    const container = document.getElementById('tecnicosSeleccionados');
+    if (!container) return;
+    
+    if (tecnicosSeleccionadosLista.length === 0) {
+        container.innerHTML = '<small class="text-muted">No hay técnicos asignados aún</small>';
+        return;
+    }
+    
+    container.innerHTML = tecnicosSeleccionadosLista.map(t => `
+        <div class="tecnico-tag" data-id="${t.id}">
+            ${escapeHtml(t.nombre)}
+            <button type="button" class="remove-tecnico" onclick="removerTecnico(${t.id})">&times;</button>
+        </div>
+    `).join('');
+}
+
+async function guardarAsignacionTecnicos() {
+    if (!currentGestionTecnicosOrden) {
+        showToast('Error: No hay orden seleccionada', 'error');
+        return;
+    }
+    
+    const instrucciones = document.getElementById('instruccionesTecnico')?.value.trim();
+    if (!instrucciones) {
+        showToast('Debes escribir instrucciones para el técnico', 'warning');
+        return;
+    }
+    
+    const tiempoEstimado = document.getElementById('tiempoEstimado')?.value;
+    const tiempoUnidad = document.getElementById('tiempoUnidad')?.value;
+    const fechaEstimada = document.getElementById('fechaEstimada')?.value;
+    
+    if (!tiempoEstimado || tiempoEstimado <= 0) {
+        showToast('Ingresa un tiempo estimado válido', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    
+    try {
+        const response = await fetch(`${API_URL}/asignar-tecnicos`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                id_orden: currentGestionTecnicosOrden.id_orden,
+                tecnicos: tecnicosSeleccionadosLista.map(t => t.id),
+                instrucciones: instrucciones,
+                tiempo_estimado: parseInt(tiempoEstimado),
+                tiempo_unidad: tiempoUnidad,
+                fecha_estimada_entrega: fechaEstimada || null
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('✅ Técnicos asignados correctamente', 'success');
+            cerrarModal('modalGestionTecnicos');
+            tecnicosSeleccionadosLista = [];
+            
+            // Marcar la orden como tecnicos_asignados en el objeto local
+            const ordenIndex = ordenesConServicios.findIndex(o => o.id_orden === currentGestionTecnicosOrden.id_orden);
+            if (ordenIndex !== -1) {
+                ordenesConServicios[ordenIndex].tecnicos_asignados = true;
+            }
+            
+            await cargarOrdenesConServicios();
+            await cargarCotizacionesMap();
+        } else {
+            showToast(data.error || 'Error al asignar técnicos', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// Modificar la función existente para instrucciones (para rechazadas)
+async function abrirModalInstruccionesTecnico(id_orden, codigo, vehiculo, cliente, tipo = 'rechazada') {
+    currentInstruccionesOrden = { id_orden, codigo, vehiculo, cliente };
+    
+    const ordenInfo = document.getElementById('instruccionesOrdenInfo');
+    if (ordenInfo) {
+        ordenInfo.innerHTML = `
+            <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(codigo)}</p>
+            <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(vehiculo)}</p>
+            <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(cliente)}</p>
+        `;
+    }
+    
+    // Mostrar mensaje específico según tipo
+    const mensajeExtra = document.getElementById('mensajeExtraInstrucciones');
+    if (mensajeExtra) {
+        if (tipo === 'rechazada') {
+            mensajeExtra.innerHTML = `
+                <div class="precio-diagnostico-modal" style="background: linear-gradient(135deg, #1E3A5F, #0f2b3d); padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span><i class="fas fa-stethoscope"></i> Cargo por diagnóstico:</span>
+                        <span style="font-size: 1.2rem; font-weight: bold; color: #10B981;">Bs. 200.00</span>
+                    </div>
+                    <small style="color: #8E8E93;">Este cargo aplica por el diagnóstico realizado</small>
+                </div>
+            `;
+        } else {
+            mensajeExtra.innerHTML = '';
+        }
+    }
+    
+    document.getElementById('instruccionesTexto').value = '';
+    abrirModal('modalInstruccionesTecnico');
 }
 
 // Exponer funciones globales
@@ -1802,5 +2258,7 @@ window.eliminarServicioCotizable = eliminarServicioCotizable;
 window.abrirModalInstrucciones = abrirModalInstrucciones;
 window.enviarInstrucciones = enviarInstrucciones;
 window.verHistorialInstrucciones = verHistorialInstrucciones;
+window.reutilizarCotizacionRechazada = reutilizarCotizacionRechazada;
+window.abrirHistorialCotizaciones = abrirHistorialCotizaciones;
 
 document.addEventListener('DOMContentLoaded', inicializar);

@@ -1,6 +1,6 @@
 # =====================================================
-# COTIZACIONES.PY - CLIENTE (COMPLETO)
-# CON EDICIÓN DE DECISIONES Y VENTANA DE 1 HORA
+# COTIZACIONES.PY - CLIENTE (COMPLETO CORREGIDO)
+# CON COSTO DE DIAGNÓSTICO DE Bs. 200 AL RECHAZAR
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
@@ -21,6 +21,7 @@ cotizaciones_cliente_bp = Blueprint('cotizaciones_cliente', __name__)
 
 SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
+COSTO_DIAGNOSTICO = 200
 
 # =====================================================
 # DECORADOR CLIENTE REQUIRED
@@ -184,7 +185,7 @@ def obtener_perfil_cliente(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# ENDPOINT: LISTAR COTIZACIONES
+# ENDPOINT: LISTAR COTIZACIONES (CORREGIDO)
 # =====================================================
 
 @cotizaciones_cliente_bp.route('/cotizaciones', methods=['GET'])
@@ -225,7 +226,7 @@ def obtener_cotizaciones_cliente(current_user):
         ordenes_ids = [o['id'] for o in ordenes.data]
         
         query = supabase.table('cotizacion') \
-            .select('id, id_orden_trabajo, fecha_generacion, fecha_envio, estado, nombre_archivo, servicios_json') \
+            .select('id, id_orden_trabajo, fecha_generacion, fecha_envio, estado, nombre_archivo, servicios_json, motivo_rechazo, fecha_rechazo') \
             .in_('id_orden_trabajo', ordenes_ids) \
             .order('fecha_generacion', desc=True)
         
@@ -247,15 +248,30 @@ def obtener_cotizaciones_cliente(current_user):
             
             total = 0
             servicios_count = 0
-            if c.get('servicios_json'):
-                try:
-                    servicios_data = c['servicios_json']
-                    if isinstance(servicios_data, str):
-                        servicios_data = json.loads(servicios_data)
-                    total = sum(float(s.get('precio', 0)) for s in servicios_data)
-                    servicios_count = len(servicios_data)
-                except:
-                    pass
+            
+            # CORRECCIÓN: Manejar diferentes estados
+            if c.get('estado') == 'rechazada':
+                total = COSTO_DIAGNOSTICO
+                servicios_count = 0
+            else:
+                if c.get('servicios_json'):
+                    try:
+                        servicios_data = c['servicios_json']
+                        if isinstance(servicios_data, str):
+                            servicios_data = json.loads(servicios_data)
+                        
+                        if c.get('estado') in ['aprobado_total', 'aprobado_parcial']:
+                            # Sumar solo servicios aprobados
+                            aprobados = [s for s in servicios_data if s.get('aprobado_por_cliente', False)]
+                            total = sum(float(s.get('precio', 0)) for s in aprobados)
+                            servicios_count = len(aprobados)
+                        else:
+                            # Estado enviada: sumar todos
+                            total = sum(float(s.get('precio', 0)) for s in servicios_data)
+                            servicios_count = len(servicios_data)
+                    except Exception as e:
+                        logger.error(f"Error parseando servicios_json: {e}")
+                        total = 0
             
             cotizaciones.append({
                 'id': c['id'],
@@ -263,19 +279,23 @@ def obtener_cotizaciones_cliente(current_user):
                 'vehiculo': f"{vehiculo.get('marca', '')} {vehiculo.get('modelo', '')}".strip() or 'Vehículo',
                 'placa': vehiculo.get('placa', 'N/A'),
                 'fecha': c.get('fecha_envio') or c.get('fecha_generacion'),
-                'estado': c['estado'],
+                'estado': c.get('estado', 'enviada'),
                 'servicios_count': servicios_count,
-                'monto_total': total
+                'monto_total': total,
+                'motivo_rechazo': c.get('motivo_rechazo'),
+                'fecha_rechazo': c.get('fecha_rechazo')
             })
         
         return jsonify({'success': True, 'cotizaciones': cotizaciones}), 200
         
     except Exception as e:
         logger.error(f"Error obteniendo cotizaciones: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# ENDPOINT: DETALLE DE COTIZACIÓN
+# ENDPOINT: DETALLE DE COTIZACIÓN (CORREGIDO)
 # =====================================================
 
 @cotizaciones_cliente_bp.route('/cotizacion/<int:cotizacion_id>', methods=['GET'])
@@ -283,7 +303,7 @@ def obtener_cotizaciones_cliente(current_user):
 def obtener_detalle_cotizacion_cliente(current_user, cotizacion_id):
     try:
         cotizacion = supabase.table('cotizacion') \
-            .select('id, id_orden_trabajo, fecha_generacion, fecha_envio, estado, nombre_archivo, servicios_json, fecha_ultima_modificacion, ventana_edicion_horas, trabajo_iniciado') \
+            .select('id, id_orden_trabajo, fecha_generacion, fecha_envio, estado, nombre_archivo, servicios_json, fecha_ultima_modificacion, ventana_edicion_horas, trabajo_iniciado, motivo_rechazo, fecha_rechazo') \
             .eq('id', cotizacion_id) \
             .execute()
         
@@ -321,10 +341,17 @@ def obtener_detalle_cotizacion_cliente(current_user, cotizacion_id):
                 
                 for s in servicios_data:
                     precio = float(s.get('precio', 0))
-                    total += precio
+                    
+                    # Calcular total según estado
+                    if c.get('estado') == 'rechazada':
+                        total = COSTO_DIAGNOSTICO
+                    elif c.get('estado') in ['aprobado_total', 'aprobado_parcial']:
+                        if s.get('aprobado_por_cliente', False):
+                            total += precio
+                    else:
+                        total += precio
                     
                     servicios.append({
-                        'id': s.get('id_servicio', s.get('id')),
                         'id_servicio': s.get('id_servicio'),
                         'descripcion': s.get('descripcion') or s.get('nombre', 'Servicio'),
                         'precio': precio,
@@ -334,19 +361,27 @@ def obtener_detalle_cotizacion_cliente(current_user, cotizacion_id):
             except Exception as e:
                 logger.error(f"Error parseando servicios_json: {e}")
         
+        # Si no hay servicios pero está rechazada, mostrar diagnóstico
+        if len(servicios) == 0 and c.get('estado') == 'rechazada':
+            total = COSTO_DIAGNOSTICO
+        
         # Calcular tiempo restante para editar
         tiempo_restante = None
         puede_editar, mensaje_edicion = puede_editar_cotizacion(c)
         
         if puede_editar and c.get('fecha_ultima_modificacion'):
-            fecha_mod = datetime.datetime.fromisoformat(c['fecha_ultima_modificacion'].replace('Z', '+00:00'))
-            minutos_pasados = (datetime.datetime.now(datetime.timezone.utc) - fecha_mod).total_seconds() / 60
-            ventana_minutos = c.get('ventana_edicion_horas', 1) * 60
-            minutos_restantes = max(0, ventana_minutos - minutos_pasados)
-            tiempo_restante = {
-                'minutos': int(minutos_restantes),
-                'texto': f"{int(minutos_restantes)} minuto(s)"
-            }
+            try:
+                fecha_mod = datetime.datetime.fromisoformat(c['fecha_ultima_modificacion'].replace('Z', '+00:00'))
+                minutos_pasados = (datetime.datetime.now(datetime.timezone.utc) - fecha_mod).total_seconds() / 60
+                ventana_minutos = c.get('ventana_edicion_horas', 1) * 60
+                minutos_restantes = max(0, ventana_minutos - minutos_pasados)
+                tiempo_restante = {
+                    'minutos': int(minutos_restantes),
+                    'texto': f"{int(minutos_restantes)} minuto(s)"
+                }
+            except Exception as e:
+                logger.error(f"Error calculando tiempo restante: {e}")
+                tiempo_restante = {'minutos': 60, 'texto': "60 minutos"}
         elif puede_editar and not c.get('fecha_ultima_modificacion'):
             tiempo_restante = {'minutos': 60, 'texto': "60 minutos"}
         
@@ -365,17 +400,17 @@ def obtener_detalle_cotizacion_cliente(current_user, cotizacion_id):
                 'nombre_archivo': c.get('nombre_archivo'),
                 'puede_editar': puede_editar,
                 'mensaje_edicion': mensaje_edicion,
-                'tiempo_restante': tiempo_restante
+                'tiempo_restante': tiempo_restante,
+                'motivo_rechazo': c.get('motivo_rechazo'),
+                'fecha_rechazo': c.get('fecha_rechazo')
             }
         }), 200
         
     except Exception as e:
         logger.error(f"Error obteniendo detalle cotización: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT: APROBAR TOTALMENTE
-# =====================================================
 
 @cotizaciones_cliente_bp.route('/cotizacion/<int:cotizacion_id>/aprobar-total', methods=['POST'])
 @cliente_required
@@ -383,8 +418,9 @@ def aprobar_total(current_user, cotizacion_id):
     try:
         ahora = datetime.datetime.now().isoformat()
         
+        # Obtener cotización actual
         cotizacion = supabase.table('cotizacion') \
-            .select('id_orden_trabajo, estado, servicios_json') \
+            .select('id_orden_trabajo, estado, servicios_json, id_jefe_taller') \
             .eq('id', cotizacion_id) \
             .execute()
         
@@ -393,7 +429,9 @@ def aprobar_total(current_user, cotizacion_id):
         
         c = cotizacion.data[0]
         
+        # Procesar servicios
         servicios_actualizados = []
+        total = 0
         if c.get('servicios_json'):
             servicios_data = c['servicios_json']
             if isinstance(servicios_data, str):
@@ -402,31 +440,31 @@ def aprobar_total(current_user, cotizacion_id):
             for s in servicios_data:
                 s['aprobado_por_cliente'] = True
                 s['fecha_aprobacion'] = ahora
+                total += float(s.get('precio', 0))
                 servicios_actualizados.append(s)
         
+        # Actualizar cotización
         supabase.table('cotizacion') \
             .update({
                 'servicios_json': json.dumps(servicios_actualizados),
                 'estado': 'aprobado_total',
+                'total': total,
                 'fecha_ultima_modificacion': ahora,
                 'trabajo_iniciado': True
             }) \
             .eq('id', cotizacion_id) \
             .execute()
         
+        # Actualizar estado de la orden
         supabase.table('ordentrabajo') \
             .update({'estado_global': 'EnProceso'}) \
             .eq('id', c['id_orden_trabajo']) \
             .execute()
         
-        orden = supabase.table('ordentrabajo') \
-            .select('id_jefe_taller') \
-            .eq('id', c['id_orden_trabajo']) \
-            .execute()
-        
-        if orden.data and orden.data[0].get('id_jefe_taller'):
+        # Notificar al jefe de taller (usando id_jefe_taller de la cotización)
+        if c.get('id_jefe_taller'):
             supabase.table('notificacion').insert({
-                'id_usuario_destino': orden.data[0]['id_jefe_taller'],
+                'id_usuario_destino': c['id_jefe_taller'],
                 'tipo': 'cotizacion_aprobada_total',
                 'mensaje': "✅ El cliente ha aprobado TODOS los servicios. Puedes asignar técnicos.",
                 'fecha_envio': ahora,
@@ -435,17 +473,16 @@ def aprobar_total(current_user, cotizacion_id):
         
         return jsonify({
             'success': True,
-            'message': '¡Cotización aprobada totalmente! El taller iniciará los trabajos.',
-            'estado': 'aprobado_total'
+            'message': f'¡Cotización aprobada totalmente! Total: Bs. {total:.2f}',
+            'estado': 'aprobado_total',
+            'total': total
         }), 200
         
     except Exception as e:
         logger.error(f"Error en aprobación total: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT: APROBAR PARCIALMENTE
-# =====================================================
 
 @cotizaciones_cliente_bp.route('/cotizacion/<int:cotizacion_id>/aprobar-parcial', methods=['POST'])
 @cliente_required
@@ -457,8 +494,9 @@ def aprobar_parcial(current_user, cotizacion_id):
         
         ahora = datetime.datetime.now().isoformat()
         
+        # Obtener cotización actual
         cotizacion = supabase.table('cotizacion') \
-            .select('id_orden_trabajo, estado, servicios_json') \
+            .select('id_orden_trabajo, estado, servicios_json, id_jefe_taller') \
             .eq('id', cotizacion_id) \
             .execute()
         
@@ -467,55 +505,65 @@ def aprobar_parcial(current_user, cotizacion_id):
         
         c = cotizacion.data[0]
         
+        # Procesar servicios
         servicios_actualizados = []
+        total = 0
         if c.get('servicios_json'):
             servicios_data = c['servicios_json']
             if isinstance(servicios_data, str):
                 servicios_data = json.loads(servicios_data)
             
             for s in servicios_data:
-                es_aprobado = s.get('id_servicio') in servicios_aprobados_ids
+                serv_id = s.get('id_servicio')
+                if serv_id is None:
+                    serv_id = s.get('id')
+                
+                es_aprobado = serv_id in servicios_aprobados_ids
                 s['aprobado_por_cliente'] = es_aprobado
                 s['fecha_aprobacion'] = ahora if es_aprobado else None
+                if es_aprobado:
+                    total += float(s.get('precio', 0))
                 servicios_actualizados.append(s)
         
+        # Actualizar cotización
         supabase.table('cotizacion') \
             .update({
                 'servicios_json': json.dumps(servicios_actualizados),
                 'estado': 'aprobado_parcial',
+                'total': total,
                 'fecha_ultima_modificacion': ahora,
-                'comentarios_cliente': comentarios
+                'comentarios_cliente': comentarios if comentarios else None
             }) \
             .eq('id', cotizacion_id) \
             .execute()
         
+        # Actualizar estado de la orden
         supabase.table('ordentrabajo') \
             .update({'estado_global': 'cotizacion_aprobada'}) \
             .eq('id', c['id_orden_trabajo']) \
             .execute()
         
-        orden = supabase.table('ordentrabajo') \
-            .select('id_jefe_taller') \
-            .eq('id', c['id_orden_trabajo']) \
-            .execute()
-        
-        if orden.data and orden.data[0].get('id_jefe_taller'):
+        # Notificar al jefe de taller (usando id_jefe_taller de la cotización)
+        if c.get('id_jefe_taller'):
             supabase.table('notificacion').insert({
-                'id_usuario_destino': orden.data[0]['id_jefe_taller'],
+                'id_usuario_destino': c['id_jefe_taller'],
                 'tipo': 'cotizacion_aprobada_parcial',
-                'mensaje': f"📋 Cliente aprobó parcialmente. {'Comentarios: ' + comentarios if comentarios else ''}",
+                'mensaje': f"📋 Cliente aprobó {len(servicios_aprobados_ids)} servicio(s). {comentarios if comentarios else ''}",
                 'fecha_envio': ahora,
                 'leida': False
             }).execute()
         
         return jsonify({
             'success': True,
-            'message': 'Cotización aprobada parcialmente',
-            'estado': 'aprobado_parcial'
+            'message': f'Cotización aprobada parcialmente. Total: Bs. {total:.2f}',
+            'estado': 'aprobado_parcial',
+            'total': total
         }), 200
         
     except Exception as e:
         logger.error(f"Error en aprobación parcial: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
@@ -570,6 +618,7 @@ def editar_decision_cotizacion(current_user, cotizacion_id):
         
         # Actualizar servicios
         servicios_actualizados = []
+        total = 0
         if c.get('servicios_json'):
             servicios_data = c['servicios_json']
             if isinstance(servicios_data, str):
@@ -579,6 +628,8 @@ def editar_decision_cotizacion(current_user, cotizacion_id):
                 es_aprobado = s.get('id_servicio') in nuevos_servicios_aprobados
                 s['aprobado_por_cliente'] = es_aprobado
                 s['fecha_aprobacion'] = ahora if es_aprobado else None
+                if es_aprobado:
+                    total += float(s.get('precio', 0))
                 servicios_actualizados.append(s)
         
         todos_aprobados = all(s.get('aprobado_por_cliente', False) for s in servicios_actualizados)
@@ -598,6 +649,7 @@ def editar_decision_cotizacion(current_user, cotizacion_id):
             .update({
                 'servicios_json': json.dumps(servicios_actualizados),
                 'estado': nuevo_estado,
+                'total': total,
                 'fecha_ultima_modificacion': ahora,
                 'historial_aprobaciones': json.dumps(historial)
             }) \
@@ -633,10 +685,6 @@ def editar_decision_cotizacion(current_user, cotizacion_id):
         logger.error(f"Error editando decisión: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# =====================================================
-# ENDPOINT: RECHAZAR COTIZACIÓN
-# =====================================================
-
 @cotizaciones_cliente_bp.route('/cotizacion/<int:cotizacion_id>/rechazar', methods=['POST'])
 @cliente_required
 def rechazar_cotizacion_cliente(current_user, cotizacion_id):
@@ -646,8 +694,9 @@ def rechazar_cotizacion_cliente(current_user, cotizacion_id):
         
         ahora = datetime.datetime.now().isoformat()
         
+        # Obtener cotización actual
         cotizacion = supabase.table('cotizacion') \
-            .select('id_orden_trabajo, estado') \
+            .select('id_orden_trabajo, estado, id_jefe_taller') \
             .eq('id', cotizacion_id) \
             .execute()
         
@@ -656,35 +705,39 @@ def rechazar_cotizacion_cliente(current_user, cotizacion_id):
         
         c = cotizacion.data[0]
         
+        # Actualizar cotización como rechazada
         supabase.table('cotizacion') \
             .update({
                 'estado': 'rechazada',
                 'motivo_rechazo': motivo,
-                'fecha_rechazo': ahora
+                'fecha_rechazo': ahora,
+                'total': 200.00,  # Costo de diagnóstico
+                'fecha_ultima_modificacion': ahora
             }) \
             .eq('id', cotizacion_id) \
             .execute()
         
+        # Actualizar estado de la orden
         supabase.table('ordentrabajo') \
             .update({'estado_global': 'PendienteAprobacion'}) \
             .eq('id', c['id_orden_trabajo']) \
             .execute()
         
-        orden = supabase.table('ordentrabajo') \
-            .select('id_jefe_taller') \
-            .eq('id', c['id_orden_trabajo']) \
-            .execute()
-        
-        if orden.data and orden.data[0].get('id_jefe_taller'):
+        # Notificar al jefe de taller
+        if c.get('id_jefe_taller'):
             supabase.table('notificacion').insert({
-                'id_usuario_destino': orden.data[0]['id_jefe_taller'],
+                'id_usuario_destino': c['id_jefe_taller'],
                 'tipo': 'cotizacion_rechazada',
-                'mensaje': f"❌ Cliente rechazó la cotización. Motivo: {motivo}",
+                'mensaje': f"❌ Cliente rechazó la cotización. Motivo: {motivo if motivo else 'No especificado'}. Se aplicará costo de diagnóstico de Bs. 200.00",
                 'fecha_envio': ahora,
                 'leida': False
             }).execute()
         
-        return jsonify({'success': True, 'message': 'Cotización rechazada'}), 200
+        return jsonify({
+            'success': True, 
+            'message': 'Cotización rechazada. Se aplicará el costo de diagnóstico de Bs. 200.00.',
+            'costo_diagnostico': 200.00
+        }), 200
         
     except Exception as e:
         logger.error(f"Error rechazando cotización: {str(e)}")

@@ -302,30 +302,53 @@ function mostrarDetalleCotizacion(cotizacion) {
     const esRechazada = cotizacion.estado === 'rechazada';
     const tieneServicios = cotizacion.servicios && cotizacion.servicios.length > 0;
     
-    // Determinar si mostrar costo de diagnóstico (cuando está rechazada o no hay servicios aprobados)
-    const serviciosAprobados = (cotizacion.servicios || []).filter(s => s.aprobado_por_cliente).length;
-    const noHayServiciosAprobados = serviciosAprobados === 0;
-    const mostrarDiagnostico = esRechazada || (noHayServiciosAprobados && !puedeAprobar);
+    // Calcular total ORIGINAL de servicios (sin importar el estado)
+    let totalServiciosOriginal = 0;
+    if (tieneServicios) {
+        totalServiciosOriginal = cotizacion.servicios.reduce((sum, s) => sum + (s.precio || 0), 0);
+    }
     
-    // Calcular totales
-    let totalServicios = cotizacion.total || 0;
-    let totalConDiagnostico = totalServicios;
+    // Si viene del backend con total, usarlo
+    if (cotizacion.total > 0 && !esRechazada) {
+        totalServiciosOriginal = cotizacion.total;
+    }
+    
+    // Determinar total a pagar
+    let totalPagar = totalServiciosOriginal;
+    let mostrarDiagnostico = false;
     let mensajeDiagnostico = '';
     
-    if (mostrarDiagnostico) {
-        totalConDiagnostico = COSTO_DIAGNOSTICO;
+    if (esRechazada) {
+        totalPagar = COSTO_DIAGNOSTICO;
+        mostrarDiagnostico = true;
         mensajeDiagnostico = `
-            <div class="diagnostico-warning">
-                <i class="fas fa-exclamation-triangle"></i>
-                <strong>⚠️ Costo de Diagnóstico Aplicado</strong>
-                <p>Esta cotización ha sido rechazada o no tiene servicios aprobados. Se aplicará el costo de diagnóstico de <strong>${formatCurrency(COSTO_DIAGNOSTICO)}</strong> por la revisión realizada al vehículo.</p>
+            <div class="diagnostico-warning" style="background: #fff3e0; border-left: 4px solid #F59E0B; padding: 1rem; margin-bottom: 1rem; border-radius: 8px;">
+                <i class="fas fa-exclamation-triangle" style="color: #F59E0B;"></i>
+                <strong>⚠️ Cotización Rechazada</strong>
+                <p>Esta cotización fue rechazada. Se aplicará el costo de diagnóstico de <strong>${formatCurrency(COSTO_DIAGNOSTICO)}</strong> por la revisión realizada al vehículo.</p>
+            </div>
+        `;
+    }
+    
+    // Calcular servicios aprobados (si hay aprobación parcial)
+    const serviciosAprobados = (cotizacion.servicios || []).filter(s => s.aprobado_por_cliente).length;
+    const noHayServiciosAprobados = serviciosAprobados === 0;
+    
+    if (!esRechazada && noHayServiciosAprobados && cotizacion.estado !== 'enviada' && cotizacion.estado !== 'aprobado_total') {
+        totalPagar = COSTO_DIAGNOSTICO;
+        mostrarDiagnostico = true;
+        mensajeDiagnostico = `
+            <div class="diagnostico-warning" style="background: #fff3e0; border-left: 4px solid #F59E0B; padding: 1rem; margin-bottom: 1rem; border-radius: 8px;">
+                <i class="fas fa-exclamation-triangle" style="color: #F59E0B;"></i>
+                <strong>⚠️ Sin Servicios Aprobados</strong>
+                <p>No has aprobado ningún servicio de esta cotización. Se aplicará el costo de diagnóstico de <strong>${formatCurrency(COSTO_DIAGNOSTICO)}</strong> por la revisión realizada.</p>
             </div>
         `;
     }
     
     const serviciosHtml = (cotizacion.servicios || []).map((servicio, index) => `
-        <div class="servicio-cotizacion-item ${servicio.aprobado_por_cliente ? 'aprobado' : ''}">
-            <div class="servicio-info">
+        <div class="servicio-cotizacion-item ${servicio.aprobado_por_cliente ? 'aprobado' : ''}" style="border-bottom: 1px solid #eee; padding: 12px 0;">
+            <div class="servicio-info" style="display: flex; justify-content: space-between; align-items: center;">
                 <div class="servicio-descripcion">
                     <strong>${escapeHtml(servicio.descripcion)}</strong>
                 </div>
@@ -334,15 +357,15 @@ function mostrarDetalleCotizacion(cotizacion) {
                 </div>
             </div>
             ${puedeAprobar && !servicio.aprobado_por_cliente ? `
-                <div class="servicio-actions">
-                    <label class="checkbox-container">
+                <div class="servicio-actions" style="margin-top: 8px;">
+                    <label class="checkbox-container" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                         <input type="checkbox" class="servicio-checkbox" data-index="${index}" data-id="${servicio.id_servicio}">
                         <span class="checkmark"></span>
                         Aprobar este servicio
                     </label>
                 </div>
             ` : servicio.aprobado_por_cliente ? `
-                <div class="servicio-aprobado">
+                <div class="servicio-aprobado" style="margin-top: 8px; color: #10B981;">
                     <i class="fas fa-check-circle"></i> Aprobado el ${formatDate(servicio.fecha_aprobacion)}
                 </div>
             ` : ''}
@@ -350,7 +373,7 @@ function mostrarDetalleCotizacion(cotizacion) {
     `).join('');
     
     const noServiciosHtml = !tieneServicios ? `
-        <div class="empty-state" style="padding: 2rem;">
+        <div class="empty-state" style="padding: 2rem; text-align: center;">
             <i class="fas fa-tools"></i>
             <p>No hay servicios en esta cotización</p>
             <small>Se aplicará el costo de diagnóstico de ${formatCurrency(COSTO_DIAGNOSTICO)}</small>
@@ -363,7 +386,7 @@ function mostrarDetalleCotizacion(cotizacion) {
             ${mensajeDiagnostico}
             <div class="detalle-seccion">
                 <h4><i class="fas fa-info-circle"></i> Información de la Cotización</h4>
-                <div class="detalle-grid">
+                <div class="detalle-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
                     <div class="detalle-item">
                         <span class="detalle-label">Orden de Trabajo</span>
                         <span class="detalle-value"><strong>${escapeHtml(cotizacion.codigo_orden)}</strong></span>
@@ -378,7 +401,7 @@ function mostrarDetalleCotizacion(cotizacion) {
                     </div>
                     <div class="detalle-item">
                         <span class="detalle-label">Estado</span>
-                        <span class="detalle-value">${getEstadoTexto(cotizacion.estado)}</span>
+                        <span class="detalle-value ${getEstadoClass(cotizacion.estado)}">${getEstadoTexto(cotizacion.estado)}</span>
                     </div>
                 </div>
             </div>
@@ -388,24 +411,28 @@ function mostrarDetalleCotizacion(cotizacion) {
                 <div class="servicios-lista">
                     ${tieneServicios ? serviciosHtml : noServiciosHtml}
                 </div>
+                
                 ${tieneServicios ? `
-                    <div class="total-general">
-                        <strong>Total Servicios:</strong> ${formatCurrency(totalServicios)}
-                    </div>
-                ` : ''}
-                ${mostrarDiagnostico ? `
-                    <div class="diagnostico-message">
-                        <i class="fas fa-stethoscope"></i>
-                        <span>Costo de Diagnóstico: ${formatCurrency(COSTO_DIAGNOSTICO)}</span>
-                        <p>Este cargo aplica por la revisión y diagnóstico del vehículo</p>
-                    </div>
-                    <div class="total-general" style="margin-top: 1rem; border-top-color: var(--ambar-alerta);">
-                        <strong>Total a Pagar:</strong> ${formatCurrency(COSTO_DIAGNOSTICO)}
-                    </div>
-                ` : ''}
-                ${!mostrarDiagnostico && tieneServicios ? `
-                    <div class="total-general">
-                        <strong>Total General:</strong> ${formatCurrency(totalServicios)}
+                    <div class="totales-container" style="margin-top: 1.5rem; border-top: 2px solid #e5e7eb; padding-top: 1rem;">
+                        <div class="total-servicios" style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <strong>Total Servicios Cotizados:</strong>
+                            <span>${formatCurrency(totalServiciosOriginal)}</span>
+                        </div>
+                        ${mostrarDiagnostico ? `
+                            <div class="diagnostico-info" style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; color: #F59E0B;">
+                                <span><i class="fas fa-stethoscope"></i> Costo de Diagnóstico:</span>
+                                <span>${formatCurrency(COSTO_DIAGNOSTICO)}</span>
+                            </div>
+                        ` : ''}
+                        <div class="total-pagar" style="display: flex; justify-content: space-between; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #e5e7eb; font-size: 1.1rem;">
+                            <strong>Total a Pagar:</strong>
+                            <strong style="color: ${mostrarDiagnostico ? '#F59E0B' : '#10B981'}">${formatCurrency(totalPagar)}</strong>
+                        </div>
+                        ${mostrarDiagnostico ? `
+                            <div class="nota-diagnostico" style="margin-top: 0.5rem; font-size: 0.75rem; color: #6b7280;">
+                                <i class="fas fa-info-circle"></i> El costo de diagnóstico cubre la revisión técnica realizada al vehículo.
+                            </div>
+                        ` : ''}
                     </div>
                 ` : ''}
             </div>
@@ -417,12 +444,17 @@ function mostrarDetalleCotizacion(cotizacion) {
     const btnAprobarSeleccion = document.getElementById('btnAprobarSeleccion');
     const btnRechazar = document.getElementById('btnRechazar');
     
-    // Si está rechazada, ocultar botones de aprobación
-    const mostrarBotonesAprobacion = puedeAprobar && tieneServicios;
-    
-    if (btnAprobarTodo) btnAprobarTodo.style.display = mostrarBotonesAprobacion ? 'inline-flex' : 'none';
-    if (btnAprobarSeleccion) btnAprobarSeleccion.style.display = mostrarBotonesAprobacion ? 'inline-flex' : 'none';
-    if (btnRechazar) btnRechazar.style.display = puedeAprobar ? 'inline-flex' : 'none';
+    // Si está rechazada, solo mostrar botón de cerrar
+    if (esRechazada) {
+        if (btnAprobarTodo) btnAprobarTodo.style.display = 'none';
+        if (btnAprobarSeleccion) btnAprobarSeleccion.style.display = 'none';
+        if (btnRechazar) btnRechazar.style.display = 'none';
+    } else {
+        const mostrarBotonesAprobacion = puedeAprobar && tieneServicios;
+        if (btnAprobarTodo) btnAprobarTodo.style.display = mostrarBotonesAprobacion ? 'inline-flex' : 'none';
+        if (btnAprobarSeleccion) btnAprobarSeleccion.style.display = mostrarBotonesAprobacion ? 'inline-flex' : 'none';
+        if (btnRechazar) btnRechazar.style.display = puedeAprobar ? 'inline-flex' : 'none';
+    }
     
     abrirModal('modalDetalleCotizacion');
 }

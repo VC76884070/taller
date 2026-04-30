@@ -113,29 +113,41 @@ def obtener_vehiculos_cliente(cliente_id):
         return []
 
 def puede_editar_cotizacion(cotizacion_data):
-    """Verifica si el cliente aún puede editar su decisión (ventana de 1 hora)"""
+    """Verifica si el cliente aún puede editar su decisión"""
     try:
         # Si el taller ya comenzó a trabajar
         if cotizacion_data.get('trabajo_iniciado', False):
             return False, "El taller ya comenzó a trabajar en tu vehículo."
         
+        # Si ya está rechazada o aprobada y pasó tiempo
+        estado = cotizacion_data.get('estado')
+        if estado in ['rechazada', 'aprobado_total']:
+            return False, f"La cotización ya fue {estado}. No se puede modificar."
+        
         # Si ya pasó la ventana de 1 hora
-        if cotizacion_data.get('fecha_ultima_modificacion'):
-            fecha_mod = datetime.datetime.fromisoformat(cotizacion_data['fecha_ultima_modificacion'].replace('Z', '+00:00'))
-            minutos_pasados = (datetime.datetime.now(datetime.timezone.utc) - fecha_mod).total_seconds() / 60
-            ventana_minutos = cotizacion_data.get('ventana_edicion_horas', 1) * 60
-            
-            if minutos_pasados > ventana_minutos:
-                return False, f"El tiempo para editar expiró. Pasaron {int(minutos_pasados)} minutos (máximo {ventana_minutos} minutos)"
-        
-        # Si la orden ya está en proceso
-        orden = supabase.table('ordentrabajo') \
-            .select('estado_global') \
-            .eq('id', cotizacion_data['id_orden_trabajo']) \
-            .execute()
-        
-        if orden.data and orden.data[0]['estado_global'] in ['EnProceso', 'ControlCalidad', 'Finalizado']:
-            return False, "El trabajo ya está en proceso avanzado."
+        fecha_mod = cotizacion_data.get('fecha_ultima_modificacion') or cotizacion_data.get('fecha_envio')
+        if fecha_mod:
+            try:
+                # Limpiar la fecha
+                if isinstance(fecha_mod, str):
+                    fecha_mod_str = fecha_mod.replace('Z', '+00:00')
+                    fecha_mod_dt = datetime.datetime.fromisoformat(fecha_mod_str)
+                else:
+                    fecha_mod_dt = fecha_mod
+                
+                # Asegurar zona horaria UTC
+                if fecha_mod_dt.tzinfo is None:
+                    fecha_mod_dt = fecha_mod_dt.replace(tzinfo=datetime.timezone.utc)
+                
+                ahora = datetime.datetime.now(datetime.timezone.utc)
+                minutos_pasados = (ahora - fecha_mod_dt).total_seconds() / 60
+                ventana_minutos = cotizacion_data.get('ventana_edicion_horas', 1) * 60
+                
+                if minutos_pasados > ventana_minutos:
+                    return False, f"El tiempo para editar expiró. Pasaron {int(minutos_pasados)} minutos (máximo {int(ventana_minutos)} minutos)"
+            except Exception as e:
+                logger.warning(f"Error calculando tiempo: {e}")
+                # Si hay error, permitir por defecto
         
         return True, "Puede editar"
         
@@ -185,7 +197,7 @@ def obtener_perfil_cliente(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# ENDPOINT: LISTAR COTIZACIONES (CORREGIDO)
+# ENDPOINT: LISTAR COTIZACIONES
 # =====================================================
 
 @cotizaciones_cliente_bp.route('/cotizaciones', methods=['GET'])
@@ -249,7 +261,6 @@ def obtener_cotizaciones_cliente(current_user):
             total = 0
             servicios_count = 0
             
-            # CORRECCIÓN: Manejar diferentes estados
             if c.get('estado') == 'rechazada':
                 total = COSTO_DIAGNOSTICO
                 servicios_count = 0
@@ -261,12 +272,10 @@ def obtener_cotizaciones_cliente(current_user):
                             servicios_data = json.loads(servicios_data)
                         
                         if c.get('estado') in ['aprobado_total', 'aprobado_parcial']:
-                            # Sumar solo servicios aprobados
                             aprobados = [s for s in servicios_data if s.get('aprobado_por_cliente', False)]
                             total = sum(float(s.get('precio', 0)) for s in aprobados)
                             servicios_count = len(aprobados)
                         else:
-                            # Estado enviada: sumar todos
                             total = sum(float(s.get('precio', 0)) for s in servicios_data)
                             servicios_count = len(servicios_data)
                     except Exception as e:
@@ -295,7 +304,7 @@ def obtener_cotizaciones_cliente(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# ENDPOINT: DETALLE DE COTIZACIÓN (CORREGIDO)
+# ENDPOINT: DETALLE DE COTIZACIÓN
 # =====================================================
 
 @cotizaciones_cliente_bp.route('/cotizacion/<int:cotizacion_id>', methods=['GET'])
@@ -342,7 +351,6 @@ def obtener_detalle_cotizacion_cliente(current_user, cotizacion_id):
                 for s in servicios_data:
                     precio = float(s.get('precio', 0))
                     
-                    # Calcular total según estado
                     if c.get('estado') == 'rechazada':
                         total = COSTO_DIAGNOSTICO
                     elif c.get('estado') in ['aprobado_total', 'aprobado_parcial']:
@@ -361,29 +369,37 @@ def obtener_detalle_cotizacion_cliente(current_user, cotizacion_id):
             except Exception as e:
                 logger.error(f"Error parseando servicios_json: {e}")
         
-        # Si no hay servicios pero está rechazada, mostrar diagnóstico
         if len(servicios) == 0 and c.get('estado') == 'rechazada':
             total = COSTO_DIAGNOSTICO
         
-        # Calcular tiempo restante para editar
-        tiempo_restante = None
         puede_editar, mensaje_edicion = puede_editar_cotizacion(c)
         
-        if puede_editar and c.get('fecha_ultima_modificacion'):
-            try:
-                fecha_mod = datetime.datetime.fromisoformat(c['fecha_ultima_modificacion'].replace('Z', '+00:00'))
-                minutos_pasados = (datetime.datetime.now(datetime.timezone.utc) - fecha_mod).total_seconds() / 60
-                ventana_minutos = c.get('ventana_edicion_horas', 1) * 60
-                minutos_restantes = max(0, ventana_minutos - minutos_pasados)
-                tiempo_restante = {
-                    'minutos': int(minutos_restantes),
-                    'texto': f"{int(minutos_restantes)} minuto(s)"
-                }
-            except Exception as e:
-                logger.error(f"Error calculando tiempo restante: {e}")
-                tiempo_restante = {'minutos': 60, 'texto': "60 minutos"}
-        elif puede_editar and not c.get('fecha_ultima_modificacion'):
-            tiempo_restante = {'minutos': 60, 'texto': "60 minutos"}
+        tiempo_restante = None
+        if puede_editar:
+            fecha_ref = c.get('fecha_ultima_modificacion') or c.get('fecha_envio')
+            if fecha_ref:
+                try:
+                    if isinstance(fecha_ref, str):
+                        fecha_ref = fecha_ref.replace('Z', '+00:00')
+                        fecha_ref_dt = datetime.datetime.fromisoformat(fecha_ref)
+                    else:
+                        fecha_ref_dt = fecha_ref
+                    
+                    if fecha_ref_dt.tzinfo is None:
+                        fecha_ref_dt = fecha_ref_dt.replace(tzinfo=datetime.timezone.utc)
+                    
+                    ahora = datetime.datetime.now(datetime.timezone.utc)
+                    minutos_pasados = (ahora - fecha_ref_dt).total_seconds() / 60
+                    ventana_minutos = c.get('ventana_edicion_horas', 1) * 60
+                    minutos_restantes = max(0, ventana_minutos - minutos_pasados)
+                    
+                    tiempo_restante = {
+                        'minutos': int(minutos_restantes),
+                        'texto': f"{int(minutos_restantes)} minuto(s)"
+                    }
+                except Exception as e:
+                    logger.error(f"Error calculando tiempo restante: {e}")
+                    tiempo_restante = {'minutos': 60, 'texto': "60 minutos"}
         
         return jsonify({
             'success': True,
@@ -412,162 +428,9 @@ def obtener_detalle_cotizacion_cliente(current_user, cotizacion_id):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@cotizaciones_cliente_bp.route('/cotizacion/<int:cotizacion_id>/aprobar-total', methods=['POST'])
-@cliente_required
-def aprobar_total(current_user, cotizacion_id):
-    try:
-        ahora = datetime.datetime.now().isoformat()
-        
-        # Obtener cotización actual
-        cotizacion = supabase.table('cotizacion') \
-            .select('id_orden_trabajo, estado, servicios_json, id_jefe_taller') \
-            .eq('id', cotizacion_id) \
-            .execute()
-        
-        if not cotizacion.data:
-            return jsonify({'error': 'Cotización no encontrada'}), 404
-        
-        c = cotizacion.data[0]
-        
-        # Procesar servicios
-        servicios_actualizados = []
-        total = 0
-        if c.get('servicios_json'):
-            servicios_data = c['servicios_json']
-            if isinstance(servicios_data, str):
-                servicios_data = json.loads(servicios_data)
-            
-            for s in servicios_data:
-                s['aprobado_por_cliente'] = True
-                s['fecha_aprobacion'] = ahora
-                total += float(s.get('precio', 0))
-                servicios_actualizados.append(s)
-        
-        # Actualizar cotización
-        supabase.table('cotizacion') \
-            .update({
-                'servicios_json': json.dumps(servicios_actualizados),
-                'estado': 'aprobado_total',
-                'total': total,
-                'fecha_ultima_modificacion': ahora,
-                'trabajo_iniciado': True
-            }) \
-            .eq('id', cotizacion_id) \
-            .execute()
-        
-        # Actualizar estado de la orden
-        supabase.table('ordentrabajo') \
-            .update({'estado_global': 'EnProceso'}) \
-            .eq('id', c['id_orden_trabajo']) \
-            .execute()
-        
-        # Notificar al jefe de taller (usando id_jefe_taller de la cotización)
-        if c.get('id_jefe_taller'):
-            supabase.table('notificacion').insert({
-                'id_usuario_destino': c['id_jefe_taller'],
-                'tipo': 'cotizacion_aprobada_total',
-                'mensaje': "✅ El cliente ha aprobado TODOS los servicios. Puedes asignar técnicos.",
-                'fecha_envio': ahora,
-                'leida': False
-            }).execute()
-        
-        return jsonify({
-            'success': True,
-            'message': f'¡Cotización aprobada totalmente! Total: Bs. {total:.2f}',
-            'estado': 'aprobado_total',
-            'total': total
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error en aprobación total: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-
-@cotizaciones_cliente_bp.route('/cotizacion/<int:cotizacion_id>/aprobar-parcial', methods=['POST'])
-@cliente_required
-def aprobar_parcial(current_user, cotizacion_id):
-    try:
-        data = request.get_json()
-        servicios_aprobados_ids = data.get('servicios_aprobados', [])
-        comentarios = data.get('comentarios', '')
-        
-        ahora = datetime.datetime.now().isoformat()
-        
-        # Obtener cotización actual
-        cotizacion = supabase.table('cotizacion') \
-            .select('id_orden_trabajo, estado, servicios_json, id_jefe_taller') \
-            .eq('id', cotizacion_id) \
-            .execute()
-        
-        if not cotizacion.data:
-            return jsonify({'error': 'Cotización no encontrada'}), 404
-        
-        c = cotizacion.data[0]
-        
-        # Procesar servicios
-        servicios_actualizados = []
-        total = 0
-        if c.get('servicios_json'):
-            servicios_data = c['servicios_json']
-            if isinstance(servicios_data, str):
-                servicios_data = json.loads(servicios_data)
-            
-            for s in servicios_data:
-                serv_id = s.get('id_servicio')
-                if serv_id is None:
-                    serv_id = s.get('id')
-                
-                es_aprobado = serv_id in servicios_aprobados_ids
-                s['aprobado_por_cliente'] = es_aprobado
-                s['fecha_aprobacion'] = ahora if es_aprobado else None
-                if es_aprobado:
-                    total += float(s.get('precio', 0))
-                servicios_actualizados.append(s)
-        
-        # Actualizar cotización
-        supabase.table('cotizacion') \
-            .update({
-                'servicios_json': json.dumps(servicios_actualizados),
-                'estado': 'aprobado_parcial',
-                'total': total,
-                'fecha_ultima_modificacion': ahora,
-                'comentarios_cliente': comentarios if comentarios else None
-            }) \
-            .eq('id', cotizacion_id) \
-            .execute()
-        
-        # Actualizar estado de la orden
-        supabase.table('ordentrabajo') \
-            .update({'estado_global': 'cotizacion_aprobada'}) \
-            .eq('id', c['id_orden_trabajo']) \
-            .execute()
-        
-        # Notificar al jefe de taller (usando id_jefe_taller de la cotización)
-        if c.get('id_jefe_taller'):
-            supabase.table('notificacion').insert({
-                'id_usuario_destino': c['id_jefe_taller'],
-                'tipo': 'cotizacion_aprobada_parcial',
-                'mensaje': f"📋 Cliente aprobó {len(servicios_aprobados_ids)} servicio(s). {comentarios if comentarios else ''}",
-                'fecha_envio': ahora,
-                'leida': False
-            }).execute()
-        
-        return jsonify({
-            'success': True,
-            'message': f'Cotización aprobada parcialmente. Total: Bs. {total:.2f}',
-            'estado': 'aprobado_parcial',
-            'total': total
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error en aprobación parcial: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# ENDPOINT: EDITAR DECISIÓN (VENTANA 1 HORA)
+# ENDPOINT: EDITAR DECISIÓN
 # =====================================================
 
 @cotizaciones_cliente_bp.route('/cotizacion/<int:cotizacion_id>/editar-decision', methods=['PUT'])
@@ -594,7 +457,6 @@ def editar_decision_cotizacion(current_user, cotizacion_id):
         if not puede:
             return jsonify({'error': mensaje}), 400
         
-        # Guardar historial
         historial = c.get('historial_aprobaciones', [])
         if isinstance(historial, str):
             historial = json.loads(historial)
@@ -616,7 +478,6 @@ def editar_decision_cotizacion(current_user, cotizacion_id):
             'comentario': comentario_edicion
         })
         
-        # Actualizar servicios
         servicios_actualizados = []
         total = 0
         if c.get('servicios_json'):
@@ -637,13 +498,13 @@ def editar_decision_cotizacion(current_user, cotizacion_id):
         
         if todos_aprobados:
             nuevo_estado = 'aprobado_total'
-            estado_orden = 'EnProceso'
+            estado_orden = 'CotizacionAceptada'
         elif hay_aprobados:
             nuevo_estado = 'aprobado_parcial'
-            estado_orden = 'cotizacion_aprobada'
+            estado_orden = 'CotizacionAceptada'
         else:
             nuevo_estado = 'enviada'
-            estado_orden = 'cotizacion_enviada'
+            estado_orden = 'CotizacionEnviada'
         
         supabase.table('cotizacion') \
             .update({
@@ -685,13 +546,14 @@ def editar_decision_cotizacion(current_user, cotizacion_id):
         logger.error(f"Error editando decisión: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+# =====================================================
+# ENDPOINT: RECHAZAR COTIZACIÓN (CORREGIDO - SIN id_referencia)
+# =====================================================
+
 @cotizaciones_cliente_bp.route('/cotizacion/<int:cotizacion_id>/rechazar', methods=['POST'])
 @cliente_required
 def rechazar_cotizacion_cliente(current_user, cotizacion_id):
     try:
-        data = request.get_json()
-        motivo = data.get('motivo', '')
-        
         ahora = datetime.datetime.now().isoformat()
         
         # Obtener cotización actual
@@ -705,42 +567,240 @@ def rechazar_cotizacion_cliente(current_user, cotizacion_id):
         
         c = cotizacion.data[0]
         
-        # Actualizar cotización como rechazada
+        if c.get('estado') != 'enviada':
+            return jsonify({'error': f'La cotización ya fue {c.get("estado")}'}), 400
+        
+        # 1. Actualizar cotización como rechazada
         supabase.table('cotizacion') \
             .update({
                 'estado': 'rechazada',
-                'motivo_rechazo': motivo,
                 'fecha_rechazo': ahora,
-                'total': 200.00,  # Costo de diagnóstico
+                'total': 200.00,
                 'fecha_ultima_modificacion': ahora
             }) \
             .eq('id', cotizacion_id) \
             .execute()
         
-        # Actualizar estado de la orden
-        supabase.table('ordentrabajo') \
-            .update({'estado_global': 'PendienteAprobacion'}) \
-            .eq('id', c['id_orden_trabajo']) \
-            .execute()
+        # 2. Actualizar orden de trabajo - USAR EL MISMO ESTADO QUE ESPERA EL JS
+        # El estado 'CotizacionRechazada' debe existir en tu tabla ordentrabajo
+        try:
+            supabase.table('ordentrabajo') \
+                .update({
+                    'estado_global': 'CotizacionRechazada',
+                    'fecha_cotizacion_rechazada': ahora
+                }) \
+                .eq('id', c['id_orden_trabajo']) \
+                .execute()
+            logger.info(f"✅ Orden {c['id_orden_trabajo']} actualizada a CotizacionRechazada")
+        except Exception as e:
+            logger.warning(f"No se pudo usar CotizacionRechazada: {e}")
+            # Fallback: usar EnDiagnostico pero el JS no lo mostrará correctamente
+            supabase.table('ordentrabajo') \
+                .update({
+                    'estado_global': 'EnDiagnostico',
+                    'fecha_cotizacion_rechazada': ahora
+                }) \
+                .eq('id', c['id_orden_trabajo']) \
+                .execute()
+            logger.info(f"✅ Orden {c['id_orden_trabajo']} actualizada a EnDiagnostico (fallback)")
         
-        # Notificar al jefe de taller
+        # 3. Notificar al jefe de taller
         if c.get('id_jefe_taller'):
-            supabase.table('notificacion').insert({
-                'id_usuario_destino': c['id_jefe_taller'],
-                'tipo': 'cotizacion_rechazada',
-                'mensaje': f"❌ Cliente rechazó la cotización. Motivo: {motivo if motivo else 'No especificado'}. Se aplicará costo de diagnóstico de Bs. 200.00",
-                'fecha_envio': ahora,
-                'leida': False
-            }).execute()
+            supabase.table('notificacion') \
+                .insert({
+                    'id_usuario_destino': c['id_jefe_taller'],
+                    'tipo': 'cotizacion_rechazada',
+                    'mensaje': f"❌ Cliente rechazó la cotización. Se cobrará Bs. 200 por diagnóstico.",
+                    'fecha_envio': ahora,
+                    'leida': False
+                }) \
+                .execute()
         
         return jsonify({
-            'success': True, 
-            'message': 'Cotización rechazada. Se aplicará el costo de diagnóstico de Bs. 200.00.',
+            'success': True,
+            'message': f'Cotización rechazada. Costo de diagnóstico: Bs. 200.00',
             'costo_diagnostico': 200.00
         }), 200
         
     except Exception as e:
         logger.error(f"Error rechazando cotización: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT: APROBAR TOTAL (CORREGIDO - SIN id_referencia)
+# =====================================================
+
+@cotizaciones_cliente_bp.route('/cotizacion/<int:cotizacion_id>/aprobar-total', methods=['POST'])
+@cliente_required
+def aprobar_total(current_user, cotizacion_id):
+    try:
+        ahora = datetime.datetime.now().isoformat()
+        
+        cotizacion = supabase.table('cotizacion') \
+            .select('id_orden_trabajo, estado, servicios_json, id_jefe_taller') \
+            .eq('id', cotizacion_id) \
+            .execute()
+        
+        if not cotizacion.data:
+            return jsonify({'error': 'Cotización no encontrada'}), 404
+        
+        c = cotizacion.data[0]
+        
+        if c.get('estado') != 'enviada':
+            return jsonify({'error': f'La cotización ya fue {c.get("estado")}'}), 400
+        
+        servicios_actualizados = []
+        total = 0
+        if c.get('servicios_json'):
+            servicios_data = c['servicios_json']
+            if isinstance(servicios_data, str):
+                servicios_data = json.loads(servicios_data)
+            
+            for s in servicios_data:
+                s['aprobado_por_cliente'] = True
+                s['fecha_aprobacion'] = ahora
+                total += float(s.get('precio', 0))
+                servicios_actualizados.append(s)
+        
+        supabase.table('cotizacion') \
+            .update({
+                'servicios_json': json.dumps(servicios_actualizados),
+                'estado': 'aprobado_total',
+                'total': total,
+                'fecha_ultima_modificacion': ahora,
+                'trabajo_iniciado': True
+            }) \
+            .eq('id', cotizacion_id) \
+            .execute()
+        
+        supabase.table('ordentrabajo') \
+            .update({
+                'estado_global': 'CotizacionAceptada',
+                'fecha_cotizacion_aceptada': ahora
+            }) \
+            .eq('id', c['id_orden_trabajo']) \
+            .execute()
+        
+        logger.info(f"✅ Orden {c['id_orden_trabajo']} actualizada - Fecha aceptación: {ahora}")
+        
+        # Notificar (SIN id_referencia)
+        if c.get('id_jefe_taller'):
+            supabase.table('notificacion') \
+                .insert({
+                    'id_usuario_destino': c['id_jefe_taller'],
+                    'tipo': 'cotizacion_aprobada_total',
+                    'mensaje': f"✅ El cliente ha aprobado TODOS los servicios. Total: Bs. {total:.2f}",
+                    'fecha_envio': ahora,
+                    'leida': False
+                }) \
+                .execute()
+        
+        return jsonify({
+            'success': True,
+            'message': f'¡Cotización aprobada totalmente! Total: Bs. {total:.2f}',
+            'estado': 'aprobado_total',
+            'total': total,
+            'fecha_aprobacion': ahora
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error en aprobación total: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT: APROBAR PARCIAL (CORREGIDO - SIN id_referencia)
+# =====================================================
+
+@cotizaciones_cliente_bp.route('/cotizacion/<int:cotizacion_id>/aprobar-parcial', methods=['POST'])
+@cliente_required
+def aprobar_parcial(current_user, cotizacion_id):
+    try:
+        data = request.get_json()
+        servicios_aprobados_ids = data.get('servicios_aprobados', [])
+        comentarios = data.get('comentarios', '')
+        
+        ahora = datetime.datetime.now().isoformat()
+        
+        cotizacion = supabase.table('cotizacion') \
+            .select('id_orden_trabajo, estado, servicios_json, id_jefe_taller') \
+            .eq('id', cotizacion_id) \
+            .execute()
+        
+        if not cotizacion.data:
+            return jsonify({'error': 'Cotización no encontrada'}), 404
+        
+        c = cotizacion.data[0]
+        
+        if c.get('estado') != 'enviada':
+            return jsonify({'error': f'La cotización ya fue {c.get("estado")}'}), 400
+        
+        servicios_actualizados = []
+        total = 0
+        if c.get('servicios_json'):
+            servicios_data = c['servicios_json']
+            if isinstance(servicios_data, str):
+                servicios_data = json.loads(servicios_data)
+            
+            for s in servicios_data:
+                serv_id = s.get('id_servicio')
+                es_aprobado = serv_id in servicios_aprobados_ids
+                s['aprobado_por_cliente'] = es_aprobado
+                s['fecha_aprobacion'] = ahora if es_aprobado else None
+                if es_aprobado:
+                    total += float(s.get('precio', 0))
+                servicios_actualizados.append(s)
+        
+        supabase.table('cotizacion') \
+            .update({
+                'servicios_json': json.dumps(servicios_actualizados),
+                'estado': 'aprobado_parcial',
+                'total': total,
+                'fecha_ultima_modificacion': ahora,
+                'comentarios_cliente': comentarios if comentarios else None
+            }) \
+            .eq('id', cotizacion_id) \
+            .execute()
+        
+        supabase.table('ordentrabajo') \
+            .update({
+                'estado_global': 'CotizacionAceptada',
+                'fecha_cotizacion_aceptada': ahora
+            }) \
+            .eq('id', c['id_orden_trabajo']) \
+            .execute()
+        
+        logger.info(f"✅ Orden {c['id_orden_trabajo']} actualizada - Aprobación parcial - Fecha: {ahora}")
+        
+        # Notificar (SIN id_referencia)
+        if c.get('id_jefe_taller'):
+            supabase.table('notificacion') \
+                .insert({
+                    'id_usuario_destino': c['id_jefe_taller'],
+                    'tipo': 'cotizacion_aprobada_parcial',
+                    'mensaje': f"📋 Cliente aprobó {len(servicios_aprobados_ids)} servicio(s). Total: Bs. {total:.2f}",
+                    'fecha_envio': ahora,
+                    'leida': False
+                }) \
+                .execute()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Cotización aprobada parcialmente. Total: Bs. {total:.2f}',
+            'estado': 'aprobado_parcial',
+            'total': total,
+            'fecha_aprobacion': ahora
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error en aprobación parcial: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # =====================================================

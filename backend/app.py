@@ -56,19 +56,20 @@ app.register_blueprint(login_bp)
 from decorators import verificar_rol, jefe_taller_required, jefe_operativo_required, encargado_repuestos_required, cliente_required
 
 # =====================================================
-# TÉCNICO MECÁNICO
+# TÉCNICO MECÁNICO - CORREGIDO
 # =====================================================
 try:
     from tecnico_mecanico.misvehiculos import mis_vehiculos_bp
-    app.register_blueprint(mis_vehiculos_bp, url_prefix='/api/tecnico')
+    app.register_blueprint(mis_vehiculos_bp, url_prefix='/tecnico')  # ← CAMBIADO: antes era '/api/tecnico'
     from tecnico_mecanico.diagnostico import diagnostico_bp
-    app.register_blueprint(diagnostico_bp, url_prefix='/api/tecnico')
+    app.register_blueprint(diagnostico_bp, url_prefix='/tecnico')    # ← CAMBIADO
     from tecnico_mecanico.historial import historial_bp
-    app.register_blueprint(historial_bp, url_prefix='/api/tecnico')
+    app.register_blueprint(historial_bp, url_prefix='/tecnico')      # ← CAMBIADO
     from tecnico_mecanico.perfil import tecnico_mecanico_perfil_bp
-    app.register_blueprint(tecnico_mecanico_perfil_bp, url_prefix='/api/tecnico')
+    app.register_blueprint(tecnico_mecanico_perfil_bp, url_prefix='/tecnico')  # ← CAMBIADO
+    logger.info("✅ Blueprints de Técnico Mecánico registrados correctamente")
 except Exception as e:
-    pass
+    logger.error(f"❌ Error registrando blueprints de Técnico Mecánico: {e}")
 
 # =====================================================
 # JEFE OPERATIVO
@@ -83,8 +84,9 @@ try:
     app.register_blueprint(jefe_operativo_comunicados_bp, url_prefix='/api/jefe-operativo')
     app.register_blueprint(jefe_operativo_historial_bp, url_prefix='/api/jefe-operativo')
     app.register_blueprint(jefe_operativo_perfil_bp, url_prefix='/api/jefe-operativo')
+    logger.info("✅ Blueprints de Jefe Operativo registrados correctamente")
 except Exception as e:
-    pass
+    logger.error(f"❌ Error registrando blueprints de Jefe Operativo: {e}")
 
 # =====================================================
 # JEFE TALLER
@@ -107,8 +109,9 @@ try:
     app.register_blueprint(cotizaciones_bp, url_prefix='/api/jefe-taller')
     app.register_blueprint(admin_roles_bp, url_prefix='/api/jefe-taller')
     app.register_blueprint(reservas_solicitudes_bp, url_prefix='/api/jefe-taller')
+    logger.info("✅ Blueprints de Jefe Taller registrados correctamente")
 except Exception as e:
-    pass
+    logger.error(f"❌ Error registrando blueprints de Jefe Taller: {e}")
 
 # =====================================================
 # ENCARGADO DE REPUESTOS
@@ -385,7 +388,7 @@ if __name__ == '__main__':
     print("   • Cliente:              http://localhost:5000/cliente")
     print("="*60)
     print("📁 API Endpoints por Rol:")
-    print("   • Técnico Mecánico:     /api/tecnico/*")
+    print("   • Técnico Mecánico:     /tecnico/*")
     print("   • Jefe Operativo:       /api/jefe-operativo/*")
     print("   • Jefe Taller:          /api/jefe-taller/*")
     print("   • Encargado Repuestos:  /api/encargado-repuestos/*")

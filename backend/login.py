@@ -65,28 +65,65 @@ def enviar_email(destinatario, asunto, cuerpo_html):
         return False
 
 def obtener_roles_usuario(id_usuario):
-    """Obtener roles de un usuario desde la tabla usuario_rol"""
+    """Obtener roles de un usuario desde la tabla usuario_rol - CON LOGS Y NORMALIZACIÓN"""
     try:
-        result = supabase.table('usuario_rol') \
-            .select('rol!inner(nombre_rol)') \
+        logger.info(f"🔍 [LOGIN] Buscando roles para usuario ID: {id_usuario}")
+        
+        # Obtener ids de roles desde usuario_rol
+        user_roles = supabase.table('usuario_rol') \
+            .select('id_rol') \
             .eq('id_usuario', id_usuario) \
             .execute()
         
-        roles = []
-        if result.data:
-            for item in result.data:
-                rol_obj = item.get('rol', {})
-                if isinstance(rol_obj, dict):
-                    nombre = rol_obj.get('nombre_rol')
-                    if nombre:
-                        roles.append(nombre)
-                elif isinstance(rol_obj, list) and len(rol_obj) > 0:
-                    nombre = rol_obj[0].get('nombre_rol')
-                    if nombre:
-                        roles.append(nombre)
-        return roles
+        logger.info(f"📊 [LOGIN] Resultado usuario_rol: {user_roles.data}")
+        
+        if not user_roles.data:
+            logger.warning(f"⚠️ [LOGIN] No se encontraron roles para usuario {id_usuario}")
+            return []
+        
+        rol_ids = [ur['id_rol'] for ur in user_roles.data if ur.get('id_rol')]
+        logger.info(f"📊 [LOGIN] IDs de roles encontrados: {rol_ids}")
+        
+        if not rol_ids:
+            logger.warning(f"⚠️ [LOGIN] No hay IDs de roles válidos")
+            return []
+        
+        # Obtener nombres de roles desde la tabla rol
+        roles_data = supabase.table('rol') \
+            .select('nombre_rol') \
+            .in_('id', rol_ids) \
+            .execute()
+        
+        logger.info(f"📊 [LOGIN] Datos de roles desde tabla rol: {roles_data.data}")
+        
+        roles_originales = [r['nombre_rol'] for r in (roles_data.data or [])]
+        logger.info(f"📋 [LOGIN] Roles originales desde BD: {roles_originales}")
+        
+        # NORMALIZAR ROLES: convertir 'tecnico_mecanico' a 'tecnico'
+        roles_normalizados = []
+        for rol in roles_originales:
+            rol_lower = rol.lower()
+            if rol_lower == 'tecnico_mecanico':
+                roles_normalizados.append('tecnico')
+                logger.info(f"🔄 [LOGIN] Normalizado: '{rol}' → 'tecnico'")
+            elif rol_lower == 'tecnico':
+                roles_normalizados.append('tecnico')
+                logger.info(f"✅ [LOGIN] Manteniendo: '{rol}'")
+            else:
+                roles_normalizados.append(rol_lower)
+                logger.info(f"✅ [LOGIN] Manteniendo: '{rol}'")
+        
+        # Eliminar duplicados (por si acaso)
+        roles_normalizados = list(set(roles_normalizados))
+        
+        logger.info(f"✅ [LOGIN] Roles finales normalizados para usuario {id_usuario}: {roles_normalizados}")
+        
+        return roles_normalizados
+        
     except Exception as e:
-        logger.error(f"Error obteniendo roles: {str(e)}")
+        logger.error(f"❌ [LOGIN] Error obteniendo roles: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return []
 
 # =====================================================

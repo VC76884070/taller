@@ -1,6 +1,6 @@
 # =====================================================
 # DECORADORES DE AUTENTICACIÓN Y ROLES - FURIA MOTOR
-# VERSIÓN CORREGIDA - CON SOPORTE PARA CLIENTES
+# VERSIÓN CORREGIDA - PROBLEMA DE TÉCNICO SOLUCIONADO
 # =====================================================
 
 from functools import wraps
@@ -39,7 +39,7 @@ def obtener_roles_usuario(usuario_id):
                 if isinstance(rol_obj, dict):
                     nombre = rol_obj.get('nombre_rol')
                     if nombre:
-                        # Normalizar nombres de roles
+                        # Normalizar el nombre del rol
                         rol_normalizado = normalizar_nombre_rol(nombre)
                         if rol_normalizado:
                             roles.append(rol_normalizado)
@@ -58,21 +58,25 @@ def obtener_roles_usuario(usuario_id):
     return roles
 
 def normalizar_nombre_rol(nombre):
-    """Normalizar nombres de roles para que coincidan con el frontend"""
+    """
+    Normalizar nombres de roles para que coincidan con el frontend
+    CORREGIDO: Ahora soporta 'tecnico' directamente
+    """
     nombre_lower = nombre.lower()
     
     mapping = {
         'jefe_taller': 'jefe_taller',
         'jefe_operativo': 'jefe_operativo',
-        'tecnico_mecanico': 'tecnico',
-        'tecnico': 'tecnico',
+        'tecnico': 'tecnico',                    # ← CLAVE: Soporte directo para 'tecnico'
+        'tecnico_mecanico': 'tecnico',           # ← Por si viene con este nombre
         'encargado_repuestos': 'encargado_repuestos',
         'cliente': 'cliente',
         'admin': 'admin',
         'administrador': 'admin'
     }
     
-    return mapping.get(nombre_lower)
+    # Retorna el rol normalizado o el original si no está en el mapping
+    return mapping.get(nombre_lower, nombre_lower)
 
 def verificar_rol(roles_permitidos):
     """Decorador para verificar que el usuario tenga al menos uno de los roles permitidos"""
@@ -121,6 +125,11 @@ def verificar_rol(roles_permitidos):
                         if current_user.get('type') == 'client':
                             roles_usuario = ['cliente']
                 
+                # 🔍 LOG PARA DEPURACIÓN (lo puedes quitar después)
+                logger.info(f"🔍 Verificando acceso - Usuario ID: {usuario_id}")
+                logger.info(f"🔍 Roles del usuario: {roles_usuario}")
+                logger.info(f"🔍 Roles permitidos: {roles_permitidos}")
+                
                 # Verificar si tiene al menos un rol permitido
                 tiene_rol = any(rol in roles_usuario for rol in roles_permitidos)
                 
@@ -158,7 +167,7 @@ def jefe_operativo_required(f):
 
 def tecnico_required(f):
     """Verifica que el usuario sea Técnico Mecánico"""
-    return verificar_rol(['tecnico'])(f)
+    return verificar_rol(['tecnico'])(f)  # ← CORREGIDO: Ahora busca 'tecnico'
 
 def encargado_repuestos_required(f):
     """Verifica que el usuario sea Encargado de Repuestos"""
@@ -182,7 +191,7 @@ def personal_required(f):
 
 
 # =====================================================
-# FUNCIÓN PARA LIMPIAR CACHÉ DE ROLES (Útil después de actualizar roles)
+# FUNCIÓN PARA LIMPIAR CACHÉ DE ROLES
 # =====================================================
 
 def limpiar_cache_roles(usuario_id=None):

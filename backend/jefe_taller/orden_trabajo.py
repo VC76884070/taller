@@ -73,54 +73,70 @@ def listar_tecnicos(current_user):
         if cached_data:
             return jsonify({'success': True, 'tecnicos': cached_data}), 200
         
-        # Consultar usuarios
-        usuarios_result = supabase.table('usuario') \
-            .select('id, nombre, contacto') \
+        # 🔥 CORRECCIÓN: Obtener técnicos mediante JOIN con tabla rol
+        # Primero obtenemos los ids de usuarios que tienen rol de técnico (id_rol = 3 según tus datos)
+        # De la tabla usuario_rol hacemos JOIN con rol para obtener el nombre_rol
+        
+        roles_data = supabase.table('usuario_rol') \
+            .select('id_usuario, rol:rol!inner(nombre_rol)') \
             .execute()
         
-        tecnicos = []
+        if not roles_data.data:
+            return jsonify({'success': True, 'tecnicos': []}), 200
+        
+        # Filtrar solo los que tienen rol 'tecnico'
+        tecnicos_ids = []
+        for r in roles_data.data:
+            rol_info = r.get('rol', {})
+            if isinstance(rol_info, dict) and rol_info.get('nombre_rol') == 'tecnico':
+                tecnicos_ids.append(r['id_usuario'])
+            elif rol_info == 'tecnico':  # Para algunos formatos de respuesta
+                tecnicos_ids.append(r['id_usuario'])
+        
+        if not tecnicos_ids:
+            return jsonify({'success': True, 'tecnicos': []}), 200
+        
+        # Obtener información detallada de los técnicos
+        usuarios_result = supabase.table('usuario') \
+            .select('id, nombre, contacto, email') \
+            .in_('id', tecnicos_ids) \
+            .execute()
+        
         MAX_ORDENES = 2
+        tecnicos = []
         
         if usuarios_result.data:
-            usuarios_ids = [u['id'] for u in usuarios_result.data]
-            
-            # Obtener roles de usuarios (tabla correcta: usuario_rol)
-            roles_data = supabase.table('usuario_rol') \
-                .select('id_usuario, nombre_rol') \
-                .execute()
-            
-            # Crear conjunto de IDs de técnicos
-            tecnicos_ids_set = set()
-            for r in (roles_data.data or []):
-                if r.get('nombre_rol') == 'tecnico':
-                    tecnicos_ids_set.add(r.get('id_usuario'))
-            
-            # Obtener asignaciones activas
+            # Obtener órdenes activas por técnico (asignaciones activas)
             asignaciones = supabase.table('asignaciontecnico') \
-                .select('id_tecnico') \
+                .select('id_tecnico, id_orden_trabajo, fecha_hora_final') \
+                .in_('id_tecnico', tecnicos_ids) \
                 .eq('tipo_asignacion', 'diagnostico') \
                 .is_('fecha_hora_final', 'null') \
                 .execute()
             
-            # Contar órdenes por técnico
+            # Contar órdenes activas por técnico
             ordenes_por_tecnico = {}
             for a in (asignaciones.data or []):
-                if a.get('id_tecnico'):
-                    ordenes_por_tecnico[a['id_tecnico']] = ordenes_por_tecnico.get(a['id_tecnico'], 0) + 1
+                tecnico_id = a.get('id_tecnico')
+                if tecnico_id:
+                    ordenes_por_tecnico[tecnico_id] = ordenes_por_tecnico.get(tecnico_id, 0) + 1
             
             # Construir lista de técnicos
             for usuario in usuarios_result.data:
-                if usuario['id'] in tecnicos_ids_set:
-                    ordenes_activas = ordenes_por_tecnico.get(usuario['id'], 0)
-                    tecnicos.append({
-                        'id': usuario['id'],
-                        'nombre': usuario['nombre'],
-                        'contacto': usuario.get('contacto', ''),
-                        'ordenes_activas': ordenes_activas,
-                        'max_vehiculos': MAX_ORDENES,
-                        'disponible': ordenes_activas < MAX_ORDENES,
-                        'cupo_restante': MAX_ORDENES - ordenes_activas
-                    })
+                ordenes_activas = ordenes_por_tecnico.get(usuario['id'], 0)
+                tecnicos.append({
+                    'id': usuario['id'],
+                    'nombre': usuario['nombre'],
+                    'contacto': usuario.get('contacto', ''),
+                    'email': usuario.get('email', ''),
+                    'ordenes_activas': ordenes_activas,
+                    'max_vehiculos': MAX_ORDENES,
+                    'disponible': ordenes_activas < MAX_ORDENES,
+                    'cupo_restante': MAX_ORDENES - ordenes_activas
+                })
+        
+        # Ordenar: primero disponibles, luego por carga de trabajo
+        tecnicos.sort(key=lambda t: (not t['disponible'], t['ordenes_activas']))
         
         # Guardar en caché
         cache.set('tecnicos_list', tecnicos, ttl=30)
@@ -659,42 +675,41 @@ def get_estado_bahias(current_user):
         
         ahora = datetime.datetime.now()
         
-        # Obtener bahías ocupadas (trabajo en curso)
+        # 1. Obtener bahías OCUPADAS (trabajo en curso)
         planificaciones_ocupadas = supabase.table('planificacion') \
             .select('bahia_asignada, id_orden_trabajo, fecha_hora_inicio_real') \
             .not_.is_('fecha_hora_inicio_real', 'null') \
             .is_('fecha_hora_fin_real', 'null') \
             .execute()
         
-        # Obtener códigos de órdenes para bahías ocupadas
-        ordenes_ids_ocupadas = [p['id_orden_trabajo'] for p in (planificaciones_ocupadas.data or []) if p.get('id_orden_trabajo')]
-        ordenes_codigos = {}
-        if ordenes_ids_ocupadas:
-            ordenes_data = supabase.table('ordentrabajo') \
-                .select('id, codigo_unico, estado_global') \
-                .in_('id', ordenes_ids_ocupadas) \
-                .execute()
-            for o in (ordenes_data.data or []):
-                ordenes_codigos[o['id']] = o
-        
-        # Obtener bahías reservadas (planificadas para futuro)
+        # 2. Obtener bahías RESERVADAS (planificadas para futuro)
+        # 🔥 CORRECCIÓN: Incluir TODAS las planificaciones que no han comenzado
         planificaciones_reservadas = supabase.table('planificacion') \
             .select('bahia_asignada, id_orden_trabajo, fecha_hora_inicio_estimado, horas_estimadas') \
             .is_('fecha_hora_inicio_real', 'null') \
             .is_('fecha_hora_fin_real', 'null') \
             .execute()
         
-        # Obtener códigos de órdenes para bahías reservadas
-        ordenes_ids_reservadas = [p['id_orden_trabajo'] for p in (planificaciones_reservadas.data or []) if p.get('id_orden_trabajo')]
-        if ordenes_ids_reservadas:
-            ordenes_data_res = supabase.table('ordentrabajo') \
-                .select('id, codigo_unico, estado_global') \
-                .in_('id', ordenes_ids_reservadas) \
-                .execute()
-            for o in (ordenes_data_res.data or []):
-                if o['id'] not in ordenes_codigos:
-                    ordenes_codigos[o['id']] = o
+        # Obtener todos los IDs de órdenes para buscar códigos
+        ordenes_ids = set()
+        for p in (planificaciones_ocupadas.data or []):
+            if p.get('id_orden_trabajo'):
+                ordenes_ids.add(p['id_orden_trabajo'])
+        for p in (planificaciones_reservadas.data or []):
+            if p.get('id_orden_trabajo'):
+                ordenes_ids.add(p['id_orden_trabajo'])
         
+        # Obtener códigos de órdenes
+        ordenes_codigos = {}
+        if ordenes_ids:
+            ordenes_data = supabase.table('ordentrabajo') \
+                .select('id, codigo_unico, estado_global') \
+                .in_('id', list(ordenes_ids)) \
+                .execute()
+            for o in (ordenes_data.data or []):
+                ordenes_codigos[o['id']] = o
+        
+        # Procesar bahías ocupadas
         bahias_ocupadas = {}
         for p in (planificaciones_ocupadas.data or []):
             bahia = p.get('bahia_asignada')
@@ -702,34 +717,44 @@ def get_estado_bahias(current_user):
                 orden_info = ordenes_codigos.get(p['id_orden_trabajo'], {})
                 bahias_ocupadas[bahia] = {
                     'estado': 'ocupado',
-                    'codigo': orden_info.get('codigo_unico'),
-                    'estado_orden': orden_info.get('estado_global'),
+                    'orden_id': p['id_orden_trabajo'],
+                    'orden_codigo': orden_info.get('codigo_unico'),
+                    'orden_estado': orden_info.get('estado_global'),
                     'inicio_real': p.get('fecha_hora_inicio_real')
                 }
         
+        # Procesar bahías reservadas
         bahias_reservadas = {}
         for p in (planificaciones_reservadas.data or []):
             bahia = p.get('bahia_asignada')
+            # Solo procesar si no está ocupada
             if bahia and bahia not in bahias_ocupadas:
                 orden_info = ordenes_codigos.get(p['id_orden_trabajo'], {})
                 fecha_estimada = p.get('fecha_hora_inicio_estimado')
                 
-                es_futura = False
+                # Verificar si es futura (comparación más robusta)
+                es_futura = True
                 if fecha_estimada:
                     try:
-                        fecha_estimada_dt = datetime.datetime.fromisoformat(fecha_estimada.replace('Z', '+00:00'))
+                        # Asegurar formato datetime
+                        if isinstance(fecha_estimada, str):
+                            fecha_estimada_dt = datetime.datetime.fromisoformat(fecha_estimada.replace('Z', '+00:00'))
+                        else:
+                            fecha_estimada_dt = fecha_estimada
                         es_futura = fecha_estimada_dt > ahora
                     except:
                         es_futura = True
                 
-                if es_futura:
-                    bahias_reservadas[bahia] = {
-                        'estado': 'reservado',
-                        'codigo': orden_info.get('codigo_unico'),
-                        'estado_orden': orden_info.get('estado_global'),
-                        'fecha_inicio_estimado': fecha_estimada,
-                        'horas_estimadas': p.get('horas_estimadas')
-                    }
+                # 🔥 Mostrar TODAS las reservas (no solo futuras)
+                bahias_reservadas[bahia] = {
+                    'estado': 'reservado',
+                    'orden_id': p['id_orden_trabajo'],
+                    'orden_codigo': orden_info.get('codigo_unico'),
+                    'orden_estado': orden_info.get('estado_global'),
+                    'fecha_inicio_estimado': fecha_estimada,
+                    'horas_estimadas': p.get('horas_estimadas'),
+                    'es_futura': es_futura
+                }
         
         # Construir lista de bahías 1-12
         bahias = []
@@ -739,8 +764,9 @@ def get_estado_bahias(current_user):
                 bahias.append({
                     'numero': i,
                     'estado': info['estado'],
-                    'orden_codigo': info['codigo'],
-                    'orden_estado': info['estado_orden'],
+                    'orden_id': info.get('orden_id'),
+                    'orden_codigo': info.get('orden_codigo'),
+                    'orden_estado': info.get('orden_estado'),
                     'inicio_real': info.get('inicio_real')
                 })
             elif i in bahias_reservadas:
@@ -748,10 +774,12 @@ def get_estado_bahias(current_user):
                 bahias.append({
                     'numero': i,
                     'estado': info['estado'],
-                    'orden_codigo': info['codigo'],
-                    'orden_estado': info['estado_orden'],
+                    'orden_id': info.get('orden_id'),
+                    'orden_codigo': info.get('orden_codigo'),
+                    'orden_estado': info.get('orden_estado'),
                     'fecha_inicio_estimado': info.get('fecha_inicio_estimado'),
-                    'horas_estimadas': info.get('horas_estimadas')
+                    'horas_estimadas': info.get('horas_estimadas'),
+                    'es_futura': info.get('es_futura', True)
                 })
             else:
                 bahias.append({
@@ -760,6 +788,9 @@ def get_estado_bahias(current_user):
                     'orden_codigo': None,
                     'orden_estado': None
                 })
+        
+        # 🔥 Log para depuración
+        logger.info(f"Estado de bahías - Ocupadas: {len(bahias_ocupadas)}, Reservadas: {len(bahias_reservadas)}")
         
         # Guardar en caché por 10 segundos
         cache.set('bahias_estado', bahias, ttl=10)

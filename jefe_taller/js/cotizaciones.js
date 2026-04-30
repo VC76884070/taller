@@ -1,7 +1,6 @@
 // =====================================================
-// COTIZACIONES.JS - JEFE DE TALLER (COMPLETO)
-// CON HISTORIAL DE COTIZACIONES Y GESTIÓN DE RECHAZOS
-// VERSIÓN 2.0 - INTEGRADA
+// COTIZACIONES.JS - JEFE DE TALLER
+// VERSIÓN 3.0 - CON NUEVOS ESTADOS Y MANEJO DE RECHAZO
 // =====================================================
 
 const API_URL = window.location.origin + '/api/jefe-taller';
@@ -9,8 +8,8 @@ let currentUser = null;
 let currentUserRoles = [];
 
 // Datos globales
-let ordenesAprobadas = [];
 let ordenesConServicios = [];
+let ordenesAprobadas = [];
 let encargadosRepuestos = [];
 let solicitudesCotizacion = [];
 let cotizacionesMap = {};
@@ -30,6 +29,27 @@ let serviciosActuales = [];
 let serviciosCotizables = [];
 let isEditingCotizacion = false;
 let currentInstruccionesOrden = null;
+let currentOrdenRechazada = null;
+let currentOrdenAceptada = null;
+let currentOrdenArmado = null;
+
+// Estados de orden (constantes)
+const ESTADOS_ORDEN = {
+    EN_RECEPCION: 'EnRecepcion',
+    EN_DIAGNOSTICO: 'EnDiagnostico',
+    DIAGNOSTICO_COMPLETADO: 'DiagnosticoCompletado',
+    COTIZACION_ENVIADA: 'CotizacionEnviada',
+    COTIZACION_ACEPTADA: 'CotizacionAceptada',
+    COTIZACION_PARCIAL: 'CotizacionParcial',
+    COTIZACION_RECHAZADA: 'CotizacionRechazada',
+    EN_ARMADO: 'EnArmadoVehiculo',
+    VEHICULO_ARMADO: 'VehiculoArmado',
+    EN_REPARACION: 'EnReparacion',
+    EN_PAUSA: 'EnPausa',
+    REPARACION_COMPLETADA: 'ReparacionCompletada',
+    FINALIZADO: 'Finalizado',
+    ENTREGADO: 'Entregado'
+};
 
 // =====================================================
 // FUNCIONES DE UTILIDAD
@@ -273,8 +293,8 @@ async function cargarCotizacionesMap() {
             cotizacionesMap = {};
             data.cotizaciones.forEach(cot => {
                 cotizacionesMap[cot.id_orden_trabajo] = cot;
-                console.log(`Cotización cargada: Orden ${cot.id_orden_trabajo} -> Estado: ${cot.estado}`); // Debug
             });
+            console.log('Cotizaciones cargadas:', Object.keys(cotizacionesMap).length);
         }
     } catch (error) {
         console.error('Error cargando cotizaciones:', error);
@@ -386,15 +406,12 @@ async function cargarDatosIniciales() {
 }
 
 // =====================================================
-// RENDERIZADO DE ÓRDENES
+// RENDERIZADO DE ÓRDENES (ACTUALIZADO)
 // =====================================================
 
 function renderOrdenes() {
     const container = document.getElementById('ordenesContainer');
     if (!container) return;
-    
-    console.log("📢 [DEBUG] renderOrdenes - Iniciando");
-    console.log("📢 [DEBUG] cotizacionesMap actual:", cotizacionesMap);
     
     const searchTerm = document.getElementById('searchOrden')?.value.toLowerCase() || '';
     const filtroEstado = document.getElementById('filtroEstadoCotizacion')?.value || 'all';
@@ -409,42 +426,41 @@ function renderOrdenes() {
         );
     }
     
-    // Clasificar órdenes según estado real de la cotización
+    // Clasificar órdenes según estado REAL de la cotización
     const ordenesPendientes = [];
     const ordenesEnviadas = [];
+    const ordenesAceptadas = [];
     const ordenesRechazadas = [];
-    const ordenesAprobadas = [];
-    const ordenesRechazadasGestionadas = [];
-    const ordenesAprobadasGestionadas = [];
+    const ordenesEnReparacion = [];
+    const ordenesArmando = [];
     
     for (const orden of filtered) {
-        const tieneCotizacion = cotizacionesMap[orden.id_orden];
-        const estadoCotizacion = tieneCotizacion ? cotizacionesMap[orden.id_orden].estado : null;
-        const instruccionesEnviadas = orden.instrucciones_enviadas || false;
-        const tecnicosAsignados = orden.tecnicos_asignados || false;
+        const estadoOrden = orden.estado_global;
+        const cotizacionInfo = cotizacionesMap[orden.id_orden];
         
-        console.log(`📢 [DEBUG] Orden ${orden.codigo_unico} (ID: ${orden.id_orden}): estado=${estadoCotizacion}, instruccionesEnviadas=${instruccionesEnviadas}, tecnicosAsignados=${tecnicosAsignados}`);
+        console.log(`Orden ${orden.codigo_unico}: estado_global=${estadoOrden}`);
         
-        if (estadoCotizacion === 'rechazada') {
-            if (instruccionesEnviadas) {
-                ordenesRechazadasGestionadas.push({ ...orden, cotizacion: cotizacionesMap[orden.id_orden] });
-            } else {
-                ordenesRechazadas.push({ ...orden, cotizacion: cotizacionesMap[orden.id_orden] });
-            }
-        } else if (estadoCotizacion === 'aprobado_total' || estadoCotizacion === 'aprobado_parcial') {
-            if (tecnicosAsignados) {
-                ordenesAprobadasGestionadas.push({ ...orden, cotizacion: cotizacionesMap[orden.id_orden] });
-            } else {
-                ordenesAprobadas.push({ ...orden, cotizacion: cotizacionesMap[orden.id_orden] });
-            }
-        } else if (tieneCotizacion && estadoCotizacion === 'enviada') {
-            ordenesEnviadas.push({ ...orden, cotizacion: cotizacionesMap[orden.id_orden] });
-        } else {
+        if (estadoOrden === ESTADOS_ORDEN.COTIZACION_RECHAZADA) {
+            ordenesRechazadas.push({ ...orden, cotizacion: cotizacionInfo });
+        }
+        else if (estadoOrden === ESTADOS_ORDEN.EN_ARMADO) {
+            ordenesArmando.push({ ...orden, cotizacion: cotizacionInfo });
+        }
+        else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_ACEPTADA || estadoOrden === ESTADOS_ORDEN.COTIZACION_PARCIAL) {
+            ordenesAceptadas.push({ ...orden, cotizacion: cotizacionInfo });
+        }
+        else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_ENVIADA) {
+            ordenesEnviadas.push({ ...orden, cotizacion: cotizacionInfo });
+        }
+        else if (estadoOrden === ESTADOS_ORDEN.EN_REPARACION) {
+            ordenesEnReparacion.push({ ...orden, cotizacion: cotizacionInfo });
+        }
+        else {
             ordenesPendientes.push(orden);
         }
     }
     
-    console.log(`📢 [DEBUG] Clasificación: Pendientes=${ordenesPendientes.length}, Enviadas=${ordenesEnviadas.length}, Rechazadas=${ordenesRechazadas.length}, RechazadasGestionadas=${ordenesRechazadasGestionadas.length}, Aprobadas=${ordenesAprobadas.length}, AprobadasGestionadas=${ordenesAprobadasGestionadas.length}`);
+    console.log(`Clasificación: Pendientes=${ordenesPendientes.length}, Enviadas=${ordenesEnviadas.length}, Aceptadas=${ordenesAceptadas.length}, Rechazadas=${ordenesRechazadas.length}, Armando=${ordenesArmando.length}, Reparacion=${ordenesEnReparacion.length}`);
     
     // Aplicar filtro
     let ordenesMostrar = [];
@@ -453,11 +469,13 @@ function renderOrdenes() {
     } else if (filtroEstado === 'enviada') {
         ordenesMostrar = ordenesEnviadas;
     } else if (filtroEstado === 'aprobada') {
-        ordenesMostrar = [...ordenesAprobadas, ...ordenesAprobadasGestionadas];
+        ordenesMostrar = [...ordenesAceptadas, ...ordenesEnReparacion];
     } else if (filtroEstado === 'rechazada') {
-        ordenesMostrar = [...ordenesRechazadas, ...ordenesRechazadasGestionadas];
+        ordenesMostrar = [...ordenesRechazadas, ...ordenesArmando];
+    } else if (filtroEstado === 'reparacion') {
+        ordenesMostrar = ordenesEnReparacion;
     } else {
-        ordenesMostrar = [...ordenesPendientes, ...ordenesEnviadas, ...ordenesRechazadas, ...ordenesRechazadasGestionadas, ...ordenesAprobadas, ...ordenesAprobadasGestionadas];
+        ordenesMostrar = [...ordenesPendientes, ...ordenesEnviadas, ...ordenesRechazadas, ...ordenesArmando, ...ordenesAceptadas, ...ordenesEnReparacion];
     }
     
     if (ordenesMostrar.length === 0) {
@@ -467,89 +485,107 @@ function renderOrdenes() {
     
     container.innerHTML = ordenesMostrar.map(ordenData => {
         const orden = ordenData;
-        const cotizacion = ordenData.cotizacion || cotizacionesMap[orden.id_orden];
-        const estadoCotizacion = cotizacion ? cotizacion.estado : null;
-        const instruccionesEnviadas = orden.instrucciones_enviadas || false;
-        const tecnicosAsignados = orden.tecnicos_asignados || false;
+        const cotizacion = ordenData.cotizacion;
+        const estadoOrden = orden.estado_global;
         
         let estadoBadgeHtml = '';
         let botonesHtml = '';
         
-        console.log(`📢 [DEBUG] Renderizando orden ${orden.codigo_unico} -> estado=${estadoCotizacion}, instruccionesEnviadas=${instruccionesEnviadas}, tecnicosAsignados=${tecnicosAsignados}`);
-        
-        // Determinar badge y botones según estado
-        if (estadoCotizacion === 'rechazada') {
-            if (instruccionesEnviadas) {
-                // Ya se enviaron instrucciones - solo mostrar ver detalles
-                estadoBadgeHtml = `
-                    <div class="alert-success" style="padding: 0.5rem; margin-bottom: 0.5rem; width: 100%; border-radius: 8px; background: rgba(16, 185, 129, 0.15); border-left: 3px solid #10B981;">
-                        <i class="fas fa-check-circle" style="color: #10B981;"></i> 
-                        <strong>✅ INSTRUCCIONES ENVIADAS AL TÉCNICO</strong>
-                        <br><small>El técnico ya fue notificado para armar y lavar el vehículo</small>
-                    </div>
-                `;
-                botonesHtml = `
-                    <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
-                        <i class="fas fa-eye"></i> Ver Detalles
-                    </button>
-                `;
-            } else {
-                estadoBadgeHtml = `
-                    <div class="alert-warning" style="padding: 0.5rem; margin-bottom: 0.5rem; width: 100%; border-radius: 8px;">
-                        <i class="fas fa-exclamation-triangle"></i> 
-                        <strong>⚠️ COTIZACIÓN RECHAZADA</strong>
-                        <br><small>Motivo: ${escapeHtml(cotizacion.motivo_rechazo || 'No especificado')}</small>
-                        <br><small>Fecha: ${formatDate(cotizacion.fecha_rechazo)}</small>
-                    </div>
-                `;
-                botonesHtml = `
-                    <button class="btn-warning" onclick='abrirModalInstruccionesTecnico(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}", "${escapeHtml(orden.vehiculo)}", "${escapeHtml(orden.cliente_nombre)}", "rechazada")'>
-                        <i class="fas fa-tools"></i> 🔧 Notificar al Técnico (Diagnóstico Bs. 200)
-                    </button>
-                    <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
-                        <i class="fas fa-eye"></i> Ver Cotización Rechazada
-                    </button>
-                `;
-            }
-        } else if (estadoCotizacion === 'aprobado_total' || estadoCotizacion === 'aprobado_parcial') {
-            const esTotal = estadoCotizacion === 'aprobado_total';
-            if (tecnicosAsignados) {
-                // Ya se asignaron técnicos - solo mostrar ver detalles
-                estadoBadgeHtml = `
-                    <div class="alert-success" style="padding: 0.5rem; margin-bottom: 0.5rem; width: 100%; border-radius: 8px; background: rgba(16, 185, 129, 0.15); border-left: 3px solid #10B981;">
-                        <i class="fas fa-check-circle" style="color: #10B981;"></i> 
-                        <strong>✅ TRABAJO EN PROCESO</strong>
-                        <br><small>Técnicos asignados - Trabajo en curso</small>
-                    </div>
-                `;
-                botonesHtml = `
-                    <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
-                        <i class="fas fa-eye"></i> Ver Detalles
-                    </button>
-                `;
-            } else {
-                estadoBadgeHtml = `
-                    <div class="alert-success" style="padding: 0.5rem; margin-bottom: 0.5rem; width: 100%; border-radius: 8px; background: rgba(16, 185, 129, 0.15); border-left: 3px solid #10B981;">
-                        <i class="fas fa-check-circle" style="color: #10B981;"></i> 
-                        <strong>✅ COTIZACIÓN ${esTotal ? 'APROBADA TOTALMENTE' : 'APROBADA PARCIALMENTE'}</strong>
-                        <br><small>Total aprobado: Bs. ${(cotizacion.total || 0).toFixed(2)}</small>
-                    </div>
-                `;
-                botonesHtml = `
-                    <button class="btn-primary" onclick='abrirModalGestionTecnicos(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}", "${escapeHtml(orden.vehiculo)}", "${escapeHtml(orden.cliente_nombre)}")'>
-                        <i class="fas fa-users"></i> 👥 Gestionar Técnicos
-                    </button>
-                    <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
-                        <i class="fas fa-eye"></i> Ver Cotización Aprobada
-                    </button>
-                `;
-            }
-        } else if (cotizacion && estadoCotizacion === 'enviada') {
+        // CASO 1: COTIZACIÓN RECHAZADA
+        if (estadoOrden === ESTADOS_ORDEN.COTIZACION_RECHAZADA) {
             estadoBadgeHtml = `
-                <div class="alert-info" style="padding: 0.5rem; margin-bottom: 0.5rem; width: 100%; border-radius: 8px; background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3B82F6;">
-                    <i class="fas fa-paper-plane"></i> 
-                    <strong>📨 COTIZACIÓN ENVIADA - ESPERANDO RESPUESTA</strong>
-                    <br><small>Enviada el: ${formatDate(cotizacion.fecha_envio)}</small>
+                <div class="alert-danger" style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; background: rgba(220, 53, 69, 0.15); border-left: 3px solid #dc3545;">
+                    <i class="fas fa-times-circle" style="color: #dc3545;"></i>
+                    <strong>❌ COTIZACIÓN RECHAZADA POR EL CLIENTE</strong>
+                    <br><small>El cliente no aceptó la cotización. Debes notificar al técnico para que ARME el vehículo.</small>
+                    ${cotizacion?.motivo_rechazo ? `<br><small><strong>Motivo:</strong> ${escapeHtml(cotizacion.motivo_rechazo)}</small>` : ''}
+                </div>
+            `;
+            botonesHtml = `
+                <button class="btn-warning" onclick='abrirModalNotificarArmado(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}", "${escapeHtml(orden.vehiculo)}", "${escapeHtml(orden.cliente_nombre)}")'>
+                    <i class="fas fa-tools"></i> 🔧 Notificar al Técnico (Armar Vehículo)
+                </button>
+                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                    <i class="fas fa-eye"></i> Ver Cotización Rechazada
+                </button>
+                <button class="btn-primary" onclick="abrirModalGenerarCotizacion(${orden.id_orden})">
+                    <i class="fas fa-file-invoice"></i> Generar Nueva Cotización
+                </button>
+            `;
+        }
+        // CASO 2: EN PROCESO DE ARMADO
+        else if (estadoOrden === ESTADOS_ORDEN.EN_ARMADO) {
+            estadoBadgeHtml = `
+                <div class="alert-warning" style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; background: rgba(255, 193, 7, 0.15); border-left: 3px solid #ffc107;">
+                    <i class="fas fa-tools" style="color: #ffc107;"></i>
+                    <strong>🔧 VEHÍCULO EN PROCESO DE ARMADO</strong>
+                    <br><small>El técnico está armando el vehículo. Se cobrará solo diagnóstico (Bs. 200).</small>
+                </div>
+            `;
+            botonesHtml = `
+                <button class="btn-success" onclick='cobrarDiagnosticoArmado(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}")'>
+                    <i class="fas fa-dollar-sign"></i> Cobrar Diagnóstico (Bs. 200)
+                </button>
+                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                    <i class="fas fa-eye"></i> Ver Detalle
+                </button>
+            `;
+        }
+        // CASO 3: COTIZACIÓN ACEPTADA
+        else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_ACEPTADA || estadoOrden === ESTADOS_ORDEN.COTIZACION_PARCIAL) {
+            const tieneTecnicos = orden.tecnicos_asignados;
+            estadoBadgeHtml = `
+                <div class="alert-success" style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; background: rgba(40, 167, 69, 0.15); border-left: 3px solid #28a745;">
+                    <i class="fas fa-check-circle" style="color: #28a745;"></i>
+                    <strong>✅ COTIZACIÓN ACEPTADA POR EL CLIENTE</strong>
+                    <br><small>El cliente aceptó la cotización. Inicia la reparación.</small>
+                </div>
+            `;
+            if (tieneTecnicos) {
+                botonesHtml = `
+                    <button class="btn-primary" onclick="verAvanceReparacion(${orden.id_orden})">
+                        <i class="fas fa-chart-line"></i> Ver Avance
+                    </button>
+                    <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                        <i class="fas fa-eye"></i> Ver Cotización
+                    </button>
+                `;
+            } else {
+                botonesHtml = `
+                    <button class="btn-primary" onclick='abrirModalIniciarReparacion(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}", "${escapeHtml(orden.vehiculo)}", "${escapeHtml(orden.cliente_nombre)}")'>
+                        <i class="fas fa-play-circle"></i> Iniciar Reparación
+                    </button>
+                    <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                        <i class="fas fa-eye"></i> Ver Cotización
+                    </button>
+                `;
+            }
+        }
+        // CASO 4: EN REPARACIÓN
+        else if (estadoOrden === ESTADOS_ORDEN.EN_REPARACION) {
+            estadoBadgeHtml = `
+                <div class="alert-info" style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; background: rgba(23, 162, 184, 0.15); border-left: 3px solid #17a2b8;">
+                    <i class="fas fa-wrench" style="color: #17a2b8;"></i>
+                    <strong>🔧 REPARACIÓN EN CURSO</strong>
+                    <br><small>Trabajo en progreso por el equipo técnico.</small>
+                </div>
+            `;
+            botonesHtml = `
+                <button class="btn-primary" onclick="verAvanceReparacion(${orden.id_orden})">
+                    <i class="fas fa-chart-line"></i> Ver Avance
+                </button>
+                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                    <i class="fas fa-eye"></i> Ver Detalle
+                </button>
+            `;
+        }
+        // CASO 5: COTIZACIÓN ENVIADA
+        else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_ENVIADA) {
+            estadoBadgeHtml = `
+                <div class="alert-warning" style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; background: rgba(255, 193, 7, 0.15); border-left: 3px solid #ffc107;">
+                    <i class="fas fa-paper-plane" style="color: #ffc107;"></i>
+                    <strong>📨 COTIZACIÓN ENVIADA AL CLIENTE</strong>
+                    <br><small>Esperando respuesta del cliente.</small>
                 </div>
             `;
             botonesHtml = `
@@ -557,15 +593,17 @@ function renderOrdenes() {
                     <i class="fas fa-edit"></i> Editar Cotización
                 </button>
                 <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
-                    <i class="fas fa-eye"></i> Ver Detalles
+                    <i class="fas fa-eye"></i> Ver Detalle
                 </button>
             `;
-        } else {
+        }
+        // CASO 6: SIN COTIZACIÓN
+        else {
             estadoBadgeHtml = `
-                <div class="alert-secondary" style="padding: 0.5rem; margin-bottom: 0.5rem; width: 100%; border-radius: 8px; background: var(--gris-oscuro);">
-                    <i class="fas fa-clock"></i> 
+                <div class="alert-secondary" style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; background: var(--gris-oscuro);">
+                    <i class="fas fa-clock"></i>
                     <strong>⏳ PENDIENTE DE COTIZACIÓN</strong>
-                    <br><small>Diagnóstico listo, esperando generar cotización</small>
+                    <br><small>Diagnóstico listo, esperando generar cotización para el cliente.</small>
                 </div>
             `;
             botonesHtml = `
@@ -599,18 +637,12 @@ function renderOrdenes() {
                             ${serv.estado_cotizacion === 'cotizado' ? 'Cotizado' : (serv.estado_cotizacion === 'solicitado' ? 'Cotización solicitada' : 'Pendiente')}
                         </div>
                         <div class="servicio-precio">Bs. ${serv.precio_cotizado?.toFixed(2) || '0.00'}</div>
-                        <div class="action-buttons">
-                            <button class="action-btn edit" onclick="editarServicioCotizacion(${orden.id_orden}, ${serv.id_servicio})" title="Editar servicio"><i class="fas fa-edit"></i></button>
-                        </div>
                     </div>
                 `).join('')}
             </div>
             ${estadoBadgeHtml}
             <div class="orden-footer">
                 ${botonesHtml}
-                <button class="btn-outline" onclick="editarServiciosOrden(${orden.id_orden})">
-                    <i class="fas fa-edit"></i> Editar Servicios
-                </button>
             </div>
         </div>
     `}).join('');
@@ -686,7 +718,7 @@ function renderSolicitudesCotizacion() {
     if (!tbody) return;
     
     if (solicitudesCotizacion.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes de cotización</p></div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes</p></div></td></tr>`;
         return;
     }
     
@@ -713,7 +745,7 @@ function renderSolicitudesCompra() {
     if (!tbody) return;
     
     if (solicitudesCompra.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="fas fa-shopping-cart"></i><p>No hay solicitudes de compra</p></div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="fas fa-shopping-cart"></i><p>No hay solicitudes</p></div></td></tr>`;
         return;
     }
     
@@ -732,6 +764,217 @@ function renderSolicitudesCompra() {
             </td>
         </tr>
     `).join('');
+}
+
+// =====================================================
+// MODAL: NOTIFICAR ARMADO (COTIZACIÓN RECHAZADA)
+// =====================================================
+
+async function abrirModalNotificarArmado(id_orden, codigo, vehiculo, cliente) {
+    currentOrdenArmado = { id_orden, codigo, vehiculo, cliente };
+    
+    const ordenInfo = document.getElementById('armadoOrdenInfo');
+    if (ordenInfo) {
+        ordenInfo.innerHTML = `
+            <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(codigo)}</p>
+            <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(vehiculo)}</p>
+            <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(cliente)}</p>
+        `;
+    }
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/tecnicos-disponibles`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        
+        const selectTecnicos = document.getElementById('armadoTecnicosList');
+        if (selectTecnicos && data.tecnicos) {
+            selectTecnicos.innerHTML = data.tecnicos.map(t => 
+                `<option value="${t.id}">${escapeHtml(t.nombre)}</option>`
+            ).join('');
+        }
+    } catch (error) {
+        console.error('Error cargando técnicos:', error);
+    } finally {
+        mostrarLoading(false);
+    }
+    
+    document.getElementById('armadoInstrucciones').value = '';
+    abrirModal('modalNotificarArmado');
+}
+
+async function confirmarNotificarArmado() {
+    if (!currentOrdenArmado) return;
+    
+    const instrucciones = document.getElementById('armadoInstrucciones')?.value.trim();
+    if (!instrucciones) {
+        showToast('Debes escribir instrucciones para el armado', 'warning');
+        return;
+    }
+    
+    const selectTecnicos = document.getElementById('armadoTecnicosList');
+    const tecnicosIds = Array.from(selectTecnicos?.selectedOptions || []).map(opt => parseInt(opt.value));
+    
+    if (tecnicosIds.length === 0) {
+        showToast('Debes seleccionar al menos un técnico', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/rechazo/iniciar-armado`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                id_orden: currentOrdenArmado.id_orden,
+                instrucciones_armado: instrucciones,
+                tecnicos_ids: tecnicosIds
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('✅ Técnico notificado. El vehículo será armado.', 'success');
+            cerrarModal('modalNotificarArmado');
+            await cargarOrdenesConServicios();
+            await cargarCotizacionesMap();
+        } else {
+            showToast(data.error || 'Error al notificar', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+async function cobrarDiagnosticoArmado(id_orden, codigo) {
+    if (!confirm(`¿Confirmas que el vehículo está ARMADO y deseas cobrar SOLO el diagnóstico (Bs. 200)?\n\nOrden: ${codigo}`)) return;
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/rechazo/finalizar-diagnostico`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                id_orden: id_orden,
+                forma_pago: 'efectivo'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast(`✅ Orden finalizada. Cobrado Bs. 200 por diagnóstico.`, 'success');
+            await cargarOrdenesConServicios();
+            await cargarCotizacionesMap();
+        } else {
+            showToast(data.error || 'Error al finalizar', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// =====================================================
+// MODAL: INICIAR REPARACIÓN
+// =====================================================
+
+async function abrirModalIniciarReparacion(id_orden, codigo, vehiculo, cliente) {
+    currentOrdenAceptada = { id_orden, codigo, vehiculo, cliente };
+    
+    const ordenInfo = document.getElementById('reparacionOrdenInfo');
+    if (ordenInfo) {
+        ordenInfo.innerHTML = `
+            <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(codigo)}</p>
+            <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(vehiculo)}</p>
+            <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(cliente)}</p>
+        `;
+    }
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/tecnicos-disponibles`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        
+        const container = document.getElementById('reparacionTecnicosContainer');
+        if (container && data.tecnicos) {
+            container.innerHTML = data.tecnicos.map(t => `
+                <div class="tecnico-checkbox" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-card); border-radius: 8px;">
+                    <input type="checkbox" id="tecnico_${t.id}" value="${t.id}">
+                    <label for="tecnico_${t.id}">${escapeHtml(t.nombre)}</label>
+                </div>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    } finally {
+        mostrarLoading(false);
+    }
+    
+    document.getElementById('reparacionInstrucciones').value = '';
+    document.getElementById('reparacionPlazoDias').value = 3;
+    abrirModal('modalIniciarReparacion');
+}
+
+async function confirmarIniciarReparacion() {
+    if (!currentOrdenAceptada) return;
+    
+    const instrucciones = document.getElementById('reparacionInstrucciones')?.value.trim();
+    if (!instrucciones) {
+        showToast('Debes escribir instrucciones para los técnicos', 'warning');
+        return;
+    }
+    
+    const plazoDias = parseInt(document.getElementById('reparacionPlazoDias')?.value || 3);
+    
+    const checkboxes = document.querySelectorAll('#reparacionTecnicosContainer input[type="checkbox"]:checked');
+    const tecnicosIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    
+    if (tecnicosIds.length === 0) {
+        showToast('Debes seleccionar al menos un técnico', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/asignar-tecnicos`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                id_orden: currentOrdenAceptada.id_orden,
+                tecnicos: tecnicosIds,
+                instrucciones: instrucciones,
+                tiempo_estimado: plazoDias,
+                tiempo_unidad: 'dias'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast(`✅ Reparación iniciada con ${tecnicosIds.length} técnico(s)`, 'success');
+            cerrarModal('modalIniciarReparacion');
+            await cargarOrdenesConServicios();
+            await cargarCotizacionesMap();
+        } else {
+            showToast(data.error || 'Error al iniciar reparación', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+function verAvanceReparacion(id_orden) {
+    showToast('Función en desarrollo - Ver avance de reparación', 'info');
 }
 
 // =====================================================
@@ -1597,328 +1840,8 @@ async function aprobarCompra(id) {
 }
 
 // =====================================================
-// INSTRUCCIONES AL TÉCNICO
+// FUNCIONES AUXILIARES - TABS Y EVENTOS
 // =====================================================
-
-async function abrirModalInstrucciones(id_orden, codigo, vehiculo, cliente) {
-    currentInstruccionesOrden = { id_orden, codigo, vehiculo, cliente };
-    
-    const ordenInfo = document.getElementById('instruccionesOrdenInfo');
-    if (ordenInfo) {
-        ordenInfo.innerHTML = `
-            <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(codigo)}</p>
-            <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(vehiculo)}</p>
-            <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(cliente)}</p>
-        `;
-    }
-    
-    document.getElementById('instruccionesTexto').value = '';
-    abrirModal('modalInstruccionesTecnico');
-}
-
-async function enviarInstrucciones() {
-    if (!currentInstruccionesOrden) return;
-    
-    const instrucciones = document.getElementById('instruccionesTexto')?.value.trim();
-    if (!instrucciones) {
-        showToast('Debes escribir instrucciones para el técnico', 'warning');
-        return;
-    }
-    
-    mostrarLoading(true);
-    
-    try {
-        const response = await fetch(`${API_URL}/enviar-instrucciones-tecnico`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                id_orden: currentInstruccionesOrden.id_orden,
-                instrucciones: instrucciones
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast('✅ Instrucciones enviadas al técnico', 'success');
-            cerrarModal('modalInstruccionesTecnico');
-            
-            // Marcar la orden como instrucciones_enviadas en el objeto local
-            const ordenIndex = ordenesConServicios.findIndex(o => o.id_orden === currentInstruccionesOrden.id_orden);
-            if (ordenIndex !== -1) {
-                ordenesConServicios[ordenIndex].instrucciones_enviadas = true;
-            }
-            
-            await cargarHistorialCotizaciones();
-            await cargarOrdenesConServicios();
-            await cargarCotizacionesMap(); // Recargar para actualizar estados
-        } else {
-            showToast(data.error || 'Error al enviar instrucciones', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-async function verHistorialInstrucciones(id_orden) {
-    mostrarLoading(true);
-    
-    try {
-        const response = await fetch(`${API_URL}/instrucciones-tecnico/${id_orden}`, { headers: getAuthHeaders() });
-        const data = await response.json();
-        
-        if (data.success) {
-            const container = document.getElementById('historialInstruccionesContainer');
-            
-            if (data.instrucciones.length === 0) {
-                container.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>No hay instrucciones registradas</p></div>`;
-            } else {
-                container.innerHTML = data.instrucciones.map(inst => `
-                    <div class="instruccion-item" style="background: var(--gris-oscuro); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; border-left: 3px solid ${inst.leida ? '#10B981' : '#F59E0B'}">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <strong><i class="fas fa-user-tie"></i> ${escapeHtml(inst.jefe_taller_nombre)}</strong>
-                            <span style="font-size: 0.7rem; color: var(--gris-texto);">${formatDate(inst.fecha_envio)}</span>
-                        </div>
-                        <p style="margin: 0.5rem 0; white-space: pre-wrap;">${escapeHtml(inst.instrucciones)}</p>
-                        <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
-                            ${inst.leida ? 
-                                '<span class="status-badge status-aprobado" style="font-size: 0.7rem;"><i class="fas fa-check-circle"></i> Leída por el técnico</span>' : 
-                                '<span class="status-badge status-pendiente" style="font-size: 0.7rem;"><i class="fas fa-clock"></i> Pendiente de lectura</span>'}
-                        </div>
-                    </div>
-                `).join('');
-            }
-            
-            abrirModal('modalHistorialInstrucciones');
-        } else {
-            showToast('Error al cargar historial', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-// =====================================================
-// EDITOR DE SERVICIOS
-// =====================================================
-
-async function editarServiciosOrden(id_orden) {
-    currentOrdenData = { id_orden };
-    mostrarLoading(true);
-    try {
-        const orden = ordenesConServicios.find(o => o.id_orden === id_orden);
-        if (orden && orden.servicios) {
-            serviciosActuales = orden.servicios.map(s => ({
-                id_servicio: s.id_servicio,
-                descripcion: s.descripcion,
-                precio: s.precio_cotizado || 0,
-                items: s.items || []
-            }));
-        } else {
-            serviciosActuales = [];
-        }
-        renderEditorServicios();
-        abrirModal('modalEditorServicios');
-    } catch (error) {
-        showToast('Error al cargar servicios', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-function renderEditorServicios() {
-    const container = document.getElementById('serviciosEditablesContainer');
-    if (!container) return;
-    
-    if (serviciosActuales.length === 0) {
-        container.innerHTML = `<div class="empty-state"><i class="fas fa-plus-circle"></i><p>No hay servicios. Haz clic en "Agregar Servicio"</p></div>`;
-        return;
-    }
-    
-    container.innerHTML = serviciosActuales.map((serv, idx) => `
-        <div class="servicio-editable-card">
-            <div class="servicio-editable-header" onclick="toggleServicioEditable(${idx})">
-                <div class="servicio-editable-titulo">${escapeHtml(serv.descripcion || 'Nuevo Servicio')}</div>
-                <div class="servicio-editable-precio">Bs. ${(serv.precio || 0).toFixed(2)}</div>
-            </div>
-            <div class="servicio-editable-body" id="servicio-body-${idx}">
-                <div class="form-group">
-                    <label>Nombre del Servicio</label>
-                    <input type="text" class="form-input" value="${escapeHtml(serv.descripcion || '')}" onchange="actualizarServicio(${idx}, 'descripcion', this.value)">
-                </div>
-                <div class="form-group">
-                    <label>Precio del Servicio</label>
-                    <input type="number" class="form-input" step="0.01" value="${serv.precio || 0}" onchange="actualizarServicio(${idx}, 'precio', parseFloat(this.value))">
-                </div>
-                <div class="form-group">
-                    <label>Repuestos/Items</label>
-                    <div id="items-servicio-${idx}">
-                        ${(serv.items || []).map((item, itemIdx) => `
-                            <div class="item-row">
-                                <div class="item-fields">
-                                    <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Descripción" onchange="actualizarItemServicio(${idx}, ${itemIdx}, 'descripcion', this.value)">
-                                    <input type="number" class="item-cantidad" value="${item.cantidad || 1}" min="1" onchange="actualizarItemServicio(${idx}, ${itemIdx}, 'cantidad', parseInt(this.value))">
-                                    <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle" onchange="actualizarItemServicio(${idx}, ${itemIdx}, 'detalle', this.value)">
-                                </div>
-                                <div class="item-actions">
-                                    <button class="btn-remove-item" onclick="eliminarItemServicio(${idx}, ${itemIdx})"><i class="fas fa-trash-alt"></i></button>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <button class="btn-add-item" style="margin-top: 0.5rem;" onclick="agregarItemServicio(${idx})">
-                        <i class="fas fa-plus-circle"></i> Agregar item
-                    </button>
-                </div>
-                <div class="action-buttons" style="margin-top: 1rem;">
-                    <button class="action-btn delete" onclick="eliminarServicio(${idx})"><i class="fas fa-trash-alt"></i> Eliminar Servicio</button>
-                </div>
-            </div>
-        </div>
-    `).join('');
-}
-
-function toggleServicioEditable(idx) {
-    const body = document.getElementById(`servicio-body-${idx}`);
-    if (body) body.classList.toggle('active');
-}
-
-function actualizarServicio(idx, campo, valor) {
-    if (serviciosActuales[idx]) serviciosActuales[idx][campo] = valor;
-}
-
-function agregarItemServicio(servIdx) {
-    if (!serviciosActuales[servIdx].items) serviciosActuales[servIdx].items = [];
-    serviciosActuales[servIdx].items.push({ descripcion: '', cantidad: 1, detalle: '', precio_unitario: 0 });
-    renderEditorServicios();
-}
-
-function actualizarItemServicio(servIdx, itemIdx, campo, valor) {
-    if (serviciosActuales[servIdx]?.items?.[itemIdx]) {
-        serviciosActuales[servIdx].items[itemIdx][campo] = valor;
-    }
-}
-
-function eliminarItemServicio(servIdx, itemIdx) {
-    serviciosActuales[servIdx].items.splice(itemIdx, 1);
-    renderEditorServicios();
-}
-
-function agregarServicio() {
-    serviciosActuales.push({ descripcion: 'Nuevo Servicio', precio: 0, items: [] });
-    renderEditorServicios();
-}
-
-function eliminarServicio(idx) {
-    serviciosActuales.splice(idx, 1);
-    renderEditorServicios();
-}
-
-async function guardarServiciosEditados() {
-    if (!currentOrdenData) {
-        showToast('No hay orden seleccionada', 'error');
-        return;
-    }
-    
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/servicios-cotizacion/${currentOrdenData.id_orden}`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ servicios: serviciosActuales })
-        });
-        const data = await response.json();
-        if (data.success) {
-            showToast('Servicios guardados correctamente', 'success');
-            cerrarModal('modalEditorServicios');
-            await cargarOrdenesConServicios();
-        } else {
-            showToast(data.error || 'Error al guardar', 'error');
-        }
-    } catch (error) {
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-async function editarServicioCotizacion(id_orden, id_servicio) {
-    currentOrdenData = { id_orden };
-    const orden = ordenesConServicios.find(o => o.id_orden === id_orden);
-    const servicio = orden?.servicios.find(s => s.id_servicio === id_servicio);
-    
-    serviciosActuales = [{
-        id_servicio: servicio.id_servicio,
-        descripcion: servicio.descripcion,
-        precio: servicio.precio_cotizado || 0,
-        items: servicio.items || []
-    }];
-    
-    renderEditorServicios();
-    abrirModal('modalEditorServicios');
-}
-
-function abrirHistorialCotizaciones() {
-    cargarHistorialCotizaciones().then(() => {
-        abrirModal('modalHistorialCotizaciones');
-    });
-}
-
-// =====================================================
-// EVENTOS Y AUTENTICACIÓN
-// =====================================================
-
-function setupEventListeners() {
-    document.getElementById('saveSolicitudModal')?.addEventListener('click', () => {
-        showToast('Función en desarrollo', 'info');
-    });
-    document.getElementById('enviarCotizacionBtn')?.addEventListener('click', enviarCotizacionCliente);
-    document.getElementById('btnEnviarInstrucciones')?.addEventListener('click', enviarInstrucciones);
-    document.getElementById('confirmarSolicitudCompra')?.addEventListener('click', confirmarSolicitudCompra);
-    document.getElementById('btnAgregarItemCompra')?.addEventListener('click', agregarItemCompra);
-    document.getElementById('btnAgregarServicio')?.addEventListener('click', agregarServicio);
-    document.getElementById('guardarServiciosBtn')?.addEventListener('click', guardarServiciosEditados);
-    document.getElementById('refreshOrdenesBtn')?.addEventListener('click', () => {
-        cargarCotizacionesMap();
-        cargarOrdenesConServicios();
-    });
-    document.getElementById('btnHistorialCotizaciones')?.addEventListener('click', abrirHistorialCotizaciones);
-    document.getElementById('refreshHistorialBtn')?.addEventListener('click', cargarHistorialCotizaciones);
-    document.getElementById('btnAgregarItemSolicitud')?.addEventListener('click', agregarItemSolicitud);
-    document.getElementById('btnNuevaSolicitudCotizacion')?.addEventListener('click', () => {
-        limpiarItemsSolicitud();
-        abrirModal('modalSolicitudCotizacion');
-    });
-    document.getElementById('btnAgregarServicioCotizacion')?.addEventListener('click', agregarServicioCotizable);
-    
-    document.getElementById('filtroEstadoCotizacion')?.addEventListener('change', () => {
-        renderOrdenes();
-    });
-    document.getElementById('searchOrden')?.addEventListener('input', () => {
-        renderOrdenes();
-    });
-    document.getElementById('searchHistorial')?.addEventListener('input', () => {
-        renderHistorialCotizaciones();
-    });
-    document.getElementById('filtroEstadoHistorial')?.addEventListener('change', () => {
-        renderHistorialCotizaciones();
-    });
-    
-    const refreshBtns = ['refreshSolicitudes', 'refreshCompras'];
-    refreshBtns.forEach(id => { 
-        const btn = document.getElementById(id);
-        if (btn) btn.addEventListener('click', () => cargarDatosIniciales());
-    });
-    
-    document.querySelectorAll('.modal').forEach(modal => {
-        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
-    });
-}
 
 function setupTabs() {
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1929,6 +1852,41 @@ function setupTabs() {
             this.classList.add('active');
             document.getElementById(tabId)?.classList.add('active');
         });
+    });
+}
+
+function setupEventListeners() {
+    document.getElementById('enviarCotizacionBtn')?.addEventListener('click', enviarCotizacionCliente);
+    document.getElementById('confirmarSolicitudCompra')?.addEventListener('click', confirmarSolicitudCompra);
+    document.getElementById('btnAgregarItemCompra')?.addEventListener('click', agregarItemCompra);
+    document.getElementById('btnAgregarServicioCotizacion')?.addEventListener('click', agregarServicioCotizable);
+    document.getElementById('refreshOrdenesBtn')?.addEventListener('click', () => {
+        cargarCotizacionesMap();
+        cargarOrdenesConServicios();
+    });
+    document.getElementById('btnHistorialCotizaciones')?.addEventListener('click', () => {
+        cargarHistorialCotizaciones().then(() => abrirModal('modalHistorialCotizaciones'));
+    });
+    document.getElementById('refreshHistorialBtn')?.addEventListener('click', cargarHistorialCotizaciones);
+    document.getElementById('btnAgregarItemSolicitud')?.addEventListener('click', agregarItemSolicitud);
+    document.getElementById('btnNuevaSolicitudCotizacion')?.addEventListener('click', () => {
+        limpiarItemsSolicitud();
+        abrirModal('modalSolicitudCotizacion');
+    });
+    
+    document.getElementById('filtroEstadoCotizacion')?.addEventListener('change', () => renderOrdenes());
+    document.getElementById('searchOrden')?.addEventListener('input', () => renderOrdenes());
+    document.getElementById('searchHistorial')?.addEventListener('input', () => renderHistorialCotizaciones());
+    document.getElementById('filtroEstadoHistorial')?.addEventListener('change', () => renderHistorialCotizaciones());
+    
+    const refreshBtns = ['refreshSolicitudes', 'refreshCompras'];
+    refreshBtns.forEach(id => { 
+        const btn = document.getElementById(id);
+        if (btn) btn.addEventListener('click', () => cargarDatosIniciales());
+    });
+    
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
     });
 }
 
@@ -1978,248 +1936,13 @@ function logout() {
 }
 
 async function inicializar() {
-    console.log('🚀 Inicializando cotizaciones.js versión 2.0');
+    console.log('🚀 Inicializando cotizaciones.js versión 3.0');
     const user = await cargarUsuarioActual();
     if (!user) return;
     await cargarDatosIniciales();
     setupTabs();
     setupEventListeners();
     console.log('✅ cotizaciones.js inicializado correctamente');
-}
-// =====================================================
-// GESTIÓN DE TÉCNICOS PARA ÓRDENES APROBADAS
-// =====================================================
-
-let currentGestionTecnicosOrden = null;
-
-async function abrirModalGestionTecnicos(id_orden, codigo, vehiculo, cliente) {
-    currentGestionTecnicosOrden = { id_orden, codigo, vehiculo, cliente };
-    mostrarLoading(true);
-    
-    try {
-        // Obtener técnicos disponibles
-        const response = await fetch(`${API_URL}/tecnicos-disponibles`, { headers: getAuthHeaders() });
-        const data = await response.json();
-        
-        // Obtener técnicos ya asignados a esta orden
-        const asignadosResponse = await fetch(`${API_URL}/orden/${id_orden}/tecnicos-asignados`, { headers: getAuthHeaders() });
-        const asignadosData = await asignadosResponse.json();
-        
-        const tecnicosDisponibles = data.success ? data.tecnicos : [];
-        const tecnicosAsignados = asignadosData.success ? asignadosData.tecnicos : [];
-        
-        const modalBody = document.getElementById('gestionTecnicosBody');
-        if (modalBody) {
-            modalBody.innerHTML = `
-                <div class="orden-info-card" style="margin-bottom: 1rem;">
-                    <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(codigo)}</p>
-                    <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(vehiculo)}</p>
-                    <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(cliente)}</p>
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-users"></i> Técnicos Asignados</label>
-                    <div id="tecnicosSeleccionados" class="tecnicos-seleccionados">
-                        ${tecnicosAsignados.map(t => `
-                            <div class="tecnico-tag" data-id="${t.id}">
-                                ${escapeHtml(t.nombre)}
-                                <button type="button" class="remove-tecnico" onclick="removerTecnico(${t.id})">&times;</button>
-                            </div>
-                        `).join('')}
-                        ${tecnicosAsignados.length === 0 ? '<small class="text-muted">No hay técnicos asignados aún</small>' : ''}
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-user-plus"></i> Agregar Técnico</label>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <select id="selectTecnico" class="form-select" style="flex: 1;">
-                            <option value="">Seleccionar técnico...</option>
-                            ${tecnicosDisponibles.map(t => `
-                                <option value="${t.id}" data-nombre="${escapeHtml(t.nombre)}">${escapeHtml(t.nombre)} - ${escapeHtml(t.especialidad || 'General')}</option>
-                            `).join('')}
-                        </select>
-                        <button class="btn-primary btn-sm" onclick="agregarTecnicoSeleccionado()">
-                            <i class="fas fa-plus"></i> Agregar
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-clock"></i> Tiempo Estimado de Reparación</label>
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <input type="number" id="tiempoEstimado" class="form-input" style="width: 100px;" placeholder="Cantidad" value="1">
-                        <select id="tiempoUnidad" class="form-select" style="width: 120px;">
-                            <option value="horas">Horas</option>
-                            <option value="dias">Días</option>
-                        </select>
-                        <span class="text-muted">(tiempo estimado para completar el trabajo)</span>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-calendar-alt"></i> Fecha Estimada de Entrega</label>
-                    <input type="date" id="fechaEstimada" class="form-input">
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-comment-dots"></i> Instrucciones para el Técnico</label>
-                    <textarea id="instruccionesTecnico" class="form-textarea" rows="4" placeholder="Escribe las instrucciones detalladas para el técnico..."></textarea>
-                </div>
-            `;
-        }
-        
-        abrirModal('modalGestionTecnicos');
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error al cargar datos', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-let tecnicosSeleccionadosLista = [];
-
-function agregarTecnicoSeleccionado() {
-    const select = document.getElementById('selectTecnico');
-    const option = select.options[select.selectedIndex];
-    const id = select.value;
-    const nombre = option.getAttribute('data-nombre');
-    
-    if (!id) {
-        showToast('Selecciona un técnico', 'warning');
-        return;
-    }
-    
-    // Verificar si ya está seleccionado
-    if (tecnicosSeleccionadosLista.some(t => t.id == id)) {
-        showToast('Este técnico ya está asignado', 'warning');
-        return;
-    }
-    
-    tecnicosSeleccionadosLista.push({ id, nombre });
-    renderTecnicosSeleccionados();
-    select.value = '';
-}
-
-function removerTecnico(id) {
-    tecnicosSeleccionadosLista = tecnicosSeleccionadosLista.filter(t => t.id != id);
-    renderTecnicosSeleccionados();
-}
-
-function renderTecnicosSeleccionados() {
-    const container = document.getElementById('tecnicosSeleccionados');
-    if (!container) return;
-    
-    if (tecnicosSeleccionadosLista.length === 0) {
-        container.innerHTML = '<small class="text-muted">No hay técnicos asignados aún</small>';
-        return;
-    }
-    
-    container.innerHTML = tecnicosSeleccionadosLista.map(t => `
-        <div class="tecnico-tag" data-id="${t.id}">
-            ${escapeHtml(t.nombre)}
-            <button type="button" class="remove-tecnico" onclick="removerTecnico(${t.id})">&times;</button>
-        </div>
-    `).join('');
-}
-
-async function guardarAsignacionTecnicos() {
-    if (!currentGestionTecnicosOrden) {
-        showToast('Error: No hay orden seleccionada', 'error');
-        return;
-    }
-    
-    const instrucciones = document.getElementById('instruccionesTecnico')?.value.trim();
-    if (!instrucciones) {
-        showToast('Debes escribir instrucciones para el técnico', 'warning');
-        return;
-    }
-    
-    const tiempoEstimado = document.getElementById('tiempoEstimado')?.value;
-    const tiempoUnidad = document.getElementById('tiempoUnidad')?.value;
-    const fechaEstimada = document.getElementById('fechaEstimada')?.value;
-    
-    if (!tiempoEstimado || tiempoEstimado <= 0) {
-        showToast('Ingresa un tiempo estimado válido', 'warning');
-        return;
-    }
-    
-    mostrarLoading(true);
-    
-    try {
-        const response = await fetch(`${API_URL}/asignar-tecnicos`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                id_orden: currentGestionTecnicosOrden.id_orden,
-                tecnicos: tecnicosSeleccionadosLista.map(t => t.id),
-                instrucciones: instrucciones,
-                tiempo_estimado: parseInt(tiempoEstimado),
-                tiempo_unidad: tiempoUnidad,
-                fecha_estimada_entrega: fechaEstimada || null
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast('✅ Técnicos asignados correctamente', 'success');
-            cerrarModal('modalGestionTecnicos');
-            tecnicosSeleccionadosLista = [];
-            
-            // Marcar la orden como tecnicos_asignados en el objeto local
-            const ordenIndex = ordenesConServicios.findIndex(o => o.id_orden === currentGestionTecnicosOrden.id_orden);
-            if (ordenIndex !== -1) {
-                ordenesConServicios[ordenIndex].tecnicos_asignados = true;
-            }
-            
-            await cargarOrdenesConServicios();
-            await cargarCotizacionesMap();
-        } else {
-            showToast(data.error || 'Error al asignar técnicos', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-// Modificar la función existente para instrucciones (para rechazadas)
-async function abrirModalInstruccionesTecnico(id_orden, codigo, vehiculo, cliente, tipo = 'rechazada') {
-    currentInstruccionesOrden = { id_orden, codigo, vehiculo, cliente };
-    
-    const ordenInfo = document.getElementById('instruccionesOrdenInfo');
-    if (ordenInfo) {
-        ordenInfo.innerHTML = `
-            <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(codigo)}</p>
-            <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(vehiculo)}</p>
-            <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(cliente)}</p>
-        `;
-    }
-    
-    // Mostrar mensaje específico según tipo
-    const mensajeExtra = document.getElementById('mensajeExtraInstrucciones');
-    if (mensajeExtra) {
-        if (tipo === 'rechazada') {
-            mensajeExtra.innerHTML = `
-                <div class="precio-diagnostico-modal" style="background: linear-gradient(135deg, #1E3A5F, #0f2b3d); padding: 1rem; border-radius: 8px; margin: 1rem 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span><i class="fas fa-stethoscope"></i> Cargo por diagnóstico:</span>
-                        <span style="font-size: 1.2rem; font-weight: bold; color: #10B981;">Bs. 200.00</span>
-                    </div>
-                    <small style="color: #8E8E93;">Este cargo aplica por el diagnóstico realizado</small>
-                </div>
-            `;
-        } else {
-            mensajeExtra.innerHTML = '';
-        }
-    }
-    
-    document.getElementById('instruccionesTexto').value = '';
-    abrirModal('modalInstruccionesTecnico');
 }
 
 // Exponer funciones globales
@@ -2239,26 +1962,21 @@ window.actualizarItemSolicitud = actualizarItemSolicitud;
 window.eliminarItemSolicitud = eliminarItemSolicitud;
 window.actualizarItemCompra = actualizarItemCompra;
 window.eliminarItemCompra = eliminarItemCompra;
-window.toggleServicioEditable = toggleServicioEditable;
 window.toggleServicioCotizable = toggleServicioCotizable;
-window.actualizarServicio = actualizarServicio;
 window.actualizarServicioCotizable = actualizarServicioCotizable;
-window.agregarItemServicio = agregarItemServicio;
-window.actualizarItemServicio = actualizarItemServicio;
-window.eliminarItemServicio = eliminarItemServicio;
-window.eliminarServicio = eliminarServicio;
-window.editarServicioCotizacion = editarServicioCotizacion;
-window.editarServiciosOrden = editarServiciosOrden;
-window.descargarCotizacion = descargarCotizacion;
 window.agregarItemCotizable = agregarItemCotizable;
 window.actualizarItemCotizable = actualizarItemCotizable;
 window.eliminarItemCotizable = eliminarItemCotizable;
 window.agregarServicioCotizable = agregarServicioCotizable;
 window.eliminarServicioCotizable = eliminarServicioCotizable;
-window.abrirModalInstrucciones = abrirModalInstrucciones;
-window.enviarInstrucciones = enviarInstrucciones;
-window.verHistorialInstrucciones = verHistorialInstrucciones;
 window.reutilizarCotizacionRechazada = reutilizarCotizacionRechazada;
-window.abrirHistorialCotizaciones = abrirHistorialCotizaciones;
+window.abrirModalIniciarReparacion = abrirModalIniciarReparacion;
+window.confirmarIniciarReparacion = confirmarIniciarReparacion;
+window.abrirModalNotificarArmado = abrirModalNotificarArmado;
+window.confirmarNotificarArmado = confirmarNotificarArmado;
+window.cobrarDiagnosticoArmado = cobrarDiagnosticoArmado;
+window.verAvanceReparacion = verAvanceReparacion;
+window.descargarCotizacion = descargarCotizacion;
 
+// Inicializar
 document.addEventListener('DOMContentLoaded', inicializar);

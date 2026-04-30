@@ -464,8 +464,15 @@ function filtrarOrdenesFinalizadas() {
 // =====================================================
 
 function generarGridBahias(bahiasEstado, bahiaActual) {
+    console.log('Generando grid de bahías con datos:', bahiasEstado);
+    
     if (!bahiasEstado || bahiasEstado.length === 0) {
-        bahiasEstado = Array.from({ length: 12 }, (_, i) => ({ numero: i + 1, estado: 'libre', orden_codigo: null }));
+        console.warn('No hay datos de bahías, usando valores por defecto');
+        bahiasEstado = Array.from({ length: 12 }, (_, i) => ({ 
+            numero: i + 1, 
+            estado: 'libre', 
+            orden_codigo: null 
+        }));
     }
     
     return bahiasEstado.map(bahia => {
@@ -473,31 +480,84 @@ function generarGridBahias(bahiasEstado, bahiaActual) {
         const estado = bahia.estado;
         const esActual = bahiaActual === num;
         
-        let puedeSeleccionar = (estado === 'libre') || (estado === 'reservado' && esActual);
+        // 🔥 Mejorar lógica de selección
+        let puedeSeleccionar = false;
         
-        let estadoClass = '', estadoIcono = '', estadoTexto = '';
+        if (estado === 'libre') {
+            puedeSeleccionar = true;
+        } else if (estado === 'reservado' && esActual) {
+            puedeSeleccionar = true;
+        } else if (estado === 'reservado' && !esActual) {
+            puedeSeleccionar = false;
+        } else if (estado === 'ocupado') {
+            puedeSeleccionar = false;
+        }
+        
+        // 🔥 Mejorar estilos visuales
+        let estadoClass = '', estadoIcono = '', estadoTexto = '', infoAdicional = '';
+        
         switch (estado) {
-            case 'ocupado': estadoClass = 'ocupada'; estadoIcono = '🔴'; estadoTexto = 'Ocupada'; puedeSeleccionar = false; break;
-            case 'reservado': estadoClass = esActual ? 'reservada actual' : 'reservada'; estadoIcono = '🟡'; estadoTexto = esActual ? 'Actual' : 'Reservada'; break;
-            default: estadoClass = 'libre'; estadoIcono = '🟢'; estadoTexto = 'Libre';
+            case 'ocupado':
+                estadoClass = 'ocupada';
+                estadoIcono = '🔴';
+                estadoTexto = 'Ocupada';
+                infoAdicional = `<div class="bahia-orden">${escapeHtml(bahia.orden_codigo?.substring(0, 8) || '---')}</div>`;
+                if (bahia.inicio_real) {
+                    const inicio = new Date(bahia.inicio_real);
+                    infoAdicional += `<div class="bahia-hora">desde ${inicio.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>`;
+                }
+                break;
+                
+            case 'reservado':
+                estadoClass = esActual ? 'reservada actual' : 'reservada';
+                estadoIcono = '🟡';
+                estadoTexto = esActual ? 'Tu reserva' : 'Reservada';
+                infoAdicional = `<div class="bahia-orden">${escapeHtml(bahia.orden_codigo?.substring(0, 8) || '---')}</div>`;
+                
+                // 🔥 Mostrar información de la reserva
+                if (bahia.fecha_inicio_estimado && !esActual) {
+                    const fechaInicio = new Date(bahia.fecha_inicio_estimado);
+                    const horaInicio = fechaInicio.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                    const fechaStr = fechaInicio.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
+                    infoAdicional += `<div class="bahia-hora">📅 ${fechaStr} ${horaInicio}</div>`;
+                    if (bahia.horas_estimadas) {
+                        infoAdicional += `<div class="bahia-horas">⏱️ ${bahia.horas_estimadas}h</div>`;
+                    }
+                } else if (esActual) {
+                    infoAdicional += `<div class="bahia-hora actual-hora">⭐ Tu reserva actual</div>`;
+                }
+                break;
+                
+            default: // libre
+                estadoClass = 'libre';
+                estadoIcono = '🟢';
+                estadoTexto = 'Libre';
+                break;
         }
         
-        let infoAdicional = '';
-        if (estado === 'reservado' && bahia.fecha_inicio_estimado && !esActual) {
-            const fecha = new Date(bahia.fecha_inicio_estimado);
-            infoAdicional = `<div class="bahia-hora">${fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>`;
+        // 🔥 Tooltip con más información
+        let tooltipTitle = '';
+        if (estado === 'ocupado') {
+            tooltipTitle = `Bahía ${num} - Ocupada por orden ${bahia.orden_codigo || 'desconocida'}`;
+        } else if (estado === 'reservado' && !esActual) {
+            tooltipTitle = `Bahía ${num} - Reservada para orden ${bahia.orden_codigo || 'desconocida'} desde ${bahia.fecha_inicio_estimado ? new Date(bahia.fecha_inicio_estimado).toLocaleString() : 'horario desconocido'}`;
+        } else if (estado === 'reservado' && esActual) {
+            tooltipTitle = `Bahía ${num} - Esta es tu reserva actual`;
+        } else {
+            tooltipTitle = `Bahía ${num} - Disponible`;
         }
-        if (estado === 'reservado' && esActual) infoAdicional = `<div class="bahia-hora actual-hora">Tu reserva</div>`;
         
         return `
             <div class="bahia-item ${estadoClass} ${esActual ? 'selected' : ''}" 
-                 data-bahia="${num}" data-estado="${estado}"
+                 data-bahia="${num}" 
+                 data-estado="${estado}"
+                 title="${tooltipTitle}"
                  style="${!puedeSeleccionar ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
                 <div class="bahia-numero">${num}</div>
                 <div class="bahia-estado-icono">${estadoIcono}</div>
                 <div class="bahia-estado-texto">${estadoTexto}</div>
-                ${bahia.orden_codigo ? `<div class="bahia-orden">${escapeHtml(bahia.orden_codigo.substring(0, 8))}</div>` : ''}
                 ${infoAdicional}
+                ${!puedeSeleccionar && estado !== 'libre' ? '<div class="bahia-bloqueo"><i class="fas fa-lock"></i></div>' : ''}
             </div>
         `;
     }).join('');
@@ -685,6 +745,7 @@ function configurarAudioDiagnostico(existingAudioUrl) {
 async function abrirModalGestionOrden(idOrden) {
     try {
         mostrarNotificacion('Cargando datos de la orden...', 'info');
+        await cargarTecnicos(true);
         
         // Cargar datos en paralelo
         const [detalleResponse, bahiasResponse, diagnosticoResponse] = await Promise.all([

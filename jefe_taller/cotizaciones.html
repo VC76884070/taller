@@ -35,7 +35,7 @@
             </header>
 
             <div class="content">
-                <!-- TABS PRINCIPALES (SOLO 3) -->
+                <!-- TABS PRINCIPALES -->
                 <div class="tabs-container">
                     <div class="tabs">
                         <button class="tab-btn active" data-tab="tab-solicitar-cotizacion">
@@ -132,7 +132,8 @@
                                 <option value="pendiente">Sin cotización</option>
                                 <option value="enviada">Con cotización</option>
                                 <option value="aprobada">Aprobadas</option>
-                                <option value="rechazada">Rechazadas (Requieren acción)</option>
+                                <option value="rechazada">Rechazadas</option>
+                                <option value="reparacion">En reparación</option>
                             </select>
                         </div>
                         <div class="search-box">
@@ -363,7 +364,10 @@
                 <button class="modal-close" onclick="cerrarModal('modalEditorServicios')">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="panel-header" style="margin-bottom: 1rem;"><h3>Servicios y Repuestos</h3><button class="btn-primary btn-sm" id="btnAgregarServicio"><i class="fas fa-plus"></i> Agregar Servicio</button></div>
+                <div class="panel-header" style="margin-bottom: 1rem;">
+                    <h3>Servicios y Repuestos</h3>
+                    <button class="btn-primary btn-sm" id="btnAgregarServicio"><i class="fas fa-plus"></i> Agregar Servicio</button>
+                </div>
                 <div id="serviciosEditablesContainer" style="max-height: 500px; overflow-y: auto;"></div>
             </div>
             <div class="modal-footer">
@@ -401,7 +405,104 @@
         </div>
     </div>
 
-    <!-- Modal: Enviar Instrucciones al Técnico (para ordenes rechazadas) -->
+    <!-- Modal: Notificar Armado (COTIZACIÓN RECHAZADA) -->
+    <div class="modal" id="modalNotificarArmado">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-tools"></i> Notificar al Técnico - Armar Vehículo</h2>
+                <button class="modal-close" onclick="cerrarModal('modalNotificarArmado')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert-danger" style="padding: 1rem; margin-bottom: 1rem; border-radius: 8px; background: rgba(220, 53, 69, 0.1); border-left: 3px solid #dc3545;">
+                    <i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i>
+                    <strong>⚠️ COTIZACIÓN RECHAZADA POR EL CLIENTE</strong>
+                    <p style="margin-top: 0.5rem;">El cliente no aceptó la cotización. Debes notificar al técnico para que ARME el vehículo.</p>
+                </div>
+                
+                <div id="armadoOrdenInfo" class="orden-info-card" style="margin-bottom: 1rem;"></div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-users"></i> Seleccionar Técnico(s)</label>
+                    <select id="armadoTecnicosList" class="form-select" multiple style="min-height: 100px;">
+                        <option value="">Cargando técnicos...</option>
+                    </select>
+                    <small class="text-muted">Selecciona uno o más técnicos (Ctrl+Click para múltiple)</small>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-clipboard-list"></i> Instrucciones para el Armado</label>
+                    <textarea id="armadoInstrucciones" class="form-textarea" rows="5" 
+                        placeholder="Ejemplo:&#10;- Armar el motor completamente&#10;- Colocar todas las piezas retiradas durante el diagnóstico&#10;- Verificar que todo esté en orden&#10;- Realizar prueba de funcionamiento básica"></textarea>
+                </div>
+                
+                <div class="alert-info" style="background: rgba(23, 162, 184, 0.1); padding: 0.75rem; border-radius: 8px; margin-top: 1rem;">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Información importante:</strong>
+                    <ul style="margin: 0.5rem 0 0 1.5rem; font-size: 0.85rem;">
+                        <li>El técnico recibirá una notificación con estas instrucciones</li>
+                        <li>El vehículo será armado a su estado original</li>
+                        <li>El cliente pagará SOLO el diagnóstico (Bs. 200.00)</li>
+                        <li>No se realizará ninguna reparación adicional</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalNotificarArmado')">Cancelar</button>
+                <button class="btn-primary" id="btnConfirmarNotificarArmado" onclick="confirmarNotificarArmado()">
+                    <i class="fas fa-paper-plane"></i> Notificar al Técnico
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Iniciar Reparación (para órdenes aceptadas) -->
+    <div class="modal" id="modalIniciarReparacion">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-play-circle"></i> Iniciar Reparación</h2>
+                <button class="modal-close" onclick="cerrarModal('modalIniciarReparacion')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert-success" style="padding: 1rem; margin-bottom: 1rem; border-radius: 8px; background: rgba(40, 167, 69, 0.1); border-left: 3px solid #28a745;">
+                    <i class="fas fa-check-circle" style="color: #28a745;"></i>
+                    <strong>✅ COTIZACIÓN ACEPTADA POR EL CLIENTE</strong>
+                    <p style="margin-top: 0.5rem;">Configura los técnicos y el plazo para iniciar la reparación.</p>
+                </div>
+                
+                <div id="reparacionOrdenInfo" class="orden-info-card" style="margin-bottom: 1rem;"></div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-users"></i> Seleccionar Técnicos</label>
+                    <div id="reparacionTecnicosContainer" class="tecnicos-grid" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; max-height: 200px; overflow-y: auto;">
+                        <div class="tecnico-checkbox-placeholder">Cargando técnicos...</div>
+                    </div>
+                    <small class="text-muted">Selecciona uno o más técnicos para la reparación</small>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-calendar-alt"></i> Plazo de Reparación</label>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <input type="number" id="reparacionPlazoDias" class="form-input" style="width: 100px;" value="3" min="1">
+                        <span>días hábiles</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-comment-dots"></i> Instrucciones para el Técnico</label>
+                    <textarea id="reparacionInstrucciones" class="form-textarea" rows="5" 
+                        placeholder="Ejemplo:&#10;- Realizar diagnóstico completo del motor&#10;- Revisar sistema eléctrico y computadora&#10;- Cambiar aceite y filtros&#10;- Probar funcionamiento al finalizar"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalIniciarReparacion')">Cancelar</button>
+                <button class="btn-primary" id="btnConfirmarReparacion" onclick="confirmarIniciarReparacion()">
+                    <i class="fas fa-check-circle"></i> Iniciar Reparación
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Enviar Instrucciones al Técnico -->
     <div class="modal" id="modalInstruccionesTecnico">
         <div class="modal-content modal-md">
             <div class="modal-header">
@@ -417,7 +518,7 @@
                 </div>
                 <div class="alert-info" style="background: rgba(59, 130, 246, 0.1); padding: 0.75rem; border-radius: 8px;">
                     <i class="fas fa-info-circle"></i>
-                    <small>El técnico recibirá una notificación con estas instrucciones. La orden volverá a estado "En Diagnóstico".</small>
+                    <small>El técnico recibirá una notificación con estas instrucciones.</small>
                 </div>
             </div>
             <div class="modal-footer">
@@ -427,7 +528,7 @@
         </div>
     </div>
 
-    <!-- Modal: Gestión de Técnicos (para órdenes aprobadas) -->
+    <!-- Modal: Gestión de Técnicos -->
     <div class="modal" id="modalGestionTecnicos">
         <div class="modal-content modal-lg">
             <div class="modal-header">
@@ -461,8 +562,11 @@
     </div>
 
     <!-- Loading Overlay -->
-    <div id="loadingOverlay" style="display: none;">
-        <div><i class="fas fa-spinner fa-pulse fa-2x" style="color: var(--rojo-primario);"></i><p style="margin-top: 0.5rem;">Cargando...</p></div>
+    <div id="loadingOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
+        <div style="background: white; padding: 1.5rem; border-radius: 12px; text-align: center;">
+            <i class="fas fa-spinner fa-pulse fa-2x" style="color: var(--rojo-primario);"></i>
+            <p style="margin-top: 0.5rem;">Cargando...</p>
+        </div>
     </div>
 
     <script src="js/include.js"></script>

@@ -1,5 +1,5 @@
 # =====================================================
-# ADMINISTRACIÓN DE ROLES - JEFE DE TALLER
+# ADMINISTRACIÓN DE ROLES - JEFE DE TALLER (CORREGIDO)
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
@@ -19,11 +19,11 @@ admin_roles_bp = Blueprint('admin_roles', __name__, url_prefix='/api/admin')
 SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
 
-# Roles de personal
-ROLES_PERSONAL = [1, 2, 3, 4]
+# Roles de personal (IDs de la tabla 'rol')
+ROLES_PERSONAL = [1, 2, 3, 4]  # Ajusta según tu BD
 
 # =====================================================
-# DECORADOR PARA VERIFICAR TOKEN
+# DECORADOR PERSONALIZADO PARA ADMIN
 # =====================================================
 
 def admin_required(f):
@@ -31,6 +31,7 @@ def admin_required(f):
     def decorated(*args, **kwargs):
         token = None
         
+        # Obtener token
         if 'Authorization' in request.headers:
             auth_header = request.headers['Authorization']
             try:
@@ -42,25 +43,64 @@ def admin_required(f):
             return jsonify({'error': 'Token requerido'}), 401
         
         try:
+            # Decodificar token
             data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            current_user = data.get('user', {})
+            current_user = data.get('user', data)
             
-            # Verificar si es JEFE TALLER
-            roles = current_user.get('roles', [])
-            es_jefe_taller = 'jefe_taller' in roles
+            # Obtener roles del usuario
+            usuario_id = current_user.get('id')
+            if not usuario_id:
+                return jsonify({'error': 'ID de usuario no encontrado'}), 401
+            
+            # Obtener roles desde la BD
+            roles_result = supabase.table('usuario_rol') \
+                .select('rol:rol!inner(nombre_rol)') \
+                .eq('id_usuario', usuario_id) \
+                .execute()
+            
+            user_roles = []
+            if roles_result.data:
+                for item in roles_result.data:
+                    rol_obj = item.get('rol', {})
+                    if isinstance(rol_obj, dict):
+                        nombre_rol = rol_obj.get('nombre_rol', '')
+                        if nombre_rol:
+                            user_roles.append(nombre_rol.lower())
+                    elif isinstance(rol_obj, list) and len(rol_obj) > 0:
+                        nombre_rol = rol_obj[0].get('nombre_rol', '')
+                        if nombre_rol:
+                            user_roles.append(nombre_rol.lower())
+            
+            # Fallback a roles del token
+            if not user_roles:
+                user_roles = current_user.get('roles', [])
+            
+            # Verificar si es jefe_taller
+            es_jefe_taller = 'jefe_taller' in user_roles
+            
+            # También verificar por ID de rol
+            if not es_jefe_taller:
+                id_rol = current_user.get('id_rol')
+                if id_rol == 2:  # ID 2 = jefe_taller
+                    es_jefe_taller = True
             
             if not es_jefe_taller:
-                rol_antiguo = current_user.get('rol')
-                id_rol_antiguo = current_user.get('id_rol')
-                es_jefe_taller = (rol_antiguo == 'jefe_taller') or (id_rol_antiguo == 2)
+                logger.warning(f"Acceso denegado: Usuario {usuario_id} no es jefe_taller")
+                return jsonify({'error': 'No autorizado. Se requiere rol jefe_taller'}), 403
             
-            if not es_jefe_taller:
-                return jsonify({'error': 'No autorizado'}), 403
+            # Agregar usuario a la función
+            if 'user' in data:
+                data['user']['roles'] = user_roles
+            else:
+                data['roles'] = user_roles
                 
         except jwt.ExpiredSignatureError:
             return jsonify({'error': 'Token expirado'}), 401
         except jwt.InvalidTokenError:
             return jsonify({'error': 'Token inválido'}), 401
+        except Exception as e:
+            logger.error(f"Error en autenticación: {str(e)}")
+            return jsonify({'error': 'Error de autenticación'}), 401
         
         return f(current_user, *args, **kwargs)
     
@@ -75,17 +115,25 @@ def admin_required(f):
 def get_roles(current_user):
     """Obtener lista de roles (solo personal)"""
     try:
+        # Obtener todos los roles
         result = supabase.table('rol') \
             .select('id, nombre_rol, descripcion') \
-            .in_('id', ROLES_PERSONAL) \
             .execute()
         
-        roles = result.data if result.data else []
+        if not result.data:
+            return jsonify({'success': True, 'roles': []}), 200
+        
+        # Filtrar roles de personal (excluir cliente)
+        roles = [r for r in result.data if r['id'] != 5]  # Asumiendo que id=5 es cliente
+        
+        # Log para depuración
+        logger.info(f"Roles encontrados: {len(roles)} roles de personal")
         
         return jsonify({
             'success': True,
             'roles': roles
         }), 200
+        
     except Exception as e:
         logger.error(f"Error obteniendo roles: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -98,13 +146,16 @@ def get_usuarios(current_user):
         # Obtener usuarios que tienen roles de personal
         usuarios_con_roles = supabase.table('usuario_rol') \
             .select('id_usuario') \
-            .in_('id_rol', ROLES_PERSONAL) \
             .execute()
         
         if not usuarios_con_roles.data:
             return jsonify({'success': True, 'usuarios': []}), 200
         
+        # Obtener IDs únicos de usuarios
         usuarios_ids = list(set([ur['id_usuario'] for ur in usuarios_con_roles.data]))
+        
+        if not usuarios_ids:
+            return jsonify({'success': True, 'usuarios': []}), 200
         
         # Obtener datos de usuarios
         usuarios = supabase.table('usuario') \
@@ -119,11 +170,12 @@ def get_usuarios(current_user):
         usuarios_roles = supabase.table('usuario_rol') \
             .select('id_usuario, id_rol') \
             .in_('id_usuario', usuarios_ids) \
-            .in_('id_rol', ROLES_PERSONAL) \
             .execute()
         
         # Mapa de roles por usuario
         roles_por_usuario = {}
+        
+        # Primero, obtener la relación usuario-rol
         for ur in (usuarios_roles.data or []):
             usuario_id = ur['id_usuario']
             if usuario_id not in roles_por_usuario:
@@ -133,8 +185,8 @@ def get_usuarios(current_user):
         # Obtener nombres de roles
         roles_result = supabase.table('rol') \
             .select('id, nombre_rol') \
-            .in_('id', ROLES_PERSONAL) \
             .execute()
+        
         roles_map = {r['id']: r['nombre_rol'] for r in (roles_result.data or [])}
         
         # Construir resultado
@@ -176,7 +228,6 @@ def asignar_roles_usuario(current_user, id_usuario):
         # Eliminar roles existentes
         supabase.table('usuario_rol').delete() \
             .eq('id_usuario', id_usuario) \
-            .in_('id_rol', ROLES_PERSONAL) \
             .execute()
         
         # Insertar nuevos roles
@@ -184,8 +235,7 @@ def asignar_roles_usuario(current_user, id_usuario):
             supabase.table('usuario_rol').insert({
                 'id_usuario': id_usuario,
                 'id_rol': rol_id,
-                'fecha_asignacion': datetime.datetime.now().isoformat(),
-                'asignado_por': current_user['id']
+                'fecha_asignacion': datetime.datetime.now().isoformat()
             }).execute()
         
         return jsonify({'success': True, 'message': 'Roles asignados correctamente'}), 200
@@ -199,10 +249,9 @@ def asignar_roles_usuario(current_user, id_usuario):
 def get_estadisticas(current_user):
     """Obtener estadísticas de roles"""
     try:
-        # Total de usuarios con roles de personal
+        # Total de usuarios con roles activos
         usuarios_personal = supabase.table('usuario_rol') \
             .select('id_usuario', count='exact') \
-            .in_('id_rol', ROLES_PERSONAL) \
             .execute()
         
         usuarios_ids = set()
@@ -213,7 +262,6 @@ def get_estadisticas(current_user):
         # Usuarios por rol
         roles = supabase.table('rol') \
             .select('id, nombre_rol') \
-            .in_('id', ROLES_PERSONAL) \
             .execute()
         
         usuarios_por_rol = []
@@ -263,13 +311,18 @@ def get_usuario_detalle(current_user, id_usuario):
         roles_result = supabase.table('usuario_rol') \
             .select('id_rol, rol(nombre_rol)') \
             .eq('id_usuario', id_usuario) \
-            .in_('id_rol', ROLES_PERSONAL) \
             .execute()
         
         roles = []
         for item in (roles_result.data or []):
-            if item.get('rol') and item['rol'].get('nombre_rol'):
-                roles.append(item['rol']['nombre_rol'])
+            if item.get('rol') and isinstance(item['rol'], dict):
+                nombre_rol = item['rol'].get('nombre_rol')
+                if nombre_rol:
+                    roles.append(nombre_rol)
+            elif item.get('rol') and isinstance(item['rol'], list) and len(item['rol']) > 0:
+                nombre_rol = item['rol'][0].get('nombre_rol')
+                if nombre_rol:
+                    roles.append(nombre_rol)
         
         return jsonify({
             'success': True,
@@ -298,18 +351,28 @@ def get_usuario_detalle(current_user, id_usuario):
 def eliminar_usuario(current_user, id_usuario):
     """Eliminar un usuario del sistema"""
     try:
-        usuario = supabase.table('usuario').select('id, nombre').eq('id', id_usuario).execute()
+        # Verificar si el usuario existe
+        usuario = supabase.table('usuario') \
+            .select('id, nombre') \
+            .eq('id', id_usuario) \
+            .execute()
+        
         if not usuario.data:
             return jsonify({'error': 'Usuario no encontrado'}), 404
         
-        if id_usuario == current_user['id']:
+        # No permitir eliminar a sí mismo
+        if id_usuario == current_user.get('id'):
             return jsonify({'error': 'No puedes eliminarte a ti mismo'}), 400
         
         # Eliminar asignaciones de roles
-        supabase.table('usuario_rol').delete().eq('id_usuario', id_usuario).execute()
+        supabase.table('usuario_rol').delete() \
+            .eq('id_usuario', id_usuario) \
+            .execute()
         
         # Eliminar usuario
-        supabase.table('usuario').delete().eq('id', id_usuario).execute()
+        supabase.table('usuario').delete() \
+            .eq('id', id_usuario) \
+            .execute()
         
         return jsonify({
             'success': True,

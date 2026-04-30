@@ -3,7 +3,7 @@
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
-const API_URL = 'http://localhost:5000/api/admin';
+const API_URL = 'http://localhost:5000/api/jefe-taller';
 let usuariosData = [];
 let rolesData = [];
 let usuarioSeleccionado = null;

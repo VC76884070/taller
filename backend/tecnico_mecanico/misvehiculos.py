@@ -462,3 +462,174 @@ def obtener_comunicados_tecnico(current_user):
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+# =====================================================
+# API: DETALLE DE ORDEN (VER DETALLE DEL VEHÍCULO) - CORRECCIÓN FINAL
+# =====================================================
+@mis_vehiculos_bp.route('/detalle-orden/<int:orden_id>', methods=['GET'])
+@tecnico_required
+def obtener_detalle_orden(current_user, orden_id):
+    """Obtener detalle completo de una orden de trabajo para el técnico"""
+    try:
+        tecnico_id = current_user['id']
+        logger.info(f"🔍 Técnico {tecnico_id} consultando detalle de orden {orden_id}")
+        
+        # 1. Verificar que el técnico esté asignado a esta orden
+        asignacion = supabase.table('asignaciontecnico') \
+            .select('*') \
+            .eq('id_orden_trabajo', orden_id) \
+            .eq('id_tecnico', tecnico_id) \
+            .execute()
+        
+        if not asignacion.data:
+            logger.warning(f"⚠️ Técnico {tecnico_id} no tiene acceso a orden {orden_id}")
+            return jsonify({'success': False, 'error': 'No tienes acceso a esta orden de trabajo'}), 403
+        
+        tipo_asignacion = asignacion.data[0].get('tipo_asignacion', 'diagnostico')
+        logger.info(f"📋 Tipo de asignación: {tipo_asignacion}")
+        
+        # 2. Obtener orden de trabajo
+        orden = supabase.table('ordentrabajo') \
+            .select('*') \
+            .eq('id', orden_id) \
+            .execute()
+        
+        if not orden.data:
+            return jsonify({'success': False, 'error': 'Orden no encontrada'}), 404
+        
+        orden_data = orden.data[0]
+        logger.info(f"📋 Orden encontrada: {orden_data.get('codigo_unico')}")
+        
+        # 3. Obtener vehículo
+        vehiculo = supabase.table('vehiculo') \
+            .select('*') \
+            .eq('id', orden_data.get('id_vehiculo')) \
+            .execute()
+        
+        vehiculo_data = vehiculo.data[0] if vehiculo.data else {}
+        logger.info(f"🚗 Vehículo: {vehiculo_data.get('placa')} - {vehiculo_data.get('marca')} {vehiculo_data.get('modelo')}")
+        
+        # 4. Obtener cliente y su información de usuario
+        cliente_info = {
+            'nombre': 'No registrado',
+            'telefono': 'No registrado',
+            'email': 'No registrado'
+        }
+        
+        if vehiculo_data.get('id_cliente'):
+            cliente = supabase.table('cliente') \
+                .select('id, id_usuario, email') \
+                .eq('id', vehiculo_data['id_cliente']) \
+                .execute()
+            
+            if cliente.data:
+                cliente_data = cliente.data[0]
+                cliente_info['email'] = cliente_data.get('email', 'No registrado')
+                
+                if cliente_data.get('id_usuario'):
+                    usuario = supabase.table('usuario') \
+                        .select('nombre, contacto') \
+                        .eq('id', cliente_data['id_usuario']) \
+                        .execute()
+                    
+                    if usuario.data:
+                        cliente_info['nombre'] = usuario.data[0].get('nombre', 'No registrado')
+                        cliente_info['telefono'] = usuario.data[0].get('contacto', 'No registrado')
+        
+        # 5. Obtener recepción
+        recepcion = supabase.table('recepcion') \
+            .select('transcripcion_problema, url_grabacion_problema, url_lateral_izquierda, url_lateral_derecha, url_foto_frontal, url_foto_trasera, url_foto_superior, url_foto_inferior, url_foto_tablero') \
+            .eq('id_orden_trabajo', orden_id) \
+            .execute()
+        
+        recepcion_data = recepcion.data[0] if recepcion.data else {}
+        logger.info(f"📝 Recepción encontrada: {bool(recepcion_data)}")
+        
+        # Organizar fotos
+        fotos = {}
+        if recepcion_data:
+            fotos = {
+                'url_lateral_izquierda': recepcion_data.get('url_lateral_izquierda'),
+                'url_lateral_derecha': recepcion_data.get('url_lateral_derecha'),
+                'url_foto_frontal': recepcion_data.get('url_foto_frontal'),
+                'url_foto_trasera': recepcion_data.get('url_foto_trasera'),
+                'url_foto_superior': recepcion_data.get('url_foto_superior'),
+                'url_foto_inferior': recepcion_data.get('url_foto_inferior'),
+                'url_foto_tablero': recepcion_data.get('url_foto_tablero')
+            }
+        
+        # 6. Obtener diagnóstico técnico
+        diagnostico = supabase.table('diagnostico_tecnico') \
+            .select('*') \
+            .eq('id_orden_trabajo', orden_id) \
+            .order('version', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        diagnostico_data = diagnostico.data[0] if diagnostico.data else None
+        if diagnostico_data:
+            logger.info(f"🔧 Diagnóstico encontrado - versión: {diagnostico_data.get('version')}, estado: {diagnostico_data.get('estado')}")
+        
+        # 7. Obtener planificación - CORREGIDO: usar columna correcta y nombres correctos
+        planificacion = supabase.table('planificacion') \
+            .select('bahia_asignada, fecha_hora_inicio_estimado, fecha_hora_fin_estimado, fecha_hora_inicio_real, fecha_hora_fin_real') \
+            .eq('id_orden_trabajo', orden_id) \
+            .execute()
+        
+        planificacion_data = planificacion.data[0] if planificacion.data else {}
+        logger.info(f"📋 Planificación encontrada: {bool(planificacion_data)}")
+        
+        # 8. Construir respuesta
+        response_data = {
+            'success': True,
+            'detalle': {
+                'orden': {
+                    'id': orden_data['id'],
+                    'codigo_unico': orden_data.get('codigo_unico', ''),
+                    'fecha_ingreso': orden_data.get('fecha_ingreso'),
+                    'estado_global': orden_data.get('estado_global', '')
+                },
+                'vehiculo': {
+                    'placa': vehiculo_data.get('placa', ''),
+                    'marca': vehiculo_data.get('marca', ''),
+                    'modelo': vehiculo_data.get('modelo', ''),
+                    'anio': vehiculo_data.get('anio', ''),
+                    'kilometraje': vehiculo_data.get('kilometraje', 0)
+                },
+                'cliente': {
+                    'nombre': cliente_info.get('nombre', 'No registrado'),
+                    'telefono': cliente_info.get('telefono', 'No registrado'),
+                    'email': cliente_info.get('email', 'No registrado')
+                },
+                'recepcion': {
+                    'transcripcion_problema': recepcion_data.get('transcripcion_problema', 'No hay descripción del problema'),
+                    'audio_url': recepcion_data.get('url_grabacion_problema', ''),
+                    'fotos': fotos
+                },
+                'diagnostico_tecnico': {
+                    'informe': diagnostico_data.get('informe', '') if diagnostico_data else None,
+                    'audio_url': diagnostico_data.get('url_grabacion_informe', '') if diagnostico_data else None,
+                    'transcripcion': diagnostico_data.get('transcripcion_informe', '') if diagnostico_data else None,
+                    'estado': diagnostico_data.get('estado', '') if diagnostico_data else None,
+                    'version': diagnostico_data.get('version', 1) if diagnostico_data else None,
+                    'fecha_envio': diagnostico_data.get('fecha_envio') if diagnostico_data else None
+                } if diagnostico_data else None,
+                'planificacion': {
+                    'bahia_asignada': planificacion_data.get('bahia_asignada', ''),
+                    'fecha_hora_inicio_estimado': planificacion_data.get('fecha_hora_inicio_estimado'),
+                    'fecha_hora_fin_estimado': planificacion_data.get('fecha_hora_fin_estimado'),
+                    'fecha_hora_inicio_real': planificacion_data.get('fecha_hora_inicio_real'),
+                    'fecha_hora_fin_real': planificacion_data.get('fecha_hora_fin_real')
+                },
+                'tipo_asignacion': tipo_asignacion
+            }
+        }
+        
+        logger.info(f"✅ Detalle construido correctamente para orden {orden_id}")
+        return jsonify(response_data), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error en detalle-orden: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500

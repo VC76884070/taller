@@ -1,5 +1,5 @@
 // =====================================================
-// LOGIN - FURIA MOTOR COMPANY - VERSIÓN SIMPLIFICADA
+// LOGIN - FURIA MOTOR COMPANY - VERSIÓN COMPLETA CORREGIDA
 // =====================================================
 
 const API_URL = 'http://localhost:5000/api';
@@ -23,6 +23,12 @@ const ROLE_CONFIG = {
         redirect: '/tecnico_mecanico/misvehiculos.html',
         descripcion: 'Diagnóstico y reparación de vehículos'
     },
+    'tecnico_mecanico': {
+        nombre: 'Técnico Mecánico',
+        icono: 'fa-wrench',
+        redirect: '/tecnico_mecanico/misvehiculos.html',
+        descripcion: 'Diagnóstico y reparación de vehículos'
+    },
     'encargado_repuestos': {
         nombre: 'Encargado de Repuestos',
         icono: 'fa-boxes',
@@ -36,6 +42,15 @@ const ROLE_CONFIG = {
         descripcion: 'Seguimiento de tus vehículos'
     }
 };
+
+// Función para normalizar roles
+function normalizarRol(rol) {
+    if (!rol) return null;
+    const rolLower = rol.toLowerCase();
+    if (rolLower === 'tecnico_mecanico') return 'tecnico';
+    if (rolLower === 'tecnico') return 'tecnico';
+    return rolLower;
+}
 
 // Elementos DOM
 const tabBtns = document.querySelectorAll('.tab-btn');
@@ -125,6 +140,10 @@ async function handleLogin(e) {
     
     setLoadingState(true);
     
+    console.log('🔐 === INICIANDO LOGIN ===');
+    console.log('Tipo:', selectedType);
+    console.log('Identificador:', identifier);
+    
     try {
         const response = await fetch(`${API_URL}/login`, {
             method: 'POST',
@@ -138,22 +157,37 @@ async function handleLogin(e) {
         
         const data = await response.json();
         
+        console.log('📦 Respuesta del servidor:', data);
+        
         if (!response.ok) {
             throw new Error(data.error || 'Error en el login');
         }
         
         if (data.success && data.user) {
-            const userRoles = data.user.roles || [];
-            const isMultiRole = userRoles.length > 1;
+            console.log('🔐 === DATOS DEL LOGIN ===');
+            console.log('Token recibido:', data.token.substring(0, 50) + '...');
+            console.log('Usuario:', data.user);
+            console.log('Roles originales del servidor:', data.user.roles);
             
-            console.log('📋 Roles del usuario:', userRoles);
+            // Normalizar roles del usuario
+            let userRoles = data.user.roles || [];
+            userRoles = userRoles.map(r => normalizarRol(r));
+            
+            console.log('Roles normalizados en frontend:', userRoles);
+            
+            const isMultiRole = userRoles.length > 1;
             
             const savedRole = localStorage.getItem('furia_selected_role');
             const savedUserId = localStorage.getItem('furia_selected_role_user');
             const hasSavedRole = savedRole && savedUserId == data.user.id && userRoles.includes(savedRole);
             
+            console.log('¿Múltiples roles?', isMultiRole);
+            console.log('Rol guardado:', savedRole);
+            console.log('¿Tiene rol guardado?', hasSavedRole);
+            
             if (isMultiRole && !hasSavedRole) {
-                pendingLoginData = data.user;
+                console.log('🎯 Mostrando modal de selección de roles');
+                pendingLoginData = { ...data.user, roles: userRoles };
                 pendingToken = data.token;
                 showRoleModal();
                 setLoadingState(false);
@@ -166,12 +200,15 @@ async function handleLogin(e) {
             if (hasSavedRole) {
                 selectedRole = savedRole;
                 redirectUrl = ROLE_CONFIG[savedRole]?.redirect;
+                console.log('Usando rol guardado:', selectedRole);
             } else if (userRoles.length === 1) {
                 selectedRole = userRoles[0];
                 redirectUrl = ROLE_CONFIG[selectedRole]?.redirect;
+                console.log('Usando único rol:', selectedRole);
             } else {
                 selectedRole = userRoles[0];
                 redirectUrl = ROLE_CONFIG[selectedRole]?.redirect;
+                console.log('Usando primer rol (múltiples):', selectedRole);
             }
             
             if (!redirectUrl && selectedType === 'client') {
@@ -183,7 +220,10 @@ async function handleLogin(e) {
                 throw new Error('No se pudo determinar la redirección');
             }
             
-            const finalUser = { ...data.user, selected_role: selectedRole };
+            console.log('🔄 Redirigiendo a:', redirectUrl);
+            console.log('🔐 ====================');
+            
+            const finalUser = { ...data.user, roles: userRoles, selected_role: selectedRole };
             localStorage.setItem('furia_token', data.token);
             localStorage.setItem('furia_user', JSON.stringify(finalUser));
             
@@ -202,7 +242,7 @@ async function handleLogin(e) {
         }
         
     } catch (error) {
-        console.error('Error:', error);
+        console.error('❌ Error en login:', error);
         showToast(error.message, 'error');
         setLoadingState(false);
     }
@@ -219,7 +259,7 @@ function setLoadingState(loading) {
 }
 
 // =====================================================
-// MODAL DE SELECCIÓN DE ROL
+// MODAL DE SELECCIÓN DE ROL (CORREGIDO)
 // =====================================================
 function showRoleModal() {
     const modal = document.getElementById('roleSelectionModal');
@@ -233,20 +273,23 @@ function showRoleModal() {
     }
     
     const userRoles = pendingLoginData.roles || [];
-    const availableRoles = userRoles.filter(rol => ROLE_CONFIG[rol]);
+    const availableRoles = userRoles.filter(rol => ROLE_CONFIG[rol] || ROLE_CONFIG['tecnico']);
     
     if (availableRoles.length === 0) return;
     
     if (rolesGrid) {
-        rolesGrid.innerHTML = availableRoles.map(rol => `
-            <div class="role-card" data-role="${rol}" onclick="selectRoleHandler('${rol}')">
-                <div class="role-icon">
-                    <i class="fas ${ROLE_CONFIG[rol].icono}"></i>
+        rolesGrid.innerHTML = availableRoles.map(rol => {
+            const config = ROLE_CONFIG[rol] || ROLE_CONFIG['tecnico'];
+            return `
+                <div class="role-card" data-role="${rol}" onclick="selectRoleHandler('${rol}')">
+                    <div class="role-icon">
+                        <i class="fas ${config.icono}"></i>
+                    </div>
+                    <div class="role-name">${config.nombre}</div>
+                    <div class="role-description">${config.descripcion}</div>
                 </div>
-                <div class="role-name">${ROLE_CONFIG[rol].nombre}</div>
-                <div class="role-description">${ROLE_CONFIG[rol].descripcion}</div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
     
     modal.style.display = 'flex';
@@ -264,35 +307,58 @@ function closeRoleModal() {
 }
 
 window.selectRoleHandler = function(selectedRole) {
+    console.log('🎯 === SELECCIÓN DE ROL ===');
+    console.log('Rol seleccionado:', selectedRole);
+    console.log('Datos pendientes:', pendingLoginData);
+    
     if (!pendingLoginData || !pendingToken) {
         showToast('Error: No hay datos de sesión', 'error');
         closeRoleModal();
         return;
     }
     
-    if (!pendingLoginData.roles.includes(selectedRole)) {
+    // Normalizar el rol seleccionado
+    let rolNormalizado = normalizarRol(selectedRole);
+    console.log('Rol normalizado:', rolNormalizado);
+    
+    // Verificar roles normalizados
+    const rolesNormalizados = pendingLoginData.roles.map(r => normalizarRol(r));
+    console.log('Roles disponibles normalizados:', rolesNormalizados);
+    
+    if (!rolesNormalizados.includes(rolNormalizado)) {
+        console.error('❌ Rol no permitido');
         showToast('No tienes permiso para este rol', 'error');
         return;
     }
     
     const rememberChoice = document.getElementById('rememberRoleChoice')?.checked || false;
+    console.log('Recordar elección:', rememberChoice);
     
     if (rememberChoice) {
-        localStorage.setItem('furia_selected_role', selectedRole);
+        localStorage.setItem('furia_selected_role', rolNormalizado);
         localStorage.setItem('furia_selected_role_user', pendingLoginData.id);
+        console.log('✅ Rol guardado en localStorage:', rolNormalizado);
     }
     
-    const redirectUrl = ROLE_CONFIG[selectedRole]?.redirect;
+    const roleConfig = ROLE_CONFIG[rolNormalizado] || ROLE_CONFIG['tecnico'];
+    const redirectUrl = roleConfig?.redirect;
+    
+    console.log('Configuración del rol:', roleConfig);
+    console.log('URL de redirección:', redirectUrl);
+    
     if (!redirectUrl) {
         showToast('Error: URL de redirección no encontrada', 'error');
         return;
     }
     
-    const finalUser = { ...pendingLoginData, selected_role: selectedRole };
+    const finalUser = { ...pendingLoginData, selected_role: rolNormalizado };
     localStorage.setItem('furia_token', pendingToken);
     localStorage.setItem('furia_user', JSON.stringify(finalUser));
     
-    showToast(`Accediendo como ${ROLE_CONFIG[selectedRole].nombre}`, 'success');
+    console.log('✅ Usuario guardado:', finalUser);
+    console.log('🎯 ====================');
+    
+    showToast(`Accediendo como ${roleConfig.nombre}`, 'success');
     closeRoleModal();
     
     setTimeout(() => {
@@ -301,15 +367,31 @@ window.selectRoleHandler = function(selectedRole) {
 };
 
 // =====================================================
-// VERIFICAR SESIÓN GUARDADA
+// VERIFICAR SESIÓN GUARDADA - CORREGIDA (EVITA BUCLE)
 // =====================================================
 async function checkSavedSession() {
     const token = localStorage.getItem('furia_token');
     const currentPath = window.location.pathname;
     
+    console.log('🔍 checkSavedSession - Path actual:', currentPath);
+    console.log('🔍 checkSavedSession - Token existe:', !!token);
+    
     if (!token) return;
     
-    if (currentPath === '/' || currentPath === '/login.html') {
+    // SI YA ESTAMOS EN UNA PÁGINA DEL SISTEMA, NO REDIRIGIR
+    const isInSystemPage = currentPath.includes('/jefe_operativo/') ||
+                          currentPath.includes('/jefe_taller/') ||
+                          currentPath.includes('/tecnico_mecanico/') ||
+                          currentPath.includes('/encargado_rep_almacen/') ||
+                          currentPath.includes('/cliente/');
+    
+    if (isInSystemPage) {
+        console.log('✅ Ya estamos en una página del sistema, no redirigir');
+        return;
+    }
+    
+    // SOLO REDIRIGIR SI ESTAMOS EN LA PÁGINA DE LOGIN
+    if (currentPath === '/' || currentPath === '/login.html' || currentPath === '') {
         try {
             const response = await fetch(`${API_URL}/verify-token`, {
                 method: 'GET',
@@ -321,6 +403,11 @@ async function checkSavedSession() {
             if (response.ok && data.valid && data.user) {
                 const user = data.user;
                 let redirect = null;
+                
+                // Normalizar roles del usuario
+                if (user.roles) {
+                    user.roles = user.roles.map(r => normalizarRol(r));
+                }
                 
                 const savedUser = localStorage.getItem('furia_user');
                 if (savedUser) {
@@ -339,16 +426,19 @@ async function checkSavedSession() {
                 }
                 
                 if (redirect && redirect !== '/') {
+                    console.log('🔄 Redirigiendo a:', redirect);
                     window.location.href = redirect;
                 }
             } else {
+                console.log('❌ Token inválido, limpiando localStorage');
                 localStorage.clear();
             }
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Error en checkSavedSession:', error);
         }
     }
     
+    // Recordar credenciales
     const remembered = localStorage.getItem('furia_remembered');
     const rememberedType = localStorage.getItem('furia_remembered_type');
     
@@ -366,7 +456,6 @@ async function checkSavedSession() {
         }
     }
 }
-
 // =====================================================
 // UTILIDADES
 // =====================================================
@@ -393,6 +482,19 @@ function showToast(message, type = 'info') {
     setTimeout(() => toast.remove(), 4000);
 }
 
+// =====================================================
+// REDIRECCIONES EXTERNAS
+// =====================================================
+function goToRegister() {
+    window.location.href = '/registro-personal.html';
+}
+
+function goToRecover() {
+    window.location.href = '/recuperar-contrasena.html';
+}
+
+// =====================================================
+// LOGOUT
 // =====================================================
 window.logout = () => {
     localStorage.clear();

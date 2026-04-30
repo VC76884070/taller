@@ -1,14 +1,70 @@
 // =====================================================
-// INCLUDE.JS - SIDEBAR PARA TÉCNICO MECÁNICO
+// INCLUDE.JS - SIDEBAR PARA TÉCNICO MECÁNICO (CORREGIDO)
 // =====================================================
 
 // Configuración
 const CONFIG = {
     sidebarPath: 'components/sidebar.html',
     logoPath: '../../img/logoblanco.jpeg',
-    defaultUserName: 'Luis Mamani',
+    defaultUserName: 'Técnico',
     userRole: 'Técnico Mecánico'
 };
+
+// =====================================================
+// FUNCIÓN PARA OBTENER USUARIO ACTUAL (CORREGIDA)
+// =====================================================
+function obtenerUsuarioActual() {
+    try {
+        const userStr = localStorage.getItem('furia_user');
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            
+            // IMPORTANTE: Normalizar roles - 'tecnico' es correcto
+            let roles = user.roles || [];
+            if (typeof roles === 'string') roles = [roles];
+            
+            // Verificar si tiene rol de técnico
+            const tieneRolTecnico = roles.some(r => {
+                const rolLower = String(r).toLowerCase();
+                return rolLower === 'tecnico' || rolLower === 'tecnico_mecanico';
+            });
+            
+            console.log('🔍 Include.js - Usuario:', user.nombre);
+            console.log('🔍 Include.js - Roles:', roles);
+            console.log('🔍 Include.js - Tiene rol técnico:', tieneRolTecnico);
+            
+            // Si no tiene rol técnico pero está en página de técnico, redirigir
+            if (!tieneRolTecnico && !window.location.pathname.includes('login')) {
+                console.warn('⚠️ Usuario no tiene rol técnico, redirigiendo');
+                
+                if (roles.includes('jefe_taller')) {
+                    window.location.href = '/jefe_taller/dashboard.html';
+                } else if (roles.includes('jefe_operativo')) {
+                    window.location.href = '/jefe_operativo/dashboard.html';
+                } else {
+                    window.location.href = '/';
+                }
+                return { nombre: user.nombre, roles: roles, tieneAcceso: false };
+            }
+            
+            return {
+                nombre: user.nombre || CONFIG.defaultUserName,
+                roles: roles,
+                id: user.id || null,
+                tieneAcceso: tieneRolTecnico
+            };
+        }
+    } catch (error) {
+        console.error('Error obteniendo usuario:', error);
+    }
+    
+    return {
+        nombre: CONFIG.defaultUserName,
+        roles: ['tecnico'],
+        id: null,
+        tieneAcceso: true
+    };
+}
 
 // =====================================================
 // FUNCIÓN PRINCIPAL PARA INCLUIR EL SIDEBAR
@@ -21,7 +77,10 @@ async function includeSidebar() {
         return;
     }
     
-    // Mostrar loader mientras carga
+    // Verificar autenticación antes de cargar sidebar
+    const user = obtenerUsuarioActual();
+    if (!user.tieneAcceso) return;
+    
     mostrarLoader(sidebarContainer);
     
     try {
@@ -35,7 +94,6 @@ async function includeSidebar() {
         
         const html = await response.text();
         
-        // Verificar que el HTML no esté vacío
         if (!html || html.trim() === '') {
             throw new Error('El archivo sidebar.html está vacío');
         }
@@ -43,19 +101,17 @@ async function includeSidebar() {
         sidebarContainer.innerHTML = html;
         console.log('✅ Sidebar cargado correctamente');
         
-        // Inicializar todas las funcionalidades del sidebar
         inicializarSidebar();
         
     } catch (error) {
         console.error('❌ Error cargando sidebar:', error);
-        console.warn('⚠️ Usando sidebar de respaldo');
         crearSidebarRespaldo(sidebarContainer);
         inicializarSidebar();
     }
 }
 
 // =====================================================
-// MOSTRAR LOADER MIENTRAS CARGA
+// MOSTRAR LOADER
 // =====================================================
 function mostrarLoader(container) {
     container.innerHTML = `
@@ -69,15 +125,23 @@ function mostrarLoader(container) {
 }
 
 // =====================================================
-// SIDEBAR DE RESPALDO (FALLBACK)
+// SIDEBAR DE RESPALDO (CORREGIDO)
 // =====================================================
 function crearSidebarRespaldo(container) {
     const user = obtenerUsuarioActual();
     const currentPage = obtenerPaginaActual();
     
+    // Determinar si mostrar opción de cambio de rol (si tiene múltiples roles)
+    const tieneMultiplesRoles = user.roles && user.roles.length > 1;
+    const rolesHtml = tieneMultiplesRoles ? `
+        <div class="roles-switch" onclick="mostrarCambioRol()">
+            <i class="fas fa-exchange-alt"></i>
+            <span>Cambiar Rol (${user.roles.length} roles)</span>
+        </div>
+    ` : '';
+    
     container.innerHTML = `
         <aside class="sidebar">
-            <!-- HEADER -->
             <div class="sidebar-header">
                 <img src="${CONFIG.logoPath}" 
                      alt="FURIA MOTOR" 
@@ -86,31 +150,29 @@ function crearSidebarRespaldo(container) {
                 <span class="sidebar-brand">FURIA MOTOR</span>
             </div>
 
-            <!-- USER INFO -->
             <div class="sidebar-user">
                 <div class="user-avatar">
-                    <i class="fas fa-user-cog"></i>
+                    <i class="fas fa-wrench"></i>
                 </div>
                 <div class="user-info">
                     <span class="user-name" id="userName">${user.nombre}</span>
                     <span class="user-role">${CONFIG.userRole}</span>
+                    ${rolesHtml}
                 </div>
             </div>
 
-            <!-- NAVIGATION MENU -->
             <nav class="sidebar-nav">
                 <ul>
-                    ${crearMenuItem('misvehiculos', 'Mis Vehículos', 'car', currentPage, '2')}
-                    ${crearMenuItem('diagnostico', 'Diagnóstico', 'stethoscope', currentPage, '')}
-                    ${crearMenuItem('avance', 'Avance de Trabajo', 'tasks', currentPage, '')}
-                    ${crearMenuItem('historial', 'Historial', 'history', currentPage, '')}
-                    ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage, '')}
+                    ${crearMenuItem('misvehiculos', 'Mis Vehículos', 'car', currentPage)}
+                    ${crearMenuItem('diagnostico', 'Diagnóstico', 'stethoscope', currentPage)}
+                    ${crearMenuItem('avance', 'Avance de Trabajo', 'tasks', currentPage)}
+                    ${crearMenuItem('historial', 'Historial', 'history', currentPage)}
+                    ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage)}
                 </ul>
 
-                <!-- BOTTOM MENU -->
                 <ul class="sidebar-bottom">
                     <li class="nav-item">
-                        <a href="#" onclick="logout()" class="nav-link">
+                        <a href="#" onclick="cerrarSesion()" class="nav-link">
                             <i class="fas fa-sign-out-alt"></i>
                             <span>Cerrar Sesión</span>
                         </a>
@@ -124,11 +186,9 @@ function crearSidebarRespaldo(container) {
 // =====================================================
 // CREAR ITEM DE MENÚ
 // =====================================================
-function crearMenuItem(page, label, icon, currentPage, badge) {
+function crearMenuItem(page, label, icon, currentPage) {
     const isActive = currentPage === page ? 'active' : '';
-    const badgeHtml = badge ? `<span class="badge">${badge}</span>` : '';
     
-    // Mapeo de nombres de página a archivos HTML
     const pageToFile = {
         'misvehiculos': 'misvehiculos.html',
         'diagnostico': 'diagnostico.html',
@@ -144,39 +204,123 @@ function crearMenuItem(page, label, icon, currentPage, badge) {
             <a href="${href}" class="nav-link">
                 <i class="fas fa-${icon}"></i>
                 <span>${label}</span>
-                ${badgeHtml}
             </a>
         </li>
     `;
 }
 
 // =====================================================
-// INICIALIZAR FUNCIONALIDADES DEL SIDEBAR
+// INICIALIZAR SIDEBAR
 // =====================================================
 function inicializarSidebar() {
-    try {
-        // Pequeño delay para asegurar que el DOM esté listo
-        setTimeout(() => {
-            // Marcar item activo
-            const currentPage = obtenerPaginaActual();
-            marcarItemActivo(currentPage);
-            
-            // Actualizar nombre de usuario
-            actualizarNombreUsuario();
-            
-            // Actualizar badge de vehículos
-            actualizarBadgeVehiculos();
-            
-            // Configurar logout
-            configurarLogout();
-            
-            console.log('✅ Sidebar inicializado correctamente');
-        }, 100);
+    setTimeout(() => {
+        const currentPage = obtenerPaginaActual();
+        marcarItemActivo(currentPage);
+        actualizarNombreUsuario();
         
-    } catch (error) {
-        console.error('Error inicializando sidebar:', error);
-    }
+        // Mostrar indicador de múltiples roles
+        const user = obtenerUsuarioActual();
+        if (user.roles && user.roles.length > 1) {
+            mostrarIndicadorMultiplesRoles();
+        }
+        
+        console.log('✅ Sidebar inicializado correctamente');
+    }, 100);
 }
+
+// =====================================================
+// MOSTRAR INDICADOR DE MÚLTIPLES ROLES
+// =====================================================
+function mostrarIndicadorMultiplesRoles() {
+    const userInfo = document.querySelector('.user-info');
+    if (!userInfo) return;
+    
+    // Evitar duplicados
+    if (userInfo.querySelector('.multi-role-badge')) return;
+    
+    const user = obtenerUsuarioActual();
+    const rolesNombres = user.roles.map(r => {
+        const nombres = {
+            'tecnico': 'Técnico',
+            'jefe_taller': 'Jefe Taller',
+            'jefe_operativo': 'Jefe Operativo',
+            'encargado_repuestos': 'Repuestos'
+        };
+        return nombres[r] || r;
+    }).join(' • ');
+    
+    const badge = document.createElement('div');
+    badge.className = 'multi-role-badge';
+    badge.style.cssText = `
+        font-size: 0.65rem;
+        background: rgba(229, 57, 53, 0.2);
+        padding: 0.2rem 0.5rem;
+        border-radius: 12px;
+        margin-top: 0.25rem;
+        cursor: pointer;
+        text-align: center;
+    `;
+    badge.innerHTML = `<i class="fas fa-exchange-alt"></i> ${rolesNombres}`;
+    badge.title = "Tienes múltiples roles. Haz clic para cambiar.";
+    badge.onclick = () => mostrarCambioRol();
+    
+    userInfo.appendChild(badge);
+}
+
+// =====================================================
+// FUNCIÓN PARA CAMBIAR DE ROL
+// =====================================================
+window.mostrarCambioRol = function() {
+    const user = obtenerUsuarioActual();
+    const roles = user.roles || [];
+    
+    if (roles.length <= 1) {
+        mostrarNotificacion('Solo tienes un rol asignado', 'info');
+        return;
+    }
+    
+    const roleNames = {
+        'tecnico': 'Técnico Mecánico',
+        'jefe_taller': 'Jefe de Taller',
+        'jefe_operativo': 'Jefe Operativo',
+        'encargado_repuestos': 'Encargado de Repuestos'
+    };
+    
+    let message = 'Selecciona el rol para cambiar:\n\n';
+    roles.forEach((rol, index) => {
+        message += `${index + 1}. ${roleNames[rol] || rol}\n`;
+    });
+    message += '\n0. Cancelar';
+    
+    const option = prompt(message);
+    
+    if (option && option !== '0') {
+        const selectedIndex = parseInt(option) - 1;
+        if (selectedIndex >= 0 && selectedIndex < roles.length) {
+            const selectedRole = roles[selectedIndex];
+            const currentRole = localStorage.getItem('furia_selected_role');
+            
+            if (selectedRole !== currentRole) {
+                localStorage.setItem('furia_selected_role', selectedRole);
+                localStorage.setItem('furia_selected_role_user', user.id);
+                mostrarNotificacion(`Cambiando a ${roleNames[selectedRole] || selectedRole}...`, 'success');
+                
+                const redirects = {
+                    'tecnico': '/tecnico_mecanico/misvehiculos.html',
+                    'jefe_taller': '/jefe_taller/dashboard.html',
+                    'jefe_operativo': '/jefe_operativo/dashboard.html',
+                    'encargado_repuestos': '/encargado_rep_almacen/dashboard.html'
+                };
+                
+                setTimeout(() => {
+                    window.location.href = redirects[selectedRole] || '/';
+                }, 500);
+            } else {
+                mostrarNotificacion('Ya estás en ese rol', 'info');
+            }
+        }
+    }
+};
 
 // =====================================================
 // OBTENER PÁGINA ACTUAL
@@ -184,81 +328,33 @@ function inicializarSidebar() {
 function obtenerPaginaActual() {
     const path = window.location.pathname;
     const filename = path.split('/').pop() || 'misvehiculos.html';
-    return filename.replace('.html', '');
+    const pageName = filename.replace('.html', '');
+    
+    // Mapeo de páginas
+    const validPages = ['misvehiculos', 'diagnostico', 'avance', 'historial', 'perfil'];
+    
+    if (validPages.includes(pageName)) {
+        return pageName;
+    }
+    return 'misvehiculos';
 }
 
 // =====================================================
-// MARCAR ITEM ACTIVO EN EL MENÚ
+// MARCAR ITEM ACTIVO
 // =====================================================
 function marcarItemActivo(currentPage) {
-    // Remover active de todos
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
     });
     
-    // Intentar encontrar por data-page exacto
-    let activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
-    
-    // Si no encuentra, intentar con mapeo
-    if (!activeItem) {
-        const pageMapping = {
-            'misvehiculos': ['vehiculos', 'mis-vehiculos', 'home'],
-            'diagnostico': ['diagnosticos', 'nuevo-diagnostico'],
-            'avance': ['avances', 'progreso', 'trabajo'],
-            'historial': ['historial-trabajos', 'historial-vehiculos'],
-            'perfil': ['mi-perfil', 'configuracion']
-        };
-        
-        // Buscar si currentPage tiene algún alias
-        for (const [page, aliases] of Object.entries(pageMapping)) {
-            if (page === currentPage || aliases.includes(currentPage)) {
-                activeItem = document.querySelector(`.nav-item[data-page="${page}"]`);
-                break;
-            }
-        }
-    }
-    
-    // Si encuentra, activarlo
+    const activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
     if (activeItem) {
         activeItem.classList.add('active');
-        console.log(`✅ Item activo: ${currentPage} → ${activeItem.dataset.page}`);
-    } else {
-        // Si no encuentra, activar misvehiculos por defecto
-        const defaultItem = document.querySelector('.nav-item[data-page="misvehiculos"]');
-        if (defaultItem) {
-            defaultItem.classList.add('active');
-            console.log(`✅ Item activo por defecto: misvehiculos`);
-        }
     }
 }
 
 // =====================================================
-// OBTENER USUARIO ACTUAL DESDE LOCALSTORAGE
-// =====================================================
-function obtenerUsuarioActual() {
-    try {
-        const userStr = localStorage.getItem('furia_user');
-        if (userStr) {
-            const user = JSON.parse(userStr);
-            return {
-                nombre: user.nombre || CONFIG.defaultUserName,
-                rol: user.rol || 'tecnico',
-                id: user.id || null
-            };
-        }
-    } catch (error) {
-        console.error('Error obteniendo usuario:', error);
-    }
-    
-    return {
-        nombre: CONFIG.defaultUserName,
-        rol: 'tecnico',
-        id: null
-    };
-}
-
-// =====================================================
-// ACTUALIZAR NOMBRE DE USUARIO EN EL SIDEBAR
+// ACTUALIZAR NOMBRE DE USUARIO
 // =====================================================
 function actualizarNombreUsuario() {
     const userNameSpan = document.getElementById('userName');
@@ -269,57 +365,22 @@ function actualizarNombreUsuario() {
 }
 
 // =====================================================
-// ACTUALIZAR BADGE DE VEHÍCULOS
+// CIERRE DE SESIÓN (CORREGIDO)
 // =====================================================
-function actualizarBadgeVehiculos() {
-    const badge = document.getElementById('vehiculosBadge');
-    if (!badge) return;
-    
-    // Obtener cantidad de vehículos activos desde localStorage
-    try {
-        const vehiculosActivos = JSON.parse(localStorage.getItem('vehiculos_activos') || '[]');
-        badge.textContent = vehiculosActivos.length;
-        
-        // Ocultar badge si es 0
-        if (vehiculosActivos.length === 0) {
-            badge.style.display = 'none';
-        } else {
-            badge.style.display = 'inline';
-        }
-    } catch (error) {
-        console.error('Error actualizando badge:', error);
-        badge.textContent = '0';
-        badge.style.display = 'none';
+window.cerrarSesion = function() {
+    if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
+        localStorage.removeItem('furia_token');
+        localStorage.removeItem('furia_user');
+        localStorage.removeItem('furia_remembered');
+        localStorage.removeItem('furia_remembered_type');
+        localStorage.removeItem('furia_selected_role');
+        localStorage.removeItem('furia_selected_role_user');
+        window.location.href = '/';
     }
-}
+};
 
 // =====================================================
-// CONFIGURAR FUNCIÓN DE LOGOUT
-// =====================================================
-function configurarLogout() {
-    // Hacer la función logout global (por si se llama desde onclick)
-    window.logout = function() {
-        if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
-            // Mostrar notificación de cierre de sesión
-            mostrarNotificacion('Cerrando sesión...', 'info');
-            
-            // Limpiar localStorage
-            localStorage.removeItem('furia_token');
-            localStorage.removeItem('furia_user');
-            localStorage.removeItem('vehiculos_activos');
-            localStorage.removeItem('furia_remembered');
-            localStorage.removeItem('furia_remembered_type');
-            
-            // Redirigir al login
-            setTimeout(() => {
-                window.location.href = '../../login.html';
-            }, 500);
-        }
-    };
-}
-
-// =====================================================
-// FUNCIÓN PARA MOSTRAR NOTIFICACIONES
+// NOTIFICACIONES
 // =====================================================
 function mostrarNotificacion(mensaje, tipo = 'info') {
     let toastContainer = document.querySelector('.toast-container');
@@ -378,222 +439,42 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
 }
 
 // =====================================================
-// AGREGAR ESTILOS ADICIONALES PARA EL SIDEBAR
+// AGREGAR ESTILOS
 // =====================================================
 function agregarEstilosSidebar() {
-    // Verificar si ya existen los estilos
     if (document.getElementById('sidebar-adicional-styles')) return;
     
     const style = document.createElement('style');
     style.id = 'sidebar-adicional-styles';
     style.textContent = `
-        /* Estilos para el loader */
-        .sidebar-loader {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-        }
-        
-        /* Mejoras para el sidebar */
-        .sidebar {
-            background: #121212;
-            color: #FFFFFF;
-            width: 280px;
-            height: 100vh;
-            position: fixed;
-            left: 0;
-            top: 0;
-            overflow-y: auto;
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
-        
-        .sidebar-header {
-            padding: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        
-        .sidebar-logo {
-            width: 40px;
-            height: 40px;
-            object-fit: contain;
-        }
-        
-        .sidebar-brand {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #E53935;
-        }
-        
-        .sidebar-user {
-            padding: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        
-        .user-avatar {
-            width: 48px;
-            height: 48px;
-            background: #E53935;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-        }
-        
-        .user-info {
-            flex: 1;
-        }
-        
-        .user-name {
-            display: block;
-            font-weight: 600;
-            font-size: 1rem;
-            margin-bottom: 0.25rem;
-            color: #FFFFFF;
-        }
-        
-        .user-role {
-            display: block;
-            font-size: 0.8rem;
-            color: #9E9E9E;
-        }
-        
-        .sidebar-nav {
-            padding: 1rem 0;
-            display: flex;
-            flex-direction: column;
-            height: calc(100vh - 180px);
-        }
-        
-        .sidebar-nav ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        
-        .sidebar-nav ul:first-child {
-            flex: 1;
-        }
-        
-        .nav-item {
-            margin: 0.25rem 0;
-        }
-        
-        .nav-link {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: 0.75rem 1.5rem;
-            color: #9E9E9E;
-            text-decoration: none;
-            transition: all 0.3s ease;
-            border-left: 4px solid transparent;
-        }
-        
-        .nav-link i {
-            width: 20px;
-            font-size: 1.1rem;
-        }
-        
-        .nav-link:hover {
-            background: rgba(229, 57, 53, 0.1);
-            color: #FFFFFF;
-        }
-        
-        .nav-item.active .nav-link {
-            background: rgba(229, 57, 53, 0.15);
-            color: #FFFFFF;
-            border-left-color: #E53935;
-        }
-        
-        .badge {
-            background: #E53935;
-            color: #FFFFFF;
-            padding: 0.2rem 0.5rem;
-            border-radius: 12px;
-            font-size: 0.7rem;
-            margin-left: auto;
-        }
-        
-        .sidebar-bottom {
-            border-top: 1px solid rgba(255,255,255,0.1);
-            padding-top: 1rem;
-        }
-        
-        /* Responsive */
-        @media (max-width: 992px) {
-            .sidebar {
-                width: 80px;
-            }
-            
-            .sidebar-brand,
-            .user-info,
-            .nav-link span:not(.badge) {
-                display: none;
-            }
-            
-            .nav-link {
-                justify-content: center;
-                padding: 0.75rem;
-            }
-            
-            .nav-link i {
-                margin: 0;
-                font-size: 1.3rem;
-            }
-        }
+        .sidebar { background: #121212; color: #FFFFFF; width: 280px; height: 100vh; position: fixed; left: 0; top: 0; overflow-y: auto; z-index: 1000; }
+        .sidebar-header { padding: 1.5rem; display: flex; align-items: center; gap: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .sidebar-logo { width: 40px; height: 40px; object-fit: contain; }
+        .sidebar-brand { font-size: 1.2rem; font-weight: 700; color: #E53935; }
+        .sidebar-user { padding: 1.5rem; display: flex; align-items: center; gap: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .user-avatar { width: 48px; height: 48px; background: #E53935; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+        .user-info { flex: 1; }
+        .user-name { display: block; font-weight: 600; font-size: 1rem; margin-bottom: 0.25rem; color: #FFFFFF; }
+        .user-role { display: block; font-size: 0.8rem; color: #9E9E9E; }
+        .sidebar-nav { padding: 1rem 0; display: flex; flex-direction: column; height: calc(100vh - 180px); }
+        .sidebar-nav ul { list-style: none; padding: 0; margin: 0; }
+        .sidebar-nav ul:first-child { flex: 1; }
+        .nav-item { margin: 0.25rem 0; }
+        .nav-link { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1.5rem; color: #9E9E9E; text-decoration: none; transition: all 0.3s ease; border-left: 4px solid transparent; }
+        .nav-link i { width: 20px; font-size: 1.1rem; }
+        .nav-link:hover { background: rgba(229, 57, 53, 0.1); color: #FFFFFF; }
+        .nav-item.active .nav-link { background: rgba(229, 57, 53, 0.15); color: #FFFFFF; border-left-color: #E53935; }
+        .sidebar-bottom { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem; }
+        .multi-role-badge { font-size: 0.65rem; background: rgba(229, 57, 53, 0.2); padding: 0.2rem 0.5rem; border-radius: 12px; margin-top: 0.25rem; cursor: pointer; text-align: center; }
+        @media (max-width: 992px) { .sidebar { width: 80px; } .sidebar-brand, .user-info, .nav-link span:not(.badge) { display: none; } .nav-link { justify-content: center; padding: 0.75rem; } .nav-link i { margin: 0; font-size: 1.3rem; } }
     `;
-    
     document.head.appendChild(style);
 }
 
 // =====================================================
-// VERIFICAR AUTENTICACIÓN (OPCIONAL)
-// =====================================================
-function verificarAutenticacion() {
-    const token = localStorage.getItem('furia_token');
-    const user = JSON.parse(localStorage.getItem('furia_user') || '{}');
-    
-    // Si no hay token o no es técnico, redirigir
-    if (!token || user.rol !== 'tecnico') {
-        // No redirigir si ya estamos en login
-        if (!window.location.pathname.includes('login.html')) {
-            console.warn('⚠️ Usuario no autenticado o no es técnico, redirigiendo a login');
-            window.location.href = '../../login.html';
-            return false;
-        }
-    }
-    
-    return true;
-}
-
-// =====================================================
-// INICIALIZAR TODO
+// INICIALIZAR
 // =====================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // Verificar autenticación (opcional - descomentar si quieres redirección automática)
-    // verificarAutenticacion();
-    
-    // Agregar estilos adicionales
     agregarEstilosSidebar();
-    
-    // Cargar sidebar
     includeSidebar();
 });
-
-// =====================================================
-// EXPORTAR FUNCIONES PARA USO GLOBAL
-// =====================================================
-// Estas funciones estarán disponibles globalmente
-window.obtenerUsuarioActual = obtenerUsuarioActual;
-window.actualizarNombreUsuario = actualizarNombreUsuario;
-window.actualizarBadgeVehiculos = actualizarBadgeVehiculos;
-window.mostrarNotificacion = mostrarNotificacion;

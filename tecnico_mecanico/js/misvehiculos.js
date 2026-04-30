@@ -2,6 +2,7 @@
 // MIS VEHÍCULOS - TÉCNICO MECÁNICO
 // FLUJO: EMPEZAR TRABAJO → DIAGNÓSTICO → APROBACIÓN → REPARACIÓN
 // FURIA MOTOR COMPANY SRL
+// VERSIÓN CORREGIDA - URLs: /tecnico/...
 // =====================================================
 
 // Configuración de roles
@@ -13,7 +14,10 @@ const ROLE_CONFIG = {
         redirect: '/jefe_taller/dashboard.html'
     },
     'tecnico': {
-        redirect: '/tecnico_mecanico/misvehiculos.html'
+        redirect: '/tecnico/mis-vehiculos'
+    },
+    'tecnico_mecanico': {
+        redirect: '/tecnico/mis-vehiculos'
     },
     'encargado_repuestos': {
         redirect: '/encargado_rep_almacen/dashboard.html'
@@ -135,8 +139,33 @@ window.recargarDatos = function() {
     cargarComunicados();
 };
 
+// Función para normalizar roles
+function normalizarRol(rol) {
+    if (!rol) return null;
+    const rolLower = rol.toLowerCase();
+    
+    const mapping = {
+        'tecnico': 'tecnico',
+        'tecnico_mecanico': 'tecnico',
+        'jefe_taller': 'jefe_taller',
+        'jefe_operativo': 'jefe_operativo',
+        'encargado_repuestos': 'encargado_repuestos',
+        'cliente': 'cliente',
+        'admin': 'admin',
+        'administrador': 'admin'
+    };
+    
+    return mapping[rolLower] || rolLower;
+}
+
+// Verificar si tiene rol de técnico
+function tieneRolTecnico(roles) {
+    if (!roles || !Array.isArray(roles)) return false;
+    return roles.some(rol => normalizarRol(rol) === 'tecnico');
+}
+
 // =====================================================
-// VERIFICAR AUTENTICACIÓN
+// VERIFICAR AUTENTICACIÓN - URL CORREGIDA
 // =====================================================
 async function verificarToken() {
     token = getToken();
@@ -152,9 +181,11 @@ async function verificarToken() {
         if (userData) {
             usuarioActual = JSON.parse(userData);
             rolesUsuario = usuarioActual.roles || [];
+            rolesUsuario = rolesUsuario.map(r => normalizarRol(r));
         }
         
-        const response = await fetch('/tecnico/api/verify-token', {
+        // URL CORREGIDA: /tecnico/verify-token (sin /api/)
+        const response = await fetch('/tecnico/verify-token', {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -171,17 +202,20 @@ async function verificarToken() {
         if (data.user) {
             usuarioActual = data.user;
             rolesUsuario = data.user.roles || [];
+            rolesUsuario = rolesUsuario.map(r => normalizarRol(r));
             localStorage.setItem('furia_user', JSON.stringify(usuarioActual));
         }
         
         const selectedRole = localStorage.getItem('furia_selected_role');
         
-        console.log('📋 Roles del usuario:', rolesUsuario);
+        console.log('📋 Roles del usuario (normalizados):', rolesUsuario);
         console.log('🎯 Rol seleccionado:', selectedRole);
         
-        const tieneRolTecnico = rolesUsuario.includes('tecnico');
+        const tieneRol = tieneRolTecnico(rolesUsuario);
         
-        if (!tieneRolTecnico) {
+        console.log('🔍 ¿Tiene rol técnico?', tieneRol);
+        
+        if (!tieneRol) {
             console.warn('❌ Usuario no tiene permiso de Técnico');
             showToast('No tienes permisos para acceder a esta sección', 'error');
             
@@ -196,12 +230,6 @@ async function verificarToken() {
             } else {
                 window.location.href = '/';
             }
-            return false;
-        }
-        
-        if (selectedRole && selectedRole !== 'tecnico' && ROLE_CONFIG[selectedRole]) {
-            console.log(`🔄 Usuario seleccionó ${selectedRole}, redirigiendo...`);
-            window.location.href = ROLE_CONFIG[selectedRole].redirect;
             return false;
         }
         
@@ -264,7 +292,7 @@ function mostrarNombreUsuario() {
 }
 
 // =====================================================
-// CARGAR VEHÍCULOS ASIGNADOS (DIAGNÓSTICO + REPARACIÓN)
+// CARGAR VEHÍCULOS ASIGNADOS - URL CORREGIDA
 // =====================================================
 async function cargarVehiculos() {
     const grid = document.getElementById('vehiculosGrid');
@@ -276,11 +304,16 @@ async function cargarVehiculos() {
     if (emptyState) emptyState.style.display = 'none';
     
     try {
-        const response = await fetch('/tecnico/api/mis-vehiculos', {
+        const timestamp = new Date().getTime();
+        // URL CORREGIDA: /tecnico/mis-vehiculos (sin /api/)
+        const response = await fetch(`/tecnico/get-mis-vehiculos?_=${timestamp}`, {
             method: 'GET',
             headers: { 
                 'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
             }
         });
         
@@ -292,11 +325,15 @@ async function cargarVehiculos() {
         
         const data = await response.json();
         
+        console.log('📦 Respuesta de vehículos:', data);
+        
         if (!data.success) {
             throw new Error(data.error || 'Error al cargar');
         }
         
         vehiculosAsignados = data.vehiculos || [];
+        
+        console.log(`✅ ${vehiculosAsignados.length} vehículos cargados`);
         
         if (loadingContainer) loadingContainer.style.display = 'none';
         
@@ -354,13 +391,11 @@ function renderVehiculos() {
                 </span>
             `;
             
-            // MOSTRAR LA BAHÍA ASIGNADA SIEMPRE
             const bahiaInfo = vehiculo.bahia_asignada ? 
                 `<div class="bahia-info" style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(37, 99, 235, 0.1); border-radius: var(--radius-sm);">
                     <i class="fas fa-warehouse"></i> <strong>Bahía asignada:</strong> ${vehiculo.bahia_asignada}
                 </div>` : '';
             
-            // CASO 1: No ha empezado el trabajo - Mostrar "EMPEZAR TRABAJO"
             if (!trabajoIniciado && !diagnosticoEnviado && !diagnosticoRechazado) {
                 botonesHtml = `
                     <button class="btn-sm btn-primary-sm" onclick="empezarTrabajoDiagnostico(${vehiculo.orden_id})">
@@ -372,7 +407,6 @@ function renderVehiculos() {
                     ${bahiaInfo}
                 `;
             } 
-            // CASO 2: Trabajo empezado, diagnóstico no enviado - Mostrar "Realizar Diagnóstico"
             else if (trabajoIniciado && !diagnosticoEnviado && !diagnosticoRechazado) {
                 botonesHtml = `
                     <button class="btn-sm btn-warning-sm" onclick="crearDiagnostico(${vehiculo.orden_id})">
@@ -386,7 +420,6 @@ function renderVehiculos() {
                     </div>
                 `;
             } 
-            // CASO 3: Diagnóstico enviado, esperando aprobación
             else if (diagnosticoEstado === 'pendiente') {
                 botonesHtml = `
                     <button class="btn-sm btn-warning-sm" disabled>
@@ -400,7 +433,6 @@ function renderVehiculos() {
                     </div>
                 `;
             } 
-            // CASO 4: Diagnóstico aprobado
             else if (diagnosticoEstado === 'aprobado') {
                 botonesHtml = `
                     <button class="btn-sm btn-success-sm" disabled>
@@ -414,7 +446,6 @@ function renderVehiculos() {
                     </div>
                 `;
             } 
-            // CASO 5: Diagnóstico rechazado - rehacer
             else if (diagnosticoRechazado) {
                 botonesHtml = `
                     <button class="btn-sm btn-warning-sm" onclick="crearDiagnostico(${vehiculo.orden_id})">
@@ -550,7 +581,7 @@ function escapeHtml(text) {
 }
 
 // =====================================================
-// DIAGNÓSTICO - EMPEZAR TRABAJO (OCUPA BAHÍA)
+// DIAGNÓSTICO - EMPEZAR TRABAJO - URL CORREGIDA
 // =====================================================
 let ordenSeleccionadaParaEmpezar = null;
 
@@ -585,7 +616,8 @@ async function confirmarEmpezarDiagnostico() {
     showToast('Iniciando trabajo...', 'info');
     
     try {
-        const response = await fetch('/tecnico/api/empezar-diagnostico', {
+        // URL CORREGIDA: /tecnico/empezar-diagnostico (sin /api/)
+        const response = await fetch('/tecnico/empezar-diagnostico', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -621,7 +653,7 @@ function crearDiagnostico(ordenId) {
 }
 
 // =====================================================
-// REPARACIÓN - INICIAR
+// REPARACIÓN - INICIAR - URL CORREGIDA
 // =====================================================
 let ordenSeleccionadaParaReparacion = null;
 
@@ -656,7 +688,8 @@ async function confirmarInicioReparacion() {
     showToast('Iniciando reparación...', 'info');
     
     try {
-        const response = await fetch('/tecnico/api/iniciar-reparacion', {
+        // URL CORREGIDA: /tecnico/iniciar-reparacion (sin /api/)
+        const response = await fetch('/tecnico/iniciar-reparacion', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -684,7 +717,7 @@ async function confirmarInicioReparacion() {
 }
 
 // =====================================================
-// REPARACIÓN - PAUSAR
+// REPARACIÓN - PAUSAR - URL CORREGIDA
 // =====================================================
 window.pausarReparacion = function(ordenId) {
     document.getElementById('ordenIdPausa').value = ordenId;
@@ -711,7 +744,8 @@ async function confirmarPausaReparacion() {
     showToast('Pausando reparación...', 'info');
     
     try {
-        const response = await fetch('/tecnico/api/pausar-reparacion', {
+        // URL CORREGIDA: /tecnico/pausar-reparacion (sin /api/)
+        const response = await fetch('/tecnico/pausar-reparacion', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -735,7 +769,7 @@ async function confirmarPausaReparacion() {
 }
 
 // =====================================================
-// REPARACIÓN - REANUDAR
+// REPARACIÓN - REANUDAR - URL CORREGIDA
 // =====================================================
 window.reanudarReparacion = function(ordenId) {
     const vehiculo = vehiculosAsignados.find(v => v.orden_id === ordenId);
@@ -765,7 +799,8 @@ async function confirmarReanudarReparacion() {
     showToast('Reanudando reparación...', 'info');
     
     try {
-        const response = await fetch('/tecnico/api/reanudar-reparacion', {
+        // URL CORREGIDA: /tecnico/reanudar-reparacion (sin /api/)
+        const response = await fetch('/tecnico/reanudar-reparacion', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -789,7 +824,7 @@ async function confirmarReanudarReparacion() {
 }
 
 // =====================================================
-// REPARACIÓN - FINALIZAR
+// REPARACIÓN - FINALIZAR - URL CORREGIDA
 // =====================================================
 window.finalizarReparacion = async function(ordenId) {
     if (!confirm('¿Estás seguro de que deseas finalizar esta reparación? La bahía quedará libre.')) {
@@ -799,7 +834,8 @@ window.finalizarReparacion = async function(ordenId) {
     showToast('Finalizando reparación...', 'info');
     
     try {
-        const response = await fetch('/tecnico/api/finalizar-reparacion', {
+        // URL CORREGIDA: /tecnico/finalizar-reparacion (sin /api/)
+        const response = await fetch('/tecnico/finalizar-reparacion', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -823,13 +859,14 @@ window.finalizarReparacion = async function(ordenId) {
 };
 
 // =====================================================
-// DETALLE DE ORDEN
+// DETALLE DE ORDEN - URL CORREGIDA
 // =====================================================
 window.verDetalle = async function(ordenId) {
     showToast('Cargando detalles...', 'info');
     
     try {
-        const response = await fetch(`/tecnico/api/detalle-orden/${ordenId}`, {
+        // URL CORREGIDA: /tecnico/detalle-orden/${ordenId} (sin /api/)
+        const response = await fetch(`/tecnico/detalle-orden/${ordenId}`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -986,7 +1023,7 @@ window.cerrarDetalleModal = function() {
 };
 
 // =====================================================
-// COMUNICADOS
+// COMUNICADOS - URLs CORREGIDAS
 // =====================================================
 window.cargarComunicados = async function() {
     const comunicadosList = document.getElementById('comunicadosList');
@@ -998,10 +1035,14 @@ window.cargarComunicados = async function() {
             comunicadosVistos = JSON.parse(vistosStorage);
         }
         
-        const response = await fetch('/tecnico/api/comunicados', {
+        const timestamp = new Date().getTime();
+        // URL CORREGIDA: /tecnico/comunicados (sin /api/)
+        const response = await fetch(`/tecnico/comunicados?_=${timestamp}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache'
             }
         });
         
@@ -1103,7 +1144,8 @@ function verComunicadoCompleto(id) {
         if (elemento) elemento.classList.remove('nuevo');
     }
     
-    fetch(`/tecnico/api/comunicados/${id}`, {
+    // URL CORREGIDA: /tecnico/comunicados/${id} (sin /api/)
+    fetch(`/tecnico/comunicados/${id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
     })
     .then(response => response.json())

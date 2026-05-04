@@ -151,19 +151,30 @@ def listar_tecnicos(current_user):
 @jefe_taller_ordenes_bp.route('/ordenes-activas', methods=['GET'])
 @jefe_taller_required
 def listar_ordenes_activas(current_user):
-    """Listar órdenes activas"""
+    """Listar órdenes activas - Primero EnRecepcion, luego EnDiagnostico"""
     try:
-        # Obtener órdenes activas
+        # 🔥 CORRECCIÓN: Incluir 'EnDiagnostico' y 'EnRecepcion'
         resultado = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
-            .in_('estado_global', ['EnRecepcion', 'EnProceso', 'EnPausa']) \
-            .order('fecha_ingreso', desc=True) \
+            .in_('estado_global', ['EnRecepcion', 'EnDiagnostico', 'EnReparacion', 'EnPausa']) \
             .execute()
         
         if not resultado.data:
             return jsonify({'success': True, 'ordenes': []}), 200
         
         ordenes = resultado.data
+        
+        # 🔥 ORDENAR: Primero EnRecepcion, luego EnDiagnostico, luego los demás
+        # Definir el orden de prioridad
+        orden_prioridad = {
+            'EnRecepcion': 1,
+            'EnDiagnostico': 2,
+            'EnReparacion': 3,
+            'EnPausa': 4
+        }
+        
+        ordenes.sort(key=lambda o: (orden_prioridad.get(o['estado_global'], 99), o['fecha_ingreso']))
+        
         ordenes_ids = [o['id'] for o in ordenes]
         vehiculos_ids = list(set([o['id_vehiculo'] for o in ordenes if o.get('id_vehiculo')]))
         
@@ -924,4 +935,37 @@ def subir_audio_diagnostico(current_user):
         
     except Exception as e:
         logger.error(f"Error subiendo audio: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+        
+
+@jefe_taller_ordenes_bp.route('/cambiar-estado-orden', methods=['POST'])
+@jefe_taller_required
+def cambiar_estado_orden(current_user):
+    """Cambiar el estado global de una orden"""
+    try:
+        data = request.get_json()
+        id_orden = data.get('id_orden')
+        nuevo_estado = data.get('estado_global')
+        
+        if not id_orden or not nuevo_estado:
+            return jsonify({'error': 'ID de orden y estado requeridos'}), 400
+        
+        # Estados permitidos para este endpoint
+        estados_permitidos = ['EnDiagnostico', 'EnReparacion', 'EnPausa', 'ReparacionCompletada', 'Finalizado']
+        if nuevo_estado not in estados_permitidos:
+            return jsonify({'error': f'Estado {nuevo_estado} no permitido para esta acción'}), 400
+        
+        # Actualizar estado
+        supabase.table('ordentrabajo') \
+            .update({'estado_global': nuevo_estado}) \
+            .eq('id', id_orden) \
+            .execute()
+        
+        # Limpiar cachés
+        cache.clear('ordenes_activas')
+        
+        return jsonify({'success': True, 'message': f'Orden cambiada a {nuevo_estado}'}), 200
+        
+    except Exception as e:
+        logger.error(f"Error cambiando estado: {str(e)}")
         return jsonify({'error': str(e)}), 500

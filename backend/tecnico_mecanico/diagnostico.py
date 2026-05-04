@@ -716,3 +716,158 @@ def notificar_jefes_taller(id_orden, tecnico_nombre):
         
     except Exception as e:
         logger.error(f"Error enviando notificaciones: {str(e)}")
+
+@diagnostico_bp.route('/api/orden/<int:id_orden>/detalles-completos', methods=['GET'])
+@tecnico_required
+def obtener_detalles_completos_orden(current_user, id_orden):
+    """Obtener todos los detalles de una orden: recepción, diagnósticos, cotización, instrucciones"""
+    try:
+        tecnico_id = current_user['id']
+        
+        # Verificar que el técnico tiene acceso a esta orden
+        asignacion = supabase.table('asignaciontecnico') \
+            .select('id') \
+            .eq('id_orden_trabajo', id_orden) \
+            .eq('id_tecnico', tecnico_id) \
+            .execute()
+        
+        if not asignacion.data:
+            return jsonify({'error': 'No tienes acceso a esta orden'}), 403
+        
+        # Obtener datos de la orden
+        orden = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_salida, id_vehiculo, instrucciones_armado') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if not orden.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        orden_data = orden.data[0]
+        
+        # Obtener vehículo
+        vehiculo = supabase.table('vehiculo') \
+            .select('placa, marca, modelo, anio, kilometraje') \
+            .eq('id', orden_data['id_vehiculo']) \
+            .execute()
+        
+        orden_data['vehiculo'] = vehiculo.data[0] if vehiculo.data else {}
+        
+        # Obtener recepción
+        recepcion = supabase.table('recepcion') \
+            .select('*') \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
+        recepcion_data = recepcion.data[0] if recepcion.data else None
+        
+        # Obtener cotización
+        cotizacion = supabase.table('cotizacion') \
+            .select('id, estado, total, fecha_envio, motivo_rechazo, servicios_json, fecha_rechazo') \
+            .eq('id_orden_trabajo', id_orden) \
+            .order('fecha_envio', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        cotizacion_data = None
+        if cotizacion.data:
+            cotizacion_data = cotizacion.data[0]
+            if cotizacion_data.get('servicios_json'):
+                try:
+                    cotizacion_data['servicios'] = json.loads(cotizacion_data['servicios_json'])
+                except:
+                    cotizacion_data['servicios'] = []
+        
+        # Obtener instrucciones de armado (del historial)
+        instrucciones_armado = None
+        instrucciones_result = supabase.table('instrucciones_tecnico_historial') \
+            .select('instrucciones, fecha_envio') \
+            .eq('id_orden_trabajo', id_orden) \
+            .order('fecha_envio', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if instrucciones_result.data:
+            instrucciones_armado = {
+                'texto': instrucciones_result.data[0]['instrucciones'],
+                'fecha_envio': instrucciones_result.data[0]['fecha_envio']
+            }
+        elif orden_data.get('instrucciones_armado'):
+            instrucciones_armado = {
+                'texto': orden_data['instrucciones_armado'],
+                'fecha_envio': orden_data.get('fecha_instrucciones')
+            }
+        
+        # Obtener todos los diagnósticos del técnico para esta orden
+        diagnosticos = supabase.table('diagnostico_tecnico') \
+            .select('id, informe, transcripcion_informe, estado, version, fecha_envio, url_grabacion_informe, es_borrador') \
+            .eq('id_orden_trabajo', id_orden) \
+            .eq('id_tecnico', tecnico_id) \
+            .order('version', desc=True) \
+            .execute()
+        
+        diagnosticos_data = diagnosticos.data if diagnosticos.data else []
+        
+        diagnosticos_completos = []
+        for diag in diagnosticos_data:
+            servicios = supabase.table('servicio_tecnico') \
+                .select('id, descripcion, orden') \
+                .eq('id_diagnostico_tecnico', diag['id']) \
+                .order('orden') \
+                .execute()
+            diag['servicios'] = servicios.data if servicios.data else []
+            
+            fotos = supabase.table('foto_diagnostico') \
+                .select('id, url_foto, descripcion_tecnico') \
+                .eq('id_diagnostico_tecnico', diag['id']) \
+                .execute()
+            diag['fotos'] = fotos.data if fotos.data else []
+            
+            diagnosticos_completos.append(diag)
+        
+        diagnostico_actual = diagnosticos_completos[0] if diagnosticos_completos else None
+        diagnosticos_anteriores = diagnosticos_completos[1:] if len(diagnosticos_completos) > 1 else []
+        
+        observaciones = []
+        if diagnostico_actual:
+            obs_result = supabase.table('observaciondiagnostico') \
+                .select('id, observacion, transcripcion_obs, fecha_hora, id_jefe_taller') \
+                .eq('id_diagnostico_tecnico', diagnostico_actual['id']) \
+                .order('fecha_hora', desc=True) \
+                .execute()
+            
+            if obs_result.data:
+                jefes_ids = list(set([obs['id_jefe_taller'] for obs in obs_result.data if obs.get('id_jefe_taller')]))
+                jefes_nombres = {}
+                
+                if jefes_ids:
+                    jefes_result = supabase.table('usuario') \
+                        .select('id, nombre') \
+                        .in_('id', jefes_ids) \
+                        .execute()
+                    if jefes_result.data:
+                        jefes_nombres = {j['id']: j['nombre'] for j in jefes_result.data}
+                
+                for obs in obs_result.data:
+                    observaciones.append({
+                        'id': obs['id'],
+                        'observacion': obs.get('observacion', ''),
+                        'transcripcion_obs': obs.get('transcripcion_obs', ''),
+                        'fecha_hora': obs.get('fecha_hora'),
+                        'jefe_taller': {'nombre': jefes_nombres.get(obs.get('id_jefe_taller'), 'Jefe de Taller')}
+                    })
+        
+        return jsonify({
+            'success': True,
+            'orden': orden_data,
+            'recepcion': recepcion_data,
+            'cotizacion': cotizacion_data,
+            'instrucciones_armado': instrucciones_armado,
+            'diagnostico_actual': diagnostico_actual,
+            'diagnosticos_anteriores': diagnosticos_anteriores,
+            'observaciones': observaciones
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo detalles completos: {str(e)}")
+        return jsonify({'error': str(e)}), 500

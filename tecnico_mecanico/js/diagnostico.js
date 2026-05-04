@@ -1,6 +1,7 @@
 // =====================================================
 // DIAGNÓSTICO TÉCNICO - TÉCNICO MECÁNICO
-// FURIA MOTOR COMPANY SRL - VERSIÓN CORREGIDA
+// FURIA MOTOR COMPANY SRL - VERSIÓN COMPLETA
+// INCLUYE: DIAGNÓSTICO + ARMADO DE VEHÍCULOS + DETALLES
 // =====================================================
 
 let token = null;
@@ -88,6 +89,39 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function mostrarLoading(mostrar) {
+    let overlay = document.getElementById('loadingOverlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'loadingOverlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        `;
+        overlay.innerHTML = '<div style="background: white; padding: 20px; border-radius: 12px;"><i class="fas fa-spinner fa-pulse fa-2x"></i><p style="margin-top: 10px;">Cargando...</p></div>';
+        document.body.appendChild(overlay);
+    }
+    overlay.style.display = mostrar ? 'flex' : 'none';
+}
+
+function abrirModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.add('show');
+}
+
+function cerrarModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.remove('show');
+}
+
 // =====================================================
 // VERIFICACIÓN DE AUTENTICACIÓN
 // =====================================================
@@ -149,14 +183,14 @@ async function verificarToken() {
 }
 
 // =====================================================
-// CARGA DE ÓRDENES DEL TÉCNICO - CORREGIDO
+// CARGA DE ÓRDENES DEL TÉCNICO
 // =====================================================
 
 async function cargarOrdenes() {
-    const select = document.getElementById('ordenSelect');
-    if (!select) return;
-    
-    select.innerHTML = '<option value="">-- Cargando órdenes... --</option>';
+    const container = document.getElementById('ordenesContainer');
+    if (container) {
+        container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-pulse"></i> Cargando órdenes...</div>';
+    }
     
     try {
         console.log('Cargando órdenes...');
@@ -171,53 +205,45 @@ async function cargarOrdenes() {
         }
         
         const data = await response.json();
-        console.log('=== RESPUESTA COMPLETA DE LA API ===');
-        console.log(JSON.stringify(data, null, 2));
+        console.log('Órdenes recibidas:', data);
         
         if (data.success) {
             ordenesTecnico = data.ordenes || [];
-            console.log('📋 Total órdenes cargadas:', ordenesTecnico.length);
             
-            // ✅ NORMALIZAR: Asegurar que cada orden tenga un ID válido
-            ordenesTecnico = ordenesTecnico.map(orden => {
-                // Intentar diferentes nombres de campo para el ID
-                const ordenId = orden.orden_id || orden.id || orden.ordenId;
-                
-                if (!ordenId) {
-                    console.error('⚠️ Orden sin ID:', orden);
+            // Para cada orden en estado EN_ARMADO, cargar instrucciones
+            for (let orden of ordenesTecnico) {
+                if (orden.estado_global === 'EnArmadoVehiculo') {
+                    try {
+                        const instruccionesResp = await fetch(`/tecnico/api/orden/${orden.orden_id}/instrucciones-armado`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        const instruccionesData = await instruccionesResp.json();
+                        if (instruccionesData.success) {
+                            orden.instrucciones_armado = instruccionesData.instrucciones;
+                            orden.fecha_instrucciones = instruccionesData.fecha_envio;
+                        }
+                    } catch (e) {
+                        console.error('Error cargando instrucciones:', e);
+                    }
                 }
-                
-                return {
-                    ...orden,
-                    orden_id: ordenId  // Normalizar a orden_id
-                };
-            });
+            }
             
-            // Verificar cada orden
-            ordenesTecnico.forEach((orden, idx) => {
-                console.log(`Orden ${idx}:`, {
-                    orden_id: orden.orden_id,
-                    tipo: typeof orden.orden_id,
-                    codigo_unico: orden.codigo_unico,
-                    tiene_vehiculo: !!orden.vehiculo
-                });
-            });
-            
+            renderizarOrdenes();
             actualizarSelectorOrdenes();
             
             if (ordenesTecnico.length === 0) {
-                select.innerHTML = '<option value="">-- No hay órdenes asignadas --</option>';
                 showToast('No tienes órdenes de trabajo asignadas', 'warning');
             } else {
-                showToast(`${ordenesTecnico.length} órden(es) cargada(s)`, 'success');
+                console.log(`${ordenesTecnico.length} órden(es) cargada(s)`);
             }
         } else {
-            select.innerHTML = '<option value="">-- Error al cargar órdenes --</option>';
             showToast(data.error || 'Error al cargar órdenes', 'error');
         }
     } catch (error) {
         console.error('Error cargando órdenes:', error);
-        select.innerHTML = '<option value="">-- Error al cargar órdenes --</option>';
+        if (container) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Error al cargar órdenes</p><button onclick="cargarOrdenes()" class="btn-retry">Reintentar</button></div>';
+        }
         showToast('Error al cargar órdenes', 'error');
     }
 }
@@ -228,41 +254,552 @@ function actualizarSelectorOrdenes() {
     
     select.innerHTML = '<option value="">-- Seleccione una orden --</option>';
     
-    ordenesTecnico.forEach(orden => {
-        // ✅ Usar orden_id normalizado
+    const ordenesDiagnostico = ordenesTecnico.filter(o => o.estado_global !== 'EnArmadoVehiculo');
+    
+    ordenesDiagnostico.forEach(orden => {
         const ordenId = orden.orden_id;
-        
-        if (!ordenId) {
-            console.error('❌ No se puede crear option: orden sin ID', orden);
-            return;
-        }
+        if (!ordenId) return;
         
         const option = document.createElement('option');
-        
-        // ✅ Asignar value correctamente
         option.value = String(ordenId);
         
+        const vehiculo = orden.vehiculo || {};
         let estadoIcon = '';
-        if (orden.diagnostico_estado === 'pendiente') estadoIcon = '⏳';
-        else if (orden.diagnostico_estado === 'aprobado') estadoIcon = '✅';
+        if (orden.diagnostico_estado === 'aprobado') estadoIcon = '✅';
         else if (orden.diagnostico_estado === 'rechazado') estadoIcon = '❌';
         else if (orden.tiene_diagnostico) estadoIcon = '📝';
         else estadoIcon = '🆕';
         
-        const vehiculo = orden.vehiculo || {};
         option.textContent = `${orden.codigo_unico} - ${vehiculo.placa || 'SIN PLACA'} (${vehiculo.marca || ''} ${vehiculo.modelo || ''}) ${estadoIcon}`;
-        
         select.appendChild(option);
-        
-        console.log(`✅ Option creado: value="${option.value}", text="${option.textContent.substring(0, 50)}..."`);
     });
     
-    console.log('✅ Selector actualizado con', ordenesTecnico.length, 'órdenes');
+    console.log('✅ Selector actualizado con', ordenesDiagnostico.length, 'órdenes para diagnóstico');
+}
+
+// =====================================================
+// RENDERIZADO DE ÓRDENES (TARJETAS)
+// =====================================================
+
+function renderizarOrdenes() {
+    const container = document.getElementById('ordenesContainer');
+    if (!container) {
+        console.log('Contenedor de órdenes no encontrado');
+        return;
+    }
+    
+    if (!ordenesTecnico || ordenesTecnico.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-clipboard-list"></i>
+                <p>No tienes órdenes asignadas actualmente</p>
+                <small>Las órdenes aparecerán aquí cuando te sean asignadas</small>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = ordenesTecnico.map(orden => {
+        const vehiculo = orden.vehiculo || {};
+        const estadoGlobal = orden.estado_global;
+        const esArmado = estadoGlobal === 'EnArmadoVehiculo';
+        const tieneDiagnostico = orden.tiene_diagnostico;
+        const diagnosticoEstado = orden.diagnostico_estado;
+        
+        let estadoBadge = '';
+        let estadoColor = '';
+        
+        if (esArmado) {
+            estadoBadge = '<span class="estado-badge estado-armado"><i class="fas fa-tools"></i> 🔧 ARMADO REQUERIDO</span>';
+            estadoColor = 'armado';
+        } else if (diagnosticoEstado === 'aprobado') {
+            estadoBadge = '<span class="estado-badge estado-aprobado"><i class="fas fa-check-circle"></i> ✅ DIAGNÓSTICO APROBADO</span>';
+            estadoColor = 'aprobado';
+        } else if (diagnosticoEstado === 'rechazado') {
+            estadoBadge = '<span class="estado-badge estado-rechazado"><i class="fas fa-times-circle"></i> ❌ RECHAZADO - CORREGIR</span>';
+            estadoColor = 'rechazado';
+        } else if (tieneDiagnostico && diagnosticoEstado === 'pendiente') {
+            estadoBadge = '<span class="estado-badge estado-pendiente"><i class="fas fa-clock"></i> ⏳ EN REVISIÓN</span>';
+            estadoColor = 'pendiente';
+        } else if (tieneDiagnostico) {
+            estadoBadge = '<span class="estado-badge estado-borrador"><i class="fas fa-pencil-alt"></i> 📝 BORRADOR GUARDADO</span>';
+            estadoColor = 'borrador';
+        } else {
+            estadoBadge = '<span class="estado-badge estado-nuevo"><i class="fas fa-plus-circle"></i> 🆕 NUEVO - PENDIENTE</span>';
+            estadoColor = 'nuevo';
+        }
+        
+        let instruccionesHtml = '';
+        let botonArmadoHtml = '';
+        
+        if (esArmado && orden.instrucciones_armado) {
+            instruccionesHtml = `
+                <div class="instrucciones-armado">
+                    <div class="instrucciones-header">
+                        <i class="fas fa-clipboard-list"></i>
+                        <strong>📋 Instrucciones del Jefe de Taller:</strong>
+                    </div>
+                    <div class="instrucciones-contenido">
+                        ${escapeHtml(orden.instrucciones_armado).replace(/\n/g, '<br>')}
+                    </div>
+                    <div class="instrucciones-fecha">
+                        <i class="far fa-calendar-alt"></i> 
+                        📅 Enviado: ${formatFecha(orden.fecha_instrucciones || orden.fecha_asignacion)}
+                    </div>
+                </div>
+            `;
+            
+            botonArmadoHtml = `
+                <button class="btn-armado-completar" onclick="marcarArmadoCompletadoDesdeTarjeta(${orden.orden_id}, '${escapeHtml(orden.codigo_unico)}')">
+                    <i class="fas fa-check-circle"></i> ✅ Marcar Armado Completado
+                </button>
+            `;
+        }
+        
+        let botonesDiagnostico = '';
+        if (!esArmado) {
+            if (tieneDiagnostico && diagnosticoEstado !== 'aprobado') {
+                botonesDiagnostico = `
+                    <button class="btn-editar" onclick="editarDiagnostico(${orden.orden_id})">
+                        <i class="fas fa-edit"></i> Editar Diagnóstico
+                    </button>
+                `;
+            } else if (!tieneDiagnostico) {
+                botonesDiagnostico = `
+                    <button class="btn-nuevo" onclick="nuevoDiagnostico(${orden.orden_id})">
+                        <i class="fas fa-plus-circle"></i> Nuevo Diagnóstico
+                    </button>
+                `;
+            } else if (diagnosticoEstado === 'aprobado') {
+                botonesDiagnostico = `
+                    <button class="btn-aprobado" disabled>
+                        <i class="fas fa-check-circle"></i> Diagnóstico Aprobado
+                    </button>
+                `;
+            }
+        }
+        
+        return `
+            <div class="orden-card ${estadoColor}">
+                <div class="orden-header">
+                    <div class="orden-info">
+                        <span class="orden-codigo"><i class="fas fa-tag"></i> ${escapeHtml(orden.codigo_unico)}</span>
+                        <span class="orden-placa"><i class="fas fa-car"></i> ${escapeHtml(vehiculo.placa || 'N/A')}</span>
+                    </div>
+                    ${estadoBadge}
+                </div>
+                
+                <div class="orden-body">
+                    <div class="vehiculo-detalles">
+                        <div><i class="fas fa-car-side"></i> ${escapeHtml(vehiculo.marca || '')} ${escapeHtml(vehiculo.modelo || '')}</div>
+                        <div><i class="fas fa-calendar"></i> Año: ${vehiculo.anio || 'N/A'}</div>
+                        <div><i class="fas fa-tachometer-alt"></i> Km: ${(vehiculo.kilometraje || 0).toLocaleString()} km</div>
+                        <div><i class="fas fa-calendar-alt"></i> Ingreso: ${formatFecha(orden.fecha_ingreso)}</div>
+                    </div>
+                    
+                    ${instruccionesHtml}
+                </div>
+                
+                <div class="orden-footer">
+                    ${botonesDiagnostico}
+                    ${botonArmadoHtml}
+                    <button class="btn-detalles" onclick="verDetallesOrden(${orden.orden_id}, '${escapeHtml(orden.codigo_unico)}')">
+                        <i class="fas fa-eye"></i> Ver Detalles
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// =====================================================
+// VER DETALLES COMPLETOS DE LA ORDEN
+// =====================================================
+
+async function verDetallesOrden(id_orden, codigo) {
+    mostrarLoading(true);
+    
+    try {
+        const response = await fetch(`/tecnico/api/orden/${id_orden}/detalles-completos`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            mostrarModalDetalles(data);
+        } else {
+            showToast(data.error || 'Error al cargar detalles', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error al cargar detalles', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+function mostrarModalDetalles(data) {
+    const orden = data.orden;
+    const recepcion = data.recepcion;
+    const diagnosticoActual = data.diagnostico_actual;
+    const diagnosticosAnteriores = data.diagnosticos_anteriores || [];
+    const observaciones = data.observaciones || [];
+    const cotizacion = data.cotizacion || null;
+    const instruccionesArmado = data.instrucciones_armado || null;
+    
+    let html = `
+        <div class="detalles-container">
+            <div class="detalles-header">
+                <h3><i class="fas fa-tag"></i> Orden: ${escapeHtml(orden.codigo_unico)}</h3>
+                <span class="estado-badge estado-${(orden.estado_global || 'pendiente').toLowerCase()}">${escapeHtml(orden.estado_global || 'Pendiente')}</span>
+            </div>
+            
+            <!-- Información del Vehículo -->
+            <div class="detalles-seccion">
+                <h4><i class="fas fa-car"></i> Información del Vehículo</h4>
+                <div class="info-grid">
+                    <div><span>Placa:</span> <strong>${escapeHtml(orden.vehiculo?.placa || 'N/A')}</strong></div>
+                    <div><span>Marca/Modelo:</span> <strong>${escapeHtml(orden.vehiculo?.marca || '')} ${escapeHtml(orden.vehiculo?.modelo || '')}</strong></div>
+                    <div><span>Año:</span> <strong>${orden.vehiculo?.anio || 'N/A'}</strong></div>
+                    <div><span>Kilometraje:</span> <strong>${(orden.vehiculo?.kilometraje || 0).toLocaleString()} km</strong></div>
+                </div>
+            </div>
+    `;
+    
+    // SECCIÓN: INSTRUCCIONES DEL JEFE DE TALLER (para armado)
+    if (instruccionesArmado) {
+        html += `
+            <div class="detalles-seccion seccion-armado">
+                <h4><i class="fas fa-clipboard-list"></i> Instrucciones del Jefe de Taller - ARMADO</h4>
+                <div class="instrucciones-card">
+                    <div class="instrucciones-header">
+                        <i class="fas fa-user-tie"></i> Instrucciones para el armado del vehículo:
+                    </div>
+                    <div class="instrucciones-contenido-detalle">
+                        ${escapeHtml(instruccionesArmado.texto || instruccionesArmado).replace(/\n/g, '<br>')}
+                    </div>
+                    <div class="instrucciones-fecha">
+                        <i class="far fa-calendar-alt"></i> Enviado: ${formatFecha(instruccionesArmado.fecha_envio || instruccionesArmado.fecha)}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // SECCIÓN: COTIZACIÓN (si existe)
+    if (cotizacion) {
+        let cotizacionEstado = '';
+        let cotizacionColor = '';
+        let cotizacionIcon = '';
+        
+        switch (cotizacion.estado) {
+            case 'aprobada':
+                cotizacionEstado = 'APROBADA';
+                cotizacionColor = 'aprobado';
+                cotizacionIcon = 'fa-check-circle';
+                break;
+            case 'rechazada':
+                cotizacionEstado = 'RECHAZADA';
+                cotizacionColor = 'rechazado';
+                cotizacionIcon = 'fa-times-circle';
+                break;
+            case 'enviada':
+                cotizacionEstado = 'ENVIADA - PENDIENTE';
+                cotizacionColor = 'pendiente';
+                cotizacionIcon = 'fa-paper-plane';
+                break;
+            default:
+                cotizacionEstado = cotizacion.estado || 'PENDIENTE';
+                cotizacionColor = 'pendiente';
+                cotizacionIcon = 'fa-clock';
+        }
+        
+        html += `
+            <div class="detalles-seccion seccion-cotizacion">
+                <h4><i class="fas fa-file-invoice-dollar"></i> Cotización</h4>
+                <div class="cotizacion-card">
+                    <div class="cotizacion-header">
+                        <span class="cotizacion-estado ${cotizacionColor}">
+                            <i class="fas ${cotizacionIcon}"></i> ${cotizacionEstado}
+                        </span>
+                        <span class="cotizacion-total">
+                            <i class="fas fa-dollar-sign"></i> Total: Bs. ${(cotizacion.total || 0).toFixed(2)}
+                        </span>
+                    </div>
+                    <div class="cotizacion-fecha">
+                        <i class="far fa-calendar-alt"></i> Enviada: ${formatFecha(cotizacion.fecha_envio)}
+                    </div>
+            `;
+        
+        if (cotizacion.servicios && cotizacion.servicios.length > 0) {
+            html += `
+                <div class="cotizacion-servicios">
+                    <strong>Servicios cotizados:</strong>
+                    <div class="servicios-cotizados">
+                        ${cotizacion.servicios.map(serv => `
+                            <div class="servicio-cotizado">
+                                <div class="servicio-info">
+                                    <i class="fas fa-wrench"></i>
+                                    <span>${escapeHtml(serv.nombre || serv.descripcion)}</span>
+                                </div>
+                                <div class="servicio-precio">Bs. ${(serv.precio || 0).toFixed(2)}</div>
+                                <div class="servicio-aprobado">
+                                    ${serv.aprobado_por_cliente ? 
+                                        '<span class="aprobado-badge"><i class="fas fa-check-circle"></i> Aprobado por cliente</span>' : 
+                                        '<span class="pendiente-badge"><i class="fas fa-clock"></i> Pendiente</span>'}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        if (cotizacion.motivo_rechazo) {
+            html += `
+                <div class="motivo-rechazo-detalle">
+                    <i class="fas fa-comment-dots"></i>
+                    <strong>Motivo del rechazo:</strong>
+                    <p>${escapeHtml(cotizacion.motivo_rechazo)}</p>
+                </div>
+            `;
+        }
+        
+        html += `</div></div>`;
+    }
+    
+    // SECCIÓN: RECEPCIÓN
+    if (recepcion) {
+        html += `
+            <div class="detalles-seccion">
+                <h4><i class="fas fa-clipboard-list"></i> Información de Recepción</h4>
+                <div class="problema-cliente">
+                    <strong>Problema reportado por el cliente:</strong>
+                    <p>${escapeHtml(recepcion.transcripcion_problema || 'No registrado')}</p>
+                </div>
+        `;
+        
+        const fotos = [];
+        const camposFoto = ['url_lateral_izquierda', 'url_lateral_derecha', 'url_foto_frontal', 'url_foto_trasera', 'url_foto_superior', 'url_foto_inferior', 'url_foto_tablero'];
+        camposFoto.forEach(campo => {
+            if (recepcion[campo]) fotos.push(recepcion[campo]);
+        });
+        
+        if (fotos.length > 0) {
+            html += `
+                <div class="fotos-recepcion">
+                    <strong>Fotos de ingreso:</strong>
+                    <div class="fotos-grid">
+                        ${fotos.map(url => `
+                            <div class="foto-miniatura" onclick="verFotoAmpliada('${url}')">
+                                <img src="${url}" alt="Foto recepción">
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        html += `</div>`;
+    }
+    
+    // SECCIÓN: DIAGNÓSTICO APROBADO
+    if (diagnosticoActual && diagnosticoActual.estado === 'aprobado') {
+        html += `
+            <div class="detalles-seccion seccion-aprobada">
+                <h4><i class="fas fa-check-circle"></i> Diagnóstico Aprobado por Jefe de Taller</h4>
+                <div class="diagnostico-aprobado">
+                    <div class="fecha-aprobacion">
+                        <i class="far fa-calendar-alt"></i> Aprobado: ${formatFecha(diagnosticoActual.fecha_aprobacion || diagnosticoActual.fecha_envio)}
+                    </div>
+                    <div class="informe-diagnostico">
+                        <strong>Informe del diagnóstico:</strong>
+                        <p>${escapeHtml(diagnosticoActual.informe || diagnosticoActual.transcripcion_informe || 'No hay informe disponible')}</p>
+                    </div>
+        `;
+        
+        if (diagnosticoActual.servicios && diagnosticoActual.servicios.length > 0) {
+            html += `
+                <div class="servicios-aprobados">
+                    <strong>Servicios aprobados:</strong>
+                    <ul>
+                        ${diagnosticoActual.servicios.map(s => `<li><i class="fas fa-wrench"></i> ${escapeHtml(s.descripcion)}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        if (diagnosticoActual.fotos && diagnosticoActual.fotos.length > 0) {
+            html += `
+                <div class="fotos-diagnostico">
+                    <strong>Evidencia fotográfica del diagnóstico:</strong>
+                    <div class="fotos-grid">
+                        ${diagnosticoActual.fotos.map(foto => `
+                            <div class="foto-miniatura" onclick="verFotoAmpliada('${foto.url_foto}')">
+                                <img src="${foto.url_foto}" alt="Foto diagnóstico">
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        html += `</div></div>`;
+    }
+    
+    // SECCIÓN: VERSIONES ANTERIORES
+    if (diagnosticosAnteriores.length > 0) {
+        html += `
+            <div class="detalles-seccion">
+                <h4><i class="fas fa-history"></i> Versiones Anteriores del Diagnóstico</h4>
+                <div class="versiones-list">
+                    ${diagnosticosAnteriores.map((diag, idx) => `
+                        <div class="version-item">
+                            <div class="version-header">
+                                <span class="version-num">Versión ${diag.version || idx + 1}</span>
+                                <span class="version-fecha">${formatFecha(diag.fecha_envio)}</span>
+                                <span class="estado-badge estado-${diag.estado}">${diag.estado}</span>
+                            </div>
+                            <div class="version-contenido">
+                                <p><strong>Informe:</strong> ${escapeHtml(diag.informe || diag.transcripcion_informe || 'No disponible')}</p>
+                                ${diag.servicios && diag.servicios.length > 0 ? `
+                                    <div class="servicios-list-mini">
+                                        <strong>Servicios:</strong>
+                                        <ul>
+                                            ${diag.servicios.map(s => `<li>${escapeHtml(s.descripcion)}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // SECCIÓN: OBSERVACIONES
+    if (observaciones.length > 0) {
+        html += `
+            <div class="detalles-seccion">
+                <h4><i class="fas fa-comments"></i> Observaciones del Jefe de Taller</h4>
+                <div class="observaciones-list">
+                    ${observaciones.map(obs => `
+                        <div class="observacion-item">
+                            <div class="observacion-header">
+                                <span><i class="fas fa-user-tie"></i> ${escapeHtml(obs.jefe_taller?.nombre || 'Jefe de Taller')}</span>
+                                <span class="observacion-fecha">${formatFecha(obs.fecha_hora)}</span>
+                            </div>
+                            <div class="observacion-contenido">
+                                ${escapeHtml(obs.observacion)}
+                            </div>
+                            ${obs.transcripcion_obs ? `
+                                <div class="observacion-transcripcion">
+                                    <i class="fas fa-microphone-alt"></i> ${escapeHtml(obs.transcripcion_obs)}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    html += `</div>`;
+    
+    const modalContainer = document.getElementById('detalleOrdenContainer');
+    if (modalContainer) {
+        modalContainer.innerHTML = html;
+    }
+    
+    abrirModal('modalDetalleOrden');
+}
+
+function verFotoAmpliada(url) {
+    const modal = document.createElement('div');
+    modal.className = 'modal foto-ampliada-modal';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div class="modal-content foto-ampliada-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-image"></i> Ver Foto</h2>
+                <button class="modal-close" onclick="this.closest('.modal').remove()">&times;</button>
+            </div>
+            <div class="modal-body foto-ampliada-body">
+                <img src="${url}" alt="Foto ampliada" style="max-width: 100%; max-height: 70vh;">
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+    });
+}
+
+// =====================================================
+// FUNCIONES PARA NAVEGAR A DIAGNÓSTICO
+// =====================================================
+
+function nuevoDiagnostico(id_orden) {
+    const select = document.getElementById('ordenSelect');
+    const formContainer = document.getElementById('diagnosticoFormContainer');
+    
+    if (select) {
+        select.value = id_orden;
+    }
+    
+    if (formContainer) {
+        formContainer.style.display = 'block';
+    }
+    
+    cargarDiagnosticoSeleccionado();
+}
+
+function editarDiagnostico(id_orden) {
+    nuevoDiagnostico(id_orden);
 }
 
 // =====================================================
 // CARGA DE DIAGNÓSTICO EXISTENTE
 // =====================================================
+
+async function cargarDiagnosticoSeleccionado() {
+    const select = document.getElementById('ordenSelect');
+    if (!select) {
+        console.error('Selector de órdenes no encontrado');
+        showToast('Error: Selector de órdenes no encontrado', 'error');
+        return;
+    }
+    
+    const selectedValue = select.value;
+    
+    if (!selectedValue || selectedValue === '') {
+        showToast('Selecciona una orden primero', 'warning');
+        return;
+    }
+    
+    const ordenId = parseInt(selectedValue);
+    
+    if (isNaN(ordenId)) {
+        showToast('ID de orden inválido', 'error');
+        return;
+    }
+    
+    const ordenEncontrada = ordenesTecnico.find(o => o.orden_id === ordenId);
+    
+    if (ordenEncontrada) {
+        ordenSeleccionada = ordenEncontrada;
+        mostrarInfoVehiculo(ordenSeleccionada);
+        
+        const formContainer = document.getElementById('diagnosticoFormContainer');
+        if (formContainer) formContainer.style.display = 'block';
+        
+        await cargarDiagnosticoExistente(ordenId);
+        showToast(`Cargando diagnóstico para orden ${ordenSeleccionada.codigo_unico}...`, 'info');
+    } else {
+        showToast('Orden no encontrada', 'error');
+    }
+}
 
 async function cargarDiagnosticoExistente(ordenId) {
     try {
@@ -283,14 +820,12 @@ async function cargarDiagnosticoExistente(ordenId) {
         if (data.success) {
             diagnosticoActual = data.diagnostico;
             
-            // Cargar transcripción
             if (data.diagnostico && data.diagnostico.transcripcion_informe) {
                 document.getElementById('transcripcionDiagnostico').value = data.diagnostico.transcripcion_informe;
             } else {
                 document.getElementById('transcripcionDiagnostico').value = '';
             }
             
-            // Cargar audio
             if (data.diagnostico && data.diagnostico.url_grabacion_informe) {
                 audioUrlSubido = data.diagnostico.url_grabacion_informe;
                 document.getElementById('audioUrl').value = data.diagnostico.url_grabacion_informe;
@@ -305,35 +840,30 @@ async function cargarDiagnosticoExistente(ordenId) {
                 document.getElementById('grabacionStatus').innerHTML = '';
             }
             
-            // Cargar servicios
             serviciosLista = data.servicios || [];
             renderizarServicios();
             
-            // Cargar fotos
             if (data.fotos && data.fotos.length > 0) {
                 cargarFotosDesdeServidor(data.fotos);
             } else {
                 limpiarFotos();
             }
             
-            // Mostrar estado
             if (data.diagnostico) {
                 mostrarEstadoDiagnostico(data.diagnostico);
             }
             
-            // Mostrar historial
             if (data.observaciones && data.observaciones.length > 0) {
                 mostrarHistorial(data.observaciones);
             } else {
-                document.getElementById('historialContainer').style.display = 'none';
+                const historialContainer = document.getElementById('historialContainer');
+                if (historialContainer) historialContainer.style.display = 'none';
             }
             
-            // Si el diagnóstico está rechazado, mostrar mensaje
             if (data.diagnostico && data.diagnostico.estado === 'rechazado') {
                 showToast('⚠️ Este diagnóstico fue rechazado. Revisa las observaciones y realiza las correcciones.', 'warning');
             }
         } else {
-            // Nuevo diagnóstico
             limpiarFormularioDiagnostico();
         }
     } catch (error) {
@@ -354,8 +884,10 @@ function limpiarFormularioDiagnostico() {
     document.getElementById('audioUrl').value = '';
     document.getElementById('btnEliminarAudio').style.display = 'none';
     document.getElementById('grabacionStatus').innerHTML = '';
-    document.getElementById('historialContainer').style.display = 'none';
-    document.getElementById('estadoDiagnostico').innerHTML = '';
+    const historialContainer = document.getElementById('historialContainer');
+    if (historialContainer) historialContainer.style.display = 'none';
+    const estadoContainer = document.getElementById('estadoDiagnostico');
+    if (estadoContainer) estadoContainer.innerHTML = '';
 }
 
 function limpiarFotos() {
@@ -426,21 +958,23 @@ function mostrarHistorial(observaciones) {
     const historialList = document.getElementById('historialList');
     
     if (observaciones && observaciones.length > 0) {
-        historialContainer.style.display = 'block';
-        historialList.innerHTML = observaciones.map(obs => `
-            <div class="historial-item">
-                <div class="historial-header">
-                    <span class="historial-version">
-                        <i class="fas fa-comment-dots"></i> Observación
-                    </span>
-                    <span class="historial-fecha">${formatFecha(obs.fecha_hora)}</span>
+        if (historialContainer) historialContainer.style.display = 'block';
+        if (historialList) {
+            historialList.innerHTML = observaciones.map(obs => `
+                <div class="historial-item">
+                    <div class="historial-header">
+                        <span class="historial-version">
+                            <i class="fas fa-comment-dots"></i> Observación
+                        </span>
+                        <span class="historial-fecha">${formatFecha(obs.fecha_hora)}</span>
+                    </div>
+                    <div class="historial-informe">${escapeHtml(obs.observacion)}</div>
+                    ${obs.transcripcion_obs ? `<div class="historial-transcripcion"><i class="fas fa-microphone-alt"></i> ${escapeHtml(obs.transcripcion_obs)}</div>` : ''}
                 </div>
-                <div class="historial-informe">${escapeHtml(obs.observacion)}</div>
-                ${obs.transcripcion_obs ? `<div class="historial-transcripcion"><i class="fas fa-microphone-alt"></i> ${escapeHtml(obs.transcripcion_obs)}</div>` : ''}
-            </div>
-        `).join('');
+            `).join('');
+        }
     } else {
-        historialContainer.style.display = 'none';
+        if (historialContainer) historialContainer.style.display = 'none';
     }
 }
 
@@ -456,30 +990,6 @@ function mostrarInfoVehiculo(orden) {
     if (modeloEl) modeloEl.textContent = `${vehiculo.marca || ''} ${vehiculo.modelo || ''}`.trim() || 'No especificado';
     if (anioEl) anioEl.textContent = vehiculo.anio || 'No especificado';
     if (kmEl) kmEl.textContent = vehiculo.kilometraje ? `${vehiculo.kilometraje.toLocaleString()} km` : 'No registrado';
-}
-
-// =====================================================
-// MOSTRAR/OCULTAR FORMULARIO
-// =====================================================
-
-function mostrarFormulario() {
-    const form = document.getElementById('diagnosticoForm');
-    if (form) {
-        form.style.display = 'block';
-        console.log('✅ Formulario mostrado');
-        return true;
-    } else {
-        console.error('❌ No se encontró el formulario');
-        return false;
-    }
-}
-
-function ocultarFormulario() {
-    const form = document.getElementById('diagnosticoForm');
-    if (form) {
-        form.style.display = 'none';
-        console.log('✅ Formulario ocultado');
-    }
 }
 
 // =====================================================
@@ -838,7 +1348,8 @@ async function guardarDiagnostico(enviar = false) {
             const errorList = document.querySelector('#validacionErrores ul');
             if (errorList) {
                 errorList.innerHTML = errores.map(e => `<li>${e}</li>`).join('');
-                document.getElementById('validacionErrores').style.display = 'block';
+                const errorDiv = document.getElementById('validacionErrores');
+                if (errorDiv) errorDiv.style.display = 'block';
             }
             showToast('Por favor completa todos los campos requeridos', 'warning');
             return false;
@@ -875,11 +1386,10 @@ async function guardarDiagnostico(enviar = false) {
             
             if (enviar) {
                 cerrarConfirmModal();
-                ocultarFormulario();
+                await cargarOrdenes();
                 const select = document.getElementById('ordenSelect');
                 if (select) select.value = '';
                 ordenSeleccionada = null;
-                await cargarOrdenes();
             } else {
                 await cargarDiagnosticoExistente(ordenSeleccionada.orden_id);
             }
@@ -892,6 +1402,42 @@ async function guardarDiagnostico(enviar = false) {
         console.error('Error guardando diagnóstico:', error);
         showToast('Error al guardar', 'error');
         return false;
+    }
+}
+
+// =====================================================
+// ARMADO DE VEHÍCULOS
+// =====================================================
+
+async function marcarArmadoCompletadoDesdeTarjeta(id_orden, codigo) {
+    if (!confirm(`⚠️ CONFIRMACIÓN DE ARMADO\n\n¿Confirmas que has ARMADO COMPLETAMENTE el vehículo de la orden ${codigo}?\n\nEl vehículo quedará a su estado original antes del diagnóstico.\n\n✅ El cliente pagará SOLO el diagnóstico (Bs. 200)\n\n⚠️ Esta acción no se puede deshacer.`)) {
+        return;
+    }
+    
+    mostrarLoading(true);
+    
+    try {
+        const response = await fetch(`/tecnico/api/armado/completar/${id_orden}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast(`✅ Armado completado para la orden ${codigo}. Se ha notificado al Jefe de Taller.`, 'success');
+            await cargarOrdenes();
+        } else {
+            showToast(data.error || 'Error al marcar armado completado', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
     }
 }
 
@@ -924,10 +1470,6 @@ function cerrarConfirmModal() {
     if (modal) modal.classList.remove('show');
 }
 
-// =====================================================
-// CIERRE DE SESIÓN
-// =====================================================
-
 function cerrarSesion() {
     localStorage.removeItem('furia_token');
     localStorage.removeItem('furia_user');
@@ -935,66 +1477,11 @@ function cerrarSesion() {
 }
 
 // =====================================================
-// FUNCIÓN PRINCIPAL PARA CARGAR DIAGNÓSTICO
-// =====================================================
-
-async function cargarDiagnosticoSeleccionado() {
-    const select = document.getElementById('ordenSelect');
-    if (!select) {
-        console.error('❌ Selector de órdenes no encontrado');
-        showToast('Error: Selector de órdenes no encontrado', 'error');
-        return;
-    }
-    
-    // Obtener el valor seleccionado
-    const selectedValue = select.value;
-    
-    console.log('=== CARGANDO DIAGNÓSTICO ===');
-    console.log('Selected index:', select.selectedIndex);
-    console.log('Selected value:', selectedValue);
-    console.log('Selected option text:', select.options[select.selectedIndex]?.text);
-    
-    if (!selectedValue || selectedValue === '') {
-        showToast('Selecciona una orden primero', 'warning');
-        return;
-    }
-    
-    const ordenId = parseInt(selectedValue);
-    console.log('Orden ID parseado:', ordenId);
-    
-    if (isNaN(ordenId)) {
-        showToast('ID de orden inválido', 'error');
-        return;
-    }
-    
-    console.log('ordenesTecnico disponibles:', ordenesTecnico.length);
-    
-    const ordenEncontrada = ordenesTecnico.find(o => o.orden_id === ordenId);
-    console.log('Orden encontrada:', ordenEncontrada);
-    
-    if (ordenEncontrada) {
-        ordenSeleccionada = ordenEncontrada;
-        mostrarInfoVehiculo(ordenSeleccionada);
-        
-        mostrarFormulario();
-        
-        await cargarDiagnosticoExistente(ordenId);
-        showToast(`Cargando diagnóstico para orden ${ordenSeleccionada.codigo_unico}...`, 'info');
-    } else {
-        console.error('❌ Orden no encontrada en el array');
-        console.log('IDs disponibles:', ordenesTecnico.map(o => o.orden_id));
-        console.log('Todas las órdenes:', ordenesTecnico);
-        showToast('Orden no encontrada', 'error');
-    }
-}
-
-// =====================================================
 // INICIALIZACIÓN
 // =====================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 Inicializando página de diagnóstico...');
-    console.log('📋 Verificando elemento diagnosticoForm:', document.getElementById('diagnosticoForm'));
+    console.log('🚀 Inicializando página de diagnóstico técnico...');
     
     const tokenValido = await verificarToken();
     if (!tokenValido) return;
@@ -1003,28 +1490,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     await cargarOrdenes();
     setupFotosUpload();
     
-    // Configurar el botón Cargar Diagnóstico
     const btnCargar = document.getElementById('btnCargarDiagnostico');
     if (btnCargar) {
-        console.log('✅ Botón Cargar Diagnóstico encontrado');
         const newBtn = btnCargar.cloneNode(true);
         btnCargar.parentNode.replaceChild(newBtn, btnCargar);
         newBtn.addEventListener('click', cargarDiagnosticoSeleccionado);
-        console.log('✅ Event listener agregado al botón');
-    } else {
-        console.error('❌ Botón Cargar Diagnóstico NO encontrado');
     }
     
-    // Configurar evento change del select
-    const ordenSelect = document.getElementById('ordenSelect');
-    if (ordenSelect) {
-        ordenSelect.addEventListener('change', function() {
-            console.log('📋 Selector cambiado - Nuevo valor:', this.value);
-            console.log('📋 Texto seleccionado:', this.options[this.selectedIndex]?.text);
-        });
-    }
-    
-    // Botón agregar servicio
     const btnAgregarServicio = document.getElementById('btnAgregarServicio');
     if (btnAgregarServicio) {
         btnAgregarServicio.addEventListener('click', agregarServicio);
@@ -1037,7 +1509,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
-    // Botón grabar audio
     const btnGrabar = document.getElementById('btnGrabarAudio');
     if (btnGrabar) {
         btnGrabar.addEventListener('click', () => {
@@ -1049,31 +1520,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
-    // Botón eliminar audio
     const btnEliminarAudio = document.getElementById('btnEliminarAudio');
     if (btnEliminarAudio) {
         btnEliminarAudio.addEventListener('click', eliminarGrabacion);
     }
     
-    // Botón guardar borrador
     const btnGuardar = document.getElementById('btnGuardarBorrador');
     if (btnGuardar) {
         btnGuardar.addEventListener('click', () => guardarDiagnostico(false));
     }
     
-    // Botón enviar diagnóstico
     const btnEnviar = document.getElementById('btnEnviarDiagnostico');
     if (btnEnviar) {
         btnEnviar.addEventListener('click', abrirConfirmModal);
     }
     
-    // Confirmar envío
     const confirmarBtn = document.getElementById('confirmarEnvioBtn');
     if (confirmarBtn) {
         confirmarBtn.addEventListener('click', () => guardarDiagnostico(true));
     }
     
-    // Cargar sidebar
     const sidebarContainer = document.getElementById('sidebar-container');
     if (sidebarContainer) {
         try {
@@ -1086,12 +1552,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
-    // Exponer funciones globales
     window.agregarServicio = agregarServicio;
     window.eliminarServicio = eliminarServicio;
     window.cerrarSesion = cerrarSesion;
     window.cerrarConfirmModal = cerrarConfirmModal;
     window.cargarDiagnosticoSeleccionado = cargarDiagnosticoSeleccionado;
+    window.marcarArmadoCompletadoDesdeTarjeta = marcarArmadoCompletadoDesdeTarjeta;
+    window.nuevoDiagnostico = nuevoDiagnostico;
+    window.editarDiagnostico = editarDiagnostico;
+    window.verDetallesOrden = verDetallesOrden;
+    window.verFotoAmpliada = verFotoAmpliada;
+    window.cerrarModal = cerrarModal;
     
     console.log('✅ diagnostico.js cargado correctamente');
 });

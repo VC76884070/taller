@@ -633,3 +633,129 @@ def obtener_detalle_orden(current_user, orden_id):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+        # =====================================================
+# API: MARCAR ARMADO COMPLETADO (NUEVO)
+# =====================================================
+@mis_vehiculos_bp.route('/marcar-armado-completado', methods=['POST'])
+@tecnico_required
+def marcar_armado_completado(current_user):
+    """Marcar que el técnico ha completado el armado del vehículo"""
+    try:
+        data = request.get_json()
+        id_orden = data.get('id_orden')
+        
+        if not id_orden:
+            return jsonify({'error': 'ID de orden requerido'}), 400
+        
+        tecnico_id = current_user['id']
+        ahora = datetime.datetime.now().isoformat()
+        
+        logger.info(f"🔧 Técnico {tecnico_id} marcando armado completado para orden {id_orden}")
+        
+        # 1. Verificar que el técnico tiene una asignación activa de armado
+        asignacion = supabase.table('asignaciontecnico') \
+            .select('id') \
+            .eq('id_orden_trabajo', id_orden) \
+            .eq('id_tecnico', tecnico_id) \
+            .eq('tipo_asignacion', 'armado') \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
+        if not asignacion.data:
+            return jsonify({'error': 'No tienes una asignación activa de armado para esta orden'}), 403
+        
+        # 2. Obtener estado actual de la orden
+        orden_actual = supabase.table('ordentrabajo') \
+            .select('estado_global, codigo_unico') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if not orden_actual.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        if orden_actual.data[0]['estado_global'] != 'EnArmadoVehiculo':
+            return jsonify({'error': f'La orden no está en estado de armado. Estado actual: {orden_actual.data[0]["estado_global"]}'}), 400
+        
+        # 3. Finalizar la asignación del técnico
+        supabase.table('asignaciontecnico') \
+            .update({'fecha_hora_final': ahora}) \
+            .eq('id', asignacion.data[0]['id']) \
+            .execute()
+        
+        # 4. Cambiar estado de la orden a VEHICULO_ARMADO
+        supabase.table('ordentrabajo').update({
+            'estado_global': 'VehiculoArmado',
+            'fecha_fin_armado': ahora
+        }).eq('id', id_orden).execute()
+        
+        # 5. Registrar avance del trabajo
+        supabase.table('avancetrabajo').insert({
+            'id_orden_trabajo': id_orden,
+            'id_tecnico': tecnico_id,
+            'descripcion': f"✅ Armado completado por {current_user.get('nombre', 'Técnico')}",
+            'tipo_avance': 'armado_completado',
+            'fecha_hora': ahora,
+            'estado_asociado': 'VehiculoArmado'
+        }).execute()
+        
+        # 6. Liberar la bahía si estaba ocupada
+        planificacion = supabase.table('planificacion') \
+            .select('id') \
+            .eq('id_orden_trabajo', id_orden) \
+            .is_('fecha_hora_fin_real', 'null') \
+            .execute()
+        
+        if planificacion.data:
+            supabase.table('planificacion').update({
+                'fecha_hora_fin_real': ahora
+            }).eq('id', planificacion.data[0]['id']).execute()
+            logger.info(f"✅ Bahía liberada para orden {id_orden}")
+        
+        # 7. Notificar al jefe de taller
+        notificar_jefe_taller_armado_completado(id_orden, current_user.get('nombre', 'Técnico'), orden_actual.data[0].get('codigo_unico', str(id_orden)))
+        
+        logger.info(f"✅ Armado completado para orden {id_orden} por técnico {tecnico_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Armado completado exitosamente. Se ha notificado al Jefe de Taller.',
+            'nuevo_estado': 'VehiculoArmado'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error marcando armado completado: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+def notificar_jefe_taller_armado_completado(id_orden, tecnico_nombre, codigo_orden):
+    """Notificar al jefe de taller que el armado está completado"""
+    try:
+        # Obtener jefes de taller (rol con id 3 según tu esquema)
+        jefes_result = supabase.table('usuario_rol') \
+            .select('id_usuario') \
+            .eq('id_rol', 3) \
+            .execute()
+        
+        jefes_ids = [j['id_usuario'] for j in (jefes_result.data or [])]
+        
+        if not jefes_ids:
+            logger.warning("No se encontraron jefes de taller para notificar")
+            return
+        
+        for jefe_id in jefes_ids:
+            supabase.table('notificacion').insert({
+                'id_usuario_destino': jefe_id,
+                'tipo': 'armado_completado',
+                'mensaje': f"✅ El técnico {tecnico_nombre} ha completado el ARMADO del vehículo orden #{codigo_orden}. Vehículo listo para entrega.",
+                'fecha_envio': datetime.datetime.now().isoformat(),
+                'leida': False,
+                'id_referencia': id_orden
+            }).execute()
+        
+        logger.info(f"Notificaciones de armado completado enviadas a {len(jefes_ids)} jefes de taller")
+        
+    except Exception as e:
+        logger.error(f"Error enviando notificación: {str(e)}")

@@ -514,20 +514,21 @@ function renderOrdenes() {
             `;
         }
         // CASO 2: EN PROCESO DE ARMADO
+        // CASO 2: EN PROCESO DE ARMADO
         else if (estadoOrden === ESTADOS_ORDEN.EN_ARMADO) {
             estadoBadgeHtml = `
                 <div class="alert-warning" style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; background: rgba(255, 193, 7, 0.15); border-left: 3px solid #ffc107;">
-                    <i class="fas fa-tools" style="color: #ffc107;"></i>
-                    <strong>🔧 VEHÍCULO EN PROCESO DE ARMADO</strong>
-                    <br><small>El técnico está armando el vehículo. Se cobrará solo diagnóstico (Bs. 200).</small>
+                    <i class="fas fa-clock" style="color: #ffc107;"></i>
+                    <strong>🔧 NOTIFICACIÓN ENVIADA AL TÉCNICO</strong>
+                    <br><small>El técnico está ARMANDO el vehículo. Esperando confirmación de armado.</small>
                 </div>
             `;
             botonesHtml = `
-                <button class="btn-success" onclick='cobrarDiagnosticoArmado(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}")'>
-                    <i class="fas fa-dollar-sign"></i> Cobrar Diagnóstico (Bs. 200)
+                <button class="btn-outline" onclick="verInstruccionesArmado(${orden.id_orden})">
+                    <i class="fas fa-clipboard-list"></i> Ver Instrucciones Enviadas
                 </button>
                 <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
-                    <i class="fas fa-eye"></i> Ver Detalle
+                    <i class="fas fa-eye"></i> Ver Cotización Rechazada
                 </button>
             `;
         }
@@ -767,39 +768,69 @@ function renderSolicitudesCompra() {
 }
 
 // =====================================================
-// MODAL: NOTIFICAR ARMADO (COTIZACIÓN RECHAZADA)
+// MODAL: NOTIFICAR ARMADO PARA COTIZACIÓN RECHAZADA (SIMPLIFICADO - SIN SELECTOR DE TÉCNICOS)
 // =====================================================
 
 async function abrirModalNotificarArmado(id_orden, codigo, vehiculo, cliente) {
     currentOrdenArmado = { id_orden, codigo, vehiculo, cliente };
     
+    // Mostrar información de la orden
     const ordenInfo = document.getElementById('armadoOrdenInfo');
     if (ordenInfo) {
         ordenInfo.innerHTML = `
             <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(codigo)}</p>
             <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(vehiculo)}</p>
             <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(cliente)}</p>
+            <p><strong><i class="fas fa-dollar-sign"></i> Monto a cobrar:</strong> Bs. 200.00 (solo diagnóstico)</p>
         `;
     }
     
+    // Cargar los técnicos YA ASIGNADOS a esta orden (solo lectura)
     mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/tecnicos-disponibles`, { headers: getAuthHeaders() });
+        const response = await fetch(`${API_URL}/orden/${id_orden}/tecnicos-asignados`, { headers: getAuthHeaders() });
         const data = await response.json();
         
-        const selectTecnicos = document.getElementById('armadoTecnicosList');
-        if (selectTecnicos && data.tecnicos) {
-            selectTecnicos.innerHTML = data.tecnicos.map(t => 
-                `<option value="${t.id}">${escapeHtml(t.nombre)}</option>`
-            ).join('');
+        const tecnicosContainer = document.getElementById('tecnicosAsignadosList');
+        if (tecnicosContainer) {
+            if (data.tecnicos && data.tecnicos.length > 0) {
+                tecnicosContainer.innerHTML = data.tecnicos.map(t => `
+                    <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: var(--bg-card); border-radius: 8px; margin-bottom: 0.5rem;">
+                        <i class="fas fa-user-cog" style="color: var(--rojo-primario);"></i>
+                        <div>
+                            <strong>${escapeHtml(t.nombre)}</strong>
+                            ${t.contacto ? `<br><small style="color: var(--gris-texto);">📞 ${escapeHtml(t.contacto)}</small>` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                tecnicosContainer.innerHTML = `
+                    <div class="alert-warning" style="padding: 0.75rem; border-radius: 8px;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        No hay técnicos asignados actualmente a esta orden. Se notificará al jefe de taller.
+                    </div>
+                `;
+            }
         }
     } catch (error) {
-        console.error('Error cargando técnicos:', error);
+        console.error('Error cargando técnicos asignados:', error);
+        const tecnicosContainer = document.getElementById('tecnicosAsignadosList');
+        if (tecnicosContainer) {
+            tecnicosContainer.innerHTML = `
+                <div class="alert-warning" style="padding: 0.75rem; border-radius: 8px;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    No se pudieron cargar los técnicos asignados. Se notificará al jefe de taller.
+                </div>
+            `;
+        }
     } finally {
         mostrarLoading(false);
     }
     
+    // Limpiar campo de instrucciones
     document.getElementById('armadoInstrucciones').value = '';
+    
+    // Abrir modal
     abrirModal('modalNotificarArmado');
 }
 
@@ -808,15 +839,7 @@ async function confirmarNotificarArmado() {
     
     const instrucciones = document.getElementById('armadoInstrucciones')?.value.trim();
     if (!instrucciones) {
-        showToast('Debes escribir instrucciones para el armado', 'warning');
-        return;
-    }
-    
-    const selectTecnicos = document.getElementById('armadoTecnicosList');
-    const tecnicosIds = Array.from(selectTecnicos?.selectedOptions || []).map(opt => parseInt(opt.value));
-    
-    if (tecnicosIds.length === 0) {
-        showToast('Debes seleccionar al menos un técnico', 'warning');
+        showToast('⚠️ Debes escribir instrucciones para el armado del vehículo', 'warning');
         return;
     }
     
@@ -827,24 +850,25 @@ async function confirmarNotificarArmado() {
             headers: getAuthHeaders(),
             body: JSON.stringify({
                 id_orden: currentOrdenArmado.id_orden,
-                instrucciones_armado: instrucciones,
-                tecnicos_ids: tecnicosIds
+                instrucciones_armado: instrucciones
+                // NOTA: Ya no enviamos tecnicos_ids porque se toman los ya asignados
             })
         });
         
         const data = await response.json();
         
         if (data.success) {
-            showToast('✅ Técnico notificado. El vehículo será armado.', 'success');
+            showToast('✅ Instrucciones enviadas al técnico. El vehículo será armado.', 'success');
             cerrarModal('modalNotificarArmado');
+            // Recargar datos para actualizar el estado de la orden
             await cargarOrdenesConServicios();
             await cargarCotizacionesMap();
         } else {
-            showToast(data.error || 'Error al notificar', 'error');
+            showToast(data.error || 'Error al notificar al técnico', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        showToast('Error de conexión', 'error');
+        showToast('Error de conexión al servidor', 'error');
     } finally {
         mostrarLoading(false);
     }
@@ -882,12 +906,13 @@ async function cobrarDiagnosticoArmado(id_orden, codigo) {
 }
 
 // =====================================================
-// MODAL: INICIAR REPARACIÓN
+// MODAL: INICIAR REPARACIÓN PARA COTIZACIÓN ACEPTADA (COMPLETO - CON selector de técnicos)
 // =====================================================
 
 async function abrirModalIniciarReparacion(id_orden, codigo, vehiculo, cliente) {
     currentOrdenAceptada = { id_orden, codigo, vehiculo, cliente };
     
+    // Mostrar información de la orden
     const ordenInfo = document.getElementById('reparacionOrdenInfo');
     if (ordenInfo) {
         ordenInfo.innerHTML = `
@@ -899,45 +924,87 @@ async function abrirModalIniciarReparacion(id_orden, codigo, vehiculo, cliente) 
     
     mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/tecnicos-disponibles`, { headers: getAuthHeaders() });
-        const data = await response.json();
+        // 1. Cargar técnicos actualmente asignados (para mostrar)
+        const tecnicosActualesResponse = await fetch(`${API_URL}/orden/${id_orden}/tecnicos-asignados`, { headers: getAuthHeaders() });
+        const tecnicosActualesData = await tecnicosActualesResponse.json();
+        
+        const tecnicosActualesContainer = document.getElementById('tecnicosActualesList');
+        if (tecnicosActualesContainer && tecnicosActualesData.tecnicos) {
+            if (tecnicosActualesData.tecnicos.length > 0) {
+                tecnicosActualesContainer.innerHTML = tecnicosActualesData.tecnicos.map(t => `
+                    <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0;">
+                        <i class="fas fa-user-check" style="color: var(--verde-exito);"></i>
+                        <span>${escapeHtml(t.nombre)}</span>
+                    </div>
+                `).join('');
+            } else {
+                tecnicosActualesContainer.innerHTML = `<span class="text-muted"><i class="fas fa-info-circle"></i> No hay técnicos asignados actualmente</span>`;
+            }
+        }
+        
+        // 2. Cargar todos los técnicos disponibles para seleccionar
+        const tecnicosResponse = await fetch(`${API_URL}/tecnicos-disponibles`, { headers: getAuthHeaders() });
+        const tecnicosData = await tecnicosResponse.json();
         
         const container = document.getElementById('reparacionTecnicosContainer');
-        if (container && data.tecnicos) {
-            container.innerHTML = data.tecnicos.map(t => `
-                <div class="tecnico-checkbox" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-card); border-radius: 8px;">
-                    <input type="checkbox" id="tecnico_${t.id}" value="${t.id}">
-                    <label for="tecnico_${t.id}">${escapeHtml(t.nombre)}</label>
+        if (container && tecnicosData.tecnicos) {
+            // Crear checkboxes para selección múltiple
+            container.innerHTML = tecnicosData.tecnicos.map(t => `
+                <div class="tecnico-checkbox-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: var(--bg-card); border-radius: 8px; transition: all 0.2s;">
+                    <input type="checkbox" id="tecnico_${t.id}" value="${t.id}" 
+                        ${tecnicosActualesData.tecnicos && tecnicosActualesData.tecnicos.some(tact => tact.id === t.id) ? 'checked' : ''}>
+                    <label for="tecnico_${t.id}" style="flex: 1; cursor: pointer;">
+                        <strong>${escapeHtml(t.nombre)}</strong>
+                        ${t.especialidad ? `<br><small style="color: var(--gris-texto);">🔧 ${escapeHtml(t.especialidad)}</small>` : ''}
+                    </label>
                 </div>
             `).join('');
+            
+            if (tecnicosData.tecnicos.length === 0) {
+                container.innerHTML = `<div class="alert-warning" style="padding: 1rem; text-align: center;"><i class="fas fa-exclamation-triangle"></i> No hay técnicos disponibles para asignar</div>`;
+            }
+        } else if (container) {
+            container.innerHTML = `<div class="alert-warning" style="padding: 1rem; text-align: center;"><i class="fas fa-exclamation-triangle"></i> Error al cargar técnicos disponibles</div>`;
         }
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error cargando técnicos:', error);
+        const container = document.getElementById('reparacionTecnicosContainer');
+        if (container) {
+            container.innerHTML = `<div class="alert-danger" style="padding: 1rem; text-align: center;"><i class="fas fa-exclamation-circle"></i> Error al cargar técnicos. Intente nuevamente.</div>`;
+        }
     } finally {
         mostrarLoading(false);
     }
     
+    // Resetear campos
     document.getElementById('reparacionInstrucciones').value = '';
     document.getElementById('reparacionPlazoDias').value = 3;
+    
     abrirModal('modalIniciarReparacion');
 }
+
 
 async function confirmarIniciarReparacion() {
     if (!currentOrdenAceptada) return;
     
     const instrucciones = document.getElementById('reparacionInstrucciones')?.value.trim();
     if (!instrucciones) {
-        showToast('Debes escribir instrucciones para los técnicos', 'warning');
+        showToast('⚠️ Debes escribir instrucciones detalladas para los técnicos', 'warning');
         return;
     }
     
     const plazoDias = parseInt(document.getElementById('reparacionPlazoDias')?.value || 3);
+    if (isNaN(plazoDias) || plazoDias < 1) {
+        showToast('⚠️ El plazo debe ser al menos 1 día', 'warning');
+        return;
+    }
     
+    // Obtener técnicos seleccionados de los checkboxes
     const checkboxes = document.querySelectorAll('#reparacionTecnicosContainer input[type="checkbox"]:checked');
     const tecnicosIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
     
     if (tecnicosIds.length === 0) {
-        showToast('Debes seleccionar al menos un técnico', 'warning');
+        showToast('⚠️ Debes seleccionar al menos un técnico para la reparación', 'warning');
         return;
     }
     
@@ -958,16 +1025,16 @@ async function confirmarIniciarReparacion() {
         const data = await response.json();
         
         if (data.success) {
-            showToast(`✅ Reparación iniciada con ${tecnicosIds.length} técnico(s)`, 'success');
+            showToast(`✅ Reparación iniciada con ${tecnicosIds.length} técnico(s) asignados. Plazo: ${plazoDias} días.`, 'success');
             cerrarModal('modalIniciarReparacion');
             await cargarOrdenesConServicios();
             await cargarCotizacionesMap();
         } else {
-            showToast(data.error || 'Error al iniciar reparación', 'error');
+            showToast(data.error || 'Error al iniciar la reparación', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        showToast('Error de conexión', 'error');
+        showToast('Error de conexión al servidor', 'error');
     } finally {
         mostrarLoading(false);
     }
@@ -1944,8 +2011,71 @@ async function inicializar() {
     setupEventListeners();
     console.log('✅ cotizaciones.js inicializado correctamente');
 }
+async function verInstruccionesArmado(id_orden) {
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/orden/${id_orden}/instrucciones-armado`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        
+        if (data.success && data.instrucciones) {
+            const orden = ordenesConServicios.find(o => o.id_orden === id_orden);
+            const modalContent = `
+                <div class="orden-info-card" style="margin-bottom: 1rem;">
+                    <p><strong>Orden:</strong> ${escapeHtml(orden?.codigo_unico || 'N/A')}</p>
+                    <p><strong>Vehículo:</strong> ${escapeHtml(orden?.vehiculo || 'N/A')}</p>
+                    <p><strong>Fecha envío:</strong> ${formatDate(data.fecha_envio)}</p>
+                </div>
+                <div class="alert-info" style="background: rgba(59, 130, 246, 0.1); padding: 1rem; border-radius: 8px;">
+                    <strong><i class="fas fa-clipboard-list"></i> Instrucciones enviadas al técnico:</strong>
+                    <p style="margin-top: 0.75rem; white-space: pre-wrap;">${escapeHtml(data.instrucciones)}</p>
+                </div>
+            `;
+            
+            document.getElementById('detalleCotizacionContainer').innerHTML = modalContent;
+            abrirModal('modalDetalleCotizacion');
+        } else {
+            showToast('No se encontraron instrucciones de armado', 'warning');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error al cargar instrucciones', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+async function finalizarOrdenArmado(id_orden, codigo) {
+    if (!confirm(`¿Confirmas que el vehículo fue ENTREGADO al cliente?\n\nOrden: ${codigo}\n\nEl diagnóstico (Bs. 200) será cobrado internamente.`)) return;
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/orden/${id_orden}/finalizar-armado`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                id_orden: id_orden
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast(`✅ Orden ${codigo} marcada como FINALIZADA. Vehículo entregado al cliente.`, 'success');
+            await cargarOrdenesConServicios();
+            await cargarCotizacionesMap();
+        } else {
+            showToast(data.error || 'Error al finalizar la orden', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
 
 // Exponer funciones globales
+window.verInstruccionesArmado = verInstruccionesArmado;
+window.finalizarOrdenArmado = finalizarOrdenArmado;
 window.eliminarSolicitudCotizacion = eliminarSolicitudCotizacion;
 window.solicitarCompraDesdeCotizacion = solicitarCompraDesdeCotizacion;
 window.abrirModalGenerarCotizacion = abrirModalGenerarCotizacion;

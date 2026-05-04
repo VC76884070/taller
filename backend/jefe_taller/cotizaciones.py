@@ -381,11 +381,40 @@ def obtener_ordenes_aprobadas(current_user):
 def obtener_encargados_repuestos_endpoint(current_user):
     """Obtener lista de encargados de repuestos"""
     try:
-        encargados = obtener_encargados_repuestos()
+        usuario_roles = supabase.table('usuario') \
+            .select('id, nombre, contacto, email') \
+            .execute()
+        
+        encargados = []
+        for usuario in (usuario_roles.data or []):
+            # Verificar si es encargado_repuestos (id_rol = ? según tu esquema)
+            # O usar la función usuario_tiene_rol
+            try:
+                tiene_rol = supabase.rpc('usuario_tiene_rol', {
+                    'p_usuario_id': usuario['id'],
+                    'p_rol_nombre': 'encargado_repuestos'
+                }).execute()
+                if tiene_rol.data:
+                    encargados.append({
+                        'id': usuario['id'],
+                        'nombre': usuario.get('nombre', 'Encargado'),
+                        'contacto': usuario.get('contacto', ''),
+                        'email': usuario.get('email', '')
+                    })
+            except:
+                # Fallback: buscar por id_rol
+                if usuario.get('id_rol') == 5:  # Ajusta según tu ID de rol
+                    encargados.append({
+                        'id': usuario['id'],
+                        'nombre': usuario.get('nombre', 'Encargado'),
+                        'contacto': usuario.get('contacto', ''),
+                        'email': usuario.get('email', '')
+                    })
+        
         return jsonify({'success': True, 'encargados': encargados}), 200
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error obteniendo encargados: {e}")
+        return jsonify({'success': True, 'encargados': []}), 200
 
 
 # =====================================================
@@ -1227,10 +1256,6 @@ def aprobar_solicitud_compra(current_user, id_solicitud):
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# APARTADO 8: MANEJO DE COTIZACIÓN RECHAZADA
-# =====================================================
-
 @cotizaciones_bp.route('/rechazo/iniciar-armado', methods=['POST'])
 @jefe_taller_required
 def iniciar_armado_vehiculo(current_user):
@@ -1239,10 +1264,12 @@ def iniciar_armado_vehiculo(current_user):
         data = request.get_json()
         id_orden = data.get('id_orden')
         instrucciones_armado = data.get('instrucciones_armado', '')
-        tecnicos_ids = data.get('tecnicos_ids', [])
         
         if not id_orden:
             return jsonify({'error': 'Orden requerida'}), 400
+        
+        if not instrucciones_armado.strip():
+            return jsonify({'error': 'Debe escribir instrucciones para el armado'}), 400
         
         ahora = datetime.datetime.now().isoformat()
         
@@ -1256,10 +1283,7 @@ def iniciar_armado_vehiculo(current_user):
         
         # Cambiar estado a "EnArmadoVehiculo"
         supabase.table('ordentrabajo').update({
-            'estado_global': ESTADOS_ORDEN['EN_ARMADO'],
-            'fecha_inicio_armado': ahora,
-            'instrucciones_armado': instrucciones_armado,
-            'total_diagnostico': 200.00
+            'estado_global': ESTADOS_ORDEN['EN_ARMADO']
         }).eq('id', id_orden).execute()
         
         # Registrar historial
@@ -1271,23 +1295,6 @@ def iniciar_armado_vehiculo(current_user):
             'Cliente rechazó cotización. Iniciando armado del vehículo.'
         )
         
-        # Asignar técnicos para el armado
-        if tecnicos_ids:
-            supabase.table('asignaciontecnico') \
-                .update({'fecha_hora_final': ahora}) \
-                .eq('id_orden_trabajo', id_orden) \
-                .is_('fecha_hora_final', 'null') \
-                .execute()
-            
-            for tecnico_id in tecnicos_ids:
-                supabase.table('asignaciontecnico').insert({
-                    'id_orden_trabajo': id_orden,
-                    'id_tecnico': tecnico_id,
-                    'tipo_asignacion': 'armado',
-                    'fecha_hora_inicio': ahora,
-                    'id_jefe_taller': current_user['id']
-                }).execute()
-        
         # Guardar instrucciones
         instruccion_completa = f"""
 [ARMADO DE VEHÍCULO - COTIZACIÓN RECHAZADA]
@@ -1295,12 +1302,11 @@ def iniciar_armado_vehiculo(current_user):
 El cliente ha rechazado la cotización. Proceder a ARMAR el vehículo completamente.
 
 Instrucciones específicas:
-{instrucciones_armado if instrucciones_armado else 'Armar el vehículo a su estado original antes del diagnóstico.'}
+{instrucciones_armado}
 
-IMPORTANTE:
-- El cliente pagará SOLO el diagnóstico (Bs. 200.00)
-- No realizar ninguna reparación adicional
-- Al terminar, marcar como "Vehículo Armado"
+⚠️ IMPORTANTE:
+- Armar el vehículo a su estado original antes del diagnóstico
+- Al terminar, marcar como "Vehículo Armado" usando el botón correspondiente
 """
         
         supabase.table('instrucciones_tecnico_historial').insert({
@@ -1311,18 +1317,24 @@ IMPORTANTE:
             'leida': False
         }).execute()
         
-        # Notificar a los técnicos
-        for tecnico_id in tecnicos_ids:
+        # Notificar a los técnicos asignados a esta orden
+        tecnicos_asignados = supabase.table('asignaciontecnico') \
+            .select('id_tecnico') \
+            .eq('id_orden_trabajo', id_orden) \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
+        for tecnico in (tecnicos_asignados.data or []):
             enviar_notificacion(
-                tecnico_id,
+                tecnico['id_tecnico'],
                 'armado_vehiculo',
-                f'🔧 Inicia ARMADO del vehículo orden #{id_orden}. Cliente rechazó cotización. Solo diagnóstico Bs. 200.',
+                f'🔧 El cliente rechazó la cotización. Debes ARMAR el vehículo de la orden #{id_orden}. Revisa las instrucciones.',
                 id_orden
             )
         
         return jsonify({
             'success': True,
-            'message': 'Armado de vehículo iniciado',
+            'message': 'Instrucciones de armado enviadas al técnico',
             'nuevo_estado': ESTADOS_ORDEN['EN_ARMADO']
         }), 200
         
@@ -1614,32 +1626,44 @@ def obtener_instrucciones_tecnico(current_user, id_orden):
 def obtener_tecnicos_disponibles(current_user):
     """Obtener técnicos disponibles para asignar"""
     try:
+        # Obtener usuarios que tienen rol de técnico (id_rol = 4 según tu esquema)
+        # O usar la función usuario_tiene_rol
         usuarios = supabase.table('usuario') \
-            .select('id, nombre, contacto') \
+            .select('id, nombre, contacto, email') \
             .execute()
         
         tecnicos = []
         for usuario in (usuarios.data or []):
             try:
+                # Verificar si tiene rol de técnico
                 tiene_rol = supabase.rpc('usuario_tiene_rol', {
                     'p_usuario_id': usuario['id'],
-                    'p_rol_nombre': 'tecnico_mecanico'
+                    'p_rol_nombre': 'tecnico_mecanico'  # Ajusta según tu nombre de rol
                 }).execute()
                 
                 if tiene_rol.data:
                     tecnicos.append({
                         'id': usuario['id'],
                         'nombre': usuario.get('nombre', 'Técnico'),
-                        'contacto': usuario.get('contacto', '')
+                        'contacto': usuario.get('contacto', ''),
+                        'email': usuario.get('email', '')
                     })
-            except:
-                continue
+            except Exception as e:
+                # Fallback: si no funciona la función RPC, usar id_rol directamente
+                # Según tu esquema, el técnico tiene id_rol = 4
+                if usuario.get('id_rol') == 4:
+                    tecnicos.append({
+                        'id': usuario['id'],
+                        'nombre': usuario.get('nombre', 'Técnico'),
+                        'contacto': usuario.get('contacto', ''),
+                        'email': usuario.get('email', '')
+                    })
         
         return jsonify({'success': True, 'tecnicos': tecnicos}), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error obteniendo técnicos: {str(e)}")
+        return jsonify({'success': True, 'tecnicos': []}), 200
 
 
 @cotizaciones_bp.route('/asignar-tecnicos', methods=['POST'])
@@ -1764,7 +1788,34 @@ try:
 except:
     pass
 
-
+@cotizaciones_bp.route('/orden/<int:id_orden>/tecnicos-asignados', methods=['GET'])
+@jefe_taller_required
+def obtener_tecnicos_asignados(current_user, id_orden):
+    """Obtener técnicos actualmente asignados a una orden (activos, sin fecha final)"""
+    try:
+        # CORREGIDO: Usar 'usuario' en lugar de 'usuario_tecnico'
+        asignaciones = supabase.table('asignaciontecnico') \
+            .select('id_tecnico, fecha_hora_inicio, usuario!id_tecnico(id, nombre, contacto)') \
+            .eq('id_orden_trabajo', id_orden) \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
+        tecnicos = []
+        for asignacion in (asignaciones.data or []):
+            usuario_data = asignacion.get('usuario', {})
+            tecnicos.append({
+                'id': usuario_data.get('id'),
+                'nombre': usuario_data.get('nombre', 'Técnico'),
+                'contacto': usuario_data.get('contacto', ''),
+                'fecha_asignacion': asignacion.get('fecha_hora_inicio')
+            })
+        
+        return jsonify({'success': True, 'tecnicos': tecnicos}), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo técnicos asignados: {str(e)}")
+        # Devolver array vacío en lugar de error para no romper el frontend
+        return jsonify({'success': True, 'tecnicos': []}), 200
 # =====================================================
 # ENDPOINT DE PRUEBA
 # =====================================================
@@ -1772,3 +1823,76 @@ except:
 @cotizaciones_bp.route('/test', methods=['GET'])
 def test_endpoint():
     return jsonify({'success': True, 'message': 'Cotizaciones endpoint funcionando'}), 200
+
+
+@cotizaciones_bp.route('/orden/<int:id_orden>/instrucciones-armado', methods=['GET'])
+@jefe_taller_required
+def obtener_instrucciones_armado(current_user, id_orden):
+    """Obtener las instrucciones de armado enviadas al técnico"""
+    try:
+        instrucciones = supabase.table('instrucciones_tecnico_historial') \
+            .select('instrucciones, fecha_envio') \
+            .eq('id_orden_trabajo', id_orden) \
+            .order('fecha_envio', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if instrucciones.data:
+            return jsonify({
+                'success': True,
+                'instrucciones': instrucciones.data[0].get('instrucciones', ''),
+                'fecha_envio': instrucciones.data[0].get('fecha_envio')
+            }), 200
+        else:
+            return jsonify({'success': False, 'error': 'No se encontraron instrucciones'}), 404
+            
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@cotizaciones_bp.route('/orden/<int:id_orden>/finalizar-armado', methods=['PUT'])
+@jefe_taller_required
+def finalizar_orden_armado(current_user, id_orden):
+    """Finalizar orden después de que el vehículo fue armado y entregado al cliente"""
+    try:
+        ahora = datetime.datetime.now().isoformat()
+        
+        # Obtener estado actual
+        orden_actual = supabase.table('ordentrabajo') \
+            .select('estado_global') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if not orden_actual.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        estado_actual = orden_actual.data[0]['estado_global']
+        
+        if estado_actual != ESTADOS_ORDEN['VEHICULO_ARMADO']:
+            return jsonify({'error': f'La orden no está en estado VEHICULO_ARMADO. Estado actual: {estado_actual}'}), 400
+        
+        # Cambiar a FINALIZADO
+        supabase.table('ordentrabajo').update({
+            'estado_global': ESTADOS_ORDEN['FINALIZADO'],
+            'fecha_salida': ahora
+        }).eq('id', id_orden).execute()
+        
+        # Registrar historial
+        registrar_historial_estado(
+            id_orden,
+            estado_actual,
+            ESTADOS_ORDEN['FINALIZADO'],
+            current_user['id'],
+            'Vehículo armado entregado al cliente'
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Orden finalizada exitosamente',
+            'nuevo_estado': ESTADOS_ORDEN['FINALIZADO']
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
+        return jsonify({'error': str(e)}), 500

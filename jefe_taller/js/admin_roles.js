@@ -1,14 +1,17 @@
 // =====================================================
-// ADMINISTRACIÓN DE ROLES - JEFE TALLER
+// ADMINISTRACIÓN DE ROLES - JEFE TALLER (COMPLETO)
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
-const API_URL = 'http://localhost:5000/api/jefe-taller';
+const API_URL = '/api/jefe-taller'; 
 let usuariosData = [];
+let clientesData = [];
 let rolesData = [];
 let usuarioSeleccionado = null;
 let currentUserRoles = [];
 let currentUserInfo = null;
+let asignacionesActivas = [];
+let personalDisponible = [];
 
 // =====================================================
 // INICIALIZACIÓN
@@ -21,8 +24,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     initPage();
     await cargarRoles();
     await cargarUsuarios();
+    await cargarClientes();
     await cargarEstadisticas();
     setupEventListeners();
+    
+    // Cargar pestaña activa por defecto
+    cambiarPestana('personal');
 });
 
 async function checkAuth() {
@@ -46,9 +53,7 @@ async function checkAuth() {
             if (currentUserInfo) currentUserInfo.roles = currentUserRoles;
         }
         
-        const esJefeTaller = currentUserRoles.includes('jefe_taller') || 
-                              (currentUserInfo && currentUserInfo.rol_principal === 'jefe_taller') ||
-                              (currentUserInfo && currentUserInfo.rol === 'jefe_taller');
+        const esJefeTaller = currentUserRoles.includes('jefe_taller');
         
         if (!esJefeTaller) {
             mostrarNotificacion('No tienes permisos para acceder a esta sección', 'error');
@@ -84,13 +89,42 @@ function initPage() {
 }
 
 function setupEventListeners() {
-    const searchInput = document.getElementById('searchInput');
-    if (searchInput) {
-        searchInput.addEventListener('input', () => filtrarUsuarios());
+    // Filtros de personal
+    const searchPersonal = document.getElementById('searchPersonal');
+    if (searchPersonal) {
+        searchPersonal.addEventListener('input', () => filtrarPersonal());
     }
     
+    // Filtros de clientes
+    const searchClientes = document.getElementById('searchClientes');
+    if (searchClientes) {
+        searchClientes.addEventListener('input', () => filtrarClientes());
+    }
+    
+    // Botones de pestañas
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tabId = btn.dataset.tab;
+            cambiarPestana(tabId);
+        });
+    });
+    
+    // Botón de logout
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) logoutBtn.addEventListener('click', logout);
+}
+
+function cambiarPestana(tabId) {
+    // Actualizar botones
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabId);
+    });
+    
+    // Actualizar paneles
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.toggle('active', panel.id === `panel-${tabId}`);
+    });
 }
 
 function logout() {
@@ -118,9 +152,8 @@ async function cargarRoles() {
         
         const data = await response.json();
         if (response.ok && data.success) {
-            // Filtrar para asegurar que no venga el rol cliente
-            rolesData = data.roles.filter(rol => rol.id !== 5);
-            console.log('✅ Roles cargados (solo personal):', rolesData);
+            rolesData = data.roles;
+            console.log('✅ Roles cargados:', rolesData);
         } else {
             throw new Error(data.error || 'Error cargando roles');
         }
@@ -139,16 +172,40 @@ async function cargarUsuarios() {
         if (response.ok && data.success) {
             usuariosData = data.usuarios;
             console.log('✅ Usuarios de personal cargados:', usuariosData.length);
-            renderUsuariosTable(usuariosData);
+            renderPersonalTable(usuariosData);
+            actualizarEstadisticasPersonal();
         } else {
             throw new Error(data.error || 'Error cargando usuarios');
         }
     } catch (error) {
         console.error('Error cargando usuarios:', error);
         mostrarNotificacion('Error al cargar los usuarios', 'error');
-        const tbody = document.getElementById('usuariosTableBody');
+        const tbody = document.getElementById('personalTableBody');
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="6" class="loading-row"><i class="fas fa-exclamation-circle"></i> Error al cargar usuarios</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="loading-row"><i class="fas fa-exclamation-circle"></i> Error al cargar usuarios</td></tr>`;
+        }
+    }
+}
+
+async function cargarClientes() {
+    try {
+        const response = await fetch(`${API_URL}/clientes`, { headers: getAuthHeaders() });
+        if (response.status === 401) { logout(); return; }
+        
+        const data = await response.json();
+        if (response.ok && data.success) {
+            clientesData = data.clientes;
+            console.log('✅ Clientes cargados:', clientesData.length);
+            renderClientesTable(clientesData);
+        } else {
+            throw new Error(data.error || 'Error cargando clientes');
+        }
+    } catch (error) {
+        console.error('Error cargando clientes:', error);
+        mostrarNotificacion('Error al cargar los clientes', 'error');
+        const tbody = document.getElementById('clientesTableBody');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="5" class="loading-row"><i class="fas fa-exclamation-circle"></i> Error al cargar clientes</td></tr>`;
         }
     }
 }
@@ -162,7 +219,8 @@ async function cargarEstadisticas() {
         if (response.ok && data.success) {
             const stats = data.estadisticas;
             
-            document.getElementById('totalUsuarios').textContent = stats.total_usuarios || 0;
+            document.getElementById('totalPersonal').textContent = stats.total_usuarios || 0;
+            document.getElementById('totalClientes').textContent = clientesData.length || 0;
             
             for (const rol of stats.usuarios_por_rol) {
                 const rolNombre = rol.rol_nombre;
@@ -188,16 +246,76 @@ async function cargarEstadisticas() {
     }
 }
 
+async function cargarPersonalDisponible(rolNombre, excluirUsuarioId = null) {
+    try {
+        let filtrados = usuariosData.filter(u => {
+            const tieneRol = u.roles_nombres && u.roles_nombres.includes(rolNombre);
+            const noEsElMismo = excluirUsuarioId ? u.id !== excluirUsuarioId : true;
+            return tieneRol && noEsElMismo;
+        });
+        
+        // Para técnicos, verificar disponibilidad (menos de 2 órdenes activas)
+        if (rolNombre === 'tecnico') {
+            for (let i = 0; i < filtrados.length; i++) {
+                const ordenesActivas = await contarOrdenesActivasTecnico(filtrados[i].id);
+                filtrados[i].ordenes_activas = ordenesActivas;
+                filtrados[i].disponible = ordenesActivas < 2;
+            }
+            // Ordenar: disponibles primero
+            filtrados.sort((a, b) => (b.disponible ? 1 : 0) - (a.disponible ? 1 : 0));
+        }
+        
+        personalDisponible = filtrados;
+        return personalDisponible;
+    } catch (error) {
+        console.error('Error cargando personal disponible:', error);
+        return [];
+    }
+}
+
+async function contarOrdenesActivasTecnico(tecnicoId) {
+    try {
+        const response = await fetch(`${API_URL}/tecnico/${tecnicoId}/ordenes-activas`, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        if (response.ok && data.success) {
+            return data.total;
+        }
+        return 0;
+    } catch (error) {
+        console.error('Error contando órdenes activas:', error);
+        return 0;
+    }
+}
+
+async function cargarAsignacionesActivas(usuarioId) {
+    try {
+        const response = await fetch(`${API_URL}/usuario/${usuarioId}/asignaciones-activas`, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        if (response.ok && data.success) {
+            asignacionesActivas = data.asignaciones;
+            return data;
+        }
+        return { tiene_asignaciones: false, asignaciones: [] };
+    } catch (error) {
+        console.error('Error cargando asignaciones activas:', error);
+        return { tiene_asignaciones: false, asignaciones: [] };
+    }
+}
+
 // =====================================================
 // RENDER FUNCTIONS
 // =====================================================
 
-function renderUsuariosTable(usuarios) {
-    const tbody = document.getElementById('usuariosTableBody');
+function renderPersonalTable(usuarios) {
+    const tbody = document.getElementById('personalTableBody');
     if (!tbody) return;
     
     if (usuarios.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="loading-row">No hay usuarios de personal registrados</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="loading-row">No hay usuarios de personal registrados</td></tr>`;
         return;
     }
     
@@ -213,7 +331,7 @@ function renderUsuariosTable(usuarios) {
                         ? usuario.roles_nombres.map(rol => `<span class="role-tag ${rol.replace('_', '-')}">${formatRolName(rol)}</span>`).join('')
                         : '<span class="no-roles">Sin roles asignados</span>'}
                 </div>
-               </td>
+            </td>
             <td class="action-buttons">
                 <button class="action-btn view" onclick="verDetalleUsuario(${usuario.id})" title="Ver detalles">
                     <i class="fas fa-eye"></i>
@@ -224,16 +342,67 @@ function renderUsuariosTable(usuarios) {
                 <button class="action-btn delete" onclick="eliminarUsuario(${usuario.id})" title="Eliminar usuario">
                     <i class="fas fa-trash-alt"></i>
                 </button>
-             </td>
+            </td>
         </tr>
     `).join('');
 }
 
-function filtrarUsuarios() {
-    const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
+function renderClientesTable(clientes) {
+    const tbody = document.getElementById('clientesTableBody');
+    if (!tbody) return;
+    
+    if (clientes.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="loading-row">No hay clientes registrados</td></tr>`;
+        return;
+    }
+    
+    tbody.innerHTML = clientes.map(cliente => `
+        <tr data-id="${cliente.id}">
+            <td><strong>${escapeHtml(cliente.nombre)}</strong></td>
+            <td>${escapeHtml(cliente.email || '-')}</td>
+            <td>${escapeHtml(cliente.contacto || '-')}</td>
+            <td>${escapeHtml(cliente.ubicacion || '-')}</td>
+            <td>
+                <div class="vehiculos-badge">
+                    ${cliente.vehiculos && cliente.vehiculos.length > 0 
+                        ? cliente.vehiculos.map(v => `<span class="vehiculo-tag">${escapeHtml(v.placa)} (${escapeHtml(v.marca)} ${escapeHtml(v.modelo)})</span>`).join('')
+                        : '<span class="no-vehiculos">Sin vehículos</span>'}
+                </div>
+            </td>
+            <td class="action-buttons">
+                <button class="action-btn view" onclick="verDetalleCliente(${cliente.id})" title="Ver detalles">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function actualizarEstadisticasPersonal() {
+    // Contar por rol
+    let jefeOperativo = 0, jefeTaller = 0, tecnico = 0, repuestos = 0;
+    
+    usuariosData.forEach(u => {
+        if (u.roles_nombres) {
+            if (u.roles_nombres.includes('jefe_operativo')) jefeOperativo++;
+            if (u.roles_nombres.includes('jefe_taller')) jefeTaller++;
+            if (u.roles_nombres.includes('tecnico')) tecnico++;
+            if (u.roles_nombres.includes('encargado_repuestos')) repuestos++;
+        }
+    });
+    
+    document.getElementById('totalJefeOperativo').textContent = jefeOperativo;
+    document.getElementById('totalJefeTaller').textContent = jefeTaller;
+    document.getElementById('totalTecnico').textContent = tecnico;
+    document.getElementById('totalRepuestos').textContent = repuestos;
+    document.getElementById('totalPersonal').textContent = usuariosData.length;
+}
+
+function filtrarPersonal() {
+    const searchTerm = document.getElementById('searchPersonal')?.value.toLowerCase() || '';
     
     if (!searchTerm) {
-        renderUsuariosTable(usuariosData);
+        renderPersonalTable(usuariosData);
         return;
     }
     
@@ -243,11 +412,28 @@ function filtrarUsuarios() {
         (u.documento && u.documento.includes(searchTerm))
     );
     
-    renderUsuariosTable(filtrados);
+    renderPersonalTable(filtrados);
+}
+
+function filtrarClientes() {
+    const searchTerm = document.getElementById('searchClientes')?.value.toLowerCase() || '';
+    
+    if (!searchTerm) {
+        renderClientesTable(clientesData);
+        return;
+    }
+    
+    const filtrados = clientesData.filter(c => 
+        c.nombre.toLowerCase().includes(searchTerm) ||
+        (c.email && c.email.toLowerCase().includes(searchTerm)) ||
+        (c.contacto && c.contacto.includes(searchTerm))
+    );
+    
+    renderClientesTable(filtrados);
 }
 
 // =====================================================
-// VER DETALLE DE USUARIO
+// VER DETALLE
 // =====================================================
 
 async function verDetalleUsuario(usuarioId) {
@@ -290,10 +476,6 @@ async function verDetalleUsuario(usuarioId) {
                             <p>${escapeHtml(usuario.ubicacion || 'No registrada')}</p>
                         </div>
                         <div class="info-group">
-                            <label><i class="fas fa-calendar-alt"></i> Fecha de registro</label>
-                            <p>${formatDate(usuario.fecha_registro)}</p>
-                        </div>
-                        <div class="info-group">
                             <label><i class="fas fa-tags"></i> Roles asignados</label>
                             <div class="roles-badge">
                                 ${usuario.roles && usuario.roles.length > 0 
@@ -315,22 +497,91 @@ async function verDetalleUsuario(usuarioId) {
     }
 }
 
+function verDetalleCliente(clienteId) {
+    const cliente = clientesData.find(c => c.id === clienteId);
+    if (!cliente) return;
+    
+    const modalBody = document.getElementById('modalDetalleClienteBody');
+    if (modalBody) {
+        modalBody.innerHTML = `
+            <div class="detalle-cliente">
+                <div class="info-group">
+                    <label><i class="fas fa-user"></i> Nombre completo</label>
+                    <p>${escapeHtml(cliente.nombre)}</p>
+                </div>
+                <div class="info-group">
+                    <label><i class="fas fa-envelope"></i> Correo electrónico</label>
+                    <p>${escapeHtml(cliente.email || 'No registrado')}</p>
+                </div>
+                <div class="info-group">
+                    <label><i class="fas fa-phone"></i> Teléfono / Contacto</label>
+                    <p>${escapeHtml(cliente.contacto || 'No registrado')}</p>
+                </div>
+                <div class="info-group">
+                    <label><i class="fas fa-map-marker-alt"></i> Ubicación</label>
+                    <p>${escapeHtml(cliente.ubicacion || 'No registrada')}</p>
+                </div>
+                <div class="info-group">
+                    <label><i class="fas fa-calendar-alt"></i> Cliente desde</label>
+                    <p>${formatDate(cliente.fecha_registro)}</p>
+                </div>
+                <div class="info-group">
+                    <label><i class="fas fa-car"></i> Vehículos registrados</label>
+                    <div class="vehiculos-list">
+                        ${cliente.vehiculos && cliente.vehiculos.length > 0 
+                            ? cliente.vehiculos.map(v => `
+                                <div class="vehiculo-item">
+                                    <span class="placa">${escapeHtml(v.placa)}</span>
+                                    <span>${escapeHtml(v.marca)} ${escapeHtml(v.modelo)}</span>
+                                    <span class="anio">${v.anio || 'N/A'}</span>
+                                    <span class="km">${(v.kilometraje || 0).toLocaleString()} km</span>
+                                </div>
+                            `).join('')
+                            : '<p class="no-data">No tiene vehículos registrados</p>'}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    document.getElementById('modalDetalleCliente').classList.add('show');
+}
+
+function cerrarModalDetalleCliente() {
+    document.getElementById('modalDetalleCliente').classList.remove('show');
+}
+
 function cerrarModalDetalleUsuario() {
     document.getElementById('modalDetalleUsuario').classList.remove('show');
 }
 
 // =====================================================
-// ELIMINAR USUARIO
+// ELIMINAR USUARIO CON VERIFICACIÓN
 // =====================================================
 
 async function eliminarUsuario(usuarioId) {
     const usuario = usuariosData.find(u => u.id === usuarioId);
     if (!usuario) return;
     
+    // Verificar asignaciones activas primero
+    mostrarNotificacion('Verificando asignaciones activas...', 'info');
+    const asignacionesInfo = await cargarAsignacionesActivas(usuarioId);
+    
+    if (asignacionesInfo.tiene_asignaciones) {
+        // Tiene asignaciones activas, mostrar modal de reasignación
+        await abrirModalReasignar(usuario, asignacionesInfo.asignaciones);
+        return;
+    }
+    
+    // No tiene asignaciones, preguntar directamente
     if (!confirm(`¿Estás seguro de que deseas eliminar al usuario "${usuario.nombre}"?\n\nEsta acción no se puede deshacer.`)) {
         return;
     }
     
+    await ejecutarEliminacion(usuarioId, usuario.nombre);
+}
+
+async function ejecutarEliminacion(usuarioId, nombreUsuario) {
     try {
         const response = await fetch(`${API_URL}/usuario/${usuarioId}`, {
             method: 'DELETE',
@@ -352,6 +603,167 @@ async function eliminarUsuario(usuarioId) {
         console.error('Error eliminando usuario:', error);
         mostrarNotificacion(error.message, 'error');
     }
+}
+
+// =====================================================
+// MODAL DE REASIGNACIÓN
+// =====================================================
+
+async function abrirModalReasignar(usuario, asignaciones) {
+    usuarioSeleccionado = usuario;
+    asignacionesActivas = asignaciones;
+    
+    // Determinar roles del usuario
+    const rolesUsuario = usuario.roles_nombres || [];
+    const esTecnico = rolesUsuario.includes('tecnico');
+    const esEncargadoRepuestos = rolesUsuario.includes('encargado_repuestos');
+    
+    // Cargar personal disponible para reasignación
+    let tecnicosDisponibles = [];
+    let encargadosDisponibles = [];
+    
+    if (esTecnico) {
+        tecnicosDisponibles = await cargarPersonalDisponible('tecnico', usuario.id);
+    }
+    if (esEncargadoRepuestos) {
+        encargadosDisponibles = await cargarPersonalDisponible('encargado_repuestos', usuario.id);
+    }
+    
+    const modalBody = document.getElementById('modalReasignarBody');
+    const modalTitle = document.getElementById('modalReasignarTitle');
+    
+    modalTitle.innerHTML = `<i class="fas fa-exchange-alt"></i> Reasignar tareas - ${escapeHtml(usuario.nombre)}`;
+    
+    modalBody.innerHTML = `
+        <div class="reasignar-container">
+            <div class="alert-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>⚠️ Este usuario tiene tareas activas</strong>
+                <p>Para poder eliminar al usuario, debes reasignar sus tareas a otro miembro del personal.</p>
+            </div>
+            
+            <div class="asignaciones-lista">
+                <h4><i class="fas fa-tasks"></i> Tareas activas (${asignaciones.length})</h4>
+                ${asignaciones.map(asig => `
+                    <div class="asignacion-item" data-id="${asig.id_asignacion || asig.id_solicitud}" data-tipo="${asig.tipo}">
+                        <input type="checkbox" class="asignacion-checkbox" data-tipo="${asig.tipo}" data-id="${asig.id_asignacion || asig.id_solicitud}" checked>
+                        <div class="asignacion-info">
+                            <span class="badge ${asig.tipo}">${asig.tipo === 'tecnico' ? '🔧 Técnico' : '📦 Repuestos'}</span>
+                            <span class="orden-ref">Orden: ${escapeHtml(asig.codigo_orden)}</span>
+                            ${asig.descripcion_pieza ? `<span class="pieza">Pieza: ${escapeHtml(asig.descripcion_pieza)}</span>` : ''}
+                            ${asig.tipo_asignacion ? `<span class="tipo">Tipo: ${escapeHtml(asig.tipo_asignacion)}</span>` : ''}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            
+            ${esTecnico ? `
+            <div class="reasignar-seccion">
+                <h4><i class="fas fa-user-cog"></i> Reasignar tareas de TÉCNICO</h4>
+                <div class="form-group">
+                    <label>Seleccionar nuevo técnico:</label>
+                    <select id="nuevoTecnico" class="form-select">
+                        <option value="">-- Seleccionar técnico --</option>
+                        ${tecnicosDisponibles.map(t => `
+                            <option value="${t.id}" ${!t.disponible ? 'disabled' : ''}>
+                                ${escapeHtml(t.nombre)} ${!t.disponible ? '(No disponible - tiene 2 órdenes activas)' : t.ordenes_activas ? `(${t.ordenes_activas}/2 activas)` : '(Disponible)'}
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+            </div>
+            ` : ''}
+            
+            ${esEncargadoRepuestos ? `
+            <div class="reasignar-seccion">
+                <h4><i class="fas fa-boxes"></i> Reasignar tareas de ENCARGADO DE REPUESTOS</h4>
+                <div class="form-group">
+                    <label>Seleccionar nuevo encargado:</label>
+                    <select id="nuevoEncargado" class="form-select">
+                        <option value="">-- Seleccionar encargado --</option>
+                        ${encargadosDisponibles.map(e => `
+                            <option value="${e.id}">${escapeHtml(e.nombre)}</option>
+                        `).join('')}
+                    </select>
+                </div>
+            </div>
+            ` : ''}
+        </div>
+    `;
+    
+    document.getElementById('modalReasignar').classList.add('show');
+}
+
+async function confirmarReasignar() {
+    const asignacionesSeleccionadas = [];
+    
+    document.querySelectorAll('.asignacion-checkbox:checked').forEach(cb => {
+        asignacionesSeleccionadas.push({
+            tipo: cb.dataset.tipo,
+            id_asignacion: cb.dataset.tipo === 'tecnico' ? parseInt(cb.dataset.id) : null,
+            id_solicitud: cb.dataset.tipo === 'repuestos' ? parseInt(cb.dataset.id) : null,
+            codigo_orden: cb.closest('.asignacion-item')?.querySelector('.orden-ref')?.textContent?.replace('Orden: ', '') || ''
+        });
+    });
+    
+    const nuevoTecnicoId = document.getElementById('nuevoTecnico')?.value;
+    const nuevoEncargadoId = document.getElementById('nuevoEncargado')?.value;
+    
+    if (asignacionesSeleccionadas.length === 0) {
+        mostrarNotificacion('Debes seleccionar al menos una tarea para reasignar', 'warning');
+        return;
+    }
+    
+    // Validar que se seleccionó un nuevo responsable si hay tareas de ese tipo
+    const tieneTareasTecnico = asignacionesSeleccionadas.some(a => a.tipo === 'tecnico');
+    const tieneTareasRepuestos = asignacionesSeleccionadas.some(a => a.tipo === 'repuestos');
+    
+    if (tieneTareasTecnico && !nuevoTecnicoId) {
+        mostrarNotificacion('Debes seleccionar un nuevo técnico para reasignar las tareas técnicas', 'warning');
+        return;
+    }
+    
+    if (tieneTareasRepuestos && !nuevoEncargadoId) {
+        mostrarNotificacion('Debes seleccionar un nuevo encargado de repuestos', 'warning');
+        return;
+    }
+    
+    mostrarNotificacion('Reasignando tareas...', 'info');
+    
+    try {
+        const response = await fetch(`${API_URL}/usuario/${usuarioSeleccionado.id}/reasignar`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                nuevo_tecnico_id: nuevoTecnicoId ? parseInt(nuevoTecnicoId) : null,
+                nuevo_encargado_id: nuevoEncargadoId ? parseInt(nuevoEncargadoId) : null,
+                asignaciones: asignacionesSeleccionadas
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            mostrarNotificacion('Tareas reasignadas correctamente', 'success');
+            cerrarModalReasignar();
+            
+            // Ahora preguntar si quiere eliminar al usuario
+            if (confirm(`¿Las tareas fueron reasignadas. ¿Deseas eliminar al usuario "${usuarioSeleccionado.nombre}" ahora?`)) {
+                await ejecutarEliminacion(usuarioSeleccionado.id, usuarioSeleccionado.nombre);
+            }
+        } else {
+            throw new Error(data.error || 'Error al reasignar');
+        }
+    } catch (error) {
+        console.error('Error reasignando:', error);
+        mostrarNotificacion(error.message, 'error');
+    }
+}
+
+function cerrarModalReasignar() {
+    document.getElementById('modalReasignar').classList.remove('show');
+    usuarioSeleccionado = null;
+    asignacionesActivas = [];
 }
 
 // =====================================================
@@ -506,15 +918,19 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
                 toastContainer.removeChild(toast);
             }
         }, 300);
-    }, 3000);
+    }, 4000);
 }
 
 // Funciones globales
 window.verDetalleUsuario = verDetalleUsuario;
 window.cerrarModalDetalleUsuario = cerrarModalDetalleUsuario;
+window.verDetalleCliente = verDetalleCliente;
+window.cerrarModalDetalleCliente = cerrarModalDetalleCliente;
 window.eliminarUsuario = eliminarUsuario;
 window.abrirModalRoles = abrirModalRoles;
 window.closeRolesModal = closeRolesModal;
 window.saveRoles = saveRoles;
 window.toggleCheckbox = toggleCheckbox;
+window.confirmarReasignar = confirmarReasignar;
+window.cerrarModalReasignar = cerrarModalReasignar;
 window.logout = logout;

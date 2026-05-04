@@ -356,27 +356,6 @@
         </div>
     </div>
 
-    <!-- Modal: Editor de Servicios -->
-    <div class="modal" id="modalEditorServicios">
-        <div class="modal-content modal-lg">
-            <div class="modal-header">
-                <h2><i class="fas fa-edit"></i> Editar Servicios de Cotización</h2>
-                <button class="modal-close" onclick="cerrarModal('modalEditorServicios')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="panel-header" style="margin-bottom: 1rem;">
-                    <h3>Servicios y Repuestos</h3>
-                    <button class="btn-primary btn-sm" id="btnAgregarServicio"><i class="fas fa-plus"></i> Agregar Servicio</button>
-                </div>
-                <div id="serviciosEditablesContainer" style="max-height: 500px; overflow-y: auto;"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalEditorServicios')">Cancelar</button>
-                <button class="btn-primary" id="guardarServiciosBtn"><i class="fas fa-save"></i> Guardar Cambios</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Modal: Solicitar Compra -->
     <div class="modal" id="modalSolicitarCompra">
         <div class="modal-content modal-lg">
@@ -405,11 +384,12 @@
         </div>
     </div>
 
-    <!-- Modal: Notificar Armado (COTIZACIÓN RECHAZADA) -->
+    <!-- ==================== MODAL PARA COTIZACIÓN RECHAZADA (SIMPLIFICADO) ==================== -->
+    <!-- Modal: Notificar Armado - SOLO INSTRUCCIONES (SIN selector de técnicos) -->
     <div class="modal" id="modalNotificarArmado">
-        <div class="modal-content modal-lg">
+        <div class="modal-content modal-md">
             <div class="modal-header">
-                <h2><i class="fas fa-tools"></i> Notificar al Técnico - Armar Vehículo</h2>
+                <h2><i class="fas fa-tools"></i> Notificar Armado - Cotización Rechazada</h2>
                 <button class="modal-close" onclick="cerrarModal('modalNotificarArmado')">&times;</button>
             </div>
             <div class="modal-body">
@@ -419,30 +399,35 @@
                     <p style="margin-top: 0.5rem;">El cliente no aceptó la cotización. Debes notificar al técnico para que ARME el vehículo.</p>
                 </div>
                 
+                <!-- Información de la orden -->
                 <div id="armadoOrdenInfo" class="orden-info-card" style="margin-bottom: 1rem;"></div>
                 
-                <div class="form-group">
-                    <label><i class="fas fa-users"></i> Seleccionar Técnico(s)</label>
-                    <select id="armadoTecnicosList" class="form-select" multiple style="min-height: 100px;">
-                        <option value="">Cargando técnicos...</option>
-                    </select>
-                    <small class="text-muted">Selecciona uno o más técnicos (Ctrl+Click para múltiple)</small>
+                <!-- Técnicos asignados actualmente (solo lectura - ya están asignados del diagnóstico) -->
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label><i class="fas fa-users"></i> Técnico(s) Asignado(s) Actualmente</label>
+                    <div id="tecnicosAsignadosList" style="background: var(--gris-oscuro); border-radius: 8px; padding: 0.75rem; border: 1px solid var(--border-color);">
+                        <span class="text-muted"><i class="fas fa-spinner fa-pulse"></i> Cargando técnicos asignados...</span>
+                    </div>
+                    <small class="text-muted"><i class="fas fa-info-circle"></i> Estos técnicos recibirán la notificación de armado</small>
                 </div>
                 
+                <!-- SOLO instrucciones (ya no hay selector de técnicos) -->
                 <div class="form-group">
-                    <label><i class="fas fa-clipboard-list"></i> Instrucciones para el Armado</label>
+                    <label><i class="fas fa-clipboard-list"></i> Instrucciones para el Armado <span class="required">*</span></label>
                     <textarea id="armadoInstrucciones" class="form-textarea" rows="5" 
-                        placeholder="Ejemplo:&#10;- Armar el motor completamente&#10;- Colocar todas las piezas retiradas durante el diagnóstico&#10;- Verificar que todo esté en orden&#10;- Realizar prueba de funcionamiento básica"></textarea>
+                        placeholder="Ejemplo:&#10;- Armar el motor completamente&#10;- Colocar todas las piezas retiradas durante el diagnóstico&#10;- Verificar que todo esté en orden&#10;- Realizar prueba de funcionamiento básica"
+                        required></textarea>
                 </div>
                 
                 <div class="alert-info" style="background: rgba(23, 162, 184, 0.1); padding: 0.75rem; border-radius: 8px; margin-top: 1rem;">
                     <i class="fas fa-info-circle"></i>
                     <strong>Información importante:</strong>
                     <ul style="margin: 0.5rem 0 0 1.5rem; font-size: 0.85rem;">
-                        <li>El técnico recibirá una notificación con estas instrucciones</li>
+                        <li>Los técnicos asignados recibirán una notificación con estas instrucciones</li>
                         <li>El vehículo será armado a su estado original</li>
                         <li>El cliente pagará SOLO el diagnóstico (Bs. 200.00)</li>
                         <li>No se realizará ninguna reparación adicional</li>
+                        <li>El técnico deberá marcar "Armado Completado" cuando termine</li>
                     </ul>
                 </div>
             </div>
@@ -455,11 +440,12 @@
         </div>
     </div>
 
-    <!-- Modal: Iniciar Reparación (para órdenes aceptadas) -->
+    <!-- ==================== MODAL PARA COTIZACIÓN ACEPTADA (COMPLETO - CON selector de técnicos) ==================== -->
+    <!-- Modal: Iniciar Reparación (para órdenes aceptadas) - CON selector de técnicos -->
     <div class="modal" id="modalIniciarReparacion">
         <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h2><i class="fas fa-play-circle"></i> Iniciar Reparación</h2>
+                <h2><i class="fas fa-play-circle"></i> Iniciar Reparación - Cotización Aceptada</h2>
                 <button class="modal-close" onclick="cerrarModal('modalIniciarReparacion')">&times;</button>
             </div>
             <div class="modal-body">
@@ -469,28 +455,47 @@
                     <p style="margin-top: 0.5rem;">Configura los técnicos y el plazo para iniciar la reparación.</p>
                 </div>
                 
+                <!-- Información de la orden -->
                 <div id="reparacionOrdenInfo" class="orden-info-card" style="margin-bottom: 1rem;"></div>
                 
-                <div class="form-group">
-                    <label><i class="fas fa-users"></i> Seleccionar Técnicos</label>
-                    <div id="reparacionTecnicosContainer" class="tecnicos-grid" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; max-height: 200px; overflow-y: auto;">
-                        <div class="tecnico-checkbox-placeholder">Cargando técnicos...</div>
+                <!-- Técnicos actualmente asignados (para mostrar) -->
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label><i class="fas fa-users"></i> Técnicos Actualmente Asignados</label>
+                    <div id="tecnicosActualesList" style="background: var(--gris-oscuro); border-radius: 8px; padding: 0.75rem; border: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                        <span class="text-muted"><i class="fas fa-spinner fa-pulse"></i> Cargando...</span>
                     </div>
-                    <small class="text-muted">Selecciona uno o más técnicos para la reparación</small>
                 </div>
                 
+                <!-- SELECCIONAR TÉCNICOS (puede cambiar/mantener) -->
                 <div class="form-group">
-                    <label><i class="fas fa-calendar-alt"></i> Plazo de Reparación</label>
-                    <div style="display: flex; gap: 1rem; align-items: center;">
+                    <label><i class="fas fa-user-plus"></i> Seleccionar Técnicos para la Reparación</label>
+                    <div id="reparacionTecnicosContainer" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; max-height: 200px; overflow-y: auto; background: var(--gris-oscuro); border-radius: 8px; padding: 0.75rem; border: 1px solid var(--border-color);">
+                        <div class="text-muted" style="text-align: center; padding: 1rem;"><i class="fas fa-spinner fa-pulse"></i> Cargando técnicos disponibles...</div>
+                    </div>
+                    <small class="text-muted"><i class="fas fa-info-circle"></i> Puedes mantener los mismos técnicos o cambiarlos. Selecciona uno o más (Ctrl+Click para múltiple)</small>
+                </div>
+                
+                <!-- Plazo de reparación -->
+                <div class="form-group">
+                    <label><i class="fas fa-calendar-alt"></i> Plazo de Reparación Estimado</label>
+                    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                         <input type="number" id="reparacionPlazoDias" class="form-input" style="width: 100px;" value="3" min="1">
                         <span>días hábiles</span>
+                        <span style="margin-left: auto; font-size: 0.7rem; color: var(--gris-texto);">(se enviará al técnico)</span>
                     </div>
                 </div>
                 
+                <!-- Instrucciones detalladas -->
                 <div class="form-group">
-                    <label><i class="fas fa-comment-dots"></i> Instrucciones para el Técnico</label>
+                    <label><i class="fas fa-comment-dots"></i> Instrucciones Detalladas para el Técnico <span class="required">*</span></label>
                     <textarea id="reparacionInstrucciones" class="form-textarea" rows="5" 
-                        placeholder="Ejemplo:&#10;- Realizar diagnóstico completo del motor&#10;- Revisar sistema eléctrico y computadora&#10;- Cambiar aceite y filtros&#10;- Probar funcionamiento al finalizar"></textarea>
+                        placeholder="Ejemplo:&#10;- Realizar diagnóstico completo del motor&#10;- Revisar sistema eléctrico y computadora&#10;- Cambiar aceite y filtros&#10;- Probar funcionamiento al finalizar"
+                        required></textarea>
+                </div>
+                
+                <div class="alert-info" style="background: rgba(23, 162, 184, 0.1); padding: 0.75rem; border-radius: 8px;">
+                    <i class="fas fa-info-circle"></i>
+                    <small>Los técnicos seleccionados recibirán una notificación con las instrucciones y el plazo estimado.</small>
                 </div>
             </div>
             <div class="modal-footer">
@@ -502,7 +507,7 @@
         </div>
     </div>
 
-    <!-- Modal: Enviar Instrucciones al Técnico -->
+    <!-- Modal: Enviar Instrucciones al Técnico (general) -->
     <div class="modal" id="modalInstruccionesTecnico">
         <div class="modal-content modal-md">
             <div class="modal-header">
@@ -511,7 +516,6 @@
             </div>
             <div class="modal-body">
                 <div class="orden-info-card" id="instruccionesOrdenInfo"></div>
-                <div id="mensajeExtraInstrucciones"></div>
                 <div class="form-group">
                     <label><i class="fas fa-comment-dots"></i> Instrucciones para el técnico</label>
                     <textarea id="instruccionesTexto" class="form-textarea" rows="5" placeholder="Ejemplo:&#10;- Realizar una revisión más detallada del sistema eléctrico&#10;- Verificar nuevamente el diagnóstico del motor&#10;- Coordinar con el cliente para aclarar dudas"></textarea>
@@ -524,39 +528,6 @@
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalInstruccionesTecnico')">Cancelar</button>
                 <button class="btn-primary" id="btnEnviarInstrucciones"><i class="fas fa-paper-plane"></i> Enviar Instrucciones</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Gestión de Técnicos -->
-    <div class="modal" id="modalGestionTecnicos">
-        <div class="modal-content modal-lg">
-            <div class="modal-header">
-                <h2><i class="fas fa-users"></i> Gestionar Técnicos</h2>
-                <button class="modal-close" onclick="cerrarModal('modalGestionTecnicos')">&times;</button>
-            </div>
-            <div class="modal-body" id="gestionTecnicosBody">
-                <!-- Contenido dinámico -->
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalGestionTecnicos')">Cancelar</button>
-                <button class="btn-primary" id="btnGuardarTecnicos" onclick="guardarAsignacionTecnicos()">
-                    <i class="fas fa-save"></i> Guardar Asignación
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Historial de Instrucciones -->
-    <div class="modal" id="modalHistorialInstrucciones">
-        <div class="modal-content modal-md">
-            <div class="modal-header">
-                <h2><i class="fas fa-history"></i> Historial de Instrucciones</h2>
-                <button class="modal-close" onclick="cerrarModal('modalHistorialInstrucciones')">&times;</button>
-            </div>
-            <div class="modal-body" id="historialInstruccionesContainer"></div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalHistorialInstrucciones')">Cerrar</button>
             </div>
         </div>
     </div>

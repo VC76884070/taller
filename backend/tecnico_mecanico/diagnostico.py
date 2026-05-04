@@ -662,7 +662,7 @@ def guardar_diagnostico(current_user):
         # Si se envió, actualizar estado de la orden
         if enviar:
             supabase.table('ordentrabajo').update({
-                'estado_global': 'PendienteAprobacion'
+                'estado_global': 'DiagnosticoCompletado' 
             }).eq('id', id_orden).execute()
             
             # Notificar al Jefe de Taller

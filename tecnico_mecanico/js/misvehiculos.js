@@ -1,8 +1,7 @@
 // =====================================================
 // MIS VEHÍCULOS - TÉCNICO MECÁNICO
-// FLUJO: EMPEZAR TRABAJO → DIAGNÓSTICO → APROBACIÓN → REPARACIÓN
+// VERSIÓN ACTUALIZADA - CON SOPORTE PARA ARMADO
 // FURIA MOTOR COMPANY SRL
-// VERSIÓN CORREGIDA - URLs: /tecnico/...
 // =====================================================
 
 // Configuración de roles
@@ -165,7 +164,7 @@ function tieneRolTecnico(roles) {
 }
 
 // =====================================================
-// VERIFICAR AUTENTICACIÓN - URL CORREGIDA
+// VERIFICAR AUTENTICACIÓN
 // =====================================================
 async function verificarToken() {
     token = getToken();
@@ -184,7 +183,6 @@ async function verificarToken() {
             rolesUsuario = rolesUsuario.map(r => normalizarRol(r));
         }
         
-        // URL CORREGIDA: /tecnico/verify-token (sin /api/)
         const response = await fetch('/tecnico/verify-token', {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
@@ -292,7 +290,7 @@ function mostrarNombreUsuario() {
 }
 
 // =====================================================
-// CARGAR VEHÍCULOS ASIGNADOS - URL CORREGIDA
+// CARGAR VEHÍCULOS ASIGNADOS (ACTUALIZADO CON ARMADO)
 // =====================================================
 async function cargarVehiculos() {
     const grid = document.getElementById('vehiculosGrid');
@@ -305,7 +303,6 @@ async function cargarVehiculos() {
     
     try {
         const timestamp = new Date().getTime();
-        // URL CORREGIDA: /tecnico/mis-vehiculos (sin /api/)
         const response = await fetch(`/tecnico/get-mis-vehiculos?_=${timestamp}`, {
             method: 'GET',
             headers: { 
@@ -358,6 +355,33 @@ async function cargarVehiculos() {
     }
 }
 
+function formatFecha(fechaStr) {
+    if (!fechaStr) return 'N/A';
+    try {
+        const fecha = new Date(fechaStr);
+        if (isNaN(fecha.getTime())) return 'N/A';
+        return fecha.toLocaleDateString('es-ES', { 
+            day: '2-digit', 
+            month: '2-digit', 
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (e) {
+        return 'N/A';
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// =====================================================
+// RENDERIZADO DE VEHÍCULOS (ACTUALIZADO CON ARMADO)
+// =====================================================
 function renderVehiculos() {
     const grid = document.getElementById('vehiculosGrid');
     if (!grid) return;
@@ -369,22 +393,68 @@ function renderVehiculos() {
     
     grid.innerHTML = vehiculosAsignados.map(vehiculo => {
         const tipo = vehiculo.tipo_asignacion;
-        const esDiagnostico = tipo === 'diagnostico';
-        const esReparacion = tipo === 'reparacion';
+        const estadoGlobal = vehiculo.estado_global;
         
+        // NUEVO: Detectar si es ARMADO
+        const esArmado = tipo === 'armado' || estadoGlobal === 'EnArmadoVehiculo';
+        
+        // Para diagnóstico
         const diagnosticoEnviado = vehiculo.diagnostico_enviado || false;
         const diagnosticoAprobado = vehiculo.diagnostico_aprobado || false;
         const diagnosticoRechazado = vehiculo.diagnostico_rechazado || false;
         const diagnosticoEstado = vehiculo.diagnostico_estado;
         const diagnosticoVersion = vehiculo.diagnostico_version || 1;
-        
         const trabajoIniciado = vehiculo.trabajo_iniciado || false;
-        const estadoGlobal = vehiculo.estado_global;
+        
+        // Instrucciones de armado (si existen)
+        const instruccionesArmado = vehiculo.instrucciones_armado || '';
+        const tieneInstrucciones = instruccionesArmado && instruccionesArmado.length > 0;
         
         let badgeHtml = '';
         let botonesHtml = '';
+        let instruccionesHtml = '';
         
-        if (esDiagnostico) {
+        // ============ CASO ARMADO (NUEVO) ============
+        if (esArmado) {
+            badgeHtml = `
+                <span class="asignacion-badge armado">
+                    <i class="fas fa-tools"></i> 🔧 ARMADO REQUERIDO
+                </span>
+            `;
+            
+            const bahiaInfo = vehiculo.bahia_asignada ? 
+                `<div class="bahia-info" style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(245, 158, 11, 0.1); border-radius: var(--radius-sm);">
+                    <i class="fas fa-warehouse"></i> <strong>Bahía asignada:</strong> ${vehiculo.bahia_asignada}
+                </div>` : '';
+            
+            // Mostrar instrucciones si existen
+            if (tieneInstrucciones) {
+                const textoResumido = instruccionesArmado.length > 100 ? instruccionesArmado.substring(0, 100) + '...' : instruccionesArmado;
+                instruccionesHtml = `
+                    <div class="instrucciones-resumen" style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(245, 158, 11, 0.05); border-radius: var(--radius-md); border-left: 3px solid var(--ambar-alerta);">
+                        <div class="instrucciones-header" style="font-size: 0.7rem; color: var(--ambar-alerta); margin-bottom: 0.5rem;">
+                            <i class="fas fa-clipboard-list"></i> Instrucciones del Jefe de Taller:
+                        </div>
+                        <div class="instrucciones-texto" style="font-size: 0.75rem; color: var(--gris-texto);">
+                            ${escapeHtml(textoResumido)}
+                        </div>
+                        ${instruccionesArmado.length > 100 ? '<div style="font-size: 0.65rem; margin-top: 0.25rem;"><i class="fas fa-eye"></i> Ver detalles para más información</div>' : ''}
+                    </div>
+                `;
+            }
+            
+            botonesHtml = `
+                <button class="btn-sm btn-armado-completar" onclick="marcarArmadoCompletado(${vehiculo.orden_id})">
+                    <i class="fas fa-check-circle"></i> ✅ Marcar Armado Completado
+                </button>
+                <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
+                    <i class="fas fa-eye"></i> Ver Detalles
+                </button>
+                ${bahiaInfo}
+            `;
+        }
+        // ============ CASO DIAGNÓSTICO ============
+        else if (tipo === 'diagnostico') {
             badgeHtml = `
                 <span class="asignacion-badge diagnostico">
                     <i class="fas fa-stethoscope"></i> Diagnóstico v${diagnosticoVersion}
@@ -459,7 +529,9 @@ function renderVehiculos() {
                     </div>
                 `;
             }
-        } else if (esReparacion) {
+        }
+        // ============ CASO REPARACIÓN ============
+        else if (tipo === 'reparacion') {
             badgeHtml = `
                 <span class="asignacion-badge reparacion">
                     <i class="fas fa-wrench"></i> Reparación
@@ -511,11 +583,11 @@ function renderVehiculos() {
         }
         
         return `
-            <div class="vehiculo-card" data-orden-id="${vehiculo.orden_id}">
+            <div class="vehiculo-card ${esArmado ? 'armado-card' : ''}" data-orden-id="${vehiculo.orden_id}">
                 <div class="card-header">
                     <div class="vehiculo-info">
                         <div class="vehiculo-icon">
-                            <i class="fas ${esDiagnostico ? 'fa-stethoscope' : 'fa-wrench'}"></i>
+                            <i class="fas ${esArmado ? 'fa-tools' : (tipo === 'diagnostico' ? 'fa-stethoscope' : 'fa-wrench')}"></i>
                         </div>
                         <div class="vehiculo-titulo">
                             <h3>${escapeHtml(vehiculo.vehiculo.marca)} ${escapeHtml(vehiculo.vehiculo.modelo)}</h3>
@@ -546,6 +618,7 @@ function renderVehiculos() {
                         <span class="detalle-label"><i class="fas fa-phone"></i> Contacto:</span>
                         <span class="detalle-value">${escapeHtml(vehiculo.cliente.contacto || 'No registrado')}</span>
                     </div>
+                    ${instruccionesHtml}
                 </div>
                 
                 <div class="card-footer">
@@ -556,32 +629,42 @@ function renderVehiculos() {
     }).join('');
 }
 
-function formatFecha(fechaStr) {
-    if (!fechaStr) return 'N/A';
-    try {
-        const fecha = new Date(fechaStr);
-        if (isNaN(fecha.getTime())) return 'N/A';
-        return fecha.toLocaleDateString('es-ES', { 
-            day: '2-digit', 
-            month: '2-digit', 
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    } catch (e) {
-        return 'N/A';
+// =====================================================
+// ARMADO: MARCAR ARMADO COMPLETADO (NUEVO)
+// =====================================================
+window.marcarArmadoCompletado = async function(ordenId) {
+    if (!confirm(`⚠️ CONFIRMACIÓN DE ARMADO\n\n¿Confirmas que has ARMADO COMPLETAMENTE el vehículo?\n\nEl vehículo quedará a su estado original antes del diagnóstico.\n\n✅ El cliente pagará SOLO el diagnóstico (Bs. 200)\n\n⚠️ Esta acción no se puede deshacer.`)) {
+        return;
     }
-}
-
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+    
+    showToast('Procesando armado completado...', 'info');
+    
+    try {
+        const response = await fetch('/tecnico/marcar-armado-completado', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ id_orden: parseInt(ordenId) })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('✅ Armado completado correctamente. Se ha notificado al Jefe de Taller.', 'success');
+            cargarVehiculos(); // Recargar la lista
+        } else {
+            showToast(data.error || 'Error al marcar armado completado', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    }
+};
 
 // =====================================================
-// DIAGNÓSTICO - EMPEZAR TRABAJO - URL CORREGIDA
+// DIAGNÓSTICO - EMPEZAR TRABAJO
 // =====================================================
 let ordenSeleccionadaParaEmpezar = null;
 
@@ -616,7 +699,6 @@ async function confirmarEmpezarDiagnostico() {
     showToast('Iniciando trabajo...', 'info');
     
     try {
-        // URL CORREGIDA: /tecnico/empezar-diagnostico (sin /api/)
         const response = await fetch('/tecnico/empezar-diagnostico', {
             method: 'POST',
             headers: {
@@ -653,7 +735,7 @@ function crearDiagnostico(ordenId) {
 }
 
 // =====================================================
-// REPARACIÓN - INICIAR - URL CORREGIDA
+// REPARACIÓN - INICIAR
 // =====================================================
 let ordenSeleccionadaParaReparacion = null;
 
@@ -688,7 +770,6 @@ async function confirmarInicioReparacion() {
     showToast('Iniciando reparación...', 'info');
     
     try {
-        // URL CORREGIDA: /tecnico/iniciar-reparacion (sin /api/)
         const response = await fetch('/tecnico/iniciar-reparacion', {
             method: 'POST',
             headers: {
@@ -717,7 +798,7 @@ async function confirmarInicioReparacion() {
 }
 
 // =====================================================
-// REPARACIÓN - PAUSAR - URL CORREGIDA
+// REPARACIÓN - PAUSAR
 // =====================================================
 window.pausarReparacion = function(ordenId) {
     document.getElementById('ordenIdPausa').value = ordenId;
@@ -744,7 +825,6 @@ async function confirmarPausaReparacion() {
     showToast('Pausando reparación...', 'info');
     
     try {
-        // URL CORREGIDA: /tecnico/pausar-reparacion (sin /api/)
         const response = await fetch('/tecnico/pausar-reparacion', {
             method: 'POST',
             headers: {
@@ -769,7 +849,7 @@ async function confirmarPausaReparacion() {
 }
 
 // =====================================================
-// REPARACIÓN - REANUDAR - URL CORREGIDA
+// REPARACIÓN - REANUDAR
 // =====================================================
 window.reanudarReparacion = function(ordenId) {
     const vehiculo = vehiculosAsignados.find(v => v.orden_id === ordenId);
@@ -799,7 +879,6 @@ async function confirmarReanudarReparacion() {
     showToast('Reanudando reparación...', 'info');
     
     try {
-        // URL CORREGIDA: /tecnico/reanudar-reparacion (sin /api/)
         const response = await fetch('/tecnico/reanudar-reparacion', {
             method: 'POST',
             headers: {
@@ -824,7 +903,7 @@ async function confirmarReanudarReparacion() {
 }
 
 // =====================================================
-// REPARACIÓN - FINALIZAR - URL CORREGIDA
+// REPARACIÓN - FINALIZAR
 // =====================================================
 window.finalizarReparacion = async function(ordenId) {
     if (!confirm('¿Estás seguro de que deseas finalizar esta reparación? La bahía quedará libre.')) {
@@ -834,7 +913,6 @@ window.finalizarReparacion = async function(ordenId) {
     showToast('Finalizando reparación...', 'info');
     
     try {
-        // URL CORREGIDA: /tecnico/finalizar-reparacion (sin /api/)
         const response = await fetch('/tecnico/finalizar-reparacion', {
             method: 'POST',
             headers: {
@@ -859,13 +937,12 @@ window.finalizarReparacion = async function(ordenId) {
 };
 
 // =====================================================
-// DETALLE DE ORDEN - URL CORREGIDA
+// DETALLE DE ORDEN (ACTUALIZADO CON INSTRUCCIONES DE ARMADO)
 // =====================================================
 window.verDetalle = async function(ordenId) {
     showToast('Cargando detalles...', 'info');
     
     try {
-        // URL CORREGIDA: /tecnico/detalle-orden/${ordenId} (sin /api/)
         const response = await fetch(`/tecnico/detalle-orden/${ordenId}`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
@@ -885,6 +962,7 @@ window.verDetalle = async function(ordenId) {
         
         const detalle = data.detalle;
         const tipoAsignacion = detalle.tipo_asignacion;
+        const esArmado = tipoAsignacion === 'armado' || detalle.orden?.estado_global === 'EnArmadoVehiculo';
         
         const fotos = detalle.recepcion?.fotos || {};
         const fotosArray = Object.entries(fotos).filter(([_, url]) => url && url !== '');
@@ -900,28 +978,99 @@ window.verDetalle = async function(ordenId) {
         const bahiaInfo = detalle.planificacion?.bahia_asignada ? 
             `<div><strong>Bahía asignada:</strong> ${detalle.planificacion.bahia_asignada}</div>` : '';
         
-        const diagnosticoInfo = detalle.diagnostico_tecnico?.informe ? `
-            <div class="modal-section">
-                <h3><i class="fas fa-stethoscope"></i> Diagnóstico Técnico (v${detalle.diagnostico_tecnico.version || 1})</h3>
-                <div class="diagnostico-box">
-                    <p>${escapeHtml(detalle.diagnostico_tecnico.informe)}</p>
-                    ${detalle.diagnostico_tecnico.audio_url ? `
-                        <div class="audio-player" style="margin-top: 0.75rem;">
-                            <audio controls preload="none">
-                                <source src="${detalle.diagnostico_tecnico.audio_url}" type="audio/mpeg">
-                                Tu navegador no soporta audio.
-                            </audio>
+        // Instrucciones de armado (si existen)
+        let instruccionesArmadoHtml = '';
+        if (esArmado && detalle.instrucciones_armado) {
+            instruccionesArmadoHtml = `
+                <div class="modal-section">
+                    <h3><i class="fas fa-clipboard-list"></i> Instrucciones del Jefe de Taller - ARMADO</h3>
+                    <div class="instrucciones-box" style="background: rgba(245, 158, 11, 0.1); padding: 1rem; border-radius: var(--radius-md); border-left: 3px solid var(--ambar-alerta);">
+                        <div style="white-space: pre-wrap; line-height: 1.5;">
+                            ${escapeHtml(detalle.instrucciones_armado).replace(/\n/g, '<br>')}
                         </div>
-                    ` : ''}
-                    <div style="margin-top: 0.5rem;">
-                        <strong>Estado:</strong> 
-                        <span class="estado-badge ${detalle.diagnostico_tecnico.estado === 'aprobado' ? 'proceso' : (detalle.diagnostico_tecnico.estado === 'rechazado' ? 'pausa' : '')}">
-                            ${detalle.diagnostico_tecnico.estado === 'aprobado' ? '✅ Aprobado' : (detalle.diagnostico_tecnico.estado === 'rechazado' ? '❌ Rechazado' : '⏳ Pendiente')}
-                        </span>
+                        ${detalle.fecha_instrucciones ? `
+                            <div style="margin-top: 0.75rem; font-size: 0.7rem; color: var(--gris-texto);">
+                                <i class="far fa-calendar-alt"></i> Enviado: ${formatFecha(detalle.fecha_instrucciones)}
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
-            </div>
-        ` : '';
+            `;
+        }
+        
+        // Cotización (si existe)
+        let cotizacionHtml = '';
+        if (detalle.cotizacion) {
+            const cotizacion = detalle.cotizacion;
+            let cotizacionEstado = '';
+            let cotizacionColor = '';
+            
+            switch (cotizacion.estado) {
+                case 'aprobada':
+                    cotizacionEstado = 'Aprobada';
+                    cotizacionColor = '#10B981';
+                    break;
+                case 'rechazada':
+                    cotizacionEstado = 'Rechazada';
+                    cotizacionColor = '#C1121F';
+                    break;
+                default:
+                    cotizacionEstado = 'Enviada - Pendiente';
+                    cotizacionColor = '#F59E0B';
+            }
+            
+            cotizacionHtml = `
+                <div class="modal-section">
+                    <h3><i class="fas fa-file-invoice-dollar"></i> Cotización</h3>
+                    <div class="cotizacion-info" style="background: var(--gris-oscuro); padding: 0.75rem; border-radius: var(--radius-md);">
+                        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                            <span><strong>Estado:</strong> <span style="color: ${cotizacionColor};">${cotizacionEstado}</span></span>
+                            <span><strong>Total:</strong> Bs. ${(cotizacion.total || 0).toFixed(2)}</span>
+                        </div>
+                        <div style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--gris-texto);">
+                            <i class="far fa-calendar-alt"></i> Enviada: ${formatFecha(cotizacion.fecha_envio)}
+                        </div>
+                        ${cotizacion.motivo_rechazo ? `
+                            <div style="margin-top: 0.75rem; padding: 0.5rem; background: rgba(193, 18, 31, 0.1); border-radius: var(--radius-sm);">
+                                <strong>Motivo de rechazo:</strong>
+                                <p style="margin-top: 0.25rem; font-size: 0.8rem;">${escapeHtml(cotizacion.motivo_rechazo)}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Diagnóstico técnico
+        let diagnosticoInfo = '';
+        if (detalle.diagnostico_tecnico) {
+            const diag = detalle.diagnostico_tecnico;
+            diagnosticoInfo = `
+                <div class="modal-section">
+                    <h3><i class="fas fa-stethoscope"></i> Diagnóstico Técnico (v${diag.version || 1})</h3>
+                    <div class="diagnostico-box" style="background: var(--gris-oscuro); padding: 0.75rem; border-radius: var(--radius-md);">
+                        <div style="margin-bottom: 0.5rem;">
+                            <strong>Estado:</strong> 
+                            <span class="estado-badge ${diag.estado === 'aprobado' ? 'proceso' : (diag.estado === 'rechazado' ? 'pausa' : '')}">
+                                ${diag.estado === 'aprobado' ? '✅ Aprobado' : (diag.estado === 'rechazado' ? '❌ Rechazado' : '⏳ Pendiente')}
+                            </span>
+                        </div>
+                        <div class="informe-diagnostico">
+                            <strong>Informe:</strong>
+                            <p style="margin-top: 0.5rem; white-space: pre-wrap;">${escapeHtml(diag.informe || diag.transcripcion || 'No hay informe disponible')}</p>
+                        </div>
+                        ${diag.audio_url ? `
+                            <div class="audio-player" style="margin-top: 0.75rem;">
+                                <audio controls preload="none" style="width: 100%;">
+                                    <source src="${diag.audio_url}" type="audio/mpeg">
+                                    Tu navegador no soporta audio.
+                                </audio>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
         
         const detalleHtml = `
             <div style="display: grid; gap: 1rem;">
@@ -930,16 +1079,18 @@ window.verDetalle = async function(ordenId) {
                     <div class="detalle-grid">
                         <div><strong>Código:</strong> ${escapeHtml(detalle.orden?.codigo_unico || 'N/A')}</div>
                         <div><strong>Estado:</strong> 
-                            <span class="estado-badge ${detalle.orden?.estado_global === 'EnProceso' ? 'proceso' : 'pausa'}" style="display: inline-flex; font-size: 0.7rem;">
-                                ${detalle.orden?.estado_global === 'EnProceso' ? 'En Proceso' : detalle.orden?.estado_global || 'N/A'}
+                            <span class="estado-badge" style="display: inline-flex; font-size: 0.7rem;">
+                                ${detalle.orden?.estado_global === 'EnProceso' ? 'En Proceso' : 
+                                  detalle.orden?.estado_global === 'EnArmadoVehiculo' ? '🔧 Armado en curso' :
+                                  detalle.orden?.estado_global || 'N/A'}
                             </span>
                         </div>
                         <div><strong>Fecha Ingreso:</strong> ${formatFecha(detalle.orden?.fecha_ingreso)}</div>
                         ${bahiaInfo}
                         <div><strong>Tipo:</strong> 
-                            <span class="asignacion-badge ${tipoAsignacion === 'diagnostico' ? 'diagnostico' : 'reparacion'}">
-                                <i class="fas ${tipoAsignacion === 'diagnostico' ? 'fa-stethoscope' : 'fa-wrench'}"></i>
-                                ${tipoAsignacion === 'diagnostico' ? 'Diagnóstico' : 'Reparación'}
+                            <span class="asignacion-badge ${esArmado ? 'armado' : (tipoAsignacion === 'diagnostico' ? 'diagnostico' : 'reparacion')}">
+                                <i class="fas ${esArmado ? 'fa-tools' : (tipoAsignacion === 'diagnostico' ? 'fa-stethoscope' : 'fa-wrench')}"></i>
+                                ${esArmado ? 'Armado' : (tipoAsignacion === 'diagnostico' ? 'Diagnóstico' : 'Reparación')}
                             </span>
                         </div>
                     </div>
@@ -966,11 +1117,11 @@ window.verDetalle = async function(ordenId) {
                 
                 <div class="modal-section">
                     <h3><i class="fas fa-comment"></i> Problema Reportado</h3>
-                    <div class="diagnostico-box">
+                    <div class="diagnostico-box" style="background: var(--gris-oscuro); padding: 0.75rem; border-radius: var(--radius-md);">
                         <p>${escapeHtml(detalle.recepcion?.transcripcion_problema || 'No hay descripción del problema')}</p>
                         ${detalle.recepcion?.audio_url ? `
                             <div class="audio-player" style="margin-top: 0.75rem;">
-                                <audio controls preload="none">
+                                <audio controls preload="none" style="width: 100%;">
                                     <source src="${detalle.recepcion.audio_url}" type="audio/mpeg">
                                     Tu navegador no soporta audio.
                                 </audio>
@@ -979,16 +1130,18 @@ window.verDetalle = async function(ordenId) {
                     </div>
                 </div>
                 
+                ${instruccionesArmadoHtml}
+                ${cotizacionHtml}
                 ${diagnosticoInfo}
                 
                 ${fotosArray.length > 0 ? `
                     <div class="modal-section">
                         <h3><i class="fas fa-images"></i> Fotos del Vehículo (${fotosArray.length})</h3>
-                        <div class="fotos-grid">
+                        <div class="fotos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem;">
                             ${fotosArray.map(([nombre, url]) => `
-                                <div class="foto-item" onclick="verFoto('${url}')">
-                                    <img src="${url}" alt="${nombre}" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%238E8E93\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Crect x=\'3\' y=\'3\' width=\'18\' height=\'18\' rx=\'2\' ry=\'2\'%3E%3C/rect%3E%3Ccircle cx=\'8.5\' cy=\'8.5\' r=\'1.5\'%3E%3C/circle%3E%3Cpolyline points=\'21 15 16 10 5 21\'%3E%3C/polyline%3E%3C/svg%3E'">
-                                    <span>${escapeHtml(nombre)}</span>
+                                <div class="foto-item" onclick="verFoto('${url}')" style="cursor: pointer; border-radius: var(--radius-sm); overflow: hidden; aspect-ratio: 1;">
+                                    <img src="${url}" alt="${nombre}" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%238E8E93\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Crect x=\'3\' y=\'3\' width=\'18\' height=\'18\' rx=\'2\' ry=\'2\'%3E%3C/rect%3E%3Ccircle cx=\'8.5\' cy=\'8.5\' r=\'1.5\'%3E%3C/circle%3E%3Cpolyline points=\'21 15 16 10 5 21\'%3E%3C/polyline%3E%3C/svg%3E'">
+                                    <div style="font-size: 0.6rem; text-align: center; padding: 0.25rem;">${escapeHtml(nombre)}</div>
                                 </div>
                             `).join('')}
                         </div>
@@ -1023,7 +1176,7 @@ window.cerrarDetalleModal = function() {
 };
 
 // =====================================================
-// COMUNICADOS - URLs CORREGIDAS
+// COMUNICADOS
 // =====================================================
 window.cargarComunicados = async function() {
     const comunicadosList = document.getElementById('comunicadosList');
@@ -1036,7 +1189,6 @@ window.cargarComunicados = async function() {
         }
         
         const timestamp = new Date().getTime();
-        // URL CORREGIDA: /tecnico/comunicados (sin /api/)
         const response = await fetch(`/tecnico/comunicados?_=${timestamp}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -1144,7 +1296,6 @@ function verComunicadoCompleto(id) {
         if (elemento) elemento.classList.remove('nuevo');
     }
     
-    // URL CORREGIDA: /tecnico/comunicados/${id} (sin /api/)
     fetch(`/tecnico/comunicados/${id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
     })
@@ -1243,6 +1394,10 @@ estilosAdicionales.textContent = `
         background: rgba(16, 185, 129, 0.15);
         color: var(--verde-exito);
     }
+    .asignacion-badge.armado {
+        background: rgba(245, 158, 11, 0.15);
+        color: var(--ambar-alerta);
+    }
     .btn-warning-sm {
         background: var(--ambar-alerta);
         color: var(--blanco);
@@ -1257,6 +1412,27 @@ estilosAdicionales.textContent = `
         opacity: 0.6;
         cursor: not-allowed;
         transform: none;
+    }
+    .btn-armado-completar {
+        background: linear-gradient(135deg, var(--ambar-alerta), #D97706);
+        border: none;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-md);
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .btn-armado-completar:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+    }
+    .armado-card {
+        border-left: 3px solid var(--ambar-alerta);
     }
     .prioridad-badge {
         display: inline-block;

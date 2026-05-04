@@ -1,233 +1,239 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Gestión de Roles | Personal - FURIA MOTOR</title>
-
-    <!-- Fonts & Icons -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FURIA MOTOR - Administración de Roles</title>
+    <link rel="icon" type="image/png" href="/img/favicon.ico">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
-
-    <!-- Estilos -->
-    <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
+    <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/admin_roles.css">
-
 </head>
-
 <body>
-    <div class="app">
-        <div id="sidebar-container"></div>
-
-        <main class="main-content">
-            <header class="top-bar">
-                <div class="page-title">
-                    <h1><i class="fas fa-user-tag"></i> Gestión de Roles - Personal</h1>
-                    <p>Asigna roles y gestiona usuarios del personal (Jefe Operativo, Jefe Taller, Técnico, Repuestos). Los clientes no aparecen en esta lista.</p>
-                </div>
-                <div class="top-actions">
-                    <div class="notification-icon">
-                        <i class="fas fa-bell"></i>
-                        <span class="notification-badge" id="notificacionesCount">0</span>
-                    </div>
-                    <div class="date-display">
-                        <i class="far fa-calendar-alt"></i>
-                        <span id="currentDate"></span>
-                    </div>
-                    <button class="btn-logout" id="logoutBtn" onclick="logout()">
-                        <i class="fas fa-sign-out-alt"></i>
-                        <span>Cerrar Sesión</span>
-                    </button>
-                </div>
-            </header>
-
-            <div class="content">
-                <!-- Tarjeta de Estadísticas -->
-                <div class="stats-grid" id="statsGrid">
-                    <div class="stat-card">
-                        <div class="stat-icon"><i class="fas fa-users"></i></div>
-                        <div class="stat-info">
-                            <span class="stat-value" id="totalUsuarios">0</span>
-                            <span class="stat-label">Total Personal</span>
-                        </div>
-                    </div>
-                    <div class="stat-card" id="statJefeOperativo">
-                        <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
-                        <div class="stat-info">
-                            <span class="stat-value" id="totalJefeOperativo">0</span>
-                            <span class="stat-label">Jefes Operativos</span>
-                        </div>
-                    </div>
-                    <div class="stat-card" id="statJefeTaller">
-                        <div class="stat-icon"><i class="fas fa-tools"></i></div>
-                        <div class="stat-info">
-                            <span class="stat-value" id="totalJefeTaller">0</span>
-                            <span class="stat-label">Jefes de Taller</span>
-                        </div>
-                    </div>
-                    <div class="stat-card" id="statTecnico">
-                        <div class="stat-icon"><i class="fas fa-wrench"></i></div>
-                        <div class="stat-info">
-                            <span class="stat-value" id="totalTecnico">0</span>
-                            <span class="stat-label">Técnicos</span>
-                        </div>
-                    </div>
-                    <div class="stat-card" id="statRepuestos">
-                        <div class="stat-icon"><i class="fas fa-boxes"></i></div>
-                        <div class="stat-info">
-                            <span class="stat-value" id="totalRepuestos">0</span>
-                            <span class="stat-label">Enc. Repuestos</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tabla de Usuarios -->
-                <div class="usuarios-card">
-                    <div class="card-header">
-                        <h3><i class="fas fa-list"></i> Usuarios del Sistema (Personal)</h3>
-                        <div class="search-box">
-                            <i class="fas fa-search"></i>
-                            <input type="text" id="searchInput" placeholder="Buscar por nombre, email o documento...">
-                        </div>
-                    </div>
-
-                    <div class="table-container">
-                        <table class="usuarios-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Nombre</th>
-                                    <th>Email</th>
-                                    <th>Documento</th>
-                                    <th>Roles Actuales</th>
-                                    <th>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody id="usuariosTableBody">
-                                <tr>
-                                    <td colspan="6" class="loading-row">
-                                        <i class="fas fa-spinner fa-spin"></i> Cargando usuarios de personal...
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+    <div id="sidebar-container"></div>
+    
+    <main class="main-content">
+        <div class="top-bar">
+            <div class="page-title">
+                <h1><i class="fas fa-user-tag"></i> Administración de Roles</h1>
+                <p>Gestión de personal y visualización de clientes</p>
             </div>
-        </main>
-    </div>
-
-    <!-- Modal de Edición de Roles -->
-    <div id="rolesModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-tags"></i> Gestionar Roles</h3>
-                <button class="modal-close" onclick="closeRolesModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="user-info-modal">
-                    <p><strong>👤 Usuario:</strong> <span id="modalUserName"></span></p>
-                    <p><strong>📧 Email:</strong> <span id="modalUserEmail"></span></p>
-                    <p><strong>🆔 Documento:</strong> <span id="modalUserDocumento"></span></p>
+            <div class="top-actions">
+                <div class="date-display">
+                    <i class="far fa-calendar-alt"></i>
+                    <span id="currentDate"></span>
                 </div>
-                <div class="roles-checkbox-group" id="rolesCheckboxGroup">
-                    <!-- Roles se cargarán dinámicamente -->
+                <div class="user-info">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="userNombre">Jefe Taller</span>
                 </div>
-                <p class="modal-hint" style="margin-top: 1rem; font-size: 0.7rem; color: var(--gris-texto);">
-                    <i class="fas fa-info-circle"></i> Solo se pueden asignar roles de personal. Los clientes se gestionan por separado.
-                </p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeRolesModal()">Cancelar</button>
-                <button class="btn-primary" onclick="saveRoles()">
-                    <i class="fas fa-save"></i> Guardar Cambios
+                <button id="logoutBtn" class="btn-logout" title="Cerrar sesión">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Salir</span>
                 </button>
             </div>
         </div>
-    </div>
 
-    <!-- Modal de Detalle de Usuario -->
+        <!-- Pestañas -->
+        <div class="tabs-container">
+            <button class="tab-btn active" data-tab="personal">
+                <i class="fas fa-users"></i> Personal
+                <span class="badge" id="totalPersonal">0</span>
+            </button>
+            <button class="tab-btn" data-tab="clientes">
+                <i class="fas fa-user-friends"></i> Clientes
+                <span class="badge" id="totalClientes">0</span>
+            </button>
+        </div>
+
+        <!-- Panel de Personal -->
+        <div class="tab-panel active" id="panel-personal">
+            <!-- Estadísticas -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-user-tie"></i>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="totalJefeOperativo">0</span>
+                        <span class="stat-label">Jefes Operativos</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-wrench"></i>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="totalJefeTaller">0</span>
+                        <span class="stat-label">Jefes de Taller</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-microchip"></i>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="totalTecnico">0</span>
+                        <span class="stat-label">Técnicos Mecánicos</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-boxes"></i>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="totalRepuestos">0</span>
+                        <span class="stat-label">Encargados Repuestos</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-filter"></i> Filtrar Personal</h3>
+                </div>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchPersonal" placeholder="Buscar por nombre, email o documento...">
+                </div>
+            </div>
+
+            <!-- Tabla de Personal -->
+            <div class="usuarios-card">
+                <div class="card-header">
+                    <h3><i class="fas fa-users"></i> Lista de Personal</h3>
+                </div>
+                <div class="table-container">
+                    <table class="usuarios-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Email</th>
+                                <th>Documento</th>
+                                <th>Roles</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="personalTableBody">
+                            <tr class="loading-row"><td colspan="6">Cargando personal... <i class="fas fa-spinner fa-spin"></i></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel de Clientes -->
+        <div class="tab-panel" id="panel-clientes">
+            <!-- Filtros -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-filter"></i> Filtrar Clientes</h3>
+                </div>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchClientes" placeholder="Buscar por nombre, email o teléfono...">
+                </div>
+            </div>
+
+            <!-- Tabla de Clientes -->
+            <div class="usuarios-card">
+                <div class="card-header">
+                    <h3><i class="fas fa-user-friends"></i> Lista de Clientes</h3>
+                </div>
+                <div class="table-container">
+                    <table class="usuarios-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Email</th>
+                                <th>Teléfono</th>
+                                <th>Ubicación</th>
+                                <th>Vehículos</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clientesTableBody">
+                            <tr class="loading-row"><td colspan="6">Cargando clientes... <i class="fas fa-spinner fa-spin"></i></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Detalle Usuario -->
     <div id="modalDetalleUsuario" class="modal">
-        <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-content">
             <div class="modal-header">
                 <h3><i class="fas fa-user-circle"></i> Detalle del Usuario</h3>
                 <button class="modal-close" onclick="cerrarModalDetalleUsuario()">&times;</button>
             </div>
-            <div class="modal-body" id="modalDetalleUsuarioBody">
-                <!-- Contenido dinámico -->
-            </div>
+            <div id="modalDetalleUsuarioBody" class="modal-body"></div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalDetalleUsuario()">
-                    <i class="fas fa-times"></i> Cerrar
-                </button>
+                <button class="btn-secondary" onclick="cerrarModalDetalleUsuario()">Cerrar</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal de Confirmación para Eliminar -->
-    <div id="modalConfirmarEliminar" class="modal">
-        <div class="modal-content" style="max-width: 400px;">
+    <!-- Modal Detalle Cliente -->
+    <div id="modalDetalleCliente" class="modal">
+        <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h3><i class="fas fa-exclamation-triangle"></i> Confirmar Eliminación</h3>
-                <button class="modal-close" onclick="cerrarModalConfirmarEliminar()">&times;</button>
+                <h3><i class="fas fa-user-friends"></i> Detalle del Cliente</h3>
+                <button class="modal-close" onclick="cerrarModalDetalleCliente()">&times;</button>
+            </div>
+            <div id="modalDetalleClienteBody" class="modal-body"></div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalDetalleCliente()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Asignar Roles -->
+    <div id="rolesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-tags"></i> Asignar Roles</h3>
+                <button class="modal-close" onclick="closeRolesModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <p id="confirmarEliminarTexto">¿Estás seguro de que deseas eliminar este usuario?</p>
-                <p style="color: var(--rojo-primario); font-size: 0.85rem; margin-top: 0.5rem;">
-                    <i class="fas fa-info-circle"></i> Esta acción no se puede deshacer.
-                </p>
+                <div class="user-info-modal">
+                    <p><strong><i class="fas fa-user"></i> Usuario:</strong> <span id="modalUserName"></span></p>
+                    <p><strong><i class="fas fa-envelope"></i> Email:</strong> <span id="modalUserEmail"></span></p>
+                    <p><strong><i class="fas fa-id-card"></i> Documento:</strong> <span id="modalUserDocumento"></span></p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Roles disponibles:</label>
+                    <div id="rolesCheckboxGroup" class="roles-checkbox-group"></div>
+                </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalConfirmarEliminar()">
-                    <i class="fas fa-times"></i> Cancelar
-                </button>
-                <button class="btn-primary" id="btnConfirmarEliminar" style="background: var(--rojo-primario);">
-                    <i class="fas fa-trash-alt"></i> Eliminar
-                </button>
+                <button class="btn-secondary" onclick="closeRolesModal()">Cancelar</button>
+                <button class="btn-primary" onclick="saveRoles()">Guardar Roles</button>
             </div>
         </div>
     </div>
 
-    <script src="js/include.js"></script>
-    <script src="js/admin_roles.js"></script>
-    
-    <script>
-        // Función para cerrar modal de confirmación
-        function cerrarModalConfirmarEliminar() {
-            const modal = document.getElementById('modalConfirmarEliminar');
-            if (modal) modal.classList.remove('show');
-        }
-        
-        // Función global de logout
-        function logout() {
-            localStorage.removeItem('furia_token');
-            localStorage.removeItem('furia_user');
-            window.location.href = '/';
-        }
-        
-        // Cerrar modales al hacer clic fuera
-        window.onclick = function(event) {
-            const modals = document.querySelectorAll('.modal');
-            modals.forEach(modal => {
-                if (event.target === modal) {
-                    modal.classList.remove('show');
-                }
-            });
-        }
-        
-        // Cerrar modales con tecla ESC
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape') {
-                const modals = document.querySelectorAll('.modal.show');
-                modals.forEach(modal => {
-                    modal.classList.remove('show');
-                });
-            }
-        });
-    </script>
-</body>
+    <!-- Modal Reasignar Tareas -->
+    <div id="modalReasignar" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3 id="modalReasignarTitle"><i class="fas fa-exchange-alt"></i> Reasignar tareas</h3>
+                <button class="modal-close" onclick="cerrarModalReasignar()">&times;</button>
+            </div>
+            <div id="modalReasignarBody" class="modal-body"></div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalReasignar()">Cancelar</button>
+                <button class="btn-primary" onclick="confirmarReasignar()">Confirmar Reasignación</button>
+            </div>
+        </div>
+    </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/js/include.js"></script>
+    <script src="/js/admin_roles.js"></script>
+</body>
 </html>

@@ -325,7 +325,7 @@ async function cargarOrdenesFinalizadas(forceRefresh = false) {
 }
 
 // =====================================================
-// RENDER FUNCTIONS OPTIMIZADAS
+// RENDERIZAR ÓRDENES ACTIVAS - CON SOPORTE PARA EnDiagnostico
 // =====================================================
 
 function renderOrdenesActivas(ordenes) {
@@ -337,48 +337,126 @@ function renderOrdenesActivas(ordenes) {
         return;
     }
     
+    // Mapeo de estados para mostrar texto más amigable
+    const estadoDisplay = {
+        'EnRecepcion': 'En Recepción',
+        'EnDiagnostico': 'En Diagnóstico',
+        'DiagnosticoCompletado': 'Diagnóstico Completado',
+        'CotizacionEnviada': 'Cotización Enviada',
+        'CotizacionAceptada': 'Cotización Aceptada',
+        'CotizacionParcial': 'Cotización Parcial',
+        'CotizacionRechazada': 'Cotización Rechazada',
+        'EnArmadoVehiculo': 'Armando Vehículo',
+        'VehiculoArmado': 'Vehículo Armado',
+        'EnReparacion': 'En Reparación',
+        'EnPausa': 'En Pausa',
+        'ReparacionCompletada': 'Reparación Completada'
+    };
+    
     // Usar DocumentFragment para mejorar rendimiento
     const fragment = document.createDocumentFragment();
     const tempDiv = document.createElement('div');
     
-    tempDiv.innerHTML = ordenes.map(orden => `
-        <div class="orden-card" data-id="${orden.id}">
-            <div class="orden-card-header">
-                <span class="orden-codigo">${escapeHtml(orden.codigo_unico)}</span>
-                <span class="orden-estado ${orden.estado_global}">${orden.estado_global}</span>
-                <span class="recepcion-fecha"><i class="far fa-calendar-alt"></i> ${new Date(orden.fecha_ingreso).toLocaleDateString()}</span>
-            </div>
-            <div class="orden-card-body">
-                <div class="orden-info-item">
-                    <span class="orden-info-label">Cliente</span>
-                    <span class="orden-info-value">${escapeHtml(orden.cliente_nombre || 'N/A')}</span>
+    tempDiv.innerHTML = ordenes.map(orden => {
+        // Determinar si la orden está bloqueada para edición
+        const trabajoIniciado = orden.trabajo_iniciado || false;
+        const puedeGestionar = !trabajoIniciado && orden.estado_global === 'EnRecepcion';
+        
+        // Icono según estado
+        let estadoIcono = '';
+        switch (orden.estado_global) {
+            case 'EnRecepcion': estadoIcono = '📋'; break;
+            case 'EnDiagnostico': estadoIcono = '🔧'; break;
+            case 'DiagnosticoCompletado': estadoIcono = '✅'; break;
+            case 'CotizacionEnviada': estadoIcono = '💰'; break;
+            case 'CotizacionAceptada': estadoIcono = '👍'; break;
+            case 'EnReparacion': estadoIcono = '🔨'; break;
+            case 'EnPausa': estadoIcono = '⏸️'; break;
+            default: estadoIcono = '📌';
+        }
+        
+        return `
+            <div class="orden-card" data-id="${orden.id}" data-estado="${orden.estado_global}">
+                <div class="orden-card-header">
+                    <span class="orden-codigo">${escapeHtml(orden.codigo_unico)}</span>
+                    <span class="orden-estado ${orden.estado_global}">
+                        ${estadoIcono} ${estadoDisplay[orden.estado_global] || orden.estado_global}
+                    </span>
+                    <span class="recepcion-fecha">
+                        <i class="far fa-calendar-alt"></i> ${new Date(orden.fecha_ingreso).toLocaleDateString()}
+                    </span>
                 </div>
-                <div class="orden-info-item">
-                    <span class="orden-info-label">Vehículo</span>
-                    <span class="orden-info-value">${escapeHtml(orden.marca || '')} ${escapeHtml(orden.modelo || '')} (${escapeHtml(orden.placa || '')})</span>
-                </div>
-                <div class="orden-info-item">
-                    <span class="orden-info-label">Técnicos</span>
-                    <div class="orden-tecnicos">
-                        ${orden.tecnicos && orden.tecnicos.length > 0 ? 
-                            orden.tecnicos.map(t => `<span class="tecnico-badge"><i class="fas fa-user"></i> ${escapeHtml(t.nombre)}</span>`).join('') :
-                            '<span class="tecnico-badge">Sin asignar</span>'}
+                
+                <div class="orden-card-body">
+                    <div class="orden-info-item">
+                        <span class="orden-info-label">Cliente</span>
+                        <span class="orden-info-value">${escapeHtml(orden.cliente_nombre || 'N/A')}</span>
                     </div>
+                    <div class="orden-info-item">
+                        <span class="orden-info-label">Vehículo</span>
+                        <span class="orden-info-value">
+                            ${escapeHtml(orden.marca || '')} ${escapeHtml(orden.modelo || '')} 
+                            <span class="placa">(${escapeHtml(orden.placa || '')})</span>
+                        </span>
+                    </div>
+                    <div class="orden-info-item">
+                        <span class="orden-info-label">Técnicos</span>
+                        <div class="orden-tecnicos">
+                            ${orden.tecnicos && orden.tecnicos.length > 0 ? 
+                                orden.tecnicos.map(t => `<span class="tecnico-badge"><i class="fas fa-user"></i> ${escapeHtml(t.nombre)}</span>`).join('') :
+                                '<span class="tecnico-badge sin-asignar"><i class="fas fa-user-slash"></i> Sin asignar</span>'}
+                        </div>
+                    </div>
+                    ${orden.bahia_asignada ? `
+                    <div class="orden-info-item">
+                        <span class="orden-info-label">Bahía</span>
+                        <span class="orden-info-value"><i class="fas fa-warehouse"></i> Bahía ${orden.bahia_asignada}</span>
+                    </div>
+                    ` : ''}
+                    ${orden.fecha_hora_inicio_estimado ? `
+                    <div class="orden-info-item">
+                        <span class="orden-info-label">Inicio estimado</span>
+                        <span class="orden-info-value">
+                            <i class="far fa-clock"></i> ${new Date(orden.fecha_hora_inicio_estimado).toLocaleString()}
+                        </span>
+                    </div>
+                    ` : ''}
+                    ${orden.horas_estimadas ? `
+                    <div class="orden-info-item">
+                        <span class="orden-info-label">Horas estimadas</span>
+                        <span class="orden-info-value"><i class="fas fa-hourglass-half"></i> ${orden.horas_estimadas} h</span>
+                    </div>
+                    ` : ''}
+                    ${orden.trabajo_iniciado ? `
+                    <div class="orden-info-item trabajo-iniciado">
+                        <i class="fas fa-play-circle"></i> 
+                        <strong class="text-warning">Trabajo iniciado por el técnico</strong>
+                    </div>
+                    ` : ''}
                 </div>
-                ${orden.bahia_asignada ? `<div class="orden-info-item"><span class="orden-info-label">Bahía</span><span class="orden-info-value">Bahía ${orden.bahia_asignada}</span></div>` : ''}
-                ${orden.fecha_hora_inicio_estimado ? `<div class="orden-info-item"><span class="orden-info-label">Inicio estimado</span><span class="orden-info-value">${new Date(orden.fecha_hora_inicio_estimado).toLocaleString()}</span></div>` : ''}
-                ${orden.trabajo_iniciado ? `<div class="orden-info-item trabajo-iniciado"><i class="fas fa-play-circle"></i> <strong>Trabajo iniciado por el técnico</strong></div>` : ''}
+                
+                <div class="orden-card-footer">
+                    ${puedeGestionar ? `
+                    <button class="btn-accion-orden btn-gestionar" onclick="window.abrirModalGestionOrden(${orden.id})">
+                        <i class="fas fa-edit"></i> Gestionar Orden
+                    </button>
+                    ` : `
+                    <button class="btn-accion-orden btn-gestionar disabled" disabled style="opacity:0.5; cursor:not-allowed;" title="Esta orden no puede ser gestionada">
+                        <i class="fas fa-lock"></i> Gestionar Orden
+                    </button>
+                    `}
+                    <button class="btn-accion-orden btn-ver-detalle-orden" onclick="window.verDetalleOrden(${orden.id})">
+                        <i class="fas fa-eye"></i> Ver Detalle
+                    </button>
+                    ${orden.estado_global === 'EnDiagnostico' ? `
+                    <button class="btn-accion-orden btn-diagnostico" onclick="window.verDiagnosticoPendiente(${orden.id})">
+                        <i class="fas fa-stethoscope"></i> Ver Diagnóstico
+                    </button>
+                    ` : ''}
+                </div>
             </div>
-            <div class="orden-card-footer">
-                <button class="btn-accion-orden btn-gestionar" onclick="window.abrirModalGestionOrden(${orden.id})" ${orden.trabajo_iniciado ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
-                    <i class="fas fa-edit"></i> Gestionar Orden
-                </button>
-                <button class="btn-accion-orden btn-ver-detalle-orden" onclick="window.verDetalleOrden(${orden.id})">
-                    <i class="fas fa-eye"></i> Ver Detalle
-                </button>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
     
     while (tempDiv.firstChild) {
         fragment.appendChild(tempDiv.firstChild);
@@ -944,7 +1022,7 @@ async function abrirModalGestionOrden(idOrden) {
 }
 
 // =====================================================
-// GUARDAR GESTIÓN DE ORDEN - CON VALIDACIÓN COMPLETA
+// GUARDAR GESTIÓN DE ORDEN - CON CAMBIO DE ESTADO A EnDiagnostico
 // =====================================================
 
 async function guardarGestionOrden() {
@@ -1051,7 +1129,7 @@ async function guardarGestionOrden() {
         
         mostrarNotificacion('Guardando cambios...', 'info');
         
-        // Verificar disponibilidad de bahía
+        // 6. VERIFICAR DISPONIBILIDAD DE BAHÍA (si cambió)
         const bahiaActual = ordenEnGestion.planificacion?.bahia_asignada;
         if (parseInt(bahia) !== bahiaActual && fechaInicio && horasEstimadas > 0) {
             const disponibilidadResponse = await fetch(`${API_URL}/jefe-taller/verificar-bahia`, {
@@ -1080,7 +1158,7 @@ async function guardarGestionOrden() {
             }
         }
         
-        // Procesar audio
+        // 7. PROCESAR AUDIO (si hay uno nuevo)
         let audioUrl = ordenEnGestion.diagnostico_audio_url || null;
         const audioPreview = document.getElementById('audioPreviewDiagnostico');
         
@@ -1109,8 +1187,9 @@ async function guardarGestionOrden() {
             }
         }
         
-        // Guardar todo en paralelo
-        await Promise.all([
+        // 8. GUARDAR TODOS LOS DATOS EN PARALELO
+        const promises = [
+            // Asignar técnicos
             fetch(`${API_URL}/jefe-taller/asignar-tecnicos`, {
                 method: 'POST',
                 headers: {
@@ -1123,6 +1202,8 @@ async function guardarGestionOrden() {
                     tipo_asignacion: 'diagnostico'
                 })
             }),
+            
+            // Planificar trabajo
             fetch(`${API_URL}/jefe-taller/planificar`, {
                 method: 'POST',
                 headers: {
@@ -1136,6 +1217,8 @@ async function guardarGestionOrden() {
                     horas_estimadas: horasEstimadas 
                 })
             }),
+            
+            // Guardar diagnóstico inicial
             fetch(`${API_URL}/jefe-taller/diagnostico-inicial`, {
                 method: 'POST',
                 headers: {
@@ -1148,17 +1231,50 @@ async function guardarGestionOrden() {
                     audio_url: audioUrl
                 })
             })
-        ]);
+        ];
         
+        await Promise.all(promises);
+        
+        // 9. CAMBIAR ESTADO DE LA ORDEN A 'EnDiagnostico' (CRUCIAL!)
+        // Solo cambiar si la orden estaba en 'EnRecepcion'
+        if (ordenEnGestion.estado_global === 'EnRecepcion') {
+            const cambiarEstadoResponse = await fetch(`${API_URL}/jefe-taller/cambiar-estado-orden`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                },
+                body: JSON.stringify({ 
+                    id_orden: ordenEnGestion.id, 
+                    estado_global: 'EnDiagnostico'
+                })
+            });
+            
+            if (cambiarEstadoResponse.ok) {
+                console.log('✅ Orden cambiada a EnDiagnostico');
+                mostrarNotificacion('✅ Orden cambiada a EN DIAGNÓSTICO', 'success');
+            } else {
+                const errorData = await cambiarEstadoResponse.json();
+                console.warn('No se pudo cambiar el estado:', errorData);
+                mostrarNotificacion('⚠️ Datos guardados pero no se pudo cambiar el estado', 'warning');
+            }
+        } else {
+            console.log('Orden ya estaba en estado:', ordenEnGestion.estado_global);
+            mostrarNotificacion('✅ Datos guardados correctamente', 'success');
+        }
+        
+        // 10. CERRAR MODAL Y RECARGAR DATOS
         cerrarModalGestionOrden();
-        mostrarNotificacion('✅ Todos los cambios han sido guardados correctamente', 'success');
         
         // Limpiar cachés relacionados
         dataCache.clear('tecnicos');
+        dataCache.clear('ordenes');
         
+        // Recargar las listas
         await Promise.all([
             cargarTecnicos(true),
-            cargarOrdenesActivas(true)
+            cargarOrdenesActivas(true),
+            cargarOrdenesFinalizadas(true)
         ]);
         
     } catch (error) {
@@ -1167,6 +1283,7 @@ async function guardarGestionOrden() {
     }
 }
 
+// Función auxiliar para convertir blob a base64
 function getAudioBase64FromBlob(blob) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();

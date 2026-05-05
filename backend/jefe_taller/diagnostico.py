@@ -849,98 +849,98 @@ def test_endpoint():
         'message': 'Endpoint de diagnóstico funcionando'
     }), 200
 
-# =====================================================
-# 9. APROBAR DIAGNÓSTICO - VERSIÓN CORREGIDA (JSON)
-# =====================================================
+    # =====================================================
+    # 9. APROBAR DIAGNÓSTICO - VERSIÓN CORREGIDA (JSON)
+    # =====================================================
 @jefe_taller_diagnostico_bp.route('/aprobar-diagnostico-simple', methods=['POST'])
 def aprobar_diagnostico_simple():
-    """Versión corregida que acepta JSON y FormData"""
-    print("=" * 60)
-    print("🔵 APROBAR DIAGNÓSTICO - VERSIÓN CORREGIDA")
-    
-    try:
-        # Intentar obtener ID desde JSON primero
-        diagnostico_id = None
-        
-        if request.is_json:
-            data = request.get_json()
-            diagnostico_id = data.get('diagnostico_id') or data.get('id')
-            print(f"📝 Desde JSON: diagnostico_id={diagnostico_id}")
-        
-        # Si no viene en JSON, intentar FormData
-        if not diagnostico_id and request.form:
-            diagnostico_id = request.form.get('diagnostico_id') or request.form.get('id')
-            print(f"📝 Desde FormData: diagnostico_id={diagnostico_id}")
-        
-        # Si aún no hay ID, error
-        if not diagnostico_id:
-            print("❌ No se encontró ID en ningún lugar")
-            return jsonify({
-                'success': False,
-                'error': 'ID de diagnóstico no proporcionado'
-            }), 400
-        
-        diagnostico_id = int(diagnostico_id)
-        print(f"✅ ID procesado: {diagnostico_id}")
-        
-        # Verificar diagnóstico
-        diagnostico = supabase.table('diagnostico_tecnico') \
-            .select('*') \
-            .eq('id', diagnostico_id) \
-            .execute()
-        
-        if not diagnostico.data:
-            return jsonify({
-                'success': False,
-                'error': f'Diagnóstico {diagnostico_id} no encontrado'
-            }), 404
-        
-        dt = diagnostico.data[0]
-        print(f"✅ Diagnóstico: estado={dt['estado']}, orden={dt['id_orden_trabajo']}")
-        
-        # Verificar estado
-        if dt['estado'] != 'pendiente':
-            return jsonify({
-                'success': False,
-                'error': f'El diagnóstico está en estado "{dt["estado"]}", no se puede aprobar'
-            }), 400
-        
-        ahora = datetime.datetime.now().isoformat()
-        
-        # Actualizar diagnóstico
-        supabase.table('diagnostico_tecnico') \
-            .update({
-                'estado': 'aprobado',
-                'fecha_modificacion': ahora
-            }) \
-            .eq('id', diagnostico_id) \
-            .execute()
-        print("✅ Diagnóstico actualizado a 'aprobado'")
-        
-        # Actualizar orden
-        supabase.table('ordentrabajo') \
-            .update({
-                'estado_global': 'DiagnosticoAprobado'
-            }) \
-            .eq('id', dt['id_orden_trabajo']) \
-            .execute()
-        print(f"✅ Orden {dt['id_orden_trabajo']} actualizada a 'DiagnosticoAprobado'")
-        
-        print("🎉 ÉXITO!")
+        """Versión corregida que acepta JSON y FormData"""
         print("=" * 60)
+        print("🔵 APROBAR DIAGNÓSTICO - VERSIÓN CORREGIDA")
         
-        return jsonify({
-            'success': True,
-            'message': 'Diagnóstico aprobado correctamente',
-            'nuevo_estado_diagnostico': 'aprobado',
-            'nuevo_estado_orden': 'DiagnosticoAprobado'
-        }), 200
-        
-    except Exception as e:
-        print(f"❌ Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        try:
+            # Intentar obtener ID desde JSON primero
+            diagnostico_id = None
+            
+            if request.is_json:
+                data = request.get_json()
+                diagnostico_id = data.get('diagnostico_id') or data.get('id')
+                print(f"📝 Desde JSON: diagnostico_id={diagnostico_id}")
+            
+            # Si no viene en JSON, intentar FormData
+            if not diagnostico_id and request.form:
+                diagnostico_id = request.form.get('diagnostico_id') or request.form.get('id')
+                print(f"📝 Desde FormData: diagnostico_id={diagnostico_id}")
+            
+            # Si aún no hay ID, error
+            if not diagnostico_id:
+                print("❌ No se encontró ID en ningún lugar")
+                return jsonify({
+                    'success': False,
+                    'error': 'ID de diagnóstico no proporcionado'
+                }), 400
+            
+            diagnostico_id = int(diagnostico_id)
+            print(f"✅ ID procesado: {diagnostico_id}")
+            
+            # Verificar diagnóstico
+            diagnostico = supabase.table('diagnostico_tecnico') \
+                .select('*') \
+                .eq('id', diagnostico_id) \
+                .execute()
+            
+            if not diagnostico.data:
+                return jsonify({
+                    'success': False,
+                    'error': f'Diagnóstico {diagnostico_id} no encontrado'
+                }), 404
+            
+            dt = diagnostico.data[0]
+            print(f"✅ Diagnóstico: estado={dt['estado']}, orden={dt['id_orden_trabajo']}")
+            
+            # Verificar estado
+            if dt['estado'] != 'pendiente':
+                return jsonify({
+                    'success': False,
+                    'error': f'El diagnóstico está en estado "{dt["estado"]}", no se puede aprobar'
+                }), 400
+            
+            ahora = datetime.datetime.now().isoformat()
+            
+            # Actualizar diagnóstico
+            supabase.table('diagnostico_tecnico') \
+                .update({
+                    'estado': 'aprobado',
+                    'fecha_modificacion': ahora
+                }) \
+                .eq('id', diagnostico_id) \
+                .execute()
+            print("✅ Diagnóstico actualizado a 'aprobado'")
+            
+            # Actualizar orden
+            supabase.table('ordentrabajo') \
+                .update({
+                    'estado_global': 'DiagnosticoAprobado'
+                }) \
+                .eq('id', dt['id_orden_trabajo']) \
+                .execute()
+            print(f"✅ Orden {dt['id_orden_trabajo']} actualizada a 'DiagnosticoAprobado'")
+            
+            print("🎉 ÉXITO!")
+            print("=" * 60)
+            
+            return jsonify({
+                'success': True,
+                'message': 'Diagnóstico aprobado correctamente',
+                'nuevo_estado_diagnostico': 'aprobado',
+                'nuevo_estado_orden': 'DiagnosticoAprobado'
+            }), 200
+            
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500

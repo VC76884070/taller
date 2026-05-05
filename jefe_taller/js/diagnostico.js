@@ -1,5 +1,5 @@
 // =====================================================
-// DIAGNOSTICO.JS - JEFE DE TALLER (VERSIÓN CORREGIDA CON MODAL FUNCIONAL)
+// DIAGNOSTICO.JS - JEFE DE TALLER (VERSIÓN COMPLETAMENTE CORREGIDA)
 // Gestión de diagnósticos técnicos con filtros funcionales
 // =====================================================
 
@@ -391,7 +391,7 @@ function applyFilters() {
 }
 
 // ====================================================
-// RENDERIZAR LISTA - CORREGIDO
+// RENDERIZAR LISTA
 // ====================================================
 function renderDiagnosticosList(diagnosticos) {
     const container = document.getElementById('resultadosContainer');
@@ -480,7 +480,7 @@ function limpiarFiltros() {
 }
 
 // ====================================================
-// VER DIAGNÓSTICO - CORREGIDO
+// VER DIAGNÓSTICO
 // ====================================================
 window.verDiagnostico = async function(diagnosticoId) {
     console.log('👁️ Ver diagnóstico ID:', diagnosticoId);
@@ -729,7 +729,7 @@ window.cerrarModalDiagnostico = function() {
 };
 
 // ====================================================
-// APROBAR DIAGNÓSTICO
+// APROBAR DIAGNÓSTICO - CORREGIDO
 // ====================================================
 window.aprobarDiagnostico = async function(diagnosticoId) {
     console.log('📝 Aprobando diagnóstico ID:', diagnosticoId);
@@ -739,7 +739,7 @@ window.aprobarDiagnostico = async function(diagnosticoId) {
         return;
     }
     
-    if (!confirm('¿Estás seguro de aprobar este diagnóstico?\n\nAl aprobarlo, la orden pasará al estado COTIZACION.')) return;
+    if (!confirm('¿Estás seguro de aprobar este diagnóstico?\n\nAl aprobarlo, el diagnóstico pasará a estado APROBADO.')) return;
     
     const token = getAuthToken();
     if (!token) {
@@ -748,29 +748,31 @@ window.aprobarDiagnostico = async function(diagnosticoId) {
     }
     
     try {
-        const formData = new FormData();
-        formData.append('diagnostico_id', diagnosticoId);
-        
+        // Enviar como JSON
         const response = await fetch(`${API_URL}/jefe-taller/aprobar-diagnostico-simple`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
             },
-            body: formData
+            body: JSON.stringify({
+                diagnostico_id: diagnosticoId
+            })
         });
         
         const data = await response.json();
         
         if (response.ok && data.success) {
-            mostrarNotificacion(data.message || 'Diagnóstico aprobado correctamente', 'success');
+            mostrarNotificacion('✅ Diagnóstico aprobado correctamente', 'success');
             await loadDiagnosticos();
             await loadStats();
             window.cerrarModalDiagnostico();
         } else {
-            mostrarNotificacion(data.error || 'Error al aprobar', 'error');
+            console.error('Error response:', data);
+            mostrarNotificacion(data.error || 'Error al aprobar el diagnóstico', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error en aprobación:', error);
         mostrarNotificacion('Error de conexión: ' + error.message, 'error');
     }
 };

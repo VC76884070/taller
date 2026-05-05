@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>FURIA MOTOR - Administración de Roles</title>
     <link rel="icon" type="image/png" href="/img/favicon.ico">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -125,7 +125,7 @@
             </div>
         </div>
 
-        <!-- Panel de Clientes -->
+        <!-- Panel de Clientes - VERSIÓN TARJETAS -->
         <div class="tab-panel" id="panel-clientes">
             <!-- Filtros -->
             <div class="card">
@@ -138,27 +138,11 @@
                 </div>
             </div>
 
-            <!-- Tabla de Clientes -->
-            <div class="usuarios-card">
-                <div class="card-header">
-                    <h3><i class="fas fa-user-friends"></i> Lista de Clientes</h3>
-                </div>
-                <div class="table-container">
-                    <table class="usuarios-table">
-                        <thead>
-                            <tr>
-                                <th>Nombre</th>
-                                <th>Email</th>
-                                <th>Teléfono</th>
-                                <th>Ubicación</th>
-                                <th>Vehículos</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="clientesTableBody">
-                            <tr class="loading-row"><td colspan="6">Cargando clientes... <i class="fas fa-spinner fa-spin"></i></td></tr>
-                        </tbody>
-                    </table>
+            <!-- Grid de Tarjetas de Clientes -->
+            <div class="clientes-grid" id="clientesGrid">
+                <div class="loading-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando clientes...</p>
                 </div>
             </div>
         </div>
@@ -233,7 +217,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="/js/include.js"></script>
-    <script src="/js/admin_roles.js"></script>
+    <script src="js/include.js"></script>
+    <script src="js/admin_roles.js"></script>
 </body>
 </html>

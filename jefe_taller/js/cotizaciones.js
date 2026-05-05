@@ -1,6 +1,6 @@
 // =====================================================
 // COTIZACIONES.JS - JEFE DE TALLER
-// VERSIÓN 3.0 - CON NUEVOS ESTADOS Y MANEJO DE RECHAZO
+// VERSIÓN 3.3 - CORREGIDO (SUBIDA DE ARCHIVOS FUNCIONAL)
 // =====================================================
 
 const API_URL = window.location.origin + '/api/jefe-taller';
@@ -8,8 +8,8 @@ let currentUser = null;
 let currentUserRoles = [];
 
 // Datos globales
-let ordenesConServicios = [];
-let ordenesAprobadas = [];
+let ordenesParaCotizar = [];
+let ordenesDiagnosticoAprobado = [];
 let encargadosRepuestos = [];
 let solicitudesCotizacion = [];
 let cotizacionesMap = {};
@@ -25,19 +25,14 @@ let currentFileData = null;
 let currentFileName = null;
 let currentOrdenData = null;
 let currentCotizacionId = null;
-let serviciosActuales = [];
 let serviciosCotizables = [];
 let isEditingCotizacion = false;
-let currentInstruccionesOrden = null;
-let currentOrdenRechazada = null;
 let currentOrdenAceptada = null;
 let currentOrdenArmado = null;
 
 // Estados de orden (constantes)
 const ESTADOS_ORDEN = {
-    EN_RECEPCION: 'EnRecepcion',
-    EN_DIAGNOSTICO: 'EnDiagnostico',
-    DIAGNOSTICO_COMPLETADO: 'DiagnosticoCompletado',
+    DIAGNOSTICO_APROBADO: 'DiagnosticoAprobado',
     COTIZACION_ENVIADA: 'CotizacionEnviada',
     COTIZACION_ACEPTADA: 'CotizacionAceptada',
     COTIZACION_PARCIAL: 'CotizacionParcial',
@@ -135,7 +130,7 @@ function statusBadge(estado) {
         'enviada': 'status-enviado',
         'aprobada': 'status-aprobado',
         'expirada': 'status-pendiente',
-        'rechazada_total': 'status-rechazado'
+        'solicitado': 'status-pendiente'
     };
     
     const texto = {
@@ -147,13 +142,14 @@ function statusBadge(estado) {
         'aprobada': 'Aprobada',
         'expirada': 'Expirada',
         'comprado': 'Comprado',
-        'rechazada_total': 'Rechazada Total'
+        'solicitado': 'Solicitud Enviada'
     };
     
     let icon = 'fa-clock';
     if (estado === 'aprobado' || estado === 'aprobada' || estado === 'comprado') icon = 'fa-check-circle';
-    if (estado === 'rechazado' || estado === 'rechazada_total') icon = 'fa-times-circle';
+    if (estado === 'rechazado') icon = 'fa-times-circle';
     if (estado === 'enviada') icon = 'fa-paper-plane';
+    if (estado === 'solicitado') icon = 'fa-paper-plane';
     
     return `<span class="status-badge ${map[estado] || 'status-pendiente'}">
         <i class="fas ${icon}"></i> ${texto[estado] || estado}
@@ -256,17 +252,39 @@ function limpiarItemsCompra() {
 // CARGA DE DATOS
 // =====================================================
 
-async function cargarOrdenesConServicios() {
+async function cargarOrdenesDiagnosticoAprobado() {
     try {
-        const response = await fetch(`${API_URL}/ordenes-con-servicios`, { headers: getAuthHeaders() });
+        const response = await fetch(`${API_URL}/ordenes-diagnostico-aprobado`, { 
+            headers: getAuthHeaders() 
+        });
         const data = await response.json();
+        
         if (data.success) {
-            ordenesConServicios = data.ordenes || [];
-            renderOrdenes();
+            ordenesDiagnosticoAprobado = data.ordenes || [];
+            console.log(`📊 Órdenes con diagnóstico aprobado: ${ordenesDiagnosticoAprobado.length}`);
+            renderOrdenesSolicitarCotizacion();
         }
     } catch (error) {
         console.error('Error cargando órdenes:', error);
-        ordenesConServicios = [];
+        ordenesDiagnosticoAprobado = [];
+    }
+}
+
+async function cargarOrdenesParaCotizar() {
+    try {
+        const response = await fetch(`${API_URL}/ordenes-con-servicios`, { 
+            headers: getAuthHeaders() 
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            ordenesParaCotizar = data.ordenes || [];
+            console.log(`📊 Órdenes para cotización al cliente: ${ordenesParaCotizar.length}`);
+            renderOrdenesCotizacionCliente();
+        }
+    } catch (error) {
+        console.error('Error cargando órdenes para cotizar:', error);
+        ordenesParaCotizar = [];
     }
 }
 
@@ -336,15 +354,19 @@ async function cargarEncargadosRepuestos() {
 
 async function cargarOrdenesAprobadas() {
     try {
-        const response = await fetch(`${API_URL}/ordenes-aprobadas`, { headers: getAuthHeaders() });
+        const response = await fetch(`${API_URL}/ordenes-aprobadas`, { 
+            headers: getAuthHeaders() 
+        });
         const data = await response.json();
+        
         if (data.success) {
-            ordenesAprobadas = data.ordenes || [];
+            window.ordenesAprobadas = data.ordenes || [];
             cargarSelectOrdenesSolicitud();
+            console.log(`✅ Órdenes aprobadas cargadas: ${window.ordenesAprobadas.length}`);
         }
     } catch (error) {
         console.error('Error cargando órdenes aprobadas:', error);
-        ordenesAprobadas = [];
+        window.ordenesAprobadas = [];
     }
 }
 
@@ -364,24 +386,31 @@ async function cargarHistorialCotizaciones() {
 
 function cargarSelectOrdenesSolicitud() {
     const selectOrden = document.getElementById('solicitud_id_orden_trabajo');
-    const selectServicio = document.getElementById('solicitud_id_servicio');
+    const ordenes = window.ordenesAprobadas || [];
     
-    if (selectOrden && ordenesAprobadas.length > 0) {
+    if (selectOrden && ordenes.length > 0) {
         const currentValue = selectOrden.value;
         selectOrden.innerHTML = '<option value="">Seleccionar orden</option>' + 
-            ordenesAprobadas.map(o => `<option value="${o.id_orden}">${escapeHtml(o.codigo_unico)} - ${escapeHtml(o.vehiculo)}</option>`).join('');
+            ordenes.map(o => `<option value="${o.id_orden}">${escapeHtml(o.codigo_unico)} - ${escapeHtml(o.vehiculo)}</option>`).join('');
         if (currentValue) selectOrden.value = currentValue;
     }
     
-    if (selectServicio && ordenesConServicios.length > 0) {
-        selectServicio.innerHTML = '<option value="">Seleccionar servicio</option>';
-        ordenesConServicios.forEach(orden => {
-            if (orden.servicios) {
+    if (selectOrden) {
+        selectOrden.onchange = function() {
+            const ordenId = parseInt(this.value);
+            const orden = ordenesDiagnosticoAprobado.find(o => o.id_orden === ordenId);
+            const selectServicio = document.getElementById('solicitud_id_servicio');
+            
+            if (selectServicio && orden && orden.servicios) {
+                selectServicio.innerHTML = '<option value="">Seleccionar servicio</option>';
                 orden.servicios.forEach(serv => {
-                    selectServicio.innerHTML += `<option value="${serv.id_servicio}">${escapeHtml(orden.codigo_unico)} - ${escapeHtml(serv.descripcion)}</option>`;
+                    const option = document.createElement('option');
+                    option.value = serv.id_servicio;
+                    option.textContent = serv.descripcion;
+                    selectServicio.appendChild(option);
                 });
             }
-        });
+        };
     }
 }
 
@@ -389,7 +418,8 @@ async function cargarDatosIniciales() {
     mostrarLoading(true);
     try {
         await Promise.all([
-            cargarOrdenesConServicios(),
+            cargarOrdenesDiagnosticoAprobado(),
+            cargarOrdenesParaCotizar(),
             cargarSolicitudesCotizacion(),
             cargarCotizacionesMap(),
             cargarSolicitudesCompra(),
@@ -406,212 +436,59 @@ async function cargarDatosIniciales() {
 }
 
 // =====================================================
-// RENDERIZADO DE ÓRDENES (ACTUALIZADO)
+// RENDERIZADO PRIMER APARTADO
 // =====================================================
 
-function renderOrdenes() {
-    const container = document.getElementById('ordenesContainer');
+function renderOrdenesSolicitarCotizacion() {
+    const container = document.getElementById('ordenesSolicitarContainer');
     if (!container) return;
     
-    const searchTerm = document.getElementById('searchOrden')?.value.toLowerCase() || '';
-    const filtroEstado = document.getElementById('filtroEstadoCotizacion')?.value || 'all';
+    const searchTerm = document.getElementById('searchOrdenSolicitar')?.value.toLowerCase() || '';
+    const filtroEstado = document.getElementById('filtroEstadoCotizacionSolicitar')?.value || 'all';
     
-    let filtered = [...ordenesConServicios];
+    let ordenesFiltradas = ordenesDiagnosticoAprobado.filter(orden => {
+        return orden.servicios.some(serv => 
+            serv.estado_cotizacion === 'pendiente' || 
+            serv.estado_cotizacion === 'solicitado'
+        );
+    });
     
     if (searchTerm) {
-        filtered = filtered.filter(o => 
+        ordenesFiltradas = ordenesFiltradas.filter(o => 
             (o.codigo_unico || '').toLowerCase().includes(searchTerm) ||
             (o.cliente_nombre || '').toLowerCase().includes(searchTerm) ||
             (o.vehiculo || '').toLowerCase().includes(searchTerm)
         );
     }
     
-    // Clasificar órdenes según estado REAL de la cotización
-    const ordenesPendientes = [];
-    const ordenesEnviadas = [];
-    const ordenesAceptadas = [];
-    const ordenesRechazadas = [];
-    const ordenesEnReparacion = [];
-    const ordenesArmando = [];
-    
-    for (const orden of filtered) {
-        const estadoOrden = orden.estado_global;
-        const cotizacionInfo = cotizacionesMap[orden.id_orden];
-        
-        console.log(`Orden ${orden.codigo_unico}: estado_global=${estadoOrden}`);
-        
-        if (estadoOrden === ESTADOS_ORDEN.COTIZACION_RECHAZADA) {
-            ordenesRechazadas.push({ ...orden, cotizacion: cotizacionInfo });
-        }
-        else if (estadoOrden === ESTADOS_ORDEN.EN_ARMADO) {
-            ordenesArmando.push({ ...orden, cotizacion: cotizacionInfo });
-        }
-        else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_ACEPTADA || estadoOrden === ESTADOS_ORDEN.COTIZACION_PARCIAL) {
-            ordenesAceptadas.push({ ...orden, cotizacion: cotizacionInfo });
-        }
-        else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_ENVIADA) {
-            ordenesEnviadas.push({ ...orden, cotizacion: cotizacionInfo });
-        }
-        else if (estadoOrden === ESTADOS_ORDEN.EN_REPARACION) {
-            ordenesEnReparacion.push({ ...orden, cotizacion: cotizacionInfo });
-        }
-        else {
-            ordenesPendientes.push(orden);
-        }
-    }
-    
-    console.log(`Clasificación: Pendientes=${ordenesPendientes.length}, Enviadas=${ordenesEnviadas.length}, Aceptadas=${ordenesAceptadas.length}, Rechazadas=${ordenesRechazadas.length}, Armando=${ordenesArmando.length}, Reparacion=${ordenesEnReparacion.length}`);
-    
-    // Aplicar filtro
-    let ordenesMostrar = [];
     if (filtroEstado === 'pendiente') {
-        ordenesMostrar = ordenesPendientes;
-    } else if (filtroEstado === 'enviada') {
-        ordenesMostrar = ordenesEnviadas;
-    } else if (filtroEstado === 'aprobada') {
-        ordenesMostrar = [...ordenesAceptadas, ...ordenesEnReparacion];
-    } else if (filtroEstado === 'rechazada') {
-        ordenesMostrar = [...ordenesRechazadas, ...ordenesArmando];
-    } else if (filtroEstado === 'reparacion') {
-        ordenesMostrar = ordenesEnReparacion;
-    } else {
-        ordenesMostrar = [...ordenesPendientes, ...ordenesEnviadas, ...ordenesRechazadas, ...ordenesArmando, ...ordenesAceptadas, ...ordenesEnReparacion];
+        ordenesFiltradas = ordenesFiltradas.filter(o => 
+            o.servicios.some(s => s.estado_cotizacion === 'pendiente')
+        );
+    } else if (filtroEstado === 'solicitado') {
+        ordenesFiltradas = ordenesFiltradas.filter(o => 
+            o.servicios.some(s => s.estado_cotizacion === 'solicitado')
+        );
     }
     
-    if (ordenesMostrar.length === 0) {
-        container.innerHTML = `<div class="empty-state"><i class="fas fa-clipboard-list"></i><p>No hay órdenes con servicios disponibles</p></div>`;
+    if (ordenesFiltradas.length === 0) {
+        container.innerHTML = `<div class="empty-state"><i class="fas fa-clipboard-list"></i><p>No hay órdenes con diagnóstico aprobado pendientes de cotización</p><small>Las órdenes aparecerán aquí cuando el diagnóstico sea aprobado por el jefe de taller</small></div>`;
         return;
     }
     
-    container.innerHTML = ordenesMostrar.map(ordenData => {
-        const orden = ordenData;
-        const cotizacion = ordenData.cotizacion;
-        const estadoOrden = orden.estado_global;
+    container.innerHTML = ordenesFiltradas.map(orden => {
+        const serviciosPendientes = orden.servicios.filter(s => s.estado_cotizacion === 'pendiente').length;
+        const serviciosSolicitados = orden.servicios.filter(s => s.estado_cotizacion === 'solicitado').length;
         
-        let estadoBadgeHtml = '';
+        let estadoBadge = '';
         let botonesHtml = '';
         
-        // CASO 1: COTIZACIÓN RECHAZADA
-        if (estadoOrden === ESTADOS_ORDEN.COTIZACION_RECHAZADA) {
-            estadoBadgeHtml = `
-                <div class="alert-danger" style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; background: rgba(220, 53, 69, 0.15); border-left: 3px solid #dc3545;">
-                    <i class="fas fa-times-circle" style="color: #dc3545;"></i>
-                    <strong>❌ COTIZACIÓN RECHAZADA POR EL CLIENTE</strong>
-                    <br><small>El cliente no aceptó la cotización. Debes notificar al técnico para que ARME el vehículo.</small>
-                    ${cotizacion?.motivo_rechazo ? `<br><small><strong>Motivo:</strong> ${escapeHtml(cotizacion.motivo_rechazo)}</small>` : ''}
-                </div>
-            `;
-            botonesHtml = `
-                <button class="btn-warning" onclick='abrirModalNotificarArmado(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}", "${escapeHtml(orden.vehiculo)}", "${escapeHtml(orden.cliente_nombre)}")'>
-                    <i class="fas fa-tools"></i> 🔧 Notificar al Técnico (Armar Vehículo)
-                </button>
-                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
-                    <i class="fas fa-eye"></i> Ver Cotización Rechazada
-                </button>
-                <button class="btn-primary" onclick="abrirModalGenerarCotizacion(${orden.id_orden})">
-                    <i class="fas fa-file-invoice"></i> Generar Nueva Cotización
-                </button>
-            `;
-        }
-        // CASO 2: EN PROCESO DE ARMADO
-        // CASO 2: EN PROCESO DE ARMADO
-        else if (estadoOrden === ESTADOS_ORDEN.EN_ARMADO) {
-            estadoBadgeHtml = `
-                <div class="alert-warning" style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; background: rgba(255, 193, 7, 0.15); border-left: 3px solid #ffc107;">
-                    <i class="fas fa-clock" style="color: #ffc107;"></i>
-                    <strong>🔧 NOTIFICACIÓN ENVIADA AL TÉCNICO</strong>
-                    <br><small>El técnico está ARMANDO el vehículo. Esperando confirmación de armado.</small>
-                </div>
-            `;
-            botonesHtml = `
-                <button class="btn-outline" onclick="verInstruccionesArmado(${orden.id_orden})">
-                    <i class="fas fa-clipboard-list"></i> Ver Instrucciones Enviadas
-                </button>
-                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
-                    <i class="fas fa-eye"></i> Ver Cotización Rechazada
-                </button>
-            `;
-        }
-        // CASO 3: COTIZACIÓN ACEPTADA
-        else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_ACEPTADA || estadoOrden === ESTADOS_ORDEN.COTIZACION_PARCIAL) {
-            const tieneTecnicos = orden.tecnicos_asignados;
-            estadoBadgeHtml = `
-                <div class="alert-success" style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; background: rgba(40, 167, 69, 0.15); border-left: 3px solid #28a745;">
-                    <i class="fas fa-check-circle" style="color: #28a745;"></i>
-                    <strong>✅ COTIZACIÓN ACEPTADA POR EL CLIENTE</strong>
-                    <br><small>El cliente aceptó la cotización. Inicia la reparación.</small>
-                </div>
-            `;
-            if (tieneTecnicos) {
-                botonesHtml = `
-                    <button class="btn-primary" onclick="verAvanceReparacion(${orden.id_orden})">
-                        <i class="fas fa-chart-line"></i> Ver Avance
-                    </button>
-                    <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
-                        <i class="fas fa-eye"></i> Ver Cotización
-                    </button>
-                `;
-            } else {
-                botonesHtml = `
-                    <button class="btn-primary" onclick='abrirModalIniciarReparacion(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}", "${escapeHtml(orden.vehiculo)}", "${escapeHtml(orden.cliente_nombre)}")'>
-                        <i class="fas fa-play-circle"></i> Iniciar Reparación
-                    </button>
-                    <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
-                        <i class="fas fa-eye"></i> Ver Cotización
-                    </button>
-                `;
-            }
-        }
-        // CASO 4: EN REPARACIÓN
-        else if (estadoOrden === ESTADOS_ORDEN.EN_REPARACION) {
-            estadoBadgeHtml = `
-                <div class="alert-info" style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; background: rgba(23, 162, 184, 0.15); border-left: 3px solid #17a2b8;">
-                    <i class="fas fa-wrench" style="color: #17a2b8;"></i>
-                    <strong>🔧 REPARACIÓN EN CURSO</strong>
-                    <br><small>Trabajo en progreso por el equipo técnico.</small>
-                </div>
-            `;
-            botonesHtml = `
-                <button class="btn-primary" onclick="verAvanceReparacion(${orden.id_orden})">
-                    <i class="fas fa-chart-line"></i> Ver Avance
-                </button>
-                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
-                    <i class="fas fa-eye"></i> Ver Detalle
-                </button>
-            `;
-        }
-        // CASO 5: COTIZACIÓN ENVIADA
-        else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_ENVIADA) {
-            estadoBadgeHtml = `
-                <div class="alert-warning" style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; background: rgba(255, 193, 7, 0.15); border-left: 3px solid #ffc107;">
-                    <i class="fas fa-paper-plane" style="color: #ffc107;"></i>
-                    <strong>📨 COTIZACIÓN ENVIADA AL CLIENTE</strong>
-                    <br><small>Esperando respuesta del cliente.</small>
-                </div>
-            `;
-            botonesHtml = `
-                <button class="btn-outline" onclick="editarCotizacionExistente(${orden.id_orden})">
-                    <i class="fas fa-edit"></i> Editar Cotización
-                </button>
-                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
-                    <i class="fas fa-eye"></i> Ver Detalle
-                </button>
-            `;
-        }
-        // CASO 6: SIN COTIZACIÓN
-        else {
-            estadoBadgeHtml = `
-                <div class="alert-secondary" style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; background: var(--gris-oscuro);">
-                    <i class="fas fa-clock"></i>
-                    <strong>⏳ PENDIENTE DE COTIZACIÓN</strong>
-                    <br><small>Diagnóstico listo, esperando generar cotización para el cliente.</small>
-                </div>
-            `;
-            botonesHtml = `
-                <button class="btn-primary" onclick="abrirModalGenerarCotizacion(${orden.id_orden})">
-                    <i class="fas fa-file-invoice"></i> Generar Cotización
-                </button>
-            `;
+        if (serviciosSolicitados > 0) {
+            estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> ${serviciosSolicitados} solicitud(es) enviada(s)</span>`;
+            botonesHtml = `<button class="btn-outline" disabled style="opacity:0.7;"><i class="fas fa-clock"></i> Esperando respuesta</button>`;
+        } else if (serviciosPendientes > 0) {
+            estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> ${serviciosPendientes} servicio(s) pendiente(s)</span>`;
+            botonesHtml = `<button class="btn-primary" onclick="abrirModalSolicitudParaOrden(${orden.id_orden})"><i class="fas fa-paper-plane"></i> Solicitar Cotización</button>`;
         }
         
         return `
@@ -623,30 +500,126 @@ function renderOrdenes() {
                 </div>
                 <div>
                     <span class="orden-cliente"><i class="fas fa-user"></i> ${escapeHtml(orden.cliente_nombre)}</span>
-                    <span class="orden-total"><i class="fas fa-dollar-sign"></i> Total: Bs. ${orden.total_orden?.toFixed(2) || '0.00'}</span>
+                </div>
+            </div>
+            <div class="orden-body" style="padding: 0.75rem 1.25rem;">
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">${estadoBadge}</div>
+                <div class="servicios-container" style="margin-top: 0.5rem;">
+                    ${orden.servicios.map(serv => `
+                        <div class="servicio-row" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--border-color);">
+                            <div class="servicio-info"><div class="servicio-nombre" style="font-weight: 500;">${escapeHtml(serv.descripcion)}</div></div>
+                            <div class="servicio-estado estado-${serv.estado_cotizacion}" style="font-size: 0.75rem;">
+                                <i class="fas ${serv.estado_cotizacion === 'cotizado' ? 'fa-check-circle' : (serv.estado_cotizacion === 'solicitado' ? 'fa-paper-plane' : 'fa-clock')}"></i>
+                                ${serv.estado_cotizacion === 'cotizado' ? 'Cotizado' : (serv.estado_cotizacion === 'solicitado' ? 'Solicitud enviada' : 'Pendiente')}
+                            </div>
+                            ${serv.precio_cotizado > 0 ? `<div class="servicio-precio" style="font-weight: 600; color: var(--verde-exito);">${formatCurrency(serv.precio_cotizado)}</div>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            <div class="orden-footer" style="padding: 0.75rem 1.25rem; border-top: 1px solid var(--border-color);">${botonesHtml}</div>
+        </div>`;
+    }).join('');
+}
+
+async function abrirModalSolicitudParaOrden(id_orden) {
+    limpiarItemsSolicitud();
+    await cargarOrdenesAprobadas();
+    const selectOrden = document.getElementById('solicitud_id_orden_trabajo');
+    if (selectOrden) {
+        selectOrden.value = id_orden;
+        selectOrden.dispatchEvent(new Event('change'));
+    }
+    abrirModal('modalSolicitudCotizacion');
+}
+
+// =====================================================
+// RENDERIZADO SEGUNDO APARTADO
+// =====================================================
+
+function renderOrdenesCotizacionCliente() {
+    const container = document.getElementById('ordenesCotizacionContainer');
+    if (!container) return;
+    
+    const searchTerm = document.getElementById('searchCotizacionCliente')?.value.toLowerCase() || '';
+    const filtroEstado = document.getElementById('filtroEstadoCotizacionCliente')?.value || 'all';
+    
+    let filtered = [...ordenesParaCotizar];
+    
+    if (searchTerm) {
+        filtered = filtered.filter(o => 
+            (o.codigo_unico || '').toLowerCase().includes(searchTerm) ||
+            (o.cliente_nombre || '').toLowerCase().includes(searchTerm) ||
+            (o.vehiculo || '').toLowerCase().includes(searchTerm)
+        );
+    }
+    
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="empty-state"><i class="fas fa-clipboard-list"></i><p>No hay órdenes disponibles</p></div>`;
+        return;
+    }
+    
+    container.innerHTML = filtered.map(orden => {
+        const estadoOrden = orden.estado_global;
+        let estadoBadge = '';
+        let botonesHtml = '';
+        
+        if (estadoOrden === ESTADOS_ORDEN.DIAGNOSTICO_APROBADO) {
+            estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> Pendiente de Cotización</span>`;
+            botonesHtml = `<button class="btn-primary" onclick="abrirModalGenerarCotizacion(${orden.id_orden})"><i class="fas fa-file-invoice"></i> Generar Cotización</button>`;
+        } else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_ENVIADA) {
+            estadoBadge = `<span class="status-badge status-enviado"><i class="fas fa-paper-plane"></i> Cotización Enviada</span>`;
+            botonesHtml = `
+                <button class="btn-outline" onclick="editarCotizacionExistente(${orden.id_orden})"><i class="fas fa-edit"></i> Editar Cotización</button>
+                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})"><i class="fas fa-eye"></i> Ver Detalle</button>`;
+        } else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_ACEPTADA || estadoOrden === ESTADOS_ORDEN.COTIZACION_PARCIAL) {
+            estadoBadge = `<span class="status-badge status-aprobado"><i class="fas fa-check-circle"></i> Cotización Aceptada</span>`;
+            botonesHtml = `
+                <button class="btn-primary" onclick='abrirModalIniciarReparacion(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}", "${escapeHtml(orden.vehiculo)}", "${escapeHtml(orden.cliente_nombre)}")'><i class="fas fa-play-circle"></i> Iniciar Reparación</button>
+                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})"><i class="fas fa-eye"></i> Ver Cotización</button>`;
+        } else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_RECHAZADA) {
+            estadoBadge = `<span class="status-badge status-rechazado"><i class="fas fa-times-circle"></i> Cotización Rechazada</span>`;
+            botonesHtml = `
+                <button class="btn-warning" onclick='abrirModalNotificarArmado(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}", "${escapeHtml(orden.vehiculo)}", "${escapeHtml(orden.cliente_nombre)}")'><i class="fas fa-tools"></i> Notificar Armado</button>
+                <button class="btn-primary" onclick="reutilizarCotizacionRechazada(${orden.id_orden})"><i class="fas fa-copy"></i> Nueva Cotización</button>`;
+        } else if (estadoOrden === ESTADOS_ORDEN.EN_ARMADO) {
+            estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-tools"></i> Armando Vehículo</span>`;
+            botonesHtml = `<button class="btn-outline" onclick="verInstruccionesArmado(${orden.id_orden})"><i class="fas fa-clipboard-list"></i> Ver Instrucciones</button>`;
+        } else if (estadoOrden === ESTADOS_ORDEN.EN_REPARACION) {
+            estadoBadge = `<span class="status-badge status-proceso"><i class="fas fa-wrench"></i> En Reparación</span>`;
+            botonesHtml = `<button class="btn-outline" onclick="verAvanceReparacion(${orden.id_orden})"><i class="fas fa-chart-line"></i> Ver Avance</button>`;
+        }
+        
+        const totalCotizado = orden.cotizacion_total || orden.total_orden || 0;
+        
+        return `
+        <div class="orden-card">
+            <div class="orden-header">
+                <div>
+                    <span class="orden-codigo"><i class="fas fa-tag"></i> ${escapeHtml(orden.codigo_unico)}</span>
+                    <span class="orden-vehiculo"><i class="fas fa-car"></i> ${escapeHtml(orden.vehiculo)}</span>
+                    ${estadoBadge}
+                </div>
+                <div>
+                    <span class="orden-cliente"><i class="fas fa-user"></i> ${escapeHtml(orden.cliente_nombre)}</span>
+                    <span class="orden-total"><i class="fas fa-dollar-sign"></i> Total: ${formatCurrency(totalCotizado)}</span>
                 </div>
             </div>
             <div class="servicios-container">
                 ${orden.servicios.map(serv => `
                     <div class="servicio-row">
-                        <div class="servicio-info">
-                            <div class="servicio-nombre">${escapeHtml(serv.descripcion)}</div>
-                            ${serv.items && serv.items.length > 0 ? `<div class="servicio-items">📦 ${serv.items.length} repuesto(s)</div>` : ''}
-                        </div>
+                        <div class="servicio-info"><div class="servicio-nombre">${escapeHtml(serv.descripcion)}</div></div>
                         <div class="servicio-estado estado-${serv.estado_cotizacion}">
-                            <i class="fas ${serv.estado_cotizacion === 'cotizado' ? 'fa-check-circle' : 'fa-clock'}"></i>
-                            ${serv.estado_cotizacion === 'cotizado' ? 'Cotizado' : (serv.estado_cotizacion === 'solicitado' ? 'Cotización solicitada' : 'Pendiente')}
+                            <i class="fas ${serv.estado_cotizacion === 'cotizado' ? 'fa-check-circle' : (serv.estado_cotizacion === 'solicitado' ? 'fa-paper-plane' : 'fa-clock')}"></i>
+                            ${serv.estado_cotizacion === 'cotizado' ? 'Cotizado' : (serv.estado_cotizacion === 'solicitado' ? 'Solicitud enviada' : 'Pendiente')}
                         </div>
-                        <div class="servicio-precio">Bs. ${serv.precio_cotizado?.toFixed(2) || '0.00'}</div>
+                        ${serv.precio_cotizado > 0 ? `<div class="servicio-precio">${formatCurrency(serv.precio_cotizado)}</div>` : ''}
                     </div>
                 `).join('')}
             </div>
-            ${estadoBadgeHtml}
-            <div class="orden-footer">
-                ${botonesHtml}
-            </div>
-        </div>
-    `}).join('');
+            <div class="orden-footer">${botonesHtml}</div>
+        </div>`;
+    }).join('');
 }
 
 function renderHistorialCotizaciones() {
@@ -678,14 +651,8 @@ function renderHistorialCotizaciones() {
     container.innerHTML = filtered.map(cot => `
         <div class="orden-card">
             <div class="orden-header">
-                <div>
-                    <span class="orden-codigo"><i class="fas fa-tag"></i> ${escapeHtml(cot.orden_codigo)}</span>
-                    <span class="orden-vehiculo"><i class="fas fa-car"></i> ${escapeHtml(cot.vehiculo)}</span>
-                </div>
-                <div>
-                    <span class="orden-cliente"><i class="fas fa-user"></i> ${escapeHtml(cot.cliente_nombre)}</span>
-                    <span class="orden-total"><i class="fas fa-dollar-sign"></i> Total: ${formatCurrency(cot.total)}</span>
-                </div>
+                <div><span class="orden-codigo"><i class="fas fa-tag"></i> ${escapeHtml(cot.orden_codigo)}</span><span class="orden-vehiculo"><i class="fas fa-car"></i> ${escapeHtml(cot.vehiculo)}</span></div>
+                <div><span class="orden-cliente"><i class="fas fa-user"></i> ${escapeHtml(cot.cliente_nombre)}</span><span class="orden-total"><i class="fas fa-dollar-sign"></i> Total: ${formatCurrency(cot.total)}</span></div>
             </div>
             <div class="orden-body" style="padding: 0.75rem 1.25rem;">
                 <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
@@ -693,22 +660,11 @@ function renderHistorialCotizaciones() {
                     <div>${statusBadge(cot.estado)}</div>
                     ${cot.fecha_rechazo ? `<div><strong>Rechazado:</strong> ${formatDate(cot.fecha_rechazo)}</div>` : ''}
                 </div>
-                ${cot.motivo_rechazo ? `
-                    <div class="motivo-rechazo" style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(193,18,31,0.1); border-radius: 6px;">
-                        <i class="fas fa-comment-dots"></i> <strong>Motivo de rechazo:</strong>
-                        <p style="margin: 0.25rem 0 0 1.5rem; font-size: 0.8rem;">${escapeHtml(cot.motivo_rechazo)}</p>
-                    </div>
-                ` : ''}
+                ${cot.motivo_rechazo ? `<div class="motivo-rechazo" style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(193,18,31,0.1); border-radius: 6px;"><i class="fas fa-comment-dots"></i> <strong>Motivo de rechazo:</strong><p style="margin: 0.25rem 0 0 1.5rem; font-size: 0.8rem;">${escapeHtml(cot.motivo_rechazo)}</p></div>` : ''}
             </div>
             <div class="orden-footer">
-                <button class="btn-outline" onclick="verDetalleCotizacion(${cot.id})">
-                    <i class="fas fa-eye"></i> Ver Detalle
-                </button>
-                ${cot.estado === 'rechazada' ? `
-                    <button class="btn-primary" onclick="reutilizarCotizacionRechazada(${cot.id_orden_trabajo}, ${cot.id})">
-                        <i class="fas fa-copy"></i> Generar Nueva Cotización
-                    </button>
-                ` : ''}
+                <button class="btn-outline" onclick="verDetalleCotizacion(${cot.id})"><i class="fas fa-eye"></i> Ver Detalle</button>
+                ${cot.estado === 'rechazada' ? `<button class="btn-primary" onclick="reutilizarCotizacionRechazada(${cot.id_orden_trabajo}, ${cot.id})"><i class="fas fa-copy"></i> Generar Nueva Cotización</button>` : ''}
             </div>
         </div>
     `).join('');
@@ -727,16 +683,16 @@ function renderSolicitudesCotizacion() {
         <tr>
             <td>${s.id}</td>
             <td><strong>${escapeHtml(s.orden_codigo)}</strong></td>
-            <td>${escapeHtml(s.vehiculo)}</td>
-            <td>${escapeHtml(s.servicio_descripcion || '-')}</td>
-            <td>${s.items?.length || 1} item(s)</td>
-            <td>${statusBadge(s.estado)}</td>
-            <td>${s.precio_cotizado ? `Bs. ${s.precio_cotizado.toFixed(2)}` : '-'}</td>
-            <td>${formatDate(s.fecha_solicitud)}</td>
+            <td>${escapeHtml(s.vehiculo)}</div></td>
+            <td>${escapeHtml(s.servicio_descripcion || '-')}</div></td>
+            <td>${s.items?.length || 1} item(s)</div></td>
+            <td>${statusBadge(s.estado)}</div></td>
+            <td>${s.precio_cotizado ? formatCurrency(s.precio_cotizado) : '-'}</div></td>
+            <td>${formatDate(s.fecha_solicitud)}</div></td>
             <td class="action-buttons">
                 ${s.estado === 'pendiente' ? `<button class="action-btn delete" onclick="eliminarSolicitudCotizacion(${s.id})"><i class="fas fa-trash-alt"></i></button>` : ''}
                 ${s.estado === 'cotizado' ? `<button class="action-btn send" onclick="solicitarCompraDesdeCotizacion(${s.id})"><i class="fas fa-shopping-cart"></i></button>` : ''}
-            </td>
+            </div>
         </tr>
     `).join('');
 }
@@ -746,35 +702,174 @@ function renderSolicitudesCompra() {
     if (!tbody) return;
     
     if (solicitudesCompra.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="fas fa-shopping-cart"></i><p>No hay solicitudes</p></div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="fas fa-shopping-cart"></i><p>No hay solicitudes</p></div></div></td>`;
         return;
     }
     
     tbody.innerHTML = solicitudesCompra.map(s => `
         <tr>
-            <td>${s.id}</td>
-            <td><strong>${escapeHtml(s.orden_codigo)}</strong></td>
-            <td>${escapeHtml(s.vehiculo)}</td>
-            <td>${escapeHtml(s.servicio_descripcion || '-')}</td>
-            <td>${s.items?.length || 1} item(s)</td>
-            <td>${statusBadge(s.estado)}</td>
-            <td>${formatDate(s.fecha_solicitud)}</td>
+            <td>${s.id}</div><td><strong>${escapeHtml(s.orden_codigo)}</strong></div><td>${escapeHtml(s.vehiculo)}</div><td>${s.items?.length || 1} item(s)</div><td>${statusBadge(s.estado)}</div><td>${formatDate(s.fecha_solicitud)}</div>
             <td class="action-buttons">
                 <button class="action-btn view" onclick="verSolicitudCompra(${s.id})"><i class="fas fa-eye"></i></button>
                 ${s.estado === 'pendiente' ? `<button class="action-btn approve" onclick="aprobarCompra(${s.id})"><i class="fas fa-check-circle"></i></button>` : ''}
-            </td>
+            </div>
         </tr>
     `).join('');
 }
 
 // =====================================================
-// MODAL: NOTIFICAR ARMADO PARA COTIZACIÓN RECHAZADA (SIMPLIFICADO - SIN SELECTOR DE TÉCNICOS)
+// SUBIDA DE ARCHIVOS - CORREGIDA
+// =====================================================
+
+function setupFileUpload() {
+    console.log('🔧 Configurando subida de archivos...');
+    
+    const fileInput = document.getElementById('cotizacionFile');
+    const selectBtn = document.getElementById('selectFileBtn');
+    const dropArea = document.getElementById('fileUploadArea');
+    const removeBtn = document.getElementById('removeFileBtn');
+    
+    if (!fileInput) {
+        console.error('❌ No se encontró el input de archivo (cotizacionFile)');
+        return;
+    }
+    
+    // Click en el botón de seleccionar archivo
+    if (selectBtn) {
+        selectBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('🖱️ Click en seleccionar archivo');
+            fileInput.click();
+        });
+    }
+    
+    // Click en el área de drop (si no es el botón)
+    if (dropArea) {
+        dropArea.addEventListener('click', function(e) {
+            if (e.target === selectBtn || selectBtn?.contains(e.target)) return;
+            console.log('🖱️ Click en área de drop');
+            fileInput.click();
+        });
+    }
+    
+    // Cambio de archivo
+    fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        console.log('📁 Archivo seleccionado:', file?.name);
+        if (file) handleFileSelect(file);
+    });
+    
+    // Drag & drop
+    if (dropArea) {
+        dropArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            dropArea.classList.add('dragover');
+        });
+        
+        dropArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            dropArea.classList.remove('dragover');
+        });
+        
+        dropArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            dropArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            console.log('📁 Archivo soltado:', file?.name);
+            if (file) handleFileSelect(file);
+        });
+    }
+    
+    // Botón eliminar archivo
+    if (removeBtn) {
+        removeBtn.addEventListener('click', function() {
+            console.log('🗑️ Eliminar archivo');
+            clearFileSelection();
+        });
+    }
+    
+    console.log('✅ Subida de archivos configurada correctamente');
+}
+
+function handleFileSelect(file) {
+    if (!file) return;
+    
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(file.type)) {
+        showToast('Solo se permiten archivos PDF o Word', 'error');
+        return;
+    }
+    
+    if (file.size > 10 * 1024 * 1024) {
+        showToast('El archivo no debe superar los 10MB', 'error');
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        currentFileData = e.target.result;
+        currentFileName = file.name;
+        displayFileInfo(file);
+        showToast('Archivo cargado correctamente', 'success');
+        console.log('✅ Archivo cargado:', file.name);
+    };
+    reader.onerror = () => {
+        showToast('Error al leer el archivo', 'error');
+        console.error('❌ Error al leer el archivo');
+    };
+    reader.readAsDataURL(file);
+}
+
+function displayFileInfo(file) {
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const fileIconPdf = document.getElementById('fileIconPdf');
+    const fileIconWord = document.getElementById('fileIconWord');
+    
+    if (fileInfo && fileName && fileSize) {
+        fileName.textContent = file.name;
+        fileSize.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+        
+        if (fileIconPdf && fileIconWord) {
+            if (file.type === 'application/pdf') {
+                fileIconPdf.style.display = 'block';
+                fileIconWord.style.display = 'none';
+            } else {
+                fileIconPdf.style.display = 'none';
+                fileIconWord.style.display = 'block';
+            }
+        }
+        
+        fileInfo.style.display = 'block';
+        
+        // Actualizar resumen
+        const resumenArchivo = document.getElementById('resumenArchivo');
+        if (resumenArchivo) resumenArchivo.textContent = file.name;
+    }
+}
+
+function clearFileSelection() {
+    currentFileData = null;
+    currentFileName = null;
+    
+    const fileInfo = document.getElementById('fileInfo');
+    const fileInput = document.getElementById('cotizacionFile');
+    const resumenArchivo = document.getElementById('resumenArchivo');
+    
+    if (fileInfo) fileInfo.style.display = 'none';
+    if (fileInput) fileInput.value = '';
+    if (resumenArchivo) resumenArchivo.textContent = 'No seleccionado';
+}
+
+// =====================================================
+// MODALES: NOTIFICAR ARMADO, INICIAR REPARACIÓN
 // =====================================================
 
 async function abrirModalNotificarArmado(id_orden, codigo, vehiculo, cliente) {
     currentOrdenArmado = { id_orden, codigo, vehiculo, cliente };
     
-    // Mostrar información de la orden
     const ordenInfo = document.getElementById('armadoOrdenInfo');
     if (ordenInfo) {
         ordenInfo.innerHTML = `
@@ -785,7 +880,6 @@ async function abrirModalNotificarArmado(id_orden, codigo, vehiculo, cliente) {
         `;
     }
     
-    // Cargar los técnicos YA ASIGNADOS a esta orden (solo lectura)
     mostrarLoading(true);
     try {
         const response = await fetch(`${API_URL}/orden/${id_orden}/tecnicos-asignados`, { headers: getAuthHeaders() });
@@ -797,40 +891,20 @@ async function abrirModalNotificarArmado(id_orden, codigo, vehiculo, cliente) {
                 tecnicosContainer.innerHTML = data.tecnicos.map(t => `
                     <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: var(--bg-card); border-radius: 8px; margin-bottom: 0.5rem;">
                         <i class="fas fa-user-cog" style="color: var(--rojo-primario);"></i>
-                        <div>
-                            <strong>${escapeHtml(t.nombre)}</strong>
-                            ${t.contacto ? `<br><small style="color: var(--gris-texto);">📞 ${escapeHtml(t.contacto)}</small>` : ''}
-                        </div>
+                        <div><strong>${escapeHtml(t.nombre)}</strong>${t.contacto ? `<br><small style="color: var(--gris-texto);">📞 ${escapeHtml(t.contacto)}</small>` : ''}</div>
                     </div>
                 `).join('');
             } else {
-                tecnicosContainer.innerHTML = `
-                    <div class="alert-warning" style="padding: 0.75rem; border-radius: 8px;">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        No hay técnicos asignados actualmente a esta orden. Se notificará al jefe de taller.
-                    </div>
-                `;
+                tecnicosContainer.innerHTML = `<div class="alert-warning">No hay técnicos asignados actualmente.</div>`;
             }
         }
     } catch (error) {
-        console.error('Error cargando técnicos asignados:', error);
-        const tecnicosContainer = document.getElementById('tecnicosAsignadosList');
-        if (tecnicosContainer) {
-            tecnicosContainer.innerHTML = `
-                <div class="alert-warning" style="padding: 0.75rem; border-radius: 8px;">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    No se pudieron cargar los técnicos asignados. Se notificará al jefe de taller.
-                </div>
-            `;
-        }
+        console.error('Error cargando técnicos:', error);
     } finally {
         mostrarLoading(false);
     }
     
-    // Limpiar campo de instrucciones
     document.getElementById('armadoInstrucciones').value = '';
-    
-    // Abrir modal
     abrirModal('modalNotificarArmado');
 }
 
@@ -839,7 +913,7 @@ async function confirmarNotificarArmado() {
     
     const instrucciones = document.getElementById('armadoInstrucciones')?.value.trim();
     if (!instrucciones) {
-        showToast('⚠️ Debes escribir instrucciones para el armado del vehículo', 'warning');
+        showToast('⚠️ Debes escribir instrucciones para el armado', 'warning');
         return;
     }
     
@@ -851,51 +925,17 @@ async function confirmarNotificarArmado() {
             body: JSON.stringify({
                 id_orden: currentOrdenArmado.id_orden,
                 instrucciones_armado: instrucciones
-                // NOTA: Ya no enviamos tecnicos_ids porque se toman los ya asignados
             })
         });
         
         const data = await response.json();
         
         if (data.success) {
-            showToast('✅ Instrucciones enviadas al técnico. El vehículo será armado.', 'success');
+            showToast('✅ Instrucciones enviadas al técnico', 'success');
             cerrarModal('modalNotificarArmado');
-            // Recargar datos para actualizar el estado de la orden
-            await cargarOrdenesConServicios();
-            await cargarCotizacionesMap();
+            await cargarDatosIniciales();
         } else {
-            showToast(data.error || 'Error al notificar al técnico', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión al servidor', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-async function cobrarDiagnosticoArmado(id_orden, codigo) {
-    if (!confirm(`¿Confirmas que el vehículo está ARMADO y deseas cobrar SOLO el diagnóstico (Bs. 200)?\n\nOrden: ${codigo}`)) return;
-    
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/rechazo/finalizar-diagnostico`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                id_orden: id_orden,
-                forma_pago: 'efectivo'
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast(`✅ Orden finalizada. Cobrado Bs. 200 por diagnóstico.`, 'success');
-            await cargarOrdenesConServicios();
-            await cargarCotizacionesMap();
-        } else {
-            showToast(data.error || 'Error al finalizar', 'error');
+            showToast(data.error || 'Error al notificar', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -905,14 +945,9 @@ async function cobrarDiagnosticoArmado(id_orden, codigo) {
     }
 }
 
-// =====================================================
-// MODAL: INICIAR REPARACIÓN PARA COTIZACIÓN ACEPTADA (COMPLETO - CON selector de técnicos)
-// =====================================================
-
 async function abrirModalIniciarReparacion(id_orden, codigo, vehiculo, cliente) {
     currentOrdenAceptada = { id_orden, codigo, vehiculo, cliente };
     
-    // Mostrar información de la orden
     const ordenInfo = document.getElementById('reparacionOrdenInfo');
     if (ordenInfo) {
         ordenInfo.innerHTML = `
@@ -924,87 +959,122 @@ async function abrirModalIniciarReparacion(id_orden, codigo, vehiculo, cliente) 
     
     mostrarLoading(true);
     try {
-        // 1. Cargar técnicos actualmente asignados (para mostrar)
-        const tecnicosActualesResponse = await fetch(`${API_URL}/orden/${id_orden}/tecnicos-asignados`, { headers: getAuthHeaders() });
-        const tecnicosActualesData = await tecnicosActualesResponse.json();
+        // Obtener técnicos actualmente asignados y todos los técnicos con su carga
+        const [tecnicosActualesRes, todosTecnicosRes] = await Promise.all([
+            fetch(`${API_URL}/orden/${id_orden}/tecnicos-asignados`, { headers: getAuthHeaders() }),
+            fetch(`${API_URL}/tecnicos-con-carga`, { headers: getAuthHeaders() })
+        ]);
         
-        const tecnicosActualesContainer = document.getElementById('tecnicosActualesList');
-        if (tecnicosActualesContainer && tecnicosActualesData.tecnicos) {
-            if (tecnicosActualesData.tecnicos.length > 0) {
-                tecnicosActualesContainer.innerHTML = tecnicosActualesData.tecnicos.map(t => `
-                    <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0;">
-                        <i class="fas fa-user-check" style="color: var(--verde-exito);"></i>
-                        <span>${escapeHtml(t.nombre)}</span>
-                    </div>
-                `).join('');
-            } else {
-                tecnicosActualesContainer.innerHTML = `<span class="text-muted"><i class="fas fa-info-circle"></i> No hay técnicos asignados actualmente</span>`;
-            }
+        const tecnicosActualesData = await tecnicosActualesRes.json();
+        const todosTecnicosData = await todosTecnicosRes.json();
+        
+        console.log('📊 Técnicos actuales:', tecnicosActualesData);
+        console.log('📊 Todos los técnicos con carga:', todosTecnicosData);
+        
+        // Crear un Set con los IDs de técnicos actualmente asignados
+        const tecnicosActualesIds = new Set();
+        if (tecnicosActualesData.tecnicos && tecnicosActualesData.tecnicos.length > 0) {
+            tecnicosActualesData.tecnicos.forEach(t => tecnicosActualesIds.add(t.id));
         }
         
-        // 2. Cargar todos los técnicos disponibles para seleccionar
-        const tecnicosResponse = await fetch(`${API_URL}/tecnicos-disponibles`, { headers: getAuthHeaders() });
-        const tecnicosData = await tecnicosResponse.json();
-        
-        const container = document.getElementById('reparacionTecnicosContainer');
-        if (container && tecnicosData.tecnicos) {
-            // Crear checkboxes para selección múltiple
-            container.innerHTML = tecnicosData.tecnicos.map(t => `
-                <div class="tecnico-checkbox-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: var(--bg-card); border-radius: 8px; transition: all 0.2s;">
-                    <input type="checkbox" id="tecnico_${t.id}" value="${t.id}" 
-                        ${tecnicosActualesData.tecnicos && tecnicosActualesData.tecnicos.some(tact => tact.id === t.id) ? 'checked' : ''}>
-                    <label for="tecnico_${t.id}" style="flex: 1; cursor: pointer;">
-                        <strong>${escapeHtml(t.nombre)}</strong>
-                        ${t.especialidad ? `<br><small style="color: var(--gris-texto);">🔧 ${escapeHtml(t.especialidad)}</small>` : ''}
-                    </label>
-                </div>
-            `).join('');
-            
-            if (tecnicosData.tecnicos.length === 0) {
-                container.innerHTML = `<div class="alert-warning" style="padding: 1rem; text-align: center;"><i class="fas fa-exclamation-triangle"></i> No hay técnicos disponibles para asignar</div>`;
+        const container = document.getElementById('tecnicosContainer');
+        if (container) {
+            if (todosTecnicosData.tecnicos && todosTecnicosData.tecnicos.length > 0) {
+                container.innerHTML = todosTecnicosData.tecnicos.map(t => {
+                    const estaAsignado = tecnicosActualesIds.has(t.id);
+                    const ordenesActivas = t.ordenes_activas || 0;
+                    const maxVehiculos = t.max_vehiculos || 2;
+                    const disponible = ordenesActivas < maxVehiculos;
+                    
+                    // Determinar el color del badge de carga
+                    let cargaColor = '';
+                    let cargaIcono = '';
+                    let cargaTexto = '';
+                    
+                    if (ordenesActivas === 0) {
+                        cargaColor = '#10B981'; // verde
+                        cargaIcono = 'fa-check-circle';
+                        cargaTexto = 'Disponible';
+                    } else if (ordenesActivas === 1) {
+                        cargaColor = '#F59E0B'; // amarillo
+                        cargaIcono = 'fa-clock';
+                        cargaTexto = `${ordenesActivas}/${maxVehiculos} vehículo(s)`;
+                    } else {
+                        cargaColor = '#EF4444'; // rojo
+                        cargaIcono = 'fa-exclamation-triangle';
+                        cargaTexto = `COMPLETO (${ordenesActivas}/${maxVehiculos})`;
+                    }
+                    
+                    // Determinar si el checkbox debe estar deshabilitado
+                    const checkboxDisabled = !disponible && !estaAsignado;
+                    const disabledAttr = checkboxDisabled ? 'disabled' : '';
+                    
+                    return `
+                        <div class="tecnico-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem; background: var(--bg-card); border-radius: 8px; transition: all 0.2s; border: 1px solid var(--border-color); margin-bottom: 0.5rem; ${checkboxDisabled ? 'opacity: 0.6;' : ''}">
+                            <input type="checkbox" id="tecnico_${t.id}" value="${t.id}" ${estaAsignado ? 'checked' : ''} ${disabledAttr}>
+                            <label for="tecnico_${t.id}" style="flex: 1; cursor: ${checkboxDisabled ? 'not-allowed' : 'pointer'}; display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas fa-user-cog" style="color: var(--rojo-primario);"></i>
+                                <div style="flex: 1;">
+                                    <strong>${escapeHtml(t.nombre)}</strong>
+                                    ${t.contacto ? `<br><small style="color: var(--gris-texto);">📞 ${escapeHtml(t.contacto)}</small>` : ''}
+                                </div>
+                                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem;">
+                                    <span style="font-size: 0.7rem; color: ${cargaColor};">
+                                        <i class="fas ${cargaIcono}"></i> ${cargaTexto}
+                                    </span>
+                                    ${ordenesActivas > 0 ? `
+                                        <div style="width: 60px; height: 4px; background: var(--gris-oscuro); border-radius: 2px; overflow: hidden;">
+                                            <div style="width: ${(ordenesActivas / maxVehiculos) * 100}%; height: 100%; background: ${cargaColor}; border-radius: 2px;"></div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                ${estaAsignado ? '<span style="margin-left: 0.5rem; font-size: 0.7rem; color: var(--verde-exito);"><i class="fas fa-check-circle"></i> Actual</span>' : ''}
+                                ${!disponible && !estaAsignado ? '<span style="margin-left: 0.5rem; font-size: 0.7rem; color: var(--rojo-primario);"><i class="fas fa-ban"></i> Límite alcanzado</span>' : ''}
+                            </label>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                container.innerHTML = `<div class="alert-warning" style="padding: 1rem; text-align: center;">
+                    <i class="fas fa-exclamation-triangle"></i> No hay técnicos disponibles para asignar<br>
+                    <small>Verifica que existan usuarios con rol "tecnico_mecanico" en el sistema</small>
+                </div>`;
             }
-        } else if (container) {
-            container.innerHTML = `<div class="alert-warning" style="padding: 1rem; text-align: center;"><i class="fas fa-exclamation-triangle"></i> Error al cargar técnicos disponibles</div>`;
+        } else {
+            console.error('❌ No se encontró el contenedor con id "tecnicosContainer"');
         }
     } catch (error) {
         console.error('Error cargando técnicos:', error);
-        const container = document.getElementById('reparacionTecnicosContainer');
+        const container = document.getElementById('tecnicosContainer');
         if (container) {
-            container.innerHTML = `<div class="alert-danger" style="padding: 1rem; text-align: center;"><i class="fas fa-exclamation-circle"></i> Error al cargar técnicos. Intente nuevamente.</div>`;
+            container.innerHTML = `<div class="alert-danger" style="padding: 1rem; text-align: center;">
+                <i class="fas fa-exclamation-circle"></i> Error al cargar técnicos. Intente nuevamente.<br>
+                <small>${error.message}</small>
+            </div>`;
         }
     } finally {
         mostrarLoading(false);
     }
     
-    // Resetear campos
     document.getElementById('reparacionInstrucciones').value = '';
     document.getElementById('reparacionPlazoDias').value = 3;
-    
     abrirModal('modalIniciarReparacion');
 }
-
-
 async function confirmarIniciarReparacion() {
     if (!currentOrdenAceptada) return;
     
     const instrucciones = document.getElementById('reparacionInstrucciones')?.value.trim();
     if (!instrucciones) {
-        showToast('⚠️ Debes escribir instrucciones detalladas para los técnicos', 'warning');
+        showToast('⚠️ Debes escribir instrucciones', 'warning');
         return;
     }
     
-    const plazoDias = parseInt(document.getElementById('reparacionPlazoDias')?.value || 3);
-    if (isNaN(plazoDias) || plazoDias < 1) {
-        showToast('⚠️ El plazo debe ser al menos 1 día', 'warning');
-        return;
-    }
-    
-    // Obtener técnicos seleccionados de los checkboxes
-    const checkboxes = document.querySelectorAll('#reparacionTecnicosContainer input[type="checkbox"]:checked');
+    // Usar el contenedor correcto 'tecnicosContainer'
+    const checkboxes = document.querySelectorAll('#tecnicosContainer input[type="checkbox"]:checked');
     const tecnicosIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
     
     if (tecnicosIds.length === 0) {
-        showToast('⚠️ Debes seleccionar al menos un técnico para la reparación', 'warning');
+        showToast('⚠️ Selecciona al menos un técnico', 'warning');
         return;
     }
     
@@ -1017,7 +1087,7 @@ async function confirmarIniciarReparacion() {
                 id_orden: currentOrdenAceptada.id_orden,
                 tecnicos: tecnicosIds,
                 instrucciones: instrucciones,
-                tiempo_estimado: plazoDias,
+                tiempo_estimado: document.getElementById('reparacionPlazoDias')?.value || 3,
                 tiempo_unidad: 'dias'
             })
         });
@@ -1025,23 +1095,18 @@ async function confirmarIniciarReparacion() {
         const data = await response.json();
         
         if (data.success) {
-            showToast(`✅ Reparación iniciada con ${tecnicosIds.length} técnico(s) asignados. Plazo: ${plazoDias} días.`, 'success');
+            showToast(`✅ Reparación iniciada con ${tecnicosIds.length} técnico(s)`, 'success');
             cerrarModal('modalIniciarReparacion');
-            await cargarOrdenesConServicios();
-            await cargarCotizacionesMap();
+            await cargarDatosIniciales();
         } else {
-            showToast(data.error || 'Error al iniciar la reparación', 'error');
+            showToast(data.error || 'Error al iniciar', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        showToast('Error de conexión al servidor', 'error');
+        showToast('Error de conexión', 'error');
     } finally {
         mostrarLoading(false);
     }
-}
-
-function verAvanceReparacion(id_orden) {
-    showToast('Función en desarrollo - Ver avance de reparación', 'info');
 }
 
 // =====================================================
@@ -1053,72 +1118,26 @@ function renderServiciosCotizables() {
     if (!container) return;
     
     if (serviciosCotizables.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-plus-circle"></i>
-                <p>No hay servicios agregados</p>
-                <small>Haz clic en "Agregar Servicio" para comenzar</small>
-            </div>
-        `;
+        container.innerHTML = `<div class="empty-state"><i class="fas fa-plus-circle"></i><p>No hay servicios agregados</p><small>Haz clic en "Agregar Servicio" para comenzar</small></div>`;
         actualizarTotalCotizacion();
         return;
     }
     
     container.innerHTML = serviciosCotizables.map((serv, idx) => `
-        <div class="servicio-cotizable-card" data-servicio-index="${idx}">
+        <div class="servicio-cotizable-card">
             <div class="servicio-cotizable-header" onclick="toggleServicioCotizable(${idx})">
                 <div class="servicio-cotizable-nombre">
-                    <input type="text" class="form-input" value="${escapeHtml(serv.nombre)}" 
-                           style="background: transparent; border: none; padding: 0; font-weight: 600; width: auto;"
-                           onchange="actualizarServicioCotizable(${idx}, 'nombre', this.value)" 
-                           onclick="event.stopPropagation()">
+                    <input type="text" value="${escapeHtml(serv.nombre)}" onchange="actualizarServicioCotizable(${idx}, 'nombre', this.value)" onclick="event.stopPropagation()">
                 </div>
                 <div class="servicio-cotizable-precio">
-                    Bs. <input type="number" class="servicio-precio-input" value="${serv.precio || 0}" step="0.01"
-                               style="width: 100px; background: transparent; border: none; text-align: right; font-weight: bold; color: var(--verde-exito);"
-                               onchange="actualizarServicioCotizable(${idx}, 'precio', parseFloat(this.value))"
-                               onclick="event.stopPropagation()">
+                    Bs. <input type="number" value="${serv.precio || 0}" step="0.01" onchange="actualizarServicioCotizable(${idx}, 'precio', parseFloat(this.value))" onclick="event.stopPropagation()">
                 </div>
-                <div class="action-buttons" onclick="event.stopPropagation()">
-                    <button class="action-btn delete" onclick="eliminarServicioCotizable(${idx})" title="Eliminar servicio">
-                        <i class="fas fa-trash-alt"></i>
-                    </button>
-                </div>
+                <button class="action-btn delete" onclick="eliminarServicioCotizable(${idx})" onclick="event.stopPropagation()"><i class="fas fa-trash-alt"></i></button>
             </div>
-            <div class="servicio-cotizable-body" id="servicio-cotizable-body-${idx}">
+            <div class="servicio-cotizable-body" id="servicio-body-${idx}">
                 <div class="form-group">
-                    <label>Descripción detallada del servicio</label>
-                    <textarea class="form-textarea" rows="2" 
-                              onchange="actualizarServicioCotizable(${idx}, 'descripcion', this.value)"
-                              placeholder="Describe el servicio en detalle...">${escapeHtml(serv.descripcion || '')}</textarea>
-                </div>
-                <div class="servicio-items-container">
-                    <label><i class="fas fa-boxes"></i> Repuestos / Materiales</label>
-                    <div id="items-cotizacion-${idx}">
-                        ${(serv.items || []).map((item, itemIdx) => `
-                            <div class="servicio-item-row">
-                                <input type="text" class="servicio-item-descripcion" 
-                                       value="${escapeHtml(item.descripcion)}" 
-                                       placeholder="Descripción del repuesto"
-                                       onchange="actualizarItemCotizable(${idx}, ${itemIdx}, 'descripcion', this.value)">
-                                <input type="number" class="servicio-item-cantidad" 
-                                       value="${item.cantidad || 1}" min="1"
-                                       onchange="actualizarItemCotizable(${idx}, ${itemIdx}, 'cantidad', parseInt(this.value))">
-                                <input type="number" class="servicio-item-precio" 
-                                       value="${item.precio_unitario || 0}" step="0.01" 
-                                       placeholder="Precio unitario"
-                                       onchange="actualizarItemCotizable(${idx}, ${itemIdx}, 'precio_unitario', parseFloat(this.value))">
-                                <div class="item-actions">
-                                    <button class="btn-remove-item" onclick="eliminarItemCotizable(${idx}, ${itemIdx})">
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <button class="btn-add-item" style="margin-top: 0.5rem;" onclick="agregarItemCotizable(${idx})">
-                        <i class="fas fa-plus-circle"></i> Agregar repuesto
-                    </button>
+                    <label>Descripción detallada</label>
+                    <textarea class="form-textarea" rows="2" onchange="actualizarServicioCotizable(${idx}, 'descripcion', this.value)">${escapeHtml(serv.descripcion || '')}</textarea>
                 </div>
             </div>
         </div>
@@ -1128,60 +1147,14 @@ function renderServiciosCotizables() {
 }
 
 function toggleServicioCotizable(idx) {
-    const body = document.getElementById(`servicio-cotizable-body-${idx}`);
+    const body = document.getElementById(`servicio-body-${idx}`);
     if (body) body.classList.toggle('active');
 }
 
 function actualizarServicioCotizable(idx, campo, valor) {
     if (serviciosCotizables[idx]) {
         serviciosCotizables[idx][campo] = valor;
-        if (campo === 'precio') {
-            actualizarTotalCotizacion();
-        }
-    }
-}
-
-function agregarItemCotizable(servIdx) {
-    if (!serviciosCotizables[servIdx].items) {
-        serviciosCotizables[servIdx].items = [];
-    }
-    serviciosCotizables[servIdx].items.push({
-        descripcion: '',
-        cantidad: 1,
-        precio_unitario: 0
-    });
-    renderServiciosCotizables();
-    const body = document.getElementById(`servicio-cotizable-body-${servIdx}`);
-    if (body) body.classList.add('active');
-}
-
-function actualizarItemCotizable(servIdx, itemIdx, campo, valor) {
-    if (serviciosCotizables[servIdx]?.items?.[itemIdx]) {
-        serviciosCotizables[servIdx].items[itemIdx][campo] = valor;
-        recalcularPrecioServicio(servIdx);
-    }
-}
-
-function eliminarItemCotizable(servIdx, itemIdx) {
-    serviciosCotizables[servIdx].items.splice(itemIdx, 1);
-    recalcularPrecioServicio(servIdx);
-    renderServiciosCotizables();
-}
-
-function recalcularPrecioServicio(servIdx) {
-    const servicio = serviciosCotizables[servIdx];
-    if (!servicio) return;
-    
-    let totalItems = 0;
-    if (servicio.items && servicio.items.length > 0) {
-        totalItems = servicio.items.reduce((sum, item) => {
-            return sum + ((item.precio_unitario || 0) * (item.cantidad || 1));
-        }, 0);
-    }
-    
-    if (totalItems > 0) {
-        servicio.precio = totalItems;
-        actualizarTotalCotizacion();
+        if (campo === 'precio') actualizarTotalCotizacion();
     }
 }
 
@@ -1194,11 +1167,6 @@ function agregarServicioCotizable() {
         items: []
     });
     renderServiciosCotizables();
-    const nuevoIdx = serviciosCotizables.length - 1;
-    setTimeout(() => {
-        const body = document.getElementById(`servicio-cotizable-body-${nuevoIdx}`);
-        if (body) body.classList.add('active');
-    }, 100);
 }
 
 function eliminarServicioCotizable(idx) {
@@ -1211,9 +1179,9 @@ function eliminarServicioCotizable(idx) {
 function actualizarTotalCotizacion() {
     const total = serviciosCotizables.reduce((sum, serv) => sum + (serv.precio || 0), 0);
     const totalSpan = document.getElementById('totalCotizacion');
-    if (totalSpan) {
-        totalSpan.textContent = `Bs. ${total.toFixed(2)}`;
-    }
+    const resumenTotal = document.getElementById('resumenTotal');
+    if (totalSpan) totalSpan.textContent = formatCurrency(total);
+    if (resumenTotal) resumenTotal.textContent = formatCurrency(total);
 }
 
 function cargarServiciosDesdeDiagnostico(orden) {
@@ -1226,11 +1194,7 @@ function cargarServiciosDesdeDiagnostico(orden) {
                 nombre: serv.descripcion,
                 descripcion: serv.descripcion || '',
                 precio: serv.precio_cotizado || 0,
-                items: (serv.items || []).map(item => ({
-                    descripcion: item.descripcion || '',
-                    cantidad: item.cantidad || 1,
-                    precio_unitario: item.precio_unitario || 0
-                }))
+                items: []
             });
         });
     }
@@ -1249,166 +1213,47 @@ function cargarServiciosDesdeDiagnostico(orden) {
 }
 
 // =====================================================
-// FUNCIONES PARA SUBIDA DE ARCHIVOS
-// =====================================================
-
-function setupFileUpload() {
-    const dropArea = document.getElementById('fileUploadArea');
-    const fileInput = document.getElementById('cotizacionFile');
-    const selectBtn = document.getElementById('selectFileBtn');
-    
-    if (!dropArea) return;
-    
-    dropArea.addEventListener('click', (e) => {
-        if (e.target !== selectBtn && !selectBtn?.contains(e.target)) {
-            fileInput.click();
-        }
-    });
-    
-    selectBtn?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        fileInput.click();
-    });
-    
-    fileInput?.addEventListener('change', (e) => {
-        handleFileSelect(e.target.files[0]);
-    });
-    
-    dropArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropArea.classList.add('dragover');
-    });
-    
-    dropArea.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        dropArea.classList.remove('dragover');
-    });
-    
-    dropArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropArea.classList.remove('dragover');
-        const file = e.dataTransfer.files[0];
-        handleFileSelect(file);
-    });
-    
-    document.getElementById('removeFileBtn')?.addEventListener('click', () => {
-        clearFileSelection();
-    });
-}
-
-function handleFileSelect(file) {
-    if (!file) return;
-    
-    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    if (!allowedTypes.includes(file.type)) {
-        showToast('Solo se permiten archivos PDF o Word (DOC, DOCX)', 'error');
-        return;
-    }
-    
-    if (file.size > 10 * 1024 * 1024) {
-        showToast('El archivo no debe superar los 10MB', 'error');
-        return;
-    }
-    
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        currentFileData = e.target.result;
-        currentFileName = file.name;
-        displayFileInfo(file);
-        showToast('Archivo cargado correctamente', 'success');
-    };
-    reader.onerror = () => {
-        showToast('Error al leer el archivo', 'error');
-    };
-    reader.readAsDataURL(file);
-}
-
-function displayFileInfo(file) {
-    const fileInfo = document.getElementById('fileInfo');
-    const fileName = document.getElementById('fileName');
-    const fileSize = document.getElementById('fileSize');
-    const pdfIcon = document.querySelector('#fileInfo .fa-file-pdf');
-    const wordIcon = document.querySelector('#fileInfo .fa-file-word');
-    const uploadArea = document.getElementById('fileUploadArea');
-    
-    if (fileInfo && fileName && fileSize) {
-        fileName.textContent = file.name;
-        fileSize.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
-        
-        if (pdfIcon && wordIcon) {
-            if (file.type === 'application/pdf') {
-                pdfIcon.style.display = 'block';
-                wordIcon.style.display = 'none';
-            } else {
-                pdfIcon.style.display = 'none';
-                wordIcon.style.display = 'block';
-            }
-        }
-        
-        fileInfo.style.display = 'block';
-        fileInfo.classList.add('file-uploaded');
-        
-        if (uploadArea) {
-            uploadArea.style.opacity = '0.6';
-        }
-        
-        setTimeout(() => {
-            fileInfo.classList.remove('file-uploaded');
-        }, 300);
-    }
-}
-
-function clearFileSelection() {
-    currentFileData = null;
-    currentFileName = null;
-    
-    const fileInfo = document.getElementById('fileInfo');
-    const fileInput = document.getElementById('cotizacionFile');
-    const uploadArea = document.getElementById('fileUploadArea');
-    
-    if (fileInfo) fileInfo.style.display = 'none';
-    if (fileInput) fileInput.value = '';
-    if (uploadArea) uploadArea.style.opacity = '1';
-}
-
-function setupModalTabs() {
-    const tabs = document.querySelectorAll('.modal-tab-btn');
-    tabs.forEach(btn => {
-        btn.removeEventListener('click', handleModalTabClick);
-        btn.addEventListener('click', handleModalTabClick);
-    });
-}
-
-function handleModalTabClick(e) {
-    const btn = e.currentTarget;
-    const tabId = btn.getAttribute('data-modal-tab');
-    
-    document.querySelectorAll('.modal-tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    
-    document.querySelectorAll('.modal-tab-content').forEach(content => content.classList.remove('active'));
-    document.getElementById(`modal-${tabId}`).classList.add('active');
-}
-
-// =====================================================
 // COTIZACIÓN AL CLIENTE
 // =====================================================
 
+// Configurar los tabs del modal de generación de cotización
+function setupModalTabs() {
+    const modalTabs = document.querySelectorAll('#modalGenerarCotizacion .modal-tab-btn');
+    const modalContents = document.querySelectorAll('#modalGenerarCotizacion .modal-tab-content');
+    
+    modalTabs.forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            const tabId = this.getAttribute('data-tab');
+            
+            // Remover active de todos los tabs
+            modalTabs.forEach(t => t.classList.remove('active'));
+            modalContents.forEach(c => c.classList.remove('active'));
+            
+            // Activar el tab seleccionado
+            this.classList.add('active');
+            const activeContent = document.getElementById(`tab-${tabId}`);
+            if (activeContent) {
+                activeContent.classList.add('active');
+            }
+        });
+    });
+}
+
+// Llamar a esta función después de abrir el modal
 async function abrirModalGenerarCotizacion(id_orden) {
     mostrarLoading(true);
     isEditingCotizacion = false;
     currentCotizacionId = null;
     
     try {
-        const orden = ordenesConServicios.find(o => o.id_orden === id_orden);
+        const orden = ordenesParaCotizar.find(o => o.id_orden === id_orden);
         if (!orden) {
             showToast('Orden no encontrada', 'error');
             return;
         }
         
-        const datosOrden = await obtenerDatosOrden(id_orden);
-        currentOrdenData = { id_orden, datosOrden };
-        
+        currentOrdenData = { id_orden };
         document.getElementById('modalCotizacionTitle').innerHTML = '<i class="fas fa-file-invoice"></i> Generar Cotización';
         
         cargarServiciosDesdeDiagnostico(orden);
@@ -1417,21 +1262,20 @@ async function abrirModalGenerarCotizacion(id_orden) {
         const ordenInfoDiv = document.getElementById('ordenInfoPreview');
         if (ordenInfoDiv) {
             ordenInfoDiv.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                    <div>
-                        <strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(orden.codigo_unico)}<br>
-                        <strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}<br>
-                        <strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(orden.vehiculo)}
-                    </div>
-                    <div>
-                        <strong>Total estimado:</strong> Bs. ${orden.total_orden?.toFixed(2) || '0.00'}
-                    </div>
+                <div>
+                    <strong>Orden:</strong> ${escapeHtml(orden.codigo_unico)}<br>
+                    <strong>Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}<br>
+                    <strong>Vehículo:</strong> ${escapeHtml(orden.vehiculo)}
                 </div>
             `;
         }
         
         setupFileUpload();
-        setupModalTabs();
+        
+        // Configurar los tabs del modal
+        setTimeout(() => {
+            setupModalTabs();
+        }, 100);
         
         abrirModal('modalGenerarCotizacion');
     } catch (error) {
@@ -1443,28 +1287,16 @@ async function abrirModalGenerarCotizacion(id_orden) {
 }
 
 async function editarCotizacionExistente(id_orden) {
-    mostrarLoading(true);
-    try {
-        const cotizacionExistente = cotizacionesMap[id_orden];
-        if (!cotizacionExistente) {
-            abrirModalGenerarCotizacion(id_orden);
-            return;
-        }
-        
-        await editarCotizacionPorId(cotizacionExistente.id);
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error al cargar la cotización para editar', 'error');
-    } finally {
-        mostrarLoading(false);
+    const cotizacion = cotizacionesMap[id_orden];
+    if (cotizacion) {
+        await editarCotizacionPorId(cotizacion.id);
+    } else {
+        abrirModalGenerarCotizacion(id_orden);
     }
 }
 
 async function editarCotizacionPorId(id_cotizacion) {
     mostrarLoading(true);
-    isEditingCotizacion = true;
-    currentCotizacionId = id_cotizacion;
-    
     try {
         const response = await fetch(`${API_URL}/detalle-cotizacion/${id_cotizacion}`, { headers: getAuthHeaders() });
         const data = await response.json();
@@ -1476,6 +1308,8 @@ async function editarCotizacionPorId(id_cotizacion) {
         
         const cotizacion = data.detalle;
         currentOrdenData = { id_orden: cotizacion.id_orden_trabajo };
+        currentCotizacionId = id_cotizacion;
+        isEditingCotizacion = true;
         
         document.getElementById('modalCotizacionTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Cotización';
         
@@ -1483,9 +1317,7 @@ async function editarCotizacionPorId(id_cotizacion) {
             serviciosCotizables = cotizacion.servicios.map(serv => ({
                 id_servicio: serv.id_servicio,
                 nombre: serv.nombre || serv.descripcion,
-                descripcion: serv.descripcion || '',
-                precio: serv.precio || 0,
-                items: serv.items || []
+                precio: serv.precio || 0
             }));
         } else {
             serviciosCotizables = [];
@@ -1497,47 +1329,14 @@ async function editarCotizacionPorId(id_cotizacion) {
             document.getElementById('notasAdicionales').value = cotizacion.notas;
         }
         
-        const orden = ordenesConServicios.find(o => o.id_orden === cotizacion.id_orden_trabajo);
-        const ordenInfoDiv = document.getElementById('ordenInfoPreview');
-        if (ordenInfoDiv && orden) {
-            ordenInfoDiv.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                    <div>
-                        <strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(orden.codigo_unico)}<br>
-                        <strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}<br>
-                        <strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(orden.vehiculo)}
-                    </div>
-                    <div>
-                        <strong>Total cotizado:</strong> Bs. ${cotizacion.total?.toFixed(2) || '0.00'}
-                    </div>
-                </div>
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color);">
-                    <small><i class="fas fa-info-circle"></i> Editando cotización enviada el ${formatDate(cotizacion.fecha_envio)}</small>
-                </div>
-            `;
-        }
-        
         clearFileSelection();
         setupFileUpload();
-        setupModalTabs();
-        
         abrirModal('modalGenerarCotizacion');
     } catch (error) {
         console.error('Error:', error);
-        showToast('Error al cargar la cotización para editar', 'error');
+        showToast('Error al cargar la cotización', 'error');
     } finally {
         mostrarLoading(false);
-    }
-}
-
-async function obtenerDatosOrden(id_orden) {
-    try {
-        const response = await fetch(`${API_URL}/datos-orden/${id_orden}`, { headers: getAuthHeaders() });
-        const data = await response.json();
-        return data.success ? data.datos : {};
-    } catch (error) {
-        console.error('Error obteniendo datos de orden:', error);
-        return {};
     }
 }
 
@@ -1548,7 +1347,7 @@ async function enviarCotizacionCliente() {
     }
     
     if (!currentFileData) {
-        showToast('Debes subir un archivo PDF o Word para la cotización', 'warning');
+        showToast('Debes subir un archivo PDF o Word', 'warning');
         return;
     }
     
@@ -1558,17 +1357,14 @@ async function enviarCotizacionCliente() {
         return;
     }
     
-    const mensaje = isEditingCotizacion ? '¿Confirmas actualizar y reenviar esta cotización al cliente?' : '¿Confirmas enviar esta cotización al cliente?';
-    if (!confirm(mensaje)) return;
+    if (!confirm(isEditingCotizacion ? '¿Actualizar y reenviar esta cotización?' : '¿Enviar esta cotización al cliente?')) return;
     
     mostrarLoading(true);
     try {
         const serviciosParaEnviar = serviciosCotizables.map(serv => ({
             id_servicio: serv.id_servicio,
             nombre: serv.nombre,
-            descripcion: serv.descripcion,
-            precio: serv.precio,
-            items: serv.items || []
+            precio: serv.precio
         }));
         
         const url = isEditingCotizacion && currentCotizacionId 
@@ -1586,17 +1382,16 @@ async function enviarCotizacionCliente() {
                 servicios: serviciosParaEnviar
             })
         });
+        
         const data = await response.json();
         if (data.success) {
-            showToast(isEditingCotizacion ? 'Cotización actualizada y reenviada exitosamente' : 'Cotización enviada al cliente exitosamente', 'success');
+            showToast(isEditingCotizacion ? 'Cotización actualizada y reenviada' : 'Cotización enviada al cliente', 'success');
             cerrarModal('modalGenerarCotizacion');
             clearFileSelection();
             serviciosCotizables = [];
             isEditingCotizacion = false;
             currentCotizacionId = null;
-            await cargarCotizacionesMap();
-            await cargarOrdenesConServicios();
-            await cargarHistorialCotizaciones();
+            await cargarDatosIniciales();
         } else {
             showToast(data.error || 'Error al enviar', 'error');
         }
@@ -1608,29 +1403,37 @@ async function enviarCotizacionCliente() {
     }
 }
 
-async function reutilizarCotizacionRechazada(id_orden, id_cotizacion) {
+async function reutilizarCotizacionRechazada(id_orden) {
     mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/detalle-cotizacion/${id_cotizacion}`, { headers: getAuthHeaders() });
+        const orden = ordenesParaCotizar.find(o => o.id_orden === id_orden);
+        const cotizacionId = orden?.cotizacion_id;
+        
+        if (!cotizacionId) {
+            abrirModalGenerarCotizacion(id_orden);
+            return;
+        }
+        
+        const response = await fetch(`${API_URL}/detalle-cotizacion/${cotizacionId}`, { headers: getAuthHeaders() });
         const data = await response.json();
         
         if (!data.success) {
-            showToast('Error al cargar la cotización rechazada', 'error');
+            abrirModalGenerarCotizacion(id_orden);
             return;
         }
         
         const cotizacion = data.detalle;
-        currentOrdenData = { id_orden: cotizacion.id_orden_trabajo };
+        currentOrdenData = { id_orden };
+        isEditingCotizacion = false;
+        currentCotizacionId = null;
         
-        document.getElementById('modalCotizacionTitle').innerHTML = '<i class="fas fa-copy"></i> Nueva Cotización (basada en rechazada)';
+        document.getElementById('modalCotizacionTitle').innerHTML = '<i class="fas fa-copy"></i> Nueva Cotización';
         
         if (cotizacion.servicios && cotizacion.servicios.length > 0) {
             serviciosCotizables = cotizacion.servicios.map(serv => ({
                 id_servicio: serv.id_servicio,
                 nombre: serv.nombre || serv.descripcion,
-                descripcion: serv.descripcion || '',
-                precio: serv.precio || 0,
-                items: serv.items || []
+                precio: serv.precio || 0
             }));
         } else {
             serviciosCotizables = [];
@@ -1638,33 +1441,17 @@ async function reutilizarCotizacionRechazada(id_orden, id_cotizacion) {
         
         renderServiciosCotizables();
         
-        const orden = ordenesConServicios.find(o => o.id_orden === id_orden);
         const ordenInfoDiv = document.getElementById('ordenInfoPreview');
         if (ordenInfoDiv && orden) {
-            ordenInfoDiv.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                    <div>
-                        <strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(orden.codigo_unico)}<br>
-                        <strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}<br>
-                        <strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(orden.vehiculo)}
-                    </div>
-                </div>
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color);">
-                    <small><i class="fas fa-info-circle"></i> Basado en cotización rechazada el ${formatDate(cotizacion.fecha_rechazo)}</small>
-                </div>
-            `;
+            ordenInfoDiv.innerHTML = `<div><strong>Orden:</strong> ${escapeHtml(orden.codigo_unico)}<br><strong>Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}<br><strong>Vehículo:</strong> ${escapeHtml(orden.vehiculo)}</div><small>Basado en cotización rechazada el ${formatDate(cotizacion.fecha_rechazo)}</small>`;
         }
         
-        isEditingCotizacion = false;
-        currentCotizacionId = null;
         clearFileSelection();
         setupFileUpload();
-        setupModalTabs();
-        
         abrirModal('modalGenerarCotizacion');
     } catch (error) {
         console.error('Error:', error);
-        showToast('Error al cargar la cotización rechazada', 'error');
+        abrirModalGenerarCotizacion(id_orden);
     } finally {
         mostrarLoading(false);
     }
@@ -1679,65 +1466,10 @@ async function verDetalleCotizacion(id_cotizacion) {
     try {
         const response = await fetch(`${API_URL}/detalle-cotizacion/${id_cotizacion}`, { headers: getAuthHeaders() });
         const data = await response.json();
+        
         if (data.success) {
             const d = data.detalle;
             const container = document.getElementById('detalleCotizacionContainer');
-            
-            let archivoHTML = '';
-            if (d.nombre_archivo) {
-                const iconClass = d.nombre_archivo.toLowerCase().endsWith('.pdf') ? 'fa-file-pdf' : 'fa-file-word';
-                const iconColor = d.nombre_archivo.toLowerCase().endsWith('.pdf') ? '#dc3545' : '#2b5797';
-                archivoHTML = `
-                    <div class="file-preview-card" style="margin-top: 15px;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
-                            <div style="display: flex; align-items: center; gap: 15px;">
-                                <i class="fas ${iconClass}" style="font-size: 40px; color: ${iconColor};"></i>
-                                <div>
-                                    <strong>${escapeHtml(d.nombre_archivo)}</strong>
-                                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">Documento de cotización</p>
-                                </div>
-                            </div>
-                            <button class="btn-primary" onclick="descargarCotizacion(${id_cotizacion})">
-                                <i class="fas fa-download"></i> Descargar
-                            </button>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            let serviciosHTML = '';
-            if (d.servicios && d.servicios.length > 0) {
-                serviciosHTML = `
-                    <div style="margin-top: 20px;">
-                        <h4><i class="fas fa-clipboard-list"></i> Servicios Cotizados</h4>
-                        <table class="data-table" style="margin-top: 10px;">
-                            <thead>
-                                <tr><th>Servicio</th><th style="text-align: center;">Cantidad</th><th style="text-align: right;">Precio</th><th style="text-align: center;">Estado</th></tr>
-                            </thead>
-                            <tbody>
-                                ${d.servicios.map(serv => `
-                                    <tr>
-                                        <td>
-                                            <strong>${escapeHtml(serv.nombre || serv.descripcion)}</strong>
-                                            ${serv.items && serv.items.length > 0 ? `<br><small style="color: var(--gris-texto);">${serv.items.map(i => `📦 ${escapeHtml(i.descripcion)} x${i.cantidad}`).join(', ')}</small>` : ''}
-                                         </strong>
-                                        <td style="text-align: center;">${serv.items ? serv.items.reduce((sum, i) => sum + (i.cantidad || 1), 0) : 1}</strong>
-                                        <td style="text-align: right;">Bs. ${(serv.precio || 0).toFixed(2)}</strong>
-                                        <td style="text-align: center;">
-                                            ${serv.aprobado_por_cliente 
-                                                ? '<span class="status-badge status-aprobado"><i class="fas fa-check-circle"></i> Aprobado</span>'
-                                                : '<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> Pendiente</span>'}
-                                        </strong>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                        <div style="text-align: right; margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color);">
-                            <strong>TOTAL: Bs. ${d.total?.toFixed(2) || '0.00'}</strong>
-                        </div>
-                    </div>
-                `;
-            }
             
             container.innerHTML = `
                 <div class="orden-info-card">
@@ -1746,20 +1478,12 @@ async function verDetalleCotizacion(id_cotizacion) {
                     <p><strong>Vehículo:</strong> ${escapeHtml(d.vehiculo_marca)} ${escapeHtml(d.vehiculo_modelo)} - ${escapeHtml(d.vehiculo_placa)}</p>
                     <p><strong>Fecha Envío:</strong> ${formatDate(d.fecha_envio)}</p>
                     <p><strong>Estado:</strong> ${statusBadge(d.estado || 'enviada')}</p>
+                    <p><strong>Total:</strong> ${formatCurrency(d.total)}</p>
                     ${d.notas ? `<p><strong>Mensaje:</strong> ${escapeHtml(d.notas)}</p>` : ''}
                 </div>
-                ${serviciosHTML}
-                ${archivoHTML}
             `;
             
-            const btnDescarga = document.getElementById('exportarPDFDetalleBtn');
-            if (btnDescarga) {
-                btnDescarga.onclick = () => descargarCotizacion(id_cotizacion);
-            }
-            
             abrirModal('modalDetalleCotizacion');
-        } else {
-            showToast('Error al cargar detalle', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -1778,30 +1502,6 @@ async function verDetalleCotizacionByOrden(id_orden) {
     }
 }
 
-async function descargarCotizacion(id_cotizacion) {
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/descargar-cotizacion/${id_cotizacion}`, { headers: getAuthHeaders() });
-        const data = await response.json();
-        if (data.success && data.archivo_base64) {
-            const link = document.createElement('a');
-            link.href = data.archivo_base64;
-            link.download = data.nombre_archivo || 'cotizacion.pdf';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            showToast('Descargando archivo...', 'success');
-        } else {
-            showToast('Error al descargar el archivo', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
 // =====================================================
 // ACCIONES - SOLICITUDES
 // =====================================================
@@ -1815,6 +1515,7 @@ async function eliminarSolicitudCotizacion(id) {
         if (data.success) {
             showToast('Solicitud eliminada', 'success');
             await cargarSolicitudesCotizacion();
+            await cargarOrdenesDiagnosticoAprobado();
         } else {
             showToast(data.error || 'Error al eliminar', 'error');
         }
@@ -1839,7 +1540,7 @@ async function solicitarCompraDesdeCotizacion(id_solicitud) {
     document.getElementById('solicitudCompraInfo').innerHTML = `
         <p><strong>Orden:</strong> ${escapeHtml(solicitud.orden_codigo)}</p>
         <p><strong>Vehículo:</strong> ${escapeHtml(solicitud.vehiculo)}</p>
-        <p><strong>Precio cotizado:</strong> ${solicitud.precio_cotizado ? `Bs. ${solicitud.precio_cotizado.toFixed(2)}` : 'No especificado'}</p>
+        <p><strong>Precio cotizado:</strong> ${solicitud.precio_cotizado ? formatCurrency(solicitud.precio_cotizado) : 'No especificado'}</p>
     `;
     abrirModal('modalSolicitarCompra');
 }
@@ -1864,12 +1565,14 @@ async function confirmarSolicitudCompra() {
                 mensaje: document.getElementById('compra_mensaje')?.value || ''
             })
         });
+        
         const data = await response.json();
         if (data.success) {
-            showToast('Solicitud de compra creada exitosamente', 'success');
+            showToast('Solicitud de compra creada', 'success');
             cerrarModal('modalSolicitarCompra');
             limpiarItemsCompra();
             await cargarSolicitudesCompra();
+            await cargarOrdenesDiagnosticoAprobado();
         } else {
             showToast(data.error || 'Error al crear solicitud', 'error');
         }
@@ -1894,13 +1597,44 @@ async function aprobarCompra(id) {
         const response = await fetch(`${API_URL}/solicitudes-compra/${id}/aprobar`, { method: 'PUT', headers: getAuthHeaders() });
         const data = await response.json();
         if (data.success) {
-            showToast('Compra registrada exitosamente', 'success');
+            showToast('Compra registrada', 'success');
             await cargarSolicitudesCompra();
         } else {
             showToast(data.error || 'Error al registrar', 'error');
         }
     } catch (error) {
         showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+function verAvanceReparacion(id_orden) {
+    showToast('Función en desarrollo', 'info');
+}
+
+async function verInstruccionesArmado(id_orden) {
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/orden/${id_orden}/instrucciones-armado`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        
+        if (data.success && data.instrucciones) {
+            const container = document.getElementById('detalleCotizacionContainer');
+            container.innerHTML = `
+                <div class="alert-info">
+                    <strong>Instrucciones de armado:</strong>
+                    <p style="margin-top: 0.75rem; white-space: pre-wrap;">${escapeHtml(data.instrucciones)}</p>
+                    <small>Fecha: ${formatDate(data.fecha_envio)}</small>
+                </div>
+            `;
+            abrirModal('modalDetalleCotizacion');
+        } else {
+            showToast('No se encontraron instrucciones', 'warning');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error al cargar instrucciones', 'error');
     } finally {
         mostrarLoading(false);
     }
@@ -1927,34 +1661,79 @@ function setupEventListeners() {
     document.getElementById('confirmarSolicitudCompra')?.addEventListener('click', confirmarSolicitudCompra);
     document.getElementById('btnAgregarItemCompra')?.addEventListener('click', agregarItemCompra);
     document.getElementById('btnAgregarServicioCotizacion')?.addEventListener('click', agregarServicioCotizable);
-    document.getElementById('refreshOrdenesBtn')?.addEventListener('click', () => {
-        cargarCotizacionesMap();
-        cargarOrdenesConServicios();
-    });
+    document.getElementById('btnAgregarItemSolicitud')?.addEventListener('click', agregarItemSolicitud);
+    document.getElementById('saveSolicitudModal')?.addEventListener('click', guardarSolicitudCotizacion);
+    
+    document.getElementById('refreshSolicitarBtn')?.addEventListener('click', () => cargarDatosIniciales());
+    document.getElementById('refreshCotizacionBtn')?.addEventListener('click', () => cargarDatosIniciales());
     document.getElementById('btnHistorialCotizaciones')?.addEventListener('click', () => {
         cargarHistorialCotizaciones().then(() => abrirModal('modalHistorialCotizaciones'));
     });
     document.getElementById('refreshHistorialBtn')?.addEventListener('click', cargarHistorialCotizaciones);
-    document.getElementById('btnAgregarItemSolicitud')?.addEventListener('click', agregarItemSolicitud);
     document.getElementById('btnNuevaSolicitudCotizacion')?.addEventListener('click', () => {
         limpiarItemsSolicitud();
-        abrirModal('modalSolicitudCotizacion');
+        cargarOrdenesAprobadas().then(() => abrirModal('modalSolicitudCotizacion'));
     });
     
-    document.getElementById('filtroEstadoCotizacion')?.addEventListener('change', () => renderOrdenes());
-    document.getElementById('searchOrden')?.addEventListener('input', () => renderOrdenes());
+    document.getElementById('filtroEstadoCotizacionSolicitar')?.addEventListener('change', () => renderOrdenesSolicitarCotizacion());
+    document.getElementById('searchOrdenSolicitar')?.addEventListener('input', () => renderOrdenesSolicitarCotizacion());
+    document.getElementById('filtroEstadoCotizacionCliente')?.addEventListener('change', () => renderOrdenesCotizacionCliente());
+    document.getElementById('searchCotizacionCliente')?.addEventListener('input', () => renderOrdenesCotizacionCliente());
     document.getElementById('searchHistorial')?.addEventListener('input', () => renderHistorialCotizaciones());
     document.getElementById('filtroEstadoHistorial')?.addEventListener('change', () => renderHistorialCotizaciones());
-    
-    const refreshBtns = ['refreshSolicitudes', 'refreshCompras'];
-    refreshBtns.forEach(id => { 
-        const btn = document.getElementById(id);
-        if (btn) btn.addEventListener('click', () => cargarDatosIniciales());
-    });
     
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
     });
+}
+
+async function guardarSolicitudCotizacion() {
+    const id_orden_trabajo = document.getElementById('solicitud_id_orden_trabajo')?.value;
+    const id_servicio = document.getElementById('solicitud_id_servicio')?.value;
+    const id_encargado = document.getElementById('solicitud_id_encargado')?.value;
+    const observaciones = document.getElementById('solicitud_observacion')?.value || '';
+    
+    if (!id_orden_trabajo || !id_servicio || !id_encargado) {
+        showToast('Complete todos los campos requeridos', 'warning');
+        return;
+    }
+    
+    if (itemsSolicitud.length === 0) {
+        showToast('Agregue al menos un item para cotizar', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/solicitudes-cotizacion`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                id_orden_trabajo: parseInt(id_orden_trabajo),
+                id_servicio: parseInt(id_servicio),
+                id_encargado: parseInt(id_encargado),
+                items: itemsSolicitud,
+                observaciones: observaciones
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Solicitud de cotización enviada exitosamente', 'success');
+            cerrarModal('modalSolicitudCotizacion');
+            limpiarItemsSolicitud();
+            await cargarSolicitudesCotizacion();
+            await cargarOrdenesDiagnosticoAprobado();
+        } else {
+            showToast(data.error || 'Error al enviar solicitud', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
 }
 
 async function cargarUsuarioActual() {
@@ -2003,7 +1782,7 @@ function logout() {
 }
 
 async function inicializar() {
-    console.log('🚀 Inicializando cotizaciones.js versión 3.0');
+    console.log('🚀 Inicializando cotizaciones.js versión 3.3');
     const user = await cargarUsuarioActual();
     if (!user) return;
     await cargarDatosIniciales();
@@ -2011,71 +1790,25 @@ async function inicializar() {
     setupEventListeners();
     console.log('✅ cotizaciones.js inicializado correctamente');
 }
-async function verInstruccionesArmado(id_orden) {
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/orden/${id_orden}/instrucciones-armado`, { headers: getAuthHeaders() });
-        const data = await response.json();
-        
-        if (data.success && data.instrucciones) {
-            const orden = ordenesConServicios.find(o => o.id_orden === id_orden);
-            const modalContent = `
-                <div class="orden-info-card" style="margin-bottom: 1rem;">
-                    <p><strong>Orden:</strong> ${escapeHtml(orden?.codigo_unico || 'N/A')}</p>
-                    <p><strong>Vehículo:</strong> ${escapeHtml(orden?.vehiculo || 'N/A')}</p>
-                    <p><strong>Fecha envío:</strong> ${formatDate(data.fecha_envio)}</p>
-                </div>
-                <div class="alert-info" style="background: rgba(59, 130, 246, 0.1); padding: 1rem; border-radius: 8px;">
-                    <strong><i class="fas fa-clipboard-list"></i> Instrucciones enviadas al técnico:</strong>
-                    <p style="margin-top: 0.75rem; white-space: pre-wrap;">${escapeHtml(data.instrucciones)}</p>
-                </div>
-            `;
-            
-            document.getElementById('detalleCotizacionContainer').innerHTML = modalContent;
-            abrirModal('modalDetalleCotizacion');
-        } else {
-            showToast('No se encontraron instrucciones de armado', 'warning');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error al cargar instrucciones', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-async function finalizarOrdenArmado(id_orden, codigo) {
-    if (!confirm(`¿Confirmas que el vehículo fue ENTREGADO al cliente?\n\nOrden: ${codigo}\n\nEl diagnóstico (Bs. 200) será cobrado internamente.`)) return;
+// Función para mostrar badge de carga de técnicos en la tarjeta de orden
+function renderCargaTecnicosBadge(tecnicos) {
+    if (!tecnicos || tecnicos.length === 0) return '';
     
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/orden/${id_orden}/finalizar-armado`, {
-            method: 'PUT',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                id_orden: id_orden
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast(`✅ Orden ${codigo} marcada como FINALIZADA. Vehículo entregado al cliente.`, 'success');
-            await cargarOrdenesConServicios();
-            await cargarCotizacionesMap();
-        } else {
-            showToast(data.error || 'Error al finalizar la orden', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
+    const totalCarga = tecnicos.reduce((sum, t) => sum + (t.ordenes_activas || 0), 0);
+    const maxTotal = tecnicos.length * 2;
+    
+    let color = '#10B981';
+    if (totalCarga >= maxTotal) color = '#EF4444';
+    else if (totalCarga > 0) color = '#F59E0B';
+    
+    return `
+        <span style="font-size: 0.65rem; background: ${color}20; color: ${color}; padding: 0.2rem 0.5rem; border-radius: 12px;">
+            <i class="fas fa-chart-line"></i> Carga: ${totalCarga}/${maxTotal}
+        </span>
+    `;
 }
 
 // Exponer funciones globales
-window.verInstruccionesArmado = verInstruccionesArmado;
-window.finalizarOrdenArmado = finalizarOrdenArmado;
 window.eliminarSolicitudCotizacion = eliminarSolicitudCotizacion;
 window.solicitarCompraDesdeCotizacion = solicitarCompraDesdeCotizacion;
 window.abrirModalGenerarCotizacion = abrirModalGenerarCotizacion;
@@ -2092,11 +1825,7 @@ window.actualizarItemSolicitud = actualizarItemSolicitud;
 window.eliminarItemSolicitud = eliminarItemSolicitud;
 window.actualizarItemCompra = actualizarItemCompra;
 window.eliminarItemCompra = eliminarItemCompra;
-window.toggleServicioCotizable = toggleServicioCotizable;
 window.actualizarServicioCotizable = actualizarServicioCotizable;
-window.agregarItemCotizable = agregarItemCotizable;
-window.actualizarItemCotizable = actualizarItemCotizable;
-window.eliminarItemCotizable = eliminarItemCotizable;
 window.agregarServicioCotizable = agregarServicioCotizable;
 window.eliminarServicioCotizable = eliminarServicioCotizable;
 window.reutilizarCotizacionRechazada = reutilizarCotizacionRechazada;
@@ -2104,9 +1833,10 @@ window.abrirModalIniciarReparacion = abrirModalIniciarReparacion;
 window.confirmarIniciarReparacion = confirmarIniciarReparacion;
 window.abrirModalNotificarArmado = abrirModalNotificarArmado;
 window.confirmarNotificarArmado = confirmarNotificarArmado;
-window.cobrarDiagnosticoArmado = cobrarDiagnosticoArmado;
 window.verAvanceReparacion = verAvanceReparacion;
-window.descargarCotizacion = descargarCotizacion;
+window.abrirModalSolicitudParaOrden = abrirModalSolicitudParaOrden;
+window.verInstruccionesArmado = verInstruccionesArmado;
+window.toggleServicioCotizable = toggleServicioCotizable;
 
 // Inicializar
 document.addEventListener('DOMContentLoaded', inicializar);

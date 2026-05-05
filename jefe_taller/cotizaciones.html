@@ -41,7 +41,7 @@
                         <button class="tab-btn active" data-tab="tab-solicitar-cotizacion">
                             <i class="fas fa-tools"></i> Solicitar Cotización
                         </button>
-                        <button class="tab-btn" data-tab="tab-servicios-cliente">
+                        <button class="tab-btn" data-tab="tab-cotizacion-cliente">
                             <i class="fas fa-file-invoice"></i> Cotización al Cliente
                         </button>
                         <button class="tab-btn" data-tab="tab-solicitar-compra">
@@ -54,7 +54,7 @@
                 <div id="tab-solicitar-cotizacion" class="tab-content active">
                     <div class="panel-header">
                         <div class="panel-header-left">
-                            <h3><i class="fas fa-tools"></i> Solicitudes de Cotización</h3>
+                            <h3><i class="fas fa-tools"></i> Solicitar Cotización a Repuestos</h3>
                             <p>Órdenes con diagnóstico APROBADO - Solicita cotización al Encargado de Repuestos</p>
                         </div>
                         <button class="btn-primary" id="btnNuevaSolicitudCotizacion">
@@ -64,10 +64,31 @@
 
                     <div class="filters-bar">
                         <div class="filter-group">
-                            <select id="filtroOrdenSolicitud" class="form-select-sm">
-                                <option value="all">Todas las órdenes</option>
+                            <select id="filtroEstadoCotizacionSolicitar" class="form-select-sm">
+                                <option value="all">Todos los estados</option>
+                                <option value="pendiente">Pendiente</option>
+                                <option value="solicitado">Solicitud enviada</option>
                             </select>
                         </div>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchOrdenSolicitar" placeholder="Buscar orden, cliente o vehículo...">
+                        </div>
+                        <button class="btn-outline" id="refreshSolicitarBtn">
+                            <i class="fas fa-sync-alt"></i> Actualizar
+                        </button>
+                    </div>
+
+                    <div id="ordenesSolicitarContainer" class="ordenes-container"></div>
+
+                    <div class="panel-header" style="margin-top: 2rem;">
+                        <div class="panel-header-left">
+                            <h3><i class="fas fa-list"></i> Solicitudes de Cotización Enviadas</h3>
+                            <p>Solicitudes que has enviado al encargado de repuestos</p>
+                        </div>
+                    </div>
+
+                    <div class="filters-bar">
                         <div class="filter-group">
                             <select id="filtroEstadoSolicitud" class="form-select-sm">
                                 <option value="all">Todos los estados</option>
@@ -75,12 +96,8 @@
                                 <option value="cotizado">Cotizado</option>
                             </select>
                         </div>
-                        <div class="search-box">
-                            <i class="fas fa-search"></i>
-                            <input type="text" id="searchSolicitud" placeholder="Buscar...">
-                        </div>
                         <button class="btn-outline" id="refreshSolicitudes">
-                            <i class="fas fa-sync-alt"></i> Actualizar
+                            <i class="fas fa-sync-alt"></i> Actualizar Solicitudes
                         </button>
                     </div>
 
@@ -109,17 +126,17 @@
                 </div>
 
                 <!-- TAB 2: COTIZACIÓN AL CLIENTE -->
-                <div id="tab-servicios-cliente" class="tab-content">
+                <div id="tab-cotizacion-cliente" class="tab-content">
                     <div class="panel-header">
                         <div class="panel-header-left">
-                            <h3><i class="fas fa-clipboard-list"></i> Órdenes con Servicios</h3>
+                            <h3><i class="fas fa-clipboard-list"></i> Órdenes para Cotización</h3>
                             <p>Selecciona una orden para generar o editar cotización</p>
                         </div>
                         <div style="display: flex; gap: 0.75rem;">
                             <button class="btn-outline" id="btnHistorialCotizaciones">
-                                <i class="fas fa-history"></i> 📋 Cotizaciones Anteriores
+                                <i class="fas fa-history"></i> Cotizaciones Anteriores
                             </button>
-                            <button class="btn-outline" id="refreshOrdenesBtn">
+                            <button class="btn-outline" id="refreshCotizacionBtn">
                                 <i class="fas fa-sync-alt"></i> Actualizar
                             </button>
                         </div>
@@ -127,22 +144,22 @@
 
                     <div class="filters-bar">
                         <div class="filter-group">
-                            <select id="filtroEstadoCotizacion" class="form-select-sm">
+                            <select id="filtroEstadoCotizacionCliente" class="form-select-sm">
                                 <option value="all">Todas las órdenes</option>
                                 <option value="pendiente">Sin cotización</option>
-                                <option value="enviada">Con cotización</option>
-                                <option value="aprobada">Aprobadas</option>
-                                <option value="rechazada">Rechazadas</option>
+                                <option value="enviada">Cotización enviada</option>
+                                <option value="aprobada">Cotización aceptada</option>
+                                <option value="rechazada">Cotización rechazada</option>
                                 <option value="reparacion">En reparación</option>
                             </select>
                         </div>
                         <div class="search-box">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="searchOrden" placeholder="Buscar orden, cliente o vehículo...">
+                            <input type="text" id="searchCotizacionCliente" placeholder="Buscar orden, cliente o vehículo...">
                         </div>
                     </div>
 
-                    <div id="ordenesContainer"></div>
+                    <div id="ordenesCotizacionContainer" class="ordenes-container"></div>
                 </div>
 
                 <!-- TAB 3: SOLICITAR COMPRA -->
@@ -150,16 +167,11 @@
                     <div class="panel-header">
                         <div class="panel-header-left">
                             <h3><i class="fas fa-shopping-cart"></i> Solicitudes de Compra</h3>
-                            <p>Solicitudes enviadas al encargado de repuestos</p>
+                            <p>Solicitudes enviadas al encargado de repuestos para compra de repuestos</p>
                         </div>
                     </div>
 
                     <div class="filters-bar">
-                        <div class="filter-group">
-                            <select id="filtroOrdenCompra" class="form-select-sm">
-                                <option value="all">Todas las órdenes</option>
-                            </select>
-                        </div>
                         <div class="filter-group">
                             <select id="filtroEstadoCompra" class="form-select-sm">
                                 <option value="all">Todos los estados</option>
@@ -179,7 +191,6 @@
                                     <th>ID</th>
                                     <th>Orden</th>
                                     <th>Vehículo</th>
-                                    <th>Servicio</th>
                                     <th>Items</th>
                                     <th>Estado</th>
                                     <th>Fecha</th>
@@ -188,7 +199,7 @@
                             </thead>
                             <tbody id="tablaSolicitudesCompra">
                                 <tr class="empty-row">
-                                    <td colspan="8"><div class="empty-state"><i class="fas fa-shopping-cart"></i><p>No hay solicitudes</p></div></td>
+                                    <td colspan="7"><div class="empty-state"><i class="fas fa-shopping-cart"></i><p>No hay solicitudes</p></div></table>
                                 </tr>
                             </tbody>
                         </table>
@@ -251,7 +262,7 @@
         </div>
     </div>
 
-    <!-- Modal: Generar/Editar Cotización -->
+    <!-- Modal: Generar/Editar Cotización (SOLO 2 TABS) -->
     <div class="modal" id="modalGenerarCotizacion">
         <div class="modal-content modal-xl">
             <div class="modal-header">
@@ -260,23 +271,37 @@
             </div>
             <div class="modal-body" id="generarCotizacionBody">
                 <div class="modal-tabs">
-                    <button class="modal-tab-btn active" data-modal-tab="tab-servicios"><i class="fas fa-tools"></i> Servicios y Repuestos</button>
-                    <button class="modal-tab-btn" data-modal-tab="tab-documento"><i class="fas fa-file-pdf"></i> Documento de Cotización</button>
+                    <button class="modal-tab-btn active" data-tab="servicios">
+                        <i class="fas fa-tools"></i> Servicios y Repuestos
+                    </button>
+                    <button class="modal-tab-btn" data-tab="documento">
+                        <i class="fas fa-file-pdf"></i> Documento de Cotización
+                    </button>
                 </div>
 
-                <div id="modal-tab-servicios" class="modal-tab-content active">
+                <!-- Tab 1: Servicios -->
+                <div id="tab-servicios" class="modal-tab-content active">
                     <div class="panel-header" style="margin-bottom: 1rem;">
-                        <div class="panel-header-left"><h3><i class="fas fa-clipboard-list"></i> Servicios a Cotizar</h3><p>Administra los servicios y repuestos que se enviarán al cliente</p></div>
-                        <button class="btn-primary btn-sm" id="btnAgregarServicioCotizacion"><i class="fas fa-plus"></i> Agregar Servicio</button>
+                        <div class="panel-header-left">
+                            <h3><i class="fas fa-clipboard-list"></i> Servicios a Cotizar</h3>
+                            <p>Administra los servicios y repuestos que se enviarán al cliente</p>
+                        </div>
+                        <button class="btn-primary btn-sm" id="btnAgregarServicioCotizacion">
+                            <i class="fas fa-plus"></i> Agregar Servicio
+                        </button>
                     </div>
+                    
                     <div class="orden-info-card" id="ordenInfoPreview" style="margin-bottom: 1rem;"></div>
+                    
                     <div id="serviciosCotizacionContainer" style="max-height: 400px; overflow-y: auto; margin-bottom: 1rem;"></div>
+                    
                     <div class="total-cotizacion" style="text-align: right; padding: 1rem; background: var(--gris-oscuro); border-radius: var(--radius-md); margin-top: 1rem;">
                         <h3>Total: <span id="totalCotizacion" style="color: var(--verde-exito);">Bs. 0.00</span></h3>
                     </div>
                 </div>
 
-                <div id="modal-tab-documento" class="modal-tab-content">
+                <!-- Tab 2: Documento de Cotización -->
+                <div id="tab-documento" class="modal-tab-content">
                     <div class="upload-section">
                         <div class="file-upload-area" id="fileUploadArea">
                             <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: var(--rojo-primario); margin-bottom: 15px;"></i>
@@ -284,28 +309,44 @@
                             <p style="color: var(--text-muted); margin-bottom: 10px;">Arrastra un archivo PDF o Word o haz clic para seleccionar</p>
                             <p style="color: var(--text-muted); font-size: 12px;">Formatos permitidos: PDF, DOC, DOCX (Máx. 10MB)</p>
                             <input type="file" id="cotizacionFile" accept=".pdf,.doc,.docx" style="display: none;">
-                            <button class="btn-outline" id="selectFileBtn" style="margin-top: 15px;"><i class="fas fa-folder-open"></i> Seleccionar archivo</button>
+                            <button class="btn-outline" id="selectFileBtn" type="button" style="margin-top: 15px;">
+                                <i class="fas fa-folder-open"></i> Seleccionar archivo
+                            </button>
                         </div>
+                        
                         <div id="fileInfo" style="display: none; margin-top: 20px; padding: 15px; background: var(--bg-card); border-radius: var(--radius-md);">
-                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
                                 <div style="display: flex; align-items: center; gap: 10px;">
-                                    <i class="fas fa-file-pdf" style="font-size: 32px; color: #dc3545;"></i>
-                                    <i class="fas fa-file-word" style="font-size: 32px; color: #2b5797; display: none;"></i>
-                                    <div><strong id="fileName"></strong><p id="fileSize" style="font-size: 12px; color: var(--text-muted); margin-top: 5px;"></p></div>
+                                    <i class="fas fa-file-pdf" id="fileIconPdf" style="font-size: 32px; color: #dc3545;"></i>
+                                    <i class="fas fa-file-word" id="fileIconWord" style="font-size: 32px; color: #2b5797; display: none;"></i>
+                                    <div>
+                                        <strong id="fileName"></strong>
+                                        <p id="fileSize" style="font-size: 12px; color: var(--text-muted); margin-top: 5px;"></p>
+                                    </div>
                                 </div>
-                                <div><button class="action-btn delete" id="removeFileBtn" title="Eliminar archivo"><i class="fas fa-trash-alt"></i></button></div>
+                                <button class="btn-danger" id="removeFileBtn" style="padding: 0.4rem 0.8rem;">
+                                    <i class="fas fa-trash-alt"></i> Eliminar
+                                </button>
                             </div>
                         </div>
+                        
                         <div class="form-group" style="margin-top: 20px;">
                             <label><i class="fas fa-comment-dots"></i> Mensaje para el cliente</label>
                             <textarea id="notasAdicionales" class="form-textarea" rows="3" placeholder="Escribe un mensaje adicional para el cliente..."></textarea>
+                        </div>
+
+                        <div id="sinArchivoAdvertencia" class="alert-warning" style="margin-top: 1rem; padding: 0.75rem; border-radius: 8px; display: none;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>⚠️ Necesitas subir un documento PDF o Word para enviar la cotización.</strong>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalGenerarCotizacion')">Cancelar</button>
-                <button class="btn-primary" id="enviarCotizacionBtn"><i class="fas fa-paper-plane"></i> Enviar al Cliente</button>
+                <button class="btn-primary" id="enviarCotizacionBtn">
+                    <i class="fas fa-paper-plane"></i> Enviar al Cliente
+                </button>
             </div>
         </div>
     </div>
@@ -384,8 +425,7 @@
         </div>
     </div>
 
-    <!-- ==================== MODAL PARA COTIZACIÓN RECHAZADA (SIMPLIFICADO) ==================== -->
-    <!-- Modal: Notificar Armado - SOLO INSTRUCCIONES (SIN selector de técnicos) -->
+    <!-- Modal: Notificar Armado -->
     <div class="modal" id="modalNotificarArmado">
         <div class="modal-content modal-md">
             <div class="modal-header">
@@ -399,10 +439,8 @@
                     <p style="margin-top: 0.5rem;">El cliente no aceptó la cotización. Debes notificar al técnico para que ARME el vehículo.</p>
                 </div>
                 
-                <!-- Información de la orden -->
                 <div id="armadoOrdenInfo" class="orden-info-card" style="margin-bottom: 1rem;"></div>
                 
-                <!-- Técnicos asignados actualmente (solo lectura - ya están asignados del diagnóstico) -->
                 <div class="form-group" style="margin-bottom: 1rem;">
                     <label><i class="fas fa-users"></i> Técnico(s) Asignado(s) Actualmente</label>
                     <div id="tecnicosAsignadosList" style="background: var(--gris-oscuro); border-radius: 8px; padding: 0.75rem; border: 1px solid var(--border-color);">
@@ -411,7 +449,6 @@
                     <small class="text-muted"><i class="fas fa-info-circle"></i> Estos técnicos recibirán la notificación de armado</small>
                 </div>
                 
-                <!-- SOLO instrucciones (ya no hay selector de técnicos) -->
                 <div class="form-group">
                     <label><i class="fas fa-clipboard-list"></i> Instrucciones para el Armado <span class="required">*</span></label>
                     <textarea id="armadoInstrucciones" class="form-textarea" rows="5" 
@@ -440,8 +477,7 @@
         </div>
     </div>
 
-    <!-- ==================== MODAL PARA COTIZACIÓN ACEPTADA (COMPLETO - CON selector de técnicos) ==================== -->
-    <!-- Modal: Iniciar Reparación (para órdenes aceptadas) - CON selector de técnicos -->
+    <!-- Modal: Iniciar Reparación (UNIFICADO - Una sola sección de técnicos) -->
     <div class="modal" id="modalIniciarReparacion">
         <div class="modal-content modal-lg">
             <div class="modal-header">
@@ -458,21 +494,18 @@
                 <!-- Información de la orden -->
                 <div id="reparacionOrdenInfo" class="orden-info-card" style="margin-bottom: 1rem;"></div>
                 
-                <!-- Técnicos actualmente asignados (para mostrar) -->
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label><i class="fas fa-users"></i> Técnicos Actualmente Asignados</label>
-                    <div id="tecnicosActualesList" style="background: var(--gris-oscuro); border-radius: 8px; padding: 0.75rem; border: 1px solid var(--border-color); margin-bottom: 0.5rem;">
-                        <span class="text-muted"><i class="fas fa-spinner fa-pulse"></i> Cargando...</span>
-                    </div>
-                </div>
-                
-                <!-- SELECCIONAR TÉCNICOS (puede cambiar/mantener) -->
+                <!-- SECCIÓN ÚNICA DE TÉCNICOS (UNIFICADA) -->
                 <div class="form-group">
-                    <label><i class="fas fa-user-plus"></i> Seleccionar Técnicos para la Reparación</label>
-                    <div id="reparacionTecnicosContainer" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; max-height: 200px; overflow-y: auto; background: var(--gris-oscuro); border-radius: 8px; padding: 0.75rem; border: 1px solid var(--border-color);">
-                        <div class="text-muted" style="text-align: center; padding: 1rem;"><i class="fas fa-spinner fa-pulse"></i> Cargando técnicos disponibles...</div>
+                    <label><i class="fas fa-users"></i> Seleccionar Técnicos para la Reparación</label>
+                    <p class="text-muted" style="margin-bottom: 0.5rem; font-size: 0.7rem;">
+                        <i class="fas fa-info-circle"></i> Los técnicos marcados con ✓ están actualmente asignados. Puedes mantenerlos o cambiarlos.
+                    </p>
+                    <div id="tecnicosContainer" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; max-height: 250px; overflow-y: auto; background: var(--gris-oscuro); border-radius: 8px; padding: 0.75rem; border: 1px solid var(--border-color);">
+                        <div class="text-muted" style="text-align: center; padding: 1rem;">
+                            <i class="fas fa-spinner fa-pulse"></i> Cargando técnicos disponibles...
+                        </div>
                     </div>
-                    <small class="text-muted"><i class="fas fa-info-circle"></i> Puedes mantener los mismos técnicos o cambiarlos. Selecciona uno o más (Ctrl+Click para múltiple)</small>
+                    <small class="text-muted"><i class="fas fa-info-circle"></i> Selecciona uno o más técnicos para la reparación</small>
                 </div>
                 
                 <!-- Plazo de reparación -->
@@ -481,7 +514,6 @@
                     <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                         <input type="number" id="reparacionPlazoDias" class="form-input" style="width: 100px;" value="3" min="1">
                         <span>días hábiles</span>
-                        <span style="margin-left: auto; font-size: 0.7rem; color: var(--gris-texto);">(se enviará al técnico)</span>
                     </div>
                 </div>
                 
@@ -492,42 +524,12 @@
                         placeholder="Ejemplo:&#10;- Realizar diagnóstico completo del motor&#10;- Revisar sistema eléctrico y computadora&#10;- Cambiar aceite y filtros&#10;- Probar funcionamiento al finalizar"
                         required></textarea>
                 </div>
-                
-                <div class="alert-info" style="background: rgba(23, 162, 184, 0.1); padding: 0.75rem; border-radius: 8px;">
-                    <i class="fas fa-info-circle"></i>
-                    <small>Los técnicos seleccionados recibirán una notificación con las instrucciones y el plazo estimado.</small>
-                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalIniciarReparacion')">Cancelar</button>
                 <button class="btn-primary" id="btnConfirmarReparacion" onclick="confirmarIniciarReparacion()">
                     <i class="fas fa-check-circle"></i> Iniciar Reparación
                 </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Enviar Instrucciones al Técnico (general) -->
-    <div class="modal" id="modalInstruccionesTecnico">
-        <div class="modal-content modal-md">
-            <div class="modal-header">
-                <h2><i class="fas fa-clipboard-list"></i> Instrucciones para el Técnico</h2>
-                <button class="modal-close" onclick="cerrarModal('modalInstruccionesTecnico')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="orden-info-card" id="instruccionesOrdenInfo"></div>
-                <div class="form-group">
-                    <label><i class="fas fa-comment-dots"></i> Instrucciones para el técnico</label>
-                    <textarea id="instruccionesTexto" class="form-textarea" rows="5" placeholder="Ejemplo:&#10;- Realizar una revisión más detallada del sistema eléctrico&#10;- Verificar nuevamente el diagnóstico del motor&#10;- Coordinar con el cliente para aclarar dudas"></textarea>
-                </div>
-                <div class="alert-info" style="background: rgba(59, 130, 246, 0.1); padding: 0.75rem; border-radius: 8px;">
-                    <i class="fas fa-info-circle"></i>
-                    <small>El técnico recibirá una notificación con estas instrucciones.</small>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalInstruccionesTecnico')">Cancelar</button>
-                <button class="btn-primary" id="btnEnviarInstrucciones"><i class="fas fa-paper-plane"></i> Enviar Instrucciones</button>
             </div>
         </div>
     </div>

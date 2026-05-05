@@ -196,19 +196,107 @@ async function cargarClientes() {
         if (response.ok && data.success) {
             clientesData = data.clientes;
             console.log('✅ Clientes cargados:', clientesData.length);
-            renderClientesTable(clientesData);
+            renderClientesGrid(clientesData); // ← CAMBIADO: usa renderClientesGrid
+            // Actualizar badge
+            const totalClientesSpan = document.getElementById('totalClientes');
+            if (totalClientesSpan) totalClientesSpan.textContent = clientesData.length;
         } else {
             throw new Error(data.error || 'Error cargando clientes');
         }
     } catch (error) {
         console.error('Error cargando clientes:', error);
         mostrarNotificacion('Error al cargar los clientes', 'error');
-        const tbody = document.getElementById('clientesTableBody');
-        if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="5" class="loading-row"><i class="fas fa-exclamation-circle"></i> Error al cargar clientes</td></tr>`;
+        const grid = document.getElementById('clientesGrid');
+        if (grid) {
+            grid.innerHTML = `
+                <div class="empty-state-cards">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <p>Error al cargar clientes</p>
+                </div>
+            `;
         }
     }
 }
+function renderClientesGrid(clientes) {
+    const grid = document.getElementById('clientesGrid');
+    if (!grid) return;
+    
+    if (!clientes || clientes.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state-cards">
+                <i class="fas fa-user-friends"></i>
+                <p>No hay clientes registrados</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const getInitials = (nombre) => {
+        if (!nombre) return '?';
+        return nombre.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    };
+    
+    const getAvatarColor = (nombre) => {
+        const colors = ['#C1121F', '#1E3A5F', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
+        let hash = 0;
+        for (let i = 0; i < nombre.length; i++) {
+            hash = nombre.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return colors[Math.abs(hash) % colors.length];
+    };
+    
+    grid.innerHTML = clientes.map(cliente => `
+        <div class="cliente-card" data-id="${cliente.id}">
+            <div class="cliente-card-header">
+                <div class="cliente-avatar" style="background: linear-gradient(135deg, ${getAvatarColor(cliente.nombre)}, ${getAvatarColor(cliente.nombre)}dd)">
+                    ${cliente.nombre ? getInitials(cliente.nombre) : '<i class="fas fa-user"></i>'}
+                </div>
+                <div class="cliente-info-header">
+                    <h4 class="cliente-nombre">${escapeHtml(cliente.nombre)}</h4>
+                    <div class="cliente-email">
+                        <i class="fas fa-envelope"></i>
+                        <span>${escapeHtml(cliente.email || 'Email no registrado')}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="cliente-card-body">
+                <div class="cliente-info-item">
+                    <i class="fas fa-phone"></i>
+                    <span class="label">Teléfono</span>
+                    <span class="value">${escapeHtml(cliente.contacto || 'No registrado')}</span>
+                </div>
+                <div class="cliente-info-item">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span class="label">Ubicación</span>
+                    <span class="value">${escapeHtml(cliente.ubicacion || 'No registrada')}</span>
+                </div>
+                <div class="vehiculos-preview">
+                    <div class="vehiculos-title">
+                        <i class="fas fa-car"></i>
+                        <span>Vehículos (${cliente.vehiculos?.length || 0})</span>
+                    </div>
+                    <div class="vehiculos-list-mini">
+                        ${cliente.vehiculos && cliente.vehiculos.length > 0 
+                            ? cliente.vehiculos.slice(0, 2).map(v => `
+                                <span class="vehiculo-mini">
+                                    <i class="fas fa-tag"></i>
+                                    ${escapeHtml(v.placa)}
+                                </span>
+                            `).join('') + (cliente.vehiculos.length > 2 ? 
+                                `<span class="vehiculo-mini">+${cliente.vehiculos.length - 2} más</span>` : '')
+                            : '<span class="no-vehiculos-badge"><i class="fas fa-car-side"></i> Sin vehículos</span>'}
+                    </div>
+                </div>
+            </div>
+            <div class="cliente-card-footer">
+                <button class="action-btn view" onclick="verDetalleCliente(${cliente.id})" title="Ver detalles completos">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
 
 async function cargarEstadisticas() {
     try {
@@ -419,7 +507,7 @@ function filtrarClientes() {
     const searchTerm = document.getElementById('searchClientes')?.value.toLowerCase() || '';
     
     if (!searchTerm) {
-        renderClientesTable(clientesData);
+        renderClientesGrid(clientesData);
         return;
     }
     
@@ -429,7 +517,7 @@ function filtrarClientes() {
         (c.contacto && c.contacto.includes(searchTerm))
     );
     
-    renderClientesTable(filtrados);
+    renderClientesGrid(filtrados);
 }
 
 // =====================================================

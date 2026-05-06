@@ -1,5 +1,5 @@
 // =====================================================
-// INCLUDE.JS - SIDEBAR PARA TÉCNICO MECÁNICO (CORREGIDO)
+// INCLUDE.JS - SIDEBAR PARA TÉCNICO MECÁNICO
 // =====================================================
 
 // Configuración
@@ -11,7 +11,7 @@ const CONFIG = {
 };
 
 // =====================================================
-// FUNCIÓN PARA OBTENER USUARIO ACTUAL (CORREGIDA)
+// FUNCIÓN PARA OBTENER USUARIO ACTUAL
 // =====================================================
 function obtenerUsuarioActual() {
     try {
@@ -19,7 +19,7 @@ function obtenerUsuarioActual() {
         if (userStr) {
             const user = JSON.parse(userStr);
             
-            // IMPORTANTE: Normalizar roles - 'tecnico' es correcto
+            // Normalizar roles
             let roles = user.roles || [];
             if (typeof roles === 'string') roles = [roles];
             
@@ -31,7 +31,6 @@ function obtenerUsuarioActual() {
             
             console.log('🔍 Include.js - Usuario:', user.nombre);
             console.log('🔍 Include.js - Roles:', roles);
-            console.log('🔍 Include.js - Tiene rol técnico:', tieneRolTecnico);
             
             // Si no tiene rol técnico pero está en página de técnico, redirigir
             if (!tieneRolTecnico && !window.location.pathname.includes('login')) {
@@ -64,6 +63,69 @@ function obtenerUsuarioActual() {
         id: null,
         tieneAcceso: true
     };
+}
+
+// =====================================================
+// FUNCIÓN PARA ELIMINAR CUALQUIER BOTÓN DE CERRAR SESIÓN ADICIONAL
+// =====================================================
+function eliminarBotonesCerrarSesionAdicionales() {
+    // Eliminar cualquier botón de cerrar sesión que no sea del sidebar
+    // Busca elementos por diferentes selectores comunes
+    
+    // 1. Buscar elementos en el header superior derecho
+    const headerTop = document.querySelector('header') || document.querySelector('.top-header') || document.querySelector('.navbar');
+    if (headerTop) {
+        const logoutButtons = headerTop.querySelectorAll('a[onclick*="logout"], a[onclick*="cerrarSesion"], button[onclick*="logout"], button[onclick*="cerrarSesion"]');
+        logoutButtons.forEach(btn => {
+            if (btn && btn.parentNode) {
+                console.log('🗑️ Eliminando botón de cerrar sesión del header:', btn);
+                btn.parentNode.removeChild(btn);
+            }
+        });
+    }
+    
+    // 2. Buscar en todo el documento elementos comunes de logout
+    const selectors = [
+        '.logout-btn', 
+        '.btn-logout', 
+        '.cerrar-sesion', 
+        '[onclick="logout()"]', 
+        '[onclick="cerrarSesion()"]',
+        'a:contains("Cerrar Sesión")',
+        'button:contains("Cerrar Sesión")'
+    ];
+    
+    selectors.forEach(selector => {
+        try {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(el => {
+                // Verificar que NO sea el que está dentro del sidebar
+                const isInSidebar = el.closest('.sidebar');
+                if (!isInSidebar && el.parentNode) {
+                    console.log('🗑️ Eliminando botón adicional:', el);
+                    el.parentNode.removeChild(el);
+                }
+            });
+        } catch(e) {
+            // Ignorar errores de selectores complejos
+        }
+    });
+    
+    // 3. Buscar por texto específico (solución más robusta)
+    const allElements = document.querySelectorAll('a, button');
+    allElements.forEach(el => {
+        const text = el.textContent || el.innerText;
+        if (text && (text.includes('Cerrar Sesión') || text.includes('Cerrar Sesi&oacute;n') || text.includes('Logout'))) {
+            const isInSidebar = el.closest('.sidebar');
+            const isInSidebarBottom = el.closest('.sidebar-bottom');
+            
+            // Si no está en el sidebar, eliminarlo
+            if (!isInSidebar && !isInSidebarBottom && el.parentNode) {
+                console.log('🗑️ Eliminando botón por texto:', el);
+                el.parentNode.removeChild(el);
+            }
+        }
+    });
 }
 
 // =====================================================
@@ -103,6 +165,11 @@ async function includeSidebar() {
         
         inicializarSidebar();
         
+        // IMPORTANTE: Eliminar botones adicionales después de cargar el sidebar
+        setTimeout(() => {
+            eliminarBotonesCerrarSesionAdicionales();
+        }, 150);
+        
     } catch (error) {
         console.error('❌ Error cargando sidebar:', error);
         crearSidebarRespaldo(sidebarContainer);
@@ -125,13 +192,12 @@ function mostrarLoader(container) {
 }
 
 // =====================================================
-// SIDEBAR DE RESPALDO (CORREGIDO)
+// SIDEBAR DE RESPALDO
 // =====================================================
 function crearSidebarRespaldo(container) {
     const user = obtenerUsuarioActual();
     const currentPage = obtenerPaginaActual();
     
-    // Determinar si mostrar opción de cambio de rol (si tiene múltiples roles)
     const tieneMultiplesRoles = user.roles && user.roles.length > 1;
     const rolesHtml = tieneMultiplesRoles ? `
         <div class="roles-switch" onclick="mostrarCambioRol()">
@@ -218,6 +284,9 @@ function inicializarSidebar() {
         marcarItemActivo(currentPage);
         actualizarNombreUsuario();
         
+        // Corregir el onclick del botón cerrar sesión en el sidebar
+        corregirBotonCerrarSesion();
+        
         // Mostrar indicador de múltiples roles
         const user = obtenerUsuarioActual();
         if (user.roles && user.roles.length > 1) {
@@ -226,6 +295,33 @@ function inicializarSidebar() {
         
         console.log('✅ Sidebar inicializado correctamente');
     }, 100);
+}
+
+// =====================================================
+// CORREGIR BOTÓN CERRAR SESIÓN EN EL SIDEBAR
+// =====================================================
+function corregirBotonCerrarSesion() {
+    // Buscar el botón de cerrar sesión dentro del sidebar
+    const sidebarLogoutBtn = document.querySelector('.sidebar-bottom a[onclick="logout()"], .sidebar-bottom a[onclick*="cerrarSesion"]');
+    
+    if (sidebarLogoutBtn) {
+        // Cambiar el onclick para que use la función correcta
+        sidebarLogoutBtn.removeAttribute('onclick');
+        sidebarLogoutBtn.setAttribute('onclick', 'cerrarSesion()');
+        console.log('✅ Botón de cerrar sesión del sidebar corregido');
+    }
+    
+    // También buscar cualquier otro botón en el sidebar
+    const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+    sidebarLinks.forEach(link => {
+        const text = link.textContent || link.innerText;
+        if (text && text.includes('Cerrar Sesión')) {
+            if (!link.hasAttribute('onclick') || link.getAttribute('onclick') !== 'cerrarSesion()') {
+                link.removeAttribute('onclick');
+                link.setAttribute('onclick', 'cerrarSesion()');
+            }
+        }
+    });
 }
 
 // =====================================================
@@ -330,7 +426,6 @@ function obtenerPaginaActual() {
     const filename = path.split('/').pop() || 'misvehiculos.html';
     const pageName = filename.replace('.html', '');
     
-    // Mapeo de páginas
     const validPages = ['misvehiculos', 'diagnostico', 'avance', 'historial', 'perfil'];
     
     if (validPages.includes(pageName)) {
@@ -447,6 +542,14 @@ function agregarEstilosSidebar() {
     const style = document.createElement('style');
     style.id = 'sidebar-adicional-styles';
     style.textContent = `
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
         .sidebar { background: #121212; color: #FFFFFF; width: 280px; height: 100vh; position: fixed; left: 0; top: 0; overflow-y: auto; z-index: 1000; }
         .sidebar-header { padding: 1.5rem; display: flex; align-items: center; gap: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
         .sidebar-logo { width: 40px; height: 40px; object-fit: contain; }
@@ -467,6 +570,9 @@ function agregarEstilosSidebar() {
         .sidebar-bottom { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem; }
         .multi-role-badge { font-size: 0.65rem; background: rgba(229, 57, 53, 0.2); padding: 0.2rem 0.5rem; border-radius: 12px; margin-top: 0.25rem; cursor: pointer; text-align: center; }
         @media (max-width: 992px) { .sidebar { width: 80px; } .sidebar-brand, .user-info, .nav-link span:not(.badge) { display: none; } .nav-link { justify-content: center; padding: 0.75rem; } .nav-link i { margin: 0; font-size: 1.3rem; } }
+        .roles-switch { margin-top: 0.5rem; font-size: 0.7rem; background: rgba(229, 57, 53, 0.15); padding: 0.25rem 0.5rem; border-radius: 6px; cursor: pointer; text-align: center; }
+        .roles-switch:hover { background: rgba(229, 57, 53, 0.3); }
+        .badge { background: #E53935; color: white; border-radius: 10px; padding: 0.15rem 0.5rem; font-size: 0.7rem; margin-left: auto; }
     `;
     document.head.appendChild(style);
 }
@@ -477,4 +583,17 @@ function agregarEstilosSidebar() {
 document.addEventListener('DOMContentLoaded', () => {
     agregarEstilosSidebar();
     includeSidebar();
+    
+    // También agregar un observer para detectar y eliminar botones adicionales dinámicamente
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.addedNodes.length) {
+                setTimeout(() => {
+                    eliminarBotonesCerrarSesionAdicionales();
+                }, 100);
+            }
+        });
+    });
+    
+    observer.observe(document.body, { childList: true, subtree: true });
 });

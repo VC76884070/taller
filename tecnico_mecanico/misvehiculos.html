@@ -8,9 +8,7 @@
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/misvehiculos.css">
@@ -142,7 +140,7 @@
         </div>
     </div>
 
-    <!-- Modal de PAUSA REPARACIÓN -->
+    <!-- Modal de PAUSA NORMAL (SOLO MOTIVO) -->
     <div class="modal" id="pausaModal">
         <div class="modal-content modal-sm">
             <div class="modal-header">
@@ -162,6 +160,49 @@
         </div>
     </div>
 
+    <!-- Modal de PAUSA CON SOLICITUD DE REPUESTOS -->
+    <div class="modal" id="pausaItemsModal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-shopping-cart"></i> Solicitar Repuestos - Pausar Reparación</h2>
+                <button class="modal-close" onclick="cerrarPausaItemsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert-info" style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(37, 99, 235, 0.1); border-radius: var(--radius-md);">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Los repuestos solicitados se enviarán al Jefe de Taller</strong>
+                    <p style="margin-top: 0.25rem; font-size: 0.8rem;">El jefe de taller gestionará la compra y te notificará cuando estén disponibles.</p>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-list-alt"></i> Items a solicitar</label>
+                    <div class="items-list-container">
+                        <div class="items-list" id="itemsListPausa">
+                            <div class="item-empty"><i class="fas fa-box-open"></i><p>No hay items agregados</p><small>Agrega los repuestos que necesitas</small></div>
+                        </div>
+                        <button type="button" class="btn-add-item" id="btnAgregarItemPausa">
+                            <i class="fas fa-plus-circle"></i> Agregar repuesto
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label><i class="fas fa-comment-dots"></i> Motivo de la pausa (adicional)</label>
+                    <textarea id="motivoPausaItems" class="form-textarea" rows="2" 
+                        placeholder="Ej: Esperando repuestos para continuar..."></textarea>
+                </div>
+                
+                <input type="hidden" id="ordenIdPausaItems">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarPausaItemsModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmarPausaItemsBtn">
+                    <i class="fas fa-paper-plane"></i> Enviar Solicitud y Pausar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal de REANUDAR REPARACIÓN -->
     <div class="modal" id="reanudarModal">
         <div class="modal-content modal-sm">
@@ -177,6 +218,28 @@
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarReanudarModal()">Cancelar</button>
                 <button class="btn-primary" id="confirmarReanudarBtn">Reanudar Trabajo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de FINALIZAR REPARACIÓN -->
+    <div class="modal" id="finalizarModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2><i class="fas fa-flag-checkered"></i> Finalizar Reparación</h2>
+                <button class="modal-close" onclick="cerrarFinalizarModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>¿Has completado TODAS las reparaciones de este vehículo?</p>
+                <p class="text-warning" style="color: var(--ambar-alerta); margin-top: 0.5rem;">
+                    <i class="fas fa-exclamation-triangle"></i> Al finalizar, la bahía quedará libre y se notificará al Jefe de Taller
+                </p>
+                <div id="finalizarInfo" class="modal-info"></div>
+                <input type="hidden" id="ordenIdFinalizar">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarFinalizarModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmarFinalizarBtn">Finalizar Reparación</button>
             </div>
         </div>
     </div>

@@ -1069,7 +1069,6 @@ async function confirmarIniciarReparacion() {
         return;
     }
     
-    // Usar el contenedor correcto 'tecnicosContainer'
     const checkboxes = document.querySelectorAll('#tecnicosContainer input[type="checkbox"]:checked');
     const tecnicosIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
     
@@ -1079,8 +1078,10 @@ async function confirmarIniciarReparacion() {
     }
     
     mostrarLoading(true);
+    
     try {
-        const response = await fetch(`${API_URL}/asignar-tecnicos`, {
+        // 1. Asignar técnicos
+        const asignarResponse = await fetch(`${API_URL}/asignar-tecnicos`, {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({
@@ -1092,15 +1093,37 @@ async function confirmarIniciarReparacion() {
             })
         });
         
-        const data = await response.json();
+        const asignarData = await asignarResponse.json();
         
-        if (data.success) {
+        if (!asignarData.success) {
+            showToast(asignarData.error || 'Error al asignar técnicos', 'error');
+            return;
+        }
+        
+        // 2. Cambiar el estado de la orden (endpoint separado)
+        console.log('🔄 Cambiando estado de la orden...');
+        const estadoResponse = await fetch(`${API_URL}/cambiar-estado-reparacion/${currentOrdenAceptada.id_orden}`, {
+            method: 'PUT',
+            headers: getAuthHeaders()
+        });
+        
+        const estadoData = await estadoResponse.json();
+        
+        if (estadoData.success) {
             showToast(`✅ Reparación iniciada con ${tecnicosIds.length} técnico(s)`, 'success');
             cerrarModal('modalIniciarReparacion');
-            await cargarDatosIniciales();
+            
+            // Recargar la página para ver el cambio
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
         } else {
-            showToast(data.error || 'Error al iniciar', 'error');
+            showToast('Los técnicos fueron asignados pero hubo un error al cambiar el estado', 'warning');
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
         }
+        
     } catch (error) {
         console.error('Error:', error);
         showToast('Error de conexión', 'error');
@@ -1108,7 +1131,6 @@ async function confirmarIniciarReparacion() {
         mostrarLoading(false);
     }
 }
-
 // =====================================================
 // FUNCIONES PARA SERVICIOS COTIZABLES
 // =====================================================

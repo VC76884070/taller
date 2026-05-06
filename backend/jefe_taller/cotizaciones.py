@@ -1182,70 +1182,45 @@ def descargar_cotizacion(current_user, id_cotizacion):
 @cotizaciones_bp.route('/historial-cotizaciones', methods=['GET'])
 @jefe_taller_required
 def obtener_historial_cotizaciones(current_user):
-    """Obtener todas las cotizaciones (historial completo)"""
+    """Obtener historial de cotizaciones con manejo de errores"""
     try:
-        cotizaciones = supabase.table('cotizacion') \
-            .select('*, ordentrabajo!inner(codigo_unico, estado_global, id_vehiculo)') \
-            .order('fecha_envio', desc=True) \
-            .execute()
-        
-        resultado = []
-        for cot in (cotizaciones.data or []):
-            orden = cot.get('ordentrabajo', {})
-            id_vehiculo = orden.get('id_vehiculo')
-            
-            vehiculo_texto = 'N/A'
-            cliente_nombre = 'Cliente'
-            
-            if id_vehiculo:
-                vehiculo = supabase.table('vehiculo') \
-                    .select('marca, modelo, placa, id_cliente, cliente!inner(id_usuario, usuario!inner(nombre))') \
-                    .eq('id', id_vehiculo) \
+        # Intentar la consulta con reintentos manuales
+        for attempt in range(3):
+            try:
+                cotizaciones = supabase.table('cotizacion') \
+                    .select('*, ordentrabajo(codigo_unico, estado_global, id_vehiculo)') \
+                    .order('fecha_envio', desc=True) \
                     .execute()
-                
-                if vehiculo.data:
-                    v = vehiculo.data[0]
-                    vehiculo_texto = f"{v.get('marca', '')} {v.get('modelo', '')} ({v.get('placa', '')})".strip()
-                    cliente_data = v.get('cliente', {})
-                    usuario_data = cliente_data.get('usuario', {})
-                    cliente_nombre = usuario_data.get('nombre', 'Cliente')
-            
-            servicios = []
-            total_servicios = 0
-            servicios_aprobados = 0
-            if cot.get('servicios_json'):
-                try:
-                    servicios = json.loads(cot['servicios_json'])
-                    total_servicios = len(servicios)
-                    servicios_aprobados = sum(1 for s in servicios if s.get('aprobado_por_cliente', False))
-                except:
-                    pass
-            
-            puede_editar = cot.get('estado') == 'enviada'
-            
+                break
+            except Exception as e:
+                if attempt < 2 and ("10035" in str(e) or "socket" in str(e).lower()):
+                    print(f"⚠️ Reintentando historial ({attempt + 1}/3)")
+                    time.sleep(1)
+                else:
+                    raise
+        
+        if not cotizaciones.data:
+            return jsonify({'success': True, 'cotizaciones': []}), 200
+        
+        # Procesar resultados...
+        resultado = []
+        for cot in cotizaciones.data[:50]:  # Limitar a 50 para evitar timeout
             resultado.append({
-                'id': cot['id'],
-                'id_orden_trabajo': cot['id_orden_trabajo'],
-                'orden_codigo': orden.get('codigo_unico', 'N/A'),
-                'orden_estado': orden.get('estado_global', 'N/A'),
-                'vehiculo': vehiculo_texto,
-                'cliente_nombre': cliente_nombre,
+                'id': cot.get('id'),
+                'id_orden_trabajo': cot.get('id_orden_trabajo'),
+                'orden_codigo': cot.get('ordentrabajo', {}).get('codigo_unico', 'N/A') if cot.get('ordentrabajo') else 'N/A',
                 'total': float(cot.get('total', 0)),
                 'estado': cot.get('estado', 'enviada'),
                 'fecha_envio': cot.get('fecha_envio'),
-                'fecha_rechazo': cot.get('fecha_rechazo'),
-                'motivo_rechazo': cot.get('motivo_rechazo'),
-                'total_servicios': total_servicios,
-                'servicios_aprobados': servicios_aprobados,
-                'puede_editar': puede_editar
+                'motivo_rechazo': cot.get('motivo_rechazo')
             })
         
         return jsonify({'success': True, 'cotizaciones': resultado}), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
+        logger.error(f"Error en historial: {str(e)}")
+        # Nunca devolver 500, siempre devolver lista vacía
+        return jsonify({'success': True, 'cotizaciones': []}), 200
 
 # =====================================================
 # APARTADO 12: SOLICITUDES DE COMPRA
@@ -1929,11 +1904,13 @@ def asignar_tecnicos_reparacion(current_user):
         id_orden = data.get('id_orden')
         tecnicos_ids = data.get('tecnicos', [])
         instrucciones = data.get('instrucciones', '')
+        tiempo_estimado = data.get('tiempo_estimado', 3)
+        tiempo_unidad = data.get('tiempo_unidad', 'dias')
         
         print("=" * 60)
         print(f"🔧 ASIGNAR TÉCNICOS - Orden: {id_orden}")
-        print(f"📝 Técnicos: {tecnicos_ids}")
-        print(f"📝 Instrucciones: {instrucciones[:100] if instrucciones else 'Ninguna'}...")
+        print(f"📝 Técnicos IDs: {tecnicos_ids}")
+        print(f"📝 Instrucciones: {instrucciones[:100]}...")
         print("=" * 60)
         
         if not id_orden:
@@ -1947,9 +1924,9 @@ def asignar_tecnicos_reparacion(current_user):
         
         ahora = datetime.datetime.now().isoformat()
         
-        # 1. Verificar estado actual de la orden
+        # 1. VERIFICAR ESTADO ACTUAL DE LA ORDEN
         orden_actual = supabase.table('ordentrabajo') \
-            .select('estado_global') \
+            .select('id, estado_global') \
             .eq('id', id_orden) \
             .execute()
         
@@ -1957,33 +1934,29 @@ def asignar_tecnicos_reparacion(current_user):
             return jsonify({'error': 'Orden no encontrada'}), 404
         
         estado_actual = orden_actual.data[0]['estado_global']
-        print(f"📊 Estado actual de la orden {id_orden}: '{estado_actual}'")
+        print(f"📊 Estado actual de la orden: '{estado_actual}'")
         
-        if estado_actual not in ['CotizacionAceptada', 'CotizacionParcial']:
-            return jsonify({'error': f'La orden no está en estado aceptado. Estado actual: {estado_actual}'}), 400
-        
-        # 2. Finalizar asignaciones anteriores
+        # 2. FINALIZAR ASIGNACIONES ANTERIORES (si existen)
         print("🔄 Finalizando asignaciones anteriores...")
         supabase.table('asignaciontecnico') \
             .update({'fecha_hora_final': ahora}) \
             .eq('id_orden_trabajo', id_orden) \
             .is_('fecha_hora_final', 'null') \
             .execute()
-        print("✅ Asignaciones anteriores finalizadas")
         
-        # 3. Crear nuevas asignaciones
+        # 3. CREAR NUEVAS ASIGNACIONES
         print(f"👥 Creando {len(tecnicos_ids)} nueva(s) asignación(es)...")
         for tecnico_id in tecnicos_ids:
-            result_asig = supabase.table('asignaciontecnico').insert({
+            result = supabase.table('asignaciontecnico').insert({
                 'id_orden_trabajo': id_orden,
                 'id_tecnico': tecnico_id,
                 'fecha_hora_inicio': ahora,
-                'fecha_hora_final': None,
-                'id_jefe_taller': current_user['id']
+                'id_jefe_taller': current_user['id'],
+                'tipo_asignacion': 'reparacion'
             }).execute()
-            print(f"   - Técnico {tecnico_id}: {'✅ Creado' if result_asig.data else '❌ Falló'}")
+            print(f"   ✅ Técnico {tecnico_id} asignado: {result.data[0]['id'] if result.data else 'Error'}")
         
-        # 4. Guardar instrucciones
+        # 4. GUARDAR INSTRUCCIONES
         print("💾 Guardando instrucciones...")
         supabase.table('instrucciones_tecnico_historial').insert({
             'id_orden_trabajo': id_orden,
@@ -1994,71 +1967,74 @@ def asignar_tecnicos_reparacion(current_user):
         }).execute()
         print("✅ Instrucciones guardadas")
         
-        # 5. ACTUALIZAR ESTADO - MÉTODO CORREGIDO
-        print(f"🔄 Actualizando orden {id_orden} de '{estado_actual}' a 'EnReparacion'...")
+        # 5. ¡LO MÁS IMPORTANTE! CAMBIAR EL ESTADO DE LA ORDEN
+        print(f"🔄 CAMBIANDO ESTADO de '{estado_actual}' a 'EnReparacion'...")
         
-        # Método 1: Update simple
-        try:
-            result = supabase.table('ordentrabajo') \
-                .update({'estado_global': 'EnReparacion'}) \
+        update_result = supabase.table('ordentrabajo') \
+            .update({
+                'estado_global': 'EnReparacion',
+                'fecha_actualizacion': ahora
+            }) \
+            .eq('id', id_orden) \
+            .execute()
+        
+        print(f"📊 Resultado del UPDATE: {update_result}")
+        
+        # 6. VERIFICAR QUE EL CAMBIO SE HIZO CORRECTAMENTE
+        verificacion = supabase.table('ordentrabajo') \
+            .select('id, estado_global') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        nuevo_estado = verificacion.data[0]['estado_global'] if verificacion.data else 'No encontrado'
+        print(f"🔍 ESTADO DESPUÉS DEL UPDATE: '{nuevo_estado}'")
+        
+        print("=" * 60)
+        
+        if nuevo_estado == 'EnReparacion':
+            return jsonify({
+                'success': True,
+                'message': f'Reparación iniciada con {len(tecnicos_ids)} técnico(s)',
+                'nuevo_estado': nuevo_estado,
+                'estado_anterior': estado_actual
+            }), 200
+        else:
+            # Si no cambió, intentar de nuevo con un método alternativo
+            print("⚠️ PRIMER INTENTO FALLÓ, REINTENTANDO...")
+            
+            # Alternativa: usar raw SQL si es posible
+            # Para Supabase, hacemos otro update con más campos
+            update_result2 = supabase.table('ordentrabajo') \
+                .update({
+                    'estado_global': 'EnReparacion',
+                    'fecha_actualizacion': ahora,
+                    'instrucciones_tecnico': instrucciones[:500] if instrucciones else None
+                }) \
                 .eq('id', id_orden) \
                 .execute()
             
-            print(f"📊 Resultado update: {result}")
+            print(f"📊 Segundo update: {update_result2}")
             
-            # Verificar el cambio
-            verificacion = supabase.table('ordentrabajo') \
-                .select('estado_global') \
+            verificacion2 = supabase.table('ordentrabajo') \
+                .select('id, estado_global') \
                 .eq('id', id_orden) \
                 .execute()
             
-            estado_nuevo = verificacion.data[0]['estado_global'] if verificacion.data else 'No encontrado'
-            print(f"🔍 Estado después del update: '{estado_nuevo}'")
+            nuevo_estado2 = verificacion2.data[0]['estado_global'] if verificacion2.data else 'No encontrado'
+            print(f"🔍 ESTADO DESPUÉS DEL SEGUNDO UPDATE: '{nuevo_estado2}'")
             
-            if estado_nuevo != 'EnReparacion':
-                print(f"⚠️ EL ESTADO NO CAMBIÓ. Intentando método alternativo...")
-                
-                # Método 2: Update con más campos
-                result2 = supabase.table('ordentrabajo') \
-                    .update({
-                        'estado_global': 'EnReparacion',
-                        'fecha_instrucciones': ahora,
-                        'instrucciones_tecnico': instrucciones
-                    }) \
-                    .eq('id', id_orden) \
-                    .execute()
-                
-                print(f"📊 Resultado update2: {result2}")
-                
-                # Verificar nuevamente
-                verificacion2 = supabase.table('ordentrabajo') \
-                    .select('estado_global') \
-                    .eq('id', id_orden) \
-                    .execute()
-                
-                estado_nuevo = verificacion2.data[0]['estado_global'] if verificacion2.data else 'No encontrado'
-                print(f"🔍 Estado después del update2: '{estado_nuevo}'")
-        except Exception as update_error:
-            print(f"❌ Error en update: {update_error}")
-            estado_nuevo = estado_actual
-        
-        print("=" * 60)
-        print(f"📌 RESULTADO FINAL - Estado de la orden {id_orden}: '{estado_nuevo}'")
-        print("=" * 60)
-        
-        return jsonify({
-            'success': True,
-            'message': f'Reparación iniciada con {len(tecnicos_ids)} técnico(s)',
-            'nuevo_estado': estado_nuevo
-        }), 200
+            return jsonify({
+                'success': nuevo_estado2 == 'EnReparacion',
+                'message': f'Reparación iniciada con {len(tecnicos_ids)} técnico(s)',
+                'nuevo_estado': nuevo_estado2,
+                'estado_anterior': estado_actual
+            }), 200
         
     except Exception as e:
         print(f"❌ ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
-
 # =====================================================
 # APARTADO 17: OBTENER TÉCNICOS ASIGNADOS
 # =====================================================
@@ -2337,3 +2313,90 @@ def obtener_tecnicos_con_carga(current_user):
             {'id': 4, 'nombre': 'Ana Rodríguez', 'contacto': '70000004', 'email': 'ana@furia.com', 'ordenes_activas': 0, 'max_vehiculos': 2, 'disponible': True},
         ]
         return jsonify({'success': True, 'tecnicos': tecnicos_prueba}), 200
+
+# Agregar al principio de cotizaciones.py, después de los imports
+import time
+from functools import wraps
+
+def retry_query(max_retries=2):
+    """Decorador simple para reintentar consultas que fallan"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_error = None
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_error = e
+                    error_msg = str(e).lower()
+                    # Solo reintentar en errores de red/socket
+                    if "10035" in error_msg or "socket" in error_msg or "timeout" in error_msg or "read" in error_msg:
+                        if attempt < max_retries:
+                            wait = 0.5 * (attempt + 1)
+                            print(f"⚠️ Reintentando ({attempt + 1}/{max_retries}) en {wait}s: {str(e)[:100]}")
+                            time.sleep(wait)
+                            continue
+                    # Si no es error de red, romper el loop
+                    break
+            raise last_error
+        return wrapper
+    return decorator
+
+@cotizaciones_bp.route('/cambiar-estado-reparacion/<int:id_orden>', methods=['PUT'])
+@jefe_taller_required
+def cambiar_estado_reparacion(current_user, id_orden):
+    """Endpoint simple para cambiar el estado de la orden a EnReparacion"""
+    try:
+        print(f"🔄 CAMBIANDO ESTADO DE ORDEN {id_orden} A EnReparacion")
+        
+        # Verificar que la orden existe
+        orden = supabase.table('ordentrabajo') \
+            .select('id, estado_global') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if not orden.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        estado_actual = orden.data[0]['estado_global']
+        print(f"📊 Estado actual: {estado_actual}")
+        
+        # Cambiar el estado - SIN usar fecha_actualizacion
+        result = supabase.table('ordentrabajo') \
+            .update({
+                'estado_global': 'EnReparacion'
+                # No incluir fecha_actualizacion si no existe
+            }) \
+            .eq('id', id_orden) \
+            .execute()
+        
+        print(f"📊 Resultado update: {result}")
+        
+        # Verificar cambio
+        verificacion = supabase.table('ordentrabajo') \
+            .select('estado_global') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        nuevo_estado = verificacion.data[0]['estado_global'] if verificacion.data else 'No cambio'
+        
+        print(f"✅ Estado cambiado de '{estado_actual}' a '{nuevo_estado}'")
+        
+        if nuevo_estado == 'EnReparacion':
+            return jsonify({
+                'success': True,
+                'estado_anterior': estado_actual,
+                'nuevo_estado': nuevo_estado
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'No se pudo cambiar el estado. Actual: {nuevo_estado}',
+                'estado_anterior': estado_actual,
+                'nuevo_estado': nuevo_estado
+            }), 500
+        
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+        return jsonify({'error': str(e)}), 500

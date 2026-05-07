@@ -26,8 +26,8 @@
             <!-- Top Bar -->
             <header class="top-bar">
                 <div class="page-title">
-                    <h1>Mis Vehículos</h1>
-                    <p>Gestiona tus vehículos asignados</p>
+                    <h1><i class="fas fa-car"></i> Mis Vehículos</h1>
+                    <p>Gestiona tus vehículos asignados y solicita repuestos</p>
                 </div>
 
                 <div class="top-actions">
@@ -229,7 +229,7 @@
         </div>
     </div>
 
-    <!-- Modal de FINALIZAR REPARACIÓN -->
+        <!-- Modal de FINALIZAR REPARACIÓN (CORREGIDO - SIN MENSAJE DE BAHÍA) -->
     <div class="modal" id="finalizarModal">
         <div class="modal-content modal-sm">
             <div class="modal-header">
@@ -243,16 +243,29 @@
                     <i class="fas fa-exclamation-triangle" style="color: var(--ambar-alerta);"></i>
                     <span style="font-size: 0.8rem;">⚠️ Tienes solicitudes de repuestos pendientes</span>
                 </div>
-                <p class="text-warning" style="color: var(--ambar-alerta); margin-top: 0.5rem;">
-                    <i class="fas fa-exclamation-triangle"></i> Al finalizar, la bahía quedará libre y se notificará al
-                    Jefe de Taller
-                </p>
+                <!-- ELIMINADO: mensaje de bahía -->
                 <div id="finalizarInfo" class="modal-info"></div>
                 <input type="hidden" id="ordenIdFinalizar">
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarFinalizarModal()">Cancelar</button>
                 <button class="btn-primary" id="confirmarFinalizarBtn">Finalizar Reparación</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de HISTORIAL DE SOLICITUDES -->
+    <div id="historialSolicitudesModal" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-history"></i> Historial de Solicitudes de Repuestos</h2>
+                <button class="modal-close" onclick="cerrarHistorialModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="historialSolicitudesBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarHistorialModal()">Cerrar</button>
             </div>
         </div>
     </div>

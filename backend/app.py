@@ -100,6 +100,11 @@ try:
     from jefe_taller.cotizaciones import cotizaciones_bp
     from jefe_taller.admin_roles import admin_roles_bp  
     from jefe_taller.reservas_solicitudes import reservas_solicitudes_bp
+    # Agregar esta línea con los otros blueprints
+    from jefe_taller.control_calidad import control_calidad_bp
+
+    # Y registrar el blueprint
+    app.register_blueprint(control_calidad_bp)
 
     app.register_blueprint(jefe_taller_ordenes_bp, url_prefix='/api/jefe-taller')
     app.register_blueprint(calendario_bahias_bp, url_prefix='/api/jefe-taller')

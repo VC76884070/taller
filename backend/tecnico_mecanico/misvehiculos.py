@@ -889,7 +889,7 @@ def finalizar_reparacion(current_user):
         
         # Verificar que la orden está en reparación
         orden_actual = supabase.table('ordentrabajo') \
-            .select('estado_global') \
+            .select('estado_global, codigo_unico') \
             .eq('id', id_orden) \
             .execute()
         
@@ -899,60 +899,90 @@ def finalizar_reparacion(current_user):
         if orden_actual.data[0]['estado_global'] != 'EnReparacion':
             return jsonify({'error': f'La orden no está en reparación. Estado actual: {orden_actual.data[0]["estado_global"]}'}), 400
         
+        # Finalizar la asignación activa del técnico (reparacion)
+        supabase.table('asignaciontecnico') \
+            .update({'fecha_hora_final': ahora}) \
+            .eq('id_orden_trabajo', id_orden) \
+            .eq('id_tecnico', tecnico_id) \
+            .eq('tipo_asignacion', 'reparacion') \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
         # Cambiar estado a ReparacionCompletada
         supabase.table('ordentrabajo').update({
             'estado_global': 'ReparacionCompletada'
         }).eq('id', id_orden).execute()
         
-        # Liberar bahía
-        planificacion = supabase.table('planificacion') \
-            .select('id') \
-            .eq('id_orden_trabajo', id_orden) \
-            .is_('fecha_hora_fin_real', 'null') \
-            .execute()
-        
-        if planificacion.data:
-            supabase.table('planificacion').update({
-                'fecha_hora_fin_real': ahora
-            }).eq('id', planificacion.data[0]['id']).execute()
+        # =====================================================
+        # CREAR ASIGNACIÓN DE VISUALIZACIÓN
+        # Para que el técnico pueda seguir viendo la orden
+        # =====================================================
+        supabase.table('asignaciontecnico').insert({
+            'id_orden_trabajo': id_orden,
+            'id_tecnico': tecnico_id,
+            'tipo_asignacion': 'visualizacion',
+            'fecha_hora_inicio': ahora
+        }).execute()
         
         # Registrar avance
         supabase.table('avancetrabajo').insert({
             'id_orden_trabajo': id_orden,
             'id_tecnico': tecnico_id,
-            'descripcion': f"Reparación finalizada por {current_user.get('nombre', 'Técnico')}",
+            'descripcion': f"Reparación completada por {current_user.get('nombre', 'Técnico')}",
             'tipo_avance': 'finalizar_reparacion',
             'fecha_hora': ahora
         }).execute()
         
         # Notificar al jefe de taller
-        orden_info = supabase.table('ordentrabajo') \
-            .select('codigo_unico') \
-            .eq('id', id_orden) \
-            .execute()
+        notificar_jefe_taller_reparacion_completada(
+            id_orden,
+            current_user.get('nombre', 'Técnico'),
+            orden_actual.data[0].get('codigo_unico', str(id_orden))
+        )
         
-        codigo_orden = orden_info.data[0]['codigo_unico'] if orden_info.data else str(id_orden)
+        return jsonify({
+            'success': True,
+            'message': 'Reparación marcada como completada. Se ha notificado al Jefe de Taller.',
+            'nuevo_estado': 'ReparacionCompletada'
+        }), 200
         
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+def notificar_jefe_taller_reparacion_completada(id_orden, tecnico_nombre, codigo_orden):
+    try:
         jefes_result = supabase.table('usuario_rol') \
             .select('id_usuario') \
             .eq('id_rol', 3) \
             .execute()
         
-        for jefe in (jefes_result.data or []):
-            supabase.table('notificacion').insert({
-                'id_usuario_destino': jefe['id_usuario'],
-                'tipo': 'reparacion_finalizada',
-                'mensaje': f"✅ El técnico {current_user.get('nombre', 'Técnico')} ha finalizado la reparación de la orden #{codigo_orden}",
-                'fecha_envio': ahora,
-                'leida': False,
-                'id_referencia': id_orden
-            }).execute()
+        jefes_ids = [j['id_usuario'] for j in (jefes_result.data or [])]
         
-        return jsonify({'success': True, 'message': 'Reparación finalizada correctamente'}), 200
+        if not jefes_ids:
+            return
+        
+        ahora = datetime.datetime.now().isoformat()
+        
+        for jefe_id in jefes_ids:
+            try:
+                supabase.table('notificacion').insert({
+                    'id_usuario_destino': jefe_id,
+                    'tipo': 'reparacion_completada',
+                    'mensaje': f"✅ El técnico {tecnico_nombre} ha COMPLETADO la reparación de la orden #{codigo_orden}. Pendiente revisión final.",
+                    'fecha_envio': ahora,
+                    'leida': False
+                }).execute()
+            except Exception as e:
+                logger.warning(f"Error insertando notificación: {e}")
+        
+        logger.info(f"Notificación de reparación completada enviada a {len(jefes_ids)} jefes")
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error notificando: {str(e)}")
 
 
 # =====================================================
@@ -971,19 +1001,6 @@ def marcar_armado_completado(current_user):
         tecnico_id = current_user['id']
         ahora = datetime.datetime.now().isoformat()
         
-        # Verificar asignación de armado
-        asignacion = supabase.table('asignaciontecnico') \
-            .select('id') \
-            .eq('id_orden_trabajo', id_orden) \
-            .eq('id_tecnico', tecnico_id) \
-            .eq('tipo_asignacion', 'armado') \
-            .is_('fecha_hora_final', 'null') \
-            .execute()
-        
-        if not asignacion.data:
-            return jsonify({'error': 'No tienes una asignación activa de armado para esta orden'}), 403
-        
-        # Verificar estado
         orden_actual = supabase.table('ordentrabajo') \
             .select('estado_global, codigo_unico') \
             .eq('id', id_orden) \
@@ -992,22 +1009,37 @@ def marcar_armado_completado(current_user):
         if not orden_actual.data:
             return jsonify({'error': 'Orden no encontrada'}), 404
         
-        if orden_actual.data[0]['estado_global'] not in ['EnArmadoVehiculo', 'EnReparacion']:
+        estado_actual = orden_actual.data[0]['estado_global']
+        
+        if estado_actual not in ['EnArmadoVehiculo', 'EnReparacion']:
             return jsonify({'error': f'La orden no está en estado válido para armado'}), 400
         
-        # Finalizar asignación
+        # Finalizar asignación de armado activa
         supabase.table('asignaciontecnico') \
             .update({'fecha_hora_final': ahora}) \
-            .eq('id', asignacion.data[0]['id']) \
+            .eq('id_orden_trabajo', id_orden) \
+            .eq('id_tecnico', tecnico_id) \
+            .eq('tipo_asignacion', 'armado') \
+            .is_('fecha_hora_final', 'null') \
             .execute()
         
         # Cambiar estado a VehiculoArmado
         supabase.table('ordentrabajo').update({
-            'estado_global': 'VehiculoArmado',
-            'fecha_fin_armado': ahora
+            'estado_global': 'VehiculoArmado'
         }).eq('id', id_orden).execute()
         
-        # Liberar bahía
+        # =====================================================
+        # CREAR ASIGNACIÓN DE VISUALIZACIÓN
+        # Para que el técnico pueda seguir viendo la orden
+        # =====================================================
+        supabase.table('asignaciontecnico').insert({
+            'id_orden_trabajo': id_orden,
+            'id_tecnico': tecnico_id,
+            'tipo_asignacion': 'visualizacion',
+            'fecha_hora_inicio': ahora
+        }).execute()
+        
+        # Liberar bahía SOLO si estamos en armado
         planificacion = supabase.table('planificacion') \
             .select('id') \
             .eq('id_orden_trabajo', id_orden) \
@@ -1044,6 +1076,8 @@ def marcar_armado_completado(current_user):
         
     except Exception as e:
         logger.error(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -1256,3 +1290,114 @@ def obtener_detalle_orden(current_user, orden_id):
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
+# =====================================================
+# API: HISTORIAL DE SOLICITUDES DE REPUESTOS
+# =====================================================
+@mis_vehiculos_bp.route('/historial-solicitudes/<int:orden_id>', methods=['GET'])
+@tecnico_required
+def obtener_historial_solicitudes(current_user, orden_id):
+    try:
+        tecnico_id = current_user['id']
+        
+        # Verificar acceso
+        asignacion = supabase.table('asignaciontecnico') \
+            .select('id') \
+            .eq('id_orden_trabajo', orden_id) \
+            .eq('id_tecnico', tecnico_id) \
+            .execute()
+        
+        if not asignacion.data:
+            return jsonify({'error': 'No tienes acceso a esta orden'}), 403
+        
+        # Obtener información de la orden
+        orden = supabase.table('ordentrabajo') \
+            .select('codigo_unico, id_vehiculo, vehiculo!inner(marca, modelo, placa)') \
+            .eq('id', orden_id) \
+            .execute()
+        
+        codigo_orden = orden.data[0]['codigo_unico'] if orden.data else str(orden_id)
+        vehiculo_info = orden.data[0].get('vehiculo', {}) if orden.data else {}
+        vehiculo_texto = f"{vehiculo_info.get('marca', '')} {vehiculo_info.get('modelo', '')} ({vehiculo_info.get('placa', '')})".strip() or 'N/A'
+        
+        # Obtener solicitudes de repuestos del técnico (desde su tabla)
+        solicitudes_tecnico = supabase.table('solicitud_repuestos_tecnico') \
+            .select('*') \
+            .eq('id_orden_trabajo', orden_id) \
+            .eq('id_tecnico', tecnico_id) \
+            .order('fecha_solicitud', desc=True) \
+            .execute()
+        
+        # También obtener solicitudes de compra relacionadas (para mostrar más detalles)
+        solicitudes_compra = supabase.table('solicitud_compra') \
+            .select('*') \
+            .eq('id_orden_trabajo', orden_id) \
+            .order('fecha_solicitud', desc=True) \
+            .execute()
+        
+        # Combinar resultados
+        resultado = []
+        
+        # Agregar solicitudes del técnico
+        for s in (solicitudes_tecnico.data or []):
+            items = s.get('items', [])
+            if isinstance(items, str):
+                try:
+                    items = json.loads(items)
+                except:
+                    items = []
+            
+            resultado.append({
+                'id': s.get('id'),
+                'items': items,
+                'observaciones': s.get('observaciones', ''),
+                'estado': s.get('estado', 'pendiente'),
+                'fecha_solicitud': s.get('fecha_solicitud'),
+                'fecha_respuesta': s.get('fecha_respuesta'),
+                'respuesta': s.get('respuesta', ''),
+                'fecha_entrega': s.get('fecha_entrega'),
+                'tipo': 'tecnico'
+            })
+        
+        # Agregar solicitudes de compra (para mostrar comprobantes si los hay)
+        for sc in (solicitudes_compra.data or []):
+            items = sc.get('items', [])
+            if isinstance(items, str):
+                try:
+                    items = json.loads(items)
+                except:
+                    items = []
+            
+            # Solo agregar si tiene comprobante o si está entregado
+            if sc.get('comprobante_url') or sc.get('estado') == 'entregado':
+                resultado.append({
+                    'id': sc.get('id'),
+                    'items': items,
+                    'observaciones': sc.get('mensaje_jefe_taller', ''),
+                    'estado': sc.get('estado', 'pendiente'),
+                    'fecha_solicitud': sc.get('fecha_solicitud'),
+                    'fecha_respuesta': sc.get('fecha_respuesta'),
+                    'respuesta': sc.get('respuesta_encargado', ''),
+                    'fecha_entrega': sc.get('fecha_entrega'),
+                    'comprobante_url': sc.get('comprobante_url'),
+                    'numero_factura': sc.get('numero_factura'),
+                    'proveedor_nombre': sc.get('proveedor_nombre'),
+                    'tipo': 'compra'
+                })
+        
+        # Ordenar por fecha descendente
+        resultado.sort(key=lambda x: x.get('fecha_solicitud', ''), reverse=True)
+        
+        print(f"📊 Historial para orden {orden_id}: {len(resultado)} solicitudes encontradas")
+        
+        return jsonify({
+            'success': True,
+            'codigo_orden': codigo_orden,
+            'vehiculo': vehiculo_texto,
+            'solicitudes': resultado
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500

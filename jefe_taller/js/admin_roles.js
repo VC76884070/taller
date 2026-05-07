@@ -3,7 +3,7 @@
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
-const API_URL = '/api/jefe-taller'; 
+const API_URL = '/api/jefe-taller'; // CAMBIADO: debe coincidir con el prefix del blueprint
 let usuariosData = [];
 let clientesData = [];
 let rolesData = [];
@@ -12,6 +12,12 @@ let currentUserRoles = [];
 let currentUserInfo = null;
 let asignacionesActivas = [];
 let personalDisponible = [];
+
+// IDs de roles críticos (deben coincidir con los del backend)
+const ROLES_CRITICOS = {
+    tecnico: 3,              // Ajusta según tu BD
+    encargado_repuestos: 4   // Ajusta según tu BD
+};
 
 // =====================================================
 // INICIALIZACIÓN
@@ -196,8 +202,7 @@ async function cargarClientes() {
         if (response.ok && data.success) {
             clientesData = data.clientes;
             console.log('✅ Clientes cargados:', clientesData.length);
-            renderClientesGrid(clientesData); // ← CAMBIADO: usa renderClientesGrid
-            // Actualizar badge
+            renderClientesGrid(clientesData);
             const totalClientesSpan = document.getElementById('totalClientes');
             if (totalClientesSpan) totalClientesSpan.textContent = clientesData.length;
         } else {
@@ -217,6 +222,7 @@ async function cargarClientes() {
         }
     }
 }
+
 function renderClientesGrid(clientes) {
     const grid = document.getElementById('clientesGrid');
     if (!grid) return;
@@ -297,7 +303,6 @@ function renderClientesGrid(clientes) {
     `).join('');
 }
 
-
 async function cargarEstadisticas() {
     try {
         const response = await fetch(`${API_URL}/estadisticas`, { headers: getAuthHeaders() });
@@ -342,14 +347,12 @@ async function cargarPersonalDisponible(rolNombre, excluirUsuarioId = null) {
             return tieneRol && noEsElMismo;
         });
         
-        // Para técnicos, verificar disponibilidad (menos de 2 órdenes activas)
         if (rolNombre === 'tecnico') {
             for (let i = 0; i < filtrados.length; i++) {
                 const ordenesActivas = await contarOrdenesActivasTecnico(filtrados[i].id);
                 filtrados[i].ordenes_activas = ordenesActivas;
                 filtrados[i].disponible = ordenesActivas < 2;
             }
-            // Ordenar: disponibles primero
             filtrados.sort((a, b) => (b.disponible ? 1 : 0) - (a.disponible ? 1 : 0));
         }
         
@@ -435,39 +438,7 @@ function renderPersonalTable(usuarios) {
     `).join('');
 }
 
-function renderClientesTable(clientes) {
-    const tbody = document.getElementById('clientesTableBody');
-    if (!tbody) return;
-    
-    if (clientes.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="loading-row">No hay clientes registrados</td></tr>`;
-        return;
-    }
-    
-    tbody.innerHTML = clientes.map(cliente => `
-        <tr data-id="${cliente.id}">
-            <td><strong>${escapeHtml(cliente.nombre)}</strong></td>
-            <td>${escapeHtml(cliente.email || '-')}</td>
-            <td>${escapeHtml(cliente.contacto || '-')}</td>
-            <td>${escapeHtml(cliente.ubicacion || '-')}</td>
-            <td>
-                <div class="vehiculos-badge">
-                    ${cliente.vehiculos && cliente.vehiculos.length > 0 
-                        ? cliente.vehiculos.map(v => `<span class="vehiculo-tag">${escapeHtml(v.placa)} (${escapeHtml(v.marca)} ${escapeHtml(v.modelo)})</span>`).join('')
-                        : '<span class="no-vehiculos">Sin vehículos</span>'}
-                </div>
-            </td>
-            <td class="action-buttons">
-                <button class="action-btn view" onclick="verDetalleCliente(${cliente.id})" title="Ver detalles">
-                    <i class="fas fa-eye"></i>
-                </button>
-            </td>
-        </tr>
-    `).join('');
-}
-
 function actualizarEstadisticasPersonal() {
-    // Contar por rol
     let jefeOperativo = 0, jefeTaller = 0, tecnico = 0, repuestos = 0;
     
     usuariosData.forEach(u => {
@@ -651,17 +622,14 @@ async function eliminarUsuario(usuarioId) {
     const usuario = usuariosData.find(u => u.id === usuarioId);
     if (!usuario) return;
     
-    // Verificar asignaciones activas primero
     mostrarNotificacion('Verificando asignaciones activas...', 'info');
     const asignacionesInfo = await cargarAsignacionesActivas(usuarioId);
     
     if (asignacionesInfo.tiene_asignaciones) {
-        // Tiene asignaciones activas, mostrar modal de reasignación
         await abrirModalReasignar(usuario, asignacionesInfo.asignaciones);
         return;
     }
     
-    // No tiene asignaciones, preguntar directamente
     if (!confirm(`¿Estás seguro de que deseas eliminar al usuario "${usuario.nombre}"?\n\nEsta acción no se puede deshacer.`)) {
         return;
     }
@@ -684,6 +652,8 @@ async function ejecutarEliminacion(usuarioId, nombreUsuario) {
             mostrarNotificacion(data.message, 'success');
             await cargarUsuarios();
             await cargarEstadisticas();
+        } else if (response.status === 409) {
+            mostrarModalTareasPendientes(data, { nombre: nombreUsuario, id: usuarioId }, true);
         } else {
             throw new Error(data.error || 'Error al eliminar usuario');
         }
@@ -701,12 +671,10 @@ async function abrirModalReasignar(usuario, asignaciones) {
     usuarioSeleccionado = usuario;
     asignacionesActivas = asignaciones;
     
-    // Determinar roles del usuario
     const rolesUsuario = usuario.roles_nombres || [];
     const esTecnico = rolesUsuario.includes('tecnico');
     const esEncargadoRepuestos = rolesUsuario.includes('encargado_repuestos');
     
-    // Cargar personal disponible para reasignación
     let tecnicosDisponibles = [];
     let encargadosDisponibles = [];
     
@@ -802,7 +770,6 @@ async function confirmarReasignar() {
         return;
     }
     
-    // Validar que se seleccionó un nuevo responsable si hay tareas de ese tipo
     const tieneTareasTecnico = asignacionesSeleccionadas.some(a => a.tipo === 'tecnico');
     const tieneTareasRepuestos = asignacionesSeleccionadas.some(a => a.tipo === 'repuestos');
     
@@ -835,7 +802,6 @@ async function confirmarReasignar() {
             mostrarNotificacion('Tareas reasignadas correctamente', 'success');
             cerrarModalReasignar();
             
-            // Ahora preguntar si quiere eliminar al usuario
             if (confirm(`¿Las tareas fueron reasignadas. ¿Deseas eliminar al usuario "${usuarioSeleccionado.nombre}" ahora?`)) {
                 await ejecutarEliminacion(usuarioSeleccionado.id, usuarioSeleccionado.nombre);
             }
@@ -855,7 +821,7 @@ function cerrarModalReasignar() {
 }
 
 // =====================================================
-// MODAL DE ROLES
+// MODAL DE ROLES (VERSIÓN CORREGIDA CON VALIDACIÓN)
 // =====================================================
 
 function abrirModalRoles(usuarioId) {
@@ -903,6 +869,44 @@ async function saveRoles() {
         .filter(cb => cb.checked)
         .map(cb => parseInt(cb.value));
     
+    // Obtener roles actuales para saber cuáles se están quitando
+    const rolesActuales = usuarioSeleccionado.roles_ids || [];
+    const rolesQuitando = rolesActuales.filter(id => !rolesSeleccionados.includes(id));
+    
+    // Verificar si se están quitando roles críticos
+    const quitandoTecnico = rolesQuitando.includes(ROLES_CRITICOS.tecnico);
+    const quitandoRepuestos = rolesQuitando.includes(ROLES_CRITICOS.encargado_repuestos);
+    
+    if (quitandoTecnico || quitandoRepuestos) {
+        mostrarNotificacion('Verificando tareas pendientes...', 'info');
+        
+        // Verificar si tiene tareas pendientes ANTES de enviar la petición
+        const asignacionesInfo = await cargarAsignacionesActivas(usuarioSeleccionado.id);
+        
+        const tieneTareasTecnico = quitandoTecnico && asignacionesInfo.asignaciones.some(a => a.tipo === 'tecnico');
+        const tieneTareasRepuestos = quitandoRepuestos && asignacionesInfo.asignaciones.some(a => a.tipo === 'repuestos');
+        
+        if (tieneTareasTecnico || tieneTareasRepuestos) {
+            const rolesAfectados = [];
+            if (tieneTareasTecnico) rolesAfectados.push('Técnico Mecánico');
+            if (tieneTareasRepuestos) rolesAfectados.push('Encargado de Repuestos');
+            
+            mostrarNotificacion(`No se puede quitar el rol de ${rolesAfectados.join(' y ')} porque tiene tareas pendientes`, 'warning');
+            
+            // Mostrar modal con detalles
+            mostrarModalTareasPendientes({
+                error: `No se puede quitar el rol de ${rolesAfectados.join(' y ')} porque tiene tareas pendientes`,
+                tareas_pendientes: asignacionesInfo.asignaciones.filter(a => 
+                    (tieneTareasTecnico && a.tipo === 'tecnico') || 
+                    (tieneTareasRepuestos && a.tipo === 'repuestos')
+                ),
+                total_tareas: asignacionesInfo.asignaciones.length
+            }, usuarioSeleccionado, false);
+            return;
+        }
+    }
+    
+    // Si no hay roles críticos o no tienen tareas, proceder con la actualización
     mostrarNotificacion('Guardando cambios...', 'info');
     
     try {
@@ -921,12 +925,112 @@ async function saveRoles() {
             closeRolesModal();
             await cargarUsuarios();
             await cargarEstadisticas();
+        } else if (response.status === 409) {
+            // Error por tareas pendientes desde el backend
+            mostrarModalTareasPendientes(data, usuarioSeleccionado, false);
         } else {
             throw new Error(data.error || 'Error al guardar los roles');
         }
     } catch (error) {
         console.error('Error guardando roles:', error);
         mostrarNotificacion(error.message, 'error');
+    }
+}
+
+// =====================================================
+// MODAL DE TAREAS PENDIENTES (NUEVO)
+// =====================================================
+
+function mostrarModalTareasPendientes(data, usuario, esParaEliminacion = false) {
+    // Cerrar modal existente si hay
+    const modalExistente = document.getElementById('modalTareasPendientes');
+    if (modalExistente) {
+        modalExistente.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal show';
+    modal.id = 'modalTareasPendientes';
+    modal.style.display = 'flex';
+    
+    const tareas = data.tareas_pendientes || [];
+    const totalTareas = data.total_tareas || tareas.length;
+    
+    const rolesAfectadosTexto = data.error ? data.error.split('porque')[0] : 
+        (esParaEliminacion ? 'eliminar al usuario' : 'quitar el(los) rol(es)');
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header" style="background: #dc2626;">
+                <h3><i class="fas fa-tasks"></i> ${esParaEliminacion ? 'No se puede eliminar el usuario' : 'No se puede modificar el rol'}</h3>
+                <button class="close-modal" onclick="cerrarModalTareasPendientes()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert-warning" style="margin-bottom: 20px;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>⚠️ ${data.error || `El usuario ${escapeHtml(usuario.nombre)} tiene tareas pendientes`}</strong>
+                    <p>${esParaEliminacion ? 
+                        'No se puede eliminar al usuario hasta que complete o reasigne las siguientes tareas:' : 
+                        'No se puede modificar el rol hasta que complete o reasigne las siguientes tareas:'}
+                    </p>
+                </div>
+                
+                <div class="tareas-lista">
+                    <h4>Tareas pendientes (${totalTareas})</h4>
+                    ${tareas.length > 0 ? tareas.map(tarea => `
+                        <div class="tarea-item">
+                            <i class="fas ${tarea.tipo === 'tecnico' ? 'fa-wrench' : 'fa-box'}"></i>
+                            <div class="tarea-info">
+                                <span class="tarea-tipo">${tarea.tipo === 'tecnico' ? '🔧 Asignación técnica' : '📦 Solicitud de repuestos'}</span>
+                                <span class="tarea-descripcion">${escapeHtml(tarea.descripcion)}</span>
+                                ${tarea.orden_codigo ? `<span class="tarea-orden">Orden: ${escapeHtml(tarea.orden_codigo)}</span>` : ''}
+                            </div>
+                        </div>
+                    `).join('') : `
+                        <div class="tarea-item">
+                            <i class="fas fa-info-circle"></i>
+                            <div class="tarea-info">
+                                <span class="tarea-descripcion">No se pudieron cargar los detalles de las tareas pendientes</span>
+                            </div>
+                        </div>
+                    `}
+                </div>
+                
+                <div class="acciones-sugeridas">
+                    <p><strong>Opciones disponibles:</strong></p>
+                    <ul>
+                        <li>Esperar a que el usuario complete las tareas pendientes</li>
+                        ${!esParaEliminacion ? `
+                            <li>Mantener el rol actual y editar otros roles</li>
+                            <li>Reasignar las tareas a otro miembro del personal (desde la opción "Eliminar usuario")</li>
+                        ` : `
+                            <li>Reasignar las tareas a otro miembro del personal</li>
+                        `}
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalTareasPendientes()">
+                    <i class="fas fa-times"></i> Entendido
+                </button>
+                ${!esParaEliminacion ? `
+                    <button class="btn-primary" onclick="cerrarModalTareasPendientes(); abrirModalReasignar(usuarioSeleccionado, ${JSON.stringify(tareas).replace(/"/g, '&quot;')})">
+                        <i class="fas fa-exchange-alt"></i> Reasignar tareas
+                    </button>
+                ` : ''}
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+}
+
+function cerrarModalTareasPendientes() {
+    const modal = document.getElementById('modalTareasPendientes');
+    if (modal) {
+        modal.remove();
+        document.body.style.overflow = '';
     }
 }
 
@@ -982,7 +1086,7 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
     if (!toastContainer) {
         toastContainer = document.createElement('div');
         toastContainer.className = 'toast-container';
-        toastContainer.style.cssText = `position: fixed; top: 20px; right: 20px; z-index: 9999;`;
+        toastContainer.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999;';
         document.body.appendChild(toastContainer);
     }
     
@@ -1021,4 +1125,5 @@ window.saveRoles = saveRoles;
 window.toggleCheckbox = toggleCheckbox;
 window.confirmarReasignar = confirmarReasignar;
 window.cerrarModalReasignar = cerrarModalReasignar;
+window.cerrarModalTareasPendientes = cerrarModalTareasPendientes;
 window.logout = logout;

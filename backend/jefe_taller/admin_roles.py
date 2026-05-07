@@ -20,7 +20,14 @@ SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
 
 # IDs de roles de personal (excluyendo cliente que es id=5)
+# Asegúrate que estos IDs coincidan con tu base de datos
 ROLES_PERSONAL = [1, 2, 3, 4]
+
+# IDs de roles críticos que no se pueden quitar si tienen tareas pendientes
+ROLES_CRITICOS = {
+    'tecnico': 3,               # Ajusta según tu BD
+    'encargado_repuestos': 4    # Ajusta según tu BD
+}
 
 # =====================================================
 # DECORADOR PERSONALIZADO PARA ADMIN
@@ -93,6 +100,125 @@ def admin_required(f):
     return decorated
 
 # =====================================================
+# FUNCIÓN AUXILIAR PARA VERIFICAR TAREAS PENDIENTES
+# =====================================================
+
+def verificar_tareas_pendientes(id_usuario, roles_a_verificar):
+    """
+    Verifica si un usuario tiene tareas pendientes para roles específicos
+    
+    Args:
+        id_usuario: ID del usuario a verificar
+        roles_a_verificar: Lista de nombres de roles a verificar ['tecnico', 'encargado_repuestos']
+    
+    Returns:
+        dict: {
+            'tiene_pendientes': bool,
+            'tareas': list,
+            'roles_con_tareas': list
+        }
+    """
+    tareas_pendientes = []
+    roles_con_tareas = []
+    
+    # Verificar tareas como técnico
+    if 'tecnico' in roles_a_verificar:
+        # Asignaciones de técnico activas (sin fecha final)
+        asignaciones_activas = supabase.table('asignaciontecnico') \
+            .select('id, id_orden_trabajo, tipo_asignacion, fecha_hora_inicio') \
+            .eq('id_tecnico', id_usuario) \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
+        if asignaciones_activas.data:
+            roles_con_tareas.append('tecnico')
+            for asig in asignaciones_activas.data:
+                # Obtener código de orden
+                orden = supabase.table('ordentrabajo') \
+                    .select('codigo_unico') \
+                    .eq('id', asig['id_orden_trabajo']) \
+                    .execute()
+                codigo = orden.data[0]['codigo_unico'] if orden.data else 'N/A'
+                
+                tareas_pendientes.append({
+                    'tipo': 'tecnico',
+                    'id': asig['id'],
+                    'id_orden': asig['id_orden_trabajo'],
+                    'orden_codigo': codigo,
+                    'descripcion': f"Orden {codigo} - {asig.get('tipo_asignacion', 'diagnóstico')}",
+                    'fecha_inicio': asig.get('fecha_hora_inicio')
+                })
+    
+    # Verificar tareas como encargado de repuestos
+    if 'encargado_repuestos' in roles_a_verificar:
+        # Solicitudes de cotización pendientes
+        solicitudes_pendientes = supabase.table('solicitud_cotizacion_repuesto') \
+            .select('id, id_orden_trabajo, descripcion_pieza, cantidad') \
+            .eq('id_encargado_repuestos', id_usuario) \
+            .eq('estado', 'pendiente') \
+            .execute()
+        
+        if solicitudes_pendientes.data:
+            roles_con_tareas.append('encargado_repuestos')
+            for sol in solicitudes_pendientes.data:
+                # Obtener código de orden
+                orden = supabase.table('ordentrabajo') \
+                    .select('codigo_unico') \
+                    .eq('id', sol['id_orden_trabajo']) \
+                    .execute()
+                codigo = orden.data[0]['codigo_unico'] if orden.data else 'N/A'
+                
+                tareas_pendientes.append({
+                    'tipo': 'repuestos',
+                    'id': sol['id'],
+                    'id_orden': sol['id_orden_trabajo'],
+                    'orden_codigo': codigo,
+                    'descripcion': f"Solicitud {codigo} - {sol.get('descripcion_pieza', 'Pieza')} x{sol.get('cantidad', 1)}"
+                })
+    
+    return {
+        'tiene_pendientes': len(tareas_pendientes) > 0,
+        'tareas': tareas_pendientes,
+        'roles_con_tareas': roles_con_tareas
+    }
+
+
+def obtener_roles_usuario(id_usuario):
+    """Obtiene los roles actuales de un usuario"""
+    try:
+        roles_result = supabase.table('usuario_rol') \
+            .select('id_rol, rol:rol!inner(nombre_rol)') \
+            .eq('id_usuario', id_usuario) \
+            .execute()
+        
+        roles_ids = []
+        roles_nombres = []
+        
+        for item in (roles_result.data or []):
+            rol_id = item.get('id_rol')
+            if rol_id:
+                roles_ids.append(rol_id)
+            
+            rol_info = item.get('rol', {})
+            if isinstance(rol_info, dict):
+                nombre = rol_info.get('nombre_rol', '')
+                if nombre:
+                    roles_nombres.append(nombre)
+            elif isinstance(rol_info, list) and len(rol_info) > 0:
+                nombre = rol_info[0].get('nombre_rol', '')
+                if nombre:
+                    roles_nombres.append(nombre)
+        
+        return {
+            'ids': roles_ids,
+            'nombres': roles_nombres
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo roles del usuario {id_usuario}: {str(e)}")
+        return {'ids': [], 'nombres': []}
+
+
+# =====================================================
 # ENDPOINTS PRINCIPALES
 # =====================================================
 
@@ -119,6 +245,7 @@ def get_roles(current_user):
     except Exception as e:
         logger.error(f"Error obteniendo roles: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @admin_roles_bp.route('/usuarios', methods=['GET'])
 @admin_required
@@ -188,6 +315,7 @@ def get_usuarios(current_user):
         logger.error(f"Error obteniendo usuarios: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 @admin_roles_bp.route('/clientes', methods=['GET'])
 @admin_required
 def get_clientes(current_user):
@@ -233,6 +361,7 @@ def get_clientes(current_user):
     except Exception as e:
         logger.error(f"Error obteniendo clientes: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @admin_roles_bp.route('/usuario/<int:id_usuario>', methods=['GET'])
 @admin_required
@@ -285,37 +414,94 @@ def get_usuario_detalle(current_user, id_usuario):
         logger.error(f"Error obteniendo detalle: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 @admin_roles_bp.route('/usuario/<int:id_usuario>/roles', methods=['PUT'])
 @admin_required
 def asignar_roles_usuario(current_user, id_usuario):
-    """Asignar roles a un usuario"""
+    """Asignar roles a un usuario con validación de tareas pendientes"""
     try:
         data = request.get_json()
-        roles_ids = data.get('roles_ids', [])
+        nuevos_roles_ids = data.get('roles_ids', [])
         
         # Verificar roles válidos
-        for rol_id in roles_ids:
+        for rol_id in nuevos_roles_ids:
             if rol_id not in ROLES_PERSONAL:
                 return jsonify({'error': f'Rol {rol_id} no permitido'}), 400
         
-        # Eliminar roles existentes
+        # Obtener roles actuales del usuario
+        roles_actuales = obtener_roles_usuario(id_usuario)
+        roles_actuales_ids = roles_actuales['ids']
+        roles_actuales_nombres = roles_actuales['nombres']
+        
+        # Identificar roles que se están quitando (estaban antes pero no en los nuevos)
+        roles_eliminados_ids = [rid for rid in roles_actuales_ids if rid not in nuevos_roles_ids]
+        
+        # Verificar si se está quitando el rol de técnico o encargado_repuestos
+        roles_criticos_a_quitar = []
+        for nombre_rol, rol_id in ROLES_CRITICOS.items():
+            if rol_id in roles_eliminados_ids:
+                roles_criticos_a_quitar.append(nombre_rol)
+        
+        # Si no se quitan roles críticos, continuar normalmente
+        if not roles_criticos_a_quitar:
+            # Eliminar roles existentes
+            supabase.table('usuario_rol').delete() \
+                .eq('id_usuario', id_usuario) \
+                .execute()
+            
+            # Insertar nuevos roles
+            for rol_id in nuevos_roles_ids:
+                supabase.table('usuario_rol').insert({
+                    'id_usuario': id_usuario,
+                    'id_rol': rol_id,
+                    'fecha_asignacion': datetime.datetime.now().isoformat()
+                }).execute()
+            
+            logger.info(f"Roles actualizados para usuario {id_usuario}: {nuevos_roles_ids}")
+            return jsonify({'success': True, 'message': 'Roles asignados correctamente'}), 200
+        
+        # =====================================================
+        # VERIFICAR TAREAS PENDIENTES ANTES DE QUITAR ROLES CRÍTICOS
+        # =====================================================
+        
+        verificacion = verificar_tareas_pendientes(id_usuario, roles_criticos_a_quitar)
+        
+        # Si hay tareas pendientes, NO permitir quitar el rol
+        if verificacion['tiene_pendientes']:
+            nombres_roles_quitando = []
+            if 'tecnico' in roles_criticos_a_quitar:
+                nombres_roles_quitando.append("Técnico Mecánico")
+            if 'encargado_repuestos' in roles_criticos_a_quitar:
+                nombres_roles_quitando.append("Encargado de Repuestos")
+            
+            logger.warning(f"Intento denegado: No se pueden quitar roles {nombres_roles_quitando} al usuario {id_usuario} - tiene {len(verificacion['tareas'])} tareas pendientes")
+            
+            return jsonify({
+                'error': f'No se puede quitar el rol de {", ".join(nombres_roles_quitando)} porque el usuario tiene tareas pendientes',
+                'tareas_pendientes': verificacion['tareas'],
+                'total_tareas': len(verificacion['tareas']),
+                'roles_afectados': roles_criticos_a_quitar
+            }), 409  # 409 Conflict
+        
+        # Si no hay tareas pendientes, proceder con la actualización
         supabase.table('usuario_rol').delete() \
             .eq('id_usuario', id_usuario) \
             .execute()
         
-        # Insertar nuevos roles
-        for rol_id in roles_ids:
+        for rol_id in nuevos_roles_ids:
             supabase.table('usuario_rol').insert({
                 'id_usuario': id_usuario,
                 'id_rol': rol_id,
                 'fecha_asignacion': datetime.datetime.now().isoformat()
             }).execute()
         
-        return jsonify({'success': True, 'message': 'Roles asignados correctamente'}), 200
+        logger.info(f"Roles actualizados para usuario {id_usuario} (con eliminación de roles críticos sin tareas): {nuevos_roles_ids}")
+        return jsonify({'success': True, 'message': 'Roles actualizados correctamente'}), 200
         
     except Exception as e:
         logger.error(f"Error asignando roles: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @admin_roles_bp.route('/usuario/<int:id_usuario>', methods=['DELETE'])
 @admin_required
@@ -335,6 +521,25 @@ def eliminar_usuario(current_user, id_usuario):
         if id_usuario == current_user.get('id'):
             return jsonify({'error': 'No puedes eliminarte a ti mismo'}), 400
         
+        # Verificar si tiene tareas pendientes ANTES de eliminar
+        roles_usuario = obtener_roles_usuario(id_usuario)
+        roles_nombres = roles_usuario['nombres']
+        
+        roles_a_verificar = []
+        if 'tecnico' in roles_nombres:
+            roles_a_verificar.append('tecnico')
+        if 'encargado_repuestos' in roles_nombres:
+            roles_a_verificar.append('encargado_repuestos')
+        
+        if roles_a_verificar:
+            verificacion = verificar_tareas_pendientes(id_usuario, roles_a_verificar)
+            if verificacion['tiene_pendientes']:
+                return jsonify({
+                    'error': 'No se puede eliminar el usuario porque tiene tareas pendientes',
+                    'tareas_pendientes': verificacion['tareas'],
+                    'total_tareas': len(verificacion['tareas'])
+                }), 409
+        
         # Eliminar asignaciones de roles
         supabase.table('usuario_rol').delete() \
             .eq('id_usuario', id_usuario) \
@@ -345,6 +550,7 @@ def eliminar_usuario(current_user, id_usuario):
             .eq('id', id_usuario) \
             .execute()
         
+        logger.info(f"Usuario {usuario.data[0]['nombre']} (ID: {id_usuario}) eliminado correctamente")
         return jsonify({
             'success': True,
             'message': f'Usuario {usuario.data[0]["nombre"]} eliminado correctamente'
@@ -353,6 +559,7 @@ def eliminar_usuario(current_user, id_usuario):
     except Exception as e:
         logger.error(f"Error eliminando usuario: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @admin_roles_bp.route('/estadisticas', methods=['GET'])
 @admin_required
@@ -408,6 +615,7 @@ def get_estadisticas(current_user):
         logger.error(f"Error obteniendo estadísticas: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 @admin_roles_bp.route('/tecnico/<int:id_tecnico>/ordenes-activas', methods=['GET'])
 @admin_required
 def get_tecnico_ordenes_activas(current_user, id_tecnico):
@@ -424,6 +632,7 @@ def get_tecnico_ordenes_activas(current_user, id_tecnico):
     except Exception as e:
         logger.error(f"Error contando órdenes activas: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @admin_roles_bp.route('/usuario/<int:id_usuario>/asignaciones-activas', methods=['GET'])
 @admin_required
@@ -508,6 +717,7 @@ def get_asignaciones_activas(current_user, id_usuario):
         logger.error(f"Error obteniendo asignaciones activas: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 @admin_roles_bp.route('/usuario/<int:id_usuario>/reasignar', methods=['POST'])
 @admin_required
 def reasignar_tareas(current_user, id_usuario):
@@ -545,6 +755,7 @@ def reasignar_tareas(current_user, id_usuario):
                         .eq('id', asignacion['id_solicitud']) \
                         .execute()
         
+        logger.info(f"Tareas reasignadas desde usuario {id_usuario} - Técnico: {nuevo_tecnico_id}, Repuestos: {nuevo_encargado_id}")
         return jsonify({
             'success': True,
             'message': 'Tareas reasignadas correctamente'
@@ -553,6 +764,7 @@ def reasignar_tareas(current_user, id_usuario):
     except Exception as e:
         logger.error(f"Error reasignando tareas: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 # Ruta para servir la página HTML (si es necesario)
 @admin_roles_bp.route('/page', methods=['GET'])

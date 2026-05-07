@@ -1,6 +1,6 @@
 // =====================================================
 // COTIZACIONES.JS - JEFE DE TALLER
-// VERSIÓN 4.0 - CON SOLICITUDES DE TÉCNICOS Y COMPRA DIRECTA
+// VERSIÓN 5.0 - CON SOLICITUDES DE TÉCNICOS Y COMPRA DIRECTA UNIFICADA
 // =====================================================
 
 const API_URL = window.location.origin + '/api/jefe-taller';
@@ -19,9 +19,7 @@ let solicitudesRepuestosTecnico = [];
 
 // Items dinámicos
 let itemsSolicitud = [];
-let itemsCompra = [];
 let itemsCompraDirecta = [];
-let itemsGestionCompra = [];
 
 // Variables para archivo y servicios
 let currentFileData = null;
@@ -32,7 +30,9 @@ let serviciosCotizables = [];
 let isEditingCotizacion = false;
 let currentOrdenAceptada = null;
 let currentOrdenArmado = null;
-let currentGestionSolicitud = null;
+
+// Variable para solicitud de técnico (cuando se abre el modal desde el carrito)
+let currentSolicitudTecnico = null;
 
 // Estados de orden (constantes)
 const ESTADOS_ORDEN = {
@@ -166,7 +166,7 @@ function statusBadge(estado) {
 }
 
 // =====================================================
-// FUNCIONES PARA LISTA DINÁMICA DE ITEMS
+// FUNCIONES PARA LISTA DINÁMICA DE ITEMS - SOLICITUD COTIZACIÓN
 // =====================================================
 
 function renderItemsSolicitud() {
@@ -215,50 +215,8 @@ function limpiarItemsSolicitud() {
     renderItemsSolicitud();
 }
 
-function renderItemsCompra() {
-    const container = document.getElementById('itemsListCompra');
-    if (!container) return;
-    
-    if (itemsCompra.length === 0) {
-        container.innerHTML = `<div class="item-empty"><i class="fas fa-box-open"></i><p>No hay items agregados</p></div>`;
-        return;
-    }
-    
-    container.innerHTML = itemsCompra.map((item, index) => `
-        <div class="item-row">
-            <div class="item-fields">
-                <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Descripción" onchange="actualizarItemCompra(${index}, 'descripcion', this.value)">
-                <input type="number" class="item-cantidad" value="${item.cantidad}" min="1" onchange="actualizarItemCompra(${index}, 'cantidad', parseInt(this.value))">
-                <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle" onchange="actualizarItemCompra(${index}, 'detalle', this.value)">
-            </div>
-            <div class="item-actions">
-                <button class="btn-remove-item" onclick="eliminarItemCompra(${index})"><i class="fas fa-trash-alt"></i></button>
-            </div>
-        </div>
-    `).join('');
-}
-
-function agregarItemCompra() {
-    itemsCompra.push({ descripcion: '', cantidad: 1, detalle: '' });
-    renderItemsCompra();
-}
-
-function actualizarItemCompra(index, campo, valor) {
-    if (itemsCompra[index]) itemsCompra[index][campo] = valor;
-}
-
-function eliminarItemCompra(index) {
-    itemsCompra.splice(index, 1);
-    renderItemsCompra();
-}
-
-function limpiarItemsCompra() {
-    itemsCompra = [];
-    renderItemsCompra();
-}
-
 // =====================================================
-// ITEMS PARA COMPRA DIRECTA
+// FUNCIONES PARA LISTA DINÁMICA DE ITEMS - COMPRA DIRECTA (UNIFICADO)
 // =====================================================
 
 function renderItemsCompraDirecta() {
@@ -305,52 +263,6 @@ function eliminarItemCompraDirecta(index) {
 function limpiarItemsCompraDirecta() {
     itemsCompraDirecta = [];
     renderItemsCompraDirecta();
-}
-
-// =====================================================
-// ITEMS PARA GESTIÓN DE COMPRA (desde solicitud de técnico)
-// =====================================================
-
-function renderItemsGestionCompra() {
-    const container = document.getElementById('itemsListGestionCompra');
-    if (!container) return;
-    
-    if (itemsGestionCompra.length === 0) {
-        container.innerHTML = `<div class="item-empty"><i class="fas fa-box-open"></i><p>No hay items agregados</p><small>Haz clic en "Agregar repuesto a comprar" para comenzar</small></div>`;
-        return;
-    }
-    
-    container.innerHTML = itemsGestionCompra.map((item, index) => `
-        <div class="item-row" data-index="${index}">
-            <div class="item-fields">
-                <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Nombre del repuesto" onchange="actualizarItemGestionCompra(${index}, 'descripcion', this.value)">
-                <input type="number" class="item-cantidad" value="${item.cantidad}" min="1" onchange="actualizarItemGestionCompra(${index}, 'cantidad', parseInt(this.value))">
-                <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle" onchange="actualizarItemGestionCompra(${index}, 'detalle', this.value)">
-            </div>
-            <div class="item-actions">
-                <button class="btn-remove-item" onclick="eliminarItemGestionCompra(${index})"><i class="fas fa-trash-alt"></i></button>
-            </div>
-        </div>
-    `).join('');
-}
-
-function agregarItemGestionCompra() {
-    itemsGestionCompra.push({ descripcion: '', cantidad: 1, detalle: '' });
-    renderItemsGestionCompra();
-}
-
-function actualizarItemGestionCompra(index, campo, valor) {
-    if (itemsGestionCompra[index]) itemsGestionCompra[index][campo] = valor;
-}
-
-function eliminarItemGestionCompra(index) {
-    itemsGestionCompra.splice(index, 1);
-    renderItemsGestionCompra();
-}
-
-function limpiarItemsGestionCompra() {
-    itemsGestionCompra = [];
-    renderItemsGestionCompra();
 }
 
 // =====================================================
@@ -426,12 +338,15 @@ async function cargarCotizacionesMap() {
 
 async function cargarSolicitudesCompra() {
     try {
-        const response = await fetch(`${API_URL}/solicitudes-compra`, { headers: getAuthHeaders() });
+        const response = await fetch(`${API_URL}/solicitudes-compra`, { 
+            headers: getAuthHeaders() 
+        });
         const data = await response.json();
+        
         if (data.success) {
             solicitudesCompra = data.solicitudes || [];
             renderSolicitudesCompra();
-            cargarSelectEncargadosCompra();
+            console.log(`📊 Solicitudes de compra cargadas: ${solicitudesCompra.length}`);
         }
     } catch (error) {
         console.error('Error cargando solicitudes de compra:', error);
@@ -500,21 +415,61 @@ async function cargarHistorialCotizaciones() {
 
 async function cargarOrdenesActivasParaCompraDirecta() {
     try {
-        const response = await fetch(`${API_URL}/ordenes-activas`, { headers: getAuthHeaders() });
+        mostrarLoading(true);
+        console.log('🔄 Cargando órdenes activas...');
+        
+        const response = await fetch(`${API_URL}/ordenes-activas`, { 
+            headers: getAuthHeaders() 
+        });
         const data = await response.json();
         
+        console.log('📦 Datos recibidos del backend:', JSON.stringify(data, null, 2));
+        
         const selectOrden = document.getElementById('compraDirecta_id_orden');
-        if (selectOrden && data.ordenes) {
-            selectOrden.innerHTML = '<option value="">Seleccionar orden</option>' + 
-                data.ordenes.map(o => `<option value="${o.id_orden}">${escapeHtml(o.codigo_unico)} - ${escapeHtml(o.vehiculo)}</option>`).join('');
+        if (!selectOrden) {
+            console.error('❌ Select no encontrado');
+            return;
+        }
+        
+        if (data.success && data.ordenes && data.ordenes.length > 0) {
+            console.log(`✅ ${data.ordenes.length} órdenes encontradas`);
+            
+            selectOrden.innerHTML = '<option value="">Seleccionar orden</option>';
+            
+            data.ordenes.forEach(orden => {
+                const option = document.createElement('option');
+                // Asegurar que el valor sea el ID correcto
+                const ordenId = orden.id_orden || orden.id;
+                option.value = ordenId;
+                option.textContent = `${orden.codigo_unico} - ${orden.vehiculo || 'Vehículo'}`;
+                selectOrden.appendChild(option);
+                console.log(`  - Agregada: value=${option.value}, text=${option.textContent}`);
+            });
+            
+            // Auto-seleccionar la primera orden válida
+            if (selectOrden.options.length > 1) {
+                selectOrden.selectedIndex = 1;
+                console.log('✅ Seleccionada primera orden:', selectOrden.value);
+            }
+            
+        } else {
+            console.warn('⚠️ No hay órdenes activas');
+            selectOrden.innerHTML = '<option value="">No hay órdenes activas disponibles</option>';
         }
     } catch (error) {
-        console.error('Error cargando órdenes activas:', error);
+        console.error('❌ Error cargando órdenes:', error);
+        const selectOrden = document.getElementById('compraDirecta_id_orden');
+        if (selectOrden) {
+            selectOrden.innerHTML = '<option value="">Error al cargar órdenes</option>';
+        }
+        showToast('Error al cargar las órdenes activas', 'error');
+    } finally {
+        mostrarLoading(false);
     }
 }
 
 // =====================================================
-// SOLICITUDES DE REPUESTOS DE TÉCNICOS
+// SOLICITUDES DE REPUESTOS DE TÉCNICOS (TAB 3)
 // =====================================================
 
 async function cargarSolicitudesRepuestosTecnico() {
@@ -593,14 +548,13 @@ function renderSolicitudesRepuestosTecnico() {
                 estadoTexto = s.estado || 'Desconocido';
         }
         
+        // Botón de carrito (Gestionar Compra) - abre el mismo modal que el botón "Nueva Solicitud de Compra Directa"
+        // pero PRE-CARGADO con los items del técnico
         let accionesHtml = '';
         if (s.estado === 'pendiente' || s.estado === 'en_proceso') {
             accionesHtml = `
-                <button class="action-btn edit" onclick="abrirModalGestionarSolicitudTecnico(${s.id})" title="Gestionar Compra">
+                <button class="action-btn edit" onclick="abrirModalCompraDesdeSolicitudTecnico(${s.id})" title="Gestionar Compra">
                     <i class="fas fa-shopping-cart"></i>
-                </button>
-                <button class="action-btn approve" onclick="abrirModalResponderSolicitud(${s.id})" title="Responder">
-                    <i class="fas fa-reply"></i>
                 </button>
             `;
         } else {
@@ -611,71 +565,311 @@ function renderSolicitudesRepuestosTecnico() {
             <tr>
                 <td>${s.id}</td>
                 <td><strong>${escapeHtml(s.orden_codigo)}</strong><br><small class="text-muted">${escapeHtml(s.orden_estado)}</small></td>
-                <td>${escapeHtml(s.vehiculo)}</div></td>
+                <td>${escapeHtml(s.vehiculo)}</td>
                 <td>
                     <strong>${escapeHtml(s.tecnico_nombre)}</strong>
                     ${s.tecnico_contacto ? `<br><small class="text-muted">📞 ${escapeHtml(s.tecnico_contacto)}</small>` : ''}
-                </div></td>
+                </td>
                 <td style="max-width: 250px;">
                     ${itemsHtml}
                     ${s.observaciones ? `<div class="text-muted" style="font-size: 0.65rem; margin-top: 0.25rem;"><i class="fas fa-comment"></i> ${escapeHtml(s.observaciones.substring(0, 50))}${s.observaciones.length > 50 ? '...' : ''}</div>` : ''}
-                </div></td>
-                <td><span class="status-badge ${estadoClass}"><i class="fas ${estadoIcon}"></i> ${estadoTexto}</span></div></td>
-                <td>${formatDate(s.fecha_solicitud)}</div></td>
-                <td class="action-buttons">${accionesHtml}</div></tr>
+                </td>
+                <td><span class="status-badge ${estadoClass}"><i class="fas ${estadoIcon}"></i> ${estadoTexto}</span></td>
+                <td>${formatDate(s.fecha_solicitud)}</td>
+                <td class="action-buttons">${accionesHtml}</td>
+            </tr>
         `;
     }).join('');
 }
 
 // =====================================================
-// SOLICITUDES DE COTIZACIÓN PARA TAB 3
+// MODAL DE COMPRA DIRECTA UNIFICADO
 // =====================================================
 
-async function cargarSolicitudesCotizacionCompra() {
+// Abre el modal para nueva solicitud de compra (botón)
+async function abrirModalNuevaSolicitudCompraDirecta() {
+    console.log('🔄 Abriendo modal de nueva solicitud de compra directa...');
+    
+    limpiarItemsCompraDirecta();
+    currentSolicitudTecnico = null;
+    
+    const observacionesTextarea = document.getElementById('compraDirecta_observaciones');
+    if (observacionesTextarea) observacionesTextarea.value = '';
+    
+    const infoAdicional = document.getElementById('compraDirectaInfoAdicional');
+    if (infoAdicional) infoAdicional.style.display = 'none';
+    
+    const title = document.getElementById('modalCompraDirectaTitle');
+    if (title) title.innerHTML = '<i class="fas fa-shopping-cart"></i> Nueva Solicitud de Compra';
+    
+    mostrarLoading(true);
     try {
-        const estado = document.getElementById('filtroEstadoCotizacionCompra')?.value || 'all';
-        let url = `${API_URL}/solicitudes-cotizacion?estado=${estado}`;
+        await cargarOrdenesActivasParaCompraDirecta();
+        await cargarEncargadosRepuestos();
         
-        const response = await fetch(url, { headers: getAuthHeaders() });
-        const data = await response.json();
-        
-        if (data.success) {
-            renderSolicitudesCotizacionCompra(data.solicitudes || []);
+        // Forzar que el select tenga un valor válido seleccionado
+        const selectOrden = document.getElementById('compraDirecta_id_orden');
+        if (selectOrden && selectOrden.options.length > 1) {
+            // Si hay opciones y la primera es la placeholder, seleccionar la primera opción válida
+            if (selectOrden.selectedIndex === 0 || !selectOrden.value || selectOrden.value === '') {
+                selectOrden.selectedIndex = 1; // Seleccionar la primera opción válida
+                console.log('✅ Select orden auto-seleccionado a:', selectOrden.value);
+            }
         }
+        
+        const selectEncargado = document.getElementById('compraDirecta_id_encargado');
+        if (selectEncargado && selectEncargado.options.length > 1 && (!selectEncargado.value || selectEncargado.value === '')) {
+            selectEncargado.selectedIndex = 1;
+        }
+        
+        abrirModal('modalNuevaSolicitudCompraDirecta');
+        
     } catch (error) {
-        console.error('Error cargando solicitudes de cotización:', error);
+        console.error('❌ Error:', error);
+        showToast('Error al preparar el formulario', 'error');
+    } finally {
+        mostrarLoading(false);
     }
 }
 
-function renderSolicitudesCotizacionCompra(solicitudes) {
-    const tbody = document.getElementById('tablaSolicitudesCotizacionCompra');
-    if (!tbody) return;
+// Abre el modal desde el carrito de una solicitud de técnico
+async function abrirModalCompraDesdeSolicitudTecnico(id_solicitud) {
+    console.log(`🔄 Abriendo modal desde solicitud de técnico #${id_solicitud}`);
     
-    if (solicitudes.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes de cotización</p></div></div></td>`;
+    const solicitud = solicitudesRepuestosTecnico.find(s => s.id === id_solicitud);
+    if (!solicitud) {
+        showToast('No se encontró la solicitud del técnico', 'error');
         return;
     }
     
-    tbody.innerHTML = solicitudes.map(s => `
-        <tr>
-            <td>${s.id}</div>
-            <td><strong>${escapeHtml(s.orden_codigo)}</strong></div>
-            <td>${escapeHtml(s.vehiculo)}</div>
-            <td>${escapeHtml(s.servicio_descripcion || '-')}</div>
-            <td>${s.items?.length || 1} item(s)</div>
-            <td>${statusBadge(s.estado)}</div>
-            <td>${s.precio_cotizado ? formatCurrency(s.precio_cotizado) : '-'}</div>
-            <td>${formatDate(s.fecha_solicitud)}</div>
-            <td class="action-buttons">
-                ${s.estado === 'pendiente' ? `<button class="action-btn delete" onclick="eliminarSolicitudCotizacion(${s.id})"><i class="fas fa-trash-alt"></i></button>` : ''}
-                ${s.estado === 'cotizado' ? `<button class="action-btn send" onclick="solicitarCompraDesdeCotizacion(${s.id})"><i class="fas fa-shopping-cart"></i></button>` : ''}
-            </div>
-        </tr>
-    `).join('');
+    currentSolicitudTecnico = solicitud;
+    
+    // Limpiar items previos
+    limpiarItemsCompraDirecta();
+    
+    // Pre-cargar los items del técnico en el modal
+    if (solicitud.items && solicitud.items.length > 0) {
+        itemsCompraDirecta = solicitud.items.map(item => ({
+            descripcion: item.descripcion,
+            cantidad: item.cantidad,
+            detalle: item.detalle || ''
+        }));
+        renderItemsCompraDirecta();
+        console.log(`📦 Items pre-cargados: ${itemsCompraDirecta.length}`);
+    }
+    
+    // Mostrar info adicional de la solicitud del técnico
+    const infoAdicional = document.getElementById('compraDirectaInfoAdicional');
+    if (infoAdicional) {
+        let itemsHtml = '';
+        if (solicitud.items && solicitud.items.length > 0) {
+            itemsHtml = '<ul style="margin: 0.5rem 0 0 1rem;">' + 
+                solicitud.items.map(item => `<li><strong>${escapeHtml(item.descripcion)}</strong> x${item.cantidad}${item.detalle ? ` (${escapeHtml(item.detalle)})` : ''}</li>`).join('') + 
+                '</ul>';
+        }
+        
+        infoAdicional.innerHTML = `
+            <p><strong><i class="fas fa-tools"></i> Solicitud del Técnico #${solicitud.id}</strong></p>
+            <p><strong>Orden:</strong> ${escapeHtml(solicitud.orden_codigo)}</p>
+            <p><strong>Vehículo:</strong> ${escapeHtml(solicitud.vehiculo)}</p>
+            <p><strong>Técnico:</strong> ${escapeHtml(solicitud.tecnico_nombre)}</p>
+            <p><strong>Repuestos solicitados:</strong>${itemsHtml}</p>
+            ${solicitud.observaciones ? `<p><strong>Observaciones del técnico:</strong> ${escapeHtml(solicitud.observaciones)}</p>` : ''}
+        `;
+        infoAdicional.style.display = 'block';
+    }
+    
+    // Cambiar título
+    const title = document.getElementById('modalCompraDirectaTitle');
+    if (title) title.innerHTML = '<i class="fas fa-shopping-cart"></i> Solicitar Compra - Items del Técnico';
+    
+    mostrarLoading(true);
+    try {
+        // Cargar órdenes activas
+        await cargarOrdenesActivasParaCompraDirecta();
+        
+        // Pre-seleccionar la orden
+        const selectOrden = document.getElementById('compraDirecta_id_orden');
+        if (selectOrden && solicitud.id_orden_trabajo) {
+            // Asegurar que la orden esté en el select
+            const optionExists = Array.from(selectOrden.options).some(opt => opt.value == solicitud.id_orden_trabajo);
+            if (!optionExists) {
+                // Agregar la orden si no existe
+                const option = document.createElement('option');
+                option.value = solicitud.id_orden_trabajo;
+                option.textContent = `${escapeHtml(solicitud.orden_codigo)} - ${escapeHtml(solicitud.vehiculo)}`;
+                selectOrden.appendChild(option);
+            }
+            selectOrden.value = solicitud.id_orden_trabajo;
+            console.log(`✅ Orden preseleccionada: ${solicitud.id_orden_trabajo}`);
+        }
+        
+        // Cargar encargados de repuestos
+        await cargarEncargadosRepuestos();
+        
+        // Pre-llenar observaciones
+        const observacionesTextarea = document.getElementById('compraDirecta_observaciones');
+        if (observacionesTextarea && solicitud.observaciones) {
+            observacionesTextarea.value = `Solicitud del técnico: ${solicitud.observaciones.substring(0, 200)}`;
+        }
+        
+        abrirModal('modalNuevaSolicitudCompraDirecta');
+        
+    } catch (error) {
+        console.error('❌ Error preparando modal:', error);
+        showToast('Error al preparar el formulario', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+async function confirmarCompraDirecta() {
+    // Obtener elementos y depurar
+    const selectOrden = document.getElementById('compraDirecta_id_orden');
+    const selectEncargado = document.getElementById('compraDirecta_id_encargado');
+    const observaciones = document.getElementById('compraDirecta_observaciones')?.value || '';
+    
+    // DEPURACIÓN: Mostrar información del select
+    console.log('🔍 DEPURACIÓN SELECT ORDEN:');
+    console.log('  - Elemento existe:', !!selectOrden);
+    console.log('  - value:', selectOrden?.value);
+    console.log('  - selectedIndex:', selectOrden?.selectedIndex);
+    console.log('  - options length:', selectOrden?.options?.length);
+    
+    if (selectOrden && selectOrden.options) {
+        for (let i = 0; i < selectOrden.options.length; i++) {
+            console.log(`  - option[${i}]: value="${selectOrden.options[i].value}", text="${selectOrden.options[i].text}"`);
+        }
+    }
+    
+    // Normalizar la obtención del valor
+    let id_orden = null;
+    if (selectOrden) {
+        // Intentar obtener el valor de diferentes maneras
+        id_orden = selectOrden.value;
+        if (!id_orden || id_orden === '' || id_orden === 'undefined') {
+            // Si el value está vacío, intentar con el texto seleccionado o buscar por selectedIndex
+            const selectedOption = selectOrden.options[selectOrden.selectedIndex];
+            if (selectedOption && selectedOption.value && selectedOption.value !== '') {
+                id_orden = selectedOption.value;
+            }
+        }
+    }
+    
+    const id_encargado = selectEncargado?.value;
+    
+    console.log('📝 Valor final id_orden:', id_orden);
+    console.log('📝 id_encargado:', id_encargado);
+    
+    // Validación más estricta
+    if (!id_orden || id_orden === '' || id_orden === 'undefined' || id_orden === 'null' || id_orden === 'NaN') {
+        showToast('⚠️ Por favor, seleccione una orden de trabajo válida', 'warning');
+        
+        // Recargar órdenes si no hay ninguna seleccionable
+        if (selectOrden && selectOrden.options.length <= 1) {
+            showToast('No hay órdenes activas. Recargando...', 'info');
+            await cargarOrdenesActivasParaCompraDirecta();
+        }
+        
+        if (selectOrden) {
+            selectOrden.style.borderColor = 'var(--rojo-primario)';
+            selectOrden.focus();
+            setTimeout(() => {
+                selectOrden.style.borderColor = '';
+            }, 2000);
+        }
+        return;
+    }
+    
+    if (!id_encargado || id_encargado === '' || id_encargado === 'undefined') {
+        showToast('⚠️ Por favor, seleccione un encargado de repuestos', 'warning');
+        if (selectEncargado) {
+            selectEncargado.style.borderColor = 'var(--rojo-primario)';
+            selectEncargado.focus();
+            setTimeout(() => {
+                selectEncargado.style.borderColor = '';
+            }, 2000);
+        }
+        return;
+    }
+    
+    const itemsValidos = itemsCompraDirecta.filter(item => item.descripcion && item.descripcion.trim() !== '');
+    if (itemsValidos.length === 0) {
+        showToast('⚠️ Agregue al menos un repuesto a comprar', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    try {
+        const id_orden_numero = parseInt(id_orden);
+        
+        if (isNaN(id_orden_numero)) {
+            showToast('Error: ID de orden inválido', 'error');
+            return;
+        }
+        
+        const requestBody = {
+            id_orden_trabajo: id_orden_numero,
+            id_encargado_repuestos: parseInt(id_encargado),
+            items: itemsValidos,
+            observaciones: observaciones
+        };
+        
+        console.log('📤 Enviando solicitud:', requestBody);
+        
+        const response = await fetch(`${API_URL}/solicitudes-compra-directa`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(requestBody)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            if (currentSolicitudTecnico) {
+                await actualizarEstadoSolicitudTecnico(currentSolicitudTecnico.id, 'en_proceso', 
+                    `Solicitud de compra enviada. Items: ${itemsValidos.length}`);
+            }
+            
+            showToast('✅ Solicitud de compra enviada al encargado de repuestos', 'success');
+            cerrarModal('modalNuevaSolicitudCompraDirecta');
+            limpiarItemsCompraDirecta();
+            currentSolicitudTecnico = null;
+            
+            await cargarSolicitudesCompra();
+            await cargarSolicitudesRepuestosTecnico();
+        } else {
+            showToast(data.error || 'Error al crear solicitud', 'error');
+        }
+    } catch (error) {
+        console.error('❌ Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+async function actualizarEstadoSolicitudTecnico(id_solicitud, nuevoEstado, respuesta) {
+    try {
+        const response = await fetch(`${API_URL}/solicitudes-repuestos-tecnico/${id_solicitud}/estado`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ 
+                estado: nuevoEstado, 
+                respuesta: respuesta,
+                respondido_por: currentUser?.id
+            })
+        });
+        const data = await response.json();
+        console.log(`✅ Solicitud de técnico #${id_solicitud} actualizada a ${nuevoEstado}`);
+        return data;
+    } catch (error) {
+        console.error('Error actualizando solicitud de técnico:', error);
+        return { success: false };
+    }
 }
 
 // =====================================================
-// RENDERIZADO PRIMER APARTADO
+// RENDERIZADO PRIMER APARTADO (TAB 1)
 // =====================================================
 
 function renderOrdenesSolicitarCotizacion() {
@@ -803,7 +997,7 @@ async function abrirModalSolicitudParaOrden(id_orden) {
 }
 
 // =====================================================
-// RENDERIZADO SEGUNDO APARTADO
+// RENDERIZADO SEGUNDO APARTADO (TAB 2)
 // =====================================================
 
 function renderOrdenesCotizacionCliente() {
@@ -958,10 +1152,11 @@ function renderSolicitudesCotizacion() {
     if (!tbody) return;
     
     if (solicitudesCotizacion.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes</p></div></td><table>`;
+        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes</p></div></td></tr>`;
         return;
     }
     
+    // SIN columna de acciones - solo información
     tbody.innerHTML = solicitudesCotizacion.map(s => `
         <tr>
             <td>${s.id}</td>
@@ -972,299 +1167,8 @@ function renderSolicitudesCotizacion() {
             <td>${statusBadge(s.estado)}</div></td>
             <td>${s.precio_cotizado ? formatCurrency(s.precio_cotizado) : '-'}</div></td>
             <td>${formatDate(s.fecha_solicitud)}</div></td>
-            <td class="action-buttons">
-                ${s.estado === 'pendiente' ? `<button class="action-btn delete" onclick="eliminarSolicitudCotizacion(${s.id})"><i class="fas fa-trash-alt"></i></button>` : ''}
-                ${s.estado === 'cotizado' ? `<button class="action-btn send" onclick="solicitarCompraDesdeCotizacion(${s.id})"><i class="fas fa-shopping-cart"></i></button>` : ''}
-            </div>
         </tr>
     `).join('');
-}
-
-function renderSolicitudesCompra() {
-    const tbody = document.getElementById('tablaSolicitudesCompra');
-    if (!tbody) return;
-    
-    if (solicitudesCompra.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="fas fa-shopping-cart"></i><p>No hay solicitudes</p></div></div></td>`;
-        return;
-    }
-    
-    tbody.innerHTML = solicitudesCompra.map(s => `
-        <tr>
-            <td>${s.id}</div><td><strong>${escapeHtml(s.orden_codigo)}</strong></div><td>${escapeHtml(s.vehiculo)}</div><td>${s.items?.length || 1} item(s)</div><td>${statusBadge(s.estado)}</div><td>${formatDate(s.fecha_solicitud)}</div>
-            <td class="action-buttons">
-                <button class="action-btn view" onclick="verSolicitudCompra(${s.id})"><i class="fas fa-eye"></i></button>
-                ${s.estado === 'pendiente' ? `<button class="action-btn approve" onclick="aprobarCompra(${s.id})"><i class="fas fa-check-circle"></i></button>` : ''}
-            </div>
-        </tr>
-    `).join('');
-}
-
-// =====================================================
-// NUEVA SOLICITUD DE COMPRA DIRECTA
-// =====================================================
-
-async function abrirModalNuevaSolicitudCompraDirecta() {
-    limpiarItemsCompraDirecta();
-    await cargarOrdenesActivasParaCompraDirecta();
-    await cargarEncargadosRepuestos();
-    abrirModal('modalNuevaSolicitudCompraDirecta');
-}
-
-async function confirmarCompraDirecta() {
-    const id_orden = document.getElementById('compraDirecta_id_orden')?.value;
-    const id_encargado = document.getElementById('compraDirecta_id_encargado')?.value;
-    const observaciones = document.getElementById('compraDirecta_observaciones')?.value || '';
-    
-    if (!id_orden) {
-        showToast('Seleccione una orden de trabajo', 'warning');
-        return;
-    }
-    
-    if (!id_encargado) {
-        showToast('Seleccione un encargado de repuestos', 'warning');
-        return;
-    }
-    
-    const itemsValidos = itemsCompraDirecta.filter(item => item.descripcion && item.descripcion.trim() !== '');
-    if (itemsValidos.length === 0) {
-        showToast('Agregue al menos un repuesto a comprar', 'warning');
-        return;
-    }
-    
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/solicitudes-compra-directa`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                id_orden_trabajo: parseInt(id_orden),
-                id_encargado_repuestos: parseInt(id_encargado),
-                items: itemsValidos,
-                observaciones: observaciones
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast('✅ Solicitud de compra enviada al encargado de repuestos', 'success');
-            cerrarModal('modalNuevaSolicitudCompraDirecta');
-            limpiarItemsCompraDirecta();
-            await cargarSolicitudesCompra();
-        } else {
-            showToast(data.error || 'Error al crear solicitud', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-// =====================================================
-// GESTIONAR SOLICITUD DE TÉCNICO (COMPRAR REPUESTOS)
-// =====================================================
-
-function abrirModalGestionarSolicitudTecnico(id_solicitud) {
-    const solicitud = solicitudesRepuestosTecnico.find(s => s.id === id_solicitud);
-    if (!solicitud) return;
-    
-    currentGestionSolicitud = solicitud;
-    limpiarItemsGestionCompra();
-    
-    let itemsHtml = '';
-    if (solicitud.items && solicitud.items.length > 0) {
-        itemsHtml = '<ul style="margin: 0.5rem 0 0 1rem;">' + 
-            solicitud.items.map(item => `<li><strong>${escapeHtml(item.descripcion)}</strong> x${item.cantidad}${item.detalle ? ` (${escapeHtml(item.detalle)})` : ''}</li>`).join('') + 
-            '</ul>';
-    }
-    
-    const infoContainer = document.getElementById('gestionSolicitudInfo');
-    if (infoContainer) {
-        infoContainer.innerHTML = `
-            <p><strong>Orden:</strong> ${escapeHtml(solicitud.orden_codigo)}</p>
-            <p><strong>Vehículo:</strong> ${escapeHtml(solicitud.vehiculo)}</p>
-            <p><strong>Técnico:</strong> ${escapeHtml(solicitud.tecnico_nombre)}</p>
-            <p><strong>Repuestos solicitados:</strong>${itemsHtml}</p>
-            ${solicitud.observaciones ? `<p><strong>Observaciones del técnico:</strong> ${escapeHtml(solicitud.observaciones)}</p>` : ''}
-        `;
-    }
-    
-    const itemsContainer = document.getElementById('itemsSolicitudTecnico');
-    if (itemsContainer && solicitud.items && solicitud.items.length > 0) {
-        itemsContainer.innerHTML = solicitud.items.map(item => 
-            `<div style="padding: 0.3rem 0; border-bottom: 1px solid var(--border-color);">
-                <i class="fas fa-box"></i> <strong>${escapeHtml(item.descripcion)}</strong> x${item.cantidad}
-                ${item.detalle ? `<br><small class="text-muted">${escapeHtml(item.detalle)}</small>` : ''}
-            </div>`
-        ).join('');
-    }
-    
-    if (solicitud.items && solicitud.items.length > 0) {
-        itemsGestionCompra = solicitud.items.map(item => ({
-            descripcion: item.descripcion,
-            cantidad: item.cantidad,
-            detalle: item.detalle || ''
-        }));
-        renderItemsGestionCompra();
-    }
-    
-    document.getElementById('gestionRespuestaTecnico').value = solicitud.respuesta || '';
-    document.getElementById('gestionEstadoFinal').value = solicitud.estado === 'en_proceso' ? 'en_proceso' : 'completado';
-    
-    abrirModal('modalGestionarSolicitudTecnico');
-}
-
-async function confirmarGestionSolicitudTecnico() {
-    if (!currentGestionSolicitud) return;
-    
-    const respuesta = document.getElementById('gestionRespuestaTecnico')?.value.trim();
-    const nuevoEstado = document.getElementById('gestionEstadoFinal')?.value || 'completado';
-    
-    if (!respuesta) {
-        showToast('Debes escribir una respuesta para el técnico', 'warning');
-        return;
-    }
-    
-    const itemsComprados = itemsGestionCompra.filter(item => item.descripcion && item.descripcion.trim() !== '');
-    
-    mostrarLoading(true);
-    try {
-        const updateResponse = await fetch(`${API_URL}/solicitudes-repuestos-tecnico/${currentGestionSolicitud.id}/estado`, {
-            method: 'PUT',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ 
-                estado: nuevoEstado, 
-                respuesta: respuesta,
-                respondido_por: currentUser?.id
-            })
-        });
-        
-        const updateData = await updateResponse.json();
-        
-        if (!updateData.success) {
-            showToast(updateData.error || 'Error al actualizar solicitud', 'error');
-            return;
-        }
-        
-        if (itemsComprados.length > 0 && (nuevoEstado === 'completado' || nuevoEstado === 'en_proceso')) {
-            let id_encargado = null;
-            const encargados = await fetch(`${API_URL}/encargados-repuestos`, { headers: getAuthHeaders() });
-            const encargadosData = await encargados.json();
-            if (encargadosData.encargados && encargadosData.encargados.length > 0) {
-                id_encargado = encargadosData.encargados[0].id;
-            }
-            
-            if (id_encargado) {
-                const compraResponse = await fetch(`${API_URL}/solicitudes-compra-directa`, {
-                    method: 'POST',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify({
-                        id_orden_trabajo: currentGestionSolicitud.id_orden_trabajo,
-                        id_encargado_repuestos: id_encargado,
-                        items: itemsComprados,
-                        observaciones: `Solicitud generada desde petición del técnico #${currentGestionSolicitud.id}. Respuesta: ${respuesta.substring(0, 200)}`
-                    })
-                });
-                
-                const compraData = await compraResponse.json();
-                if (compraData.success) {
-                    showToast('✅ Solicitud de compra enviada al encargado de repuestos', 'success');
-                }
-            }
-        }
-        
-        showToast(`✅ Solicitud actualizada a "${nuevoEstado}" y notificada al técnico`, 'success');
-        cerrarModal('modalGestionarSolicitudTecnico');
-        
-        await cargarSolicitudesRepuestosTecnico();
-        await cargarSolicitudesCompra();
-        
-        currentGestionSolicitud = null;
-        limpiarItemsGestionCompra();
-        
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-// =====================================================
-// RESPONDER SOLICITUD DE TÉCNICO (SIMPLE)
-// =====================================================
-
-function abrirModalResponderSolicitud(id_solicitud) {
-    const solicitud = solicitudesRepuestosTecnico.find(s => s.id === id_solicitud);
-    if (!solicitud) return;
-    
-    const infoContainer = document.getElementById('responderSolicitudInfo');
-    if (infoContainer) {
-        let itemsHtml = '';
-        if (solicitud.items && solicitud.items.length > 0) {
-            itemsHtml = '<ul style="margin: 0.5rem 0 0 1rem;">' + 
-                solicitud.items.map(item => `<li>${escapeHtml(item.descripcion)} x${item.cantidad}${item.detalle ? ` (${escapeHtml(item.detalle)})` : ''}</li>`).join('') + 
-                '</ul>';
-        }
-        
-        infoContainer.innerHTML = `
-            <p><strong>Orden:</strong> ${escapeHtml(solicitud.orden_codigo)}</p>
-            <p><strong>Vehículo:</strong> ${escapeHtml(solicitud.vehiculo)}</p>
-            <p><strong>Técnico:</strong> ${escapeHtml(solicitud.tecnico_nombre)}</p>
-            <p><strong>Repuestos solicitados:</strong>${itemsHtml}</p>
-            ${solicitud.observaciones ? `<p><strong>Observaciones:</strong> ${escapeHtml(solicitud.observaciones)}</p>` : ''}
-        `;
-    }
-    
-    document.getElementById('respuestaMensaje').value = solicitud.respuesta || '';
-    document.getElementById('respuestaEstado').value = solicitud.estado === 'en_proceso' ? 'en_proceso' : 'en_proceso';
-    
-    window.currentSolicitudTecnico = solicitud;
-    abrirModal('modalResponderSolicitud');
-}
-
-async function confirmarResponderSolicitud() {
-    if (!window.currentSolicitudTecnico) return;
-    
-    const respuesta = document.getElementById('respuestaMensaje')?.value.trim();
-    const nuevoEstado = document.getElementById('respuestaEstado')?.value || 'en_proceso';
-    
-    if (!respuesta) {
-        showToast('Debes escribir una respuesta para el técnico', 'warning');
-        return;
-    }
-    
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/solicitudes-repuestos-tecnico/${window.currentSolicitudTecnico.id}/estado`, {
-            method: 'PUT',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ 
-                estado: nuevoEstado, 
-                respuesta: respuesta,
-                respondido_por: currentUser?.id
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast('✅ Respuesta enviada al técnico', 'success');
-            cerrarModal('modalResponderSolicitud');
-            await cargarSolicitudesRepuestosTecnico();
-            window.currentSolicitudTecnico = null;
-        } else {
-            showToast(data.error || 'Error al enviar respuesta', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
 }
 
 // =====================================================
@@ -1812,91 +1716,6 @@ async function eliminarSolicitudCotizacion(id) {
     }
 }
 
-async function solicitarCompraDesdeCotizacion(id_solicitud) {
-    const solicitud = solicitudesCotizacion.find(s => s.id === id_solicitud);
-    if (!solicitud) return;
-    
-    limpiarItemsCompra();
-    if (solicitud.items && solicitud.items.length > 0) {
-        itemsCompra = [...solicitud.items];
-        renderItemsCompra();
-    }
-    
-    window.currentCompraData = { id_solicitud_cotizacion: id_solicitud };
-    document.getElementById('solicitudCompraInfo').innerHTML = `
-        <p><strong>Orden:</strong> ${escapeHtml(solicitud.orden_codigo)}</p>
-        <p><strong>Vehículo:</strong> ${escapeHtml(solicitud.vehiculo)}</p>
-        <p><strong>Precio cotizado:</strong> ${solicitud.precio_cotizado ? formatCurrency(solicitud.precio_cotizado) : 'No especificado'}</p>
-    `;
-    abrirModal('modalSolicitarCompra');
-}
-
-async function confirmarSolicitudCompra() {
-    if (!window.currentCompraData) return;
-    
-    const itemsValidos = itemsCompra.filter(item => item.descripcion && item.descripcion.trim() !== '');
-    if (itemsValidos.length === 0) {
-        showToast('Agregue al menos un item', 'error');
-        return;
-    }
-    
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/solicitudes-compra`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                id_solicitud_cotizacion: window.currentCompraData.id_solicitud_cotizacion,
-                items: itemsValidos,
-                mensaje: document.getElementById('compra_mensaje')?.value || ''
-            })
-        });
-        
-        const data = await response.json();
-        if (data.success) {
-            showToast('Solicitud de compra creada', 'success');
-            cerrarModal('modalSolicitarCompra');
-            limpiarItemsCompra();
-            await cargarSolicitudesCompra();
-            await cargarOrdenesDiagnosticoAprobado();
-            await cargarSolicitudesCotizacionCompra();
-        } else {
-            showToast(data.error || 'Error al crear solicitud', 'error');
-        }
-    } catch (error) {
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-async function verSolicitudCompra(id) {
-    const solicitud = solicitudesCompra.find(s => s.id === id);
-    if (solicitud) {
-        showToast(`Solicitud #${id} - Estado: ${solicitud.estado}`, 'info');
-    }
-}
-
-async function aprobarCompra(id) {
-    if (!confirm('¿Confirmar que la compra se realizó?')) return;
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/solicitudes-compra/${id}/aprobar`, { method: 'PUT', headers: getAuthHeaders() });
-        const data = await response.json();
-        if (data.success) {
-            showToast('Compra registrada', 'success');
-            await cargarSolicitudesCompra();
-            await cargarSolicitudesCotizacionCompra();
-        } else {
-            showToast(data.error || 'Error al registrar', 'error');
-        }
-    } catch (error) {
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
 // =====================================================
 // MODALES: NOTIFICAR ARMADO, INICIAR REPARACIÓN
 // =====================================================
@@ -2230,7 +2049,6 @@ async function guardarSolicitudCotizacion() {
             limpiarItemsSolicitud();
             await cargarSolicitudesCotizacion();
             await cargarOrdenesDiagnosticoAprobado();
-            await cargarSolicitudesCotizacionCompra();
         } else {
             showToast(data.error || 'Error al enviar solicitud', 'error');
         }
@@ -2256,7 +2074,6 @@ function setupTabs() {
             document.getElementById(tabId)?.classList.add('active');
             
             if (tabId === 'tab-solicitar-compra') {
-                cargarSolicitudesCotizacionCompra();
                 cargarSolicitudesRepuestosTecnico();
             }
         });
@@ -2266,12 +2083,9 @@ function setupTabs() {
 function setupEventListeners() {
     // Botones principales
     document.getElementById('enviarCotizacionBtn')?.addEventListener('click', enviarCotizacionCliente);
-    document.getElementById('confirmarSolicitudCompra')?.addEventListener('click', confirmarSolicitudCompra);
-    document.getElementById('btnAgregarItemCompra')?.addEventListener('click', agregarItemCompra);
     document.getElementById('btnAgregarServicioCotizacion')?.addEventListener('click', agregarServicioCotizable);
     document.getElementById('btnAgregarItemSolicitud')?.addEventListener('click', agregarItemSolicitud);
     document.getElementById('saveSolicitudModal')?.addEventListener('click', guardarSolicitudCotizacion);
-    document.getElementById('btnConfirmarRespuestaSolicitud')?.addEventListener('click', confirmarResponderSolicitud);
     
     // Botones de refresh
     document.getElementById('refreshSolicitarBtn')?.addEventListener('click', () => cargarDatosIniciales());
@@ -2286,14 +2100,9 @@ function setupEventListeners() {
     });
     
     // Botones TAB 3
-    document.getElementById('refreshCotizacionesCompra')?.addEventListener('click', () => {
-        cargarSolicitudesCotizacionCompra();
-        cargarSolicitudesRepuestosTecnico();
-    });
     document.getElementById('refreshSolicitudesTecnico')?.addEventListener('click', () => {
         cargarSolicitudesRepuestosTecnico();
     });
-    document.getElementById('filtroEstadoCotizacionCompra')?.addEventListener('change', () => cargarSolicitudesCotizacionCompra());
     document.getElementById('filtroEstadoRepuestoTecnico')?.addEventListener('change', () => cargarSolicitudesRepuestosTecnico());
     document.getElementById('searchRepuestoTecnico')?.addEventListener('input', () => cargarSolicitudesRepuestosTecnico());
     
@@ -2305,14 +2114,10 @@ function setupEventListeners() {
     document.getElementById('searchHistorial')?.addEventListener('input', () => renderHistorialCotizaciones());
     document.getElementById('filtroEstadoHistorial')?.addEventListener('change', () => renderHistorialCotizaciones());
     
-    // Botones compra directa
+    // Botones compra directa (unificado)
     document.getElementById('btnNuevaSolicitudCompraDirecta')?.addEventListener('click', abrirModalNuevaSolicitudCompraDirecta);
     document.getElementById('btnAgregarItemCompraDirecta')?.addEventListener('click', agregarItemCompraDirecta);
     document.getElementById('btnConfirmarCompraDirecta')?.addEventListener('click', confirmarCompraDirecta);
-    
-    // Botones gestión de compra
-    document.getElementById('btnAgregarItemGestionCompra')?.addEventListener('click', agregarItemGestionCompra);
-    document.getElementById('btnConfirmarGestionSolicitud')?.addEventListener('click', confirmarGestionSolicitudTecnico);
     
     // Cerrar modales al hacer clic fuera
     document.querySelectorAll('.modal').forEach(modal => {
@@ -2370,7 +2175,8 @@ async function cargarDatosIniciales() {
             cargarSolicitudesCompra(),
             cargarEncargadosRepuestos(),
             cargarOrdenesAprobadas(),
-            cargarHistorialCotizaciones()
+            cargarHistorialCotizaciones(),
+            cargarSolicitudesRepuestosTecnico()
         ]);
     } catch (error) {
         console.error('Error cargando datos:', error);
@@ -2387,34 +2193,540 @@ function logout() {
 }
 
 async function inicializar() {
-    console.log('🚀 Inicializando cotizaciones.js versión 4.0');
+    console.log('🚀 Inicializando cotizaciones.js versión 5.0');
     const user = await cargarUsuarioActual();
     if (!user) return;
     await cargarDatosIniciales();
-    await cargarSolicitudesCotizacionCompra();
-    await cargarSolicitudesRepuestosTecnico();
     setupTabs();
     setupEventListeners();
     console.log('✅ cotizaciones.js inicializado correctamente');
 }
+function renderSolicitudesCompra() {
+    const tbody = document.getElementById('tablaSolicitudesCompra');
+    if (!tbody) return;
+    
+    if (!solicitudesCompra || solicitudesCompra.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes de compra</p></div></div></td></tr>`;
+        return;
+    }
+    
+    tbody.innerHTML = solicitudesCompra.map(s => {
+        // Parsear items si es string
+        let itemsList = s.items;
+        if (typeof itemsList === 'string') {
+            try {
+                itemsList = JSON.parse(itemsList);
+            } catch(e) {
+                itemsList = [];
+            }
+        }
+        
+        const itemsHtml = itemsList && itemsList.length > 0 
+            ? itemsList.map(item => `<div style="font-size: 0.7rem;">• ${escapeHtml(item.descripcion)} x${item.cantidad}</div>`).join('')
+            : `<div class="text-muted">${escapeHtml(s.descripcion_pieza || 'Item')} x${s.cantidad || 1}</div>`;
+        
+        let estadoClass = '';
+        let estadoIcon = '';
+        let estadoTexto = '';
+        
+        switch (s.estado) {
+            case 'pendiente':
+                estadoClass = 'status-pendiente';
+                estadoIcon = 'fa-clock';
+                estadoTexto = 'Pendiente';
+                break;
+            case 'comprado':
+                estadoClass = 'status-aprobado';
+                estadoIcon = 'fa-check-circle';
+                estadoTexto = 'Comprado';
+                break;
+            case 'rechazado':
+                estadoClass = 'status-rechazado';
+                estadoIcon = 'fa-times-circle';
+                estadoTexto = 'Rechazado';
+                break;
+            default:
+                estadoClass = 'status-pendiente';
+                estadoIcon = 'fa-clock';
+                estadoTexto = s.estado || 'Pendiente';
+        }
+        
+        return `
+            <tr>
+                <td>${s.id}</div>
+                <td><strong>${escapeHtml(s.orden_codigo || 'N/A')}</strong></div>
+                <td>${escapeHtml(s.vehiculo || 'N/A')}</div>
+                <td style="max-width: 250px;">${itemsHtml}</div>
+                <td><span class="status-badge ${estadoClass}"><i class="fas ${estadoIcon}"></i> ${estadoTexto}</span></div>
+                <td>${formatDate(s.fecha_solicitud)}</div>
+                <td class="action-buttons">
+                    <button class="action-btn view" onclick="verDetalleSolicitudCompra(${s.id})" title="Ver detalle">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    ${s.estado === 'pendiente' ? 
+                        `<button class="action-btn approve" onclick="aprobarCompra(${s.id})" title="Marcar como comprado">
+                            <i class="fas fa-check-circle"></i>
+                        </button>` : ''}
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
 
+// Función para ver detalle de solicitud de compra
+// Función para ver detalle de solicitud de compra (JEFE DE TALLER - TAB 3)
+function verDetalleSolicitudCompra(id) {
+    const solicitud = solicitudesCompra.find(s => s.id === id);
+    if (!solicitud) return;
+    
+    // Guardar el ID de la solicitud para la descarga
+    window.currentSolicitudCompraId = id;
+    
+    let itemsHtml = '';
+    let itemsList = solicitud.items;
+    if (typeof itemsList === 'string') {
+        try {
+            itemsList = JSON.parse(itemsList);
+        } catch(e) {
+            itemsList = [];
+        }
+    }
+    
+    if (itemsList && itemsList.length > 0) {
+        itemsHtml = '<ul style="margin: 0.5rem 0 0 1rem;">' + 
+            itemsList.map(item => `<li><strong>${escapeHtml(item.descripcion)}</strong> x${item.cantidad}${item.detalle ? ` (${escapeHtml(item.detalle)})` : ''}</li>`).join('') + 
+            '</ul>';
+    } else {
+        itemsHtml = `<p>${escapeHtml(solicitud.descripcion_pieza || 'Item')} x${solicitud.cantidad || 1}</p>`;
+    }
+    
+    // Buscar la cotización asociada a esta orden
+    const cotizacion = cotizacionesMap[solicitud.id_orden_trabajo];
+    const tieneDocumento = cotizacion && cotizacion.id;
+    
+    const container = document.getElementById('detalleCotizacionContainer');
+    container.innerHTML = `
+        <div class="orden-info-card">
+            <p><strong><i class="fas fa-tag"></i> Solicitud ID:</strong> ${solicitud.id}</p>
+            <p><strong><i class="fas fa-clipboard-list"></i> Orden:</strong> ${escapeHtml(solicitud.orden_codigo)}</p>
+            <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(solicitud.vehiculo)}</p>
+            <p><strong><i class="fas fa-boxes"></i> Items solicitados:</strong>${itemsHtml}</p>
+            <p><strong><i class="fas fa-clock"></i> Fecha solicitud:</strong> ${formatDate(solicitud.fecha_solicitud)}</p>
+            <p><strong><i class="fas fa-chart-line"></i> Estado:</strong> ${statusBadge(solicitud.estado)}</p>
+            
+            ${solicitud.mensaje_jefe_taller ? `<p><strong><i class="fas fa-comment"></i> Mensaje del Jefe de Taller:</strong> ${escapeHtml(solicitud.mensaje_jefe_taller)}</p>` : ''}
+            
+            <!-- SECCIÓN DE COMPROBANTE (lo que llenó el encargado de repuestos) -->
+            ${solicitud.estado === 'comprado' || solicitud.estado === 'entregado' ? `
+                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 2px solid var(--border-color);">
+                    <h4 style="color: var(--verde-exito); margin-bottom: 0.75rem;">
+                        <i class="fas fa-receipt"></i> Detalles de la Compra (Registrado por Encargado de Repuestos)
+                    </h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem;">
+                        ${solicitud.fecha_compra ? `
+                            <div>
+                                <label style="font-size: 0.65rem; color: var(--gris-texto);">Fecha de Compra</label>
+                                <p style="margin: 0; font-weight: 500;">${formatDate(solicitud.fecha_compra)}</p>
+                            </div>
+                        ` : ''}
+                        ${solicitud.numero_factura ? `
+                            <div>
+                                <label style="font-size: 0.65rem; color: var(--gris-texto);">N° Factura/Comprobante</label>
+                                <p style="margin: 0; font-weight: 500;">${escapeHtml(solicitud.numero_factura)}</p>
+                            </div>
+                        ` : ''}
+                        ${solicitud.proveedor_nombre ? `
+                            <div>
+                                <label style="font-size: 0.65rem; color: var(--gris-texto);">Proveedor</label>
+                                <p style="margin: 0; font-weight: 500;">${escapeHtml(solicitud.proveedor_nombre)}</p>
+                            </div>
+                        ` : ''}
+                        ${solicitud.precio_cotizado ? `
+                            <div>
+                                <label style="font-size: 0.65rem; color: var(--gris-texto);">Monto Total</label>
+                                <p style="margin: 0; font-weight: 700; color: var(--verde-exito);">${formatCurrency(solicitud.precio_cotizado)}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                    ${solicitud.notas_compra ? `
+                        <div style="margin-top: 0.75rem;">
+                            <label style="font-size: 0.65rem; color: var(--gris-texto);">Notas de compra</label>
+                            <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem;">${escapeHtml(solicitud.notas_compra)}</p>
+                        </div>
+                    ` : ''}
+                    ${solicitud.respuesta_encargado ? `
+                        <div style="margin-top: 0.75rem;">
+                            <label style="font-size: 0.65rem; color: var(--gris-texto);">Respuesta del Encargado</label>
+                            <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem;">${escapeHtml(solicitud.respuesta_encargado)}</p>
+                        </div>
+                    ` : ''}
+                    ${solicitud.comprobante_url ? `
+                        <div style="margin-top: 1rem;">
+                            <button class="btn-outline" onclick="verComprobanteCompra(${solicitud.id})" style="width: 100%;">
+                                <i class="fas fa-image"></i> Ver Comprobante de Compra
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            ` : ''}
+            
+            ${solicitud.fecha_entrega ? `
+                <div style="margin-top: 1rem; padding-top: 0.5rem;">
+                    <p><strong><i class="fas fa-truck"></i> Fecha de entrega:</strong> ${formatDate(solicitud.fecha_entrega)}</p>
+                    ${solicitud.notas_entrega ? `<p><strong>Notas de entrega:</strong> ${escapeHtml(solicitud.notas_entrega)}</p>` : ''}
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    // Mostrar el botón de descarga de documento si existe la cotización
+    const modalFooter = document.querySelector('#modalDetalleCotizacion .modal-footer');
+    if (modalFooter) {
+        const btnDescargar = modalFooter.querySelector('#descargarDocumentoBtn');
+        if (cotizacion && cotizacion.id) {
+            if (btnDescargar) {
+                btnDescargar.style.display = 'flex';
+                btnDescargar.onclick = () => descargarDocumentoCotizacion(cotizacion.id);
+            }
+        } else {
+            if (btnDescargar) btnDescargar.style.display = 'none';
+        }
+    }
+    
+    abrirModal('modalDetalleCotizacion');
+}
+
+// Función para descargar el documento de cotización (PDF/WORD)
+async function descargarDocumentoCotizacion(idCotizacion) {
+    mostrarLoading(true);
+    
+    try {
+        const response = await fetch(`${API_URL}/detalle-cotizacion/${idCotizacion}`, {
+            headers: getAuthHeaders()
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success || !data.detalle) {
+            showToast('No se pudo obtener el documento', 'error');
+            return;
+        }
+        
+        const cotizacion = data.detalle;
+        
+        if (!cotizacion.archivo_base64) {
+            showToast('No hay documento asociado a esta cotización', 'warning');
+            return;
+        }
+        
+        // Decodificar base64
+        let base64String = cotizacion.archivo_base64;
+        if (base64String.includes(',')) {
+            base64String = base64String.split(',')[1];
+        }
+        
+        const byteCharacters = atob(base64String);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        
+        // Determinar tipo MIME
+        let mimeType = 'application/pdf';
+        const nombreArchivo = cotizacion.nombre_archivo || 'documento_cotizacion.pdf';
+        if (nombreArchivo.toLowerCase().endsWith('.doc')) {
+            mimeType = 'application/msword';
+        } else if (nombreArchivo.toLowerCase().endsWith('.docx')) {
+            mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        }
+        
+        const blob = new Blob([byteArray], { type: mimeType });
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = nombreArchivo;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(blobUrl);
+        
+        showToast('✅ Documento descargado correctamente', 'success');
+        
+    } catch (error) {
+        console.error('Error descargando documento:', error);
+        showToast('Error al descargar el documento', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// Función para ver el comprobante desde el jefe de taller
+function verComprobanteCompra(idSolicitud) {
+    const solicitud = solicitudesCompra.find(s => s.id === idSolicitud);
+    if (!solicitud || !solicitud.comprobante_url) {
+        showToast('No hay comprobante disponible para esta solicitud', 'warning');
+        return;
+    }
+    
+    const isImage = solicitud.comprobante_url.match(/\.(jpeg|jpg|gif|png|webp)$/i);
+    
+    const container = document.getElementById('detalleCotizacionContainer');
+    container.innerHTML = `
+        <div class="comprobante-modal-container">
+            <div class="comprobante-header">
+                <h3><i class="fas fa-receipt"></i> Comprobante de Compra</h3>
+                <p>Solicitud #${solicitud.id} - Orden: ${escapeHtml(solicitud.orden_codigo)}</p>
+            </div>
+            
+            <div class="comprobante-visualizacion">
+                ${isImage ? 
+                    `<img src="${solicitud.comprobante_url}" alt="Comprobante" class="comprobante-imagen" onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%25%22%20height%3D%22200%22%20viewBox%3D%220%200%20200%20200%22%3E%3Crect%20width%3D%22200%22%20height%3D%22200%22%20fill%3D%22%23333%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dy%3D%22.3em%22%20fill%3D%22%23999%22%3EImagen%20no%20disponible%3C%2Ftext%3E%3C%2Fsvg%3E'">` :
+                    `<iframe src="${solicitud.comprobante_url}" class="comprobante-pdf"></iframe>`
+                }
+            </div>
+            
+            <div class="comprobante-info">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>Factura/Comprobante N°:</label>
+                        <span>${escapeHtml(solicitud.numero_factura || 'N/A')}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Proveedor:</label>
+                        <span>${escapeHtml(solicitud.proveedor_nombre || 'N/A')}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Monto Total:</label>
+                        <span class="monto">${formatCurrency(solicitud.precio_cotizado || 0)}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Fecha de Compra:</label>
+                        <span>${formatDate(solicitud.fecha_compra)}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Estado:</label>
+                        <span>${statusBadge(solicitud.estado)}</span>
+                    </div>
+                </div>
+                
+                ${solicitud.notas_compra ? `
+                    <div class="info-item full-width">
+                        <label>Notas de compra:</label>
+                        <p>${escapeHtml(solicitud.notas_compra)}</p>
+                    </div>
+                ` : ''}
+                
+                ${solicitud.respuesta_encargado ? `
+                    <div class="info-item full-width">
+                        <label>Respuesta del Encargado:</label>
+                        <p>${escapeHtml(solicitud.respuesta_encargado)}</p>
+                    </div>
+                ` : ''}
+            </div>
+            
+            <div class="comprobante-actions">
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalleCotizacion')">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+                <button class="btn-primary" onclick="descargarComprobante(${solicitud.id})">
+                    <i class="fas fa-download"></i> Descargar Comprobante
+                </button>
+                <button class="btn-outline" onclick="window.open('${solicitud.comprobante_url}', '_blank')">
+                    <i class="fas fa-external-link-alt"></i> Abrir en nueva ventana
+                </button>
+            </div>
+        </div>
+    `;
+    abrirModal('modalDetalleCotizacion');
+}
+
+// Función para aprobar compra (marcar como comprado)
+async function aprobarCompra(id) {
+    if (!confirm('¿Confirmar que la compra se realizó?')) return;
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/solicitudes-compra/${id}/aprobar`, { 
+            method: 'PUT', 
+            headers: getAuthHeaders() 
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('✅ Compra registrada como completada', 'success');
+            await cargarSolicitudesCompra();
+        } else {
+            showToast(data.error || 'Error al registrar', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+// =====================================================
+// VER Y DESCARGAR COMPROBANTE DE COMPRA (JEFE DE TALLER)
+// =====================================================
+
+function verComprobanteCompra(idSolicitud) {
+    const solicitud = solicitudesCompra.find(s => s.id === idSolicitud);
+    if (!solicitud || !solicitud.comprobante_url) {
+        showToast('No hay comprobante disponible para esta solicitud', 'warning');
+        return;
+    }
+    
+    const isImage = solicitud.comprobante_url.match(/\.(jpeg|jpg|gif|png|webp)$/i);
+    const fileExtension = isImage ? 'jpg' : 'pdf';
+    
+    const container = document.getElementById('detalleCotizacionContainer');
+    container.innerHTML = `
+        <div class="comprobante-modal-container">
+            <div class="comprobante-header">
+                <h3><i class="fas fa-receipt"></i> Comprobante de Compra</h3>
+                <p>Solicitud #${solicitud.id} - Orden: ${escapeHtml(solicitud.orden_codigo)}</p>
+            </div>
+            
+            <div class="comprobante-visualizacion">
+                ${isImage ? 
+                    `<img src="${solicitud.comprobante_url}" alt="Comprobante" class="comprobante-imagen" onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%25%22%20height%3D%22200%22%20viewBox%3D%220%200%20200%20200%22%3E%3Crect%20width%3D%22200%22%20height%3D%22200%22%20fill%3D%22%23333%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dy%3D%22.3em%22%20fill%3D%22%23999%22%3EImagen%20no%20disponible%3C%2Ftext%3E%3C%2Fsvg%3E'">` :
+                    `<iframe src="${solicitud.comprobante_url}" class="comprobante-pdf"></iframe>`
+                }
+            </div>
+            
+            <div class="comprobante-info">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>Factura/Comprobante N°:</label>
+                        <span>${escapeHtml(solicitud.numero_factura || 'N/A')}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Proveedor:</label>
+                        <span>${escapeHtml(solicitud.proveedor_nombre || 'N/A')}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Monto Total:</label>
+                        <span class="monto">${formatCurrency(solicitud.precio_cotizado || 0)}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Fecha de Compra:</label>
+                        <span>${formatDate(solicitud.fecha_compra)}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Estado:</label>
+                        <span>${statusBadge(solicitud.estado)}</span>
+                    </div>
+                </div>
+                
+                ${solicitud.notas_compra ? `
+                    <div class="info-item full-width">
+                        <label>Notas de compra:</label>
+                        <p>${escapeHtml(solicitud.notas_compra)}</p>
+                    </div>
+                ` : ''}
+                
+                ${solicitud.respuesta_encargado ? `
+                    <div class="info-item full-width">
+                        <label>Respuesta del Encargado:</label>
+                        <p>${escapeHtml(solicitud.respuesta_encargado)}</p>
+                    </div>
+                ` : ''}
+            </div>
+            
+            <div class="comprobante-actions">
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalleCotizacion')">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+                <button class="btn-primary" onclick="descargarComprobante(${solicitud.id}, '${fileExtension}')">
+                    <i class="fas fa-download"></i> Descargar Comprobante
+                </button>
+                ${isImage ? `
+                    <button class="btn-outline" onclick="window.open('${solicitud.comprobante_url}', '_blank')">
+                        <i class="fas fa-external-link-alt"></i> Abrir en nueva ventana
+                    </button>
+                ` : ''}
+            </div>
+        </div>
+    `;
+    abrirModal('modalDetalleCotizacion');
+}
+
+// Función para descargar el comprobante
+function descargarComprobante(idSolicitud, extension) {
+    const solicitud = solicitudesCompra.find(s => s.id === idSolicitud);
+    if (!solicitud || !solicitud.comprobante_url) {
+        showToast('No hay comprobante para descargar', 'warning');
+        return;
+    }
+    
+    // Crear un enlace temporal para descargar
+    const link = document.createElement('a');
+    link.href = solicitud.comprobante_url;
+    link.download = `comprobante_${solicitud.orden_codigo}_${solicitud.id}.${extension}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('Descargando comprobante...', 'success');
+}
+// Función para descargar el comprobante (CORREGIDA)
+async function descargarComprobante(idSolicitud) {
+    const solicitud = solicitudesCompra.find(s => s.id === idSolicitud);
+    if (!solicitud || !solicitud.comprobante_url) {
+        showToast('No hay comprobante para descargar', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    
+    try {
+        const url = solicitud.comprobante_url;
+        const filename = `comprobante_${solicitud.orden_codigo}_${solicitud.id}.${url.split('.').pop().split('?')[0]}`;
+        
+        // Método 1: Intentar fetch + blob (más compatible)
+        const response = await fetch(url);
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+            showToast('✅ Descarga iniciada', 'success');
+        } else {
+            // Método 2: Abrir en nueva ventana como fallback
+            window.open(url, '_blank');
+            showToast('El archivo se abrirá en una nueva ventana. Usa "Guardar como" desde allí.', 'info');
+        }
+    } catch (error) {
+        console.error('Error descargando:', error);
+        // Método 3: Fallback final - abrir directamente
+        window.open(solicitud.comprobante_url, '_blank');
+        showToast('El archivo se abrirá en una nueva ventana. Usa "Guardar como" para descargarlo.', 'info');
+    } finally {
+        mostrarLoading(false);
+    }
+}
 // Exponer funciones globales
+window.descargarDocumentoCotizacion = descargarDocumentoCotizacion;
+window.verDetalleSolicitudCompra = verDetalleSolicitudCompra;
+window.verComprobanteCompra = verComprobanteCompra;
+window.descargarComprobante = descargarComprobante;
 window.eliminarSolicitudCotizacion = eliminarSolicitudCotizacion;
-window.solicitarCompraDesdeCotizacion = solicitarCompraDesdeCotizacion;
 window.abrirModalGenerarCotizacion = abrirModalGenerarCotizacion;
 window.editarCotizacionExistente = editarCotizacionExistente;
 window.verDetalleCotizacion = verDetalleCotizacion;
 window.verDetalleCotizacionByOrden = verDetalleCotizacionByOrden;
-window.verSolicitudCompra = verSolicitudCompra;
-window.aprobarCompra = aprobarCompra;
 window.cerrarModal = cerrarModal;
 window.logout = logout;
 window.agregarItemSolicitud = agregarItemSolicitud;
-window.agregarItemCompra = agregarItemCompra;
 window.actualizarItemSolicitud = actualizarItemSolicitud;
 window.eliminarItemSolicitud = eliminarItemSolicitud;
-window.actualizarItemCompra = actualizarItemCompra;
-window.eliminarItemCompra = eliminarItemCompra;
 window.actualizarServicioCotizable = actualizarServicioCotizable;
 window.agregarServicioCotizable = agregarServicioCotizable;
 window.eliminarServicioCotizable = eliminarServicioCotizable;
@@ -2427,16 +2739,11 @@ window.verAvanceReparacion = verAvanceReparacion;
 window.abrirModalSolicitudParaOrden = abrirModalSolicitudParaOrden;
 window.verInstruccionesArmado = verInstruccionesArmado;
 window.toggleServicioCotizable = toggleServicioCotizable;
-window.abrirModalResponderSolicitud = abrirModalResponderSolicitud;
-window.confirmarResponderSolicitud = confirmarResponderSolicitud;
-window.abrirModalGestionarSolicitudTecnico = abrirModalGestionarSolicitudTecnico;
-window.confirmarGestionSolicitudTecnico = confirmarGestionSolicitudTecnico;
+window.abrirModalNuevaSolicitudCompraDirecta = abrirModalNuevaSolicitudCompraDirecta;
+window.abrirModalCompraDesdeSolicitudTecnico = abrirModalCompraDesdeSolicitudTecnico;
 window.agregarItemCompraDirecta = agregarItemCompraDirecta;
 window.actualizarItemCompraDirecta = actualizarItemCompraDirecta;
 window.eliminarItemCompraDirecta = eliminarItemCompraDirecta;
-window.agregarItemGestionCompra = agregarItemGestionCompra;
-window.actualizarItemGestionCompra = actualizarItemGestionCompra;
-window.eliminarItemGestionCompra = eliminarItemGestionCompra;
 
 // Inicializar
 document.addEventListener('DOMContentLoaded', inicializar);

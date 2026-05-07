@@ -1,12 +1,21 @@
 // =====================================================
 // SOLICITUDES_COMPRA.JS - ENCARGADO DE REPUESTOS
-// FURIA MOTOR COMPANY SRL
+// FURIA MOTOR COMPANY SRL - VERSIÓN COMPLETA
 // =====================================================
 
 const API_URL = window.location.origin + '/api/encargado-repuestos';
+
+// Configuración de Cloudinary (hardcodeada temporalmente)
+const CLOUDINARY_CLOUD_NAME = 'drpt6ztkd';
+const CLOUDINARY_UPLOAD_PRESET = 'furia_motor_preset';
+
 let currentUser = null;
 let currentUserRoles = [];
 let solicitudesPendientes = [];
+
+// Variables para subida de comprobante
+let currentSolicitudId = null;
+let currentComprobanteFile = null;
 
 // =====================================================
 // FUNCIONES DE UTILIDAD
@@ -40,6 +49,16 @@ function formatDate(dateStr) {
     }
 }
 
+function formatDateTime(dateStr) {
+    if (!dateStr) return '-';
+    try {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch {
+        return dateStr;
+    }
+}
+
 function showToast(message, type = 'info') {
     const existingToast = document.querySelector('.toast-notification');
     if (existingToast) existingToast.remove();
@@ -65,6 +84,10 @@ function showToast(message, type = 'info') {
 function cerrarModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) modal.classList.remove('active');
+    
+    if (modalId === 'modalComprar') {
+        currentComprobanteFile = null;
+    }
 }
 
 function abrirModal(modalId) {
@@ -104,8 +127,67 @@ function statusBadge(estado) {
 }
 
 // =====================================================
-// CARGA DE DATOS
+// SUBIR A CLOUDINARY
 // =====================================================
+
+async function subirACloudinary(file) {
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+        formData.append('folder', 'comprobantes_compra');
+        
+        const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`;
+        
+        console.log('📤 Subiendo a Cloudinary...');
+        
+        fetch(cloudinaryUrl, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.secure_url) {
+                console.log('✅ Comprobante subido:', data.secure_url);
+                resolve(data.secure_url);
+            } else {
+                console.error('❌ Error Cloudinary:', data);
+                reject(new Error(data.error?.message || 'Error al subir a Cloudinary'));
+            }
+        })
+        .catch(err => {
+            console.error('❌ Error de red:', err);
+            reject(new Error('Error de conexión con Cloudinary'));
+        });
+    });
+}
+
+// =====================================================
+// CARGA DE DATOS Y ESTADÍSTICAS
+// =====================================================
+
+async function cargarEstadisticas() {
+    try {
+        const response = await fetch(`${API_URL}/solicitudes-compra/stats`, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.success && data.stats) {
+            const pendientes = document.getElementById('statPendientes');
+            const comprados = document.getElementById('statComprados');
+            const entregados = document.getElementById('statEntregados');
+            const total = document.getElementById('statTotal');
+            
+            if (pendientes) pendientes.textContent = data.stats.pendientes || 0;
+            if (comprados) comprados.textContent = data.stats.comprados || 0;
+            if (entregados) entregados.textContent = data.stats.entregados || 0;
+            if (total) total.textContent = data.stats.total || 0;
+        }
+    } catch (error) {
+        console.error('Error cargando estadísticas:', error);
+    }
+}
 
 async function cargarSolicitudes() {
     mostrarLoading(true);
@@ -143,6 +225,7 @@ async function cargarSolicitudes() {
             
             solicitudesPendientes = solicitudes;
             renderizarSolicitudes(solicitudes);
+            await cargarEstadisticas();
         } else {
             showToast(data.error || 'Error al cargar solicitudes', 'error');
         }
@@ -185,7 +268,7 @@ function renderizarSolicitudes(solicitudes) {
         
         const puedeComprar = solicitud.estado === 'pendiente';
         const puedeEntregar = solicitud.estado === 'comprado';
-        const puedeVer = true;
+        const tieneComprobante = solicitud.comprobante_url;
         
         return `
             <div class="solicitud-card" data-id="${solicitud.id}">
@@ -244,6 +327,11 @@ function renderizarSolicitudes(solicitudes) {
                         <button class="action-btn view" onclick="verDetalle(${solicitud.id})" title="Ver Detalle">
                             <i class="fas fa-eye"></i> Ver
                         </button>
+                        ${tieneComprobante ? `
+                            <button class="action-btn view" onclick="verComprobante(${solicitud.id})" title="Ver Comprobante">
+                                <i class="fas fa-receipt"></i> Ver Comprobante
+                            </button>
+                        ` : ''}
                         ${puedeComprar ? `
                             <button class="action-btn buy" onclick="abrirModalComprar(${solicitud.id})" title="Marcar como Comprado">
                                 <i class="fas fa-shopping-cart"></i> Marcar Comprado
@@ -283,79 +371,187 @@ async function verDetalle(idSolicitud) {
     `).join('');
     
     const modalBody = document.getElementById('modalDetalleBody');
-    modalBody.innerHTML = `
-        <div class="orden-info">
-            <div class="orden-info-item">
-                <label>Solicitud ID</label>
-                <span>#${solicitud.id}</span>
+    if (modalBody) {
+        modalBody.innerHTML = `
+            <div class="orden-info">
+                <div class="orden-info-item">
+                    <label>Solicitud ID</label>
+                    <span>#${solicitud.id}</span>
+                </div>
+                <div class="orden-info-item">
+                    <label>Orden de Trabajo</label>
+                    <span><strong>${escapeHtml(solicitud.orden_codigo || 'N/A')}</strong></span>
+                </div>
+                <div class="orden-info-item">
+                    <label>Vehículo</label>
+                    <span>${escapeHtml(solicitud.vehiculo || 'N/A')}</span>
+                </div>
+                <div class="orden-info-item">
+                    <label>Servicio</label>
+                    <span>${escapeHtml(solicitud.servicio_descripcion || 'N/A')}</span>
+                </div>
+                <div class="orden-info-item">
+                    <label>Fecha Solicitud</label>
+                    <span>${formatDateTime(solicitud.fecha_solicitud)}</span>
+                </div>
+                <div class="orden-info-item">
+                    <label>Estado</label>
+                    <span>${statusBadge(solicitud.estado)}</span>
+                </div>
             </div>
-            <div class="orden-info-item">
-                <label>Orden de Trabajo</label>
-                <span><strong>${escapeHtml(solicitud.orden_codigo || 'N/A')}</strong></span>
+            
+            <div class="items-list">
+                <h4>Items solicitados:</h4>
+                ${itemsHtml}
             </div>
-            <div class="orden-info-item">
-                <label>Vehículo</label>
-                <span>${escapeHtml(solicitud.vehiculo || 'N/A')}</span>
-            </div>
-            <div class="orden-info-item">
-                <label>Servicio</label>
-                <span>${escapeHtml(solicitud.servicio_descripcion || 'N/A')}</span>
-            </div>
-            <div class="orden-info-item">
-                <label>Fecha Solicitud</label>
-                <span>${formatDate(solicitud.fecha_solicitud)}</span>
-            </div>
-            <div class="orden-info-item">
-                <label>Estado</label>
-                <span>${statusBadge(solicitud.estado)}</span>
-            </div>
-        </div>
-        
-        <div class="items-list">
-            <h4>Items solicitados:</h4>
-            ${itemsHtml}
-        </div>
-        
-        ${solicitud.precio_cotizado ? `
-            <div class="precio-cotizado-box">
-                <strong>Precio cotizado:</strong> Bs. ${solicitud.precio_cotizado.toFixed(2)}
-                ${solicitud.proveedor_info ? `<br><strong>Proveedor:</strong> ${escapeHtml(solicitud.proveedor_info)}` : ''}
-            </div>
-        ` : ''}
-        
-        ${solicitud.mensaje_jefe_taller ? `
-            <div class="observacion-box">
-                <small>Mensaje del Jefe de Taller:</small>
-                <p>${escapeHtml(solicitud.mensaje_jefe_taller)}</p>
-            </div>
-        ` : ''}
-        
-        ${solicitud.respuesta_encargado ? `
-            <div class="observacion-box">
-                <small>Tu respuesta:</small>
-                <p>${escapeHtml(solicitud.respuesta_encargado)}</p>
-            </div>
-        ` : ''}
-        
-        <div class="detalle-actions">
-            <button class="btn-secondary" onclick="cerrarModal('modalDetalle')">Cerrar</button>
-        </div>
-    `;
+            
+            ${solicitud.precio_cotizado ? `
+                <div class="precio-cotizado-box">
+                    <strong>Precio cotizado:</strong> Bs. ${solicitud.precio_cotizado.toFixed(2)}
+                    ${solicitud.proveedor_info ? `<br><strong>Proveedor:</strong> ${escapeHtml(solicitud.proveedor_info)}` : ''}
+                </div>
+            ` : ''}
+            
+            ${solicitud.mensaje_jefe_taller ? `
+                <div class="observacion-box">
+                    <small>Mensaje del Jefe de Taller:</small>
+                    <p>${escapeHtml(solicitud.mensaje_jefe_taller)}</p>
+                </div>
+            ` : ''}
+            
+            ${solicitud.respuesta_encargado ? `
+                <div class="observacion-box">
+                    <small>Tu respuesta:</small>
+                    <p>${escapeHtml(solicitud.respuesta_encargado)}</p>
+                </div>
+            ` : ''}
+            
+            ${solicitud.comprobante_url ? `
+                <div class="comprobante-box">
+                    <strong><i class="fas fa-receipt"></i> Comprobante de compra:</strong>
+                    <div style="margin-top: 0.5rem;">
+                        <button class="btn-outline" onclick="verComprobante(${solicitud.id})">
+                            <i class="fas fa-image"></i> Ver Comprobante
+                        </button>
+                    </div>
+                </div>
+            ` : ''}
+        `;
+    }
     
     abrirModal('modalDetalle');
 }
 
 // =====================================================
-// MARCAR COMO COMPRADO
+// VER COMPROBANTE
 // =====================================================
 
-let currentSolicitudId = null;
+async function verComprobante(idSolicitud) {
+    const solicitud = solicitudesPendientes.find(s => s.id === idSolicitud);
+    if (!solicitud || !solicitud.comprobante_url) return;
+    
+    const modalBody = document.getElementById('modalVerComprobanteBody');
+    const isImage = solicitud.comprobante_url.match(/\.(jpeg|jpg|gif|png|webp)$/i);
+    
+    if (modalBody) {
+        modalBody.innerHTML = `
+            <div style="text-align: center;">
+                ${isImage ? 
+                    `<img src="${solicitud.comprobante_url}" alt="Comprobante" style="max-width: 100%; max-height: 60vh; border-radius: var(--radius-md);">` :
+                    `<iframe src="${solicitud.comprobante_url}" style="width: 100%; height: 60vh; border: none; border-radius: var(--radius-md);"></iframe>`
+                }
+                <div style="margin-top: 1rem; text-align: left;">
+                    <p><strong>Factura/Comprobante N°:</strong> ${escapeHtml(solicitud.numero_factura || 'N/A')}</p>
+                    <p><strong>Proveedor:</strong> ${escapeHtml(solicitud.proveedor_nombre || solicitud.proveedor_info || 'N/A')}</p>
+                    <p><strong>Monto:</strong> Bs. ${(solicitud.precio_cotizado || 0).toFixed(2)}</p>
+                    <p><strong>Fecha de compra:</strong> ${formatDate(solicitud.fecha_compra)}</p>
+                </div>
+            </div>
+        `;
+    }
+    
+    const downloadBtn = document.getElementById('descargarComprobanteBtn');
+    if (downloadBtn) {
+        downloadBtn.href = solicitud.comprobante_url;
+        downloadBtn.download = `comprobante_${solicitud.id}.${isImage ? 'jpg' : 'pdf'}`;
+    }
+    
+    abrirModal('modalVerComprobante');
+}
+
+// =====================================================
+// CONFIGURAR SUBIDA DE COMPROBANTE
+// =====================================================
+
+function configurarSubidaComprobante() {
+    const uploadArea = document.getElementById('comprobanteUploadArea');
+    const fileInput = document.getElementById('comprobanteFile');
+    const removeBtn = document.getElementById('removeComprobanteBtn');
+    
+    if (!uploadArea || !fileInput) return;
+    
+    // Limpiar eventos anteriores
+    const newUploadArea = uploadArea.cloneNode(true);
+    uploadArea.parentNode.replaceChild(newUploadArea, uploadArea);
+    const newFileInput = fileInput.cloneNode(true);
+    fileInput.parentNode.replaceChild(newFileInput, fileInput);
+    
+    const finalUploadArea = document.getElementById('comprobanteUploadArea');
+    const finalFileInput = document.getElementById('comprobanteFile');
+    const finalRemoveBtn = document.getElementById('removeComprobanteBtn');
+    
+    if (!finalUploadArea || !finalFileInput) return;
+    
+    finalUploadArea.addEventListener('click', () => finalFileInput.click());
+    
+    finalFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) procesarArchivoComprobante(file);
+    });
+    
+    if (finalRemoveBtn) {
+        finalRemoveBtn.addEventListener('click', () => {
+            currentComprobanteFile = null;
+            const preview = document.getElementById('comprobantePreview');
+            if (preview) preview.style.display = 'none';
+            finalFileInput.value = '';
+        });
+    }
+}
+
+function procesarArchivoComprobante(file) {
+    if (file.size > 5 * 1024 * 1024) {
+        showToast('El archivo no debe superar los 5MB', 'error');
+        return;
+    }
+    
+    const tiposPermitidos = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+    if (!tiposPermitidos.includes(file.type)) {
+        showToast('Formato no permitido. Use JPG, PNG o PDF', 'error');
+        return;
+    }
+    
+    currentComprobanteFile = file;
+    
+    const preview = document.getElementById('comprobantePreview');
+    const nombreSpan = document.getElementById('comprobanteNombre');
+    if (preview && nombreSpan) {
+        nombreSpan.textContent = file.name;
+        preview.style.display = 'flex';
+    }
+    showToast('Comprobante cargado correctamente', 'success');
+}
+
+// =====================================================
+// MARCAR COMO COMPRADO (CON COMPROBANTE)
+// =====================================================
 
 function abrirModalComprar(idSolicitud) {
     const solicitud = solicitudesPendientes.find(s => s.id === idSolicitud);
     if (!solicitud) return;
     
     currentSolicitudId = idSolicitud;
+    currentComprobanteFile = null;
     
     let items = solicitud.items || [];
     if (typeof items === 'string') {
@@ -369,80 +565,136 @@ function abrirModalComprar(idSolicitud) {
     `).join('');
     
     const modalBody = document.getElementById('modalComprarBody');
-    modalBody.innerHTML = `
-        <div class="orden-info" style="margin-bottom: 1rem;">
-            <div class="orden-info-item">
-                <label>Orden</label>
-                <span><strong>${escapeHtml(solicitud.orden_codigo)}</strong></span>
+    if (modalBody) {
+        modalBody.innerHTML = `
+            <div class="orden-info" style="margin-bottom: 1rem;">
+                <div class="orden-info-item">
+                    <label>Orden</label>
+                    <span><strong>${escapeHtml(solicitud.orden_codigo)}</strong></span>
+                </div>
+                <div class="orden-info-item">
+                    <label>Vehículo</label>
+                    <span>${escapeHtml(solicitud.vehiculo)}</span>
+                </div>
             </div>
-            <div class="orden-info-item">
-                <label>Vehículo</label>
-                <span>${escapeHtml(solicitud.vehiculo)}</span>
+            
+            <div class="items-list">
+                <h4>Items a comprar:</h4>
+                ${itemsHtml}
             </div>
-        </div>
-        
-        <div class="items-list">
-            <h4>Items a comprar:</h4>
-            ${itemsHtml}
-        </div>
-        
-        ${solicitud.precio_cotizado ? `
-            <div class="precio-cotizado-box">
-                <strong>Precio cotizado:</strong> Bs. ${solicitud.precio_cotizado.toFixed(2)}
-                ${solicitud.proveedor_info ? `<br><strong>Proveedor:</strong> ${escapeHtml(solicitud.proveedor_info)}` : ''}
+            
+            ${solicitud.precio_cotizado ? `
+                <div class="precio-cotizado-box">
+                    <strong>Precio cotizado:</strong> Bs. ${solicitud.precio_cotizado.toFixed(2)}
+                    ${solicitud.proveedor_info ? `<br><strong>Proveedor:</strong> ${escapeHtml(solicitud.proveedor_info)}` : ''}
+                </div>
+            ` : ''}
+            
+            <div class="compra-form">
+                <div class="form-group">
+                    <label>Fecha de compra</label>
+                    <input type="date" id="fechaCompra" class="form-input" value="${new Date().toISOString().split('T')[0]}">
+                </div>
+                
+                <div class="form-group">
+                    <label>N° de Factura/Comprobante</label>
+                    <input type="text" id="numeroFactura" class="form-input" placeholder="Ej: 001-123456">
+                </div>
+                
+                <div class="form-group">
+                    <label>Proveedor</label>
+                    <input type="text" id="proveedorNombre" class="form-input" placeholder="Nombre del proveedor">
+                </div>
+                
+                <div class="form-group">
+                    <label>Monto total de la compra (Bs.)</label>
+                    <input type="number" id="montoCompra" step="0.01" class="form-input" placeholder="0.00">
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-image"></i> Subir foto del recibo/comprobante <span class="required">*</span></label>
+                    <div class="file-upload-area" id="comprobanteUploadArea">
+                        <i class="fas fa-cloud-upload-alt" style="font-size: 32px; color: var(--rojo-primario); margin-bottom: 0.5rem;"></i>
+                        <p style="margin: 0; font-size: 0.85rem;">Haz clic para seleccionar el comprobante</p>
+                        <small style="color: var(--gris-texto);">Formatos: JPG, PNG, PDF (Máx. 5MB)</small>
+                        <input type="file" id="comprobanteFile" accept="image/*,application/pdf" style="display: none;">
+                    </div>
+                    <div id="comprobantePreview" style="display: none; margin-top: 0.5rem;" class="comprobante-preview">
+                        <i class="fas fa-file-image"></i>
+                        <span id="comprobanteNombre"></span>
+                        <button type="button" id="removeComprobanteBtn" class="btn-remove-comprobante">
+                            <i class="fas fa-times-circle"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Notas de compra (opcional)</label>
+                    <textarea id="notasCompra" rows="2" class="form-textarea" placeholder="Detalles adicionales de la compra..."></textarea>
+                </div>
             </div>
-        ` : ''}
-        
-        <div class="compra-form">
-            <div class="form-group">
-                <label>Fecha de compra</label>
-                <input type="date" id="fechaCompra" value="${new Date().toISOString().split('T')[0]}">
-            </div>
-            <div class="form-group">
-                <label>Notas de compra (opcional)</label>
-                <textarea id="notasCompra" rows="2" placeholder="N° de factura, detalles de la compra..."></textarea>
-            </div>
-        </div>
-        
-        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
-            <button class="btn-secondary" onclick="cerrarModal('modalComprar')">Cancelar</button>
-            <button class="btn-comprar" onclick="confirmarCompra()">
-                <i class="fas fa-check-circle"></i> Confirmar Compra
-            </button>
-        </div>
-    `;
+        `;
+    }
     
+    setTimeout(() => configurarSubidaComprobante(), 100);
     abrirModal('modalComprar');
 }
 
 async function confirmarCompra() {
     const fechaCompra = document.getElementById('fechaCompra')?.value || new Date().toISOString().split('T')[0];
+    const numeroFactura = document.getElementById('numeroFactura')?.value || '';
+    const proveedorNombre = document.getElementById('proveedorNombre')?.value || '';
+    const montoCompra = document.getElementById('montoCompra')?.value;
     const notas = document.getElementById('notasCompra')?.value || '';
+    
+    if (!currentComprobanteFile) {
+        showToast('⚠️ Debes subir la foto del recibo/comprobante de compra', 'warning');
+        return;
+    }
     
     mostrarLoading(true);
     
     try {
+        let comprobanteUrl = null;
+        
+        if (currentComprobanteFile) {
+            try {
+                comprobanteUrl = await subirACloudinary(currentComprobanteFile);
+                console.log('✅ Comprobante subido a Cloudinary:', comprobanteUrl);
+            } catch (cloudError) {
+                console.error('Error al subir a Cloudinary:', cloudError);
+                showToast('Error al subir el comprobante. Intenta nuevamente.', 'error');
+                mostrarLoading(false);
+                return;
+            }
+        }
+        
         const response = await fetch(`${API_URL}/solicitudes-compra/${currentSolicitudId}/comprar`, {
             method: 'PUT',
             headers: getAuthHeaders(),
             body: JSON.stringify({
                 fecha_compra: fechaCompra,
-                notas_compra: notas
+                numero_factura: numeroFactura,
+                proveedor_nombre: proveedorNombre,
+                monto_compra: montoCompra ? parseFloat(montoCompra) : null,
+                notas_compra: notas,
+                comprobante_url: comprobanteUrl
             })
         });
         
         const data = await response.json();
         
         if (data.success) {
-            showToast('Compra registrada exitosamente', 'success');
+            showToast('✅ Compra registrada exitosamente con comprobante', 'success');
             cerrarModal('modalComprar');
+            currentComprobanteFile = null;
             await cargarSolicitudes();
         } else {
             showToast(data.error || 'Error al registrar compra', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        showToast('Error de conexión', 'error');
+        showToast('Error al procesar la compra: ' + error.message, 'error');
     } finally {
         mostrarLoading(false);
     }
@@ -470,41 +722,36 @@ function abrirModalEntregar(idSolicitud) {
     `).join('');
     
     const modalBody = document.getElementById('modalEntregarBody');
-    modalBody.innerHTML = `
-        <div class="orden-info" style="margin-bottom: 1rem;">
-            <div class="orden-info-item">
-                <label>Orden</label>
-                <span><strong>${escapeHtml(solicitud.orden_codigo)}</strong></span>
+    if (modalBody) {
+        modalBody.innerHTML = `
+            <div class="orden-info" style="margin-bottom: 1rem;">
+                <div class="orden-info-item">
+                    <label>Orden</label>
+                    <span><strong>${escapeHtml(solicitud.orden_codigo)}</strong></span>
+                </div>
+                <div class="orden-info-item">
+                    <label>Vehículo</label>
+                    <span>${escapeHtml(solicitud.vehiculo)}</span>
+                </div>
             </div>
-            <div class="orden-info-item">
-                <label>Vehículo</label>
-                <span>${escapeHtml(solicitud.vehiculo)}</span>
+            
+            <div class="items-list">
+                <h4>Items a entregar:</h4>
+                ${itemsHtml}
             </div>
-        </div>
-        
-        <div class="items-list">
-            <h4>Items a entregar:</h4>
-            ${itemsHtml}
-        </div>
-        
-        <div class="compra-form">
-            <div class="form-group">
-                <label>Fecha de entrega</label>
-                <input type="date" id="fechaEntrega" value="${new Date().toISOString().split('T')[0]}">
+            
+            <div class="compra-form">
+                <div class="form-group">
+                    <label>Fecha de entrega</label>
+                    <input type="date" id="fechaEntrega" class="form-input" value="${new Date().toISOString().split('T')[0]}">
+                </div>
+                <div class="form-group">
+                    <label>Notas de entrega (opcional)</label>
+                    <textarea id="notasEntrega" rows="2" class="form-textarea" placeholder="Detalles de la entrega..."></textarea>
+                </div>
             </div>
-            <div class="form-group">
-                <label>Notas de entrega (opcional)</label>
-                <textarea id="notasEntrega" rows="2" placeholder="Detalles de la entrega..."></textarea>
-            </div>
-        </div>
-        
-        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
-            <button class="btn-secondary" onclick="cerrarModal('modalEntregar')">Cancelar</button>
-            <button class="btn-entregar" onclick="confirmarEntrega()">
-                <i class="fas fa-truck"></i> Confirmar Entrega
-            </button>
-        </div>
-    `;
+        `;
+    }
     
     abrirModal('modalEntregar');
 }
@@ -607,6 +854,12 @@ async function cargarUsuarioActual() {
     }
 }
 
+function logout() {
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = '/';
+}
+
 // =====================================================
 // INICIALIZACIÓN
 // =====================================================
@@ -630,6 +883,11 @@ function setupEventListeners() {
         searchInput.addEventListener('input', () => cargarSolicitudes());
     }
     
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', logout);
+    }
+    
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) modal.classList.remove('active');
@@ -651,10 +909,12 @@ async function inicializar() {
 
 // Exponer funciones globales
 window.verDetalle = verDetalle;
+window.verComprobante = verComprobante;
 window.abrirModalComprar = abrirModalComprar;
 window.abrirModalEntregar = abrirModalEntregar;
 window.confirmarCompra = confirmarCompra;
 window.confirmarEntrega = confirmarEntrega;
 window.cerrarModal = cerrarModal;
+window.logout = logout;
 
 document.addEventListener('DOMContentLoaded', inicializar);

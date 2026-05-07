@@ -1,10 +1,6 @@
 // =====================================================
 // MIS VEHÍCULOS - TÉCNICO MECÁNICO
-// VERSIÓN COMPLETA CON BOTONES SEPARADOS
-// - Pausar Trabajo (manual, con motivo)
-// - Solicitar Repuesto (sin pausar)
-// - Reanudar Trabajo (cuando está en pausa)
-// - Marcar Completada (solo en EnReparacion, con validación)
+// VERSIÓN COMPLETA CON BOTONES SEPARADOS Y HISTORIAL
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
@@ -271,17 +267,10 @@ async function cargarVehiculos() {
 }
 
 // =====================================================
-// RENDERIZADO DE VEHÍCULOS (ACTUALIZADO)
+// RENDERIZADO DE VEHÍCULOS CON BOTÓN DE HISTORIAL
 // =====================================================
 // =====================================================
-// RENDERIZADO DE VEHÍCULOS - VERSIÓN CORREGIDA
-// PRIORIZA EL estado_global SOBRE EL tipo_asignacion
-// =====================================================
-// =====================================================
-// RENDERIZADO DE VEHÍCULOS - VERSIÓN COMPLETA
-// BOTONES: 
-// - Si está en PAUSA: muestra "Reanudar Trabajo" + "Solicitar Repuesto" + "Ver Detalle"
-// - Si está en REPARACIÓN: muestra "Pausar Trabajo" + "Solicitar Repuesto" + "Marcar Completada" + "Ver Detalle"
+// RENDERIZADO DE VEHÍCULOS - CON ESTADOS FINALES
 // =====================================================
 function renderVehiculos() {
     const grid = document.getElementById('vehiculosGrid');
@@ -304,8 +293,65 @@ function renderVehiculos() {
         
         console.log(`🎯 Renderizando: ID=${vehiculo.orden_id}, Estado=${estadoGlobal}`);
         
-        // ============ CASO ARMADO ============
-        if (estadoGlobal === 'EnArmadoVehiculo') {
+        // ============ ESTADOS FINALES (sin botones de acción) ============
+        if (estadoGlobal === 'VehiculoArmado') {
+            badgeHtml = `<span class="asignacion-badge armado-completado"><i class="fas fa-check-circle"></i> ✅ VEHÍCULO ARMADO</span>`;
+            botonesHtml = `
+                <div class="botones-container">
+                    <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
+                        <i class="fas fa-eye"></i> Ver Detalle
+                    </button>
+                </div>
+                ${bahiaInfo}
+                <div class="estado-final-info">
+                    <i class="fas fa-info-circle"></i> El vehículo ha sido armado. Esperando instrucciones del Jefe de Taller.
+                </div>
+            `;
+        }
+        else if (estadoGlobal === 'ReparacionCompletada') {
+            badgeHtml = `<span class="asignacion-badge reparacion-completada"><i class="fas fa-check-circle"></i> ✅ REPARACIÓN COMPLETADA</span>`;
+            botonesHtml = `
+                <div class="botones-container">
+                    <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
+                        <i class="fas fa-eye"></i> Ver Detalle
+                    </button>
+                </div>
+                ${bahiaInfo}
+                <div class="estado-final-info">
+                    <i class="fas fa-info-circle"></i> Reparación completada. Esperando confirmación del Jefe de Taller.
+                </div>
+            `;
+        }
+        else if (estadoGlobal === 'Finalizado') {
+            badgeHtml = `<span class="asignacion-badge finalizado"><i class="fas fa-flag-checkered"></i> 🏁 FINALIZADO</span>`;
+            botonesHtml = `
+                <div class="botones-container">
+                    <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
+                        <i class="fas fa-eye"></i> Ver Detalle
+                    </button>
+                </div>
+                ${bahiaInfo}
+                <div class="estado-final-info">
+                    <i class="fas fa-check-circle"></i> Trabajo finalizado. A la espera de entrega al cliente.
+                </div>
+            `;
+        }
+        else if (estadoGlobal === 'Entregado') {
+            // Estado entregado - ya no debería aparecer, pero por si acaso
+            badgeHtml = `<span class="asignacion-badge entregado"><i class="fas fa-truck"></i> 🚗 ENTREGADO</span>`;
+            botonesHtml = `
+                <div class="botones-container">
+                    <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
+                        <i class="fas fa-eye"></i> Ver Detalle
+                    </button>
+                </div>
+                <div class="estado-final-info">
+                    <i class="fas fa-check-circle"></i> Vehículo entregado al cliente. Trabajo completado.
+                </div>
+            `;
+        }
+        // ============ CASO ARMADO (activo) ============
+        else if (estadoGlobal === 'EnArmadoVehiculo') {
             badgeHtml = `<span class="asignacion-badge armado"><i class="fas fa-tools"></i> 🔧 ARMADO REQUERIDO</span>`;
             
             const instruccionesArmado = vehiculo.instrucciones_armado || '';
@@ -335,23 +381,19 @@ function renderVehiculos() {
         }
         // ============ CASO REPARACIÓN O PAUSA ============
         else if (estadoGlobal === 'EnReparacion' || estadoGlobal === 'EnPausa') {
-            // Badge según el estado
             if (estadoGlobal === 'EnReparacion') {
                 badgeHtml = `<span class="asignacion-badge reparacion"><i class="fas fa-wrench"></i> 🔧 EN REPARACIÓN</span>`;
             } else {
                 badgeHtml = `<span class="asignacion-badge reparacion"><i class="fas fa-pause-circle"></i> ⏸️ EN PAUSA</span>`;
             }
             
-            // Advertencia si hay solicitudes pendientes
             const tieneSolicitudesPendientes = vehiculo.solicitudes_repuestos_pendientes || false;
             const advertenciaSolicitudes = tieneSolicitudesPendientes ? 
                 `<div class="solicitud-pendiente-warning" style="margin-top: 0.5rem; padding: 0.3rem; background: rgba(245, 158, 11, 0.1); border-radius: var(--radius-sm); font-size: 0.7rem; text-align: center;">
                     <i class="fas fa-clock"></i> Hay solicitudes de repuestos pendientes
                 </div>` : '';
             
-            // Botones según el estado
             if (estadoGlobal === 'EnPausa') {
-                // En PAUSA: muestra Reanudar + Solicitar Repuesto + Ver Detalle
                 botonesHtml = `
                     <div class="botones-container">
                         <button class="btn-sm btn-success-sm" onclick="reanudarReparacion(${vehiculo.orden_id})">
@@ -363,12 +405,14 @@ function renderVehiculos() {
                         <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
                             <i class="fas fa-eye"></i> Ver Detalle
                         </button>
+                        <button class="btn-sm btn-secondary-sm" onclick="verHistorialSolicitudes(${vehiculo.orden_id})">
+                            <i class="fas fa-history"></i> Historial Solicitudes
+                        </button>
                     </div>
                     ${bahiaInfo}
                     ${advertenciaSolicitudes}
                 `;
             } else {
-                // En REPARACIÓN: muestra Pausar + Solicitar Repuesto + Finalizar + Ver Detalle
                 botonesHtml = `
                     <div class="botones-container">
                         <button class="btn-sm btn-warning-sm" onclick="pausarReparacionManual(${vehiculo.orden_id})">
@@ -382,6 +426,9 @@ function renderVehiculos() {
                         </button>
                         <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
                             <i class="fas fa-eye"></i> Ver Detalle
+                        </button>
+                        <button class="btn-sm btn-secondary-sm" onclick="verHistorialSolicitudes(${vehiculo.orden_id})">
+                            <i class="fas fa-history"></i> Historial Solicitudes
                         </button>
                     </div>
                     ${bahiaInfo}
@@ -432,11 +479,11 @@ function renderVehiculos() {
         }
         
         return `
-            <div class="vehiculo-card" data-orden-id="${vehiculo.orden_id}">
+            <div class="vehiculo-card" data-orden-id="${vehiculo.orden_id}" data-estado="${estadoGlobal}">
                 <div class="card-header">
                     <div class="vehiculo-info">
                         <div class="vehiculo-icon">
-                            <i class="fas ${estadoGlobal === 'EnReparacion' ? 'fa-wrench' : (estadoGlobal === 'EnPausa' ? 'fa-pause-circle' : 'fa-car')}"></i>
+                            <i class="fas ${estadoGlobal === 'EnReparacion' ? 'fa-wrench' : (estadoGlobal === 'EnPausa' ? 'fa-pause-circle' : (estadoGlobal === 'EnArmadoVehiculo' ? 'fa-tools' : 'fa-car'))}"></i>
                         </div>
                         <div class="vehiculo-titulo">
                             <h3>${escapeHtml(vehiculo.vehiculo.marca)} ${escapeHtml(vehiculo.vehiculo.modelo)}</h3>
@@ -560,7 +607,7 @@ async function confirmarInicioReparacion() {
 }
 
 // =====================================================
-// REPARACIÓN - PAUSAR MANUAL (SOLO MOTIVO, SIN REPUESTOS)
+// REPARACIÓN - PAUSAR MANUAL
 // =====================================================
 window.pausarReparacionManual = function(ordenId) {
     document.getElementById('ordenIdPausaManual').value = ordenId;
@@ -609,10 +656,7 @@ async function confirmarPausaManual() {
 // SOLICITAR REPUESTOS SIN PAUSA
 // =====================================================
 window.solicitarRepuestosSinPausa = function(ordenId) {
-    // Limpiar items anteriores
-    if (typeof limpiarItemsSolicitud === 'function') {
-        limpiarItemsSolicitud();
-    }
+    limpiarItemsSolicitud();
     document.getElementById('ordenIdSolicitud').value = ordenId;
     document.getElementById('motivoSolicitud').value = '';
     document.getElementById('solicitarRepuestosModal').classList.add('show');
@@ -621,17 +665,14 @@ window.solicitarRepuestosSinPausa = function(ordenId) {
 window.cerrarSolicitarRepuestosModal = function() {
     document.getElementById('solicitarRepuestosModal').classList.remove('show');
     document.getElementById('ordenIdSolicitud').value = '';
-    if (typeof limpiarItemsSolicitud === 'function') {
-        limpiarItemsSolicitud();
-    }
+    limpiarItemsSolicitud();
 };
 
 async function confirmarSolicitarRepuestos() {
     const ordenId = document.getElementById('ordenIdSolicitud').value;
     const motivo = document.getElementById('motivoSolicitud').value.trim();
     
-    // Obtener items de la variable global itemsSolicitud
-    const itemsValidos = (typeof itemsSolicitud !== 'undefined' ? itemsSolicitud : []).filter(item => item.descripcion && item.descripcion.trim() !== '');
+    const itemsValidos = itemsSolicitud.filter(item => item.descripcion && item.descripcion.trim() !== '');
     
     if (itemsValidos.length === 0) {
         showToast('Debes agregar al menos un repuesto a solicitar', 'warning');
@@ -655,6 +696,7 @@ async function confirmarSolicitarRepuestos() {
         
         if (data.success) {
             showToast('✅ Solicitud de repuestos enviada correctamente', 'success');
+            limpiarItemsSolicitud();
             cargarVehiculos();
         } else {
             showToast(data.error || 'Error al enviar solicitud', 'error');
@@ -701,7 +743,7 @@ async function confirmarReanudarReparacion() {
         
         if (data.success) {
             showToast('✅ Reparación reanudada correctamente', 'success');
-            await cargarVehiculos();  // Recargar para que se actualicen los botones
+            cargarVehiculos();
         } else {
             showToast(data.error || 'Error al reanudar', 'error');
         }
@@ -709,8 +751,9 @@ async function confirmarReanudarReparacion() {
         showToast('Error de conexión', 'error');
     }
 }
+
 // =====================================================
-// REPARACIÓN - FINALIZAR (CON VALIDACIÓN)
+// REPARACIÓN - FINALIZAR
 // =====================================================
 window.mostrarFinalizarModal = async function(ordenId) {
     const vehiculo = vehiculosAsignados.find(v => v.orden_id === ordenId);
@@ -722,7 +765,6 @@ window.mostrarFinalizarModal = async function(ordenId) {
         `;
     }
     
-    // Verificar si hay solicitudes de repuestos pendientes
     try {
         const response = await fetch(`/tecnico/verificar-solicitudes-pendientes/${ordenId}`, {
             method: 'GET',
@@ -804,6 +846,151 @@ window.marcarArmadoCompletado = async function(ordenId) {
         showToast('Error de conexión', 'error');
     }
 };
+
+// =====================================================
+// HISTORIAL DE SOLICITUDES DE REPUESTOS
+// =====================================================
+window.verHistorialSolicitudes = async function(ordenId) {
+    showToast('Cargando historial de solicitudes...', 'info');
+    
+    try {
+        const response = await fetch(`/tecnico/historial-solicitudes/${ordenId}`, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Error al cargar historial');
+        }
+        
+        const solicitudes = data.solicitudes || [];
+        
+        if (solicitudes.length === 0) {
+            showToast('No hay solicitudes de repuestos para esta orden', 'info');
+            return;
+        }
+        
+        const modalBody = document.getElementById('historialSolicitudesBody');
+        
+        let solicitudesHtml = `
+            <div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+                <p><strong><i class="fas fa-clipboard-list"></i> Orden:</strong> ${escapeHtml(data.codigo_orden || ordenId)}</p>
+                <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(data.vehiculo || 'N/A')}</p>
+            </div>
+        `;
+        
+        solicitudesHtml += `<div class="solicitudes-historial">`;
+        
+        for (const sol of solicitudes) {
+            let itemsHtml = '';
+            let items = sol.items;
+            if (typeof items === 'string') {
+                try { items = JSON.parse(items); } catch(e) { items = []; }
+            }
+            
+            if (items && items.length > 0) {
+                itemsHtml = '<ul style="margin: 0.5rem 0 0 1rem;">' + 
+                    items.map(item => `<li><strong>${escapeHtml(item.descripcion)}</strong> x${item.cantidad}${item.detalle ? ` (${escapeHtml(item.detalle)})` : ''}</li>`).join('') + 
+                    '</ul>';
+            }
+            
+            let estadoBadge = '';
+            let estadoTexto = '';
+            let estadoColor = '';
+            let estadoIcon = '';
+            
+            switch (sol.estado) {
+                case 'pendiente':
+                    estadoBadge = 'status-pendiente';
+                    estadoTexto = 'Pendiente';
+                    estadoColor = '#F59E0B';
+                    estadoIcon = 'fa-clock';
+                    break;
+                case 'en_proceso':
+                    estadoBadge = 'status-proceso';
+                    estadoTexto = 'En Proceso';
+                    estadoColor = '#3B82F6';
+                    estadoIcon = 'fa-spinner fa-pulse';
+                    break;
+                case 'completado':
+                    estadoBadge = 'status-completado';
+                    estadoTexto = 'Repuestos Comprados';
+                    estadoColor = '#10B981';
+                    estadoIcon = 'fa-check-circle';
+                    break;
+                case 'entregado':
+                    estadoBadge = 'status-entregado';
+                    estadoTexto = '✓ Entregado';
+                    estadoColor = '#10B981';
+                    estadoIcon = 'fa-truck';
+                    break;
+                case 'rechazado':
+                    estadoBadge = 'status-rechazado';
+                    estadoTexto = 'Rechazado';
+                    estadoColor = '#C1121F';
+                    estadoIcon = 'fa-times-circle';
+                    break;
+                default:
+                    estadoBadge = 'status-pendiente';
+                    estadoTexto = sol.estado || 'Desconocido';
+                    estadoColor = 'var(--gris-texto)';
+                    estadoIcon = 'fa-question-circle';
+            }
+            
+            solicitudesHtml += `
+                <div class="solicitud-historial-item" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); margin-bottom: 1rem; overflow: hidden;">
+                    <div style="background: var(--gris-oscuro); padding: 0.75rem 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                        <div>
+                            <strong><i class="fas fa-ticket-alt"></i> Solicitud #${sol.id}</strong>
+                            <span style="font-size: 0.7rem; color: var(--gris-texto); margin-left: 0.5rem;">${formatFecha(sol.fecha_solicitud)}</span>
+                        </div>
+                        <span style="background: ${estadoColor}20; color: ${estadoColor}; padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.7rem; font-weight: 500;">
+                            <i class="fas ${estadoIcon}"></i> ${estadoTexto}
+                        </span>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <div><strong>Repuestos solicitados:</strong>${itemsHtml}</div>
+                        ${sol.observaciones ? `<div style="margin-top: 0.5rem;"><strong>Observaciones:</strong> ${escapeHtml(sol.observaciones)}</div>` : ''}
+                        ${sol.respuesta ? `<div style="margin-top: 0.5rem; background: var(--gris-oscuro); padding: 0.5rem; border-radius: var(--radius-sm);"><strong>Respuesta del Jefe de Taller:</strong><br>${escapeHtml(sol.respuesta)}</div>` : ''}
+                        ${sol.fecha_respuesta ? `<div style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--gris-texto);">Respondido: ${formatFecha(sol.fecha_respuesta)}</div>` : ''}
+                        
+                        ${sol.estado === 'completado' ? `
+                            <div style="margin-top: 0.75rem; background: rgba(16, 185, 129, 0.1); padding: 0.5rem; border-radius: var(--radius-sm); border-left: 3px solid var(--verde-exito);">
+                                <strong style="color: var(--verde-exito);"><i class="fas fa-check-circle"></i> Estado: Repuestos comprados</strong>
+                                <div style="font-size: 0.8rem; margin-top: 0.25rem;">Los repuestos ya están disponibles para su uso.</div>
+                            </div>
+                        ` : ''}
+                        
+                        ${sol.estado === 'entregado' ? `
+                            <div style="margin-top: 0.75rem; background: rgba(16, 185, 129, 0.15); padding: 0.5rem; border-radius: var(--radius-sm); border-left: 3px solid var(--verde-exito);">
+                                <strong style="color: var(--verde-exito);"><i class="fas fa-truck"></i> Estado: Repuestos entregados</strong>
+                                <div style="font-size: 0.8rem; margin-top: 0.25rem;">Los repuestos han sido entregados y están disponibles para usar.</div>
+                                ${sol.fecha_entrega ? `<div style="font-size: 0.7rem; margin-top: 0.25rem;">Fecha de entrega: ${formatFecha(sol.fecha_entrega)}</div>` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+        
+        solicitudesHtml += `</div>`;
+        modalBody.innerHTML = solicitudesHtml;
+        
+        const modal = document.getElementById('historialSolicitudesModal');
+        if (modal) modal.classList.add('show');
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showToast(error.message, 'error');
+    }
+};
+
+function cerrarHistorialModal() {
+    const modal = document.getElementById('historialSolicitudesModal');
+    if (modal) modal.classList.remove('show');
+}
 
 // =====================================================
 // DETALLE DE ORDEN
@@ -1076,9 +1263,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('confirmarEmpezarBtn')?.addEventListener('click', confirmarEmpezarDiagnostico);
     document.getElementById('confirmarInicioBtn')?.addEventListener('click', confirmarInicioReparacion);
     document.getElementById('confirmarPausaManualBtn')?.addEventListener('click', confirmarPausaManual);
-    document.getElementById('btnAgregarItemSolicitud')?.addEventListener('click', () => {
-        if (typeof agregarItemSolicitud === 'function') agregarItemSolicitud();
-    });
+    document.getElementById('btnAgregarItemSolicitud')?.addEventListener('click', agregarItemSolicitud);
     document.getElementById('confirmarSolicitarRepuestosBtn')?.addEventListener('click', confirmarSolicitarRepuestos);
     document.getElementById('confirmarReanudarBtn')?.addEventListener('click', confirmarReanudarReparacion);
     document.getElementById('confirmarFinalizarBtn')?.addEventListener('click', confirmarFinalizarReparacion);
@@ -1087,5 +1272,5 @@ document.addEventListener('DOMContentLoaded', async () => {
         modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
     });
     
-    console.log('✅ misvehiculos.js cargado correctamente - Versión con botones separados');
+    console.log('✅ misvehiculos.js cargado correctamente - Versión con historial de solicitudes');
 });

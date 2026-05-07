@@ -1349,16 +1349,54 @@ def iniciar_armado_vehiculo(current_user):
         
         ahora = datetime.datetime.now().isoformat()
         
+        # Obtener la orden actual
         orden_actual = supabase.table('ordentrabajo') \
             .select('estado_global') \
             .eq('id', id_orden) \
             .execute()
         
-        estado_anterior = orden_actual.data[0]['estado_global'] if orden_actual.data else None
+        if not orden_actual.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
         
+        estado_anterior = orden_actual.data[0]['estado_global']
+        
+        # Cambiar estado a EnArmadoVehiculo
         supabase.table('ordentrabajo').update({
             'estado_global': ESTADOS_ORDEN['EN_ARMADO']
         }).eq('id', id_orden).execute()
+        
+        # =====================================================
+        # CREAR ASIGNACIÓN DE ARMADO PARA LOS TÉCNICOS
+        # =====================================================
+        # Obtener los técnicos actualmente asignados a esta orden
+        tecnicos_asignados = supabase.table('asignaciontecnico') \
+            .select('id_tecnico') \
+            .eq('id_orden_trabajo', id_orden) \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
+        if tecnicos_asignados.data:
+            # Finalizar asignaciones activas de diagnóstico/reparación
+            for ta in tecnicos_asignados.data:
+                supabase.table('asignaciontecnico') \
+                    .update({'fecha_hora_final': ahora}) \
+                    .eq('id_orden_trabajo', id_orden) \
+                    .eq('id_tecnico', ta['id_tecnico']) \
+                    .is_('fecha_hora_final', 'null') \
+                    .execute()
+            
+            # Crear nuevas asignaciones de tipo ARMADO para los mismos técnicos
+            for ta in tecnicos_asignados.data:
+                supabase.table('asignaciontecnico').insert({
+                    'id_orden_trabajo': id_orden,
+                    'id_tecnico': ta['id_tecnico'],
+                    'tipo_asignacion': 'armado',
+                    'fecha_hora_inicio': ahora,
+                    'id_jefe_taller': current_user['id']
+                }).execute()
+                logger.info(f"✅ Asignación de ARMADO creada para técnico {ta['id_tecnico']} en orden {id_orden}")
+        else:
+            logger.warning(f"⚠️ No hay técnicos asignados a la orden {id_orden} para crear asignación de armado")
         
         registrar_historial_estado(
             id_orden,
@@ -1389,26 +1427,24 @@ Instrucciones específicas:
             'leida': False
         }).execute()
         
-        tecnicos_asignados = supabase.table('asignaciontecnico') \
-            .select('id_tecnico') \
-            .eq('id_orden_trabajo', id_orden) \
-            .is_('fecha_hora_final', 'null') \
-            .execute()
-        
-        for tecnico in (tecnicos_asignados.data or []):
-            enviar_notificacion(
-                tecnico['id_tecnico'],
-                'armado_vehiculo',
-                f'🔧 El cliente rechazó la cotización. Debes ARMAR el vehículo de la orden #{id_orden}',
-                id_orden
-            )
+        # Notificar a los técnicos
+        for ta in (tecnicos_asignados.data or []):
+            try:
+                supabase.table('notificacion').insert({
+                    'id_usuario_destino': ta['id_tecnico'],
+                    'tipo': 'armado_vehiculo',
+                    'mensaje': f'🔧 El cliente rechazó la cotización. Debes ARMAR el vehículo de la orden #{id_orden}',
+                    'fecha_envio': ahora,
+                    'leida': False
+                }).execute()
+            except Exception as e:
+                logger.warning(f"Error enviando notificación: {e}")
         
         return jsonify({'success': True, 'message': 'Instrucciones de armado enviadas'}), 200
         
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
 # =====================================================
 # APARTADO 15: TÉCNICOS ASIGNADOS
 # =====================================================

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Calidad | FURIA MOTOR - Jefe Taller</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/control_calidad.css">
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-clipboard-check"></i> Control de Calidad</h1>
+                    <p>Revisa y valida trabajos completados por los técnicos</p>
+                </div>
+                <div class="top-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                    <button class="btn-logout" id="logoutBtn" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="content">
+                <!-- TABS -->
+                <div class="tabs-container">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="tab-pendientes">
+                            <i class="fas fa-clock"></i> Pendientes de Revisión
+                            <span id="pendientesCount" class="tab-badge">0</span>
+                        </button>
+                        <button class="tab-btn" data-tab="tab-finalizadas">
+                            <i class="fas fa-check-circle"></i> Finalizadas
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TAB: PENDIENTES -->
+                <div id="tab-pendientes" class="tab-content active">
+                    <div class="filters-bar">
+                        <div class="filter-group">
+                            <select id="filtroEstado" class="form-select-sm">
+                                <option value="all">Todos los estados</option>
+                                <option value="VehiculoArmado">Vehículo Armado</option>
+                                <option value="ReparacionCompletada">Reparación Completada</option>
+                            </select>
+                        </div>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchInput" placeholder="Buscar por orden, cliente o vehículo...">
+                        </div>
+                        <button class="btn-outline" id="refreshBtn">
+                            <i class="fas fa-sync-alt"></i> Actualizar
+                        </button>
+                    </div>
+
+                    <div id="ordenesContainer" class="ordenes-container"></div>
+                </div>
+
+                <!-- TAB: FINALIZADAS -->
+                <div id="tab-finalizadas" class="tab-content">
+                    <div class="filters-bar">
+                        <div class="filter-group">
+                            <select id="filtroEstadoFinalizadas" class="form-select-sm">
+                                <option value="all">Todos los estados</option>
+                                <option value="Finalizado">Finalizado</option>
+                                <option value="Entregado">Entregado</option>
+                            </select>
+                        </div>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchFinalizadasInput" placeholder="Buscar por orden, cliente o vehículo...">
+                        </div>
+                        <button class="btn-outline" id="refreshFinalizadasBtn">
+                            <i class="fas fa-sync-alt"></i> Actualizar
+                        </button>
+                    </div>
+
+                    <div id="ordenesFinalizadasContainer" class="ordenes-container"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal: APROBAR Y FINALIZAR -->
+    <div class="modal" id="modalFinalizar">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2><i class="fas fa-check-circle"></i> Aprobar y Finalizar Trabajo</h2>
+                <button class="modal-close" onclick="cerrarModal('modalFinalizar')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert-success"
+                    style="padding: 1rem; margin-bottom: 1rem; border-radius: 8px; background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10B981;">
+                    <i class="fas fa-check-circle" style="color: #10B981;"></i>
+                    <strong>El trabajo ha sido completado correctamente</strong>
+                    <p style="margin-top: 0.5rem; font-size: 0.8rem;">Al finalizar, la orden pasará a estado <strong>FINALIZADO</strong> y el vehículo estará listo para ser entregado al cliente.</p>
+                </div>
+
+                <div id="finalizarInfo" class="orden-info-card" style="margin-bottom: 1rem;"></div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-comment-dots"></i> Comentarios adicionales (opcional)</label>
+                    <textarea id="comentariosFinalizar" class="form-textarea" rows="3"
+                        placeholder="Ej: Trabajo excelente, todo en orden..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalFinalizar')">Cancelar</button>
+                <button class="btn-primary" id="btnConfirmarFinalizar">
+                    <i class="fas fa-check-circle"></i> Finalizar Trabajo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: RECHAZAR / ENVIAR A REVISIÓN -->
+    <div class="modal" id="modalRechazar">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2><i class="fas fa-tools"></i> Enviar a Revisión</h2>
+                <button class="modal-close" onclick="cerrarModal('modalRechazar')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert-warning"
+                    style="padding: 1rem; margin-bottom: 1rem; border-radius: 8px; background: rgba(245, 158, 11, 0.1); border-left: 3px solid #F59E0B;">
+                    <i class="fas fa-exclamation-triangle" style="color: #F59E0B;"></i>
+                    <strong>El trabajo requiere correcciones</strong>
+                    <p style="margin-top: 0.5rem; font-size: 0.8rem;">La orden volverá a estado <strong>EN REPARACIÓN</strong> para que el técnico realice las correcciones.</p>
+                </div>
+
+                <div id="rechazarInfo" class="orden-info-card" style="margin-bottom: 1rem;"></div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-clipboard-list"></i> Instrucciones para el técnico <span class="required">*</span></label>
+                    <textarea id="instruccionesRechazo" class="form-textarea" rows="4"
+                        placeholder="Ej: Revisar el sistema de frenos, la presión de aceite no es la correcta, etc."></textarea>
+                    <small class="text-muted">Estas instrucciones serán notificadas al técnico.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalRechazar')">Cancelar</button>
+                <button class="btn-warning" id="btnConfirmarRechazar">
+                    <i class="fas fa-paper-plane"></i> Enviar a Revisión
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: VER DETALLE -->
+    <div class="modal" id="modalDetalle">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-info-circle"></i> Detalle de la Orden</h2>
+                <button class="modal-close" onclick="cerrarModal('modalDetalle')">&times;</button>
+            </div>
+            <div class="modal-body" id="detalleBody"></div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalle')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: FOTO AMPLIADA -->
+    <div class="modal" id="fotoModal" onclick="cerrarFotoModal()">
+        <div class="modal-content modal-lg" style="max-width: 90%; background: transparent;"
+            onclick="event.stopPropagation()">
+            <div style="text-align: right; margin-bottom: 0.5rem;">
+                <button class="modal-close" onclick="cerrarFotoModal()"
+                    style="background: var(--bg-card); padding: 0.3rem 0.8rem; border-radius: var(--radius-full);">&times;</button>
+            </div>
+            <img id="fotoAmpliada" src="" style="width: 100%; border-radius: var(--radius-lg);">
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
+        <div style="background: white; padding: 1.5rem; border-radius: 12px; text-align: center;">
+            <i class="fas fa-spinner fa-pulse fa-2x" style="color: var(--rojo-primario);"></i>
+            <p style="margin-top: 0.5rem;">Cargando...</p>
+        </div>
+    </div>
+
+    <script src="js/include.js"></script>
+    <script src="js/control_calidad.js"></script>
+</body>
+
+</html>

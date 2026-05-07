@@ -1197,3 +1197,58 @@ body {
 .btn-warning i {
     font-size: 0.9rem;
 }
+/* Botón Historial */
+.btn-secondary-sm {
+    background: var(--gris-medio);
+    color: var(--blanco);
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.btn-secondary-sm:hover {
+    background: var(--gris-claro);
+    transform: translateY(-1px);
+}
+/* Estados finales */
+.asignacion-badge.armado-completado {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--verde-exito);
+}
+
+.asignacion-badge.reparacion-completada {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--verde-exito);
+}
+
+.asignacion-badge.finalizado {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3B82F6;
+}
+
+.asignacion-badge.entregado {
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--verde-exito);
+}
+
+.estado-final-info {
+    margin-top: 0.75rem;
+    padding: 0.5rem;
+    background: rgba(16, 185, 129, 0.05);
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
+    text-align: center;
+    color: var(--gris-texto);
+}
+
+.estado-final-info i {
+    margin-right: 0.3rem;
+    color: var(--verde-exito);
+}

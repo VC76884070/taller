@@ -1564,3 +1564,165 @@
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
+
+/* Comprobante detalle box */
+.comprobante-detalle-box {
+    background: var(--gris-oscuro);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--azul-acento);
+}
+
+.comprobante-detalle-box h4 {
+    font-size: 0.85rem;
+    margin: 0 0 0.75rem 0;
+}
+
+.comprobante-detalle-box label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Botón ver comprobante */
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--blanco);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.btn-outline:hover {
+    border-color: var(--azul-acento);
+    color: var(--azul-acento);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+/* =====================================================
+   COMPROBANTE MODAL - JEFE DE TALLER
+   ===================================================== */
+
+.comprobante-modal-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.comprobante-header {
+    text-align: center;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.comprobante-header h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.25rem;
+    color: var(--rojo-primario);
+}
+
+.comprobante-header p {
+    font-size: 0.8rem;
+    color: var(--gris-texto);
+}
+
+.comprobante-visualizacion {
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    text-align: center;
+    max-height: 50vh;
+    overflow: auto;
+}
+
+.comprobante-imagen {
+    max-width: 100%;
+    max-height: 45vh;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+}
+
+.comprobante-pdf {
+    width: 100%;
+    height: 45vh;
+    border: none;
+    border-radius: var(--radius-sm);
+}
+
+.comprobante-info {
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+}
+
+.comprobante-info .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+}
+
+.comprobante-info .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.comprobante-info .info-item label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--gris-texto);
+}
+
+.comprobante-info .info-item span {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--blanco);
+}
+
+.comprobante-info .info-item .monto {
+    color: var(--verde-exito);
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.comprobante-info .info-item.full-width {
+    grid-column: 1 / -1;
+}
+
+.comprobante-info .info-item p {
+    margin: 0.25rem 0 0 0;
+    font-size: 0.8rem;
+    color: var(--blanco);
+}
+
+.comprobante-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .comprobante-info .info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .comprobante-actions {
+        flex-wrap: wrap;
+    }
+    
+    .comprobante-actions button {
+        flex: 1;
+    }
+}

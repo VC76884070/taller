@@ -8,7 +8,9 @@
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/misvehiculos.css">
@@ -25,7 +27,7 @@
             <header class="top-bar">
                 <div class="page-title">
                     <h1>Mis Vehículos</h1>
-                    <p>Gestiona tus vehículos asignados (máximo 2 activos)</p>
+                    <p>Gestiona tus vehículos asignados</p>
                 </div>
 
                 <div class="top-actions">
@@ -52,7 +54,8 @@
                         <i class="fas fa-bullhorn"></i>
                         <h3>Comunicados del Jefe Operativo</h3>
                         <span class="comunicados-badge" id="comunicadosBadge">0</span>
-                        <button class="btn-refresh-comunicados" onclick="cargarComunicados()" title="Actualizar comunicados">
+                        <button class="btn-refresh-comunicados" onclick="cargarComunicados()"
+                            title="Actualizar comunicados">
                             <i class="fas fa-sync-alt"></i>
                         </button>
                     </div>
@@ -140,64 +143,68 @@
         </div>
     </div>
 
-    <!-- Modal de PAUSA NORMAL (SOLO MOTIVO) -->
-    <div class="modal" id="pausaModal">
+    <!-- Modal de PAUSA MANUAL (SOLO MOTIVO) -->
+    <div class="modal" id="pausaManualModal">
         <div class="modal-content modal-sm">
             <div class="modal-header">
-                <h2><i class="fas fa-pause-circle"></i> Pausar Reparación</h2>
-                <button class="modal-close" onclick="cerrarPausaModal()">&times;</button>
+                <h2><i class="fas fa-pause-circle"></i> Pausar Trabajo</h2>
+                <button class="modal-close" onclick="cerrarPausaManualModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <p>¿Por qué necesitas pausar este trabajo?</p>
-                <textarea id="motivoPausa" class="form-textarea" rows="3"
-                    placeholder="Ej: Esperando repuestos, falta herramienta especial, cliente no autorizó, etc."></textarea>
-                <input type="hidden" id="ordenIdPausa">
+                <textarea id="motivoPausaManual" class="form-textarea" rows="3"
+                    placeholder="Ej: Esperando autorización del cliente, falta herramienta especial, etc."></textarea>
+                <input type="hidden" id="ordenIdPausaManual">
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarPausaModal()">Cancelar</button>
-                <button class="btn-primary" id="confirmarPausaBtn">Confirmar Pausa</button>
+                <button class="btn-secondary" onclick="cerrarPausaManualModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmarPausaManualBtn">Confirmar Pausa</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal de PAUSA CON SOLICITUD DE REPUESTOS -->
-    <div class="modal" id="pausaItemsModal">
+    <!-- Modal de SOLICITAR REPUESTOS (SIN PAUSA) -->
+    <div class="modal" id="solicitarRepuestosModal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h2><i class="fas fa-shopping-cart"></i> Solicitar Repuestos - Pausar Reparación</h2>
-                <button class="modal-close" onclick="cerrarPausaItemsModal()">&times;</button>
+                <h2><i class="fas fa-shopping-cart"></i> Solicitar Repuestos</h2>
+                <button class="modal-close" onclick="cerrarSolicitarRepuestosModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="alert-info" style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(37, 99, 235, 0.1); border-radius: var(--radius-md);">
+                <div class="alert-info"
+                    style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(37, 99, 235, 0.1); border-radius: var(--radius-md);">
                     <i class="fas fa-info-circle"></i>
                     <strong>Los repuestos solicitados se enviarán al Jefe de Taller</strong>
-                    <p style="margin-top: 0.25rem; font-size: 0.8rem;">El jefe de taller gestionará la compra y te notificará cuando estén disponibles.</p>
+                    <p style="margin-top: 0.25rem; font-size: 0.8rem;">Puedes seguir trabajando mientras se gestionan
+                        los repuestos.</p>
                 </div>
-                
+
                 <div class="form-group">
-                    <label><i class="fas fa-list-alt"></i> Items a solicitar</label>
+                    <label><i class="fas fa-list-alt"></i> Repuestos a solicitar</label>
                     <div class="items-list-container">
-                        <div class="items-list" id="itemsListPausa">
-                            <div class="item-empty"><i class="fas fa-box-open"></i><p>No hay items agregados</p><small>Agrega los repuestos que necesitas</small></div>
+                        <div class="items-list" id="itemsListSolicitud">
+                            <div class="item-empty"><i class="fas fa-box-open"></i>
+                                <p>No hay repuestos agregados</p><small>Agrega los repuestos que necesitas</small>
+                            </div>
                         </div>
-                        <button type="button" class="btn-add-item" id="btnAgregarItemPausa">
+                        <button type="button" class="btn-add-item" id="btnAgregarItemSolicitud">
                             <i class="fas fa-plus-circle"></i> Agregar repuesto
                         </button>
                     </div>
                 </div>
-                
+
                 <div class="form-group" style="margin-top: 1rem;">
-                    <label><i class="fas fa-comment-dots"></i> Motivo de la pausa (adicional)</label>
-                    <textarea id="motivoPausaItems" class="form-textarea" rows="2" 
-                        placeholder="Ej: Esperando repuestos para continuar..."></textarea>
+                    <label><i class="fas fa-comment-dots"></i> Observaciones adicionales</label>
+                    <textarea id="motivoSolicitud" class="form-textarea" rows="2"
+                        placeholder="Ej: Urgente, especificaciones técnicas, etc."></textarea>
                 </div>
-                
-                <input type="hidden" id="ordenIdPausaItems">
+
+                <input type="hidden" id="ordenIdSolicitud">
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarPausaItemsModal()">Cancelar</button>
-                <button class="btn-primary" id="confirmarPausaItemsBtn">
-                    <i class="fas fa-paper-plane"></i> Enviar Solicitud y Pausar
+                <button class="btn-secondary" onclick="cerrarSolicitarRepuestosModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmarSolicitarRepuestosBtn">
+                    <i class="fas fa-paper-plane"></i> Enviar Solicitud
                 </button>
             </div>
         </div>
@@ -207,7 +214,7 @@
     <div class="modal" id="reanudarModal">
         <div class="modal-content modal-sm">
             <div class="modal-header">
-                <h2><i class="fas fa-play-circle"></i> Reanudar Reparación</h2>
+                <h2><i class="fas fa-play-circle"></i> Reanudar Trabajo</h2>
                 <button class="modal-close" onclick="cerrarReanudarModal()">&times;</button>
             </div>
             <div class="modal-body">
@@ -231,8 +238,14 @@
             </div>
             <div class="modal-body">
                 <p>¿Has completado TODAS las reparaciones de este vehículo?</p>
+                <div id="solicitudesPendientesMsg"
+                    style="margin: 0.75rem 0; padding: 0.5rem; background: rgba(245, 158, 11, 0.1); border-radius: var(--radius-sm); display: none;">
+                    <i class="fas fa-exclamation-triangle" style="color: var(--ambar-alerta);"></i>
+                    <span style="font-size: 0.8rem;">⚠️ Tienes solicitudes de repuestos pendientes</span>
+                </div>
                 <p class="text-warning" style="color: var(--ambar-alerta); margin-top: 0.5rem;">
-                    <i class="fas fa-exclamation-triangle"></i> Al finalizar, la bahía quedará libre y se notificará al Jefe de Taller
+                    <i class="fas fa-exclamation-triangle"></i> Al finalizar, la bahía quedará libre y se notificará al
+                    Jefe de Taller
                 </p>
                 <div id="finalizarInfo" class="modal-info"></div>
                 <input type="hidden" id="ordenIdFinalizar">
@@ -262,9 +275,11 @@
 
     <!-- Modal de FOTO AMPLIADA -->
     <div class="modal" id="fotoModal" onclick="cerrarFotoModal()">
-        <div class="modal-content modal-lg" style="max-width: 90%; background: transparent;" onclick="event.stopPropagation()">
+        <div class="modal-content modal-lg" style="max-width: 90%; background: transparent;"
+            onclick="event.stopPropagation()">
             <div style="text-align: right; margin-bottom: 0.5rem;">
-                <button class="modal-close" onclick="cerrarFotoModal()" style="background: var(--bg-card); padding: 0.3rem 0.8rem; border-radius: var(--radius-full);">&times;</button>
+                <button class="modal-close" onclick="cerrarFotoModal()"
+                    style="background: var(--bg-card); padding: 0.3rem 0.8rem; border-radius: var(--radius-full);">&times;</button>
             </div>
             <img id="fotoAmpliada" src="" style="width: 100%; border-radius: var(--radius-lg);">
         </div>
@@ -272,6 +287,66 @@
 
     <!-- Toast Container -->
     <div id="toast-container"></div>
+
+    <!-- Variables para items de solicitud -->
+    <script>
+        // Variables globales para items de solicitud de repuestos
+        let itemsSolicitud = [];
+
+        // Funciones para manejar items de solicitud
+        function renderItemsSolicitud() {
+            const container = document.getElementById('itemsListSolicitud');
+            if (!container) return;
+
+            if (itemsSolicitud.length === 0) {
+                container.innerHTML = `<div class="item-empty"><i class="fas fa-box-open"></i><p>No hay repuestos agregados</p><small>Haz clic en "Agregar repuesto" para comenzar</small></div>`;
+                return;
+            }
+
+            container.innerHTML = itemsSolicitud.map((item, index) => `
+                <div class="item-row" data-index="${index}">
+                    <div class="item-fields">
+                        <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Nombre del repuesto" onchange="actualizarItemSolicitud(${index}, 'descripcion', this.value)">
+                        <input type="number" class="item-cantidad" value="${item.cantidad}" min="1" onchange="actualizarItemSolicitud(${index}, 'cantidad', parseInt(this.value))">
+                        <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle (marca, especificaciones...)" onchange="actualizarItemSolicitud(${index}, 'detalle', this.value)">
+                    </div>
+                    <div class="item-actions">
+                        <button class="btn-remove-item" onclick="eliminarItemSolicitud(${index})"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function agregarItemSolicitud() {
+            itemsSolicitud.push({ descripcion: '', cantidad: 1, detalle: '' });
+            renderItemsSolicitud();
+            setTimeout(() => {
+                const lastInput = document.querySelector('#itemsListSolicitud .item-row:last-child .item-descripcion');
+                if (lastInput) lastInput.focus();
+            }, 100);
+        }
+
+        function actualizarItemSolicitud(index, campo, valor) {
+            if (itemsSolicitud[index]) itemsSolicitud[index][campo] = valor;
+        }
+
+        function eliminarItemSolicitud(index) {
+            itemsSolicitud.splice(index, 1);
+            renderItemsSolicitud();
+        }
+
+        function limpiarItemsSolicitud() {
+            itemsSolicitud = [];
+            renderItemsSolicitud();
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
 
     <script src="js/include.js"></script>
     <script src="js/misvehiculos.js"></script>

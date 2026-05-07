@@ -1,6 +1,6 @@
 // =====================================================
 // COTIZACIONES.JS - JEFE DE TALLER
-// VERSIÓN 3.3 - CORREGIDO (SUBIDA DE ARCHIVOS FUNCIONAL)
+// VERSIÓN 4.0 - CON SOLICITUDES DE TÉCNICOS Y COMPRA DIRECTA
 // =====================================================
 
 const API_URL = window.location.origin + '/api/jefe-taller';
@@ -15,10 +15,13 @@ let solicitudesCotizacion = [];
 let cotizacionesMap = {};
 let solicitudesCompra = [];
 let historialCotizaciones = [];
+let solicitudesRepuestosTecnico = [];
 
 // Items dinámicos
 let itemsSolicitud = [];
 let itemsCompra = [];
+let itemsCompraDirecta = [];
+let itemsGestionCompra = [];
 
 // Variables para archivo y servicios
 let currentFileData = null;
@@ -29,6 +32,7 @@ let serviciosCotizables = [];
 let isEditingCotizacion = false;
 let currentOrdenAceptada = null;
 let currentOrdenArmado = null;
+let currentGestionSolicitud = null;
 
 // Estados de orden (constantes)
 const ESTADOS_ORDEN = {
@@ -130,7 +134,9 @@ function statusBadge(estado) {
         'enviada': 'status-enviado',
         'aprobada': 'status-aprobado',
         'expirada': 'status-pendiente',
-        'solicitado': 'status-pendiente'
+        'solicitado': 'status-pendiente',
+        'en_proceso': 'status-cotizado',
+        'completado': 'status-aprobado'
     };
     
     const texto = {
@@ -142,14 +148,17 @@ function statusBadge(estado) {
         'aprobada': 'Aprobada',
         'expirada': 'Expirada',
         'comprado': 'Comprado',
-        'solicitado': 'Solicitud Enviada'
+        'solicitado': 'Solicitud Enviada',
+        'en_proceso': 'En Proceso',
+        'completado': 'Completado'
     };
     
     let icon = 'fa-clock';
-    if (estado === 'aprobado' || estado === 'aprobada' || estado === 'comprado') icon = 'fa-check-circle';
+    if (estado === 'aprobado' || estado === 'aprobada' || estado === 'comprado' || estado === 'completado') icon = 'fa-check-circle';
     if (estado === 'rechazado') icon = 'fa-times-circle';
     if (estado === 'enviada') icon = 'fa-paper-plane';
     if (estado === 'solicitado') icon = 'fa-paper-plane';
+    if (estado === 'en_proceso') icon = 'fa-spinner fa-pulse';
     
     return `<span class="status-badge ${map[estado] || 'status-pendiente'}">
         <i class="fas ${icon}"></i> ${texto[estado] || estado}
@@ -211,7 +220,7 @@ function renderItemsCompra() {
     if (!container) return;
     
     if (itemsCompra.length === 0) {
-        container.innerHTML = `<div class="item-empty"><i class="fas fa-box-open"></i><p>No hay items agregados</p><small>Haz clic en "Agregar item" para comenzar</small></div>`;
+        container.innerHTML = `<div class="item-empty"><i class="fas fa-box-open"></i><p>No hay items agregados</p></div>`;
         return;
     }
     
@@ -249,7 +258,103 @@ function limpiarItemsCompra() {
 }
 
 // =====================================================
-// CARGA DE DATOS
+// ITEMS PARA COMPRA DIRECTA
+// =====================================================
+
+function renderItemsCompraDirecta() {
+    const container = document.getElementById('itemsListCompraDirecta');
+    if (!container) return;
+    
+    if (itemsCompraDirecta.length === 0) {
+        container.innerHTML = `<div class="item-empty"><i class="fas fa-box-open"></i><p>No hay items agregados</p><small>Haz clic en "Agregar item" para comenzar</small></div>`;
+        return;
+    }
+    
+    container.innerHTML = itemsCompraDirecta.map((item, index) => `
+        <div class="item-row" data-index="${index}">
+            <div class="item-fields">
+                <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Nombre del repuesto" onchange="actualizarItemCompraDirecta(${index}, 'descripcion', this.value)">
+                <input type="number" class="item-cantidad" value="${item.cantidad}" min="1" onchange="actualizarItemCompraDirecta(${index}, 'cantidad', parseInt(this.value))">
+                <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle (marca, especificaciones...)" onchange="actualizarItemCompraDirecta(${index}, 'detalle', this.value)">
+            </div>
+            <div class="item-actions">
+                <button class="btn-remove-item" onclick="eliminarItemCompraDirecta(${index})"><i class="fas fa-trash-alt"></i></button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function agregarItemCompraDirecta() {
+    itemsCompraDirecta.push({ descripcion: '', cantidad: 1, detalle: '' });
+    renderItemsCompraDirecta();
+    setTimeout(() => {
+        const lastInput = document.querySelector('#itemsListCompraDirecta .item-row:last-child .item-descripcion');
+        if (lastInput) lastInput.focus();
+    }, 100);
+}
+
+function actualizarItemCompraDirecta(index, campo, valor) {
+    if (itemsCompraDirecta[index]) itemsCompraDirecta[index][campo] = valor;
+}
+
+function eliminarItemCompraDirecta(index) {
+    itemsCompraDirecta.splice(index, 1);
+    renderItemsCompraDirecta();
+}
+
+function limpiarItemsCompraDirecta() {
+    itemsCompraDirecta = [];
+    renderItemsCompraDirecta();
+}
+
+// =====================================================
+// ITEMS PARA GESTIÓN DE COMPRA (desde solicitud de técnico)
+// =====================================================
+
+function renderItemsGestionCompra() {
+    const container = document.getElementById('itemsListGestionCompra');
+    if (!container) return;
+    
+    if (itemsGestionCompra.length === 0) {
+        container.innerHTML = `<div class="item-empty"><i class="fas fa-box-open"></i><p>No hay items agregados</p><small>Haz clic en "Agregar repuesto a comprar" para comenzar</small></div>`;
+        return;
+    }
+    
+    container.innerHTML = itemsGestionCompra.map((item, index) => `
+        <div class="item-row" data-index="${index}">
+            <div class="item-fields">
+                <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Nombre del repuesto" onchange="actualizarItemGestionCompra(${index}, 'descripcion', this.value)">
+                <input type="number" class="item-cantidad" value="${item.cantidad}" min="1" onchange="actualizarItemGestionCompra(${index}, 'cantidad', parseInt(this.value))">
+                <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle" onchange="actualizarItemGestionCompra(${index}, 'detalle', this.value)">
+            </div>
+            <div class="item-actions">
+                <button class="btn-remove-item" onclick="eliminarItemGestionCompra(${index})"><i class="fas fa-trash-alt"></i></button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function agregarItemGestionCompra() {
+    itemsGestionCompra.push({ descripcion: '', cantidad: 1, detalle: '' });
+    renderItemsGestionCompra();
+}
+
+function actualizarItemGestionCompra(index, campo, valor) {
+    if (itemsGestionCompra[index]) itemsGestionCompra[index][campo] = valor;
+}
+
+function eliminarItemGestionCompra(index) {
+    itemsGestionCompra.splice(index, 1);
+    renderItemsGestionCompra();
+}
+
+function limpiarItemsGestionCompra() {
+    itemsGestionCompra = [];
+    renderItemsGestionCompra();
+}
+
+// =====================================================
+// CARGA DE DATOS PRINCIPALES
 // =====================================================
 
 async function cargarOrdenesDiagnosticoAprobado() {
@@ -295,7 +400,6 @@ async function cargarSolicitudesCotizacion() {
         if (data.success) {
             solicitudesCotizacion = data.solicitudes || [];
             renderSolicitudesCotizacion();
-            cargarSelectOrdenesSolicitud();
         }
     } catch (error) {
         console.error('Error cargando solicitudes:', error);
@@ -327,6 +431,7 @@ async function cargarSolicitudesCompra() {
         if (data.success) {
             solicitudesCompra = data.solicitudes || [];
             renderSolicitudesCompra();
+            cargarSelectEncargadosCompra();
         }
     } catch (error) {
         console.error('Error cargando solicitudes de compra:', error);
@@ -345,10 +450,19 @@ async function cargarEncargadosRepuestos() {
                 selectEncargado.innerHTML = '<option value="">Seleccionar encargado</option>' +
                     encargadosRepuestos.map(e => `<option value="${e.id}">${escapeHtml(e.nombre)}</option>`).join('');
             }
+            cargarSelectEncargadosCompra();
         }
     } catch (error) {
         console.error('Error cargando encargados:', error);
         encargadosRepuestos = [];
+    }
+}
+
+function cargarSelectEncargadosCompra() {
+    const selectEncargado = document.getElementById('compraDirecta_id_encargado');
+    if (selectEncargado && encargadosRepuestos.length > 0) {
+        selectEncargado.innerHTML = '<option value="">Seleccionar encargado</option>' +
+            encargadosRepuestos.map(e => `<option value="${e.id}">${escapeHtml(e.nombre)}</option>`).join('');
     }
 }
 
@@ -384,55 +498,180 @@ async function cargarHistorialCotizaciones() {
     }
 }
 
-function cargarSelectOrdenesSolicitud() {
-    const selectOrden = document.getElementById('solicitud_id_orden_trabajo');
-    const ordenes = window.ordenesAprobadas || [];
-    
-    if (selectOrden && ordenes.length > 0) {
-        const currentValue = selectOrden.value;
-        selectOrden.innerHTML = '<option value="">Seleccionar orden</option>' + 
-            ordenes.map(o => `<option value="${o.id_orden}">${escapeHtml(o.codigo_unico)} - ${escapeHtml(o.vehiculo)}</option>`).join('');
-        if (currentValue) selectOrden.value = currentValue;
-    }
-    
-    if (selectOrden) {
-        selectOrden.onchange = function() {
-            const ordenId = parseInt(this.value);
-            const orden = ordenesDiagnosticoAprobado.find(o => o.id_orden === ordenId);
-            const selectServicio = document.getElementById('solicitud_id_servicio');
-            
-            if (selectServicio && orden && orden.servicios) {
-                selectServicio.innerHTML = '<option value="">Seleccionar servicio</option>';
-                orden.servicios.forEach(serv => {
-                    const option = document.createElement('option');
-                    option.value = serv.id_servicio;
-                    option.textContent = serv.descripcion;
-                    selectServicio.appendChild(option);
-                });
-            }
-        };
+async function cargarOrdenesActivasParaCompraDirecta() {
+    try {
+        const response = await fetch(`${API_URL}/ordenes-activas`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        
+        const selectOrden = document.getElementById('compraDirecta_id_orden');
+        if (selectOrden && data.ordenes) {
+            selectOrden.innerHTML = '<option value="">Seleccionar orden</option>' + 
+                data.ordenes.map(o => `<option value="${o.id_orden}">${escapeHtml(o.codigo_unico)} - ${escapeHtml(o.vehiculo)}</option>`).join('');
+        }
+    } catch (error) {
+        console.error('Error cargando órdenes activas:', error);
     }
 }
 
-async function cargarDatosIniciales() {
-    mostrarLoading(true);
+// =====================================================
+// SOLICITUDES DE REPUESTOS DE TÉCNICOS
+// =====================================================
+
+async function cargarSolicitudesRepuestosTecnico() {
     try {
-        await Promise.all([
-            cargarOrdenesDiagnosticoAprobado(),
-            cargarOrdenesParaCotizar(),
-            cargarSolicitudesCotizacion(),
-            cargarCotizacionesMap(),
-            cargarSolicitudesCompra(),
-            cargarEncargadosRepuestos(),
-            cargarOrdenesAprobadas(),
-            cargarHistorialCotizaciones()
-        ]);
+        const estado = document.getElementById('filtroEstadoRepuestoTecnico')?.value || 'all';
+        const search = document.getElementById('searchRepuestoTecnico')?.value || '';
+        
+        let url = `${API_URL}/solicitudes-repuestos-tecnico?estado=${estado}`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+        
+        const response = await fetch(url, { headers: getAuthHeaders() });
+        const data = await response.json();
+        
+        if (data.success) {
+            solicitudesRepuestosTecnico = data.solicitudes || [];
+            renderSolicitudesRepuestosTecnico();
+            console.log(`📊 Solicitudes de técnicos: ${solicitudesRepuestosTecnico.length}`);
+        }
     } catch (error) {
-        console.error('Error cargando datos:', error);
-        showToast('Error al cargar los datos', 'error');
-    } finally {
-        mostrarLoading(false);
+        console.error('Error cargando solicitudes de técnicos:', error);
+        solicitudesRepuestosTecnico = [];
+        const tbody = document.getElementById('tablaSolicitudesRepuestosTecnico');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>Error al cargar solicitudes</p></div></td></tr>`;
+        }
     }
+}
+
+function renderSolicitudesRepuestosTecnico() {
+    const tbody = document.getElementById('tablaSolicitudesRepuestosTecnico');
+    if (!tbody) return;
+    
+    if (solicitudesRepuestosTecnico.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes de repuestos de técnicos</p></div></td></tr>`;
+        return;
+    }
+    
+    tbody.innerHTML = solicitudesRepuestosTecnico.map(s => {
+        let itemsHtml = '';
+        if (s.items && s.items.length > 0) {
+            itemsHtml = s.items.map(item => 
+                `<div style="font-size: 0.7rem; padding: 0.2rem 0;">• ${escapeHtml(item.descripcion)} x${item.cantidad}</div>`
+            ).join('');
+        } else {
+            itemsHtml = '<span class="text-muted">No especificado</span>';
+        }
+        
+        let estadoClass = '';
+        let estadoIcon = '';
+        let estadoTexto = '';
+        
+        switch (s.estado) {
+            case 'pendiente':
+                estadoClass = 'status-pendiente';
+                estadoIcon = 'fa-clock';
+                estadoTexto = 'Pendiente';
+                break;
+            case 'en_proceso':
+                estadoClass = 'status-cotizado';
+                estadoIcon = 'fa-spinner fa-pulse';
+                estadoTexto = 'En Proceso';
+                break;
+            case 'completado':
+                estadoClass = 'status-aprobado';
+                estadoIcon = 'fa-check-circle';
+                estadoTexto = 'Completado';
+                break;
+            case 'rechazado':
+                estadoClass = 'status-rechazado';
+                estadoIcon = 'fa-times-circle';
+                estadoTexto = 'Rechazado';
+                break;
+            default:
+                estadoClass = 'status-pendiente';
+                estadoIcon = 'fa-clock';
+                estadoTexto = s.estado || 'Desconocido';
+        }
+        
+        let accionesHtml = '';
+        if (s.estado === 'pendiente' || s.estado === 'en_proceso') {
+            accionesHtml = `
+                <button class="action-btn edit" onclick="abrirModalGestionarSolicitudTecnico(${s.id})" title="Gestionar Compra">
+                    <i class="fas fa-shopping-cart"></i>
+                </button>
+                <button class="action-btn approve" onclick="abrirModalResponderSolicitud(${s.id})" title="Responder">
+                    <i class="fas fa-reply"></i>
+                </button>
+            `;
+        } else {
+            accionesHtml = `<span class="text-muted">Finalizado</span>`;
+        }
+        
+        return `
+            <tr>
+                <td>${s.id}</td>
+                <td><strong>${escapeHtml(s.orden_codigo)}</strong><br><small class="text-muted">${escapeHtml(s.orden_estado)}</small></td>
+                <td>${escapeHtml(s.vehiculo)}</div></td>
+                <td>
+                    <strong>${escapeHtml(s.tecnico_nombre)}</strong>
+                    ${s.tecnico_contacto ? `<br><small class="text-muted">📞 ${escapeHtml(s.tecnico_contacto)}</small>` : ''}
+                </div></td>
+                <td style="max-width: 250px;">
+                    ${itemsHtml}
+                    ${s.observaciones ? `<div class="text-muted" style="font-size: 0.65rem; margin-top: 0.25rem;"><i class="fas fa-comment"></i> ${escapeHtml(s.observaciones.substring(0, 50))}${s.observaciones.length > 50 ? '...' : ''}</div>` : ''}
+                </div></td>
+                <td><span class="status-badge ${estadoClass}"><i class="fas ${estadoIcon}"></i> ${estadoTexto}</span></div></td>
+                <td>${formatDate(s.fecha_solicitud)}</div></td>
+                <td class="action-buttons">${accionesHtml}</div></tr>
+        `;
+    }).join('');
+}
+
+// =====================================================
+// SOLICITUDES DE COTIZACIÓN PARA TAB 3
+// =====================================================
+
+async function cargarSolicitudesCotizacionCompra() {
+    try {
+        const estado = document.getElementById('filtroEstadoCotizacionCompra')?.value || 'all';
+        let url = `${API_URL}/solicitudes-cotizacion?estado=${estado}`;
+        
+        const response = await fetch(url, { headers: getAuthHeaders() });
+        const data = await response.json();
+        
+        if (data.success) {
+            renderSolicitudesCotizacionCompra(data.solicitudes || []);
+        }
+    } catch (error) {
+        console.error('Error cargando solicitudes de cotización:', error);
+    }
+}
+
+function renderSolicitudesCotizacionCompra(solicitudes) {
+    const tbody = document.getElementById('tablaSolicitudesCotizacionCompra');
+    if (!tbody) return;
+    
+    if (solicitudes.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes de cotización</p></div></div></td>`;
+        return;
+    }
+    
+    tbody.innerHTML = solicitudes.map(s => `
+        <tr>
+            <td>${s.id}</div>
+            <td><strong>${escapeHtml(s.orden_codigo)}</strong></div>
+            <td>${escapeHtml(s.vehiculo)}</div>
+            <td>${escapeHtml(s.servicio_descripcion || '-')}</div>
+            <td>${s.items?.length || 1} item(s)</div>
+            <td>${statusBadge(s.estado)}</div>
+            <td>${s.precio_cotizado ? formatCurrency(s.precio_cotizado) : '-'}</div>
+            <td>${formatDate(s.fecha_solicitud)}</div>
+            <td class="action-buttons">
+                ${s.estado === 'pendiente' ? `<button class="action-btn delete" onclick="eliminarSolicitudCotizacion(${s.id})"><i class="fas fa-trash-alt"></i></button>` : ''}
+                ${s.estado === 'cotizado' ? `<button class="action-btn send" onclick="solicitarCompraDesdeCotizacion(${s.id})"><i class="fas fa-shopping-cart"></i></button>` : ''}
+            </div>
+        </tr>
+    `).join('');
 }
 
 // =====================================================
@@ -522,6 +761,36 @@ function renderOrdenesSolicitarCotizacion() {
     }).join('');
 }
 
+function cargarSelectOrdenesSolicitud() {
+    const selectOrden = document.getElementById('solicitud_id_orden_trabajo');
+    const ordenes = window.ordenesAprobadas || [];
+    
+    if (selectOrden && ordenes.length > 0) {
+        const currentValue = selectOrden.value;
+        selectOrden.innerHTML = '<option value="">Seleccionar orden</option>' + 
+            ordenes.map(o => `<option value="${o.id_orden}">${escapeHtml(o.codigo_unico)} - ${escapeHtml(o.vehiculo)}</option>`).join('');
+        if (currentValue) selectOrden.value = currentValue;
+    }
+    
+    if (selectOrden) {
+        selectOrden.onchange = function() {
+            const ordenId = parseInt(this.value);
+            const orden = ordenesDiagnosticoAprobado.find(o => o.id_orden === ordenId);
+            const selectServicio = document.getElementById('solicitud_id_servicio');
+            
+            if (selectServicio && orden && orden.servicios) {
+                selectServicio.innerHTML = '<option value="">Seleccionar servicio</option>';
+                orden.servicios.forEach(serv => {
+                    const option = document.createElement('option');
+                    option.value = serv.id_servicio;
+                    option.textContent = serv.descripcion;
+                    selectServicio.appendChild(option);
+                });
+            }
+        };
+    }
+}
+
 async function abrirModalSolicitudParaOrden(id_orden) {
     limpiarItemsSolicitud();
     await cargarOrdenesAprobadas();
@@ -552,6 +821,20 @@ function renderOrdenesCotizacionCliente() {
             (o.cliente_nombre || '').toLowerCase().includes(searchTerm) ||
             (o.vehiculo || '').toLowerCase().includes(searchTerm)
         );
+    }
+    
+    if (filtroEstado !== 'all') {
+        if (filtroEstado === 'pendiente') {
+            filtered = filtered.filter(o => o.estado_global === ESTADOS_ORDEN.DIAGNOSTICO_APROBADO);
+        } else if (filtroEstado === 'enviada') {
+            filtered = filtered.filter(o => o.estado_global === ESTADOS_ORDEN.COTIZACION_ENVIADA);
+        } else if (filtroEstado === 'aprobada') {
+            filtered = filtered.filter(o => o.estado_global === ESTADOS_ORDEN.COTIZACION_ACEPTADA || o.estado_global === ESTADOS_ORDEN.COTIZACION_PARCIAL);
+        } else if (filtroEstado === 'rechazada') {
+            filtered = filtered.filter(o => o.estado_global === ESTADOS_ORDEN.COTIZACION_RECHAZADA);
+        } else if (filtroEstado === 'reparacion') {
+            filtered = filtered.filter(o => o.estado_global === ESTADOS_ORDEN.EN_REPARACION);
+        }
     }
     
     if (filtered.length === 0) {
@@ -675,7 +958,7 @@ function renderSolicitudesCotizacion() {
     if (!tbody) return;
     
     if (solicitudesCotizacion.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes</p></div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes</p></div></td><table>`;
         return;
     }
     
@@ -718,7 +1001,274 @@ function renderSolicitudesCompra() {
 }
 
 // =====================================================
-// SUBIDA DE ARCHIVOS - CORREGIDA
+// NUEVA SOLICITUD DE COMPRA DIRECTA
+// =====================================================
+
+async function abrirModalNuevaSolicitudCompraDirecta() {
+    limpiarItemsCompraDirecta();
+    await cargarOrdenesActivasParaCompraDirecta();
+    await cargarEncargadosRepuestos();
+    abrirModal('modalNuevaSolicitudCompraDirecta');
+}
+
+async function confirmarCompraDirecta() {
+    const id_orden = document.getElementById('compraDirecta_id_orden')?.value;
+    const id_encargado = document.getElementById('compraDirecta_id_encargado')?.value;
+    const observaciones = document.getElementById('compraDirecta_observaciones')?.value || '';
+    
+    if (!id_orden) {
+        showToast('Seleccione una orden de trabajo', 'warning');
+        return;
+    }
+    
+    if (!id_encargado) {
+        showToast('Seleccione un encargado de repuestos', 'warning');
+        return;
+    }
+    
+    const itemsValidos = itemsCompraDirecta.filter(item => item.descripcion && item.descripcion.trim() !== '');
+    if (itemsValidos.length === 0) {
+        showToast('Agregue al menos un repuesto a comprar', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/solicitudes-compra-directa`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                id_orden_trabajo: parseInt(id_orden),
+                id_encargado_repuestos: parseInt(id_encargado),
+                items: itemsValidos,
+                observaciones: observaciones
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('✅ Solicitud de compra enviada al encargado de repuestos', 'success');
+            cerrarModal('modalNuevaSolicitudCompraDirecta');
+            limpiarItemsCompraDirecta();
+            await cargarSolicitudesCompra();
+        } else {
+            showToast(data.error || 'Error al crear solicitud', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// =====================================================
+// GESTIONAR SOLICITUD DE TÉCNICO (COMPRAR REPUESTOS)
+// =====================================================
+
+function abrirModalGestionarSolicitudTecnico(id_solicitud) {
+    const solicitud = solicitudesRepuestosTecnico.find(s => s.id === id_solicitud);
+    if (!solicitud) return;
+    
+    currentGestionSolicitud = solicitud;
+    limpiarItemsGestionCompra();
+    
+    let itemsHtml = '';
+    if (solicitud.items && solicitud.items.length > 0) {
+        itemsHtml = '<ul style="margin: 0.5rem 0 0 1rem;">' + 
+            solicitud.items.map(item => `<li><strong>${escapeHtml(item.descripcion)}</strong> x${item.cantidad}${item.detalle ? ` (${escapeHtml(item.detalle)})` : ''}</li>`).join('') + 
+            '</ul>';
+    }
+    
+    const infoContainer = document.getElementById('gestionSolicitudInfo');
+    if (infoContainer) {
+        infoContainer.innerHTML = `
+            <p><strong>Orden:</strong> ${escapeHtml(solicitud.orden_codigo)}</p>
+            <p><strong>Vehículo:</strong> ${escapeHtml(solicitud.vehiculo)}</p>
+            <p><strong>Técnico:</strong> ${escapeHtml(solicitud.tecnico_nombre)}</p>
+            <p><strong>Repuestos solicitados:</strong>${itemsHtml}</p>
+            ${solicitud.observaciones ? `<p><strong>Observaciones del técnico:</strong> ${escapeHtml(solicitud.observaciones)}</p>` : ''}
+        `;
+    }
+    
+    const itemsContainer = document.getElementById('itemsSolicitudTecnico');
+    if (itemsContainer && solicitud.items && solicitud.items.length > 0) {
+        itemsContainer.innerHTML = solicitud.items.map(item => 
+            `<div style="padding: 0.3rem 0; border-bottom: 1px solid var(--border-color);">
+                <i class="fas fa-box"></i> <strong>${escapeHtml(item.descripcion)}</strong> x${item.cantidad}
+                ${item.detalle ? `<br><small class="text-muted">${escapeHtml(item.detalle)}</small>` : ''}
+            </div>`
+        ).join('');
+    }
+    
+    if (solicitud.items && solicitud.items.length > 0) {
+        itemsGestionCompra = solicitud.items.map(item => ({
+            descripcion: item.descripcion,
+            cantidad: item.cantidad,
+            detalle: item.detalle || ''
+        }));
+        renderItemsGestionCompra();
+    }
+    
+    document.getElementById('gestionRespuestaTecnico').value = solicitud.respuesta || '';
+    document.getElementById('gestionEstadoFinal').value = solicitud.estado === 'en_proceso' ? 'en_proceso' : 'completado';
+    
+    abrirModal('modalGestionarSolicitudTecnico');
+}
+
+async function confirmarGestionSolicitudTecnico() {
+    if (!currentGestionSolicitud) return;
+    
+    const respuesta = document.getElementById('gestionRespuestaTecnico')?.value.trim();
+    const nuevoEstado = document.getElementById('gestionEstadoFinal')?.value || 'completado';
+    
+    if (!respuesta) {
+        showToast('Debes escribir una respuesta para el técnico', 'warning');
+        return;
+    }
+    
+    const itemsComprados = itemsGestionCompra.filter(item => item.descripcion && item.descripcion.trim() !== '');
+    
+    mostrarLoading(true);
+    try {
+        const updateResponse = await fetch(`${API_URL}/solicitudes-repuestos-tecnico/${currentGestionSolicitud.id}/estado`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ 
+                estado: nuevoEstado, 
+                respuesta: respuesta,
+                respondido_por: currentUser?.id
+            })
+        });
+        
+        const updateData = await updateResponse.json();
+        
+        if (!updateData.success) {
+            showToast(updateData.error || 'Error al actualizar solicitud', 'error');
+            return;
+        }
+        
+        if (itemsComprados.length > 0 && (nuevoEstado === 'completado' || nuevoEstado === 'en_proceso')) {
+            let id_encargado = null;
+            const encargados = await fetch(`${API_URL}/encargados-repuestos`, { headers: getAuthHeaders() });
+            const encargadosData = await encargados.json();
+            if (encargadosData.encargados && encargadosData.encargados.length > 0) {
+                id_encargado = encargadosData.encargados[0].id;
+            }
+            
+            if (id_encargado) {
+                const compraResponse = await fetch(`${API_URL}/solicitudes-compra-directa`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        id_orden_trabajo: currentGestionSolicitud.id_orden_trabajo,
+                        id_encargado_repuestos: id_encargado,
+                        items: itemsComprados,
+                        observaciones: `Solicitud generada desde petición del técnico #${currentGestionSolicitud.id}. Respuesta: ${respuesta.substring(0, 200)}`
+                    })
+                });
+                
+                const compraData = await compraResponse.json();
+                if (compraData.success) {
+                    showToast('✅ Solicitud de compra enviada al encargado de repuestos', 'success');
+                }
+            }
+        }
+        
+        showToast(`✅ Solicitud actualizada a "${nuevoEstado}" y notificada al técnico`, 'success');
+        cerrarModal('modalGestionarSolicitudTecnico');
+        
+        await cargarSolicitudesRepuestosTecnico();
+        await cargarSolicitudesCompra();
+        
+        currentGestionSolicitud = null;
+        limpiarItemsGestionCompra();
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// =====================================================
+// RESPONDER SOLICITUD DE TÉCNICO (SIMPLE)
+// =====================================================
+
+function abrirModalResponderSolicitud(id_solicitud) {
+    const solicitud = solicitudesRepuestosTecnico.find(s => s.id === id_solicitud);
+    if (!solicitud) return;
+    
+    const infoContainer = document.getElementById('responderSolicitudInfo');
+    if (infoContainer) {
+        let itemsHtml = '';
+        if (solicitud.items && solicitud.items.length > 0) {
+            itemsHtml = '<ul style="margin: 0.5rem 0 0 1rem;">' + 
+                solicitud.items.map(item => `<li>${escapeHtml(item.descripcion)} x${item.cantidad}${item.detalle ? ` (${escapeHtml(item.detalle)})` : ''}</li>`).join('') + 
+                '</ul>';
+        }
+        
+        infoContainer.innerHTML = `
+            <p><strong>Orden:</strong> ${escapeHtml(solicitud.orden_codigo)}</p>
+            <p><strong>Vehículo:</strong> ${escapeHtml(solicitud.vehiculo)}</p>
+            <p><strong>Técnico:</strong> ${escapeHtml(solicitud.tecnico_nombre)}</p>
+            <p><strong>Repuestos solicitados:</strong>${itemsHtml}</p>
+            ${solicitud.observaciones ? `<p><strong>Observaciones:</strong> ${escapeHtml(solicitud.observaciones)}</p>` : ''}
+        `;
+    }
+    
+    document.getElementById('respuestaMensaje').value = solicitud.respuesta || '';
+    document.getElementById('respuestaEstado').value = solicitud.estado === 'en_proceso' ? 'en_proceso' : 'en_proceso';
+    
+    window.currentSolicitudTecnico = solicitud;
+    abrirModal('modalResponderSolicitud');
+}
+
+async function confirmarResponderSolicitud() {
+    if (!window.currentSolicitudTecnico) return;
+    
+    const respuesta = document.getElementById('respuestaMensaje')?.value.trim();
+    const nuevoEstado = document.getElementById('respuestaEstado')?.value || 'en_proceso';
+    
+    if (!respuesta) {
+        showToast('Debes escribir una respuesta para el técnico', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/solicitudes-repuestos-tecnico/${window.currentSolicitudTecnico.id}/estado`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ 
+                estado: nuevoEstado, 
+                respuesta: respuesta,
+                respondido_por: currentUser?.id
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('✅ Respuesta enviada al técnico', 'success');
+            cerrarModal('modalResponderSolicitud');
+            await cargarSolicitudesRepuestosTecnico();
+            window.currentSolicitudTecnico = null;
+        } else {
+            showToast(data.error || 'Error al enviar respuesta', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// =====================================================
+// SUBIDA DE ARCHIVOS
 // =====================================================
 
 function setupFileUpload() {
@@ -734,7 +1284,6 @@ function setupFileUpload() {
         return;
     }
     
-    // Click en el botón de seleccionar archivo
     if (selectBtn) {
         selectBtn.addEventListener('click', function(e) {
             e.preventDefault();
@@ -744,7 +1293,6 @@ function setupFileUpload() {
         });
     }
     
-    // Click en el área de drop (si no es el botón)
     if (dropArea) {
         dropArea.addEventListener('click', function(e) {
             if (e.target === selectBtn || selectBtn?.contains(e.target)) return;
@@ -753,14 +1301,12 @@ function setupFileUpload() {
         });
     }
     
-    // Cambio de archivo
     fileInput.addEventListener('change', function(e) {
         const file = e.target.files[0];
         console.log('📁 Archivo seleccionado:', file?.name);
         if (file) handleFileSelect(file);
     });
     
-    // Drag & drop
     if (dropArea) {
         dropArea.addEventListener('dragover', function(e) {
             e.preventDefault();
@@ -781,7 +1327,6 @@ function setupFileUpload() {
         });
     }
     
-    // Botón eliminar archivo
     if (removeBtn) {
         removeBtn.addEventListener('click', function() {
             console.log('🗑️ Eliminar archivo');
@@ -843,10 +1388,6 @@ function displayFileInfo(file) {
         }
         
         fileInfo.style.display = 'block';
-        
-        // Actualizar resumen
-        const resumenArchivo = document.getElementById('resumenArchivo');
-        if (resumenArchivo) resumenArchivo.textContent = file.name;
     }
 }
 
@@ -856,281 +1397,11 @@ function clearFileSelection() {
     
     const fileInfo = document.getElementById('fileInfo');
     const fileInput = document.getElementById('cotizacionFile');
-    const resumenArchivo = document.getElementById('resumenArchivo');
     
     if (fileInfo) fileInfo.style.display = 'none';
     if (fileInput) fileInput.value = '';
-    if (resumenArchivo) resumenArchivo.textContent = 'No seleccionado';
 }
 
-// =====================================================
-// MODALES: NOTIFICAR ARMADO, INICIAR REPARACIÓN
-// =====================================================
-
-async function abrirModalNotificarArmado(id_orden, codigo, vehiculo, cliente) {
-    currentOrdenArmado = { id_orden, codigo, vehiculo, cliente };
-    
-    const ordenInfo = document.getElementById('armadoOrdenInfo');
-    if (ordenInfo) {
-        ordenInfo.innerHTML = `
-            <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(codigo)}</p>
-            <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(vehiculo)}</p>
-            <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(cliente)}</p>
-            <p><strong><i class="fas fa-dollar-sign"></i> Monto a cobrar:</strong> Bs. 200.00 (solo diagnóstico)</p>
-        `;
-    }
-    
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/orden/${id_orden}/tecnicos-asignados`, { headers: getAuthHeaders() });
-        const data = await response.json();
-        
-        const tecnicosContainer = document.getElementById('tecnicosAsignadosList');
-        if (tecnicosContainer) {
-            if (data.tecnicos && data.tecnicos.length > 0) {
-                tecnicosContainer.innerHTML = data.tecnicos.map(t => `
-                    <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: var(--bg-card); border-radius: 8px; margin-bottom: 0.5rem;">
-                        <i class="fas fa-user-cog" style="color: var(--rojo-primario);"></i>
-                        <div><strong>${escapeHtml(t.nombre)}</strong>${t.contacto ? `<br><small style="color: var(--gris-texto);">📞 ${escapeHtml(t.contacto)}</small>` : ''}</div>
-                    </div>
-                `).join('');
-            } else {
-                tecnicosContainer.innerHTML = `<div class="alert-warning">No hay técnicos asignados actualmente.</div>`;
-            }
-        }
-    } catch (error) {
-        console.error('Error cargando técnicos:', error);
-    } finally {
-        mostrarLoading(false);
-    }
-    
-    document.getElementById('armadoInstrucciones').value = '';
-    abrirModal('modalNotificarArmado');
-}
-
-async function confirmarNotificarArmado() {
-    if (!currentOrdenArmado) return;
-    
-    const instrucciones = document.getElementById('armadoInstrucciones')?.value.trim();
-    if (!instrucciones) {
-        showToast('⚠️ Debes escribir instrucciones para el armado', 'warning');
-        return;
-    }
-    
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/rechazo/iniciar-armado`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                id_orden: currentOrdenArmado.id_orden,
-                instrucciones_armado: instrucciones
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast('✅ Instrucciones enviadas al técnico', 'success');
-            cerrarModal('modalNotificarArmado');
-            await cargarDatosIniciales();
-        } else {
-            showToast(data.error || 'Error al notificar', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-async function abrirModalIniciarReparacion(id_orden, codigo, vehiculo, cliente) {
-    currentOrdenAceptada = { id_orden, codigo, vehiculo, cliente };
-    
-    const ordenInfo = document.getElementById('reparacionOrdenInfo');
-    if (ordenInfo) {
-        ordenInfo.innerHTML = `
-            <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(codigo)}</p>
-            <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(vehiculo)}</p>
-            <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(cliente)}</p>
-        `;
-    }
-    
-    mostrarLoading(true);
-    try {
-        // Obtener técnicos actualmente asignados y todos los técnicos con su carga
-        const [tecnicosActualesRes, todosTecnicosRes] = await Promise.all([
-            fetch(`${API_URL}/orden/${id_orden}/tecnicos-asignados`, { headers: getAuthHeaders() }),
-            fetch(`${API_URL}/tecnicos-con-carga`, { headers: getAuthHeaders() })
-        ]);
-        
-        const tecnicosActualesData = await tecnicosActualesRes.json();
-        const todosTecnicosData = await todosTecnicosRes.json();
-        
-        console.log('📊 Técnicos actuales:', tecnicosActualesData);
-        console.log('📊 Todos los técnicos con carga:', todosTecnicosData);
-        
-        // Crear un Set con los IDs de técnicos actualmente asignados
-        const tecnicosActualesIds = new Set();
-        if (tecnicosActualesData.tecnicos && tecnicosActualesData.tecnicos.length > 0) {
-            tecnicosActualesData.tecnicos.forEach(t => tecnicosActualesIds.add(t.id));
-        }
-        
-        const container = document.getElementById('tecnicosContainer');
-        if (container) {
-            if (todosTecnicosData.tecnicos && todosTecnicosData.tecnicos.length > 0) {
-                container.innerHTML = todosTecnicosData.tecnicos.map(t => {
-                    const estaAsignado = tecnicosActualesIds.has(t.id);
-                    const ordenesActivas = t.ordenes_activas || 0;
-                    const maxVehiculos = t.max_vehiculos || 2;
-                    const disponible = ordenesActivas < maxVehiculos;
-                    
-                    // Determinar el color del badge de carga
-                    let cargaColor = '';
-                    let cargaIcono = '';
-                    let cargaTexto = '';
-                    
-                    if (ordenesActivas === 0) {
-                        cargaColor = '#10B981'; // verde
-                        cargaIcono = 'fa-check-circle';
-                        cargaTexto = 'Disponible';
-                    } else if (ordenesActivas === 1) {
-                        cargaColor = '#F59E0B'; // amarillo
-                        cargaIcono = 'fa-clock';
-                        cargaTexto = `${ordenesActivas}/${maxVehiculos} vehículo(s)`;
-                    } else {
-                        cargaColor = '#EF4444'; // rojo
-                        cargaIcono = 'fa-exclamation-triangle';
-                        cargaTexto = `COMPLETO (${ordenesActivas}/${maxVehiculos})`;
-                    }
-                    
-                    // Determinar si el checkbox debe estar deshabilitado
-                    const checkboxDisabled = !disponible && !estaAsignado;
-                    const disabledAttr = checkboxDisabled ? 'disabled' : '';
-                    
-                    return `
-                        <div class="tecnico-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem; background: var(--bg-card); border-radius: 8px; transition: all 0.2s; border: 1px solid var(--border-color); margin-bottom: 0.5rem; ${checkboxDisabled ? 'opacity: 0.6;' : ''}">
-                            <input type="checkbox" id="tecnico_${t.id}" value="${t.id}" ${estaAsignado ? 'checked' : ''} ${disabledAttr}>
-                            <label for="tecnico_${t.id}" style="flex: 1; cursor: ${checkboxDisabled ? 'not-allowed' : 'pointer'}; display: flex; align-items: center; gap: 0.5rem;">
-                                <i class="fas fa-user-cog" style="color: var(--rojo-primario);"></i>
-                                <div style="flex: 1;">
-                                    <strong>${escapeHtml(t.nombre)}</strong>
-                                    ${t.contacto ? `<br><small style="color: var(--gris-texto);">📞 ${escapeHtml(t.contacto)}</small>` : ''}
-                                </div>
-                                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem;">
-                                    <span style="font-size: 0.7rem; color: ${cargaColor};">
-                                        <i class="fas ${cargaIcono}"></i> ${cargaTexto}
-                                    </span>
-                                    ${ordenesActivas > 0 ? `
-                                        <div style="width: 60px; height: 4px; background: var(--gris-oscuro); border-radius: 2px; overflow: hidden;">
-                                            <div style="width: ${(ordenesActivas / maxVehiculos) * 100}%; height: 100%; background: ${cargaColor}; border-radius: 2px;"></div>
-                                        </div>
-                                    ` : ''}
-                                </div>
-                                ${estaAsignado ? '<span style="margin-left: 0.5rem; font-size: 0.7rem; color: var(--verde-exito);"><i class="fas fa-check-circle"></i> Actual</span>' : ''}
-                                ${!disponible && !estaAsignado ? '<span style="margin-left: 0.5rem; font-size: 0.7rem; color: var(--rojo-primario);"><i class="fas fa-ban"></i> Límite alcanzado</span>' : ''}
-                            </label>
-                        </div>
-                    `;
-                }).join('');
-            } else {
-                container.innerHTML = `<div class="alert-warning" style="padding: 1rem; text-align: center;">
-                    <i class="fas fa-exclamation-triangle"></i> No hay técnicos disponibles para asignar<br>
-                    <small>Verifica que existan usuarios con rol "tecnico_mecanico" en el sistema</small>
-                </div>`;
-            }
-        } else {
-            console.error('❌ No se encontró el contenedor con id "tecnicosContainer"');
-        }
-    } catch (error) {
-        console.error('Error cargando técnicos:', error);
-        const container = document.getElementById('tecnicosContainer');
-        if (container) {
-            container.innerHTML = `<div class="alert-danger" style="padding: 1rem; text-align: center;">
-                <i class="fas fa-exclamation-circle"></i> Error al cargar técnicos. Intente nuevamente.<br>
-                <small>${error.message}</small>
-            </div>`;
-        }
-    } finally {
-        mostrarLoading(false);
-    }
-    
-    document.getElementById('reparacionInstrucciones').value = '';
-    document.getElementById('reparacionPlazoDias').value = 3;
-    abrirModal('modalIniciarReparacion');
-}
-async function confirmarIniciarReparacion() {
-    if (!currentOrdenAceptada) return;
-    
-    const instrucciones = document.getElementById('reparacionInstrucciones')?.value.trim();
-    if (!instrucciones) {
-        showToast('⚠️ Debes escribir instrucciones', 'warning');
-        return;
-    }
-    
-    const checkboxes = document.querySelectorAll('#tecnicosContainer input[type="checkbox"]:checked');
-    const tecnicosIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
-    
-    if (tecnicosIds.length === 0) {
-        showToast('⚠️ Selecciona al menos un técnico', 'warning');
-        return;
-    }
-    
-    mostrarLoading(true);
-    
-    try {
-        // 1. Asignar técnicos
-        const asignarResponse = await fetch(`${API_URL}/asignar-tecnicos`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                id_orden: currentOrdenAceptada.id_orden,
-                tecnicos: tecnicosIds,
-                instrucciones: instrucciones,
-                tiempo_estimado: document.getElementById('reparacionPlazoDias')?.value || 3,
-                tiempo_unidad: 'dias'
-            })
-        });
-        
-        const asignarData = await asignarResponse.json();
-        
-        if (!asignarData.success) {
-            showToast(asignarData.error || 'Error al asignar técnicos', 'error');
-            return;
-        }
-        
-        // 2. Cambiar el estado de la orden (endpoint separado)
-        console.log('🔄 Cambiando estado de la orden...');
-        const estadoResponse = await fetch(`${API_URL}/cambiar-estado-reparacion/${currentOrdenAceptada.id_orden}`, {
-            method: 'PUT',
-            headers: getAuthHeaders()
-        });
-        
-        const estadoData = await estadoResponse.json();
-        
-        if (estadoData.success) {
-            showToast(`✅ Reparación iniciada con ${tecnicosIds.length} técnico(s)`, 'success');
-            cerrarModal('modalIniciarReparacion');
-            
-            // Recargar la página para ver el cambio
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
-        } else {
-            showToast('Los técnicos fueron asignados pero hubo un error al cambiar el estado', 'warning');
-            setTimeout(() => {
-                window.location.reload();
-            }, 2000);
-        }
-        
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
 // =====================================================
 // FUNCIONES PARA SERVICIOS COTIZABLES
 // =====================================================
@@ -1201,9 +1472,7 @@ function eliminarServicioCotizable(idx) {
 function actualizarTotalCotizacion() {
     const total = serviciosCotizables.reduce((sum, serv) => sum + (serv.precio || 0), 0);
     const totalSpan = document.getElementById('totalCotizacion');
-    const resumenTotal = document.getElementById('resumenTotal');
     if (totalSpan) totalSpan.textContent = formatCurrency(total);
-    if (resumenTotal) resumenTotal.textContent = formatCurrency(total);
 }
 
 function cargarServiciosDesdeDiagnostico(orden) {
@@ -1238,7 +1507,6 @@ function cargarServiciosDesdeDiagnostico(orden) {
 // COTIZACIÓN AL CLIENTE
 // =====================================================
 
-// Configurar los tabs del modal de generación de cotización
 function setupModalTabs() {
     const modalTabs = document.querySelectorAll('#modalGenerarCotizacion .modal-tab-btn');
     const modalContents = document.querySelectorAll('#modalGenerarCotizacion .modal-tab-content');
@@ -1248,11 +1516,9 @@ function setupModalTabs() {
             e.preventDefault();
             const tabId = this.getAttribute('data-tab');
             
-            // Remover active de todos los tabs
             modalTabs.forEach(t => t.classList.remove('active'));
             modalContents.forEach(c => c.classList.remove('active'));
             
-            // Activar el tab seleccionado
             this.classList.add('active');
             const activeContent = document.getElementById(`tab-${tabId}`);
             if (activeContent) {
@@ -1262,7 +1528,6 @@ function setupModalTabs() {
     });
 }
 
-// Llamar a esta función después de abrir el modal
 async function abrirModalGenerarCotizacion(id_orden) {
     mostrarLoading(true);
     isEditingCotizacion = false;
@@ -1294,7 +1559,6 @@ async function abrirModalGenerarCotizacion(id_orden) {
         
         setupFileUpload();
         
-        // Configurar los tabs del modal
         setTimeout(() => {
             setupModalTabs();
         }, 100);
@@ -1595,6 +1859,7 @@ async function confirmarSolicitudCompra() {
             limpiarItemsCompra();
             await cargarSolicitudesCompra();
             await cargarOrdenesDiagnosticoAprobado();
+            await cargarSolicitudesCotizacionCompra();
         } else {
             showToast(data.error || 'Error al crear solicitud', 'error');
         }
@@ -1621,10 +1886,271 @@ async function aprobarCompra(id) {
         if (data.success) {
             showToast('Compra registrada', 'success');
             await cargarSolicitudesCompra();
+            await cargarSolicitudesCotizacionCompra();
         } else {
             showToast(data.error || 'Error al registrar', 'error');
         }
     } catch (error) {
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// =====================================================
+// MODALES: NOTIFICAR ARMADO, INICIAR REPARACIÓN
+// =====================================================
+
+async function abrirModalNotificarArmado(id_orden, codigo, vehiculo, cliente) {
+    currentOrdenArmado = { id_orden, codigo, vehiculo, cliente };
+    
+    const ordenInfo = document.getElementById('armadoOrdenInfo');
+    if (ordenInfo) {
+        ordenInfo.innerHTML = `
+            <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(codigo)}</p>
+            <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(vehiculo)}</p>
+            <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(cliente)}</p>
+            <p><strong><i class="fas fa-dollar-sign"></i> Monto a cobrar:</strong> Bs. 200.00 (solo diagnóstico)</p>
+        `;
+    }
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/orden/${id_orden}/tecnicos-asignados`, { headers: getAuthHeaders() });
+        const data = await response.json();
+        
+        const tecnicosContainer = document.getElementById('tecnicosAsignadosList');
+        if (tecnicosContainer) {
+            if (data.tecnicos && data.tecnicos.length > 0) {
+                tecnicosContainer.innerHTML = data.tecnicos.map(t => `
+                    <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: var(--bg-card); border-radius: 8px; margin-bottom: 0.5rem;">
+                        <i class="fas fa-user-cog" style="color: var(--rojo-primario);"></i>
+                        <div><strong>${escapeHtml(t.nombre)}</strong>${t.contacto ? `<br><small style="color: var(--gris-texto);">📞 ${escapeHtml(t.contacto)}</small>` : ''}</div>
+                    </div>
+                `).join('');
+            } else {
+                tecnicosContainer.innerHTML = `<div class="alert-warning">No hay técnicos asignados actualmente.</div>`;
+            }
+        }
+    } catch (error) {
+        console.error('Error cargando técnicos:', error);
+    } finally {
+        mostrarLoading(false);
+    }
+    
+    document.getElementById('armadoInstrucciones').value = '';
+    abrirModal('modalNotificarArmado');
+}
+
+async function confirmarNotificarArmado() {
+    if (!currentOrdenArmado) return;
+    
+    const instrucciones = document.getElementById('armadoInstrucciones')?.value.trim();
+    if (!instrucciones) {
+        showToast('⚠️ Debes escribir instrucciones para el armado', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/rechazo/iniciar-armado`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                id_orden: currentOrdenArmado.id_orden,
+                instrucciones_armado: instrucciones
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('✅ Instrucciones enviadas al técnico', 'success');
+            cerrarModal('modalNotificarArmado');
+            await cargarDatosIniciales();
+        } else {
+            showToast(data.error || 'Error al notificar', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+async function abrirModalIniciarReparacion(id_orden, codigo, vehiculo, cliente) {
+    currentOrdenAceptada = { id_orden, codigo, vehiculo, cliente };
+    
+    const ordenInfo = document.getElementById('reparacionOrdenInfo');
+    if (ordenInfo) {
+        ordenInfo.innerHTML = `
+            <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(codigo)}</p>
+            <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(vehiculo)}</p>
+            <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(cliente)}</p>
+        `;
+    }
+    
+    mostrarLoading(true);
+    try {
+        const [tecnicosActualesRes, todosTecnicosRes] = await Promise.all([
+            fetch(`${API_URL}/orden/${id_orden}/tecnicos-asignados`, { headers: getAuthHeaders() }),
+            fetch(`${API_URL}/tecnicos-con-carga`, { headers: getAuthHeaders() })
+        ]);
+        
+        const tecnicosActualesData = await tecnicosActualesRes.json();
+        const todosTecnicosData = await todosTecnicosRes.json();
+        
+        console.log('📊 Técnicos actuales:', tecnicosActualesData);
+        console.log('📊 Todos los técnicos con carga:', todosTecnicosData);
+        
+        const tecnicosActualesIds = new Set();
+        if (tecnicosActualesData.tecnicos && tecnicosActualesData.tecnicos.length > 0) {
+            tecnicosActualesData.tecnicos.forEach(t => tecnicosActualesIds.add(t.id));
+        }
+        
+        const container = document.getElementById('tecnicosContainer');
+        if (container) {
+            if (todosTecnicosData.tecnicos && todosTecnicosData.tecnicos.length > 0) {
+                container.innerHTML = todosTecnicosData.tecnicos.map(t => {
+                    const estaAsignado = tecnicosActualesIds.has(t.id);
+                    const ordenesActivas = t.ordenes_activas || 0;
+                    const maxVehiculos = t.max_vehiculos || 2;
+                    const disponible = ordenesActivas < maxVehiculos;
+                    
+                    let cargaColor = '';
+                    let cargaIcono = '';
+                    let cargaTexto = '';
+                    
+                    if (ordenesActivas === 0) {
+                        cargaColor = '#10B981';
+                        cargaIcono = 'fa-check-circle';
+                        cargaTexto = 'Disponible';
+                    } else if (ordenesActivas === 1) {
+                        cargaColor = '#F59E0B';
+                        cargaIcono = 'fa-clock';
+                        cargaTexto = `${ordenesActivas}/${maxVehiculos} vehículo(s)`;
+                    } else {
+                        cargaColor = '#EF4444';
+                        cargaIcono = 'fa-exclamation-triangle';
+                        cargaTexto = `COMPLETO (${ordenesActivas}/${maxVehiculos})`;
+                    }
+                    
+                    const checkboxDisabled = !disponible && !estaAsignado;
+                    const disabledAttr = checkboxDisabled ? 'disabled' : '';
+                    
+                    return `
+                        <div class="tecnico-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem; background: var(--bg-card); border-radius: 8px; transition: all 0.2s; border: 1px solid var(--border-color); margin-bottom: 0.5rem; ${checkboxDisabled ? 'opacity: 0.6;' : ''}">
+                            <input type="checkbox" id="tecnico_${t.id}" value="${t.id}" ${estaAsignado ? 'checked' : ''} ${disabledAttr}>
+                            <label for="tecnico_${t.id}" style="flex: 1; cursor: ${checkboxDisabled ? 'not-allowed' : 'pointer'}; display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas fa-user-cog" style="color: var(--rojo-primario);"></i>
+                                <div style="flex: 1;">
+                                    <strong>${escapeHtml(t.nombre)}</strong>
+                                    ${t.contacto ? `<br><small style="color: var(--gris-texto);">📞 ${escapeHtml(t.contacto)}</small>` : ''}
+                                </div>
+                                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem;">
+                                    <span style="font-size: 0.7rem; color: ${cargaColor};">
+                                        <i class="fas ${cargaIcono}"></i> ${cargaTexto}
+                                    </span>
+                                    ${ordenesActivas > 0 ? `
+                                        <div style="width: 60px; height: 4px; background: var(--gris-oscuro); border-radius: 2px; overflow: hidden;">
+                                            <div style="width: ${(ordenesActivas / maxVehiculos) * 100}%; height: 100%; background: ${cargaColor}; border-radius: 2px;"></div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                ${estaAsignado ? '<span style="margin-left: 0.5rem; font-size: 0.7rem; color: var(--verde-exito);"><i class="fas fa-check-circle"></i> Actual</span>' : ''}
+                                ${!disponible && !estaAsignado ? '<span style="margin-left: 0.5rem; font-size: 0.7rem; color: var(--rojo-primario);"><i class="fas fa-ban"></i> Límite alcanzado</span>' : ''}
+                            </label>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                container.innerHTML = `<div class="alert-warning" style="padding: 1rem; text-align: center;">
+                    <i class="fas fa-exclamation-triangle"></i> No hay técnicos disponibles para asignar<br>
+                    <small>Verifica que existan usuarios con rol "tecnico_mecanico" en el sistema</small>
+                </div>`;
+            }
+        }
+    } catch (error) {
+        console.error('Error cargando técnicos:', error);
+        const container = document.getElementById('tecnicosContainer');
+        if (container) {
+            container.innerHTML = `<div class="alert-danger" style="padding: 1rem; text-align: center;">
+                <i class="fas fa-exclamation-circle"></i> Error al cargar técnicos. Intente nuevamente.<br>
+                <small>${error.message}</small>
+            </div>`;
+        }
+    } finally {
+        mostrarLoading(false);
+    }
+    
+    document.getElementById('reparacionInstrucciones').value = '';
+    document.getElementById('reparacionPlazoDias').value = 3;
+    abrirModal('modalIniciarReparacion');
+}
+
+async function confirmarIniciarReparacion() {
+    if (!currentOrdenAceptada) return;
+    
+    const instrucciones = document.getElementById('reparacionInstrucciones')?.value.trim();
+    if (!instrucciones) {
+        showToast('⚠️ Debes escribir instrucciones', 'warning');
+        return;
+    }
+    
+    const checkboxes = document.querySelectorAll('#tecnicosContainer input[type="checkbox"]:checked');
+    const tecnicosIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    
+    if (tecnicosIds.length === 0) {
+        showToast('⚠️ Selecciona al menos un técnico', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    
+    try {
+        const asignarResponse = await fetch(`${API_URL}/asignar-tecnicos`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                id_orden: currentOrdenAceptada.id_orden,
+                tecnicos: tecnicosIds,
+                instrucciones: instrucciones,
+                tiempo_estimado: document.getElementById('reparacionPlazoDias')?.value || 3,
+                tiempo_unidad: 'dias'
+            })
+        });
+        
+        const asignarData = await asignarResponse.json();
+        
+        if (!asignarData.success) {
+            showToast(asignarData.error || 'Error al asignar técnicos', 'error');
+            return;
+        }
+        
+        const estadoResponse = await fetch(`${API_URL}/cambiar-estado-reparacion/${currentOrdenAceptada.id_orden}`, {
+            method: 'PUT',
+            headers: getAuthHeaders()
+        });
+        
+        const estadoData = await estadoResponse.json();
+        
+        if (estadoData.success) {
+            showToast(`✅ Reparación iniciada con ${tecnicosIds.length} técnico(s)`, 'success');
+            cerrarModal('modalIniciarReparacion');
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showToast('Los técnicos fueron asignados pero hubo un error al cambiar el estado', 'warning');
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
         showToast('Error de conexión', 'error');
     } finally {
         mostrarLoading(false);
@@ -1663,51 +2189,8 @@ async function verInstruccionesArmado(id_orden) {
 }
 
 // =====================================================
-// FUNCIONES AUXILIARES - TABS Y EVENTOS
+// ASYNC GUARDAR SOLICITUD COTIZACIÓN
 // =====================================================
-
-function setupTabs() {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const tabId = this.getAttribute('data-tab');
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            this.classList.add('active');
-            document.getElementById(tabId)?.classList.add('active');
-        });
-    });
-}
-
-function setupEventListeners() {
-    document.getElementById('enviarCotizacionBtn')?.addEventListener('click', enviarCotizacionCliente);
-    document.getElementById('confirmarSolicitudCompra')?.addEventListener('click', confirmarSolicitudCompra);
-    document.getElementById('btnAgregarItemCompra')?.addEventListener('click', agregarItemCompra);
-    document.getElementById('btnAgregarServicioCotizacion')?.addEventListener('click', agregarServicioCotizable);
-    document.getElementById('btnAgregarItemSolicitud')?.addEventListener('click', agregarItemSolicitud);
-    document.getElementById('saveSolicitudModal')?.addEventListener('click', guardarSolicitudCotizacion);
-    
-    document.getElementById('refreshSolicitarBtn')?.addEventListener('click', () => cargarDatosIniciales());
-    document.getElementById('refreshCotizacionBtn')?.addEventListener('click', () => cargarDatosIniciales());
-    document.getElementById('btnHistorialCotizaciones')?.addEventListener('click', () => {
-        cargarHistorialCotizaciones().then(() => abrirModal('modalHistorialCotizaciones'));
-    });
-    document.getElementById('refreshHistorialBtn')?.addEventListener('click', cargarHistorialCotizaciones);
-    document.getElementById('btnNuevaSolicitudCotizacion')?.addEventListener('click', () => {
-        limpiarItemsSolicitud();
-        cargarOrdenesAprobadas().then(() => abrirModal('modalSolicitudCotizacion'));
-    });
-    
-    document.getElementById('filtroEstadoCotizacionSolicitar')?.addEventListener('change', () => renderOrdenesSolicitarCotizacion());
-    document.getElementById('searchOrdenSolicitar')?.addEventListener('input', () => renderOrdenesSolicitarCotizacion());
-    document.getElementById('filtroEstadoCotizacionCliente')?.addEventListener('change', () => renderOrdenesCotizacionCliente());
-    document.getElementById('searchCotizacionCliente')?.addEventListener('input', () => renderOrdenesCotizacionCliente());
-    document.getElementById('searchHistorial')?.addEventListener('input', () => renderHistorialCotizaciones());
-    document.getElementById('filtroEstadoHistorial')?.addEventListener('change', () => renderHistorialCotizaciones());
-    
-    document.querySelectorAll('.modal').forEach(modal => {
-        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
-    });
-}
 
 async function guardarSolicitudCotizacion() {
     const id_orden_trabajo = document.getElementById('solicitud_id_orden_trabajo')?.value;
@@ -1747,6 +2230,7 @@ async function guardarSolicitudCotizacion() {
             limpiarItemsSolicitud();
             await cargarSolicitudesCotizacion();
             await cargarOrdenesDiagnosticoAprobado();
+            await cargarSolicitudesCotizacionCompra();
         } else {
             showToast(data.error || 'Error al enviar solicitud', 'error');
         }
@@ -1756,6 +2240,84 @@ async function guardarSolicitudCotizacion() {
     } finally {
         mostrarLoading(false);
     }
+}
+
+// =====================================================
+// FUNCIONES DE TAB Y EVENTOS
+// =====================================================
+
+function setupTabs() {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tabId = this.getAttribute('data-tab');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            this.classList.add('active');
+            document.getElementById(tabId)?.classList.add('active');
+            
+            if (tabId === 'tab-solicitar-compra') {
+                cargarSolicitudesCotizacionCompra();
+                cargarSolicitudesRepuestosTecnico();
+            }
+        });
+    });
+}
+
+function setupEventListeners() {
+    // Botones principales
+    document.getElementById('enviarCotizacionBtn')?.addEventListener('click', enviarCotizacionCliente);
+    document.getElementById('confirmarSolicitudCompra')?.addEventListener('click', confirmarSolicitudCompra);
+    document.getElementById('btnAgregarItemCompra')?.addEventListener('click', agregarItemCompra);
+    document.getElementById('btnAgregarServicioCotizacion')?.addEventListener('click', agregarServicioCotizable);
+    document.getElementById('btnAgregarItemSolicitud')?.addEventListener('click', agregarItemSolicitud);
+    document.getElementById('saveSolicitudModal')?.addEventListener('click', guardarSolicitudCotizacion);
+    document.getElementById('btnConfirmarRespuestaSolicitud')?.addEventListener('click', confirmarResponderSolicitud);
+    
+    // Botones de refresh
+    document.getElementById('refreshSolicitarBtn')?.addEventListener('click', () => cargarDatosIniciales());
+    document.getElementById('refreshCotizacionBtn')?.addEventListener('click', () => cargarDatosIniciales());
+    document.getElementById('refreshHistorialBtn')?.addEventListener('click', cargarHistorialCotizaciones);
+    document.getElementById('btnHistorialCotizaciones')?.addEventListener('click', () => {
+        cargarHistorialCotizaciones().then(() => abrirModal('modalHistorialCotizaciones'));
+    });
+    document.getElementById('btnNuevaSolicitudCotizacion')?.addEventListener('click', () => {
+        limpiarItemsSolicitud();
+        cargarOrdenesAprobadas().then(() => abrirModal('modalSolicitudCotizacion'));
+    });
+    
+    // Botones TAB 3
+    document.getElementById('refreshCotizacionesCompra')?.addEventListener('click', () => {
+        cargarSolicitudesCotizacionCompra();
+        cargarSolicitudesRepuestosTecnico();
+    });
+    document.getElementById('refreshSolicitudesTecnico')?.addEventListener('click', () => {
+        cargarSolicitudesRepuestosTecnico();
+    });
+    document.getElementById('filtroEstadoCotizacionCompra')?.addEventListener('change', () => cargarSolicitudesCotizacionCompra());
+    document.getElementById('filtroEstadoRepuestoTecnico')?.addEventListener('change', () => cargarSolicitudesRepuestosTecnico());
+    document.getElementById('searchRepuestoTecnico')?.addEventListener('input', () => cargarSolicitudesRepuestosTecnico());
+    
+    // Filtros TAB 1 y 2
+    document.getElementById('filtroEstadoCotizacionSolicitar')?.addEventListener('change', () => renderOrdenesSolicitarCotizacion());
+    document.getElementById('searchOrdenSolicitar')?.addEventListener('input', () => renderOrdenesSolicitarCotizacion());
+    document.getElementById('filtroEstadoCotizacionCliente')?.addEventListener('change', () => renderOrdenesCotizacionCliente());
+    document.getElementById('searchCotizacionCliente')?.addEventListener('input', () => renderOrdenesCotizacionCliente());
+    document.getElementById('searchHistorial')?.addEventListener('input', () => renderHistorialCotizaciones());
+    document.getElementById('filtroEstadoHistorial')?.addEventListener('change', () => renderHistorialCotizaciones());
+    
+    // Botones compra directa
+    document.getElementById('btnNuevaSolicitudCompraDirecta')?.addEventListener('click', abrirModalNuevaSolicitudCompraDirecta);
+    document.getElementById('btnAgregarItemCompraDirecta')?.addEventListener('click', agregarItemCompraDirecta);
+    document.getElementById('btnConfirmarCompraDirecta')?.addEventListener('click', confirmarCompraDirecta);
+    
+    // Botones gestión de compra
+    document.getElementById('btnAgregarItemGestionCompra')?.addEventListener('click', agregarItemGestionCompra);
+    document.getElementById('btnConfirmarGestionSolicitud')?.addEventListener('click', confirmarGestionSolicitudTecnico);
+    
+    // Cerrar modales al hacer clic fuera
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
+    });
 }
 
 async function cargarUsuarioActual() {
@@ -1797,6 +2359,27 @@ async function cargarUsuarioActual() {
     }
 }
 
+async function cargarDatosIniciales() {
+    mostrarLoading(true);
+    try {
+        await Promise.all([
+            cargarOrdenesDiagnosticoAprobado(),
+            cargarOrdenesParaCotizar(),
+            cargarSolicitudesCotizacion(),
+            cargarCotizacionesMap(),
+            cargarSolicitudesCompra(),
+            cargarEncargadosRepuestos(),
+            cargarOrdenesAprobadas(),
+            cargarHistorialCotizaciones()
+        ]);
+    } catch (error) {
+        console.error('Error cargando datos:', error);
+        showToast('Error al cargar los datos', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
 function logout() { 
     localStorage.clear(); 
     sessionStorage.clear(); 
@@ -1804,30 +2387,15 @@ function logout() {
 }
 
 async function inicializar() {
-    console.log('🚀 Inicializando cotizaciones.js versión 3.3');
+    console.log('🚀 Inicializando cotizaciones.js versión 4.0');
     const user = await cargarUsuarioActual();
     if (!user) return;
     await cargarDatosIniciales();
+    await cargarSolicitudesCotizacionCompra();
+    await cargarSolicitudesRepuestosTecnico();
     setupTabs();
     setupEventListeners();
     console.log('✅ cotizaciones.js inicializado correctamente');
-}
-// Función para mostrar badge de carga de técnicos en la tarjeta de orden
-function renderCargaTecnicosBadge(tecnicos) {
-    if (!tecnicos || tecnicos.length === 0) return '';
-    
-    const totalCarga = tecnicos.reduce((sum, t) => sum + (t.ordenes_activas || 0), 0);
-    const maxTotal = tecnicos.length * 2;
-    
-    let color = '#10B981';
-    if (totalCarga >= maxTotal) color = '#EF4444';
-    else if (totalCarga > 0) color = '#F59E0B';
-    
-    return `
-        <span style="font-size: 0.65rem; background: ${color}20; color: ${color}; padding: 0.2rem 0.5rem; border-radius: 12px;">
-            <i class="fas fa-chart-line"></i> Carga: ${totalCarga}/${maxTotal}
-        </span>
-    `;
 }
 
 // Exponer funciones globales
@@ -1859,6 +2427,16 @@ window.verAvanceReparacion = verAvanceReparacion;
 window.abrirModalSolicitudParaOrden = abrirModalSolicitudParaOrden;
 window.verInstruccionesArmado = verInstruccionesArmado;
 window.toggleServicioCotizable = toggleServicioCotizable;
+window.abrirModalResponderSolicitud = abrirModalResponderSolicitud;
+window.confirmarResponderSolicitud = confirmarResponderSolicitud;
+window.abrirModalGestionarSolicitudTecnico = abrirModalGestionarSolicitudTecnico;
+window.confirmarGestionSolicitudTecnico = confirmarGestionSolicitudTecnico;
+window.agregarItemCompraDirecta = agregarItemCompraDirecta;
+window.actualizarItemCompraDirecta = actualizarItemCompraDirecta;
+window.eliminarItemCompraDirecta = eliminarItemCompraDirecta;
+window.agregarItemGestionCompra = agregarItemGestionCompra;
+window.actualizarItemGestionCompra = actualizarItemGestionCompra;
+window.eliminarItemGestionCompra = eliminarItemGestionCompra;
 
 // Inicializar
 document.addEventListener('DOMContentLoaded', inicializar);

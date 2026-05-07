@@ -1,7 +1,7 @@
 # =====================================================
 # MIS VEHÍCULOS - TÉCNICO MECÁNICO
 # FLUJO: EMPEZAR TRABAJO → DIAGNÓSTICO → APROBACIÓN → REPARACIÓN
-# VERSIÓN COMPLETA - CORREGIDA (SIN DEPENDENCIA DE asignaciontecnico)
+# VERSIÓN COMPLETA CON SOLICITUD DE REPUESTOS SIN PAUSA
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
@@ -320,6 +320,19 @@ def obtener_mis_vehiculos(current_user):
             if inst['id_orden_trabajo'] not in instrucciones_map:
                 instrucciones_map[inst['id_orden_trabajo']] = inst
         
+        # Obtener solicitudes de repuestos pendientes
+        solicitudes_pendientes = {}
+        solicitudes = supabase.table('solicitud_repuestos_tecnico') \
+            .select('id_orden_trabajo, estado') \
+            .in_('id_orden_trabajo', orden_ids) \
+            .eq('estado', 'pendiente') \
+            .execute()
+        
+        for sol in (solicitudes.data or []):
+            if sol['id_orden_trabajo'] not in solicitudes_pendientes:
+                solicitudes_pendientes[sol['id_orden_trabajo']] = 0
+            solicitudes_pendientes[sol['id_orden_trabajo']] += 1
+        
         # Construir respuesta
         vehiculos_resultado = []
         for a in todas_asignaciones:
@@ -335,16 +348,24 @@ def obtener_mis_vehiculos(current_user):
             instruccion_info = instrucciones_map.get(orden['id'], {})
             
             trabajo_iniciado = trabajos_iniciados.get(orden['id'], False)
-            tipo_real = a.get('tipo_asignacion', 'diagnostico')
-            if orden['estado_global'] == 'EnReparacion':
+            
+            # Priorizar el estado_global
+            estado_global = orden['estado_global']
+            
+            if estado_global == 'EnReparacion':
                 tipo_real = 'reparacion'
-            elif orden['estado_global'] == 'EnArmadoVehiculo':
+            elif estado_global == 'EnPausa':
+                tipo_real = 'reparacion'
+            elif estado_global == 'EnArmadoVehiculo':
                 tipo_real = 'armado'
+            else:
+                tipo_real = a.get('tipo_asignacion', 'diagnostico')
+            
             vehiculos_resultado.append({
                 'orden_id': orden['id'],
                 'codigo_unico': orden['codigo_unico'],
                 'fecha_ingreso': orden['fecha_ingreso'],
-                'estado_global': orden['estado_global'],
+                'estado_global': estado_global,
                 'tipo_asignacion': tipo_real,
                 'diagnostico_estado': diagnostico_info.get('estado'),
                 'diagnostico_version': diagnostico_info.get('version', 1),
@@ -354,6 +375,7 @@ def obtener_mis_vehiculos(current_user):
                 'trabajo_iniciado': trabajo_iniciado,
                 'bahia_asignada': planificacion_info.get('bahia_asignada'),
                 'instrucciones_armado': instruccion_info.get('instrucciones'),
+                'solicitudes_repuestos_pendientes': solicitudes_pendientes.get(orden['id'], 0) > 0,
                 'vehiculo': {
                     'placa': vehiculo.get('placa', ''),
                     'marca': vehiculo.get('marca', ''),
@@ -529,19 +551,9 @@ def iniciar_reparacion(current_user):
             return jsonify({'error': 'No tienes una reparación activa para esta orden'}), 403
         
         # Cambiar estado de la orden
-        orden_actual = supabase.table('ordentrabajo') \
-            .select('estado_global') \
-            .eq('id', id_orden) \
-            .execute()
-        
-        if orden_actual.data and orden_actual.data[0]['estado_global'] == 'EnPausa':
-            supabase.table('ordentrabajo').update({
-                'estado_global': 'EnReparacion'
-            }).eq('id', id_orden).execute()
-        else:
-            supabase.table('ordentrabajo').update({
-                'estado_global': 'EnReparacion'
-            }).eq('id', id_orden).execute()
+        supabase.table('ordentrabajo').update({
+            'estado_global': 'EnReparacion'
+        }).eq('id', id_orden).execute()
         
         # Actualizar planificación
         planificacion = supabase.table('planificacion') \
@@ -571,18 +583,22 @@ def iniciar_reparacion(current_user):
         return jsonify({'error': str(e)}), 500
 
 
-@mis_vehiculos_bp.route('/pausar-reparacion', methods=['POST'])
+# =====================================================
+# API: PAUSAR REPARACIÓN MANUAL
+# =====================================================
+@mis_vehiculos_bp.route('/pausar-reparacion-manual', methods=['POST'])
 @tecnico_required
-def pausar_reparacion(current_user):
+def pausar_reparacion_manual(current_user):
     try:
         data = request.get_json()
         id_orden = data.get('id_orden')
         motivo = data.get('motivo', '')
-        tipo = data.get('tipo', 'simple')
-        items = data.get('items', [])
         
         if not id_orden:
             return jsonify({'error': 'ID de orden requerido'}), 400
+        
+        if not motivo:
+            return jsonify({'error': 'Debes especificar el motivo de la pausa'}), 400
         
         tecnico_id = current_user['id']
         ahora = datetime.datetime.now().isoformat()
@@ -604,8 +620,8 @@ def pausar_reparacion(current_user):
             'estado_global': 'EnPausa'
         }).eq('id', id_orden).execute()
         
-        # ✅ Guardar el motivo en la tabla SeguimientoOrden
-        supabase.table('SeguimientoOrden').insert({
+        # Guardar el motivo
+        supabase.table('seguimientoorden').insert({
             'id_orden_trabajo': id_orden,
             'estado': 'EnPausa',
             'motivo_pausa': motivo,
@@ -617,41 +633,10 @@ def pausar_reparacion(current_user):
         supabase.table('avancetrabajo').insert({
             'id_orden_trabajo': id_orden,
             'id_tecnico': tecnico_id,
-            'descripcion': f"Reparación pausada. Motivo: {motivo[:200]}",
-            'tipo_avance': 'pausa_reparacion',
+            'descripcion': f"Reparación pausada manualmente. Motivo: {motivo[:200]}",
+            'tipo_avance': 'pausa_manual',
             'fecha_hora': ahora
         }).execute()
-        
-        # Si es pausa con repuestos, crear solicitud
-        if tipo == 'repuestos' and items:
-            items_validos = []
-            for item in items:
-                if item.get('descripcion'):
-                    items_validos.append({
-                        'descripcion': item['descripcion'],
-                        'cantidad': item.get('cantidad', 1),
-                        'detalle': item.get('detalle', '')
-                    })
-            
-            if items_validos:
-                solicitud = {
-                    'id_orden_trabajo': id_orden,
-                    'id_tecnico': tecnico_id,
-                    'items': json.dumps(items_validos),
-                    'motivo': motivo,
-                    'estado': 'pendiente',
-                    'fecha_solicitud': ahora
-                }
-                
-                result = supabase.table('solicitud_repuestos').insert(solicitud).execute()
-                
-                if result.data:
-                    notificar_jefe_taller_repuestos(
-                        id_orden, 
-                        items_validos, 
-                        motivo, 
-                        current_user.get('nombre', 'Técnico')
-                    )
         
         return jsonify({'success': True, 'message': 'Reparación pausada correctamente'}), 200
         
@@ -660,7 +645,101 @@ def pausar_reparacion(current_user):
         return jsonify({'error': str(e)}), 500
 
 
-def notificar_jefe_taller_repuestos(id_orden, items, motivo, tecnico_nombre):
+# =====================================================
+# API: SOLICITAR REPUESTOS SIN PAUSA (USANDO TABLA NUEVA)
+# =====================================================
+@mis_vehiculos_bp.route('/solicitar-repuestos-sin-pausa', methods=['POST'])
+@tecnico_required
+def solicitar_repuestos_sin_pausa(current_user):
+    try:
+        data = request.get_json()
+        id_orden = data.get('id_orden')
+        observaciones = data.get('observaciones', '')
+        items = data.get('items', [])
+        
+        if not id_orden:
+            return jsonify({'error': 'ID de orden requerido'}), 400
+        
+        if not items:
+            return jsonify({'error': 'Debes agregar al menos un repuesto a solicitar'}), 400
+        
+        tecnico_id = current_user['id']
+        ahora = datetime.datetime.now().isoformat()
+        
+        # Verificar que la orden está en reparación o pausa
+        orden_actual = supabase.table('ordentrabajo') \
+            .select('estado_global, codigo_unico') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if not orden_actual.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        estado_actual = orden_actual.data[0]['estado_global']
+        if estado_actual not in ['EnReparacion', 'EnPausa']:
+            return jsonify({'error': f'No se pueden solicitar repuestos. Estado actual: {estado_actual}'}), 400
+        
+        # Validar items
+        items_validos = []
+        for item in items:
+            if item.get('descripcion') and item.get('descripcion').strip():
+                items_validos.append({
+                    'descripcion': item['descripcion'].strip(),
+                    'cantidad': item.get('cantidad', 1),
+                    'detalle': item.get('detalle', '').strip()
+                })
+        
+        if not items_validos:
+            return jsonify({'error': 'Debes agregar al menos un repuesto válido'}), 400
+        
+        # Crear solicitud
+        solicitud = {
+            'id_orden_trabajo': id_orden,
+            'id_tecnico': tecnico_id,
+            'items': json.dumps(items_validos),
+            'observaciones': observaciones,
+            'estado': 'pendiente',
+            'fecha_solicitud': ahora
+        }
+        
+        result = supabase.table('solicitud_repuestos_tecnico').insert(solicitud).execute()
+        
+        if not result.data:
+            return jsonify({'error': 'Error al crear la solicitud'}), 500
+        
+        # Registrar avance
+        supabase.table('avancetrabajo').insert({
+            'id_orden_trabajo': id_orden,
+            'id_tecnico': tecnico_id,
+            'descripcion': f"Solicitud de repuestos enviada. Items: {len(items_validos)} repuestos.",
+            'tipo_avance': 'solicitud_repuestos',
+            'fecha_hora': ahora
+        }).execute()
+        
+        # Notificar al jefe de taller
+        notificar_jefe_taller_solicitud(
+            id_orden, 
+            items_validos, 
+            observaciones, 
+            current_user.get('nombre', 'Técnico'),
+            orden_actual.data[0].get('codigo_unico', str(id_orden)),
+            result.data[0]['id']
+        )
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Solicitud de {len(items_validos)} repuesto(s) enviada correctamente. El trabajo continúa.',
+            'solicitud_id': result.data[0]['id']
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+def notificar_jefe_taller_solicitud(id_orden, items, observaciones, tecnico_nombre, codigo_orden, solicitud_id):
     try:
         jefes_result = supabase.table('usuario_rol') \
             .select('id_usuario') \
@@ -670,17 +749,12 @@ def notificar_jefe_taller_repuestos(id_orden, items, motivo, tecnico_nombre):
         jefes_ids = [j['id_usuario'] for j in (jefes_result.data or [])]
         
         if not jefes_ids:
+            logger.warning("No se encontraron jefes de taller")
             return
         
-        orden_info = supabase.table('ordentrabajo') \
-            .select('codigo_unico') \
-            .eq('id', id_orden) \
-            .execute()
+        items_texto = "\n".join([f"- {item['descripcion']} x{item['cantidad']}" + (f" ({item['detalle']})" if item.get('detalle') else "") for item in items])
         
-        codigo_orden = orden_info.data[0]['codigo_unico'] if orden_info.data else str(id_orden)
-        
-        items_texto = "\n".join([f"- {item['descripcion']} x{item['cantidad']}" for item in items])
-        mensaje = f"""🛑 SOLICITUD DE REPUESTOS - Reparación Pausada
+        mensaje = f"""📋 NUEVA SOLICITUD DE REPUESTOS
 
 Técnico: {tecnico_nombre}
 Orden: {codigo_orden}
@@ -688,9 +762,9 @@ Orden: {codigo_orden}
 Repuestos solicitados:
 {items_texto}
 
-Motivo: {motivo}
+Observaciones: {observaciones or 'Sin observaciones'}
 
-⚠️ Se requiere gestionar la compra de estos repuestos para continuar con la reparación."""
+⚠️ El técnico CONTINÚA trabajando mientras se gestionan los repuestos."""
         
         for jefe_id in jefes_ids:
             supabase.table('notificacion').insert({
@@ -699,17 +773,57 @@ Motivo: {motivo}
                 'mensaje': mensaje,
                 'fecha_envio': datetime.datetime.now().isoformat(),
                 'leida': False,
-                'id_referencia': id_orden
+                'id_referencia': solicitud_id
             }).execute()
         
-        logger.info(f"Notificación de repuestos enviada a {len(jefes_ids)} jefes")
+        logger.info(f"Notificación enviada a {len(jefes_ids)} jefes")
         
     except Exception as e:
         logger.error(f"Error notificando: {str(e)}")
 
 
 # =====================================================
-# API: REANUDAR REPARACIÓN (CORREGIDA - USA ESTADO DE ORDEN)
+# API: VERIFICAR SOLICITUDES PENDIENTES
+# =====================================================
+@mis_vehiculos_bp.route('/verificar-solicitudes-pendientes/<int:orden_id>', methods=['GET'])
+@tecnico_required
+def verificar_solicitudes_pendientes(current_user, orden_id):
+    try:
+        tecnico_id = current_user['id']
+        
+        # Verificar acceso
+        asignacion = supabase.table('asignaciontecnico') \
+            .select('id') \
+            .eq('id_orden_trabajo', orden_id) \
+            .eq('id_tecnico', tecnico_id) \
+            .execute()
+        
+        if not asignacion.data:
+            return jsonify({'error': 'No tienes acceso a esta orden'}), 403
+        
+        # Contar solicitudes pendientes
+        solicitudes = supabase.table('solicitud_repuestos_tecnico') \
+            .select('id', 'estado', 'fecha_solicitud') \
+            .eq('id_orden_trabajo', orden_id) \
+            .eq('estado', 'pendiente') \
+            .execute()
+        
+        cantidad_pendientes = len(solicitudes.data) if solicitudes.data else 0
+        
+        return jsonify({
+            'success': True,
+            'tiene_pendientes': cantidad_pendientes > 0,
+            'cantidad': cantidad_pendientes,
+            'solicitudes': solicitudes.data if solicitudes.data else []
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# API: REANUDAR REPARACIÓN
 # =====================================================
 @mis_vehiculos_bp.route('/reanudar-reparacion', methods=['POST'])
 @tecnico_required
@@ -724,7 +838,7 @@ def reanudar_reparacion(current_user):
         tecnico_id = current_user['id']
         ahora = datetime.datetime.now().isoformat()
         
-        # ✅ VERIFICAR QUE LA ORDEN ESTÁ EN PAUSA
+        # Verificar que la orden está en pausa
         orden_actual = supabase.table('ordentrabajo') \
             .select('estado_global') \
             .eq('id', id_orden) \
@@ -734,7 +848,7 @@ def reanudar_reparacion(current_user):
             return jsonify({'error': 'Orden no encontrada'}), 404
         
         if orden_actual.data[0]['estado_global'] != 'EnPausa':
-            return jsonify({'error': f'La orden no está en estado de pausa. Estado actual: {orden_actual.data[0]["estado_global"]}'}), 400
+            return jsonify({'error': f'La orden no está en pausa. Estado actual: {orden_actual.data[0]["estado_global"]}'}), 400
         
         # Cambiar estado a EnReparacion
         supabase.table('ordentrabajo').update({
@@ -758,7 +872,7 @@ def reanudar_reparacion(current_user):
 
 
 # =====================================================
-# API: FINALIZAR REPARACIÓN (CORREGIDA - USA ESTADO DE ORDEN)
+# API: FINALIZAR REPARACIÓN
 # =====================================================
 @mis_vehiculos_bp.route('/finalizar-reparacion', methods=['POST'])
 @tecnico_required
@@ -773,7 +887,7 @@ def finalizar_reparacion(current_user):
         tecnico_id = current_user['id']
         ahora = datetime.datetime.now().isoformat()
         
-        # ✅ VERIFICAR QUE LA ORDEN ESTÁ EN REPARACIÓN
+        # Verificar que la orden está en reparación
         orden_actual = supabase.table('ordentrabajo') \
             .select('estado_global') \
             .eq('id', id_orden) \
@@ -1073,6 +1187,28 @@ def obtener_detalle_orden(current_user, orden_id):
         
         instrucciones_data = instrucciones.data[0] if instrucciones.data else {}
         
+        # Obtener solicitudes de repuestos pendientes
+        solicitudes = supabase.table('solicitud_repuestos_tecnico') \
+            .select('id, items, observaciones, fecha_solicitud, estado') \
+            .eq('id_orden_trabajo', orden_id) \
+            .eq('estado', 'pendiente') \
+            .execute()
+        
+        solicitudes_pendientes = []
+        if solicitudes.data:
+            for sol in solicitudes.data:
+                try:
+                    items_json = json.loads(sol['items']) if isinstance(sol['items'], str) else sol['items']
+                except:
+                    items_json = []
+                solicitudes_pendientes.append({
+                    'id': sol['id'],
+                    'items': items_json,
+                    'observaciones': sol.get('observaciones', ''),
+                    'fecha_solicitud': sol.get('fecha_solicitud'),
+                    'estado': sol.get('estado', 'pendiente')
+                })
+        
         return jsonify({
             'success': True,
             'detalle': {
@@ -1112,7 +1248,8 @@ def obtener_detalle_orden(current_user, orden_id):
                 },
                 'tipo_asignacion': tipo_asignacion,
                 'instrucciones_armado': instrucciones_data.get('instrucciones'),
-                'fecha_instrucciones': instrucciones_data.get('fecha_envio')
+                'fecha_instrucciones': instrucciones_data.get('fecha_envio'),
+                'solicitudes_repuestos_pendientes': solicitudes_pendientes
             }
         }), 200
         

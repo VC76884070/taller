@@ -1545,3 +1545,22 @@
 .loading-pulse {
     animation: pulse 1.5s ease-in-out infinite;
 }
+
+/* Estilos adicionales para el TAB 3 */
+.table-container + .table-container {
+    margin-top: 2rem;
+}
+
+.panel-header + .filters-bar {
+    margin-bottom: 1rem;
+}
+
+/* Badge de estado para solicitudes de técnico */
+.status-badge i.fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}

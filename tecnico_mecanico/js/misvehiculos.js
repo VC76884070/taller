@@ -1,6 +1,10 @@
 // =====================================================
 // MIS VEHÍCULOS - TÉCNICO MECÁNICO
-// VERSIÓN COMPLETA - CON BOTONES DE REPARACIÓN CORREGIDOS
+// VERSIÓN COMPLETA CON BOTONES SEPARADOS
+// - Pausar Trabajo (manual, con motivo)
+// - Solicitar Repuesto (sin pausar)
+// - Reanudar Trabajo (cuando está en pausa)
+// - Marcar Completada (solo en EnReparacion, con validación)
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
@@ -20,58 +24,6 @@ let token = null;
 let usuarioActual = null;
 let rolesUsuario = [];
 let comunicadosVistos = [];
-
-// Items para solicitud de repuestos
-let itemsPausa = [];
-
-// =====================================================
-// FUNCIONES PARA MANEJAR ITEMS DE PAUSA
-// =====================================================
-function renderItemsPausa() {
-    const container = document.getElementById('itemsListPausa');
-    if (!container) return;
-    
-    if (itemsPausa.length === 0) {
-        container.innerHTML = `<div class="item-empty"><i class="fas fa-box-open"></i><p>No hay repuestos agregados</p><small>Haz clic en "Agregar repuesto" para comenzar</small></div>`;
-        return;
-    }
-    
-    container.innerHTML = itemsPausa.map((item, index) => `
-        <div class="item-row" data-index="${index}">
-            <div class="item-fields">
-                <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Nombre del repuesto" onchange="actualizarItemPausa(${index}, 'descripcion', this.value)">
-                <input type="number" class="item-cantidad" value="${item.cantidad}" min="1" onchange="actualizarItemPausa(${index}, 'cantidad', parseInt(this.value))">
-                <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle (marca, especificaciones...)" onchange="actualizarItemPausa(${index}, 'detalle', this.value)">
-            </div>
-            <div class="item-actions">
-                <button class="btn-remove-item" onclick="eliminarItemPausa(${index})"><i class="fas fa-trash-alt"></i></button>
-            </div>
-        </div>
-    `).join('');
-}
-
-function agregarItemPausa() {
-    itemsPausa.push({ descripcion: '', cantidad: 1, detalle: '' });
-    renderItemsPausa();
-    setTimeout(() => {
-        const lastInput = document.querySelector('#itemsListPausa .item-row:last-child .item-descripcion');
-        if (lastInput) lastInput.focus();
-    }, 100);
-}
-
-function actualizarItemPausa(index, campo, valor) {
-    if (itemsPausa[index]) itemsPausa[index][campo] = valor;
-}
-
-function eliminarItemPausa(index) {
-    itemsPausa.splice(index, 1);
-    renderItemsPausa();
-}
-
-function limpiarItemsPausa() {
-    itemsPausa = [];
-    renderItemsPausa();
-}
 
 // =====================================================
 // UTILIDADES
@@ -300,7 +252,6 @@ async function cargarVehiculos() {
         
         vehiculosAsignados = data.vehiculos || [];
         console.log(`✅ ${vehiculosAsignados.length} vehículos cargados`);
-        console.log('📊 Detalle de vehículos:', vehiculosAsignados.map(v => ({ id: v.orden_id, estado: v.estado_global, tipo: v.tipo_asignacion, trabajo_iniciado: v.trabajo_iniciado })));
         
         if (loadingContainer) loadingContainer.style.display = 'none';
         
@@ -320,10 +271,19 @@ async function cargarVehiculos() {
 }
 
 // =====================================================
-// RENDERIZADO DE VEHÍCULOS (CORREGIDO)
+// RENDERIZADO DE VEHÍCULOS (ACTUALIZADO)
+// =====================================================
+// =====================================================
+// RENDERIZADO DE VEHÍCULOS - VERSIÓN CORREGIDA
+// PRIORIZA EL estado_global SOBRE EL tipo_asignacion
+// =====================================================
+// =====================================================
+// RENDERIZADO DE VEHÍCULOS - VERSIÓN COMPLETA
+// BOTONES: 
+// - Si está en PAUSA: muestra "Reanudar Trabajo" + "Solicitar Repuesto" + "Ver Detalle"
+// - Si está en REPARACIÓN: muestra "Pausar Trabajo" + "Solicitar Repuesto" + "Marcar Completada" + "Ver Detalle"
 // =====================================================
 function renderVehiculos() {
-    console.log('📊 TODOS LOS VEHÍCULOS:', vehiculosAsignados);
     const grid = document.getElementById('vehiculosGrid');
     if (!grid) return;
     
@@ -333,12 +293,8 @@ function renderVehiculos() {
     }
     
     grid.innerHTML = vehiculosAsignados.map(vehiculo => {
-        const tipo = vehiculo.tipo_asignacion;
         const estadoGlobal = vehiculo.estado_global;
         const trabajoIniciado = vehiculo.trabajo_iniciado || false;
-        
-        // Para depuración
-        console.log(`🔍 Vehículo ${vehiculo.orden_id}: estado="${estadoGlobal}", tipo="${tipo}", trabajoIniciado=${trabajoIniciado}`);
         
         const bahiaInfo = vehiculo.bahia_asignada ? 
             `<div class="bahia-info"><i class="fas fa-warehouse"></i> Bahía: ${vehiculo.bahia_asignada}</div>` : '';
@@ -346,8 +302,10 @@ function renderVehiculos() {
         let badgeHtml = '';
         let botonesHtml = '';
         
+        console.log(`🎯 Renderizando: ID=${vehiculo.orden_id}, Estado=${estadoGlobal}`);
+        
         // ============ CASO ARMADO ============
-        if (tipo === 'armado' || estadoGlobal === 'EnArmadoVehiculo') {
+        if (estadoGlobal === 'EnArmadoVehiculo') {
             badgeHtml = `<span class="asignacion-badge armado"><i class="fas fa-tools"></i> 🔧 ARMADO REQUERIDO</span>`;
             
             const instruccionesArmado = vehiculo.instrucciones_armado || '';
@@ -368,15 +326,71 @@ function renderVehiculos() {
                         <i class="fas fa-check-circle"></i> ✅ Marcar Armado Completado
                     </button>
                     <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
-                        <i class="fas fa-eye"></i> Ver Detalles
+                        <i class="fas fa-eye"></i> Ver Detalle
                     </button>
                 </div>
                 ${bahiaInfo}
                 ${instruccionesHtml}
             `;
         }
+        // ============ CASO REPARACIÓN O PAUSA ============
+        else if (estadoGlobal === 'EnReparacion' || estadoGlobal === 'EnPausa') {
+            // Badge según el estado
+            if (estadoGlobal === 'EnReparacion') {
+                badgeHtml = `<span class="asignacion-badge reparacion"><i class="fas fa-wrench"></i> 🔧 EN REPARACIÓN</span>`;
+            } else {
+                badgeHtml = `<span class="asignacion-badge reparacion"><i class="fas fa-pause-circle"></i> ⏸️ EN PAUSA</span>`;
+            }
+            
+            // Advertencia si hay solicitudes pendientes
+            const tieneSolicitudesPendientes = vehiculo.solicitudes_repuestos_pendientes || false;
+            const advertenciaSolicitudes = tieneSolicitudesPendientes ? 
+                `<div class="solicitud-pendiente-warning" style="margin-top: 0.5rem; padding: 0.3rem; background: rgba(245, 158, 11, 0.1); border-radius: var(--radius-sm); font-size: 0.7rem; text-align: center;">
+                    <i class="fas fa-clock"></i> Hay solicitudes de repuestos pendientes
+                </div>` : '';
+            
+            // Botones según el estado
+            if (estadoGlobal === 'EnPausa') {
+                // En PAUSA: muestra Reanudar + Solicitar Repuesto + Ver Detalle
+                botonesHtml = `
+                    <div class="botones-container">
+                        <button class="btn-sm btn-success-sm" onclick="reanudarReparacion(${vehiculo.orden_id})">
+                            <i class="fas fa-play"></i> Reanudar Trabajo
+                        </button>
+                        <button class="btn-sm btn-primary-sm" onclick="solicitarRepuestosSinPausa(${vehiculo.orden_id})">
+                            <i class="fas fa-shopping-cart"></i> Solicitar Repuesto
+                        </button>
+                        <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
+                            <i class="fas fa-eye"></i> Ver Detalle
+                        </button>
+                    </div>
+                    ${bahiaInfo}
+                    ${advertenciaSolicitudes}
+                `;
+            } else {
+                // En REPARACIÓN: muestra Pausar + Solicitar Repuesto + Finalizar + Ver Detalle
+                botonesHtml = `
+                    <div class="botones-container">
+                        <button class="btn-sm btn-warning-sm" onclick="pausarReparacionManual(${vehiculo.orden_id})">
+                            <i class="fas fa-pause"></i> Pausar Trabajo
+                        </button>
+                        <button class="btn-sm btn-primary-sm" onclick="solicitarRepuestosSinPausa(${vehiculo.orden_id})">
+                            <i class="fas fa-shopping-cart"></i> Solicitar Repuesto
+                        </button>
+                        <button class="btn-sm btn-danger-sm" onclick="mostrarFinalizarModal(${vehiculo.orden_id})">
+                            <i class="fas fa-flag-checkered"></i> Marcar Completada
+                        </button>
+                        <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})">
+                            <i class="fas fa-eye"></i> Ver Detalle
+                        </button>
+                    </div>
+                    ${bahiaInfo}
+                    ${advertenciaSolicitudes}
+                `;
+            }
+        }
         // ============ CASO DIAGNÓSTICO ============
-        else if (tipo === 'diagnostico') {
+        else {
             const diagnosticoEstado = vehiculo.diagnostico_estado;
             const diagnosticoVersion = vehiculo.diagnostico_version || 1;
             
@@ -412,52 +426,6 @@ function renderVehiculos() {
                         <button class="btn-sm btn-warning-sm" onclick="crearDiagnostico(${vehiculo.orden_id})"><i class="fas fa-stethoscope"></i> Realizar Diagnóstico</button>
                         <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})"><i class="fas fa-eye"></i> Ver Detalle</button>
                     </div>
-                    <div class="bahia-info" style="background: rgba(16, 185, 129, 0.1);"><i class="fas fa-warehouse"></i> Bahía ocupada: ${vehiculo.bahia_asignada || 'N/A'}</div>
-                `;
-            }
-        }
-        // ============ CASO REPARACIÓN (CORREGIDO) ============
-        else if (tipo === 'reparacion' || estadoGlobal === 'EnReparacion') {
-            badgeHtml = `<span class="asignacion-badge reparacion"><i class="fas fa-wrench"></i> Reparación</span>`;
-            
-            // Si está en pausa
-            if (estadoGlobal === 'EnPausa') {
-                botonesHtml = `
-                    <div class="botones-container">
-                        <button class="btn-sm btn-success-sm" onclick="reanudarReparacion(${vehiculo.orden_id})"><i class="fas fa-play"></i> Reanudar Reparación</button>
-                        <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})"><i class="fas fa-eye"></i> Ver Detalle</button>
-                    </div>
-                    ${bahiaInfo}
-                `;
-            }
-            // Si está activa la reparación (EnReparacion)
-            else if (estadoGlobal === 'EnReparacion') {
-                botonesHtml = `
-                    <div class="botones-container">
-                        <button class="btn-sm btn-warning-sm" onclick="pausarReparacion(${vehiculo.orden_id})"><i class="fas fa-pause"></i> Pausar (motivo)</button>
-                        <button class="btn-sm btn-primary-sm" onclick="pausarConRepuestos(${vehiculo.orden_id})"><i class="fas fa-shopping-cart"></i> Pausar + Solicitar Repuestos</button>
-                        <button class="btn-sm btn-danger-sm" onclick="mostrarFinalizarModal(${vehiculo.orden_id})"><i class="fas fa-flag-checkered"></i> Finalizar Reparación</button>
-                        <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})"><i class="fas fa-eye"></i> Ver Detalle</button>
-                    </div>
-                    ${bahiaInfo}
-                `;
-            }
-            // Si no ha iniciado
-            else if (!trabajoIniciado) {
-                botonesHtml = `
-                    <div class="botones-container">
-                        <button class="btn-sm btn-primary-sm" onclick="iniciarReparacion(${vehiculo.orden_id})"><i class="fas fa-play-circle"></i> Iniciar Reparación</button>
-                        <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})"><i class="fas fa-eye"></i> Ver Detalle</button>
-                    </div>
-                    ${bahiaInfo}
-                `;
-            }
-            // Fallback: mostrar botones básicos
-            else {
-                botonesHtml = `
-                    <div class="botones-container">
-                        <button class="btn-sm btn-info-sm" onclick="verDetalle(${vehiculo.orden_id})"><i class="fas fa-eye"></i> Ver Detalle</button>
-                    </div>
                     ${bahiaInfo}
                 `;
             }
@@ -468,7 +436,7 @@ function renderVehiculos() {
                 <div class="card-header">
                     <div class="vehiculo-info">
                         <div class="vehiculo-icon">
-                            <i class="fas ${tipo === 'diagnostico' ? 'fa-stethoscope' : (tipo === 'reparacion' || estadoGlobal === 'EnReparacion' ? 'fa-wrench' : 'fa-tools')}"></i>
+                            <i class="fas ${estadoGlobal === 'EnReparacion' ? 'fa-wrench' : (estadoGlobal === 'EnPausa' ? 'fa-pause-circle' : 'fa-car')}"></i>
                         </div>
                         <div class="vehiculo-titulo">
                             <h3>${escapeHtml(vehiculo.vehiculo.marca)} ${escapeHtml(vehiculo.vehiculo.modelo)}</h3>
@@ -592,37 +560,37 @@ async function confirmarInicioReparacion() {
 }
 
 // =====================================================
-// REPARACIÓN - PAUSAR (SIMPLE)
+// REPARACIÓN - PAUSAR MANUAL (SOLO MOTIVO, SIN REPUESTOS)
 // =====================================================
-window.pausarReparacion = function(ordenId) {
-    document.getElementById('ordenIdPausa').value = ordenId;
-    document.getElementById('motivoPausa').value = '';
-    document.getElementById('pausaModal').classList.add('show');
+window.pausarReparacionManual = function(ordenId) {
+    document.getElementById('ordenIdPausaManual').value = ordenId;
+    document.getElementById('motivoPausaManual').value = '';
+    document.getElementById('pausaManualModal').classList.add('show');
 };
 
-window.cerrarPausaModal = function() {
-    document.getElementById('pausaModal').classList.remove('show');
-    document.getElementById('motivoPausa').value = '';
-    document.getElementById('ordenIdPausa').value = '';
+window.cerrarPausaManualModal = function() {
+    document.getElementById('pausaManualModal').classList.remove('show');
+    document.getElementById('motivoPausaManual').value = '';
+    document.getElementById('ordenIdPausaManual').value = '';
 };
 
-async function confirmarPausaReparacion() {
-    const ordenId = document.getElementById('ordenIdPausa').value;
-    const motivo = document.getElementById('motivoPausa').value.trim();
+async function confirmarPausaManual() {
+    const ordenId = document.getElementById('ordenIdPausaManual').value;
+    const motivo = document.getElementById('motivoPausaManual').value.trim();
     
     if (!motivo) {
         showToast('Debes especificar el motivo de la pausa', 'warning');
         return;
     }
     
-    cerrarPausaModal();
+    cerrarPausaManualModal();
     showToast('Pausando reparación...', 'info');
     
     try {
-        const response = await fetch('/tecnico/pausar-reparacion', {
+        const response = await fetch('/tecnico/pausar-reparacion-manual', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ id_orden: parseInt(ordenId), motivo: motivo, tipo: 'simple' })
+            body: JSON.stringify({ id_orden: parseInt(ordenId), motivo: motivo })
         });
         const data = await response.json();
         
@@ -638,52 +606,58 @@ async function confirmarPausaReparacion() {
 }
 
 // =====================================================
-// REPARACIÓN - PAUSAR CON REPUESTOS
+// SOLICITAR REPUESTOS SIN PAUSA
 // =====================================================
-window.pausarConRepuestos = function(ordenId) {
-    limpiarItemsPausa();
-    document.getElementById('ordenIdPausaItems').value = ordenId;
-    document.getElementById('motivoPausaItems').value = '';
-    document.getElementById('pausaItemsModal').classList.add('show');
+window.solicitarRepuestosSinPausa = function(ordenId) {
+    // Limpiar items anteriores
+    if (typeof limpiarItemsSolicitud === 'function') {
+        limpiarItemsSolicitud();
+    }
+    document.getElementById('ordenIdSolicitud').value = ordenId;
+    document.getElementById('motivoSolicitud').value = '';
+    document.getElementById('solicitarRepuestosModal').classList.add('show');
 };
 
-window.cerrarPausaItemsModal = function() {
-    document.getElementById('pausaItemsModal').classList.remove('show');
-    document.getElementById('ordenIdPausaItems').value = '';
-    limpiarItemsPausa();
+window.cerrarSolicitarRepuestosModal = function() {
+    document.getElementById('solicitarRepuestosModal').classList.remove('show');
+    document.getElementById('ordenIdSolicitud').value = '';
+    if (typeof limpiarItemsSolicitud === 'function') {
+        limpiarItemsSolicitud();
+    }
 };
 
-async function confirmarPausaConRepuestos() {
-    const ordenId = document.getElementById('ordenIdPausaItems').value;
-    const motivo = document.getElementById('motivoPausaItems').value.trim();
-    const itemsValidos = itemsPausa.filter(item => item.descripcion && item.descripcion.trim() !== '');
+async function confirmarSolicitarRepuestos() {
+    const ordenId = document.getElementById('ordenIdSolicitud').value;
+    const motivo = document.getElementById('motivoSolicitud').value.trim();
+    
+    // Obtener items de la variable global itemsSolicitud
+    const itemsValidos = (typeof itemsSolicitud !== 'undefined' ? itemsSolicitud : []).filter(item => item.descripcion && item.descripcion.trim() !== '');
     
     if (itemsValidos.length === 0) {
         showToast('Debes agregar al menos un repuesto a solicitar', 'warning');
         return;
     }
     
-    cerrarPausaItemsModal();
+    cerrarSolicitarRepuestosModal();
     showToast('Enviando solicitud de repuestos...', 'info');
     
     try {
-        const response = await fetch('/tecnico/pausar-reparacion', {
+        const response = await fetch('/tecnico/solicitar-repuestos-sin-pausa', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ 
                 id_orden: parseInt(ordenId), 
-                motivo: motivo || 'Esperando repuestos para continuar la reparación',
-                tipo: 'repuestos',
+                observaciones: motivo || 'Sin observaciones adicionales',
                 items: itemsValidos
             })
         });
         const data = await response.json();
         
         if (data.success) {
-            showToast('✅ Solicitud de repuestos enviada. Reparación pausada.', 'success');
+            showToast('✅ Solicitud de repuestos enviada correctamente', 'success');
             cargarVehiculos();
         } else {
-            showToast(data.error || 'Error al procesar', 'error');
+            showToast(data.error || 'Error al enviar solicitud', 'error');
         }
     } catch (error) {
         showToast('Error de conexión', 'error');
@@ -726,8 +700,8 @@ async function confirmarReanudarReparacion() {
         const data = await response.json();
         
         if (data.success) {
-            showToast('Reparación reanudada correctamente', 'success');
-            cargarVehiculos();
+            showToast('✅ Reparación reanudada correctamente', 'success');
+            await cargarVehiculos();  // Recargar para que se actualicen los botones
         } else {
             showToast(data.error || 'Error al reanudar', 'error');
         }
@@ -735,11 +709,10 @@ async function confirmarReanudarReparacion() {
         showToast('Error de conexión', 'error');
     }
 }
-
 // =====================================================
-// REPARACIÓN - FINALIZAR
+// REPARACIÓN - FINALIZAR (CON VALIDACIÓN)
 // =====================================================
-window.mostrarFinalizarModal = function(ordenId) {
+window.mostrarFinalizarModal = async function(ordenId) {
     const vehiculo = vehiculosAsignados.find(v => v.orden_id === ordenId);
     if (vehiculo) {
         document.getElementById('finalizarInfo').innerHTML = `
@@ -748,6 +721,28 @@ window.mostrarFinalizarModal = function(ordenId) {
             <p><strong>Orden:</strong> ${escapeHtml(vehiculo.codigo_unico)}</p>
         `;
     }
+    
+    // Verificar si hay solicitudes de repuestos pendientes
+    try {
+        const response = await fetch(`/tecnico/verificar-solicitudes-pendientes/${ordenId}`, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        const solicitudesPendientesMsg = document.getElementById('solicitudesPendientesMsg');
+        if (solicitudesPendientesMsg) {
+            if (data.tiene_pendientes) {
+                solicitudesPendientesMsg.style.display = 'block';
+                solicitudesPendientesMsg.innerHTML = `<i class="fas fa-exclamation-triangle" style="color: var(--ambar-alerta);"></i> <span style="font-size: 0.8rem;">⚠️ Tienes ${data.cantidad} solicitud(es) de repuestos pendiente(s). Se notificará al Jefe de Taller.</span>`;
+            } else {
+                solicitudesPendientesMsg.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Error verificando solicitudes:', error);
+    }
+    
     document.getElementById('ordenIdFinalizar').value = ordenId;
     document.getElementById('finalizarModal').classList.add('show');
 };
@@ -835,7 +830,6 @@ window.verDetalle = async function(ordenId) {
         }
         
         const detalle = data.detalle;
-        const tipoAsignacion = detalle.tipo_asignacion;
         
         const fotos = detalle.recepcion?.fotos || {};
         const fotosArray = Object.entries(fotos).filter(([_, url]) => url && url !== '');
@@ -1081,9 +1075,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Configurar botones de modales
     document.getElementById('confirmarEmpezarBtn')?.addEventListener('click', confirmarEmpezarDiagnostico);
     document.getElementById('confirmarInicioBtn')?.addEventListener('click', confirmarInicioReparacion);
-    document.getElementById('confirmarPausaBtn')?.addEventListener('click', confirmarPausaReparacion);
-    document.getElementById('btnAgregarItemPausa')?.addEventListener('click', agregarItemPausa);
-    document.getElementById('confirmarPausaItemsBtn')?.addEventListener('click', confirmarPausaConRepuestos);
+    document.getElementById('confirmarPausaManualBtn')?.addEventListener('click', confirmarPausaManual);
+    document.getElementById('btnAgregarItemSolicitud')?.addEventListener('click', () => {
+        if (typeof agregarItemSolicitud === 'function') agregarItemSolicitud();
+    });
+    document.getElementById('confirmarSolicitarRepuestosBtn')?.addEventListener('click', confirmarSolicitarRepuestos);
     document.getElementById('confirmarReanudarBtn')?.addEventListener('click', confirmarReanudarReparacion);
     document.getElementById('confirmarFinalizarBtn')?.addEventListener('click', confirmarFinalizarReparacion);
     
@@ -1091,12 +1087,5 @@ document.addEventListener('DOMContentLoaded', async () => {
         modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
     });
     
-    setInterval(() => {
-        if (document.visibilityState === 'visible' && token) {
-            cargarVehiculos();
-            cargarComunicados();
-        }
-    }, 30000);
-    
-    console.log('✅ misvehiculos.js cargado correctamente');
+    console.log('✅ misvehiculos.js cargado correctamente - Versión con botones separados');
 });

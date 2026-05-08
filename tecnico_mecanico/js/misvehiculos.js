@@ -995,6 +995,9 @@ function cerrarHistorialModal() {
 // =====================================================
 // DETALLE DE ORDEN
 // =====================================================
+// =====================================================
+// DETALLE DE ORDEN - CON INSTRUCCIONES DE REVISIÓN
+// =====================================================
 window.verDetalle = async function(ordenId) {
     showToast('Cargando detalles...', 'info');
     
@@ -1027,6 +1030,35 @@ window.verDetalle = async function(ordenId) {
         
         const bahiaInfo = detalle.planificacion?.bahia_asignada ? `<div><strong>Bahía asignada:</strong> ${detalle.planificacion.bahia_asignada}</div>` : '';
         
+        // =====================================================
+        // INSTRUCCIONES DE REVISIÓN (Cuándo el jefe de taller rechazó)
+        // =====================================================
+        let instruccionesRevisionHtml = '';
+        if (detalle.instrucciones_pendientes && detalle.instrucciones_pendientes.length > 0) {
+            instruccionesRevisionHtml = `
+                <div class="modal-section" style="border-left: 3px solid var(--ambar-alerta);">
+                    <h3 style="color: var(--ambar-alerta);">
+                        <i class="fas fa-clipboard-list"></i> 📋 Instrucciones de Corrección del Jefe de Taller
+                    </h3>
+                    ${detalle.instrucciones_pendientes.map(inst => `
+                        <div style="background: rgba(245, 158, 11, 0.1); padding: 0.75rem; border-radius: var(--radius-md); margin-bottom: 0.75rem;">
+                            <div style="font-size: 0.7rem; color: var(--ambar-alerta); margin-bottom: 0.5rem;">
+                                <i class="fas fa-calendar-alt"></i> Enviado: ${formatFecha(inst.fecha_envio)}
+                            </div>
+                            <div style="white-space: pre-wrap; font-size: 0.85rem;">${escapeHtml(inst.instrucciones)}</div>
+                            ${!inst.leida ? `
+                                <div style="margin-top: 0.5rem;">
+                                    <button class="btn-sm btn-primary-sm" onclick="marcarInstruccionLeida(${inst.id}, ${ordenId})">
+                                        <i class="fas fa-check-circle"></i> Marcar como leída
+                                    </button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        
         const detalleHtml = `
             <div style="display: grid; gap: 1rem;">
                 <div class="modal-section">
@@ -1058,6 +1090,8 @@ window.verDetalle = async function(ordenId) {
                     </div>
                 </div>
                 
+                ${instruccionesRevisionHtml}
+                
                 <div class="modal-section">
                     <h3><i class="fas fa-comment"></i> Problema Reportado</h3>
                     <div class="diagnostico-box" style="background: var(--gris-oscuro); padding: 0.75rem; border-radius: var(--radius-md);">
@@ -1088,6 +1122,29 @@ window.verDetalle = async function(ordenId) {
     } catch (error) {
         console.error('Error:', error);
         showToast(error.message, 'error');
+    }
+};
+
+// Función para marcar instrucción como leída
+window.marcarInstruccionLeida = async function(instruccionId, ordenId) {
+    try {
+        const response = await fetch(`/tecnico/marcar-instruccion-leida/${instruccionId}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Instrucción marcada como leída', 'success');
+            // Recargar el detalle
+            verDetalle(ordenId);
+        } else {
+            showToast(data.error || 'Error al marcar como leída', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
     }
 };
 

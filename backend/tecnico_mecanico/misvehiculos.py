@@ -1221,11 +1221,52 @@ def obtener_detalle_orden(current_user, orden_id):
         
         instrucciones_data = instrucciones.data[0] if instrucciones.data else {}
         
+        # =====================================================
+        # OBTENER INSTRUCCIONES PENDIENTES DE REVISIÓN (Control de Calidad)
+        # =====================================================
+        instrucciones_pendientes = []
+        try:
+            # Buscar instrucciones no leídas
+            instrucciones_no_leidas = supabase.table('instrucciones_tecnico_historial') \
+                .select('id, instrucciones, fecha_envio, leida') \
+                .eq('id_orden_trabajo', orden_id) \
+                .eq('leida', False) \
+                .order('fecha_envio', desc=True) \
+                .execute()
+            
+            for inst in (instrucciones_no_leidas.data or []):
+                instrucciones_pendientes.append({
+                    'id': inst['id'],
+                    'instrucciones': inst['instrucciones'],
+                    'fecha_envio': inst['fecha_envio'],
+                    'leida': inst.get('leida', False)
+                })
+            
+            # También obtener instrucciones recientes (últimas 24h) aunque estén leídas
+            hace_24h = (datetime.datetime.now() - datetime.timedelta(days=1)).isoformat()
+            instrucciones_recientes = supabase.table('instrucciones_tecnico_historial') \
+                .select('id, instrucciones, fecha_envio, leida') \
+                .eq('id_orden_trabajo', orden_id) \
+                .gte('fecha_envio', hace_24h) \
+                .order('fecha_envio', desc=True) \
+                .execute()
+            
+            for inst in (instrucciones_recientes.data or []):
+                if not any(p['id'] == inst['id'] for p in instrucciones_pendientes):
+                    instrucciones_pendientes.append({
+                        'id': inst['id'],
+                        'instrucciones': inst['instrucciones'],
+                        'fecha_envio': inst['fecha_envio'],
+                        'leida': inst.get('leida', False)
+                    })
+        except Exception as e:
+            logger.warning(f"Error obteniendo instrucciones pendientes: {e}")
+        
         # Obtener solicitudes de repuestos pendientes
         solicitudes = supabase.table('solicitud_repuestos_tecnico') \
-            .select('id, items, observaciones, fecha_solicitud, estado') \
+            .select('id, items, observaciones, fecha_solicitud, estado, respuesta, fecha_respuesta') \
             .eq('id_orden_trabajo', orden_id) \
-            .eq('estado', 'pendiente') \
+            .in_('estado', ['pendiente', 'en_proceso']) \
             .execute()
         
         solicitudes_pendientes = []
@@ -1240,7 +1281,9 @@ def obtener_detalle_orden(current_user, orden_id):
                     'items': items_json,
                     'observaciones': sol.get('observaciones', ''),
                     'fecha_solicitud': sol.get('fecha_solicitud'),
-                    'estado': sol.get('estado', 'pendiente')
+                    'estado': sol.get('estado', 'pendiente'),
+                    'respuesta': sol.get('respuesta', ''),
+                    'fecha_respuesta': sol.get('fecha_respuesta')
                 })
         
         return jsonify({
@@ -1283,12 +1326,15 @@ def obtener_detalle_orden(current_user, orden_id):
                 'tipo_asignacion': tipo_asignacion,
                 'instrucciones_armado': instrucciones_data.get('instrucciones'),
                 'fecha_instrucciones': instrucciones_data.get('fecha_envio'),
+                'instrucciones_pendientes': instrucciones_pendientes,
                 'solicitudes_repuestos_pendientes': solicitudes_pendientes
             }
         }), 200
         
     except Exception as e:
         logger.error(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 # =====================================================
 # API: HISTORIAL DE SOLICITUDES DE REPUESTOS
@@ -1400,4 +1446,45 @@ def obtener_historial_solicitudes(current_user, orden_id):
         logger.error(f"Error: {str(e)}")
         import traceback
         traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    
+@mis_vehiculos_bp.route('/marcar-instruccion-leida/<int:instruccion_id>', methods=['PUT'])
+@tecnico_required
+def marcar_instruccion_leida(current_user, instruccion_id):
+    """Marcar una instrucción como leída por el técnico"""
+    try:
+        # Verificar que la instrucción pertenece a una orden del técnico
+        instruccion = supabase.table('instrucciones_tecnico_historial') \
+            .select('id_orden_trabajo') \
+            .eq('id', instruccion_id) \
+            .execute()
+        
+        if not instruccion.data:
+            return jsonify({'error': 'Instrucción no encontrada'}), 404
+        
+        id_orden = instruccion.data[0]['id_orden_trabajo']
+        
+        # Verificar que el técnico tiene acceso a esta orden
+        asignacion = supabase.table('asignaciontecnico') \
+            .select('id') \
+            .eq('id_orden_trabajo', id_orden) \
+            .eq('id_tecnico', current_user['id']) \
+            .execute()
+        
+        if not asignacion.data:
+            return jsonify({'error': 'No tienes acceso a esta orden'}), 403
+        
+        # Marcar como leída
+        supabase.table('instrucciones_tecnico_historial') \
+            .update({
+                'leida': True,
+                'fecha_leida': datetime.datetime.now().isoformat()
+            }) \
+            .eq('id', instruccion_id) \
+            .execute()
+        
+        return jsonify({'success': True, 'message': 'Instrucción marcada como leída'}), 200
+        
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
         return jsonify({'error': str(e)}), 500

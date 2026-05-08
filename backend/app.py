@@ -79,6 +79,11 @@ try:
     from jefe_operativo.comunicados import jefe_operativo_comunicados_bp
     from jefe_operativo.historial import jefe_operativo_historial_bp
     from jefe_operativo.perfil import jefe_operativo_perfil_bp
+    # Agregar esta línea con los otros blueprints
+    from jefe_operativo.control_calidad import control_calidad_bp
+
+    # Y registrar el blueprint
+    app.register_blueprint(control_calidad_bp)
     
     app.register_blueprint(jefe_operativo_recepcion_bp, url_prefix='/api/jefe-operativo')
     app.register_blueprint(jefe_operativo_comunicados_bp, url_prefix='/api/jefe-operativo')

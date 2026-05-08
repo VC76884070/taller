@@ -131,10 +131,14 @@ function obtenerPaginaActual() {
         'dashboard': 'dashboard',
         'orden_trabajo': 'orden_trabajo',
         'calendario_bahias': 'calendario_bahias',
-        'diagnosticos': 'diagnosticos',
+        'diagnostico': 'diagnosticos',
+        'cotizaciones': 'cotizaciones',
         'control_calidad': 'control_calidad',
+        'gestion_avances': 'gestion_avances',
         'historial_vehiculos': 'historial_vehiculos',
-        'perfil': 'perfil'
+        'perfil': 'perfil',
+        'admin_roles': 'admin_roles',
+        'reservas_solicitudes': 'reservas_solicitudes'
     };
     
     return pageMapping[pageName] || pageName;

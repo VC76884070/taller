@@ -8,8 +8,8 @@ from config import config
 # Agregar el directorio actual al path para importar módulos
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Configurar logging - SILENCIAR COMENTARIOS
-logging.basicConfig(level=logging.WARNING)  # Cambiado a WARNING para menos ruido
+# Configurar logging
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Crear aplicación Flask
@@ -56,17 +56,21 @@ app.register_blueprint(login_bp)
 from decorators import verificar_rol, jefe_taller_required, jefe_operativo_required, encargado_repuestos_required, cliente_required
 
 # =====================================================
-# TÉCNICO MECÁNICO - CORREGIDO
+# TÉCNICO MECÁNICO
 # =====================================================
 try:
     from tecnico_mecanico.misvehiculos import mis_vehiculos_bp
-    app.register_blueprint(mis_vehiculos_bp, url_prefix='/tecnico')  # ← CAMBIADO: antes era '/api/tecnico'
     from tecnico_mecanico.diagnostico import diagnostico_bp
-    app.register_blueprint(diagnostico_bp, url_prefix='/tecnico')    # ← CAMBIADO
     from tecnico_mecanico.historial import historial_bp
-    app.register_blueprint(historial_bp, url_prefix='/tecnico')      # ← CAMBIADO
     from tecnico_mecanico.perfil import tecnico_mecanico_perfil_bp
-    app.register_blueprint(tecnico_mecanico_perfil_bp, url_prefix='/tecnico')  # ← CAMBIADO
+    from tecnico_mecanico.avance import avance_bp
+    
+    app.register_blueprint(mis_vehiculos_bp, url_prefix='/tecnico')
+    app.register_blueprint(diagnostico_bp, url_prefix='/tecnico')
+    app.register_blueprint(historial_bp, url_prefix='/tecnico')
+    app.register_blueprint(tecnico_mecanico_perfil_bp, url_prefix='/tecnico')
+    app.register_blueprint(avance_bp, url_prefix='/tecnico')
+    
     logger.info("✅ Blueprints de Técnico Mecánico registrados correctamente")
 except Exception as e:
     logger.error(f"❌ Error registrando blueprints de Técnico Mecánico: {e}")
@@ -79,16 +83,14 @@ try:
     from jefe_operativo.comunicados import jefe_operativo_comunicados_bp
     from jefe_operativo.historial import jefe_operativo_historial_bp
     from jefe_operativo.perfil import jefe_operativo_perfil_bp
-    # Agregar esta línea con los otros blueprints
-    from jefe_operativo.control_calidad import control_calidad_bp
-
-    # Y registrar el blueprint
-    app.register_blueprint(control_calidad_bp)
+    from jefe_operativo.control_calidad import control_calidad_bp as control_calidad_operativo_bp
     
     app.register_blueprint(jefe_operativo_recepcion_bp, url_prefix='/api/jefe-operativo')
     app.register_blueprint(jefe_operativo_comunicados_bp, url_prefix='/api/jefe-operativo')
     app.register_blueprint(jefe_operativo_historial_bp, url_prefix='/api/jefe-operativo')
     app.register_blueprint(jefe_operativo_perfil_bp, url_prefix='/api/jefe-operativo')
+    app.register_blueprint(control_calidad_operativo_bp, url_prefix='/api/jefe-operativo')
+    
     logger.info("✅ Blueprints de Jefe Operativo registrados correctamente")
 except Exception as e:
     logger.error(f"❌ Error registrando blueprints de Jefe Operativo: {e}")
@@ -105,12 +107,11 @@ try:
     from jefe_taller.cotizaciones import cotizaciones_bp
     from jefe_taller.admin_roles import admin_roles_bp  
     from jefe_taller.reservas_solicitudes import reservas_solicitudes_bp
-    # Agregar esta línea con los otros blueprints
     from jefe_taller.control_calidad import control_calidad_bp
-
-    # Y registrar el blueprint
-    app.register_blueprint(control_calidad_bp)
-
+    from jefe_taller.gestion_avances import avance_jefe_bp
+    
+    print("🔵🔵🔵 Importación de gestion_avances exitosa 🔵🔵🔵")
+    
     app.register_blueprint(jefe_taller_ordenes_bp, url_prefix='/api/jefe-taller')
     app.register_blueprint(calendario_bahias_bp, url_prefix='/api/jefe-taller')
     app.register_blueprint(historial_vehiculos_bp, url_prefix='/api/jefe-taller')
@@ -119,81 +120,54 @@ try:
     app.register_blueprint(cotizaciones_bp, url_prefix='/api/jefe-taller')
     app.register_blueprint(admin_roles_bp, url_prefix='/api/jefe-taller')
     app.register_blueprint(reservas_solicitudes_bp, url_prefix='/api/jefe-taller')
+    app.register_blueprint(control_calidad_bp, url_prefix='/api/jefe-taller')
+    app.register_blueprint(avance_jefe_bp)
+    
+    print("🔵🔵🔵 Blueprint de avance_jefe_bp registrado (sin url_prefix, porque ya lo tiene en el archivo) 🔵🔵🔵")
     logger.info("✅ Blueprints de Jefe Taller registrados correctamente")
 except Exception as e:
     logger.error(f"❌ Error registrando blueprints de Jefe Taller: {e}")
+    print(f"🔴 Error específico: {e}")
 
 # =====================================================
 # ENCARGADO DE REPUESTOS
 # =====================================================
 try:
     from encargado_rep_almacen.solicitudes_cotizacion import solicitudes_cotizacion_bp
-    app.register_blueprint(solicitudes_cotizacion_bp, url_prefix='/api/encargado-repuestos')
-except Exception as e:
-    pass
-
-try:
     from encargado_rep_almacen.solicitudes_compra import solicitudes_compra_bp
-    app.register_blueprint(solicitudes_compra_bp, url_prefix='/api/encargado-repuestos')
-except Exception as e:
-    pass
-
-try:
     from encargado_rep_almacen.proveedores import proveedores_bp
-    app.register_blueprint(proveedores_bp, url_prefix='/api/encargado-repuestos')
-except Exception as e:
-    pass
-
-try:
     from encargado_rep_almacen.historial import historial_repuestos_bp
-    app.register_blueprint(historial_repuestos_bp, url_prefix='/api/encargado-repuestos')
-except Exception as e:
-    pass
-
-try:
     from encargado_rep_almacen.perfil import perfil_repuestos_bp
+    
+    app.register_blueprint(solicitudes_cotizacion_bp, url_prefix='/api/encargado-repuestos')
+    app.register_blueprint(solicitudes_compra_bp, url_prefix='/api/encargado-repuestos')
+    app.register_blueprint(proveedores_bp, url_prefix='/api/encargado-repuestos')
+    app.register_blueprint(historial_repuestos_bp, url_prefix='/api/encargado-repuestos')
     app.register_blueprint(perfil_repuestos_bp, url_prefix='/api/encargado-repuestos')
+    
+    logger.info("✅ Blueprints de Encargado de Repuestos registrados correctamente")
 except Exception as e:
-    pass
-
-try:
-    from encargado_rep_almacen.dashboard import dashboard_repuestos_bp
-    app.register_blueprint(dashboard_repuestos_bp, url_prefix='/api/encargado-repuestos')
-except Exception as e:
-    pass
+    logger.error(f"❌ Error registrando blueprints de Encargado de Repuestos: {e}")
 
 # =====================================================
 # CLIENTE
 # =====================================================
 try:
     from cliente.misvehiculos import cliente_bp
-    app.register_blueprint(cliente_bp, url_prefix='/api/cliente')
-except Exception as e:
-    pass
-
-try:
     from cliente.cotizaciones import cotizaciones_cliente_bp
-    app.register_blueprint(cotizaciones_cliente_bp, url_prefix='/api/cliente')
-except Exception as e:
-    pass
-
-try:
     from cliente.avances import avances_cliente_bp
-    app.register_blueprint(avances_cliente_bp, url_prefix='/api/cliente')
-except Exception as e:
-    pass
-
-try:
     from cliente.historial import historial_cliente_bp
-    app.register_blueprint(historial_cliente_bp, url_prefix='/api/cliente')
-except Exception as e:
-    pass
-
-try:
     from cliente.perfil import perfil_cliente_bp
+    
+    app.register_blueprint(cliente_bp, url_prefix='/api/cliente')
+    app.register_blueprint(cotizaciones_cliente_bp, url_prefix='/api/cliente')
+    app.register_blueprint(avances_cliente_bp, url_prefix='/api/cliente')
+    app.register_blueprint(historial_cliente_bp, url_prefix='/api/cliente')
     app.register_blueprint(perfil_cliente_bp, url_prefix='/api/cliente')
+    
+    logger.info("✅ Blueprints de Cliente registrados correctamente")
 except Exception as e:
-    pass
+    logger.error(f"❌ Error registrando blueprints de Cliente: {e}")
 
 # =====================================================
 # RUTAS ESTÁTICAS
@@ -293,6 +267,7 @@ def serve_html(path):
         'registro-personal.html': '../login/registro-personal.html',
         'recuperar-contrasena.html': '../login/recuperar-contrasena.html',
         
+        # Jefe Operativo
         'jefe_operativo': '../jefe_operativo/dashboard.html',
         'jefe_operativo/dashboard': '../jefe_operativo/dashboard.html',
         'jefe_operativo/recepcion': '../jefe_operativo/recepcion.html',
@@ -303,7 +278,9 @@ def serve_html(path):
         'jefe_operativo/comunicados': '../jefe_operativo/comunicados.html',
         'jefe_operativo/historial': '../jefe_operativo/historial.html',
         'jefe_operativo/perfil': '../jefe_operativo/perfil.html',
+        'jefe_operativo/control_calidad': '../jefe_operativo/control_calidad.html',
         
+        # Jefe Taller
         'jefe_taller': '../jefe_taller/dashboard.html',
         'jefe_taller/dashboard': '../jefe_taller/dashboard.html',
         'jefe_taller/orden_trabajo': '../jefe_taller/orden_trabajo.html',
@@ -311,10 +288,14 @@ def serve_html(path):
         'jefe_taller/historial_vehiculos': '../jefe_taller/historial_vehiculos.html',
         'jefe_taller/diagnostico': '../jefe_taller/diagnostico.html',
         'jefe_taller/planificacion': '../jefe_taller/planificacion.html',
+        'jefe_taller/cotizaciones': '../jefe_taller/cotizaciones.html',
         'jefe_taller/control_calidad': '../jefe_taller/control_calidad.html',
-        'jefe_taller/perfil': '../jefe_taller/perfil.html',
         'jefe_taller/reservas_solicitudes': '../jefe_taller/reservas_solicitudes.html',
+        'jefe_taller/admin_roles': '../jefe_taller/admin_roles.html',
+        'jefe_taller/gestion_avances': '../jefe_taller/gestion_avances.html',
+        'jefe_taller/perfil': '../jefe_taller/perfil.html',
         
+        # Encargado Repuestos
         'encargado_rep_almacen': '../encargado_rep_almacen/dashboard.html',
         'encargado_rep_almacen/dashboard': '../encargado_rep_almacen/dashboard.html',
         'encargado_rep_almacen/solicitudes_cotizacion': '../encargado_rep_almacen/solicitudes_cotizacion.html',
@@ -323,12 +304,15 @@ def serve_html(path):
         'encargado_rep_almacen/historial': '../encargado_rep_almacen/historial.html',
         'encargado_rep_almacen/perfil': '../encargado_rep_almacen/perfil.html',
         
+        # Técnico Mecánico
         'tecnico_mecanico': '../tecnico_mecanico/misvehiculos.html',
         'tecnico_mecanico/misvehiculos': '../tecnico_mecanico/misvehiculos.html',
         'tecnico_mecanico/diagnostico': '../tecnico_mecanico/diagnostico.html',
         'tecnico_mecanico/historial': '../tecnico_mecanico/historial.html',
+        'tecnico_mecanico/avance': '../tecnico_mecanico/avance.html',
         'tecnico_mecanico/perfil': '../tecnico_mecanico/perfil.html',
         
+        # Cliente
         'cliente': '../cliente/misvehiculos.html',
         'cliente/misvehiculos': '../cliente/misvehiculos.html',
         'cliente/cotizaciones': '../cliente/cotizaciones.html',
@@ -354,7 +338,7 @@ def serve_html(path):
     return send_from_directory('../login', 'index.html')
 
 # =====================================================
-# API
+# API DE PRUEBA
 # =====================================================
 
 @app.route('/api/test', methods=['GET'])
@@ -364,6 +348,15 @@ def test_api():
         'message': 'API de FURIA MOTOR funcionando correctamente',
         'version': '1.0.0'
     }), 200
+
+# =====================================================
+# ENDPOINT DE PRUEBA PARA AVANCES (DIRECTO)
+# =====================================================
+
+@app.route('/api/jefe-taller/avances/test-directo', methods=['GET'])
+def test_avances_directo():
+    print("🔴🔴🔴 ENDPOINT DE PRUEBA DIRECTO LLAMADO 🔴🔴🔴")
+    return jsonify({'success': True, 'message': 'Endpoint de prueba funcionando'}), 200
 
 # =====================================================
 # ERROR HANDLERS

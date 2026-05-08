@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Avances | FURIA MOTOR - Jefe Taller</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/gestion_avances.css">
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-clipboard-list"></i> Gestión de Avances</h1>
+                    <p>Aprueba o rechaza los avances de trabajo enviados por los técnicos</p>
+                </div>
+                <div class="top-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                    <button class="btn-logout" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="content">
+                <!-- TABS -->
+                <div class="tabs-container">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="tab-pendientes">
+                            <i class="fas fa-clock"></i> Pendientes de Revisión
+                            <span id="pendientesCount" class="tab-badge">0</span>
+                        </button>
+                        <button class="tab-btn" data-tab="tab-aprobados">
+                            <i class="fas fa-check-circle"></i> Aprobados / Rechazados
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TAB: PENDIENTES -->
+                <div id="tab-pendientes" class="tab-content active">
+                    <div class="filters-bar">
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchPendientes" placeholder="Buscar por orden, técnico o título...">
+                        </div>
+                        <button class="btn-outline" id="refreshPendientesBtn">
+                            <i class="fas fa-sync-alt"></i> Actualizar
+                        </button>
+                    </div>
+                    <div id="avancesPendientesContainer" class="avances-grid"></div>
+                </div>
+
+                <!-- TAB: APROBADOS/RECHAZADOS -->
+                <div id="tab-aprobados" class="tab-content">
+                    <div class="filters-bar">
+                        <div class="filter-group">
+                            <select id="filtroEstado" class="form-select-sm">
+                                <option value="all">Todos</option>
+                                <option value="aprobado">Aprobados</option>
+                                <option value="rechazado">Rechazados</option>
+                            </select>
+                        </div>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchAprobados" placeholder="Buscar por orden, técnico o título...">
+                        </div>
+                        <button class="btn-outline" id="refreshAprobadosBtn">
+                            <i class="fas fa-sync-alt"></i> Actualizar
+                        </button>
+                    </div>
+                    <div id="avancesAprobadosContainer" class="avances-grid"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal: APROBAR AVANCE -->
+    <div class="modal" id="modalAprobar">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2><i class="fas fa-check-circle"></i> Aprobar Avance</h2>
+                <button class="modal-close" onclick="cerrarModal('modalAprobar')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert-success" style="padding: 1rem; margin-bottom: 1rem; background: rgba(16,185,129,0.1); border-left: 3px solid #10B981;">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>El avance será visible para el cliente</strong>
+                    <p style="margin-top: 0.5rem; font-size: 0.8rem;">Al aprobar, este avance se mostrará en el historial del cliente.</p>
+                </div>
+
+                <div id="aprobarInfo" class="orden-info-card" style="margin-bottom: 1rem;"></div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-comment-dots"></i> Comentario (opcional)</label>
+                    <textarea id="comentarioAprobacion" class="form-textarea" rows="3"
+                        placeholder="Ej: Excelente trabajo, continúa así..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalAprobar')">Cancelar</button>
+                <button class="btn-primary" id="btnConfirmarAprobar">
+                    <i class="fas fa-check-circle"></i> Aprobar Avance
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: RECHAZAR AVANCE -->
+    <div class="modal" id="modalRechazar">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2><i class="fas fa-times-circle"></i> Rechazar Avance</h2>
+                <button class="modal-close" onclick="cerrarModal('modalRechazar')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert-warning" style="padding: 1rem; margin-bottom: 1rem; background: rgba(245,158,11,0.1); border-left: 3px solid #F59E0B;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>El técnico deberá corregir el avance</strong>
+                    <p style="margin-top: 0.5rem; font-size: 0.8rem;">Se notificará al técnico para que realice las correcciones.</p>
+                </div>
+
+                <div id="rechazarInfo" class="orden-info-card" style="margin-bottom: 1rem;"></div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-clipboard-list"></i> Motivo del rechazo <span class="required">*</span></label>
+                    <textarea id="motivoRechazo" class="form-textarea" rows="4"
+                        placeholder="Ej: Las fotos no son claras, falta documentación del proceso..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalRechazar')">Cancelar</button>
+                <button class="btn-warning" id="btnConfirmarRechazar">
+                    <i class="fas fa-paper-plane"></i> Rechazar y Notificar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: VER DETALLE AVANCE -->
+    <div class="modal" id="modalDetalleAvance">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-info-circle"></i> Detalle del Avance</h2>
+                <button class="modal-close" onclick="cerrarModal('modalDetalleAvance')">&times;</button>
+            </div>
+            <div class="modal-body" id="detalleAvanceBody"></div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalleAvance')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: FOTO AMPLIADA -->
+    <div class="modal" id="modalFoto" onclick="cerrarModalFoto()">
+        <div class="modal-content" style="max-width: 90%; background: transparent;" onclick="event.stopPropagation()">
+            <div style="text-align: right; margin-bottom: 0.5rem;">
+                <button class="modal-close" onclick="cerrarModalFoto()"
+                    style="background: var(--bg-card);">&times;</button>
+            </div>
+            <img id="fotoAmpliada" src="" style="width: 100%; border-radius: var(--radius-lg);">
+        </div>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <script src="js/include.js"></script>
+    <script src="js/gestion_avances.js"></script>
+</body>
+
+</html>

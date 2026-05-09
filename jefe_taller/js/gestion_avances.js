@@ -3,13 +3,16 @@
 // GESTIÓN DE AVANCES DE TRABAJO - VERSIÓN CORREGIDA
 // =====================================================
 
-const API_URL = window.location.origin + '/api/jefe-taller';
+// 🔧 IMPORTANTE: Definir API_URL PRIMERO
+const API_URL = window.location.origin + '/api/jefe-taller/avances';
+
 let token = null;
 let currentUser = null;
 let avancesPendientes = [];
 let avancesProcesados = [];
 
 console.log('🔧 Iniciando configuración de gestion_avances.js');
+console.log('📍 API_URL configurada:', API_URL);
 
 // =====================================================
 // FUNCIONES DE UTILIDAD
@@ -19,10 +22,17 @@ function getAuthHeaders() {
     let token = localStorage.getItem('furia_token');
     if (!token) token = localStorage.getItem('token');
     if (!token) token = sessionStorage.getItem('token');
-    console.log('🔑 Token obtenido:', token ? `${token.substring(0, 50)}...` : 'No token');
+    
+    if (!token) {
+        console.warn('⚠️ No se encontró token');
+    } else {
+        console.log('🔑 Token obtenido (primeros 30 chars):', token.substring(0, 30) + '...');
+    }
+    
     return {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
     };
 }
 
@@ -50,6 +60,8 @@ function formatDate(dateStr) {
 }
 
 function showToast(message, type = 'info') {
+    console.log(`📢 Toast [${type}]: ${message}`);
+    
     const existingToast = document.querySelector('.toast-notification');
     if (existingToast) existingToast.remove();
 
@@ -112,6 +124,7 @@ function statusBadge(estado) {
 
 async function cargarAvancesPendientes() {
     console.log('🔄 Cargando avances pendientes...');
+    console.log('📍 URL base:', API_URL);
     mostrarLoading(true);
     
     try {
@@ -119,8 +132,8 @@ async function cargarAvancesPendientes() {
         
         // Agregar timestamp para evitar caché
         const timestamp = new Date().getTime();
-        const url = `${API_URL}/avances/pendientes?_=${timestamp}`;
-        console.log(`📡 URL llamada: ${url}`);
+        const url = `${API_URL}/pendientes?_=${timestamp}`;
+        console.log(`📡 URL completa: ${url}`);
         
         const response = await fetch(url, {
             headers: getAuthHeaders(),
@@ -129,9 +142,10 @@ async function cargarAvancesPendientes() {
         });
         
         console.log(`📊 Response status: ${response.status}`);
-        console.log(`📊 Response headers:`, response.headers);
         
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Respuesta de error:', errorText.substring(0, 500));
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
@@ -163,7 +177,7 @@ async function cargarAvancesPendientes() {
     } catch (error) {
         console.error('❌ Error detallado:', error);
         console.error('❌ Stack trace:', error.stack);
-        showToast('Error al cargar avances pendientes. Ver consola para detalles.', 'error');
+        showToast('Error al cargar avances pendientes: ' + error.message, 'error');
     } finally {
         mostrarLoading(false);
     }
@@ -177,7 +191,7 @@ async function cargarAvancesProcesados() {
         const estado = document.getElementById('filtroEstado')?.value || 'all';
         const search = document.getElementById('searchAprobados')?.value.toLowerCase() || '';
         
-        let url = `${API_URL}/avances/procesados`;
+        let url = `${API_URL}/procesados`;
         if (estado !== 'all') url += `?estado=${estado}`;
         
         console.log(`📡 URL llamada: ${url}`);
@@ -348,7 +362,7 @@ window.verDetalleAvance = async function(avanceId) {
     mostrarLoading(true);
     
     try {
-        const url = `${API_URL}/avances/detalle/${avanceId}`;
+        const url = `${API_URL}/detalle/${avanceId}`;
         console.log(`📡 URL: ${url}`);
         
         const response = await fetch(url, {
@@ -388,7 +402,7 @@ window.verDetalleAvance = async function(avanceId) {
                 <p><strong><i class="fas fa-tag"></i> Título:</strong> ${escapeHtml(avance.titulo)}</p>
                 <p><strong><i class="fas fa-align-left"></i> Descripción:</strong> ${escapeHtml(avance.descripcion || 'Sin descripción')}</p>
                 <p><strong><i class="fas fa-user"></i> Técnico:</strong> ${escapeHtml(avance.tecnico_nombre)}</p>
-                <p><strong><i class="fas fa-clipboard-list"></i} Orden:</strong> ${escapeHtml(avance.orden_codigo)}</p>
+                <p><strong><i class="fas fa-clipboard-list"></i> Orden:</strong> ${escapeHtml(avance.orden_codigo)}</p>
                 <p><strong><i class="fas fa-calendar"></i> Fecha:</strong> ${formatDate(avance.fecha_creacion)}</p>
                 <p><strong><i class="fas fa-chart-line"></i> Estado:</strong> ${statusBadge(avance.estado)}</p>
                 ${avance.comentario_revision ? `<p><strong><i class="fas fa-comment"></i> Comentario de revisión:</strong> ${escapeHtml(avance.comentario_revision)}</p>` : ''}
@@ -451,7 +465,7 @@ window.confirmarAprobar = async function() {
     
     mostrarLoading(true);
     try {
-        const url = `${API_URL}/avances/aprobar/${currentAvanceId}`;
+        const url = `${API_URL}/aprobar/${currentAvanceId}`;
         console.log(`📡 PUT ${url}`);
         
         const response = await fetch(url, {
@@ -514,7 +528,7 @@ window.confirmarRechazar = async function() {
     
     mostrarLoading(true);
     try {
-        const url = `${API_URL}/avances/rechazar/${currentAvanceId}`;
+        const url = `${API_URL}/rechazar/${currentAvanceId}`;
         console.log(`📡 PUT ${url}`);
         
         const response = await fetch(url, {
@@ -560,7 +574,7 @@ async function cargarUsuarioActual() {
         
         console.log('✅ Token encontrado');
 
-        const response = await fetch('/api/jefe-taller/verify-token', {
+        const response = await fetch(`${API_URL}/verify-token`, {
             headers: getAuthHeaders()
         });
         
@@ -654,6 +668,17 @@ function setupEventListeners() {
         });
     });
     
+    // Botones de confirmación
+    const btnAprobar = document.getElementById('btnConfirmarAprobar');
+    if (btnAprobar) {
+        btnAprobar.addEventListener('click', confirmarAprobar);
+    }
+    
+    const btnRechazar = document.getElementById('btnConfirmarRechazar');
+    if (btnRechazar) {
+        btnRechazar.addEventListener('click', confirmarRechazar);
+    }
+    
     console.log('✅ Event listeners configurados');
 }
 
@@ -685,4 +710,9 @@ window.confirmarRechazar = confirmarRechazar;
 window.cerrarModal = cerrarModal;
 window.logout = logout;
 
-document.addEventListener('DOMContentLoaded', inicializar);
+// Iniciar cuando el DOM esté listo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', inicializar);
+} else {
+    inicializar();
+}

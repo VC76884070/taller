@@ -1201,3 +1201,194 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--rojo-primario);
 }
+/* =====================================================
+   ESTILOS SIMPLIFICADOS PARA MIS VEHÍCULOS (NUEVA VERSIÓN)
+   ===================================================== */
+
+/* Grid de vehículos - estilo moderno simplificado */
+.vehiculos-grid {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Tarjeta de vehículo simplificada (para la nueva versión) */
+.vehiculo-card {
+    background: var(--bg-card);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.vehiculo-card:hover {
+    border-color: var(--rojo-primario);
+    transform: translateX(4px);
+    background: rgba(193, 18, 31, 0.05);
+}
+
+.vehiculo-icono {
+    width: 48px;
+    height: 48px;
+    background: rgba(193, 18, 31, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vehiculo-icono i {
+    font-size: 1.5rem;
+    color: var(--rojo-primario);
+}
+
+.vehiculo-info {
+    flex: 1;
+}
+
+.vehiculo-info h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+}
+
+.vehiculo-placa {
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+    font-family: monospace;
+}
+
+.vehiculo-anio {
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+    margin-top: 0.2rem;
+}
+
+.vehiculo-action {
+    color: var(--gris-texto);
+    transition: all 0.2s;
+}
+
+.vehiculo-card:hover .vehiculo-action {
+    color: var(--rojo-primario);
+    transform: translateX(4px);
+}
+
+/* Detalle del vehículo en modal (versión simplificada) */
+.detalle-vehiculo {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.detalle-icono {
+    width: 60px;
+    height: 60px;
+    background: rgba(193, 18, 31, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.detalle-icono i {
+    font-size: 2rem;
+    color: var(--rojo-primario);
+}
+
+.detalle-info {
+    flex: 1;
+}
+
+.detalle-info .info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.detalle-info .info-row:last-child {
+    border-bottom: none;
+}
+
+.detalle-info .label {
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+}
+
+.detalle-info .value {
+    font-size: 0.85rem;
+    color: var(--blanco);
+}
+
+.detalle-estado {
+    text-align: center;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Modal footer para botones */
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+/* Estado badge para el detalle simplificado */
+.estado-recepcion { background: rgba(59, 130, 246, 0.15); color: #3B82F6; }
+.estado-diagnostico { background: rgba(245, 158, 11, 0.15); color: #F59E0B; }
+.estado-cotizacion { background: rgba(139, 92, 246, 0.15); color: #8B5CF6; }
+.estado-reparacion { background: rgba(236, 72, 153, 0.15); color: #EC4899; }
+.estado-calidad { background: rgba(16, 185, 129, 0.15); color: #10B981; }
+.estado-finalizado { background: rgba(59, 130, 246, 0.15); color: #3B82F6; }
+.estado-entregado { background: rgba(16, 185, 129, 0.15); color: #10B981; }
+.estado-sin { background: rgba(107, 114, 128, 0.15); color: #6B7280; }
+.estado-proceso { background: rgba(193, 18, 31, 0.15); color: var(--rojo-primario); }
+
+.estado-fecha {
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+    margin-top: 0.5rem;
+}
+
+/* Responsive para los nuevos estilos */
+@media (max-width: 768px) {
+    .vehiculos-grid {
+        padding: 1rem;
+    }
+    
+    .vehiculo-card {
+        padding: 0.75rem 1rem;
+    }
+    
+    .vehiculo-icono {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .vehiculo-icono i {
+        font-size: 1.2rem;
+    }
+    
+    .detalle-vehiculo {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+    
+    .modal-footer {
+        flex-direction: column;
+    }
+    
+    .modal-footer button {
+        width: 100%;
+        justify-content: center;
+    }
+}

@@ -4,111 +4,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mis Vehículos | Cliente - FURIA MOTOR</title>
+    <title>Mis Vehículos | FURIA MOTOR</title>
 
-    <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Google Fonts -->
     <link
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <!-- Estilos principales -->
     <link rel="stylesheet" href="css/misvehiculos.css">
 </head>
 
 <body>
     <div class="app">
-        <!-- Sidebar container (se carga dinámicamente) -->
         <div id="sidebar-container"></div>
 
-        <!-- Main Content -->
         <main class="main-content">
-            <!-- Top Bar -->
-            <div class="top-bar">
+            <header class="top-bar">
                 <div class="page-title">
-                    <h1>Mis Vehículos</h1>
-                    <p>Consulta el estado de tus vehículos en el taller</p>
+                    <h1><i class="fas fa-car"></i> Mis Vehículos</h1>
+                    <p>Selecciona tu auto para ver el progreso</p>
                 </div>
                 <div class="top-actions">
                     <div class="date-display">
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
                     </div>
+                    <button class="btn-logout" onclick="cerrarSesion()">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
                 </div>
-            </div>
+            </header>
 
-            <!-- Filtros Bar -->
-            <div class="filtros-bar">
-                <div class="search-box">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="searchInput" placeholder="Buscar por placa o modelo...">
-                </div>
-                <select id="filtroEstado">
-                    <option value="all">Todos los estados</option>
-                    <option value="EnRecepcion">En Recepción</option>
-                    <option value="EnDiagnostico">En Diagnóstico</option>
-                    <option value="CotizacionEnviada">Cotización Enviada</option>
-                    <option value="EnReparacion">En Reparación</option>
-                    <option value="ControlCalidad">Control de Calidad</option>
-                    <option value="Finalizado">Finalizado</option>
-                    <option value="Entregado">Entregado</option>
-                </select>
-                <button id="refreshBtn" class="btn-secondary">
-                    <i class="fas fa-sync-alt"></i> Actualizar
-                </button>
-            </div>
-
-            <!-- Grid de vehículos -->
-            <div id="vehiculosGrid" class="vehiculos-grid">
-                <!-- Se llena dinámicamente con JavaScript -->
-                <div class="empty-state">
-                    <i class="fas fa-car-side"></i>
-                    <p>Cargando vehículos...</p>
+            <div class="content">
+                <!-- Grid de vehículos simplificado -->
+                <div id="vehiculosGrid" class="vehiculos-grid">
+                    <div class="empty-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Cargando tus vehículos...</p>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Modal de detalle de vehículo MEJORADO -->
-    <div id="modalDetalleVehiculo" class="modal">
-        <div class="modal-content modal-lg">
+    <!-- Modal de detalle (solo para ver avances) -->
+    <div class="modal" id="modalDetalleVehiculo">
+        <div class="modal-content modal-md">
             <div class="modal-header">
-                <h3>
-                    <i class="fas fa-car"></i>
-                    Detalle del Vehículo
-                </h3>
-                <button class="close-modal" onclick="cerrarModal('modalDetalleVehiculo')">
-                    <i class="fas fa-times"></i>
-                </button>
+                <h3><i class="fas fa-car"></i> <span id="modalTitulo">Detalle</span></h3>
+                <button class="modal-close" onclick="cerrarModal('modalDetalleVehiculo')">&times;</button>
             </div>
-            <div id="modalDetalleBody">
+            <div class="modal-body" id="modalDetalleBody">
                 <!-- Contenido dinámico -->
-                <div class="detalle-seccion">
-                    <div class="empty-state">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <p>Cargando detalles...</p>
-                    </div>
-                </div>
             </div>
-            <div class="detalle-actions">
-                <button class="btn-secondary" onclick="cerrarModal('modalDetalleVehiculo')">
-                    <i class="fas fa-times"></i> Cerrar
-                </button>
-                <button class="btn-primary" id="btnVerCotizacion" onclick="verCotizacion()" style="display: none;">
-                    <i class="fas fa-file-invoice-dollar"></i> Ver Cotización
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalleVehiculo')">Cerrar</button>
+                <button class="btn-primary" id="btnVerAvances" onclick="irAvances()">
+                    <i class="fas fa-chart-line"></i> Ver progreso
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
     </div>
 
-    <!-- Scripts -->
     <script src="js/include.js"></script>
     <script src="js/misvehiculos.js"></script>
 </body>

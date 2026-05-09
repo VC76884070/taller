@@ -67,12 +67,12 @@
                     <div id="listaAvances" class="avances-grid"></div>
                 </div>
 
-                <!-- Formulario de nuevo avance -->
+                <!-- Formulario de nuevo/editar avance -->
                 <div id="formAvance" class="form-avance-section" style="display: none;">
                     <div class="section-header">
                         <div class="section-header-left">
                             <i class="fas fa-camera"></i>
-                            <h3>Registrar Nuevo Avance</h3>
+                            <h3 id="formTitle">Registrar Nuevo Avance</h3>
                         </div>
                         <button id="btnCancelarAvance" class="btn-secondary">
                             <i class="fas fa-times"></i> Cancelar
@@ -82,17 +82,20 @@
                     <div class="form-avance">
                         <div class="form-group">
                             <label><i class="fas fa-tag"></i> Título del Avance <span class="required">*</span></label>
-                            <input type="text" id="tituloAvance" class="form-input" placeholder="Ej: Reparación del motor, Cambio de frenos...">
+                            <input type="text" id="tituloAvance" class="form-input"
+                                placeholder="Ej: Reparación del motor, Cambio de frenos...">
                         </div>
 
                         <div class="form-group">
                             <label><i class="fas fa-align-left"></i> Descripción General</label>
-                            <textarea id="descripcionAvance" class="form-textarea" rows="3" placeholder="Describe el trabajo realizado en este avance..."></textarea>
+                            <textarea id="descripcionAvance" class="form-textarea" rows="3"
+                                placeholder="Describe el trabajo realizado en este avance..."></textarea>
                         </div>
 
                         <!-- Grid de fotos (10 espacios) -->
                         <div class="fotos-grid-container">
-                            <label><i class="fas fa-images"></i> Fotos del Avance <span class="required">*</span> (Máximo 10)</label>
+                            <label><i class="fas fa-images"></i> Fotos del Avance <span class="required">*</span>
+                                (Máximo 10)</label>
                             <div class="fotos-grid" id="fotosGrid">
                                 <!-- Foto 1 -->
                                 <div class="foto-upload-item" data-index="0">
@@ -100,8 +103,10 @@
                                         <i class="fas fa-plus-circle"></i>
                                         <span>Foto 1</span>
                                     </div>
-                                    <input type="file" id="fotoInput_0" class="foto-input" accept="image/*" style="display: none;">
-                                    <textarea id="comentario_0" class="foto-comentario" rows="2" placeholder="Comentario de esta foto..."></textarea>
+                                    <input type="file" id="fotoInput_0" class="foto-input" accept="image/*"
+                                        style="display: none;">
+                                    <textarea id="comentario_0" class="foto-comentario" rows="2"
+                                        placeholder="Comentario de esta foto..."></textarea>
                                     <button class="btn-remove-foto" onclick="eliminarFoto(0)" style="display: none;">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
@@ -112,8 +117,10 @@
                                         <i class="fas fa-plus-circle"></i>
                                         <span>Foto 2</span>
                                     </div>
-                                    <input type="file" id="fotoInput_1" class="foto-input" accept="image/*" style="display: none;">
-                                    <textarea id="comentario_1" class="foto-comentario" rows="2" placeholder="Comentario de esta foto..."></textarea>
+                                    <input type="file" id="fotoInput_1" class="foto-input" accept="image/*"
+                                        style="display: none;">
+                                    <textarea id="comentario_1" class="foto-comentario" rows="2"
+                                        placeholder="Comentario de esta foto..."></textarea>
                                     <button class="btn-remove-foto" onclick="eliminarFoto(1)" style="display: none;">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
@@ -124,8 +131,10 @@
                                         <i class="fas fa-plus-circle"></i>
                                         <span>Foto 3</span>
                                     </div>
-                                    <input type="file" id="fotoInput_2" class="foto-input" accept="image/*" style="display: none;">
-                                    <textarea id="comentario_2" class="foto-comentario" rows="2" placeholder="Comentario de esta foto..."></textarea>
+                                    <input type="file" id="fotoInput_2" class="foto-input" accept="image/*"
+                                        style="display: none;">
+                                    <textarea id="comentario_2" class="foto-comentario" rows="2"
+                                        placeholder="Comentario de esta foto..."></textarea>
                                     <button class="btn-remove-foto" onclick="eliminarFoto(2)" style="display: none;">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
@@ -136,8 +145,10 @@
                                         <i class="fas fa-plus-circle"></i>
                                         <span>Foto 4</span>
                                     </div>
-                                    <input type="file" id="fotoInput_3" class="foto-input" accept="image/*" style="display: none;">
-                                    <textarea id="comentario_3" class="foto-comentario" rows="2" placeholder="Comentario de esta foto..."></textarea>
+                                    <input type="file" id="fotoInput_3" class="foto-input" accept="image/*"
+                                        style="display: none;">
+                                    <textarea id="comentario_3" class="foto-comentario" rows="2"
+                                        placeholder="Comentario de esta foto..."></textarea>
                                     <button class="btn-remove-foto" onclick="eliminarFoto(3)" style="display: none;">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
@@ -148,8 +159,10 @@
                                         <i class="fas fa-plus-circle"></i>
                                         <span>Foto 5</span>
                                     </div>
-                                    <input type="file" id="fotoInput_4" class="foto-input" accept="image/*" style="display: none;">
-                                    <textarea id="comentario_4" class="foto-comentario" rows="2" placeholder="Comentario de esta foto..."></textarea>
+                                    <input type="file" id="fotoInput_4" class="foto-input" accept="image/*"
+                                        style="display: none;">
+                                    <textarea id="comentario_4" class="foto-comentario" rows="2"
+                                        placeholder="Comentario de esta foto..."></textarea>
                                     <button class="btn-remove-foto" onclick="eliminarFoto(4)" style="display: none;">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
@@ -160,8 +173,10 @@
                                         <i class="fas fa-plus-circle"></i>
                                         <span>Foto 6</span>
                                     </div>
-                                    <input type="file" id="fotoInput_5" class="foto-input" accept="image/*" style="display: none;">
-                                    <textarea id="comentario_5" class="foto-comentario" rows="2" placeholder="Comentario de esta foto..."></textarea>
+                                    <input type="file" id="fotoInput_5" class="foto-input" accept="image/*"
+                                        style="display: none;">
+                                    <textarea id="comentario_5" class="foto-comentario" rows="2"
+                                        placeholder="Comentario de esta foto..."></textarea>
                                     <button class="btn-remove-foto" onclick="eliminarFoto(5)" style="display: none;">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
@@ -172,8 +187,10 @@
                                         <i class="fas fa-plus-circle"></i>
                                         <span>Foto 7</span>
                                     </div>
-                                    <input type="file" id="fotoInput_6" class="foto-input" accept="image/*" style="display: none;">
-                                    <textarea id="comentario_6" class="foto-comentario" rows="2" placeholder="Comentario de esta foto..."></textarea>
+                                    <input type="file" id="fotoInput_6" class="foto-input" accept="image/*"
+                                        style="display: none;">
+                                    <textarea id="comentario_6" class="foto-comentario" rows="2"
+                                        placeholder="Comentario de esta foto..."></textarea>
                                     <button class="btn-remove-foto" onclick="eliminarFoto(6)" style="display: none;">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
@@ -184,8 +201,10 @@
                                         <i class="fas fa-plus-circle"></i>
                                         <span>Foto 8</span>
                                     </div>
-                                    <input type="file" id="fotoInput_7" class="foto-input" accept="image/*" style="display: none;">
-                                    <textarea id="comentario_7" class="foto-comentario" rows="2" placeholder="Comentario de esta foto..."></textarea>
+                                    <input type="file" id="fotoInput_7" class="foto-input" accept="image/*"
+                                        style="display: none;">
+                                    <textarea id="comentario_7" class="foto-comentario" rows="2"
+                                        placeholder="Comentario de esta foto..."></textarea>
                                     <button class="btn-remove-foto" onclick="eliminarFoto(7)" style="display: none;">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
@@ -196,8 +215,10 @@
                                         <i class="fas fa-plus-circle"></i>
                                         <span>Foto 9</span>
                                     </div>
-                                    <input type="file" id="fotoInput_8" class="foto-input" accept="image/*" style="display: none;">
-                                    <textarea id="comentario_8" class="foto-comentario" rows="2" placeholder="Comentario de esta foto..."></textarea>
+                                    <input type="file" id="fotoInput_8" class="foto-input" accept="image/*"
+                                        style="display: none;">
+                                    <textarea id="comentario_8" class="foto-comentario" rows="2"
+                                        placeholder="Comentario de esta foto..."></textarea>
                                     <button class="btn-remove-foto" onclick="eliminarFoto(8)" style="display: none;">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
@@ -208,8 +229,10 @@
                                         <i class="fas fa-plus-circle"></i>
                                         <span>Foto 10</span>
                                     </div>
-                                    <input type="file" id="fotoInput_9" class="foto-input" accept="image/*" style="display: none;">
-                                    <textarea id="comentario_9" class="foto-comentario" rows="2" placeholder="Comentario de esta foto..."></textarea>
+                                    <input type="file" id="fotoInput_9" class="foto-input" accept="image/*"
+                                        style="display: none;">
+                                    <textarea id="comentario_9" class="foto-comentario" rows="2"
+                                        placeholder="Comentario de esta foto..."></textarea>
                                     <button class="btn-remove-foto" onclick="eliminarFoto(9)" style="display: none;">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
@@ -256,6 +279,7 @@
         </div>
     </div>
 
+    <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
     </div>

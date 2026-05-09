@@ -4,135 +4,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Avances de Reparación | Cliente - FURIA MOTOR</title>
+    <title>Avances de Reparación | FURIA MOTOR</title>
 
-    <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Google Fonts -->
     <link
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <!-- Estilos -->
     <link rel="stylesheet" href="css/misvehiculos.css">
     <link rel="stylesheet" href="css/avances.css">
 </head>
 
 <body>
     <div class="app">
-        <!-- Sidebar container -->
         <div id="sidebar-container"></div>
 
-        <!-- Main Content -->
         <main class="main-content">
-            <!-- Top Bar -->
-            <div class="top-bar">
+            <header class="top-bar">
                 <div class="page-title">
-                    <h1>Avances de Reparación</h1>
-                    <p>Sigue el progreso de la reparación de tus vehículos en tiempo real</p>
+                    <h1><i class="fas fa-chart-line"></i> Avances de Reparación</h1>
+                    <p>Sigue el progreso de tu vehículo paso a paso</p>
                 </div>
                 <div class="top-actions">
                     <div class="date-display">
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
                     </div>
+                    <button class="btn-logout" onclick="cerrarSesion()">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
                 </div>
-            </div>
+            </header>
 
-            <!-- Filtros Bar -->
-            <div class="filtros-bar">
-                <div class="search-box">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="searchInput" placeholder="Buscar por orden o vehículo...">
+            <div class="content">
+                <!-- Selector de vehículo - diseño elegante -->
+                <div class="vehiculo-selector">
+                    <label class="selector-label">
+                        <i class="fas fa-car"></i>
+                        <span>Mi vehículo</span>
+                    </label>
+                    <div class="selector-control">
+                        <select id="selectVehiculo" class="vehiculo-select">
+                            <option value="">-- Seleccionar vehículo --</option>
+                        </select>
+                        <button id="btnVerAvances" class="btn-ver">
+                            <i class="fas fa-eye"></i>
+                            <span>Ver progreso</span>
+                        </button>
+                    </div>
                 </div>
-                <select id="filtroEstado">
-                    <option value="all">Todos los estados</option>
-                    <option value="activo">En Proceso</option>
-                    <option value="completado">Completado</option>
-                </select>
-                <button id="refreshBtn" class="btn-secondary">
-                    <i class="fas fa-sync-alt"></i> Actualizar
-                </button>
-            </div>
 
-            <!-- Grid de avances -->
-            <div id="avancesGrid" class="avances-grid">
-                <!-- Se llena dinámicamente con JavaScript -->
-                <div class="empty-state">
-                    <i class="fas fa-chart-line"></i>
-                    <p>Cargando avances de reparación...</p>
-                </div>
+                <!-- Contenedor de contenido dinámico -->
+                <div id="contenidoDinamico"></div>
             </div>
         </main>
     </div>
 
-    <!-- Modal de detalle de avance MEJORADO -->
-    <div id="modalDetalleAvance" class="modal">
-        <div class="modal-content modal-lg">
+    <!-- Modal de detalle -->
+    <div class="modal" id="modalDetalle">
+        <div class="modal-content modal-detalle">
             <div class="modal-header">
-                <h3>
-                    <i class="fas fa-chart-line"></i>
-                    Detalle del Avance
-                </h3>
-                <button class="close-modal" onclick="cerrarModal('modalDetalleAvance')">
-                    <i class="fas fa-times"></i>
-                </button>
+                <h2><i class="fas fa-clipboard-list"></i> <span id="modalTitulo">Detalle</span></h2>
+                <button class="modal-close" onclick="cerrarModal('modalDetalle')">&times;</button>
             </div>
-            <div id="modalDetalleBody">
-                <!-- Contenido dinámico -->
-                <div class="empty-state">
-                    <i class="fas fa-spinner fa-spin"></i>
-                    <p>Cargando detalles...</p>
-                </div>
-            </div>
-            <div class="detalle-actions">
-                <button class="btn-secondary" onclick="cerrarModal('modalDetalleAvance')">
-                    <i class="fas fa-times"></i> Cerrar
-                </button>
-                <button class="btn-primary" id="btnVerOrden" onclick="verOrdenCompleta()" style="display: none;">
-                    <i class="fas fa-eye"></i> Ver Orden Completa
-                </button>
-            </div>
+            <div class="modal-body" id="modalCuerpo"></div>
         </div>
     </div>
 
-    <!-- Modal para ver orden completada MEJORADO -->
-    <div id="modalOrdenCompleta" class="modal">
-        <div class="modal-content modal-lg">
-            <div class="modal-header">
-                <h3>
-                    <i class="fas fa-clipboard-list"></i>
-                    Orden de Trabajo Completada
-                </h3>
-                <button class="close-modal" onclick="cerrarModal('modalOrdenCompleta')">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div id="modalOrdenBody">
-                <!-- Contenido dinámico -->
-                <div class="empty-state">
-                    <i class="fas fa-spinner fa-spin"></i>
-                    <p>Cargando orden...</p>
-                </div>
-            </div>
-            <div class="detalle-actions">
-                <button class="btn-secondary" onclick="cerrarModal('modalOrdenCompleta')">
-                    <i class="fas fa-times"></i> Cerrar
-                </button>
-                <button class="btn-primary" onclick="imprimirOrden()">
-                    <i class="fas fa-print"></i> Imprimir
-                </button>
-            </div>
+    <!-- Modal de foto ampliada -->
+    <div class="modal modal-fullscreen" id="modalFoto" onclick="cerrarModalFoto()">
+        <div class="modal-foto-container" onclick="event.stopPropagation()">
+            <button class="modal-foto-close" onclick="cerrarModalFoto()">&times;</button>
+            <img id="fotoAmpliada" src="" alt="Foto ampliada">
         </div>
     </div>
 
-    <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
+        <p>Cargando...</p>
     </div>
 
-    <!-- Scripts -->
     <script src="js/include.js"></script>
     <script src="js/avances.js"></script>
 </body>

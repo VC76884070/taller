@@ -120,7 +120,7 @@ try:
     app.register_blueprint(cotizaciones_bp, url_prefix='/api/jefe-taller')
     app.register_blueprint(admin_roles_bp, url_prefix='/api/jefe-taller')
     app.register_blueprint(reservas_solicitudes_bp, url_prefix='/api/jefe-taller')
-    app.register_blueprint(control_calidad_bp, url_prefix='/api/jefe-taller')
+    app.register_blueprint(control_calidad_bp)
     app.register_blueprint(avance_jefe_bp)
     
     print("🔵🔵🔵 Blueprint de avance_jefe_bp registrado (sin url_prefix, porque ya lo tiene en el archivo) 🔵🔵🔵")

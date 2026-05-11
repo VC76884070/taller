@@ -1,7 +1,5 @@
 # =====================================================
-# CONTROL_CALIDAD.PY - JEFE OPERATIVO
-# GESTIÓN DE TRABAJOS COMPLETADOS POR TÉCNICOS
-# FURIA MOTOR COMPANY SRL
+# CONTROL_CALIDAD.PY - JEFE OPERATIVO (CORREGIDO)
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -13,10 +11,36 @@ import json
 
 logger = logging.getLogger(__name__)
 
-control_calidad_bp = Blueprint('control_calidad_operativo', __name__, url_prefix='/api/jefe-operativo/control-calidad')
+# ✅ CORREGIDO: Nombre único para el blueprint
+control_calidad_operativo_bp = Blueprint('control_calidad_operativo', __name__, url_prefix='/api/jefe-operativo/control-calidad')
 
 SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
+
+# =====================================================
+# ENDPOINTS DE PRUEBA (IMPORTANTE PARA DEBUG)
+# =====================================================
+
+@control_calidad_operativo_bp.route('/test', methods=['GET'])
+def test_endpoint():
+    """Endpoint de prueba para verificar que el blueprint funciona"""
+    return jsonify({
+        'success': True, 
+        'message': 'Control de Calidad (Jefe Operativo) funcionando correctamente'
+    }), 200
+
+@control_calidad_operativo_bp.route('/test-auth', methods=['GET'])
+@jefe_operativo_required
+def test_auth_endpoint(current_user):
+    """Endpoint de prueba CON autenticación"""
+    return jsonify({
+        'success': True, 
+        'message': 'Autenticación exitosa (Jefe Operativo)',
+        'user': {
+            'id': current_user.get('id'),
+            'nombre': current_user.get('nombre')
+        }
+    }), 200
 
 # =====================================================
 # FUNCIONES AUXILIARES
@@ -58,10 +82,10 @@ def enviar_notificacion(id_usuario_destino, tipo, mensaje, id_referencia=None):
         logger.warning(f"Error enviando notificación: {e}")
 
 # =====================================================
-# ENDPOINTS
+# ENDPOINTS PRINCIPALES
 # =====================================================
 
-@control_calidad_bp.route('/ordenes-pendientes', methods=['GET'])
+@control_calidad_operativo_bp.route('/ordenes-pendientes', methods=['GET'])
 @jefe_operativo_required
 def obtener_ordenes_pendientes(current_user):
     """Obtener órdenes pendientes de revisión (VehiculoArmado, ReparacionCompletada)"""
@@ -149,11 +173,11 @@ def obtener_ordenes_pendientes(current_user):
         return jsonify({'success': True, 'ordenes': ordenes}), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error en ordenes-pendientes: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@control_calidad_bp.route('/ordenes-finalizadas', methods=['GET'])
+@control_calidad_operativo_bp.route('/ordenes-finalizadas', methods=['GET'])
 @jefe_operativo_required
 def obtener_ordenes_finalizadas(current_user):
     """Obtener órdenes finalizadas (Finalizado, Entregado)"""
@@ -240,11 +264,11 @@ def obtener_ordenes_finalizadas(current_user):
         return jsonify({'success': True, 'ordenes': ordenes}), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error en ordenes-finalizadas: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@control_calidad_bp.route('/detalle-orden/<int:id_orden>', methods=['GET'])
+@control_calidad_operativo_bp.route('/detalle-orden/<int:id_orden>', methods=['GET'])
 @jefe_operativo_required
 def obtener_detalle_orden(current_user, id_orden):
     """Obtener detalle completo de una orden para revisión"""
@@ -256,7 +280,7 @@ def obtener_detalle_orden(current_user, id_orden):
             .execute()
         
         if not orden.data:
-            return jsonify({'error': 'Orden no encontrada'}), 404
+            return jsonify({'success': False, 'error': 'Orden no encontrada'}), 404
         
         orden_data = orden.data[0]
         
@@ -373,16 +397,16 @@ def obtener_detalle_orden(current_user, id_orden):
         }), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error en detalle-orden: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@control_calidad_bp.route('/finalizar-orden/<int:id_orden>', methods=['PUT'])
+@control_calidad_operativo_bp.route('/finalizar-orden/<int:id_orden>', methods=['PUT'])
 @jefe_operativo_required
 def finalizar_orden(current_user, id_orden):
     """Aprobar y finalizar una orden (cambiar a Finalizado)"""
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         comentarios = data.get('comentarios', '')
         
         orden = supabase.table('ordentrabajo') \
@@ -391,12 +415,12 @@ def finalizar_orden(current_user, id_orden):
             .execute()
         
         if not orden.data:
-            return jsonify({'error': 'Orden no encontrada'}), 404
+            return jsonify({'success': False, 'error': 'Orden no encontrada'}), 404
         
         estado_actual = orden.data[0]['estado_global']
         
         if estado_actual not in ['VehiculoArmado', 'ReparacionCompletada']:
-            return jsonify({'error': f'La orden no puede ser finalizada. Estado actual: {estado_actual}'}), 400
+            return jsonify({'success': False, 'error': f'La orden no puede ser finalizada. Estado actual: {estado_actual}'}), 400
         
         ahora = datetime.datetime.now().isoformat()
         
@@ -435,20 +459,20 @@ def finalizar_orden(current_user, id_orden):
         }), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error en finalizar-orden: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@control_calidad_bp.route('/rechazar-orden/<int:id_orden>', methods=['PUT'])
+@control_calidad_operativo_bp.route('/rechazar-orden/<int:id_orden>', methods=['PUT'])
 @jefe_operativo_required
 def rechazar_orden(current_user, id_orden):
     """Rechazar orden y enviar a revisión (volver a EnReparacion)"""
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         instrucciones = data.get('instrucciones', '')
         
         if not instrucciones:
-            return jsonify({'error': 'Debes proporcionar instrucciones para el técnico'}), 400
+            return jsonify({'success': False, 'error': 'Debes proporcionar instrucciones para el técnico'}), 400
         
         orden = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, estado_global') \
@@ -456,12 +480,12 @@ def rechazar_orden(current_user, id_orden):
             .execute()
         
         if not orden.data:
-            return jsonify({'error': 'Orden no encontrada'}), 404
+            return jsonify({'success': False, 'error': 'Orden no encontrada'}), 404
         
         estado_actual = orden.data[0]['estado_global']
         
         if estado_actual not in ['VehiculoArmado', 'ReparacionCompletada']:
-            return jsonify({'error': f'La orden no puede ser rechazada. Estado actual: {estado_actual}'}), 400
+            return jsonify({'success': False, 'error': f'La orden no puede ser rechazada. Estado actual: {estado_actual}'}), 400
         
         ahora = datetime.datetime.now().isoformat()
         
@@ -523,10 +547,5 @@ def rechazar_orden(current_user, id_orden):
         }), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@control_calidad_bp.route('/test', methods=['GET'])
-def test_endpoint():
-    return jsonify({'success': True, 'message': 'Control de Calidad endpoint funcionando'}), 200
+        logger.error(f"Error en rechazar-orden: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500

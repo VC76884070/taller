@@ -387,3 +387,240 @@ def cancelar_reserva(reserva_id):
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT - VEHÍCULOS EN TALLER (ÓRDENES ACTIVAS)
+# =====================================================
+
+@misreservas_bp.route('/vehiculos-en-taller', methods=['GET'])
+def obtener_vehiculos_en_taller():
+    """Obtener las órdenes activas del cliente (vehículos en taller)"""
+    try:
+        user, error_response, error_code = verificar_token()
+        if error_response:
+            return error_response, error_code
+        
+        usuario_id = user['id']
+        
+        # Obtener el ID del cliente desde la tabla cliente
+        cliente = supabase.table('cliente') \
+            .select('id') \
+            .eq('id_usuario', usuario_id) \
+            .execute()
+        
+        if not cliente.data:
+            return jsonify({'ordenes': []}), 200
+        
+        id_cliente = cliente.data[0]['id']
+        
+        # Obtener vehículos del cliente
+        vehiculos = supabase.table('vehiculo') \
+            .select('id, placa, marca, modelo') \
+            .eq('id_cliente', id_cliente) \
+            .execute()
+        
+        ids_vehiculos = [v['id'] for v in vehiculos.data] if vehiculos.data else []
+        
+        if not ids_vehiculos:
+            return jsonify({'ordenes': []}), 200
+        
+        # Obtener órdenes activas (que no hayan finalizado ni entregado)
+        ordenes = supabase.table('ordentrabajo') \
+            .select('''
+                id, 
+                codigo_unico, 
+                id_vehiculo, 
+                fecha_ingreso, 
+                estado_global,
+                fecha_estimada_finalizacion,
+                dias_estimados_reparacion
+            ''') \
+            .in_('id_vehiculo', ids_vehiculos) \
+            .not_.in_('estado_global', ['Finalizado', 'Entregado']) \
+            .execute()
+        
+        # Para cada orden, obtener la planificación si existe (fallback)
+        for orden in ordenes.data:
+            planificacion = supabase.table('planificacion') \
+                .select('fecha_hora_inicio_real, fecha_hora_fin_estimado, horas_estimadas') \
+                .eq('id_orden_trabajo', orden['id']) \
+                .execute()
+            
+            if planificacion.data:
+                orden['planificacion'] = planificacion.data[0]
+                
+                # Si no hay fecha_estimada_finalizacion pero hay planificación, usarla
+                if not orden.get('fecha_estimada_finalizacion') and planificacion.data[0].get('fecha_hora_fin_estimado'):
+                    orden['fecha_estimada_finalizacion'] = planificacion.data[0]['fecha_hora_fin_estimado']
+            
+            # Obtener datos del vehículo
+            vehiculo = next((v for v in vehiculos.data if v['id'] == orden['id_vehiculo']), None)
+            if vehiculo:
+                orden['vehiculo'] = vehiculo
+        
+        return jsonify({
+            'success': True,
+            'ordenes': ordenes.data
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo vehículos en taller: {str(e)}")
+        return jsonify({'error': str(e), 'ordenes': []}), 500
+
+
+# =====================================================
+# ENDPOINT - DETALLE DE ORDEN DE TRABAJO
+# =====================================================
+
+@misreservas_bp.route('/orden-trabajo/<int:orden_id>', methods=['GET'])
+def obtener_detalle_orden(orden_id):
+    """Obtener detalle de una orden de trabajo del cliente"""
+    try:
+        user, error_response, error_code = verificar_token()
+        if error_response:
+            return error_response, error_code
+        
+        usuario_id = user['id']
+        
+        # Obtener el ID del cliente
+        cliente = supabase.table('cliente') \
+            .select('id') \
+            .eq('id_usuario', usuario_id) \
+            .execute()
+        
+        if not cliente.data:
+            return jsonify({'error': 'Cliente no encontrado'}), 404
+        
+        id_cliente = cliente.data[0]['id']
+        
+        # Obtener la orden con datos del vehículo
+        orden = supabase.table('ordentrabajo') \
+            .select('''
+                id,
+                codigo_unico,
+                estado_global,
+                fecha_ingreso,
+                fecha_salida,
+                fecha_estimada_finalizacion,
+                dias_estimados_reparacion,
+                vehiculo!inner (
+                    id,
+                    placa,
+                    marca,
+                    modelo,
+                    id_cliente
+                )
+            ''') \
+            .eq('id', orden_id) \
+            .execute()
+        
+        if not orden.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        orden_data = orden.data[0]
+        
+        # Verificar que el vehículo pertenece al cliente
+        if orden_data['vehiculo']['id_cliente'] != id_cliente:
+            return jsonify({'error': 'No autorizado'}), 403
+        
+        # Obtener planificación si existe
+        planificacion = supabase.table('planificacion') \
+            .select('*') \
+            .eq('id_orden_trabajo', orden_id) \
+            .execute()
+        
+        if planificacion.data:
+            orden_data['planificacion'] = planificacion.data[0]
+        
+        # Obtener diagnósticos (opcional, para mostrar más info)
+        diagnostico = supabase.table('diagnostico_tecnico') \
+            .select('informe, estado, fecha_envio') \
+            .eq('id_orden_trabajo', orden_id) \
+            .order('version', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if diagnostico.data:
+            orden_data['diagnostico'] = diagnostico.data[0]
+        
+        return jsonify({
+            'success': True,
+            'orden': orden_data
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo detalle de orden: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT - REGISTRAR NUEVO VEHÍCULO
+# =====================================================
+
+@misreservas_bp.route('/vehiculos', methods=['POST'])
+def registrar_vehiculo():
+    """Registrar un nuevo vehículo para el cliente"""
+    try:
+        user, error_response, error_code = verificar_token()
+        if error_response:
+            return error_response, error_code
+        
+        usuario_id = user['id']
+        data = request.get_json()
+        
+        placa = data.get('placa', '').upper().strip()
+        marca = data.get('marca', '').strip()
+        modelo = data.get('modelo', '').strip()
+        anio = data.get('anio')
+        kilometraje = data.get('kilometraje')
+        
+        if not placa or not marca or not modelo:
+            return jsonify({'error': 'Placa, marca y modelo son requeridos'}), 400
+        
+        # Verificar si el cliente existe en la tabla cliente
+        cliente = supabase.table('cliente') \
+            .select('id') \
+            .eq('id_usuario', usuario_id) \
+            .execute()
+        
+        if not cliente.data:
+            # Crear cliente si no existe
+            nuevo_cliente = supabase.table('cliente') \
+                .insert({'id_usuario': usuario_id}) \
+                .execute()
+            id_cliente = nuevo_cliente.data[0]['id']
+        else:
+            id_cliente = cliente.data[0]['id']
+        
+        # Verificar si la placa ya existe para este cliente
+        existe = supabase.table('vehiculo') \
+            .select('id') \
+            .eq('placa', placa) \
+            .eq('id_cliente', id_cliente) \
+            .execute()
+        
+        if existe.data:
+            return jsonify({'error': 'Ya tienes un vehículo registrado con esa placa'}), 400
+        
+        # Registrar vehículo
+        nuevo_vehiculo = supabase.table('vehiculo') \
+            .insert({
+                'id_cliente': id_cliente,
+                'placa': placa,
+                'marca': marca,
+                'modelo': modelo,
+                'anio': anio if anio else None,
+                'kilometraje': kilometraje if kilometraje else None
+            }) \
+            .execute()
+        
+        return jsonify({
+            'success': True,
+            'vehiculo': nuevo_vehiculo.data[0],
+            'message': 'Vehículo registrado correctamente'
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Error registrando vehículo: {str(e)}")
+        return jsonify({'error': str(e)}), 500

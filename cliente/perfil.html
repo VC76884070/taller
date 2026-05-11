@@ -40,7 +40,7 @@
                 </div>
             </div>
 
-            <!-- Pestañas de perfil MEJORADAS -->
+            <!-- Pestañas de perfil -->
             <div class="perfil-tabs">
                 <button class="tab-btn-perfil active" data-tab="informacion">
                     <i class="fas fa-user-circle"></i>
@@ -120,6 +120,29 @@
                                 <label>Ciudad</label>
                                 <input type="text" id="ciudad" class="form-control" disabled>
                             </div>
+
+                            <!-- SECCIÓN DEL MAPA - SOLO VISIBLE EN MODO EDICIÓN -->
+                            <div id="mapContainer" class="map-container" style="display: none;">
+                                <div class="form-group">
+                                    <label><i class="fas fa-map-marker-alt"></i> Ubicación en el Mapa</label>
+                                    <div id="map" class="map"></div>
+                                    <div class="map-controls">
+                                        <button type="button" class="btn-secondary" id="btnGeolocalizar" onclick="usarUbicacionActual()">
+                                            <i class="fas fa-location-dot"></i> Mi ubicación actual
+                                        </button>
+                                        <button type="button" class="btn-secondary" id="btnBuscarDireccion" onclick="mostrarBuscadorDireccion()">
+                                            <i class="fas fa-search"></i> Buscar dirección
+                                        </button>
+                                    </div>
+                                    <div id="ubicacionTexto" class="ubicacion-info">
+                                        <i class="fas fa-info-circle"></i>
+                                        <span>Arrastra el marcador o haz clic en el mapa para seleccionar tu ubicación</span>
+                                    </div>
+                                    <input type="hidden" id="latitud" value="">
+                                    <input type="hidden" id="longitud" value="">
+                                </div>
+                            </div>
+
                             <div class="form-actions" id="infoActions" style="display: none;">
                                 <button type="button" class="btn-secondary" onclick="cancelarEdicionInfo()">
                                     <i class="fas fa-times"></i> Cancelar
@@ -318,15 +341,13 @@
                             </tbody>
                         </table>
                     </div>
-                    <div class="pagination" id="pagination">
-                        <!-- Paginación dinámica -->
-                    </div>
+                    <div class="pagination" id="pagination"></div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Modal Avatar MEJORADO -->
+    <!-- Modal Avatar -->
     <div id="modalAvatar" class="modal">
         <div class="modal-content modal-sm">
             <div class="modal-header">
@@ -364,7 +385,7 @@
         </div>
     </div>
 
-    <!-- Modal Vehículo MEJORADO -->
+    <!-- Modal Vehículo -->
     <div id="modalVehiculo" class="modal">
         <div class="modal-content modal-md">
             <div class="modal-header">
@@ -424,6 +445,9 @@
         <div class="loading-spinner"></div>
     </div>
 
+    <!-- Google Maps API -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=TU_API_KEY_AQUI&libraries=places&callback=initMap" async defer></script>
+    
     <!-- Scripts -->
     <script src="js/include.js"></script>
     <script src="js/perfil.js"></script>

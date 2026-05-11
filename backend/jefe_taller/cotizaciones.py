@@ -14,7 +14,9 @@ import time
 from functools import wraps
 
 logger = logging.getLogger(__name__)
-
+print("="*60)
+print("🔥🔥🔥 VERSIÓN CORREGIDA DE COTIZACIONES - 2026-05-11 🔥🔥🔥")
+print("="*60)
 # =====================================================
 # CREAR BLUEPRINT
 # =====================================================
@@ -105,37 +107,58 @@ def registrar_historial_estado(id_orden, estado_anterior, estado_nuevo, id_usuar
 def obtener_encargados_repuestos():
     """Obtener lista de usuarios con rol encargado_repuestos"""
     try:
-        resultado = supabase.rpc('get_users_by_role', {
-            'role_name': 'encargado_repuestos'
-        }).execute()
+        print("🔍 Buscando encargados de repuestos...")
         
-        if resultado.data:
-            return resultado.data
+        # Primero obtener el ID del rol 'encargado_repuestos'
+        rol_result = supabase.table('rol') \
+            .select('id') \
+ .eq('nombre_rol', 'encargado_repuestos') \
+            .execute()
         
+        if not rol_result.data:
+            print("❌ Rol 'encargado_repuestos' no encontrado")
+            return []
+        
+        rol_id = rol_result.data[0]['id']
+        print(f"📌 ID del rol encargado_repuestos: {rol_id}")
+        
+        # Buscar usuarios con ese rol en la tabla usuario_rol
+        usuarios_roles = supabase.table('usuario_rol') \
+            .select('id_usuario') \
+            .eq('id_rol', rol_id) \
+            .execute()
+        
+        if not usuarios_roles.data:
+            print("❌ No hay usuarios con ese rol")
+            return []
+        
+        # Obtener IDs de usuarios
+        usuario_ids = [ur['id_usuario'] for ur in usuarios_roles.data]
+        print(f"📊 IDs de usuarios encontrados: {usuario_ids}")
+        
+        # Obtener los datos completos de los usuarios
         usuarios = supabase.table('usuario') \
             .select('id, nombre, contacto, email') \
+            .in_('id', usuario_ids) \
             .execute()
         
         encargados = []
         for usuario in (usuarios.data or []):
-            try:
-                tiene_rol = supabase.rpc('usuario_tiene_rol', {
-                    'p_usuario_id': usuario['id'],
-                    'p_rol_nombre': 'encargado_repuestos'
-                }).execute()
-                if tiene_rol.data:
-                    encargados.append({
-                        'id': usuario['id'],
-                        'nombre': usuario.get('nombre', 'Encargado'),
-                        'contacto': usuario.get('contacto', ''),
-                        'email': usuario.get('email', '')
-                    })
-            except:
-                continue
+            encargados.append({
+                'id': usuario['id'],
+                'nombre': usuario.get('nombre', 'Encargado'),
+                'contacto': usuario.get('contacto', ''),
+                'email': usuario.get('email', '')
+            })
+            print(f"✅ Encargado encontrado: ID={usuario['id']}, Nombre={usuario.get('nombre')}")
         
+        print(f"📊 TOTAL ENCARGADOS: {len(encargados)}")
         return encargados
+        
     except Exception as e:
-        logger.error(f"Error obteniendo encargados: {e}")
+        print(f"❌ Error obteniendo encargados: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 # =====================================================
@@ -439,9 +462,13 @@ def obtener_encargados_repuestos_endpoint(current_user):
     """Obtener lista de encargados de repuestos"""
     try:
         encargados = obtener_encargados_repuestos()
+        
+        # Log para debugging
+        print(f"📤 Enviando {len(encargados)} encargados al frontend")
+        
         return jsonify({'success': True, 'encargados': encargados}), 200
     except Exception as e:
-        logger.error(f"Error: {e}")
+        logger.error(f"Error en endpoint encargados: {e}")
         return jsonify({'success': True, 'encargados': []}), 200
 
 # =====================================================
@@ -1546,23 +1573,64 @@ def obtener_tecnicos_con_carga(current_user):
 @cotizaciones_bp.route('/asignar-tecnicos', methods=['POST'])
 @jefe_taller_required
 def asignar_tecnicos_reparacion(current_user):
-    """Asignar técnicos para reparación"""
+    """Asignar técnicos para reparación con días estimados"""
+    print("\n" + "="*80)
+    print("🚨 ASIGNAR TÉCNICOS - VERSIÓN CORREGIDA 🚨")
+    print("="*80)
+    
     try:
         data = request.get_json()
+        print(f"📦 Datos recibidos: {data}")
+        
         id_orden = data.get('id_orden')
         tecnicos_ids = data.get('tecnicos', [])
         instrucciones = data.get('instrucciones', '')
+        tiempo_estimado = data.get('tiempo_estimado')
         
+        print(f"📊 tiempo_estimado recibido: {tiempo_estimado}")
+        
+        # Validaciones
         if not id_orden:
             return jsonify({'error': 'Orden requerida'}), 400
         
+        if not tiempo_estimado:
+            return jsonify({'error': 'Debes especificar los días de reparación'}), 400
+        
+        try:
+            tiempo_estimado = int(tiempo_estimado)
+            if tiempo_estimado < 1:
+                return jsonify({'error': 'El plazo debe ser al menos 1 día'}), 400
+        except:
+            return jsonify({'error': 'El plazo debe ser un número válido'}), 400
+        
         if not tecnicos_ids:
-            return jsonify({'error': 'Debe seleccionar al menos un técnico'}), 400
+            return jsonify({'error': 'Selecciona al menos un técnico'}), 400
         
-        ahora = datetime.datetime.now().isoformat()
+        ahora = datetime.datetime.now()
+        fecha_estimada_fin = ahora + datetime.timedelta(days=tiempo_estimado)
         
+        print(f"📅 Guardando {tiempo_estimado} días, fecha estimada: {fecha_estimada_fin}")
+        
+        # ACTUALIZAR ORDEN CON DÍAS
+        update_result = supabase.table('ordentrabajo').update({
+            'dias_estimados_reparacion': tiempo_estimado,
+            'fecha_estimada_finalizacion': fecha_estimada_fin.isoformat(),
+            'estado_global': 'EnReparacion'
+        }).eq('id', id_orden).execute()
+        
+        print(f"✅ Resultado update: {update_result.data}")
+        
+        # Verificar que se guardó
+        verify = supabase.table('ordentrabajo') \
+            .select('dias_estimados_reparacion, fecha_estimada_finalizacion') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        print(f"🔍 Verificación: {verify.data}")
+        
+        # Asignar técnicos
         supabase.table('asignaciontecnico') \
-            .update({'fecha_hora_final': ahora}) \
+            .update({'fecha_hora_final': ahora.isoformat()}) \
             .eq('id_orden_trabajo', id_orden) \
             .is_('fecha_hora_final', 'null') \
             .execute()
@@ -1571,26 +1639,38 @@ def asignar_tecnicos_reparacion(current_user):
             supabase.table('asignaciontecnico').insert({
                 'id_orden_trabajo': id_orden,
                 'id_tecnico': tecnico_id,
-                'fecha_hora_inicio': ahora,
-                'id_jefe_taller': current_user['id'],
-                'tipo_asignacion': 'reparacion'
+                'tipo_asignacion': 'reparacion',
+                'fecha_hora_inicio': ahora.isoformat(),
+                'fecha_hora_final_estimada': fecha_estimada_fin.isoformat(),
+                'id_jefe_taller': current_user['id']
             }).execute()
         
+        # Guardar instrucciones
         supabase.table('instrucciones_tecnico_historial').insert({
             'id_orden_trabajo': id_orden,
             'id_jefe_taller': current_user['id'],
             'instrucciones': instrucciones,
-            'fecha_envio': ahora,
-            'leida': False
+            'fecha_envio': ahora.isoformat()
         }).execute()
+        
+        print("="*80)
+        print("✅✅✅ DÍAS GUARDADOS CORRECTAMENTE ✅✅✅")
+        print(f"   Orden: {id_orden}")
+        print(f"   Días: {tiempo_estimado}")
+        print(f"   Fecha estimada: {fecha_estimada_fin}")
+        print("="*80)
         
         return jsonify({
             'success': True,
-            'message': f'Reparación iniciada con {len(tecnicos_ids)} técnico(s)'
+            'message': f'Reparación iniciada. Plazo: {tiempo_estimado} días',
+            'dias_guardados': tiempo_estimado,
+            'fecha_estimada': fecha_estimada_fin.isoformat()
         }), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        print(f"❌ ERROR: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
@@ -1666,7 +1746,199 @@ def obtener_instrucciones_armado(current_user, id_orden):
 # =====================================================
 # ENDPOINT DE PRUEBA
 # =====================================================
+@cotizaciones_bp.route('/test-version', methods=['GET'])
+def test_version():
+    return jsonify({
+        'version': 'VERSION_2026-05-11',
+        'message': 'El backend está usando el código actualizado'
+    })
 
-@cotizaciones_bp.route('/test', methods=['GET'])
-def test_endpoint():
-    return jsonify({'success': True, 'message': 'Cotizaciones endpoint funcionando'}), 200
+
+@cotizaciones_bp.route('/iniciar-reparacion-con-dias', methods=['POST'])
+@jefe_taller_required
+def iniciar_reparacion_con_dias(current_user):
+    """
+    NUEVO ENDPOINT - Iniciar reparación GUARDANDO los días
+    ========================================================
+    """
+    print("\n" + "="*80)
+    print("🟢🟢🟢 NUEVO ENDPOINT: iniciar-reparacion-con-dias 🟢🟢🟢")
+    print("="*80)
+    
+    try:
+        data = request.get_json()
+        print(f"📦 Datos recibidos: {json.dumps(data, indent=2)}")
+        
+        id_orden = data.get('id_orden')
+        tecnicos_ids = data.get('tecnicos', [])
+        instrucciones = data.get('instrucciones', '')
+        dias = data.get('dias')
+        
+        print(f"📊 Datos extraídos:")
+        print(f"   🔹 id_orden: {id_orden}")
+        print(f"   🔹 dias: {dias}")
+        print(f"   🔹 tecnicos_ids: {tecnicos_ids}")
+        print(f"   🔹 instrucciones (primeros 50): {instrucciones[:50] if instrucciones else 'None'}")
+        
+        # =====================================================
+        # VALIDACIONES
+        # =====================================================
+        if not id_orden:
+            print("❌ Error: id_orden no proporcionado")
+            return jsonify({'success': False, 'error': 'Orden requerida'}), 400
+        
+        if not dias:
+            print("❌ Error: dias no proporcionado")
+            return jsonify({'success': False, 'error': 'Debes especificar cuántos días durará la reparación'}), 400
+        
+        try:
+            dias = int(dias)
+            if dias < 1:
+                print(f"❌ Error: dias {dias} es menor que 1")
+                return jsonify({'success': False, 'error': 'El plazo debe ser al menos 1 día'}), 400
+            if dias > 60:
+                print(f"❌ Error: dias {dias} es mayor que 60")
+                return jsonify({'success': False, 'error': 'El plazo no puede ser mayor a 60 días'}), 400
+        except (ValueError, TypeError):
+            print(f"❌ Error: dias no es número válido")
+            return jsonify({'success': False, 'error': 'El plazo debe ser un número válido'}), 400
+        
+        if not tecnicos_ids:
+            print("❌ Error: No hay técnicos seleccionados")
+            return jsonify({'success': False, 'error': 'Debe seleccionar al menos un técnico'}), 400
+        
+        if not instrucciones or not instrucciones.strip():
+            print("❌ Error: Instrucciones vacías")
+            return jsonify({'success': False, 'error': 'Debes escribir instrucciones para los técnicos'}), 400
+        
+        print("✅ Todas las validaciones pasaron")
+        
+        # =====================================================
+        # CALCULAR FECHAS
+        # =====================================================
+        ahora = datetime.datetime.now()
+        fecha_estimada_fin = ahora + datetime.timedelta(days=dias)
+        fecha_estimada_fin_str = fecha_estimada_fin.isoformat()
+        ahora_str = ahora.isoformat()
+        
+        print(f"📅 Fecha actual: {ahora.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"📅 Días a sumar: {dias}")
+        print(f"📅 Fecha estimada fin: {fecha_estimada_fin.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        # =====================================================
+        # 1. ACTUALIZAR LA ORDEN CON LOS DÍAS
+        # =====================================================
+        print("\n💾 PASO 1: Actualizando tabla ordentrabajo...")
+        
+        update_data = {
+            'dias_estimados_reparacion': dias,
+            'fecha_estimada_finalizacion': fecha_estimada_fin_str,
+            'estado_global': 'EnReparacion'
+        }
+        
+        print(f"   📤 Datos a actualizar: {update_data}")
+        
+        result = supabase.table('ordentrabajo').update(update_data).eq('id', id_orden).execute()
+        print(f"   ✅ Resultado update: {result.data}")
+        
+        # Verificar que se guardó
+        verify = supabase.table('ordentrabajo') \
+            .select('dias_estimados_reparacion, fecha_estimada_finalizacion, estado_global') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        print(f"   🔍 Verificación post-update: {verify.data}")
+        
+        if verify.data and verify.data[0].get('dias_estimados_reparacion') == dias:
+            print("   ✅ ¡DÍAS GUARDADOS EXITOSAMENTE!")
+        else:
+            print(f"   ⚠️ ADVERTENCIA: Se esperaba {dias} pero se guardó {verify.data[0].get('dias_estimados_reparacion') if verify.data else 'NULL'}")
+        
+        # =====================================================
+        # 2. ACTUALIZAR ASIGNACIONES DE TÉCNICOS
+        # =====================================================
+        print("\n👨‍🔧 PASO 2: Actualizando asignaciones de técnicos...")
+        
+        # Finalizar asignaciones anteriores activas
+        try:
+            supabase.table('asignaciontecnico') \
+                .update({'fecha_hora_final': ahora_str}) \
+                .eq('id_orden_trabajo', id_orden) \
+                .is_('fecha_hora_final', 'null') \
+                .execute()
+            print(f"   ✅ Asignaciones anteriores finalizadas")
+        except Exception as e:
+            print(f"   ⚠️ Error al finalizar asignaciones: {e}")
+        
+        # Crear nuevas asignaciones (SIN id_jefe_taller)
+        for tecnico_id in tecnicos_ids:
+            try:
+                supabase.table('asignaciontecnico').insert({
+                    'id_orden_trabajo': id_orden,
+                    'id_tecnico': tecnico_id,
+                    'tipo_asignacion': 'reparacion',
+                    'fecha_hora_inicio': ahora_str,
+                    'fecha_hora_final_estimada': fecha_estimada_fin_str
+                }).execute()
+                print(f"   ✅ Técnico {tecnico_id} asignado")
+            except Exception as e:
+                print(f"   ⚠️ Error asignando técnico {tecnico_id}: {e}")
+        
+        # =====================================================
+        # 3. GUARDAR INSTRUCCIONES
+        # =====================================================
+        print("\n📝 PASO 3: Guardando instrucciones...")
+        
+        instruccion_completa = f"""
+[REPARACIÓN - COTIZACIÓN ACEPTADA]
+
+📅 Plazo estimado: {dias} días
+⏱️ Fecha estimada de finalización: {fecha_estimada_fin.strftime('%d/%m/%Y')}
+
+Instrucciones específicas:
+{instrucciones}
+
+⚠️ IMPORTANTE:
+- Registrar avances diariamente en el sistema
+- Notificar cualquier retraso o problema
+- Al finalizar, marcar como "Reparación Completada"
+"""
+        
+        try:
+            supabase.table('instrucciones_tecnico_historial').insert({
+                'id_orden_trabajo': id_orden,
+                'id_jefe_taller': current_user['id'],
+                'instrucciones': instruccion_completa,
+                'fecha_envio': ahora_str,
+                'leida': False
+            }).execute()
+            print(f"   ✅ Instrucciones guardadas")
+        except Exception as e:
+            print(f"   ⚠️ Error guardando instrucciones: {e}")
+        
+        # =====================================================
+        # RESPUESTA FINAL
+        # =====================================================
+        print("\n" + "="*80)
+        print("✅✅✅ NUEVO ENDPOINT - PROCESO COMPLETADO ✅✅✅")
+        print(f"   Orden: {id_orden}")
+        print(f"   Días guardados: {dias}")
+        print(f"   Fecha estimada: {fecha_estimada_fin_str}")
+        print("="*80 + "\n")
+        
+        return jsonify({
+            'success': True,
+            'message': f'✅ Reparación iniciada correctamente. Plazo: {dias} días',
+            'dias_guardados': dias,
+            'fecha_estimada': fecha_estimada_fin_str,
+            'tecnicos_asignados': len(tecnicos_ids)
+        }), 200
+        
+    except Exception as e:
+        print("\n" + "="*80)
+        print("❌❌❌ ERROR EN NUEVO ENDPOINT ❌❌❌")
+        print(f"   Error: {str(e)}")
+        print("="*80 + "\n")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500

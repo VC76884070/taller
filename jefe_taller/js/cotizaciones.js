@@ -1810,6 +1810,17 @@ async function abrirModalIniciarReparacion(id_orden, codigo, vehiculo, cliente) 
         `;
     }
     
+    // RESETEAR el campo de días (vacío)
+    const plazoDiasInput = document.getElementById('reparacionPlazoDias');
+    if (plazoDiasInput) {
+        plazoDiasInput.value = '';  // Vacío para obligar a llenar
+        plazoDiasInput.style.borderColor = '';
+    }
+    
+    // Ocultar mensaje de error
+    const errorMsg = document.getElementById('plazoDiasError');
+    if (errorMsg) errorMsg.style.display = 'none';
+    
     mostrarLoading(true);
     try {
         const [tecnicosActualesRes, todosTecnicosRes] = await Promise.all([
@@ -1904,16 +1915,38 @@ async function abrirModalIniciarReparacion(id_orden, codigo, vehiculo, cliente) 
     }
     
     document.getElementById('reparacionInstrucciones').value = '';
-    document.getElementById('reparacionPlazoDias').value = 3;
     abrirModal('modalIniciarReparacion');
-}
+}   
 
 async function confirmarIniciarReparacion() {
     if (!currentOrdenAceptada) return;
     
+    // OBTENER EL VALOR DEL INPUT
+    const plazoDiasInput = document.getElementById('reparacionPlazoDias');
+    let plazoDias = plazoDiasInput?.value;
+    
+    console.log("🔍 Valor del input:", plazoDias);
+    console.log("🔍 Tipo del valor:", typeof plazoDias);
+    
+    // VALIDAR
+    if (!plazoDias || plazoDias === '' || plazoDias === null) {
+        showToast('⚠️ Debes especificar cuántos días durará la reparación', 'warning');
+        plazoDiasInput?.focus();
+        return;
+    }
+    
+    // CONVERTIR A NÚMERO
+    const diasNumerico = Number(plazoDias);
+    console.log("🔍 Convertido a número:", diasNumerico);
+    
+    if (isNaN(diasNumerico) || diasNumerico < 1 || diasNumerico > 60) {
+        showToast('⚠️ El plazo debe ser un número entre 1 y 60 días', 'warning');
+        return;
+    }
+    
     const instrucciones = document.getElementById('reparacionInstrucciones')?.value.trim();
     if (!instrucciones) {
-        showToast('⚠️ Debes escribir instrucciones', 'warning');
+        showToast('⚠️ Debes escribir instrucciones para los técnicos', 'warning');
         return;
     }
     
@@ -1925,49 +1958,46 @@ async function confirmarIniciarReparacion() {
         return;
     }
     
+    // CONFIRMAR
+    const confirmMsg = `📋 INICIAR REPARACIÓN\n\n` +
+        `📅 Plazo: ${diasNumerico} DÍAS\n` +
+        `👨‍🔧 Técnicos: ${tecnicosIds.length}\n\n` +
+        `⚠️ Este plazo se guardará en la base de datos.\n` +
+        `¿Confirmar?`;
+    
+    if (!confirm(confirmMsg)) return;
+    
     mostrarLoading(true);
     
     try {
-        const asignarResponse = await fetch(`${API_URL}/asignar-tecnicos`, {
+        // =====================================================
+        // USAR EL NUEVO ENDPOINT
+        // =====================================================
+        const payload = {
+            id_orden: currentOrdenAceptada.id_orden,
+            tecnicos: tecnicosIds,
+            instrucciones: instrucciones,
+            dias: diasNumerico  // ← CAMPO RENOMBRADO
+        };
+        
+        console.log("📤 Enviando payload al NUEVO endpoint:", JSON.stringify(payload, null, 2));
+        
+        const response = await fetch(`${API_URL}/iniciar-reparacion-con-dias`, {
             method: 'POST',
             headers: getAuthHeaders(),
-            body: JSON.stringify({
-                id_orden: currentOrdenAceptada.id_orden,
-                tecnicos: tecnicosIds,
-                instrucciones: instrucciones,
-                tiempo_estimado: document.getElementById('reparacionPlazoDias')?.value || 3,
-                tiempo_unidad: 'dias'
-            })
+            body: JSON.stringify(payload)
         });
         
-        const asignarData = await asignarResponse.json();
+        const data = await response.json();
+        console.log("📥 Respuesta del NUEVO endpoint:", data);
         
-        if (!asignarData.success) {
-            showToast(asignarData.error || 'Error al asignar técnicos', 'error');
-            return;
-        }
-        
-        const estadoResponse = await fetch(`${API_URL}/cambiar-estado-reparacion/${currentOrdenAceptada.id_orden}`, {
-            method: 'PUT',
-            headers: getAuthHeaders()
-        });
-        
-        const estadoData = await estadoResponse.json();
-        
-        if (estadoData.success) {
-            showToast(`✅ Reparación iniciada con ${tecnicosIds.length} técnico(s)`, 'success');
+        if (data.success) {
+            showToast(`✅ Reparación iniciada. Plazo: ${data.dias_guardados} días`, 'success');
             cerrarModal('modalIniciarReparacion');
-            
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
+            setTimeout(() => location.reload(), 1500);
         } else {
-            showToast('Los técnicos fueron asignados pero hubo un error al cambiar el estado', 'warning');
-            setTimeout(() => {
-                window.location.reload();
-            }, 2000);
+            showToast(data.error || 'Error al iniciar reparación', 'error');
         }
-        
     } catch (error) {
         console.error('Error:', error);
         showToast('Error de conexión', 'error');
@@ -2712,6 +2742,33 @@ async function descargarComprobante(idSolicitud) {
         mostrarLoading(false);
     }
 }
+async function verificarDiasGuardados(id_orden) {
+    try {
+        const response = await fetch(`${API_URL}/orden/${id_orden}/tecnicos-asignados`, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        console.log("🔍 Verificación de orden:", data);
+        
+        // También consultar directamente la orden
+        const ordenResponse = await fetch(`${API_URL}/ordenes-con-servicios`, {
+            headers: getAuthHeaders()
+        });
+        const ordenData = await ordenResponse.json();
+        
+        const orden = ordenData.ordenes?.find(o => o.id_orden === id_orden);
+        if (orden) {
+            console.log("📊 Estado de la orden:", orden.estado_global);
+        }
+        
+        return data;
+    } catch (error) {
+        console.error("Error verificando:", error);
+    }
+}
+
+// Exponer función para pruebas en consola
+window.verificarDiasGuardados = verificarDiasGuardados;
 // Exponer funciones globales
 window.descargarDocumentoCotizacion = descargarDocumentoCotizacion;
 window.verDetalleSolicitudCompra = verDetalleSolicitudCompra;

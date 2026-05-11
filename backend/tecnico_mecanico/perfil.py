@@ -1,12 +1,11 @@
 # =====================================================
-# PERFIL - TÉCNICO MECÁNICO
+# PERFIL - TÉCNICO MECÁNICO (CORREGIDO)
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
 from flask import Blueprint, request, jsonify, send_from_directory
-from functools import wraps
 from config import config
-import jwt
+from decorators import tecnico_required  # ← Importar decorador unificado
 import datetime
 import logging
 import cloudinary
@@ -16,9 +15,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 logger = logging.getLogger(__name__)
 
 # =====================================================
-# BLUEPRINT - NOMBRE CORREGIDO
+# BLUEPRINT
 # =====================================================
-tecnico_mecanico_perfil_bp = Blueprint('tecnico_mecanico_perfil', __name__)  # Sin url_prefix
+tecnico_mecanico_perfil_bp = Blueprint('tecnico_mecanico_perfil', __name__, url_prefix='/tecnico')
 
 # Configuración
 SECRET_KEY = config.SECRET_KEY
@@ -41,44 +40,6 @@ except Exception as e:
 
 
 # =====================================================
-# DECORADOR PARA VERIFICAR TOKEN Y ROL TÉCNICO
-# =====================================================
-def tecnico_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = None
-        
-        if 'Authorization' in request.headers:
-            auth_header = request.headers['Authorization']
-            try:
-                token = auth_header.split(" ")[1]
-            except IndexError:
-                pass
-        
-        if not token:
-            token = request.cookies.get('token')
-        
-        if not token:
-            return jsonify({'error': 'No autorizado'}), 401
-        
-        try:
-            data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            current_user = data['user']
-            
-            if current_user.get('id_rol') != 4:
-                return jsonify({'error': 'No autorizado - Se requiere rol de Técnico'}), 403
-                
-        except jwt.ExpiredSignatureError:
-            return jsonify({'error': 'Sesión expirada'}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({'error': 'Token inválido'}), 401
-        
-        return f(current_user, *args, **kwargs)
-    
-    return decorated
-
-
-# =====================================================
 # RUTA PARA SERVIR EL HTML
 # =====================================================
 @tecnico_mecanico_perfil_bp.route('/perfil')
@@ -95,8 +56,11 @@ def perfil_page(current_user):
 @tecnico_required
 def obtener_perfil(current_user):
     try:
-        usuario_id = current_user['id']
-        logger.info(f"Obteniendo perfil para técnico ID: {usuario_id}")
+        usuario_id = current_user.get('id')
+        logger.info(f"🔍 Obteniendo perfil para técnico ID: {usuario_id}")
+        
+        if not usuario_id:
+            return jsonify({'error': 'ID de usuario no encontrado'}), 400
         
         # Obtener datos del usuario
         usuario_result = supabase.table('usuario') \
@@ -112,39 +76,34 @@ def obtener_perfil(current_user):
         # Obtener estadísticas del técnico
         # Total de trabajos asignados
         asignaciones = supabase.table('asignaciontecnico') \
-            .select('id_orden_trabajo', count='exact') \
-            .eq('id_tecnico', usuario_id) \
-            .execute()
-        
-        total_trabajos = asignaciones.count if hasattr(asignaciones, 'count') else len(asignaciones.data or [])
-        
-        # Trabajos completados (Finalizado o Entregado)
-        asignaciones_completadas = supabase.table('asignaciontecnico') \
             .select('id_orden_trabajo') \
             .eq('id_tecnico', usuario_id) \
             .execute()
         
-        if asignaciones_completadas.data:
-            orden_ids = [a['id_orden_trabajo'] for a in asignaciones_completadas.data]
+        total_trabajos = len(asignaciones.data or [])
+        
+        # Trabajos completados (Finalizado o Entregado)
+        trabajos_completados = 0
+        trabajos_activos = 0
+        
+        if asignaciones.data:
+            orden_ids = list(set([a['id_orden_trabajo'] for a in asignaciones.data]))
+            
+            # Trabajos completados
             ordenes_completadas = supabase.table('ordentrabajo') \
-                .select('id', count='exact') \
+                .select('id') \
                 .in_('id', orden_ids) \
                 .in_('estado_global', ['Finalizado', 'Entregado']) \
                 .execute()
-            trabajos_completados = ordenes_completadas.count if hasattr(ordenes_completadas, 'count') else len(ordenes_completadas.data or [])
-        else:
-            trabajos_completados = 0
-        
-        # Trabajos activos (EnProceso o EnPausa)
-        if asignaciones_completadas.data:
+            trabajos_completados = len(ordenes_completadas.data or [])
+            
+            # Trabajos activos (EnProceso, EnPausa, ReparacionCompletada, VehiculoArmado)
             ordenes_activas = supabase.table('ordentrabajo') \
-                .select('id', count='exact') \
+                .select('id') \
                 .in_('id', orden_ids) \
-                .in_('estado_global', ['EnProceso', 'EnPausa']) \
+                .in_('estado_global', ['EnProceso', 'EnPausa', 'ReparacionCompletada', 'VehiculoArmado']) \
                 .execute()
-            trabajos_activos = ordenes_activas.count if hasattr(ordenes_activas, 'count') else len(ordenes_activas.data or [])
-        else:
-            trabajos_activos = 0
+            trabajos_activos = len(ordenes_activas.data or [])
         
         return jsonify({
             'success': True,
@@ -157,7 +116,7 @@ def obtener_perfil(current_user):
         }), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo perfil: {str(e)}")
+        logger.error(f"❌ Error obteniendo perfil: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
@@ -171,7 +130,10 @@ def obtener_perfil(current_user):
 def actualizar_perfil(current_user):
     try:
         data = request.get_json()
-        usuario_id = current_user['id']
+        usuario_id = current_user.get('id')
+        
+        if not usuario_id:
+            return jsonify({'error': 'ID de usuario no encontrado'}), 400
         
         nombre = data.get('nombre', '').strip()
         email = data.get('email', '').strip()
@@ -214,7 +176,7 @@ def actualizar_perfil(current_user):
             return jsonify({'error': 'Error al actualizar perfil'}), 500
         
     except Exception as e:
-        logger.error(f"Error actualizando perfil: {str(e)}")
+        logger.error(f"❌ Error actualizando perfil: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -225,7 +187,10 @@ def actualizar_perfil(current_user):
 @tecnico_required
 def actualizar_avatar(current_user):
     try:
-        usuario_id = current_user['id']
+        usuario_id = current_user.get('id')
+        
+        if not usuario_id:
+            return jsonify({'error': 'ID de usuario no encontrado'}), 400
         
         if 'avatar' not in request.files:
             return jsonify({'error': 'No se envió ninguna imagen'}), 400
@@ -234,9 +199,17 @@ def actualizar_avatar(current_user):
         if avatar.filename == '':
             return jsonify({'error': 'No se seleccionó ningún archivo'}), 400
         
+        # Obtener nombre del usuario para el avatar por defecto
+        usuario_result = supabase.table('usuario') \
+            .select('nombre') \
+            .eq('id', usuario_id) \
+            .execute()
+        
+        nombre_usuario = usuario_result.data[0]['nombre'] if usuario_result.data else 'Usuario'
+        
         if not CLOUDINARY_CONFIGURED:
             # Si no hay Cloudinary, usar avatar por defecto
-            avatar_url = f"https://ui-avatars.com/api/?background=C1121F&color=fff&name={current_user.get('nombre', 'User')}"
+            avatar_url = f"https://ui-avatars.com/api/?background=C1121F&color=fff&name={nombre_usuario}"
         else:
             # Subir a Cloudinary
             resultado = cloudinary.uploader.upload(
@@ -262,7 +235,7 @@ def actualizar_avatar(current_user):
         }), 200
         
     except Exception as e:
-        logger.error(f"Error actualizando avatar: {str(e)}")
+        logger.error(f"❌ Error actualizando avatar: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -274,7 +247,10 @@ def actualizar_avatar(current_user):
 def cambiar_password(current_user):
     try:
         data = request.get_json()
-        usuario_id = current_user['id']
+        usuario_id = current_user.get('id')
+        
+        if not usuario_id:
+            return jsonify({'error': 'ID de usuario no encontrado'}), 400
         
         password_actual = data.get('password_actual')
         nueva_password = data.get('nueva_password')
@@ -315,5 +291,5 @@ def cambiar_password(current_user):
         }), 200
         
     except Exception as e:
-        logger.error(f"Error cambiando contraseña: {str(e)}")
+        logger.error(f"❌ Error cambiando contraseña: {str(e)}")
         return jsonify({'error': str(e)}), 500

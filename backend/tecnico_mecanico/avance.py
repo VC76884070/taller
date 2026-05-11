@@ -203,31 +203,45 @@ def test_endpoint():
 @avance_bp.route('/ordenes-en-reparacion', methods=['GET'])
 @tecnico_required
 def obtener_ordenes_en_reparacion(current_user):
-    """Obtener órdenes en estado EnReparacion para el técnico"""
+    """Obtener órdenes para el técnico"""
     try:
         tecnico_id = current_user['id']
-        logger.info(f"🔍 Buscando órdenes para técnico {tecnico_id}")
+        print(f"\n🔍 Buscando órdenes para técnico {tecnico_id}")
         
+        # IMPORTANTE: NO filtrar por tipo_asignacion
+        # Traer TODAS las asignaciones activas del técnico
         asignaciones = supabase.table('asignaciontecnico') \
-            .select('id_orden_trabajo') \
+            .select('id_orden_trabajo, tipo_asignacion') \
             .eq('id_tecnico', tecnico_id) \
-            .eq('tipo_asignacion', 'reparacion') \
             .is_('fecha_hora_final', 'null') \
             .execute()
         
+        print(f"📊 Asignaciones activas encontradas: {len(asignaciones.data) if asignaciones.data else 0}")
+        
         if not asignaciones.data:
+            print("⚠️ No hay asignaciones activas")
             return jsonify({'success': True, 'ordenes': []}), 200
         
-        orden_ids = [a['id_orden_trabajo'] for a in asignaciones.data if a.get('id_orden_trabajo')]
+        # Obtener IDs únicos de órdenes
+        orden_ids = list(set([a['id_orden_trabajo'] for a in asignaciones.data]))
+        print(f"📝 IDs de órdenes: {orden_ids}")
         
-        if not orden_ids:
-            return jsonify({'success': True, 'ordenes': []}), 200
-        
+        # Buscar órdenes que estén en estado EnReparacion O EnProceso O CotizacionAceptada
         ordenes_data = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, estado_global, id_vehiculo, vehiculo!inner(marca, modelo, placa)') \
             .in_('id', orden_ids) \
-            .eq('estado_global', 'EnReparacion') \
+            .in_('estado_global', ['EnReparacion', 'EnProceso', 'CotizacionAceptada', 'ReparacionCompletada']) \
             .execute()
+        
+        print(f"📊 Órdenes en reparación encontradas: {len(ordenes_data.data) if ordenes_data.data else 0}")
+        
+        # Si no encuentra con esos estados, traer todas las órdenes asignadas
+        if not ordenes_data.data:
+            print("⚠️ No se encontraron órdenes con estados esperados, trayendo todas...")
+            ordenes_data = supabase.table('ordentrabajo') \
+                .select('id, codigo_unico, estado_global, id_vehiculo, vehiculo!inner(marca, modelo, placa)') \
+                .in_('id', orden_ids) \
+                .execute()
         
         ordenes = []
         for orden in (ordenes_data.data or []):
@@ -235,13 +249,17 @@ def obtener_ordenes_en_reparacion(current_user):
             ordenes.append({
                 'id': orden.get('id'),
                 'codigo_unico': orden.get('codigo_unico'),
+                'estado_global': orden.get('estado_global'),
                 'vehiculo': f"{vehiculo.get('marca', '')} {vehiculo.get('modelo', '')} ({vehiculo.get('placa', '')})".strip()
             })
+            print(f"   ✅ Orden: {orden.get('codigo_unico')} - Estado: {orden.get('estado_global')}")
         
         return jsonify({'success': True, 'ordenes': ordenes}), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        print(f"❌ Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 

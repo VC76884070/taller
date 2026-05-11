@@ -83,13 +83,13 @@ try:
     from jefe_operativo.comunicados import jefe_operativo_comunicados_bp
     from jefe_operativo.historial import jefe_operativo_historial_bp
     from jefe_operativo.perfil import jefe_operativo_perfil_bp
-    from jefe_operativo.control_calidad import control_calidad_bp as control_calidad_operativo_bp
+    from jefe_operativo.control_calidad import control_calidad_operativo_bp 
     
     app.register_blueprint(jefe_operativo_recepcion_bp, url_prefix='/api/jefe-operativo')
     app.register_blueprint(jefe_operativo_comunicados_bp, url_prefix='/api/jefe-operativo')
     app.register_blueprint(jefe_operativo_historial_bp, url_prefix='/api/jefe-operativo')
     app.register_blueprint(jefe_operativo_perfil_bp, url_prefix='/api/jefe-operativo')
-    app.register_blueprint(control_calidad_operativo_bp, url_prefix='/api/jefe-operativo')
+    app.register_blueprint(control_calidad_operativo_bp)
     
     logger.info("✅ Blueprints de Jefe Operativo registrados correctamente")
 except Exception as e:
@@ -109,7 +109,10 @@ try:
     from jefe_taller.reservas_solicitudes import reservas_solicitudes_bp
     from jefe_taller.control_calidad import control_calidad_bp
     from jefe_taller.gestion_avances import avance_jefe_bp
-    
+    from jefe_taller.dashboard import dashboard_bp  # 👈 NUEVO
+
+# Luego, registra el blueprint:
+    app.register_blueprint(dashboard_bp, url_prefix='/api/jefe-taller')
     print("🔵🔵🔵 Importación de gestion_avances exitosa 🔵🔵🔵")
     
     app.register_blueprint(jefe_taller_ordenes_bp, url_prefix='/api/jefe-taller')

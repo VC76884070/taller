@@ -1,8 +1,9 @@
 // =====================================================
 // MIS RESERVAS - CLIENTE
+// VERSIÓN CON DÍAS PINTADOS EN EL CALENDARIO
 // =====================================================
 
-const API_URL = '';  // Vacío para usar rutas relativas
+const API_URL = '';
 let userInfo = null;
 let calendar = null;
 let solicitudActualId = null;
@@ -28,12 +29,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function checkAuth() {
     const token = localStorage.getItem('furia_token');
-    
     if (!token) {
         window.location.href = '/';
         return false;
     }
-    
     try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         userInfo = payload.user;
@@ -54,14 +53,11 @@ function getHeaders() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${getAuthToken()}`
     };
-    
     const userId = getUserIdFromToken();
-    if (userId) {
-        headers['X-User-Id'] = userId;
-    }
-    
+    if (userId) headers['X-User-Id'] = userId;
     return headers;
 }
+
 function getUserIdFromToken() {
     const token = localStorage.getItem('furia_token');
     if (!token) return null;
@@ -72,14 +68,12 @@ function getUserIdFromToken() {
         return null;
     }
 }
+
 function mostrarLoading(mostrar) {
     const overlay = document.getElementById('loadingOverlay');
     if (overlay) {
-        if (mostrar) {
-            overlay.classList.add('show');
-        } else {
-            overlay.classList.remove('show');
-        }
+        if (mostrar) overlay.classList.add('show');
+        else overlay.classList.remove('show');
     }
 }
 
@@ -94,7 +88,6 @@ function mostrarFechaActual() {
 }
 
 function setupEventListeners() {
-    // Tabs
     const tabBtns = document.querySelectorAll('.tab-btn');
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -103,54 +96,34 @@ function setupEventListeners() {
         });
     });
     
-    // Filtro de solicitudes
     const filtroEstado = document.getElementById('filtroEstadoSolicitud');
-    if (filtroEstado) {
-        filtroEstado.addEventListener('change', () => cargarMisSolicitudes());
-    }
+    if (filtroEstado) filtroEstado.addEventListener('change', () => cargarMisSolicitudes());
     
-    // Botón refresh
     const btnRefresh = document.getElementById('btnRefreshSolicitudes');
-    if (btnRefresh) {
-        btnRefresh.addEventListener('click', () => cargarMisSolicitudes());
-    }
+    if (btnRefresh) btnRefresh.addEventListener('click', () => cargarMisSolicitudes());
     
-    // Formulario nueva solicitud
     const form = document.getElementById('formNuevaSolicitud');
-    if (form) {
-        form.addEventListener('submit', enviarSolicitud);
-    }
+    if (form) form.addEventListener('submit', enviarSolicitud);
     
-    // Botón rechazar horarios en modal
     const btnRechazar = document.getElementById('btnRechazarHorarios');
-    if (btnRechazar) {
-        btnRechazar.addEventListener('click', () => rechazarHorarios());
-    }
+    if (btnRechazar) btnRechazar.addEventListener('click', () => rechazarHorarios());
     
-    // Botón confirmar cancelación
     const btnConfirmarCancelacion = document.getElementById('btnConfirmarCancelacion');
-    if (btnConfirmarCancelacion) {
-        btnConfirmarCancelacion.addEventListener('click', () => confirmarCancelacion());
-    }
+    if (btnConfirmarCancelacion) btnConfirmarCancelacion.addEventListener('click', () => confirmarCancelacion());
 }
 
 function cambiarTab(tabId) {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelector(`.tab-btn[data-tab="${tabId}"]`).classList.add('active');
     
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.remove('active');
-    });
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
     document.getElementById(`tab-${tabId}`).classList.add('active');
     
     if (tabId === 'calendario' && calendar) {
-        setTimeout(() => calendar.refetchEvents(), 100);
+        calendar.refetchEvents();
+        setTimeout(() => pintarDiasReparacion(), 200);
     }
-    if (tabId === 'solicitudes') {
-        cargarMisSolicitudes();
-    }
+    if (tabId === 'solicitudes') cargarMisSolicitudes();
 }
 
 // =====================================================
@@ -159,16 +132,11 @@ function cambiarTab(tabId) {
 
 async function cargarMisDatos() {
     try {
-        const response = await fetch(`/api/cliente/mi-perfil`, {
-            headers: getHeaders()
-        });
-        
+        const response = await fetch(`/api/cliente/mi-perfil`, { headers: getHeaders() });
         const data = await response.json();
         if (response.ok && data.cliente) {
             const userNameElement = document.querySelector('.user-name');
-            if (userNameElement && data.cliente.nombre) {
-                userNameElement.textContent = data.cliente.nombre;
-            }
+            if (userNameElement && data.cliente.nombre) userNameElement.textContent = data.cliente.nombre;
         }
     } catch (error) {
         console.error('Error cargando datos:', error);
@@ -180,10 +148,7 @@ async function cargarMisVehiculos() {
     if (!selectVehiculo) return;
     
     try {
-        const response = await fetch(`/api/cliente/mi-perfil`, {
-            headers: getHeaders()
-        });
-        
+        const response = await fetch(`/api/cliente/mi-perfil`, { headers: getHeaders() });
         const data = await response.json();
         
         selectVehiculo.innerHTML = '<option value="">-- Selecciona un vehículo --</option>';
@@ -198,7 +163,6 @@ async function cargarMisVehiculos() {
         data.vehiculos.forEach(vehiculo => {
             selectVehiculo.innerHTML += `<option value="${vehiculo.id}">${vehiculo.placa} - ${vehiculo.marca || 'Sin marca'} ${vehiculo.modelo || ''}</option>`;
         });
-        
     } catch (error) {
         console.error('Error cargando vehículos:', error);
         selectVehiculo.innerHTML = '<option value="">Error cargando vehículos</option>';
@@ -206,7 +170,7 @@ async function cargarMisVehiculos() {
 }
 
 // =====================================================
-// CALENDARIO
+// CALENDARIO - CON DÍAS DE REPARACIÓN PINTADOS
 // =====================================================
 
 function initCalendar() {
@@ -215,8 +179,6 @@ function initCalendar() {
         console.error('No se encontró el elemento del calendario');
         return;
     }
-    
-    // Verificar si FullCalendar está disponible
     if (typeof FullCalendar === 'undefined') {
         console.error('FullCalendar no está cargado');
         return;
@@ -237,40 +199,234 @@ function initCalendar() {
         events: cargarEventosCalendario,
         eventClick: (info) => {
             verDetalleReserva(info.event.id);
+        },
+        datesSet: () => {
+            setTimeout(() => pintarDiasReparacion(), 150);
         }
     });
     
     calendar.render();
+    setTimeout(() => pintarDiasReparacion(), 300);
 }
 
 async function cargarEventosCalendario(info, successCallback, failureCallback) {
     try {
-        const response = await fetch(`/api/cliente/reservas-confirmadas`, {
-            headers: getHeaders()
-        });
+        // Solo reservas confirmadas (citas)
+        const reservasResponse = await fetch(`/api/cliente/reservas-confirmadas`, { headers: getHeaders() });
+        const reservasData = await reservasResponse.json();
         
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Error cargando reservas');
+        const eventos = [];
         
-        const eventos = (data.reservas || []).map(reserva => {
-            const fechaHora = new Date(reserva.fecha_agendada);
-            const titulo = `${reserva.vehiculo?.placa || 'Vehículo'} - ${reserva.descripcion_problema?.substring(0, 30) || 'Reserva'}`;
-            
-            return {
-                id: reserva.id.toString(),
-                title: titulo,
-                start: fechaHora,
-                backgroundColor: '#10B981',
-                borderColor: '#10B981',
-                className: 'fc-event-confirmada'
-            };
-        });
+        if (reservasData.reservas) {
+            reservasData.reservas.forEach(reserva => {
+                const fechaHora = new Date(reserva.fecha_agendada);
+                eventos.push({
+                    id: `reserva_${reserva.id}`,
+                    title: `📅 ${reserva.vehiculo?.placa || 'Cita'}`,
+                    start: fechaHora,
+                    backgroundColor: '#10B981',
+                    borderColor: '#10B981',
+                    className: 'fc-event-reserva',
+                    extendedProps: { tipo: 'reserva', placa: reserva.vehiculo?.placa }
+                });
+            });
+        }
         
         successCallback(eventos);
+        
+        // Pintar los días de reparación
+        setTimeout(() => pintarDiasReparacion(), 150);
         
     } catch (error) {
         console.error('Error cargando eventos:', error);
         failureCallback(error);
+    }
+}
+
+// =====================================================
+// PINTAR DÍAS DE REPARACIÓN EN EL CALENDARIO
+// =====================================================
+
+async function pintarDiasReparacion() {
+    try {
+        const tallerResponse = await fetch(`/api/cliente/vehiculos-en-taller`, { headers: getHeaders() });
+        const tallerData = await tallerResponse.json();
+        
+        if (!tallerData.ordenes || tallerData.ordenes.length === 0) return;
+        
+        // Limpiar clases anteriores
+        document.querySelectorAll('.fc-daygrid-day').forEach(day => {
+            day.classList.remove('reparacion-dia', 'entrega-dia');
+            day.removeAttribute('data-tooltip');
+        });
+        
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        
+        tallerData.ordenes.forEach(orden => {
+            if (!orden.fecha_estimada_finalizacion && !orden.dias_estimados_reparacion) return;
+            
+            const fechaIngreso = new Date(orden.fecha_ingreso);
+            let fechaFin;
+            
+            if (orden.fecha_estimada_finalizacion) {
+                fechaFin = new Date(orden.fecha_estimada_finalizacion);
+            } else if (orden.dias_estimados_reparacion) {
+                fechaFin = new Date(fechaIngreso);
+                fechaFin.setDate(fechaIngreso.getDate() + orden.dias_estimados_reparacion);
+            } else {
+                return;
+            }
+            
+            const placa = orden.vehiculo?.placa || 'Vehículo';
+            const diasEstimados = orden.dias_estimados_reparacion || 
+                Math.ceil((fechaFin - fechaIngreso) / (1000 * 60 * 60 * 24));
+            
+            // Generar array de días entre ingreso y fin
+            const dias = [];
+            let currentDate = new Date(fechaIngreso);
+            currentDate.setHours(0, 0, 0, 0);
+            
+            // Limitar a máximo 60 días para no sobrecargar
+            let contador = 0;
+            while (currentDate <= fechaFin && contador < 90) {
+                dias.push(new Date(currentDate));
+                currentDate.setDate(currentDate.getDate() + 1);
+                contador++;
+            }
+            
+            // Pintar cada día en el calendario
+            dias.forEach(dia => {
+                const diaStr = dia.toISOString().split('T')[0];
+                const dayElements = document.querySelectorAll(`.fc-daygrid-day[data-date="${diaStr}"]`);
+                
+                dayElements.forEach(dayEl => {
+                    const esUltimoDia = dia.toDateString() === fechaFin.toDateString();
+                    
+                    if (esUltimoDia) {
+                        dayEl.classList.add('entrega-dia');
+                        let tooltip = `🚗 ENTREGA: ${placa}\n📅 ${diasEstimados} días de reparación`;
+                        if (dia < hoy) tooltip = `⚠️ ATRASADA: ${placa} (${Math.abs(Math.ceil((dia - hoy) / (1000 * 60 * 60 * 24)))} días)`;
+                        dayEl.setAttribute('data-tooltip', tooltip);
+                    } else {
+                        dayEl.classList.add('reparacion-dia');
+                        let tooltip = `🔧 EN REPARACIÓN: ${placa}`;
+                        if (dia.toDateString() === fechaIngreso.toDateString()) {
+                            tooltip = `📅 INGRESO: ${placa}\n⏱️ ${diasEstimados} días estimados`;
+                        }
+                        dayEl.setAttribute('data-tooltip', tooltip);
+                    }
+                });
+            });
+        });
+        
+    } catch (error) {
+        console.error('Error pintando días de reparación:', error);
+    }
+}
+
+// =====================================================
+// DETALLE DE EVENTOS
+// =====================================================
+
+async function verDetalleReserva(eventId) {
+    if (!eventId) return;
+    const [tipo, id] = eventId.split('_');
+    if (tipo === 'reserva') {
+        await verDetalleReservaPorId(id);
+    } else if (tipo === 'taller') {
+        await verDetalleOrdenTaller(id);
+    }
+}
+
+async function verDetalleReservaPorId(reservaId) {
+    mostrarNotificacion('Detalle de reserva disponible pronto', 'info');
+}
+
+async function verDetalleOrdenTaller(ordenId) {
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`/api/cliente/orden-trabajo/${ordenId}`, { headers: getHeaders() });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Error cargando orden');
+        
+        const orden = data.orden;
+        let infoDias = '';
+        
+        if (orden.dias_estimados_reparacion) {
+            const fechaEstimada = orden.fecha_estimada_finalizacion ? new Date(orden.fecha_estimada_finalizacion) : null;
+            const hoy = new Date();
+            if (fechaEstimada) {
+                const diffDays = Math.ceil((fechaEstimada - hoy) / (1000 * 60 * 60 * 24));
+                if (diffDays < 0) {
+                    infoDias = `<div class="info-row atrasado">
+                        <strong><i class="fas fa-exclamation-triangle"></i> Estado:</strong> 
+                        <span class="text-danger">⚠️ ATRASADO - ${Math.abs(diffDays)} días de retraso</span>
+                    </div>`;
+                } else if (diffDays === 0) {
+                    infoDias = `<div class="info-row urgente">
+                        <strong><i class="fas fa-bell"></i> Estado:</strong> 
+                        <span class="text-warning">🟡 ENTREGA PROGRAMADA PARA HOY</span>
+                    </div>`;
+                } else {
+                    infoDias = `<div class="info-row">
+                        <strong><i class="fas fa-clock"></i> Días restantes:</strong> 
+                        <span class="text-success">${diffDays} días</span>
+                    </div>`;
+                }
+            }
+        }
+        
+        const estadoTextoMap = {
+            'EnRecepcion': '📋 En Recepción', 'EnDiagnostico': '🔍 En Diagnóstico',
+            'DiagnosticoCompletado': '✅ Diagnóstico Completado', 'CotizacionEnviada': '📨 Cotización Enviada',
+            'CotizacionAceptada': '👍 Cotización Aceptada', 'EnReparacion': '🔧 En Reparación',
+            'ControlCalidad': '🔍 Control de Calidad', 'Finalizado': '🏁 Finalizado', 'Entregado': '🚗 Entregado'
+        };
+        const estadoMostrar = estadoTextoMap[orden.estado_global] || orden.estado_global;
+        
+        const modalBody = document.getElementById('modalDetalleBody');
+        if (modalBody) {
+            modalBody.innerHTML = `
+                <div class="detalle-info-orden">
+                    <div class="info-row">
+                        <strong><i class="fas fa-car"></i> Vehículo:</strong> 
+                        ${orden.vehiculo?.marca || ''} ${orden.vehiculo?.modelo || ''} (${orden.vehiculo?.placa || 'N/A'})
+                    </div>
+                    <div class="info-row">
+                        <strong><i class="fas fa-hashtag"></i> Orden #:</strong> 
+                        ${orden.codigo_unico || 'N/A'}
+                    </div>
+                    <div class="info-row">
+                        <strong><i class="fas fa-calendar-alt"></i> Ingreso:</strong> 
+                        ${new Date(orden.fecha_ingreso).toLocaleString()}
+                    </div>
+                    <div class="info-row">
+                        <strong><i class="fas fa-chart-line"></i> Estado actual:</strong> 
+                        <span class="estado-orden estado-${orden.estado_global}">${estadoMostrar}</span>
+                    </div>
+                    ${infoDias}
+                    ${orden.fecha_estimada_finalizacion ? `
+                        <div class="info-row">
+                            <strong><i class="fas fa-calendar-week"></i> Entrega estimada:</strong> 
+                            ${new Date(orden.fecha_estimada_finalizacion).toLocaleDateString()}
+                        </div>
+                    ` : ''}
+                    ${orden.fecha_salida ? `
+                        <div class="info-row">
+                            <strong><i class="fas fa-check-circle"></i> Fecha salida:</strong> 
+                            ${new Date(orden.fecha_salida).toLocaleString()}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        document.getElementById('modalDetalleSolicitud').classList.add('show');
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion(error.message, 'error');
+    } finally {
+        mostrarLoading(false);
     }
 }
 
@@ -280,37 +436,21 @@ async function cargarEventosCalendario(info, successCallback, failureCallback) {
 
 async function cargarMisSolicitudes() {
     mostrarLoading(true);
-    
     const filtroEstado = document.getElementById('filtroEstadoSolicitud')?.value || 'todos';
     
     try {
-        const response = await fetch(`/api/cliente/solicitudes`, {
-            headers: getHeaders()
-        });
-        
+        const response = await fetch(`/api/cliente/solicitudes`, { headers: getHeaders() });
         const data = await response.json();
-        
         if (!response.ok) throw new Error(data.error || 'Error cargando solicitudes');
         
         let solicitudes = data.solicitudes || [];
-        
-        if (filtroEstado !== 'todos') {
-            solicitudes = solicitudes.filter(s => s.estado === filtroEstado);
-        }
-        
+        if (filtroEstado !== 'todos') solicitudes = solicitudes.filter(s => s.estado === filtroEstado);
         renderizarSolicitudes(solicitudes);
-        
     } catch (error) {
         console.error('Error:', error);
         const container = document.getElementById('solicitudesLista');
         if (container) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <p>Error cargando solicitudes</p>
-                    <button class="btn-primary btn-sm" onclick="cargarMisSolicitudes()">Reintentar</button>
-                </div>
-            `;
+            container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Error cargando solicitudes</p><button class="btn-primary btn-sm" onclick="cargarMisSolicitudes()">Reintentar</button></div>`;
         }
     } finally {
         mostrarLoading(false);
@@ -322,13 +462,7 @@ function renderizarSolicitudes(solicitudes) {
     if (!container) return;
     
     if (!solicitudes || solicitudes.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-calendar-times"></i>
-                <p>No tienes solicitudes de reserva</p>
-                <p style="font-size: 0.8rem;">Ve a "Nueva Reserva" para solicitar una cita</p>
-            </div>
-        `;
+        container.innerHTML = `<div class="empty-state"><i class="fas fa-calendar-times"></i><p>No tienes solicitudes de reserva</p><p style="font-size: 0.8rem;">Ve a "Nueva Reserva" para solicitar una cita</p></div>`;
         return;
     }
     
@@ -340,102 +474,43 @@ function renderizarSolicitudes(solicitudes) {
         return `
             <div class="solicitud-card ${solicitud.estado}">
                 <div class="solicitud-header">
-                    <div class="solicitud-fecha">
-                        <i class="fas fa-calendar-alt"></i>
-                        Solicitado: ${fechaSolicitud}
-                    </div>
-                    <span class="solicitud-estado ${estadoClase}">
-                        ${estadoTexto}
-                    </span>
+                    <div class="solicitud-fecha"><i class="fas fa-calendar-alt"></i> Solicitado: ${fechaSolicitud}</div>
+                    <span class="solicitud-estado ${estadoClase}">${estadoTexto}</span>
                 </div>
                 <div class="solicitud-body">
-                    <div class="solicitud-vehiculo">
-                        <i class="fas fa-car"></i>
-                        <strong>${solicitud.vehiculo?.placa || 'Vehículo no especificado'}</strong>
-                    </div>
-                    <div class="solicitud-vehiculo">
-                        <i class="fas fa-calendar-day"></i>
-                        Fecha deseada: ${solicitud.fecha_deseada} ${solicitud.hora_deseada ? `a las ${solicitud.hora_deseada}` : ''}
-                    </div>
-                    <div class="solicitud-problema">
-                        <i class="fas fa-stethoscope"></i> ${escapeHtml(solicitud.descripcion_problema)}
-                    </div>
+                    <div class="solicitud-vehiculo"><i class="fas fa-car"></i><strong>${solicitud.vehiculo?.placa || 'Vehículo no especificado'}</strong></div>
+                    <div class="solicitud-vehiculo"><i class="fas fa-calendar-day"></i> Fecha deseada: ${solicitud.fecha_deseada} ${solicitud.hora_deseada ? `a las ${solicitud.hora_deseada}` : ''}</div>
+                    <div class="solicitud-problema"><i class="fas fa-stethoscope"></i> ${escapeHtml(solicitud.descripcion_problema)}</div>
                     ${solicitud.horarios_propuestos ? renderizarHorariosPropuestos(solicitud) : ''}
                 </div>
-                <div class="solicitud-footer">
-                    ${renderizarBotonesSegunEstado(solicitud)}
-                </div>
+                <div class="solicitud-footer">${renderizarBotonesSegunEstado(solicitud)}</div>
             </div>
         `;
     }).join('');
 }
 
 function getEstadoTexto(estado) {
-    const estados = {
-        'pendiente': '⏳ Solicitud enviada',
-        'horarios_propuestos': '📅 Horarios propuestos',
-        'confirmada': '✅ Confirmada',
-        'cancelada': '❌ Cancelada',
-        'completada': '🏁 Completada'
-    };
+    const estados = { 'pendiente': '⏳ Solicitud enviada', 'horarios_propuestos': '📅 Horarios propuestos', 'confirmada': '✅ Confirmada', 'cancelada': '❌ Cancelada', 'completada': '🏁 Completada' };
     return estados[estado] || estado;
 }
 
-function getEstadoClase(estado) {
-    return `estado-${estado}`;
-}
+function getEstadoClase(estado) { return `estado-${estado}`; }
 
 function renderizarHorariosPropuestos(solicitud) {
     try {
         let horarios = solicitud.horarios_propuestos;
-        if (typeof horarios === 'string') {
-            horarios = JSON.parse(horarios);
-        }
-        
+        if (typeof horarios === 'string') horarios = JSON.parse(horarios);
         if (!horarios || !Array.isArray(horarios) || horarios.length === 0) return '';
         
-        return `
-            <div class="horarios-lista">
-                <small style="width: 100%; color: var(--azul-acento);">
-                    <i class="fas fa-clock"></i> El taller te propone estos horarios:
-                </small>
-                ${horarios.map(horario => `
-                    <button class="horario-item" onclick="seleccionarHorario(${solicitud.id}, '${horario}')">
-                        <i class="fas fa-calendar-check"></i>
-                        ${new Date(horario).toLocaleString()}
-                    </button>
-                `).join('')}
-            </div>
-        `;
-    } catch (e) {
-        console.error('Error parseando horarios:', e);
-        return '';
-    }
+        return `<div class="horarios-lista"><small style="width: 100%; color: var(--azul-acento);"><i class="fas fa-clock"></i> El taller te propone estos horarios:</small>${horarios.map(horario => `<button class="horario-item" onclick="seleccionarHorario(${solicitud.id}, '${horario}')"><i class="fas fa-calendar-check"></i>${new Date(horario).toLocaleString()}</button>`).join('')}</div>`;
+    } catch (e) { return ''; }
 }
 
 function renderizarBotonesSegunEstado(solicitud) {
     switch (solicitud.estado) {
-        case 'horarios_propuestos':
-            return `
-                <button class="btn-sm btn-success" onclick="abrirModalHorarios(${solicitud.id})">
-                    <i class="fas fa-calendar-check"></i> Ver horarios
-                </button>
-            `;
-        case 'confirmada':
-            return `
-                <button class="btn-sm btn-secondary" onclick="verDetalleSolicitud(${solicitud.id})">
-                    <i class="fas fa-eye"></i> Ver detalle
-                </button>
-                <button class="btn-sm btn-danger" onclick="abrirModalCancelar(${solicitud.id})">
-                    <i class="fas fa-times"></i> Cancelar reserva
-                </button>
-            `;
-        default:
-            return `
-                <button class="btn-sm btn-secondary" onclick="verDetalleSolicitud(${solicitud.id})">
-                    <i class="fas fa-eye"></i> Ver detalle
-                </button>
-            `;
+        case 'horarios_propuestos': return `<button class="btn-sm btn-success" onclick="abrirModalHorarios(${solicitud.id})"><i class="fas fa-calendar-check"></i> Ver horarios</button>`;
+        case 'confirmada': return `<button class="btn-sm btn-secondary" onclick="verDetalleSolicitud(${solicitud.id})"><i class="fas fa-eye"></i> Ver detalle</button><button class="btn-sm btn-danger" onclick="abrirModalCancelar(${solicitud.id})"><i class="fas fa-times"></i> Cancelar reserva</button>`;
+        default: return `<button class="btn-sm btn-secondary" onclick="verDetalleSolicitud(${solicitud.id})"><i class="fas fa-eye"></i> Ver detalle</button>`;
     }
 }
 
@@ -443,151 +518,75 @@ function renderizarBotonesSegunEstado(solicitud) {
 // ACCIONES
 // =====================================================
 
-function abrirModalHorarios(solicitudId) {
-    solicitudActualId = solicitudId;
-    cargarYMostrarHorarios(solicitudId);
-}
+function abrirModalHorarios(solicitudId) { solicitudActualId = solicitudId; cargarYMostrarHorarios(solicitudId); }
 
 async function cargarYMostrarHorarios(solicitudId) {
     try {
-        const response = await fetch(`/api/cliente/solicitudes`, {
-            headers: getHeaders()
-        });
-        
+        const response = await fetch(`/api/cliente/solicitudes`, { headers: getHeaders() });
         const data = await response.json();
         const solicitud = data.solicitudes.find(s => s.id === solicitudId);
-        
         if (!solicitud || !solicitud.horarios_propuestos) return;
         
         let horarios = solicitud.horarios_propuestos;
-        if (typeof horarios === 'string') {
-            horarios = JSON.parse(horarios);
-        }
+        if (typeof horarios === 'string') horarios = JSON.parse(horarios);
         
         const modalBody = document.getElementById('modalHorariosBody');
         if (modalBody) {
-            modalBody.innerHTML = `
-                <div class="horarios-lista" style="flex-direction: column;">
-                    <p>Selecciona uno de los siguientes horarios para confirmar tu reserva:</p>
-                    ${horarios.map(horario => `
-                        <button class="horario-item" style="justify-content: space-between;" onclick="seleccionarHorario(${solicitudId}, '${horario}')">
-                            <span><i class="fas fa-calendar-day"></i> ${new Date(horario).toLocaleDateString()}</span>
-                            <span><i class="fas fa-clock"></i> ${new Date(horario).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
-                        </button>
-                    `).join('')}
-                </div>
-            `;
+            modalBody.innerHTML = `<div class="horarios-lista" style="flex-direction: column;"><p>Selecciona uno de los siguientes horarios para confirmar tu reserva:</p>${horarios.map(horario => `<button class="horario-item" style="justify-content: space-between;" onclick="seleccionarHorario(${solicitudId}, '${horario}')"><span><i class="fas fa-calendar-day"></i> ${new Date(horario).toLocaleDateString()}</span><span><i class="fas fa-clock"></i> ${new Date(horario).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span></button>`).join('')}</div>`;
         }
-        
         document.getElementById('modalHorarios').classList.add('show');
-        
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion('Error cargando horarios', 'error');
-    }
+    } catch (error) { mostrarNotificacion('Error cargando horarios', 'error'); }
 }
 
 async function seleccionarHorario(solicitudId, horario) {
     mostrarLoading(true);
-    
     try {
-        const response = await fetch(`/api/cliente/aceptar-horario/${solicitudId}`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify({ horario_seleccionado: horario })
-        });
-        
+        const response = await fetch(`/api/cliente/aceptar-horario/${solicitudId}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ horario_seleccionado: horario }) });
         const data = await response.json();
-        
         if (!response.ok) throw new Error(data.error || 'Error al confirmar horario');
-        
         mostrarNotificacion('🎉 ¡Reserva confirmada!', 'success');
         cerrarModalHorarios();
         cargarMisSolicitudes();
         if (calendar) calendar.refetchEvents();
-        
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion(error.message, 'error');
-    } finally {
-        mostrarLoading(false);
-    }
+        setTimeout(() => pintarDiasReparacion(), 200);
+    } catch (error) { mostrarNotificacion(error.message, 'error'); }
+    finally { mostrarLoading(false); }
 }
 
 async function rechazarHorarios() {
     if (!solicitudActualId) return;
-    
-    const confirmado = confirm('¿Rechazar estos horarios? La solicitud será cancelada.');
-    if (!confirmado) return;
-    
+    if (!confirm('¿Rechazar estos horarios? La solicitud será cancelada.')) return;
     mostrarLoading(true);
-    
     try {
-        const response = await fetch(`/api/cliente/rechazar-horarios/${solicitudActualId}`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify({ motivo: 'Cliente no aceptó los horarios' })
-        });
-        
+        const response = await fetch(`/api/cliente/rechazar-horarios/${solicitudActualId}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ motivo: 'Cliente no aceptó los horarios' }) });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Error al rechazar horarios');
-        
         mostrarNotificacion('Horarios rechazados', 'info');
         cerrarModalHorarios();
         cargarMisSolicitudes();
-        
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion(error.message, 'error');
-    } finally {
-        mostrarLoading(false);
-    }
+    } catch (error) { mostrarNotificacion(error.message, 'error'); }
+    finally { mostrarLoading(false); }
 }
 
-function cerrarModalHorarios() {
-    document.getElementById('modalHorarios').classList.remove('show');
-    solicitudActualId = null;
-}
+function cerrarModalHorarios() { document.getElementById('modalHorarios').classList.remove('show'); solicitudActualId = null; }
 
-function abrirModalCancelar(reservaId) {
-    reservaCancelarId = reservaId;
-    document.getElementById('motivoCancelacion').value = '';
-    document.getElementById('modalCancelar').classList.add('show');
-}
-
-function cerrarModalCancelar() {
-    document.getElementById('modalCancelar').classList.remove('show');
-    reservaCancelarId = null;
-}
+function abrirModalCancelar(reservaId) { reservaCancelarId = reservaId; document.getElementById('motivoCancelacion').value = ''; document.getElementById('modalCancelar').classList.add('show'); }
+function cerrarModalCancelar() { document.getElementById('modalCancelar').classList.remove('show'); reservaCancelarId = null; }
 
 async function confirmarCancelacion() {
     if (!reservaCancelarId) return;
-    
     const motivo = document.getElementById('motivoCancelacion')?.value || '';
-    
     mostrarLoading(true);
-    
     try {
-        const response = await fetch(`/api/cliente/cancelar-reserva/${reservaCancelarId}`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify({ motivo })
-        });
-        
+        const response = await fetch(`/api/cliente/cancelar-reserva/${reservaCancelarId}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ motivo }) });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Error al cancelar reserva');
-        
         mostrarNotificacion('Reserva cancelada', 'success');
         cerrarModalCancelar();
         cargarMisSolicitudes();
         if (calendar) calendar.refetchEvents();
-        
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion(error.message, 'error');
-    } finally {
-        mostrarLoading(false);
-    }
+    } catch (error) { mostrarNotificacion(error.message, 'error'); }
+    finally { mostrarLoading(false); }
 }
 
 // =====================================================
@@ -596,64 +595,30 @@ async function confirmarCancelacion() {
 
 async function enviarSolicitud(e) {
     e.preventDefault();
-    
     const vehiculoId = document.getElementById('vehiculoSelect')?.value;
     const fechaDeseada = document.getElementById('fechaDeseada')?.value;
     const horaDeseada = document.getElementById('horaDeseada')?.value;
     const descripcionProblema = document.getElementById('descripcionProblema')?.value;
     const mensajeAdicional = document.getElementById('mensajeAdicional')?.value;
     
-    if (!vehiculoId) {
-        mostrarNotificacion('Selecciona un vehículo', 'warning');
-        return;
-    }
-    if (!fechaDeseada) {
-        mostrarNotificacion('Selecciona una fecha', 'warning');
-        return;
-    }
-    if (!descripcionProblema || descripcionProblema.trim().length < 10) {
-        mostrarNotificacion('Describe el problema (mínimo 10 caracteres)', 'warning');
-        return;
-    }
+    if (!vehiculoId) { mostrarNotificacion('Selecciona un vehículo', 'warning'); return; }
+    if (!fechaDeseada) { mostrarNotificacion('Selecciona una fecha', 'warning'); return; }
+    if (!descripcionProblema || descripcionProblema.trim().length < 10) { mostrarNotificacion('Describe el problema (mínimo 10 caracteres)', 'warning'); return; }
     
-    const fechaMinima = new Date();
-    fechaMinima.setHours(0, 0, 0, 0);
-    const fechaSeleccionada = new Date(fechaDeseada);
-    if (fechaSeleccionada < fechaMinima) {
-        mostrarNotificacion('No puedes seleccionar una fecha pasada', 'warning');
-        return;
-    }
+    const fechaMinima = new Date(); fechaMinima.setHours(0, 0, 0, 0);
+    if (new Date(fechaDeseada) < fechaMinima) { mostrarNotificacion('No puedes seleccionar una fecha pasada', 'warning'); return; }
     
     mostrarLoading(true);
-    
     try {
-        const response = await fetch(`/api/cliente/solicitar`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify({
-                id_vehiculo: parseInt(vehiculoId),
-                fecha_deseada: fechaDeseada,
-                hora_deseada: horaDeseada || null,
-                descripcion_problema: descripcionProblema,
-                mensaje_adicional: mensajeAdicional || null
-            })
-        });
-        
+        const response = await fetch(`/api/cliente/solicitar`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ id_vehiculo: parseInt(vehiculoId), fecha_deseada: fechaDeseada, hora_deseada: horaDeseada || null, descripcion_problema: descripcionProblema, mensaje_adicional: mensajeAdicional || null }) });
         const data = await response.json();
-        
         if (!response.ok) throw new Error(data.error || 'Error al enviar solicitud');
-        
         alert('✅ Solicitud enviada. El taller te responderá pronto.');
         limpiarFormulario();
         cambiarTab('solicitudes');
         cargarMisSolicitudes();
-        
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion(error.message, 'error');
-    } finally {
-        mostrarLoading(false);
-    }
+    } catch (error) { mostrarNotificacion(error.message, 'error'); }
+    finally { mostrarLoading(false); }
 }
 
 function limpiarFormulario() {
@@ -668,71 +633,35 @@ function limpiarFormulario() {
 // MODALES DE DETALLE
 // =====================================================
 
-async function verDetalleReserva(reservaId) {
-    // Implementar si es necesario
-    mostrarNotificacion('Detalle de reserva', 'info');
-}
-
 async function verDetalleSolicitud(solicitudId) {
     try {
-        const response = await fetch(`/api/cliente/solicitudes`, {
-            headers: getHeaders()
-        });
-        
+        const response = await fetch(`/api/cliente/solicitudes`, { headers: getHeaders() });
         const data = await response.json();
         const solicitud = data.solicitudes?.find(s => s.id == solicitudId);
-        
-        if (!solicitud) {
-            mostrarNotificacion('Solicitud no encontrada', 'error');
-            return;
-        }
+        if (!solicitud) { mostrarNotificacion('Solicitud no encontrada', 'error'); return; }
         
         const modalBody = document.getElementById('modalDetalleBody');
         if (modalBody) {
-            modalBody.innerHTML = `
-                <div class="detalle-info">
-                    <div class="info-row"><strong>Vehículo:</strong> ${solicitud.vehiculo?.placa || 'N/A'}</div>
-                    <div class="info-row"><strong>Fecha solicitada:</strong> ${solicitud.fecha_deseada} ${solicitud.hora_deseada || ''}</div>
-                    <div class="info-row"><strong>Estado:</strong> ${getEstadoTexto(solicitud.estado)}</div>
-                    <div class="info-row"><strong>Problema:</strong> ${escapeHtml(solicitud.descripcion_problema)}</div>
-                    ${solicitud.mensaje_adicional ? `<div class="info-row"><strong>Comentarios:</strong> ${escapeHtml(solicitud.mensaje_adicional)}</div>` : ''}
-                    ${solicitud.fecha_agendada ? `<div class="info-row"><strong>Fecha confirmada:</strong> ${new Date(solicitud.fecha_agendada).toLocaleString()}</div>` : ''}
-                </div>
-            `;
+            modalBody.innerHTML = `<div class="detalle-info"><div class="info-row"><strong>Vehículo:</strong> ${solicitud.vehiculo?.placa || 'N/A'}</div><div class="info-row"><strong>Fecha solicitada:</strong> ${solicitud.fecha_deseada} ${solicitud.hora_deseada || ''}</div><div class="info-row"><strong>Estado:</strong> ${getEstadoTexto(solicitud.estado)}</div><div class="info-row"><strong>Problema:</strong> ${escapeHtml(solicitud.descripcion_problema)}</div>${solicitud.mensaje_adicional ? `<div class="info-row"><strong>Comentarios:</strong> ${escapeHtml(solicitud.mensaje_adicional)}</div>` : ''}${solicitud.fecha_agendada ? `<div class="info-row"><strong>Fecha confirmada:</strong> ${new Date(solicitud.fecha_agendada).toLocaleString()}</div>` : ''}</div>`;
         }
-        
         document.getElementById('modalDetalleSolicitud').classList.add('show');
-        
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion('Error cargando detalle', 'error');
-    }
+    } catch (error) { mostrarNotificacion('Error cargando detalle', 'error'); }
 }
 
-function cerrarModalDetalle() {
-    document.getElementById('modalDetalleSolicitud').classList.remove('show');
-}
+function cerrarModalDetalle() { document.getElementById('modalDetalleSolicitud').classList.remove('show'); }
 
 // =====================================================
 // FUNCIONES AUXILIARES
 // =====================================================
 
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+function escapeHtml(text) { if (!text) return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
 
 function mostrarNotificacion(mensaje, tipo = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast-notification ${tipo}`;
     toast.innerHTML = `<span>${escapeHtml(mensaje)}</span>`;
     document.body.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.remove();
-    }, 3000);
+    setTimeout(() => toast.remove(), 3000);
 }
 
 // Exponer funciones globales

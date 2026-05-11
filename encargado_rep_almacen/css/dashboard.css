@@ -1,6 +1,6 @@
 /* =====================================================
    DASHBOARD ENCARGADO DE REPUESTOS - TEMA OSCURO
-   BASADO EN LA PALETA FURIA MOTOR
+   FURIA MOTOR COMPANY SRL
    ===================================================== */
 
 /* =====================================================
@@ -73,142 +73,6 @@ body {
 }
 
 /* =====================================================
-   SIDEBAR
-   ===================================================== */
-.sidebar {
-    background: var(--negro);
-    color: var(--blanco);
-    width: 280px;
-    height: 100vh;
-    position: fixed;
-    left: 0;
-    top: 0;
-    overflow-y: auto;
-    transition: all 0.3s ease;
-    z-index: 1000;
-    border-right: 1px solid var(--border-color);
-}
-
-.sidebar-header {
-    padding: 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.sidebar-logo {
-    width: 40px;
-    height: 40px;
-    object-fit: contain;
-}
-
-.sidebar-brand {
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: var(--rojo-primario);
-}
-
-.sidebar-user {
-    padding: 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.user-avatar {
-    width: 48px;
-    height: 48px;
-    background: var(--rojo-primario);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-}
-
-.user-info {
-    flex: 1;
-}
-
-.user-name {
-    display: block;
-    font-weight: 600;
-    font-size: 1rem;
-    margin-bottom: 0.25rem;
-    color: var(--blanco);
-}
-
-.user-role {
-    display: block;
-    font-size: 0.8rem;
-    color: var(--gris-texto);
-}
-
-.sidebar-nav {
-    padding: 1rem 0;
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 180px);
-}
-
-.sidebar-nav ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.sidebar-nav ul:first-child {
-    flex: 1;
-}
-
-.nav-item {
-    margin: 0.25rem 0;
-}
-
-.nav-link {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.75rem 1.5rem;
-    color: var(--gris-texto);
-    text-decoration: none;
-    transition: var(--transition);
-    border-left: 4px solid transparent;
-}
-
-.nav-link i {
-    width: 20px;
-    font-size: 1.1rem;
-}
-
-.nav-link:hover {
-    background: rgba(193, 18, 31, 0.1);
-    color: var(--blanco);
-}
-
-.nav-item.active .nav-link {
-    background: rgba(193, 18, 31, 0.15);
-    color: var(--blanco);
-    border-left-color: var(--rojo-primario);
-}
-
-.badge {
-    background: var(--rojo-primario);
-    color: var(--blanco);
-    padding: 0.2rem 0.5rem;
-    border-radius: var(--radius-full);
-    font-size: 0.7rem;
-    margin-left: auto;
-}
-
-.sidebar-bottom {
-    border-top: 1px solid var(--border-color);
-    padding-top: 1rem;
-}
-
-/* =====================================================
    MAIN CONTENT
    ===================================================== */
 .main-content {
@@ -216,6 +80,7 @@ body {
     margin-left: 280px;
     padding: 2rem;
     background: var(--bg-primary);
+    min-height: 100vh;
 }
 
 .top-bar {
@@ -1035,26 +900,6 @@ body {
 }
 
 @media (max-width: 992px) {
-    .sidebar {
-        width: 80px;
-    }
-    
-    .sidebar-brand,
-    .user-info,
-    .nav-link span:not(.badge) {
-        display: none;
-    }
-    
-    .nav-link {
-        justify-content: center;
-        padding: 0.75rem;
-    }
-    
-    .nav-link i {
-        margin: 0;
-        font-size: 1.3rem;
-    }
-    
     .main-content {
         margin-left: 80px;
     }

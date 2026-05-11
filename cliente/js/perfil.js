@@ -10,6 +10,15 @@ let avatarSeleccionado = 'user';
 let vehiculoEditandoId = null;
 
 // =====================================================
+// GOOGLE MAPS CONFIGURACIÓN
+// =====================================================
+
+let map;
+let marker;
+let geocoder;
+let ubicacionActual = { lat: -17.3895, lng: -66.1568 }; // Coordenadas por defecto (Cochabamba)
+
+// =====================================================
 // FUNCIONES DE UTILIDAD
 // =====================================================
 
@@ -86,6 +95,250 @@ function mostrarLoading(mostrar) {
 }
 
 // =====================================================
+// GOOGLE MAPS FUNCIONES
+// =====================================================
+
+function initMap() {
+    const mapElement = document.getElementById('map');
+    if (!mapElement || !window.google) return;
+    
+    // Obtener coordenadas guardadas
+    const lat = parseFloat(document.getElementById('latitud')?.value);
+    const lng = parseFloat(document.getElementById('longitud')?.value);
+    
+    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+        ubicacionActual = { lat: lat, lng: lng };
+    }
+    
+    map = new google.maps.Map(mapElement, {
+        center: ubicacionActual,
+        zoom: 15,
+        styles: [
+            {
+                featureType: 'poi',
+                elementType: 'labels',
+                stylers: [{ visibility: 'off' }]
+            }
+        ],
+        streetViewControl: false,
+        mapTypeControl: false,
+        fullscreenControl: false,
+        zoomControl: true
+    });
+    
+    // Crear marcador arrastrable
+    marker = new google.maps.Marker({
+        position: ubicacionActual,
+        map: map,
+        draggable: true,
+        animation: google.maps.Animation.DROP,
+        icon: {
+            url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+            scaledSize: new google.maps.Size(40, 40)
+        }
+    });
+    
+    geocoder = new google.maps.Geocoder();
+    
+    // Evento cuando se arrastra el marcador
+    marker.addListener('dragend', () => {
+        const position = marker.getPosition();
+        actualizarUbicacion(position.lat(), position.lng());
+    });
+    
+    // Click en el mapa para mover marcador
+    map.addListener('click', (event) => {
+        marker.setPosition(event.latLng);
+        actualizarUbicacion(event.latLng.lat(), event.latLng.lng());
+    });
+    
+    // Si ya hay coordenadas, actualizar la dirección
+    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+        actualizarDireccionDesdeCoordenadas(lat, lng);
+    }
+}
+
+async function actualizarUbicacion(lat, lng) {
+    document.getElementById('latitud').value = lat;
+    document.getElementById('longitud').value = lng;
+    await actualizarDireccionDesdeCoordenadas(lat, lng);
+}
+
+async function actualizarDireccionDesdeCoordenadas(lat, lng) {
+    if (!geocoder) return;
+    
+    try {
+        const response = await new Promise((resolve, reject) => {
+            geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+                if (status === 'OK') resolve(results);
+                else reject(status);
+            });
+        });
+        
+        if (response && response[0]) {
+            const direccion = response[0].formatted_address;
+            const ubicacionTexto = document.getElementById('ubicacionTexto');
+            if (ubicacionTexto) {
+                ubicacionTexto.innerHTML = `
+                    <i class="fas fa-check-circle" style="color: var(--verde-exito);"></i>
+                    <span>${escapeHtml(direccion)}</span>
+                `;
+            }
+            
+            // Actualizar automáticamente los campos de dirección y ciudad
+            const direccionInput = document.getElementById('direccion');
+            const ciudadInput = document.getElementById('ciudad');
+            
+            if (direccionInput && direccionInput.disabled === false) {
+                const partes = direccion.split(',');
+                direccionInput.value = partes[0]?.trim() || '';
+                if (ciudadInput && partes.length >= 2) {
+                    ciudadInput.value = partes[partes.length - 2]?.trim() || '';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error al geocodificar:', error);
+        const ubicacionTexto = document.getElementById('ubicacionTexto');
+        if (ubicacionTexto) {
+            ubicacionTexto.innerHTML = `
+                <i class="fas fa-exclamation-triangle" style="color: var(--ambar-alerta);"></i>
+                <span>Ubicación guardada (lat: ${lat.toFixed(6)}, lng: ${lng.toFixed(6)})</span>
+            `;
+        }
+    }
+}
+
+function usarUbicacionActual() {
+    if (navigator.geolocation) {
+        mostrarLoading(true);
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                
+                if (map && marker) {
+                    map.setCenter({ lat, lng });
+                    marker.setPosition({ lat, lng });
+                    actualizarUbicacion(lat, lng);
+                    showToast('Ubicación actualizada desde tu navegador', 'success');
+                }
+                mostrarLoading(false);
+            },
+            (error) => {
+                mostrarLoading(false);
+                let mensaje = 'No se pudo obtener tu ubicación. ';
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        mensaje += 'Permiso denegado. Verifica los permisos de ubicación.';
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        mensaje += 'Información de ubicación no disponible.';
+                        break;
+                    case error.TIMEOUT:
+                        mensaje += 'Tiempo de espera agotado.';
+                        break;
+                    default:
+                        mensaje += error.message;
+                }
+                showToast(mensaje, 'warning');
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
+        );
+    } else {
+        showToast('Tu navegador no soporta geolocalización', 'error');
+    }
+}
+
+function mostrarBuscadorDireccion() {
+    const modal = document.createElement('div');
+    modal.className = 'search-modal';
+    modal.innerHTML = `
+        <div class="search-modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-search"></i> Buscar dirección</h3>
+                <button class="close-modal" onclick="this.closest('.search-modal').remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="search-input-group">
+                <input type="text" id="searchAddress" placeholder="Ej: Av. América, Cochabamba" autocomplete="off">
+                <button class="btn-primary" onclick="buscarDireccion()">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+            <div id="searchResults" class="search-results"></div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    
+    setTimeout(() => {
+        document.getElementById('searchAddress')?.focus();
+    }, 100);
+    
+    document.getElementById('searchAddress')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') buscarDireccion();
+    });
+}
+
+async function buscarDireccion() {
+    const query = document.getElementById('searchAddress')?.value;
+    if (!query || query.trim() === '') {
+        showToast('Ingresa una dirección para buscar', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    
+    try {
+        const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=TU_API_KEY_AQUI&language=es`);
+        const data = await response.json();
+        
+        if (data.status === 'OK' && data.results.length > 0) {
+            const resultsContainer = document.getElementById('searchResults');
+            resultsContainer.innerHTML = data.results.map(result => `
+                <div class="search-result-item" onclick="seleccionarDireccionResultado('${escapeHtml(result.formatted_address)}', ${result.geometry.location.lat}, ${result.geometry.location.lng})">
+                    <i class="fas fa-map-marker-alt" style="color: var(--rojo-primario);"></i>
+                    <div>
+                        <strong>${escapeHtml(result.formatted_address)}</strong>
+                        <div style="font-size: 0.7rem; color: var(--gris-texto);">${result.types.join(', ')}</div>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            document.getElementById('searchResults').innerHTML = `
+                <div style="text-align: center; padding: 1rem; color: var(--gris-texto);">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>No se encontraron resultados para: "${escapeHtml(query)}"</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error al buscar:', error);
+        showToast('Error al buscar la dirección', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+function seleccionarDireccionResultado(direccion, lat, lng) {
+    if (map && marker) {
+        map.setCenter({ lat, lng });
+        marker.setPosition({ lat, lng });
+        actualizarUbicacion(lat, lng);
+    }
+    
+    const modal = document.querySelector('.search-modal');
+    if (modal) modal.remove();
+    
+    showToast('Ubicación actualizada', 'success');
+}
+
+// =====================================================
 // CARGA DE DATOS DEL PERFIL
 // =====================================================
 
@@ -112,6 +365,33 @@ async function cargarPerfil() {
             document.getElementById('telefono2').value = usuario.telefono2 || '';
             document.getElementById('direccion').value = usuario.direccion || '';
             document.getElementById('ciudad').value = usuario.ciudad || '';
+            
+            // Cargar coordenadas
+            if (usuario.latitud && usuario.longitud) {
+                document.getElementById('latitud').value = usuario.latitud;
+                document.getElementById('longitud').value = usuario.longitud;
+                
+                const ubicacionTexto = document.getElementById('ubicacionTexto');
+                if (ubicacionTexto) {
+                    ubicacionTexto.innerHTML = `
+                        <i class="fas fa-check-circle" style="color: var(--verde-exito);"></i>
+                        <span>Ubicación guardada en el mapa</span>
+                    `;
+                }
+                
+                // Actualizar mapa si ya está inicializado
+                if (map && marker) {
+                    const lat = parseFloat(usuario.latitud);
+                    const lng = parseFloat(usuario.longitud);
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        map.setCenter({ lat, lng });
+                        marker.setPosition({ lat, lng });
+                    }
+                }
+            } else {
+                document.getElementById('latitud').value = '';
+                document.getElementById('longitud').value = '';
+            }
             
             document.getElementById('displayNombre').textContent = usuario.nombre || 'Cliente';
             document.getElementById('displayEmail').textContent = usuario.email || '';
@@ -205,7 +485,7 @@ function renderSesiones(sesiones) {
                 <span class="sesion-dispositivo">
                     <i class="fas ${s.dispositivo === 'mobile' ? 'fa-mobile-alt' : 'fa-laptop'}"></i>
                     ${escapeHtml(s.dispositivo_nombre || 'Dispositivo desconocido')}
-                    ${s.es_actual ? '<span style="margin-left: 0.5rem; color: var(--verde-exito);">(Actual)</span>' : ''}
+                    ${s.es_actual ? '<span class="badge-actual">(Actual)</span>' : ''}
                 </span>
                 <span class="sesion-fecha">Última actividad: ${formatDate(s.ultima_actividad)}</span>
             </div>
@@ -224,7 +504,7 @@ function renderVehiculos(vehiculos) {
     
     if (vehiculos.length === 0) {
         container.innerHTML = `
-            <div class="empty-state" style="padding: 2rem; text-align: center;">
+            <div class="empty-state">
                 <i class="fas fa-car" style="font-size: 2rem; color: var(--gris-texto);"></i>
                 <p>No tienes vehículos registrados</p>
                 <small>Agrega tu vehículo para un mejor seguimiento</small>
@@ -236,7 +516,7 @@ function renderVehiculos(vehiculos) {
     container.innerHTML = vehiculos.map(v => `
         <div class="vehiculo-item">
             <div class="vehiculo-info">
-                <span class="vehiculo-placa">${escapeHtml(v.placa)}</span>
+                <span class="vehiculo-placa"><i class="fas fa-id-card"></i> ${escapeHtml(v.placa)}</span>
                 <span class="vehiculo-detalle">${escapeHtml(v.marca)} ${escapeHtml(v.modelo)} ${v.anio ? `(${v.anio})` : ''}</span>
                 ${v.color ? `<span class="vehiculo-detalle">Color: ${escapeHtml(v.color)}</span>` : ''}
             </div>
@@ -262,8 +542,8 @@ function renderActividad(actividad, pagination) {
                 <td colspan="4" style="text-align: center; padding: 2rem;">
                     <i class="fas fa-history" style="font-size: 2rem; color: var(--gris-texto);"></i>
                     <p>No hay actividad registrada</p>
-                 </td>
-             </tr>
+                  </td>
+              </tr>
         `;
         return;
     }
@@ -313,7 +593,8 @@ function renderPaginacion(pagination) {
 
 function toggleEditInfo() {
     editMode = !editMode;
-    const inputs = document.querySelectorAll('#formInformacion input');
+    const inputs = document.querySelectorAll('#formInformacion input:not([type="hidden"])');
+    const mapContainer = document.getElementById('mapContainer');
     const actions = document.getElementById('infoActions');
     const editBtn = document.getElementById('btnEditarInfo');
     
@@ -324,9 +605,27 @@ function toggleEditInfo() {
     if (editMode) {
         actions.style.display = 'flex';
         editBtn.style.display = 'none';
+        if (mapContainer) mapContainer.style.display = 'block';
+        
+        // Si el mapa no está inicializado, inicializarlo
+        if (!map && document.getElementById('map')) {
+            initMap();
+        } else if (map) {
+            // Forzar redimensionamiento del mapa
+            setTimeout(() => {
+                google.maps.event.trigger(map, 'resize');
+                const lat = parseFloat(document.getElementById('latitud')?.value);
+                const lng = parseFloat(document.getElementById('longitud')?.value);
+                if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                    map.setCenter({ lat, lng });
+                    marker.setPosition({ lat, lng });
+                }
+            }, 100);
+        }
     } else {
         actions.style.display = 'none';
         editBtn.style.display = 'flex';
+        if (mapContainer) mapContainer.style.display = 'none';
     }
 }
 
@@ -335,6 +634,7 @@ function cancelarEdicionInfo() {
     const inputs = document.querySelectorAll('#formInformacion input');
     const actions = document.getElementById('infoActions');
     const editBtn = document.getElementById('btnEditarInfo');
+    const mapContainer = document.getElementById('mapContainer');
     
     inputs.forEach(input => {
         input.disabled = true;
@@ -342,6 +642,7 @@ function cancelarEdicionInfo() {
     
     actions.style.display = 'none';
     editBtn.style.display = 'flex';
+    if (mapContainer) mapContainer.style.display = 'none';
     cargarPerfil();
 }
 
@@ -353,7 +654,10 @@ async function guardarInformacion(event) {
         telefono: document.getElementById('telefono').value,
         telefono2: document.getElementById('telefono2').value,
         direccion: document.getElementById('direccion').value,
-        ciudad: document.getElementById('ciudad').value
+        ciudad: document.getElementById('ciudad').value,
+        latitud: document.getElementById('latitud').value,
+        longitud: document.getElementById('longitud').value,
+        ubicacion_confirmada: true
     };
     
     mostrarLoading(true);
@@ -367,7 +671,7 @@ async function guardarInformacion(event) {
         const result = await response.json();
         
         if (result.success) {
-            showToast('Información actualizada', 'success');
+            showToast('Información y ubicación actualizadas', 'success');
             cancelarEdicionInfo();
             cargarPerfil();
         } else {
@@ -832,5 +1136,10 @@ window.exportarActividad = exportarActividad;
 window.cargarActividad = cargarActividad;
 window.togglePassword = togglePassword;
 window.cerrarModal = cerrarModal;
+window.initMap = initMap;
+window.usarUbicacionActual = usarUbicacionActual;
+window.mostrarBuscadorDireccion = mostrarBuscadorDireccion;
+window.buscarDireccion = buscarDireccion;
+window.seleccionarDireccionResultado = seleccionarDireccionResultado;
 
 document.addEventListener('DOMContentLoaded', inicializar);

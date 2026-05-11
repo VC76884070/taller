@@ -765,3 +765,279 @@ body {
         align-items: center;
     }
 }
+/* =====================================================
+   CALENDARIO MENSUAL CON DÍAS PINTADOS
+   ===================================================== */
+
+.calendario-card {
+    overflow: visible;
+}
+
+.calendario-wrapper {
+    margin-top: 0.5rem;
+}
+
+.calendario-leyenda {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.7rem;
+}
+
+.leyenda-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--gris-texto);
+}
+
+.color-reparacion {
+    width: 12px;
+    height: 12px;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(245, 158, 11, 0.1));
+    border-radius: 2px;
+    display: inline-block;
+}
+
+.color-entrega {
+    width: 12px;
+    height: 12px;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(139, 92, 246, 0.1));
+    border-radius: 2px;
+    display: inline-block;
+}
+
+.color-atrasado {
+    width: 12px;
+    height: 12px;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(239, 68, 68, 0.1));
+    border-radius: 2px;
+    display: inline-block;
+}
+
+/* Estilos FullCalendar */
+.fc {
+    background: transparent;
+    color: var(--blanco);
+}
+
+.fc-toolbar-title {
+    color: var(--blanco);
+    font-size: 1rem;
+}
+
+.fc-button {
+    background: var(--gris-oscuro);
+    border: 1px solid var(--border-color);
+    color: var(--blanco);
+}
+
+.fc-button:hover {
+    background: var(--rojo-primario);
+    border-color: var(--rojo-primario);
+}
+
+.fc-button-primary:not(:disabled).fc-button-active,
+.fc-button-primary:not(:disabled):active {
+    background: var(--rojo-primario);
+    border-color: var(--rojo-primario);
+}
+
+.fc-daygrid-day {
+    background: var(--bg-card);
+    min-height: 90px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.fc-daygrid-day:hover {
+    background: rgba(193, 18, 31, 0.05);
+}
+
+.fc-daygrid-day-number {
+    color: var(--gris-texto);
+    font-size: 0.8rem;
+    padding: 6px;
+}
+
+.fc-day-today {
+    background: rgba(193, 18, 31, 0.1) !important;
+}
+
+.fc-day-other {
+    background: var(--bg-secondary);
+}
+
+/* Días pintados - Reparación */
+.fc-daygrid-day.reparacion-dia {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04));
+    position: relative;
+}
+
+.fc-daygrid-day.reparacion-dia:hover {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.08));
+}
+
+.fc-daygrid-day.reparacion-dia::after {
+    content: '🔧';
+    position: absolute;
+    bottom: 4px;
+    right: 6px;
+    font-size: 0.7rem;
+    opacity: 0.5;
+}
+
+/* Día de entrega */
+.fc-daygrid-day.entrega-dia {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05));
+    position: relative;
+    border-bottom: 2px solid var(--morado-acento, #8B5CF6);
+}
+
+.fc-daygrid-day.entrega-dia:hover {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(139, 92, 246, 0.08));
+}
+
+.fc-daygrid-day.entrega-dia::after {
+    content: '🚗';
+    position: absolute;
+    bottom: 4px;
+    right: 6px;
+    font-size: 0.7rem;
+    opacity: 0.7;
+}
+
+/* Día atrasado */
+.fc-daygrid-day.atrasado-dia {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
+    position: relative;
+}
+
+.fc-daygrid-day.atrasado-dia::after {
+    content: '⚠️';
+    position: absolute;
+    bottom: 4px;
+    right: 6px;
+    font-size: 0.7rem;
+    opacity: 0.7;
+}
+
+/* Tooltip para días pintados */
+.fc-daygrid-day[data-tooltip]:hover::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--gris-oscuro);
+    color: var(--blanco);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-color);
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+/* Eventos de citas/reservas */
+.fc-event {
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    margin: 1px 2px;
+    border: none !important;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fc-event-reserva {
+    background-color: #10B981 !important;
+}
+
+.fc-event-title {
+    font-weight: 500;
+    font-size: 0.65rem;
+}
+
+/* =====================================================
+   VEHÍCULOS EN TALLER LIST
+   ===================================================== */
+
+.vehiculos-taller-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.vehiculo-taller-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-md);
+    transition: var(--transition);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.vehiculo-taller-item:hover {
+    background: var(--gris-medio);
+    border-color: var(--rojo-primario);
+    transform: translateX(4px);
+}
+
+.vehiculo-taller-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--ambar-alerta);
+}
+
+.vehiculo-taller-info {
+    flex: 1;
+}
+
+.vehiculo-taller-placa {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--blanco);
+}
+
+.vehiculo-taller-modelo {
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+}
+
+.vehiculo-taller-dias {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-full);
+}
+
+.vehiculo-taller-dias.normal {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10B981;
+}
+
+.vehiculo-taller-dias.urgente {
+    background: rgba(245, 158, 11, 0.15);
+    color: #F59E0B;
+}
+
+.vehiculo-taller-dias.atrasado {
+    background: rgba(239, 68, 68, 0.15);
+    color: #EF4444;
+}

@@ -21,6 +21,7 @@
     --blanco: #FFFFFF;
     --verde-exito: #10B981;
     --ambar-alerta: #F59E0B;
+    --morado-acento: #8B5CF6;
     --azul-profundo: #1E3A5F;
     --azul-acento: #2563EB;
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
@@ -34,7 +35,6 @@
     --radius-xl: 24px;
     --radius-full: 9999px;
     --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-slow: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --bg-primary: #0A0A0C;
     --bg-secondary: #121214;
     --bg-card: #1C1C1E;
@@ -193,7 +193,7 @@ body {
 }
 
 /* =====================================================
-   CALENDARIO
+   CALENDARIO - ESTILOS CON DÍAS PINTADOS
    ===================================================== */
 
 .calendario-wrapper {
@@ -232,40 +232,144 @@ body {
 
 .fc-daygrid-day {
     background: var(--bg-card);
+    min-height: 100px;
+    transition: background 0.2s ease;
 }
 
 .fc-daygrid-day-number {
     color: var(--gris-texto);
+    font-size: 0.85rem;
+    padding: 6px;
 }
 
 .fc-day-today {
     background: rgba(193, 18, 31, 0.1) !important;
 }
 
+.fc-day-other {
+    background: var(--bg-secondary);
+}
+
+/* =====================================================
+   DÍAS DE REPARACIÓN PINTADOS
+   ===================================================== */
+
+/* Días normales de reparación - Fondo naranja suave */
+.fc-daygrid-day.reparacion-dia {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04));
+    position: relative;
+}
+
+.fc-daygrid-day.reparacion-dia:hover {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.08));
+}
+
+.fc-daygrid-day.reparacion-dia::after {
+    content: '🔧';
+    position: absolute;
+    bottom: 6px;
+    right: 8px;
+    font-size: 0.7rem;
+    opacity: 0.5;
+}
+
+/* Día de entrega (último día) - Fondo morado */
+.fc-daygrid-day.entrega-dia {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.08));
+    position: relative;
+    border-bottom: 2px solid var(--morado-acento);
+}
+
+.fc-daygrid-day.entrega-dia:hover {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(139, 92, 246, 0.12));
+}
+
+.fc-daygrid-day.entrega-dia::after {
+    content: '🚗';
+    position: absolute;
+    bottom: 6px;
+    right: 8px;
+    font-size: 0.7rem;
+    opacity: 0.7;
+}
+
+/* Día actual si está en reparación */
+.fc-day-today.reparacion-dia {
+    background: rgba(193, 18, 31, 0.15) !important;
+}
+
+.fc-day-today.entrega-dia {
+    background: rgba(139, 92, 246, 0.2) !important;
+}
+
+/* =====================================================
+   TOOLTIP PARA DÍAS PINTADOS
+   ===================================================== */
+
+.fc-daygrid-day.reparacion-dia:hover::before,
+.fc-daygrid-day.entrega-dia:hover::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--gris-oscuro);
+    color: var(--blanco);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-color);
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+/* Eventos de citas - compactos */
 .fc-event {
     cursor: pointer;
-    border-radius: var(--radius-sm);
-    font-size: 0.75rem;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    margin: 1px 2px;
+    border: none !important;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.15s ease;
 }
 
+.fc-event:hover {
+    transform: scale(1.02);
+    z-index: 10;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.fc-event-title {
+    font-weight: 500;
+    font-size: 0.65rem;
+}
+
+/* Reservas confirmadas */
+.fc-event-reserva {
+    background-color: #10B981 !important;
+}
+
+/* Estados anteriores (legado) */
 .fc-event-pendiente {
     background-color: var(--ambar-alerta);
-    border-color: var(--ambar-alerta);
 }
-
 .fc-event-confirmada {
     background-color: var(--verde-exito);
-    border-color: var(--verde-exito);
 }
-
 .fc-event-cancelada {
     background-color: var(--gris-texto);
-    border-color: var(--gris-texto);
 }
-
 .fc-event-completada {
     background-color: var(--azul-profundo);
-    border-color: var(--azul-profundo);
 }
 
 /* =====================================================
@@ -361,22 +465,18 @@ body {
     background: rgba(245, 158, 11, 0.15);
     color: var(--ambar-alerta);
 }
-
 .estado-horarios_propuestos {
     background: rgba(37, 99, 235, 0.15);
     color: var(--azul-acento);
 }
-
 .estado-confirmada {
     background: rgba(16, 185, 129, 0.15);
     color: var(--verde-exito);
 }
-
 .estado-cancelada {
     background: rgba(107, 114, 128, 0.15);
     color: var(--gris-texto);
 }
-
 .estado-completada {
     background: rgba(30, 58, 95, 0.15);
     color: var(--azul-profundo);
@@ -446,17 +546,6 @@ body {
 
 .horario-item i {
     font-size: 0.7rem;
-}
-
-.horario-seleccionado {
-    background: var(--verde-exito);
-    border-color: var(--verde-exito);
-    cursor: default;
-}
-
-.horario-seleccionado:hover {
-    background: var(--verde-exito);
-    transform: none;
 }
 
 /* =====================================================
@@ -636,7 +725,6 @@ body {
     border: 1px solid var(--verde-exito);
     color: var(--verde-exito);
 }
-
 .btn-success:hover {
     background: var(--verde-exito);
     color: var(--blanco);
@@ -681,7 +769,7 @@ body {
     width: 90%;
     opacity: 0;
     transform: scale(0.95) translateY(-20px);
-    transition: var(--transition-bounce);
+    transition: 0.2s;
     box-shadow: var(--shadow-xl);
 }
 
@@ -765,6 +853,98 @@ body {
 }
 
 /* =====================================================
+   DETALLE DE ORDEN - MODAL
+   ===================================================== */
+
+.detalle-info-orden {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.detalle-info-orden .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.7rem 1rem;
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-md);
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    border-left: 3px solid transparent;
+    transition: var(--transition);
+}
+
+.detalle-info-orden .info-row:hover {
+    background: rgba(193, 18, 31, 0.05);
+    transform: translateX(4px);
+}
+
+.detalle-info-orden .info-row strong {
+    color: var(--rojo-primario);
+    font-size: 0.8rem;
+}
+
+.detalle-info-orden .info-row span {
+    font-size: 0.85rem;
+    color: var(--blanco);
+}
+
+.detalle-info-orden .info-row.atrasado {
+    background: rgba(239, 68, 68, 0.1);
+    border-left-color: #EF4444;
+}
+.detalle-info-orden .info-row.atrasado .text-danger {
+    color: #EF4444;
+    font-weight: 600;
+}
+
+.detalle-info-orden .info-row.urgente {
+    background: rgba(245, 158, 11, 0.1);
+    border-left-color: #F59E0B;
+}
+.detalle-info-orden .info-row.urgente .text-warning {
+    color: #F59E0B;
+    font-weight: 600;
+}
+
+.detalle-info-orden .info-row .text-success {
+    color: #10B981;
+    font-weight: 600;
+}
+
+/* Estado badge en detalle */
+.estado-orden {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+.estado-orden.estado-EnRecepcion { background: rgba(245, 158, 11, 0.15); color: #F59E0B; }
+.estado-orden.estado-EnDiagnostico { background: rgba(245, 158, 11, 0.15); color: #F59E0B; }
+.estado-orden.estado-EnReparacion { background: rgba(245, 158, 11, 0.15); color: #F59E0B; }
+.estado-orden.estado-CotizacionEnviada { background: rgba(59, 130, 246, 0.15); color: #3B82F6; }
+.estado-orden.estado-CotizacionAceptada { background: rgba(16, 185, 129, 0.15); color: #10B981; }
+.estado-orden.estado-Finalizado { background: rgba(16, 185, 129, 0.15); color: #10B981; }
+.estado-orden.estado-Entregado { background: rgba(16, 185, 129, 0.15); color: #10B981; }
+
+/* Alertas */
+.alert-danger, .alert-warning, .alert-info {
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.alert-danger { background: rgba(239, 68, 68, 0.1); border-left: 3px solid #EF4444; }
+.alert-warning { background: rgba(245, 158, 11, 0.1); border-left: 3px solid #F59E0B; }
+.alert-info { background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3B82F6; }
+
+/* =====================================================
    EMPTY STATE
    ===================================================== */
 
@@ -823,60 +1003,58 @@ body {
 }
 
 /* =====================================================
+   TOAST NOTIFICACIONES
+   ===================================================== */
+
+.toast-notification {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 0.85rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    z-index: 1100;
+    animation: toastSlide 0.3s ease;
+    box-shadow: var(--shadow-xl);
+    border-left: 4px solid;
+    font-size: 0.85rem;
+}
+
+@keyframes toastSlide {
+    from { opacity: 0; transform: translateX(100%); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.toast-notification.success { border-left-color: #10B981; }
+.toast-notification.error { border-left-color: #EF4444; }
+.toast-notification.warning { border-left-color: #F59E0B; }
+.toast-notification.info { border-left-color: var(--rojo-primario); }
+
+/* =====================================================
    RESPONSIVE
    ===================================================== */
 
 @media (max-width: 768px) {
-    #sidebar-container {
-        width: 80px;
-    }
-    
-    .top-bar {
-        padding: 1rem;
-        flex-direction: column;
-        gap: 0.5rem;
-        align-items: flex-start;
-    }
-    
-    .top-actions {
-        width: 100%;
-        justify-content: space-between;
-    }
-    
-    .tabs-container {
-        padding: 1rem;
-        overflow-x: auto;
-    }
-    
-    .tab-content {
-        padding: 1rem;
-    }
-    
-    .form-row {
-        grid-template-columns: 1fr;
-    }
-    
-    .solicitud-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .modal-content {
-        width: 95%;
-    }
+    #sidebar-container { width: 80px; }
+    .top-bar { padding: 1rem; flex-direction: column; gap: 0.5rem; align-items: flex-start; }
+    .top-actions { width: 100%; justify-content: space-between; }
+    .tabs-container { padding: 1rem; overflow-x: auto; }
+    .tab-content { padding: 1rem; }
+    .form-row { grid-template-columns: 1fr; }
+    .solicitud-header { flex-direction: column; align-items: flex-start; }
+    .modal-content { width: 95%; }
+    .fc-daygrid-day { min-height: 70px; }
+    .fc-daygrid-day.reparacion-dia::after,
+    .fc-daygrid-day.entrega-dia::after { font-size: 0.6rem; bottom: 2px; right: 4px; }
 }
 
 @media (max-width: 480px) {
-    .page-title h1 {
-        font-size: 1.1rem;
-    }
-    
-    .solicitud-footer {
-        flex-direction: column;
-    }
-    
-    .solicitud-footer button {
-        width: 100%;
-        justify-content: center;
-    }
+    .page-title h1 { font-size: 1.1rem; }
+    .solicitud-footer { flex-direction: column; }
+    .solicitud-footer button { width: 100%; justify-content: center; }
+    .fc-daygrid-day { min-height: 60px; }
+    .fc-daygrid-day-number { font-size: 0.7rem; padding: 3px; }
 }

@@ -367,7 +367,9 @@ def obtener_stats_dashboard(current_user):
         print("📊 CALCULANDO STATS DEL DASHBOARD")
         print("="*50)
         
-        # 1. ÓRDENES ACTIVAS (todas excepto Finalizado y Entregado)
+        # =====================================================
+        # 1. ÓRDENES ACTIVAS (CORREGIDO)
+        # =====================================================
         ordenes_activas_result = supabase.table('ordentrabajo') \
             .select('id', count='exact') \
             .not_.in_('estado_global', ['Finalizado', 'Entregado']) \
@@ -376,7 +378,9 @@ def obtener_stats_dashboard(current_user):
         ordenes_activas_count = ordenes_activas_result.count if ordenes_activas_result.count is not None else len(ordenes_activas_result.data or [])
         print(f"✅ Órdenes activas: {ordenes_activas_count}")
         
-        # 2. ÓRDENES EN PAUSA
+        # =====================================================
+        # 2. ÓRDENES EN PAUSA (NUEVO - CORREGIDO)
+        # =====================================================
         ordenes_pausa_result = supabase.table('ordentrabajo') \
             .select('id', count='exact') \
             .eq('estado_global', 'EnPausa') \
@@ -385,42 +389,82 @@ def obtener_stats_dashboard(current_user):
         ordenes_pausa_count = ordenes_pausa_result.count if ordenes_pausa_result.count is not None else len(ordenes_pausa_result.data or [])
         print(f"✅ Órdenes en pausa: {ordenes_pausa_count}")
         
-        # 3. TÉCNICOS TRABAJANDO (con asignaciones activas)
+        # =====================================================
+        # 3. TÉCNICOS TRABAJANDO (CORREGIDO)
+        # =====================================================
+        # Método 1: Contar técnicos con asignaciones activas
         tecnicos_activos_result = supabase.table('asignaciontecnico') \
             .select('id_tecnico', distinct=True) \
             .is_('fecha_hora_final', 'null') \
             .execute()
         
         tecnicos_activos_count = len(set([t['id_tecnico'] for t in (tecnicos_activos_result.data or [])]))
-        print(f"✅ Técnicos activos: {tecnicos_activos_count}")
         
-        # Si no hay técnicos en asignaciontecnico, verificar usuarios con rol técnico
+        # Método 2 (fallback): Si no hay asignaciones, contar por rol
         if tecnicos_activos_count == 0:
             try:
+                # Usar la tabla correcta 'usuario_rol'
                 roles_result = supabase.table('usuario_rol') \
-                    .select('id_usuario') \
+                    .select('id_usuario, rol:rol_id(nombre_rol)') \
                     .execute()
                 
                 tecnicos_set = set()
                 for item in (roles_result.data or []):
-                    # También necesitarías filtrar por rol, pero por ahora contar todos
-                    tecnicos_set.add(item['id_usuario'])
+                    # Obtener nombre del rol
+                    rol_data = item.get('rol', {})
+                    if isinstance(rol_data, dict):
+                        nombre_rol = rol_data.get('nombre_rol', '')
+                    else:
+                        nombre_rol = ''
+                    
+                    if 'tecnico' in nombre_rol.lower():
+                        tecnicos_set.add(item['id_usuario'])
                 
                 tecnicos_activos_count = len(tecnicos_set)
-                print(f"✅ Técnicos (fallback): {tecnicos_activos_count}")
-            except:
-                tecnicos_activos_count = 4
+                print(f"✅ Técnicos (por rol): {tecnicos_activos_count}")
+            except Exception as e:
+                print(f"⚠️ Error fallback técnicos: {e}")
+                tecnicos_activos_count = 0
         
-        # 4. BAHÍAS OCUPADAS
+        print(f"✅ Técnicos activos final: {tecnicos_activos_count}")
+        
+        # =====================================================
+        # 4. BAHÍAS OCUPADAS (CORREGIDO)
+        # =====================================================
+        # Usar la vista corregida o consulta directa
         bahias_result = supabase.table('planificacion') \
-            .select('bahia_asignada', distinct=True) \
+            .select('bahia_asignada, fecha_hora_inicio_real, fecha_hora_fin_real, ordentrabajo!inner(estado_global)') \
             .is_('fecha_hora_fin_real', 'null') \
             .execute()
         
-        bahias_ocupadas_count = len(set([b['bahia_asignada'] for b in (bahias_result.data or [])]))
+        bahias_ocupadas_set = set()
+        for p in (bahias_result.data or []):
+            bahia = p.get('bahia_asignada')
+            if not bahia:
+                continue
+            
+            # Verificar si está ocupada según criterios correctos
+            tiene_inicio_real = p.get('fecha_hora_inicio_real') is not None
+            
+            # Obtener estado de la orden
+            orden_data = p.get('ordentrabajo', {})
+            if isinstance(orden_data, dict):
+                estado_orden = orden_data.get('estado_global', '')
+            else:
+                estado_orden = ''
+            
+            # Una bahía está ocupada si:
+            # 1. Tiene inicio real Y no tiene fin real, O
+            # 2. La orden no está finalizada/entregada
+            if tiene_inicio_real or estado_orden not in ['Finalizado', 'Entregado']:
+                bahias_ocupadas_set.add(bahia)
+        
+        bahias_ocupadas_count = len(bahias_ocupadas_set)
         print(f"✅ Bahías ocupadas: {bahias_ocupadas_count}")
         
+        # =====================================================
         # 5. DIAGNÓSTICOS PENDIENTES
+        # =====================================================
         diagnosticos_result = supabase.table('diagnostico_tecnico') \
             .select('id', count='exact') \
             .eq('estado', 'pendiente') \
@@ -436,7 +480,7 @@ def obtener_stats_dashboard(current_user):
             'stats': {
                 'ordenes_activas': ordenes_activas_count,
                 'ordenes_pausa': ordenes_pausa_count,
-                'tecnicos_activos': tecnicos_activos_count if tecnicos_activos_count > 0 else 4,
+                'tecnicos_activos': tecnicos_activos_count,
                 'bahias_ocupadas': bahias_ocupadas_count,
                 'diagnosticos_pendientes': diagnosticos_count
             }
@@ -446,14 +490,18 @@ def obtener_stats_dashboard(current_user):
         print(f"❌ Error en stats: {e}")
         import traceback
         traceback.print_exc()
-        # Retornar datos de ejemplo basados en tu consulta SQL
-        return jsonify({'success': True, 'stats': {
-            'ordenes_activas': 8,  # Según tu consulta, hay 8 órdenes
-            'ordenes_pausa': 0,
-            'tecnicos_activos': 4,
-            'bahias_ocupadas': 3,  # Según tu consulta, hay 3 bahías ocupadas: 2, 8, 10, 14? (2,8,10,14 son 4)
-            'diagnosticos_pendientes': 0
-        }}), 200
+        
+        # Retornar valores por defecto en caso de error
+        return jsonify({
+            'success': True, 
+            'stats': {
+                'ordenes_activas': 0,
+                'ordenes_pausa': 0,
+                'tecnicos_activos': 0,
+                'bahias_ocupadas': 0,
+                'diagnosticos_pendientes': 0
+            }
+        }), 200
 
 
 # =====================================================

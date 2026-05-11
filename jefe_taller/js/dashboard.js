@@ -255,10 +255,27 @@ async function loadDashboardData() {
     try {
         const token = localStorage.getItem('furia_token');
         
+        // Usar el endpoint correcto para estadísticas
+        const statsResponse = await fetch(`${API_URL}/jefe-taller/dashboard-stats`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const statsData = await statsResponse.json();
+        
+        // Actualizar KPIs con los datos correctos
+        if (statsData.success && statsData.stats) {
+            document.getElementById('ordenesActivas').textContent = statsData.stats.ordenes_activas || 0;
+            document.getElementById('ordenesPausa').textContent = statsData.stats.ordenes_pausa || 0;
+            document.getElementById('tecnicosActivos').textContent = statsData.stats.tecnicos_activos || 0;
+            document.getElementById('bahiasOcupadas').textContent = statsData.stats.bahias_ocupadas || 0;
+            document.getElementById('pendientesCount').textContent = statsData.stats.diagnosticos_pendientes || 0;
+        }
+        
+        // Cargar el resto de datos en paralelo
         const [bahiasRes, diagnosticosRes, cotizacionesRes, ordenesRes] = await Promise.all([
             fetch(`${API_URL}/jefe-taller/bahias-estado`, { headers: { 'Authorization': `Bearer ${token}` } }),
             fetch(`${API_URL}/jefe-taller/diagnosticos-pendientes`, { headers: { 'Authorization': `Bearer ${token}` } }),
-            fetch(`${API_URL}/jefe-taller/cotizaciones-enviadas`, { headers: { 'Authorization': `Bearer ${token}` } }),
+            fetch(`${API_URL}/jefe-taller/cotizaciones-enviadas-dashboard`, { headers: { 'Authorization': `Bearer ${token}` } }),
             fetch(`${API_URL}/jefe-taller/ordenes-activas`, { headers: { 'Authorization': `Bearer ${token}` } })
         ]);
         
@@ -272,21 +289,24 @@ async function loadDashboardData() {
     } catch (error) {
         console.error('Error cargando dashboard:', error);
         mostrarNotificacion('Error al cargar datos', 'error');
-        usarDatosEjemplo();
     } finally {
         mostrarLoading(false);
     }
 }
 
 function actualizarUI(bahias, diagnosticos, cotizaciones, ordenesActivas) {
-    // Actualizar KPIs
+    // Actualizar KPIs (ya se actualizaron desde dashboard-stats)
+    
     const pendientesCount = diagnosticos?.diagnosticos?.length || 0;
-    document.getElementById('ordenesActivas').textContent = pendientesCount;
     document.getElementById('pendientesCount').textContent = pendientesCount;
     
     // Actualizar bahías
     if (bahias && bahias.bahias) {
         renderizarBahias(bahias.bahias);
+        
+        // Calcular bahías ocupadas desde los datos recibidos
+        const bahiasOcupadas = bahias.bahias.filter(b => b.estado === 'ocupada' || b.estado === 'reservada').length;
+        document.getElementById('bahiasOcupadas').textContent = bahiasOcupadas;
     } else {
         renderizarBahiasEjemplo();
     }
@@ -311,6 +331,7 @@ function actualizarUI(bahias, diagnosticos, cotizaciones, ordenesActivas) {
         document.getElementById('vehiculosTallerCount').textContent = ordenesActivas.ordenes.length;
     }
 }
+
 
 function renderizarBahias(bahias) {
     const container = document.getElementById('bahiasGrid');

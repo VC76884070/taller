@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mis Reservas | FURIA MOTOR</title>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Google Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- FullCalendar CSS (versión estable) -->
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+
+    <!-- Tu CSS -->
+    <link rel="stylesheet" href="/cliente/css/misreservas.css">
+
+    <style>
+        /* Estilos adicionales para asegurar que el calendario se vea bien */
+        .fc {
+            background: var(--bg-card);
+            color: var(--blanco);
+            border-radius: var(--radius-lg);
+            padding: 1rem;
+        }
+
+        .fc-toolbar-title {
+            color: var(--blanco);
+        }
+
+        .fc-button-primary {
+            background-color: var(--rojo-primario) !important;
+            border-color: var(--rojo-primario) !important;
+        }
+
+        .fc-button-primary:hover {
+            background-color: var(--rojo-oscuro) !important;
+        }
+
+        .fc-daygrid-day {
+            background: var(--bg-card);
+        }
+
+        .fc-daygrid-day-number {
+            color: var(--blanco);
+        }
+
+        .fc-day-today {
+            background: rgba(193, 18, 31, 0.2) !important;
+        }
+
+        .fc-day-other {
+            background: var(--bg-secondary);
+        }
+
+        .fc-event {
+            cursor: pointer;
+            border-radius: 6px;
+        }
+
+        .fc-event-confirmada {
+            background-color: #10B981 !important;
+            border-color: #10B981 !important;
+        }
+
+        .fc-event-pendiente {
+            background-color: #F59E0B !important;
+            border-color: #F59E0B !important;
+        }
+
+        .fc-event-cancelada {
+            background-color: #6B7280 !important;
+            border-color: #6B7280 !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-calendar-check"></i> Mis Reservas</h1>
+                    <p>Gestiona tus citas en el taller</p>
+                </div>
+                <div class="top-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                    <button class="btn-logout" onclick="cerrarSesion()">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Tabs de navegación -->
+            <div class="tabs-container">
+                <button class="tab-btn active" data-tab="calendario">
+                    <i class="fas fa-calendar-alt"></i> Calendario
+                </button>
+                <button class="tab-btn" data-tab="solicitudes">
+                    <i class="fas fa-list-ul"></i> Mis Solicitudes
+                </button>
+                <button class="tab-btn" data-tab="nueva-solicitud">
+                    <i class="fas fa-plus-circle"></i> Nueva Reserva
+                </button>
+            </div>
+
+            <!-- TAB 1: CALENDARIO -->
+            <div id="tab-calendario" class="tab-content active">
+                <div class="calendario-wrapper">
+                    <div id="calendario"></div>
+                </div>
+            </div>
+
+            <!-- TAB 2: MIS SOLICITUDES -->
+            <div id="tab-solicitudes" class="tab-content">
+                <div class="solicitudes-header">
+                    <div class="filtros-solicitudes">
+                        <select id="filtroEstadoSolicitud" class="filter-select">
+                            <option value="todos">Todos los estados</option>
+                            <option value="pendiente">⏳ Solicitud enviada</option>
+                            <option value="horarios_propuestos">📅 Horarios propuestos</option>
+                            <option value="confirmada">✅ Confirmada</option>
+                            <option value="cancelada">❌ Cancelada</option>
+                            <option value="completada">🏁 Completada</option>
+                        </select>
+                        <button id="btnRefreshSolicitudes" class="btn-secondary">
+                            <i class="fas fa-sync-alt"></i> Actualizar
+                        </button>
+                    </div>
+                </div>
+                <div id="solicitudesLista" class="solicitudes-lista">
+                    <div class="empty-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Cargando tus solicitudes...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: NUEVA SOLICITUD -->
+            <div id="tab-nueva-solicitud" class="tab-content">
+                <div class="form-container">
+                    <div class="form-header">
+                        <h2><i class="fas fa-calendar-plus"></i> Solicitar una reserva</h2>
+                        <p>Completa el formulario y el taller te propondrá horarios disponibles</p>
+                    </div>
+
+                    <form id="formNuevaSolicitud" class="solicitud-form">
+                        <!-- Selección de vehículo -->
+                        <div class="form-group">
+                            <label for="vehiculoSelect"><i class="fas fa-car"></i> Selecciona tu vehículo *</label>
+                            <select id="vehiculoSelect" required>
+                                <option value="">-- Selecciona un vehículo --</option>
+                            </select>
+                            <small class="form-hint">Si no ves tu vehículo, regístrate primero en "Mis
+                                Vehículos"</small>
+                        </div>
+
+                        <!-- Fecha deseada -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="fechaDeseada"><i class="fas fa-calendar-day"></i> Fecha preferida *</label>
+                                <input type="date" id="fechaDeseada" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="horaDeseada"><i class="fas fa-clock"></i> Horario preferido
+                                    (opcional)</label>
+                                <select id="horaDeseada">
+                                    <option value="">-- Cualquier horario --</option>
+                                    <option value="08:00">08:00 - 09:00</option>
+                                    <option value="09:00">09:00 - 10:00</option>
+                                    <option value="10:00">10:00 - 11:00</option>
+                                    <option value="11:00">11:00 - 12:00</option>
+                                    <option value="12:00">12:00 - 13:00</option>
+                                    <option value="14:00">14:00 - 15:00</option>
+                                    <option value="15:00">15:00 - 16:00</option>
+                                    <option value="16:00">16:00 - 17:00</option>
+                                    <option value="17:00">17:00 - 18:00</option>
+                                    <option value="18:00">18:00 - 19:00</option>
+                                    <option value="19:00">19:00 - 20:00</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Descripción del problema -->
+                        <div class="form-group">
+                            <label for="descripcionProblema"><i class="fas fa-stethoscope"></i> Descripción del problema
+                                *</label>
+                            <textarea id="descripcionProblema" rows="4" required
+                                placeholder="Ej: El motor hace un ruido extraño, la dirección vibra, el aire acondicionado no enfría..."></textarea>
+                        </div>
+
+                        <!-- Comentarios adicionales -->
+                        <div class="form-group">
+                            <label for="mensajeAdicional"><i class="fas fa-comment-dots"></i> Comentarios adicionales
+                                para el taller</label>
+                            <textarea id="mensajeAdicional" rows="2"
+                                placeholder="Ej: Solo puedo venir después de las 3pm, traeré el vehículo yo mismo, etc..."></textarea>
+                        </div>
+
+                        <!-- Botones -->
+                        <div class="form-actions">
+                            <button type="button" class="btn-secondary" onclick="limpiarFormulario()">
+                                <i class="fas fa-eraser"></i> Limpiar
+                            </button>
+                            <button type="submit" class="btn-primary">
+                                <i class="fas fa-paper-plane"></i> Enviar Solicitud
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL PARA SELECCIONAR HORARIO -->
+    <div class="modal" id="modalHorarios">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h3><i class="fas fa-calendar-week"></i> Selecciona un horario</h3>
+                <button class="modal-close" onclick="cerrarModalHorarios()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalHorariosBody">
+                <!-- Lista de horarios se llenará dinámicamente -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalHorarios()">Cancelar</button>
+                <button class="btn-danger" id="btnRechazarHorarios">
+                    <i class="fas fa-times"></i> Rechazar todos
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PARA CANCELAR RESERVA -->
+    <div class="modal" id="modalCancelar">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> Cancelar reserva</h3>
+                <button class="modal-close" onclick="cerrarModalCancelar()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro que deseas cancelar esta reserva?</p>
+                <textarea id="motivoCancelacion" class="form-textarea" rows="2"
+                    placeholder="Cuéntanos el motivo (opcional)"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalCancelar()">Volver</button>
+                <button class="btn-danger" id="btnConfirmarCancelacion">
+                    <i class="fas fa-trash"></i> Sí, cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE DETALLE DE SOLICITUD -->
+    <div class="modal" id="modalDetalleSolicitud">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h3><i class="fas fa-info-circle"></i> Detalle de solicitud</h3>
+                <button class="modal-close" onclick="cerrarModalDetalle()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalDetalleBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalDetalle()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- SCRIPTS - EL ORDEN ES IMPORTANTE -->
+    <!-- ===================================================== -->
+
+    <!-- 1. FullCalendar (versión 5.11.3 que es más estable) -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/es.min.js"></script>
+
+    <!-- 2. SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- 3. Tu include.js (sidebar) -->
+    <script src="/js/include.js"></script>
+
+    <!-- 4. Tu misreservas.js -->
+    <script src="/cliente/js/misreservas.js"></script>
+
+    <script>
+        // Función global de cierre de sesión
+        function cerrarSesion() {
+            localStorage.removeItem('furia_token');
+            localStorage.removeItem('furia_user');
+            window.location.href = '/';
+        }
+    </script>
+</body>
+
+</html>

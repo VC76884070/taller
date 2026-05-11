@@ -158,12 +158,14 @@ try:
     from cliente.avances import avances_cliente_bp
     from cliente.historial import historial_cliente_bp
     from cliente.perfil import perfil_cliente_bp
+    from cliente.misreservas import misreservas_bp  # 👈 NUEVO IMPORT
     
     app.register_blueprint(cliente_bp, url_prefix='/api/cliente')
     app.register_blueprint(cotizaciones_cliente_bp, url_prefix='/api/cliente')
     app.register_blueprint(avances_cliente_bp, url_prefix='/api/cliente')
     app.register_blueprint(historial_cliente_bp, url_prefix='/api/cliente')
     app.register_blueprint(perfil_cliente_bp, url_prefix='/api/cliente')
+    app.register_blueprint(misreservas_bp, url_prefix='/api/cliente')  # 👈 REGISTRAR
     
     logger.info("✅ Blueprints de Cliente registrados correctamente")
 except Exception as e:
@@ -312,9 +314,13 @@ def serve_html(path):
         'tecnico_mecanico/avance': '../tecnico_mecanico/avance.html',
         'tecnico_mecanico/perfil': '../tecnico_mecanico/perfil.html',
         
+        # Dentro del diccionario html_routes, agrega estas líneas:
+
         # Cliente
+        # 👈 NUEVO
         'cliente': '../cliente/misvehiculos.html',
         'cliente/misvehiculos': '../cliente/misvehiculos.html',
+        'cliente/misreservas': '../cliente/misreservas.html', 
         'cliente/cotizaciones': '../cliente/cotizaciones.html',
         'cliente/avances': '../cliente/avances.html',
         'cliente/historial': '../cliente/historial.html',

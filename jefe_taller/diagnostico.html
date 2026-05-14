@@ -28,7 +28,7 @@
                     <p>Revisa, aprueba o rechaza los diagnósticos enviados por los técnicos</p>
                 </div>
                 <div class="top-actions">
-                    <button class="btn-refresh" id="refreshBtn">
+                    <button class="btn-refresh" id="refreshBtn" title="Actualizar">
                         <i class="fas fa-sync-alt"></i>
                     </button>
                     <div class="notification-icon">
@@ -134,13 +134,13 @@
     </div>
 
     <!-- ===================================================== -->
-    <!-- MODAL DE DIAGNÓSTICO - VERSIÓN MEJORADA -->
+    <!-- MODAL DE DIAGNÓSTICO - DETALLE COMPLETO -->
     <!-- ===================================================== -->
     <div class="modal" id="modalDiagnostico">
         <div class="modal-content modal-xl">
             <div class="modal-header">
                 <h2><i class="fas fa-stethoscope"></i> Detalle del Diagnóstico Técnico</h2>
-                <button class="modal-close" onclick="window.cerrarModalDiagnostico()">&times;</button>
+                <button class="modal-close" onclick="cerrarModalDiagnostico()">&times;</button>
             </div>
             <div class="modal-body" id="modalDiagnosticoBody">
                 <div class="loading-state">
@@ -149,68 +149,21 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="window.cerrarModalDiagnostico()">
+                <button class="btn-secondary" onclick="cerrarModalDiagnostico()">
                     <i class="fas fa-times"></i> Cerrar
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Modal para solicitar cotización de repuestos -->
-    <div class="modal" id="modalSolicitarRepuesto">
-        <div class="modal-content modal-md">
-            <div class="modal-header">
-                <h2><i class="fas fa-shopping-cart"></i> Solicitar Cotización</h2>
-                <button class="modal-close" onclick="window.cerrarModalSolicitud()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <form id="formSolicitarRepuesto">
-                    <input type="hidden" id="solicitudOrdenId">
-                    <input type="hidden" id="solicitudServicioId">
-
-                    <div class="form-group">
-                        <label><i class="fas fa-tools"></i> Pieza / Herramienta / Líquido</label>
-                        <textarea id="descripcionPieza" class="form-textarea" rows="3" required
-                            placeholder="Ej: Aceite de motor 5W-30 (4 litros), Filtro de aire, Bujías NGK..."></textarea>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label><i class="fas fa-hashtag"></i> Cantidad</label>
-                            <input type="number" id="cantidad" class="form-input" value="1" min="1" required>
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-exclamation-triangle"></i> Urgencia</label>
-                            <select id="urgencia" class="form-select">
-                                <option value="normal">Normal</option>
-                                <option value="urgente">Urgente</option>
-                                <option value="inmediata">Inmediata</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label><i class="fas fa-comment"></i> Observaciones</label>
-                        <textarea id="obsJefeTaller" class="form-textarea" rows="2"
-                            placeholder="Marca específica, proveedor preferido, nota de urgencia..."></textarea>
-                    </div>
-
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary"
-                            onclick="window.cerrarModalSolicitud()">Cancelar</button>
-                        <button type="submit" class="btn-primary">Enviar Solicitud</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal para observación/rechazo -->
+    <!-- ===================================================== -->
+    <!-- MODAL PARA RECHAZAR DIAGNÓSTICO -->
+    <!-- ===================================================== -->
     <div class="modal" id="modalObservacion">
         <div class="modal-content modal-md">
             <div class="modal-header">
-                <h2 id="modalObsTitle"><i class="fas fa-comment-dots"></i> Rechazar Diagnóstico</h2>
-                <button class="modal-close" onclick="window.cerrarModalObservacion()">&times;</button>
+                <h2><i class="fas fa-comment-dots"></i> Rechazar Diagnóstico</h2>
+                <button class="modal-close" onclick="cerrarModalObservacion()">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="formObservacion">
@@ -237,8 +190,7 @@
                     </div>
 
                     <div class="form-actions">
-                        <button type="button" class="btn-secondary"
-                            onclick="window.cerrarModalObservacion()">Cancelar</button>
+                        <button type="button" class="btn-secondary" onclick="cerrarModalObservacion()">Cancelar</button>
                         <button type="submit" class="btn-danger">Rechazar Diagnóstico</button>
                     </div>
                 </form>
@@ -246,11 +198,59 @@
         </div>
     </div>
 
-    <!-- Toast Notifications -->
-    <div id="toastContainer" class="toast-container"></div>
+    <!-- ===================================================== -->
+    <!-- MODAL PARA SOLICITAR COTIZACIÓN DE REPUESTOS -->
+    <!-- ===================================================== -->
+    <div class="modal" id="modalSolicitarRepuesto">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2><i class="fas fa-shopping-cart"></i> Solicitar Cotización</h2>
+                <button class="modal-close" onclick="cerrarModalSolicitud()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="formSolicitarRepuesto">
+                    <input type="hidden" id="solicitudOrdenId">
+                    <input type="hidden" id="solicitudServicioId">
 
-    <script src="js/include.js"></script>
-    <script src="js/diagnostico.js"></script>
+                    <div class="form-group">
+                        <label><i class="fas fa-tools"></i> Pieza / Herramienta / Líquido</label>
+                        <textarea id="descripcionPieza" class="form-textarea" rows="3" required
+                            placeholder="Ej: Aceite de motor 5W-30 (4 litros), Filtro de aire, Bujías NGK..."></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-hashtag"></i> Cantidad</label>
+                            <input type="number" id="cantidad" class="form-input" value="1" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-clock"></i> Urgencia</label>
+                            <select id="urgencia" class="form-select">
+                                <option value="normal">Normal</option>
+                                <option value="urgente">Urgente</option>
+                                <option value="inmediata">Inmediata</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-comment"></i> Observaciones</label>
+                        <textarea id="obsJefeTaller" class="form-textarea" rows="2"
+                            placeholder="Marca específica, proveedor preferido, nota de urgencia..."></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" onclick="cerrarModalSolicitud()">Cancelar</button>
+                        <button type="submit" class="btn-primary">Enviar Solicitud</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/jefe_taller/js/include.js"></script>
+    <script src="/jefe_taller/js/diagnostico.js"></script>
 </body>
 
 </html>

@@ -12,6 +12,9 @@
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
     <!-- Estilos -->
     <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
     <link rel="stylesheet" href="/jefe_taller/css/calendario_bahias.css">
@@ -54,7 +57,7 @@
                     </button>
                 </div>
 
-                <!-- Panel Calendario Mensual -->
+                <!-- ==================== PANEL CALENDARIO ==================== -->
                 <div class="tab-panel active" id="panel-calendario">
                     <div class="calendario-mensual-container">
                         <div class="calendario-header">
@@ -88,25 +91,9 @@
                             <!-- Generado por JS -->
                         </div>
                     </div>
-
-                    <!-- Modal de detalle del día -->
-                    <div class="modal" id="modalDetalleDia">
-                        <div class="modal-content modal-lg">
-                            <div class="modal-header">
-                                <h2 id="modalDiaTitulo"><i class="fas fa-calendar-day"></i> Órdenes del día</h2>
-                                <button class="modal-close" onclick="cerrarModalDetalleDia()">&times;</button>
-                            </div>
-                            <div class="modal-body" id="modalDiaBody">
-                                <!-- Contenido dinámico -->
-                            </div>
-                            <div class="modal-footer">
-                                <button class="btn-secondary" onclick="cerrarModalDetalleDia()">Cerrar</button>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
-                <!-- Panel Bahías -->
+                <!-- ==================== PANEL BAHÍAS ==================== -->
                 <div class="tab-panel" id="panel-bahias">
                     <div class="bahias-container">
                         <div class="bahias-header">
@@ -125,9 +112,10 @@
                     </div>
                 </div>
 
-                <!-- Panel Estadísticas -->
+                <!-- ==================== PANEL ESTADÍSTICAS ==================== -->
                 <div class="tab-panel" id="panel-estadisticas">
                     <div class="estadisticas-container">
+                        <!-- Tarjetas resumen -->
                         <div class="stats-cards">
                             <div class="stat-card">
                                 <div class="stat-icon total">
@@ -157,19 +145,53 @@
                                 </div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-icon finalizadas">
+                                <div class="stat-icon entregadas">
                                     <i class="fas fa-check-circle"></i>
                                 </div>
                                 <div class="stat-info">
-                                    <h3 id="finalizadasCount">0</h3>
-                                    <p>Finalizadas</p>
+                                    <h3 id="entregadasCount">0</h3>
+                                    <p>Entregadas</p>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Diagnósticos por estado -->
+                        <!-- Gráficos principales -->
+                        <div class="charts-row">
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h4><i class="fas fa-chart-pie"></i> Distribución por Estado</h4>
+                                </div>
+                                <canvas id="estadosChart" width="400" height="400"></canvas>
+                            </div>
+
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h4><i class="fas fa-chart-line"></i> Evolución Mensual</h4>
+                                </div>
+                                <canvas id="evolucionChart" width="400" height="400"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="charts-row">
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h4><i class="fas fa-stethoscope"></i> Diagnósticos Técnicos</h4>
+                                </div>
+                                <canvas id="diagnosticosChart" width="400" height="400"></canvas>
+                            </div>
+
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h4><i class="fas fa-chart-bar"></i> Carga de Trabajo</h4>
+                                </div>
+                                <canvas id="cargaChart" width="400" height="400"></canvas>
+                                <div id="tecnicosCargaList" class="tecnicos-lista-mini"></div>
+                            </div>
+                        </div>
+
+                        <!-- Diagnósticos por estado (resumen numérico) -->
                         <div class="diagnosticos-stats">
-                            <h3><i class="fas fa-stethoscope"></i> Diagnósticos Técnicos</h3>
+                            <h3><i class="fas fa-stethoscope"></i> Resumen de Diagnósticos</h3>
                             <div class="diagnosticos-stats-grid">
                                 <div class="diag-stat pendiente">
                                     <span class="diag-label">Pendientes</span>
@@ -189,6 +211,24 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- ==================== MODALES ==================== -->
+
+    <!-- Modal para ver detalle del día -->
+    <div class="modal" id="modalDetalleDia">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2 id="modalDiaTitulo"><i class="fas fa-calendar-day"></i> Órdenes del día</h2>
+                <button class="modal-close" onclick="cerrarModalDetalleDia()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalDiaBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalDetalleDia()">Cerrar</button>
+            </div>
+        </div>
     </div>
 
     <!-- Modal para ver detalle de orden -->

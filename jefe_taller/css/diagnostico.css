@@ -1277,3 +1277,362 @@
         font-size: 0.8rem;
     }
 }
+/* =====================================================
+   SECCIONES DE DIAGNÓSTICOS
+   ===================================================== */
+.seccion-diagnosticos {
+    margin-bottom: 2rem;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+}
+
+.seccion-header {
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.seccion-header.pendientes {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), transparent);
+    border-bottom: 2px solid #F59E0B;
+}
+
+.seccion-header.aprobados {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), transparent);
+    border-bottom: 2px solid #10B981;
+}
+
+.seccion-header.rechazados {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), transparent);
+    border-bottom: 2px solid #EF4444;
+}
+
+.seccion-header.borradores {
+    background: linear-gradient(135deg, rgba(107, 114, 128, 0.1), transparent);
+    border-bottom: 2px solid #6B7280;
+}
+
+.seccion-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.seccion-header.pendientes h3 { color: #F59E0B; }
+.seccion-header.aprobados h3 { color: #10B981; }
+.seccion-header.rechazados h3 { color: #EF4444; }
+.seccion-header.borradores h3 { color: #6B7280; }
+
+.seccion-badge {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-full);
+    background: var(--gris-oscuro);
+    color: var(--gris-texto);
+}
+
+.ver-mas {
+    padding: 0.75rem;
+    text-align: center;
+    border-top: 1px solid var(--border-color);
+    background: var(--gris-oscuro);
+}
+
+.btn-ver-mas {
+    background: transparent;
+    border: none;
+    color: var(--rojo-primario);
+    cursor: pointer;
+    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: var(--transition);
+}
+
+.btn-ver-mas:hover {
+    transform: translateY(-2px);
+    text-decoration: underline;
+}
+
+.servicios-count {
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+}
+
+.servicios-count.tiene {
+    color: #10B981;
+    font-weight: 500;
+}
+
+.servicios-count i {
+    margin-right: 0.25rem;
+}
+/* =====================================================
+   ESTILOS PARA SECCIONES DE DIAGNÓSTICOS
+   ===================================================== */
+
+.seccion-diagnosticos {
+    margin-bottom: 2rem;
+    border-radius: var(--radius-lg, 12px);
+    overflow: hidden;
+    background: var(--bg-card, #1e1e2a);
+    border: 1px solid var(--border-color, #2d2d3a);
+}
+
+.seccion-header {
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.seccion-header.pendientes {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), transparent);
+    border-bottom: 2px solid #F59E0B;
+}
+
+.seccion-header.aprobados {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), transparent);
+    border-bottom: 2px solid #10B981;
+}
+
+.seccion-header.rechazados {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), transparent);
+    border-bottom: 2px solid #EF4444;
+}
+
+.seccion-header.borradores {
+    background: linear-gradient(135deg, rgba(107, 114, 128, 0.1), transparent);
+    border-bottom: 2px solid #6B7280;
+}
+
+.seccion-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.seccion-header.pendientes h3 { color: #F59E0B; }
+.seccion-header.aprobados h3 { color: #10B981; }
+.seccion-header.rechazados h3 { color: #EF4444; }
+.seccion-header.borradores h3 { color: #6B7280; }
+
+.seccion-badge {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    background: var(--gris-oscuro, #1f1f2a);
+    color: var(--gris-texto, #9ca3af);
+}
+
+.diagnosticos-table {
+    overflow-x: auto;
+}
+
+.table-header {
+    display: grid;
+    grid-template-columns: 120px 150px 1fr 80px 100px 100px 100px;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--gris-oscuro, #1f1f2a);
+    color: var(--gris-texto, #9ca3af);
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-color, #2d2d3a);
+}
+
+.diagnostico-row {
+    display: grid;
+    grid-template-columns: 120px 150px 1fr 80px 100px 100px 100px;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color, #2d2d3a);
+    transition: background 0.2s;
+}
+
+.diagnostico-row:hover {
+    background: var(--gris-oscuro, #1f1f2a);
+}
+
+.codigo {
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: var(--rojo-primario, #c1121f);
+}
+
+.tecnico {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tecnico-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--gris-medio, #374151);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+}
+
+.vehiculo {
+    font-size: 0.8rem;
+    color: var(--blanco, #ffffff);
+}
+
+.servicios-count {
+    font-size: 0.75rem;
+    color: var(--gris-texto, #9ca3af);
+}
+
+.servicios-count.tiene {
+    color: #10B981;
+    font-weight: 500;
+}
+
+.servicios-count i {
+    margin-right: 0.25rem;
+}
+
+.fecha {
+    font-size: 0.7rem;
+    color: var(--gris-texto, #9ca3af);
+}
+
+.estado-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    width: fit-content;
+}
+
+.estado-badge.pendiente {
+    background: rgba(245, 158, 11, 0.15);
+    color: #F59E0B;
+}
+
+.estado-badge.aprobado {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10B981;
+}
+
+.estado-badge.rechazado {
+    background: rgba(239, 68, 68, 0.15);
+    color: #EF4444;
+}
+
+.estado-badge.borrador {
+    background: rgba(107, 114, 128, 0.15);
+    color: #9ca3af;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.action-btn {
+    background: transparent;
+    border: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.action-btn.view {
+    color: #3B82F6;
+}
+
+.action-btn.view:hover {
+    background: rgba(59, 130, 246, 0.15);
+}
+
+.action-btn.approve {
+    color: #10B981;
+}
+
+.action-btn.approve:hover {
+    background: rgba(16, 185, 129, 0.15);
+}
+
+.action-btn.reject {
+    color: #EF4444;
+}
+
+.action-btn.reject:hover {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+.ver-mas {
+    padding: 0.75rem;
+    text-align: center;
+    border-top: 1px solid var(--border-color, #2d2d3a);
+    background: var(--gris-oscuro, #1f1f2a);
+}
+
+.btn-ver-mas {
+    background: transparent;
+    border: none;
+    color: var(--rojo-primario, #c1121f);
+    cursor: pointer;
+    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+}
+
+.btn-ver-mas:hover {
+    transform: translateY(-2px);
+    text-decoration: underline;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .table-header, .diagnostico-row {
+        grid-template-columns: 100px 120px 1fr 70px 90px 90px 80px;
+    }
+}
+
+@media (max-width: 992px) {
+    .table-header, .diagnostico-row {
+        grid-template-columns: 90px 110px 1fr 60px 80px 80px 70px;
+        font-size: 0.7rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .diagnosticos-table {
+        overflow-x: auto;
+    }
+    
+    .table-header, .diagnostico-row {
+        min-width: 800px;
+    }
+}

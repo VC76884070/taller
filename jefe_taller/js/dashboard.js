@@ -1,5 +1,5 @@
 // =====================================================
-// DASHBOARD JEFE DE TALLER - CON CALENDARIO DE DÍAS PINTADOS
+// DASHBOARD JEFE DE TALLER - SIN DATOS DE EJEMPLO
 // =====================================================
 
 const API_URL = window.location.origin + '/api';
@@ -78,7 +78,7 @@ function setupEventListeners() {
 }
 
 // =====================================================
-// CALENDARIO CON DÍAS PINTADOS
+// CALENDARIO - SOLO CON ÓRDENES ACTIVAS
 // =====================================================
 
 function initCalendar() {
@@ -103,9 +103,6 @@ function initCalendar() {
         selectable: false,
         dayMaxEvents: true,
         events: cargarEventosCalendario,
-        eventClick: (info) => {
-            verDetalleEvento(info.event);
-        },
         datesSet: () => {
             setTimeout(() => pintarDiasReparacion(), 150);
         }
@@ -119,38 +116,47 @@ async function cargarEventosCalendario(info, successCallback, failureCallback) {
     try {
         const token = localStorage.getItem('furia_token');
         
-        const reservasResponse = await fetch(`${API_URL}/cliente/reservas-confirmadas`, {
+        // Solo cargar órdenes activas del taller
+        const ordenesResponse = await fetch(`${API_URL}/jefe-taller/ordenes-activas`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        const reservasData = await reservasResponse.json();
         
+        if (!ordenesResponse.ok) {
+            console.error('Error cargando órdenes para calendario:', ordenesResponse.status);
+            successCallback([]);
+            return;
+        }
+        
+        const ordenesData = await ordenesResponse.json();
         const eventos = [];
         
-        if (reservasData.reservas) {
-            reservasData.reservas.forEach(reserva => {
-                const fechaHora = new Date(reserva.fecha_agendada);
-                eventos.push({
-                    id: `reserva_${reserva.id}`,
-                    title: `📅 ${reserva.vehiculo?.placa || 'Cita'}`,
-                    start: fechaHora,
-                    backgroundColor: '#10B981',
-                    borderColor: '#10B981',
-                    className: 'fc-event-reserva',
-                    extendedProps: {
-                        tipo: 'reserva',
-                        placa: reserva.vehiculo?.placa,
-                        cliente: reserva.cliente_nombre
-                    }
-                });
+        if (ordenesData.ordenes && ordenesData.ordenes.length > 0) {
+            ordenesData.ordenes.forEach(orden => {
+                if (orden.fecha_ingreso) {
+                    const fechaIngreso = new Date(orden.fecha_ingreso);
+                    eventos.push({
+                        id: `orden_${orden.id_orden}`,
+                        title: `🔧 ${orden.vehiculo?.placa || 'Vehículo'}`,
+                        start: fechaIngreso,
+                        backgroundColor: '#FF9800',
+                        borderColor: '#FF9800',
+                        extendedProps: {
+                            tipo: 'orden',
+                            orden_codigo: orden.codigo_unico,
+                            placa: orden.vehiculo?.placa
+                        }
+                    });
+                }
             });
         }
         
+        console.log(`📅 Eventos cargados: ${eventos.length}`);
         successCallback(eventos);
         setTimeout(() => pintarDiasReparacion(), 150);
         
     } catch (error) {
         console.error('Error cargando eventos:', error);
-        failureCallback(error);
+        successCallback([]);
     }
 }
 
@@ -161,6 +167,11 @@ async function pintarDiasReparacion() {
         const response = await fetch(`${API_URL}/jefe-taller/ordenes-activas`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        
+        if (!response.ok) {
+            console.error('Error obteniendo órdenes para pintar días:', response.status);
+            return;
+        }
         
         const data = await response.json();
         
@@ -241,13 +252,13 @@ async function pintarDiasReparacion() {
 
 function verDetalleEvento(event) {
     const props = event.extendedProps;
-    if (props.tipo === 'reserva') {
-        mostrarNotificacion(`Reserva: ${props.placa} - ${props.cliente || 'Cliente'}`, 'info');
+    if (props.tipo === 'orden') {
+        mostrarNotificacion(`Orden: ${props.orden_codigo} - ${props.placa}`, 'info');
     }
 }
 
 // =====================================================
-// CARGAR DATOS DEL DASHBOARD
+// CARGAR DATOS REALES DEL DASHBOARD (SIN EJEMPLOS)
 // =====================================================
 
 async function loadDashboardData() {
@@ -255,23 +266,7 @@ async function loadDashboardData() {
     try {
         const token = localStorage.getItem('furia_token');
         
-        // Usar el endpoint correcto para estadísticas
-        const statsResponse = await fetch(`${API_URL}/jefe-taller/dashboard-stats`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        const statsData = await statsResponse.json();
-        
-        // Actualizar KPIs con los datos correctos
-        if (statsData.success && statsData.stats) {
-            document.getElementById('ordenesActivas').textContent = statsData.stats.ordenes_activas || 0;
-            document.getElementById('ordenesPausa').textContent = statsData.stats.ordenes_pausa || 0;
-            document.getElementById('tecnicosActivos').textContent = statsData.stats.tecnicos_activos || 0;
-            document.getElementById('bahiasOcupadas').textContent = statsData.stats.bahias_ocupadas || 0;
-            document.getElementById('pendientesCount').textContent = statsData.stats.diagnosticos_pendientes || 0;
-        }
-        
-        // Cargar el resto de datos en paralelo
+        // Cargar todos los datos en paralelo
         const [bahiasRes, diagnosticosRes, cotizacionesRes, ordenesRes] = await Promise.all([
             fetch(`${API_URL}/jefe-taller/bahias-estado`, { headers: { 'Authorization': `Bearer ${token}` } }),
             fetch(`${API_URL}/jefe-taller/diagnosticos-pendientes`, { headers: { 'Authorization': `Bearer ${token}` } }),
@@ -284,155 +279,165 @@ async function loadDashboardData() {
         const cotizaciones = cotizacionesRes.ok ? await cotizacionesRes.json() : null;
         const ordenesActivas = ordenesRes.ok ? await ordenesRes.json() : null;
         
+        // Mostrar en consola para depuración
+        console.log('📊 Datos recibidos:');
+        console.log('- Bahías:', bahias?.bahias?.length || 0);
+        console.log('- Diagnósticos pendientes:', diagnosticos?.diagnosticos?.length || 0);
+        console.log('- Cotizaciones:', cotizaciones?.cotizaciones?.length || 0);
+        console.log('- Órdenes activas:', ordenesActivas?.ordenes?.length || 0);
+        
         actualizarUI(bahias, diagnosticos, cotizaciones, ordenesActivas);
         
     } catch (error) {
         console.error('Error cargando dashboard:', error);
-        mostrarNotificacion('Error al cargar datos', 'error');
+        mostrarNotificacion('Error al cargar datos del servidor', 'error');
+        // NO mostrar datos de ejemplo, dejar vacío
     } finally {
         mostrarLoading(false);
     }
 }
 
 function actualizarUI(bahias, diagnosticos, cotizaciones, ordenesActivas) {
-    // Actualizar KPIs (ya se actualizaron desde dashboard-stats)
-    
-    const pendientesCount = diagnosticos?.diagnosticos?.length || 0;
-    document.getElementById('pendientesCount').textContent = pendientesCount;
-    
-    // Actualizar bahías
-    if (bahias && bahias.bahias) {
+    // Actualizar bahías (si hay datos)
+    if (bahias && bahias.bahias && bahias.bahias.length > 0) {
         renderizarBahias(bahias.bahias);
-        
-        // Calcular bahías ocupadas desde los datos recibidos
-        const bahiasOcupadas = bahias.bahias.filter(b => b.estado === 'ocupada' || b.estado === 'reservada').length;
-        document.getElementById('bahiasOcupadas').textContent = bahiasOcupadas;
     } else {
-        renderizarBahiasEjemplo();
+        renderizarVacio('bahiasGrid', 'No hay información de bahías disponible');
     }
     
-    // Actualizar diagnósticos
-    if (diagnosticos && diagnosticos.diagnosticos) {
+    // Actualizar diagnósticos pendientes
+    if (diagnosticos && diagnosticos.diagnosticos && diagnosticos.diagnosticos.length > 0) {
         renderizarDiagnosticos(diagnosticos.diagnosticos);
+        const pendientesCount = document.getElementById('pendientesCount');
+        if (pendientesCount) pendientesCount.textContent = diagnosticos.diagnosticos.length;
     } else {
-        renderizarDiagnosticosEjemplo();
+        renderizarVacio('diagnosticosList', 'No hay diagnósticos pendientes');
+        if (document.getElementById('pendientesCount')) {
+            document.getElementById('pendientesCount').textContent = '0';
+        }
     }
     
-    // Actualizar cotizaciones
-    if (cotizaciones && cotizaciones.cotizaciones) {
+    // Actualizar próximas entregas (cotizaciones)
+    if (cotizaciones && cotizaciones.cotizaciones && cotizaciones.cotizaciones.length > 0) {
         renderizarEntregas(cotizaciones.cotizaciones);
     } else {
-        renderizarEntregasEjemplo();
+        renderizarVacio('entregasList', 'No hay cotizaciones enviadas');
     }
     
     // Actualizar vehículos en taller
-    if (ordenesActivas && ordenesActivas.ordenes) {
+    if (ordenesActivas && ordenesActivas.ordenes && ordenesActivas.ordenes.length > 0) {
         renderizarVehiculosTaller(ordenesActivas.ordenes);
-        document.getElementById('vehiculosTallerCount').textContent = ordenesActivas.ordenes.length;
+        const vehiculosCount = document.getElementById('vehiculosTallerCount');
+        if (vehiculosCount) vehiculosCount.textContent = ordenesActivas.ordenes.length;
+    } else {
+        renderizarVacio('vehiculosTallerList', 'No hay vehículos en taller');
+        if (document.getElementById('vehiculosTallerCount')) {
+            document.getElementById('vehiculosTallerCount').textContent = '0';
+        }
     }
 }
 
+function renderizarVacio(containerId, mensaje) {
+    const container = document.getElementById(containerId);
+    if (container) {
+        container.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>${mensaje}</p></div>`;
+    }
+}
+
+// =====================================================
+// FUNCIONES DE RENDERIZADO CON DATOS REALES
+// =====================================================
 
 function renderizarBahias(bahias) {
     const container = document.getElementById('bahiasGrid');
     if (!container) return;
     
-    const estadosTexto = { 'ocupada': 'Ocupada', 'pausa': 'En Pausa', 'libre': 'Libre' };
+    const estadosTexto = { 
+        'ocupada': 'Ocupada', 
+        'reservado': 'Reservada', 
+        'libre': 'Libre' 
+    };
+    
+    const estadosColor = {
+        'ocupada': '#E91E63',
+        'reservado': '#FF9800',
+        'libre': '#4CAF50'
+    };
+    
+    if (!bahias || bahias.length === 0) {
+        renderizarVacio('bahiasGrid', 'No hay información de bahías');
+        return;
+    }
     
     container.innerHTML = bahias.map(b => `
-        <div class="bahia-item ${b.estado}" onclick="verDetalleBahia(${b.numero})">
+        <div class="bahia-item ${b.estado}" onclick="verDetalleBahia(${b.numero})" style="border-left: 4px solid ${estadosColor[b.estado] || '#ccc'}">
             <div class="bahia-numero">Bahía ${b.numero}</div>
-            <div class="bahia-estado">${estadosTexto[b.estado] || b.estado}</div>
-            ${b.tecnico ? `<div class="bahia-tecnico">${b.tecnico}</div>` : ''}
+            <div class="bahia-estado" style="color: ${estadosColor[b.estado] || '#666'}">
+                ${estadosTexto[b.estado] || b.estado}
+            </div>
+            ${b.tecnico ? `<div class="bahia-tecnico"><i class="fas fa-user"></i> ${b.tecnico}</div>` : ''}
+            ${b.orden_codigo ? `<div class="bahia-orden"><i class="fas fa-clipboard"></i> ${b.orden_codigo}</div>` : ''}
         </div>
     `).join('');
-}
-
-function renderizarBahiasEjemplo() {
-    const bahias = [];
-    for (let i = 1; i <= 12; i++) {
-        const random = Math.random();
-        let estado;
-        if (random < 0.5) estado = 'ocupada';
-        else if (random < 0.7) estado = 'pausa';
-        else estado = 'libre';
-        bahias.push({ numero: i, estado: estado, tecnico: estado !== 'libre' ? 'Técnico' : null });
-    }
-    renderizarBahias(bahias);
 }
 
 function renderizarDiagnosticos(diagnosticos) {
     const container = document.getElementById('diagnosticosList');
     if (!container) return;
     
-    if (!diagnosticos || diagnosticos.length === 0) {
-        container.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--gris-texto);"><i class="fas fa-check-circle"></i><p>No hay diagnósticos pendientes</p></div>`;
-        return;
-    }
-    
     container.innerHTML = diagnosticos.map(d => `
-        <div class="diagnostico-item">
+        <div class="diagnostico-item" onclick="revisarDiagnostico(${d.diagnostico_id || d.id})">
             <div class="diagnostico-icon"><i class="fas fa-stethoscope"></i></div>
             <div class="diagnostico-content">
-                <h4>${d.vehiculo || d.marca || 'Vehículo'} (${d.placa || 'Sin placa'})</h4>
-                <p>${d.informe ? d.informe.substring(0, 80) : 'Sin informe'}${d.informe?.length > 80 ? '...' : ''}</p>
+                <h4>${d.vehiculo || 'Vehículo'} <span class="placa">${d.placa || ''}</span></h4>
+                <p class="informe-preview">${d.informe ? d.informe.substring(0, 80) : 'Sin informe'}${d.informe?.length > 80 ? '...' : ''}</p>
+                <div class="diagnostico-meta">
+                    <span class="tecnico"><i class="fas fa-user"></i> ${d.tecnico_nombre || 'Sin técnico'}</span>
+                    <span class="fecha"><i class="far fa-calendar"></i> ${formatearFecha(d.fecha_envio)}</span>
+                </div>
             </div>
-            <div class="diagnostico-meta">
-                <span class="diagnostico-tecnico">${d.tecnico_nombre || 'Sin técnico'}</span>
-                <button class="btn-revisar" onclick="revisarDiagnostico(${d.diagnostico_id || d.id})">Revisar</button>
+            <div class="diagnostico-action">
+                <button class="btn-revisar">Revisar</button>
             </div>
         </div>
     `).join('');
-}
-
-function renderizarDiagnosticosEjemplo() {
-    const ejemplos = [
-        { diagnostico_id: 1, vehiculo: 'Toyota Corolla', placa: 'ABC123', tecnico_nombre: 'Luis M.', informe: 'Ruido en motor al acelerar' },
-        { diagnostico_id: 2, vehiculo: 'Honda Civic', placa: 'XYZ789', tecnico_nombre: 'Carlos R.', informe: 'Vibración en frenos' }
-    ];
-    renderizarDiagnosticos(ejemplos);
 }
 
 function renderizarEntregas(cotizaciones) {
     const container = document.getElementById('entregasList');
     if (!container) return;
     
-    if (!cotizaciones || cotizaciones.length === 0) {
-        container.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--gris-texto);"><i class="fas fa-clock"></i><p>No hay entregas próximas</p></div>`;
-        return;
-    }
-    
     container.innerHTML = cotizaciones.slice(0, 5).map(c => `
-        <div class="entrega-item">
+        <div class="entrega-item" onclick="verCotizacion(${c.id})">
             <div class="entrega-icon"><i class="fas fa-file-invoice-dollar"></i></div>
             <div class="entrega-content">
-                <h4>${c.vehiculo || 'Vehículo'} (${c.placa || 'Sin placa'})</h4>
-                <p>Cliente: ${c.cliente_nombre || 'No registrado'}</p>
+                <h4>${c.vehiculo || 'Vehículo'} <span class="placa">${c.placa || ''}</span></h4>
+                <p class="cliente"><i class="fas fa-user"></i> ${c.cliente_nombre || 'Cliente no registrado'}</p>
                 <p class="entrega-total">Bs. ${c.total?.toFixed(2) || '0.00'}</p>
             </div>
-            <div class="entrega-meta">
-                <button class="btn-ver" onclick="verCotizacion(${c.id})">Ver</button>
+            <div class="entrega-status">
+                <span class="status-badge ${c.estado === 'aprobada' ? 'aprobada' : 'pendiente'}">
+                    ${c.estado === 'aprobada' ? 'Aprobada' : 'Enviada'}
+                </span>
             </div>
         </div>
     `).join('');
-}
-
-function renderizarEntregasEjemplo() {
-    const ejemplos = [{ id: 1, vehiculo: 'Nissan Versa', placa: 'GHI789', cliente_nombre: 'Ana Flores', total: 1500 }];
-    renderizarEntregas(ejemplos);
 }
 
 function renderizarVehiculosTaller(ordenes) {
     const container = document.getElementById('vehiculosTallerList');
     if (!container) return;
     
-    if (!ordenes || ordenes.length === 0) {
-        container.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--gris-texto);"><i class="fas fa-car"></i><p>No hay vehículos en taller</p></div>`;
-        return;
-    }
-    
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
+    
+    const estadoColor = {
+        'EnRecepcion': '#FF9800',
+        'EnDiagnostico': '#2196F3',
+        'EnProceso': '#4CAF50',
+        'EnPausa': '#9E9E9E',
+        'PendienteAprobacion': '#FF5722'
+    };
     
     container.innerHTML = ordenes.map(orden => {
         let diasClass = 'normal';
@@ -455,7 +460,7 @@ function renderizarVehiculosTaller(ordenes) {
                 diasTexto = `${diffDays} días`;
             }
         } else if (orden.dias_estimados_reparacion) {
-            diasTexto = `${orden.dias_estimados_reparacion} días`;
+            diasTexto = `${orden.dias_estimados_reparacion} días estimados`;
         }
         
         return `
@@ -464,11 +469,24 @@ function renderizarVehiculosTaller(ordenes) {
                 <div class="vehiculo-taller-info">
                     <div class="vehiculo-taller-placa">${orden.vehiculo?.placa || orden.placa || 'Vehículo'}</div>
                     <div class="vehiculo-taller-modelo">${orden.vehiculo?.marca || ''} ${orden.vehiculo?.modelo || ''}</div>
+                    <div class="vehiculo-taller-estado" style="color: ${estadoColor[orden.estado_global] || '#666'}">
+                        <i class="fas fa-circle" style="font-size: 8px;"></i> ${orden.estado_global || 'En proceso'}
+                    </div>
                 </div>
                 ${diasTexto ? `<div class="vehiculo-taller-dias ${diasClass}">${diasTexto}</div>` : ''}
             </div>
         `;
     }).join('');
+}
+
+// =====================================================
+// FUNCIONES DE UTILIDAD
+// =====================================================
+
+function formatearFecha(fecha) {
+    if (!fecha) return 'Fecha no disponible';
+    const d = new Date(fecha);
+    return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function mostrarLoading(mostrar) {
@@ -479,21 +497,38 @@ function mostrarLoading(mostrar) {
 function mostrarNotificacion(mensaje, tipo = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast-notification ${tipo}`;
-    toast.innerHTML = `<span>${mensaje}</span>`;
+    toast.innerHTML = `<span><i class="fas ${tipo === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i> ${mensaje}</span>`;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);
 }
 
-function usarDatosEjemplo() {
-    mostrarNotificacion('Usando datos de demostración', 'warning');
-    renderizarBahiasEjemplo();
-    renderizarDiagnosticosEjemplo();
-    renderizarEntregasEjemplo();
-}
+// =====================================================
+// FUNCIONES GLOBALES (para onclick)
+// =====================================================
 
-// Funciones globales
-window.verDetalleBahia = (numero) => mostrarNotificacion(`Bahía ${numero}`, 'info');
-window.revisarDiagnostico = (id) => window.location.href = `diagnosticos.html?diagnostico_id=${id}`;
-window.verCotizacion = (id) => window.location.href = `cotizaciones.html?id=${id}`;
-window.verOrdenTrabajo = (id) => window.location.href = `orden_trabajo.html?id=${id}`;
-window.logout = () => { localStorage.clear(); window.location.href = '/'; };
+window.verDetalleBahia = (numero) => {
+    mostrarNotificacion(`Ver detalles de Bahía ${numero}`, 'info');
+};
+
+window.revisarDiagnostico = (id) => {
+    if (id) {
+        window.location.href = `/jefe_taller/diagnosticos.html?diagnostico_id=${id}`;
+    }
+};
+
+window.verCotizacion = (id) => {
+    if (id) {
+        window.location.href = `/jefe_taller/cotizaciones.html?id=${id}`;
+    }
+};
+
+window.verOrdenTrabajo = (id) => {
+    if (id) {
+        window.location.href = `/jefe_taller/orden_trabajo.html?id=${id}`;
+    }
+};
+
+window.logout = () => {
+    localStorage.clear();
+    window.location.href = '/';
+};

@@ -1,6 +1,6 @@
 # =====================================================
 # CALENDARIO Y BAHÍAS - JEFE TALLER
-# PLANIFICACIÓN OPERATIVA - COMPLETO
+# PLANIFICACIÓN OPERATIVA - COMPLETO CORREGIDO
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -21,7 +21,7 @@ supabase = config.supabase
 
 
 # =====================================================
-# ENDPOINTS - CALENDARIO Y BAHÍAS
+# ENDPOINT 1: ÓRDENES CON PLANIFICACIÓN (CALENDARIO)
 # =====================================================
 
 @calendario_bahias_bp.route('/ordenes-con-planificacion', methods=['GET'])
@@ -31,7 +31,7 @@ def obtener_ordenes_con_planificacion(current_user):
     try:
         logger.info("📅 Obteniendo órdenes con planificación")
         
-        # Obtener todas las planificaciones
+        # Obtener todas las planificaciones activas
         planificaciones = supabase.table('planificacion') \
             .select('id_orden_trabajo, bahia_asignada, horas_estimadas, fecha_hora_inicio_estimado, fecha_hora_fin_estimado, fecha_hora_inicio_real, fecha_hora_fin_real') \
             .execute()
@@ -128,9 +128,6 @@ def obtener_ordenes_con_planificacion(current_user):
             usuario_cliente = usuarios_map.get(cliente_info.get('id_usuario'), {})
             planif = planificaciones_map.get(orden['id'], {})
             
-            # Determinar si la bahía está realmente ocupada
-            bahia_ocupada = planif.get('fecha_hora_inicio_real') is not None and planif.get('fecha_hora_fin_real') is None
-            
             ordenes_data.append({
                 'id': orden['id'],
                 'codigo_unico': orden['codigo_unico'],
@@ -147,7 +144,6 @@ def obtener_ordenes_con_planificacion(current_user):
                 'fecha_hora_fin_estimado': planif.get('fecha_hora_fin_estimado'),
                 'fecha_hora_inicio_real': planif.get('fecha_hora_inicio_real'),
                 'fecha_hora_fin_real': planif.get('fecha_hora_fin_real'),
-                'bahia_ocupada': bahia_ocupada,
                 'tecnicos': tecnicos_por_orden.get(orden['id'], [])
             })
         
@@ -158,8 +154,12 @@ def obtener_ordenes_con_planificacion(current_user):
         logger.error(f"Error obteniendo órdenes planificadas: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'success': True, 'ordenes': []}), 500
 
+
+# =====================================================
+# ENDPOINT 2: ESTADO DE BAHÍAS
+# =====================================================
 
 @calendario_bahias_bp.route('/bahias', methods=['GET'])
 @jefe_taller_required
@@ -170,25 +170,21 @@ def listar_estado_bahias(current_user):
         
         ahora = datetime.datetime.now()
         
-        # 1. Bahías OCUPADAS (con inicio_real y sin fin_real)
+        # Bahías OCUPADAS (con inicio_real y sin fin_real)
         planificaciones_ocupadas = supabase.table('planificacion') \
             .select('bahia_asignada, id_orden_trabajo, fecha_hora_inicio_real, horas_estimadas') \
             .not_.is_('fecha_hora_inicio_real', 'null') \
             .is_('fecha_hora_fin_real', 'null') \
             .execute()
         
-        logger.info(f"📊 Planificaciones ocupadas encontradas: {len(planificaciones_ocupadas.data or [])}")
-        for p in (planificaciones_ocupadas.data or []):
-            logger.info(f"   - Bahía {p.get('bahia_asignada')}: inicio={p.get('fecha_hora_inicio_real')}")
-        
-        # 2. Bahías RESERVADAS (con planificación pero sin inicio_real)
+        # Bahías RESERVADAS (con planificación pero sin inicio_real)
         planificaciones_reservadas = supabase.table('planificacion') \
             .select('bahia_asignada, id_orden_trabajo, fecha_hora_inicio_estimado, horas_estimadas') \
             .is_('fecha_hora_inicio_real', 'null') \
             .is_('fecha_hora_fin_real', 'null') \
             .execute()
         
-        # Obtener códigos de orden y estados
+        # Obtener códigos de orden
         todas_ordenes_ids = []
         for p in (planificaciones_ocupadas.data or []):
             todas_ordenes_ids.append(p['id_orden_trabajo'])
@@ -207,17 +203,19 @@ def listar_estado_bahias(current_user):
                     'estado': o['estado_global']
                 }
         
-        # Mapear bahías ocupadas con cálculo de horas transcurridas
+        # Mapear bahías ocupadas
         bahias_ocupadas = {}
         for p in (planificaciones_ocupadas.data or []):
             bahia_num = p.get('bahia_asignada')
             if bahia_num and p['id_orden_trabajo'] in ordenes_info:
-                # Calcular horas transcurridas
                 horas_transcurridas = None
                 if p.get('fecha_hora_inicio_real'):
-                    inicio = datetime.datetime.fromisoformat(p['fecha_hora_inicio_real'].replace('Z', '+00:00'))
-                    diff = ahora - inicio
-                    horas_transcurridas = round(diff.total_seconds() / 3600, 1)
+                    try:
+                        inicio = datetime.datetime.fromisoformat(p['fecha_hora_inicio_real'].replace('Z', '+00:00'))
+                        diff = ahora - inicio
+                        horas_transcurridas = round(diff.total_seconds() / 3600, 1)
+                    except Exception:
+                        horas_transcurridas = None
                 
                 bahias_ocupadas[bahia_num] = {
                     'estado': 'ocupado',
@@ -295,68 +293,106 @@ def listar_estado_bahias(current_user):
         logger.error(f"Error listando estado de bahías: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'success': True, 'bahias': []}), 500
 
 
-@calendario_bahias_bp.route('/ordenes-calendario', methods=['GET'])
+# =====================================================
+# ENDPOINT 3: ESTADÍSTICAS DE ÓRDENES
+# =====================================================
+
+@calendario_bahias_bp.route('/estadisticas-ordenes', methods=['GET'])
 @jefe_taller_required
-def obtener_ordenes_calendario(current_user):
-    """Obtener órdenes para el calendario (optimizado para vista mensual)"""
+def obtener_estadisticas_ordenes(current_user):
+    """Obtener estadísticas generales de órdenes de trabajo"""
     try:
-        # Obtener parámetros de fecha (opcional)
-        fecha_inicio = request.args.get('fecha_inicio')
-        fecha_fin = request.args.get('fecha_fin')
+        logger.info("📊 Obteniendo estadísticas de órdenes")
         
-        query = supabase.table('planificacion') \
-            .select('id_orden_trabajo, bahia_asignada, horas_estimadas, fecha_hora_inicio_estimado, fecha_hora_fin_estimado, fecha_hora_inicio_real, fecha_hora_fin_real')
-        
-        if fecha_inicio:
-            query = query.gte('fecha_hora_inicio_estimado', fecha_inicio)
-        if fecha_fin:
-            query = query.lte('fecha_hora_fin_estimado', fecha_fin)
-        
-        planificaciones = query.execute()
-        
-        if not planificaciones.data:
-            return jsonify({'success': True, 'eventos': []}), 200
-        
-        ordenes_ids = list(set([p['id_orden_trabajo'] for p in planificaciones.data]))
-        
-        # Obtener órdenes
-        ordenes_result = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, estado_global') \
-            .in_('id', ordenes_ids) \
+        # Obtener todas las órdenes
+        ordenes = supabase.table('ordentrabajo') \
+            .select('estado_global') \
             .execute()
         
-        ordenes_map = {o['id']: o for o in (ordenes_result.data or [])}
+        stats = {
+            'total': 0,
+            'enProceso': 0,
+            'enPausa': 0,
+            'enRecepcion': 0,
+            'pendienteAprobacion': 0,
+            'finalizadas': 0,
+            'entregadas': 0
+        }
         
-        # Construir eventos
-        eventos = []
-        for p in planificaciones.data:
-            orden = ordenes_map.get(p['id_orden_trabajo'], {})
+        for orden in (ordenes.data or []):
+            estado = orden.get('estado_global', '')
+            stats['total'] += 1
             
-            # Determinar si está en curso
-            en_curso = p.get('fecha_hora_inicio_real') is not None and p.get('fecha_hora_fin_real') is None
-            
-            eventos.append({
-                'id': p['id_orden_trabajo'],
-                'titulo': orden.get('codigo_unico', 'N/A'),
-                'estado': orden.get('estado_global', 'Desconocido'),
-                'bahia': p.get('bahia_asignada'),
-                'horas_estimadas': p.get('horas_estimadas'),
-                'fecha_inicio': p.get('fecha_hora_inicio_estimado'),
-                'fecha_fin': p.get('fecha_hora_fin_estimado'),
-                'en_curso': en_curso,
-                'inicio_real': p.get('fecha_hora_inicio_real'),
-                'fin_real': p.get('fecha_hora_fin_real')
-            })
+            if estado == 'EnProceso':
+                stats['enProceso'] += 1
+            elif estado == 'EnPausa':
+                stats['enPausa'] += 1
+            elif estado == 'EnRecepcion':
+                stats['enRecepcion'] += 1
+            elif estado == 'PendienteAprobacion':
+                stats['pendienteAprobacion'] += 1
+            elif estado == 'Finalizado':
+                stats['finalizadas'] += 1
+            elif estado == 'Entregado':
+                stats['entregadas'] += 1
         
-        return jsonify({'success': True, 'eventos': eventos}), 200
+        logger.info(f"✅ Estadísticas: Total={stats['total']}, Proceso={stats['enProceso']}")
+        
+        return jsonify(stats), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo eventos de calendario: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error obteniendo estadísticas: {str(e)}")
+        return jsonify({'total': 0, 'enProceso': 0, 'enPausa': 0, 'enRecepcion': 0, 'pendienteAprobacion': 0, 'finalizadas': 0, 'entregadas': 0}), 500
 
+
+# =====================================================
+# ENDPOINT 4: ESTADÍSTICAS DE DIAGNÓSTICOS
+# =====================================================
+
+@calendario_bahias_bp.route('/diagnosticos-stats', methods=['GET'])
+@jefe_taller_required
+def obtener_estadisticas_diagnosticos(current_user):
+    """Obtener estadísticas de diagnósticos técnicos"""
+    try:
+        logger.info("📊 Obteniendo estadísticas de diagnósticos")
+        
+        diagnosticos = supabase.table('diagnostico_tecnico') \
+            .select('estado') \
+            .execute()
+        
+        stats = {
+            'pendiente': 0,
+            'aprobado': 0,
+            'rechazado': 0,
+            'borrador': 0
+        }
+        
+        for diag in (diagnosticos.data or []):
+            estado = diag.get('estado', '')
+            if estado == 'pendiente':
+                stats['pendiente'] += 1
+            elif estado == 'aprobado':
+                stats['aprobado'] += 1
+            elif estado == 'rechazado':
+                stats['rechazado'] += 1
+            elif estado == 'borrador':
+                stats['borrador'] += 1
+        
+        logger.info(f"✅ Diagnósticos: Pendientes={stats['pendiente']}, Aprobados={stats['aprobado']}")
+        
+        return jsonify({'success': True, 'stats': stats}), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo estadísticas de diagnósticos: {str(e)}")
+        return jsonify({'success': True, 'stats': {'pendiente': 0, 'aprobado': 0, 'rechazado': 0, 'borrador': 0}}), 500
+
+
+# =====================================================
+# ENDPOINT 5: CARGA DE TÉCNICOS
+# =====================================================
 
 @calendario_bahias_bp.route('/tecnicos-carga', methods=['GET'])
 @jefe_taller_required
@@ -367,8 +403,7 @@ def obtener_carga_tecnicos(current_user):
         
         MAX_ORDENES_POR_TECNICO = 2
         
-        # Obtener usuarios que tienen rol de técnico (id_rol = 4 en usuario_rol)
-        # Primero obtener los IDs de usuarios con rol técnico
+        # Obtener usuarios con rol de técnico
         usuarios_rol = supabase.table('usuario_rol') \
             .select('id_usuario') \
             .eq('id_rol', 4) \
@@ -388,32 +423,21 @@ def obtener_carga_tecnicos(current_user):
         
         tecnicos = []
         for tecnico in (resultado.data or []):
-            # Contar asignaciones activas de reparación
-            asignaciones_reparacion = supabase.table('asignaciontecnico') \
+            # Contar asignaciones activas
+            asignaciones = supabase.table('asignaciontecnico') \
                 .select('id_orden_trabajo') \
                 .eq('id_tecnico', tecnico['id']) \
-                .eq('tipo_asignacion', 'reparacion') \
                 .is_('fecha_hora_final', 'null') \
                 .execute()
             
-            # Contar asignaciones de diagnóstico
-            asignaciones_diagnostico = supabase.table('asignaciontecnico') \
-                .select('id_orden_trabajo') \
-                .eq('id_tecnico', tecnico['id']) \
-                .eq('tipo_asignacion', 'diagnostico') \
-                .is_('fecha_hora_final', 'null') \
-                .execute()
-            
-            reparacion_activas = len(asignaciones_reparacion.data) if asignaciones_reparacion.data else 0
-            diagnostico_activas = len(asignaciones_diagnostico.data) if asignaciones_diagnostico.data else 0
+            ordenes_activas = len(asignaciones.data) if asignaciones.data else 0
             
             tecnicos.append({
                 'id': tecnico['id'],
                 'nombre': tecnico['nombre'],
                 'contacto': tecnico.get('contacto', ''),
                 'email': tecnico.get('email', ''),
-                'ordenes_activas': reparacion_activas,
-                'diagnosticos_activos': diagnostico_activas,
+                'ordenes_activas': ordenes_activas,
                 'max_vehiculos': MAX_ORDENES_POR_TECNICO
             })
         
@@ -427,84 +451,65 @@ def obtener_carga_tecnicos(current_user):
         logger.error(f"Error obteniendo carga de técnicos: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'success': True, 'tecnicos': []}), 500
 
 
-@calendario_bahias_bp.route('/estadisticas-ordenes', methods=['GET'])
+# =====================================================
+# ENDPOINT 6: EVOLUCIÓN MENSUAL (GRÁFICO)
+# =====================================================
+
+@calendario_bahias_bp.route('/evolucion-mensual', methods=['GET'])
 @jefe_taller_required
-def obtener_estadisticas_ordenes(current_user):
-    """Obtener estadísticas generales de órdenes de trabajo"""
+def obtener_evolucion_mensual(current_user):
+    """Obtener evolución de órdenes por mes (últimos 6 meses)"""
     try:
-        logger.info("📊 Obteniendo estadísticas de órdenes")
+        logger.info("📈 Obteniendo evolución mensual")
         
-        estados = ['EnRecepcion', 'EnProceso', 'EnPausa', 'PendienteAprobacion', 'Finalizado', 'Entregado']
-        stats = {
-            'total': 0,
-            'enProceso': 0,
-            'enPausa': 0,
-            'enRecepcion': 0,
-            'pendienteAprobacion': 0,
-            'finalizadas': 0,
-            'entregadas': 0
-        }
+        from datetime import datetime, timedelta
         
-        for estado in estados:
+        ahora = datetime.now()
+        meses_nombres = []
+        datos_mensuales = []
+        
+        for i in range(5, -1, -1):
+            # Calcular fecha inicio del mes
+            fecha_inicio = datetime(ahora.year, ahora.month, 1) - timedelta(days=30 * i)
+            fecha_inicio = datetime(fecha_inicio.year, fecha_inicio.month, 1)
+            
+            # Calcular fecha fin del mes
+            if fecha_inicio.month == 12:
+                fecha_fin = datetime(fecha_inicio.year + 1, 1, 1)
+            else:
+                fecha_fin = datetime(fecha_inicio.year, fecha_inicio.month + 1, 1)
+            
+            meses_nombres.append(fecha_inicio.strftime('%b'))
+            
+            # Contar órdenes en ese mes
             count = supabase.table('ordentrabajo') \
                 .select('id', count='exact') \
-                .eq('estado_global', estado) \
+                .gte('fecha_ingreso', fecha_inicio.isoformat()) \
+                .lt('fecha_ingreso', fecha_fin.isoformat()) \
                 .execute()
             
-            cantidad = count.count if hasattr(count, 'count') else len(count.data) if count.data else 0
-            
-            if estado == 'EnProceso':
-                stats['enProceso'] = cantidad
-            elif estado == 'EnPausa':
-                stats['enPausa'] = cantidad
-            elif estado == 'EnRecepcion':
-                stats['enRecepcion'] = cantidad
-            elif estado == 'PendienteAprobacion':
-                stats['pendienteAprobacion'] = cantidad
-            elif estado == 'Finalizado':
-                stats['finalizadas'] = cantidad
-            elif estado == 'Entregado':
-                stats['entregadas'] = cantidad
-            
-            stats['total'] += cantidad
+            cantidad = count.count if hasattr(count, 'count') else len(count.data or [])
+            datos_mensuales.append(cantidad)
         
-        logger.info(f"✅ Estadísticas: Total={stats['total']}, Proceso={stats['enProceso']}, Pausa={stats['enPausa']}")
+        logger.info(f"✅ Evolución mensual: {meses_nombres} = {datos_mensuales}")
         
-        return jsonify(stats), 200
+        return jsonify({
+            'success': True,
+            'labels': meses_nombres,
+            'datos': datos_mensuales
+        }), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo estadísticas: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error obteniendo evolución mensual: {str(e)}")
+        return jsonify({'success': False, 'labels': ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'], 'datos': [0, 0, 0, 0, 0, 0]}), 500
 
 
-@calendario_bahias_bp.route('/diagnosticos-stats', methods=['GET'])
-@jefe_taller_required
-def obtener_estadisticas_diagnosticos(current_user):
-    """Obtener estadísticas de diagnósticos técnicos"""
-    try:
-        logger.info("📊 Obteniendo estadísticas de diagnósticos")
-        
-        estados = ['pendiente', 'aprobado', 'rechazado', 'borrador']
-        stats = {}
-        
-        for estado in estados:
-            count = supabase.table('diagnostico_tecnico') \
-                .select('id', count='exact') \
-                .eq('estado', estado) \
-                .execute()
-            stats[estado] = count.count if hasattr(count, 'count') else len(count.data) if count.data else 0
-        
-        logger.info(f"✅ Diagnósticos: Pendientes={stats['pendiente']}, Aprobados={stats['aprobado']}, Rechazados={stats['rechazado']}")
-        
-        return jsonify({'success': True, 'stats': stats}), 200
-        
-    except Exception as e:
-        logger.error(f"Error obteniendo estadísticas de diagnósticos: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
+# =====================================================
+# ENDPOINT 7: DETALLE DE ORDEN
+# =====================================================
 
 @calendario_bahias_bp.route('/detalle-orden/<int:id_orden>', methods=['GET'])
 @jefe_taller_required
@@ -513,7 +518,7 @@ def obtener_detalle_orden(current_user, id_orden):
     try:
         logger.info(f"🔍 Obteniendo detalle de orden {id_orden}")
         
-        # Obtener orden con vehículo
+        # Obtener orden
         orden_result = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_salida, id_vehiculo') \
             .eq('id', id_orden) \
@@ -582,40 +587,6 @@ def obtener_detalle_orden(current_user, id_orden):
                     'tipo': a.get('tipo_asignacion', 'reparacion')
                 })
         
-        # Obtener diagnóstico inicial
-        diagnostico_inicial = None
-        diagnostico_result = supabase.table('diagnostigoinicial') \
-            .select('diagnostigo') \
-            .eq('id_orden_trabajo', id_orden) \
-            .order('fecha_hora', desc=True) \
-            .limit(1) \
-            .execute()
-        
-        if diagnostico_result.data:
-            diagnostico_inicial = diagnostico_result.data[0].get('diagnostigo')
-        
-        # Obtener servicios cotizados
-        servicios = []
-        try:
-            cotizacion_result = supabase.table('cotizacion') \
-                .select('id') \
-                .eq('id_orden_trabajo', id_orden) \
-                .execute()
-            
-            if cotizacion_result.data:
-                detalles_result = supabase.table('cotizaciondetalle') \
-                    .select('servicio_descripcion, precio') \
-                    .eq('id_cotizacion', cotizacion_result.data[0]['id']) \
-                    .execute()
-                
-                for det in (detalles_result.data or []):
-                    servicios.append({
-                        'descripcion': det.get('servicio_descripcion', 'Servicio'),
-                        'precio': det.get('precio', 0)
-                    })
-        except Exception as e:
-            logger.warning(f"Error obteniendo servicios: {e}")
-        
         resultado = {
             'id': orden['id'],
             'codigo_unico': orden['codigo_unico'],
@@ -639,9 +610,7 @@ def obtener_detalle_orden(current_user, id_orden):
                 'fecha_hora_inicio_real': planificacion_data.get('fecha_hora_inicio_real'),
                 'fecha_hora_fin_real': planificacion_data.get('fecha_hora_fin_real')
             },
-            'tecnicos': tecnicos,
-            'diagnostico_inicial': diagnostico_inicial,
-            'servicios': servicios
+            'tecnicos': tecnicos
         }
         
         return jsonify({'success': True, 'detalle': resultado}), 200
@@ -653,43 +622,9 @@ def obtener_detalle_orden(current_user, id_orden):
         return jsonify({'error': str(e)}), 500
 
 
-@calendario_bahias_bp.route('/liberar-bahia', methods=['POST'])
-@jefe_taller_required
-def liberar_bahia(current_user):
-    """Liberar una bahía manualmente (para casos de emergencia)"""
-    try:
-        data = request.get_json()
-        id_orden = data.get('id_orden')
-        bahia_numero = data.get('bahia_numero')
-        
-        if not id_orden and not bahia_numero:
-            return jsonify({'error': 'Se requiere id_orden o bahia_numero'}), 400
-        
-        ahora = datetime.datetime.now().isoformat()
-        
-        if id_orden:
-            # Liberar por ID de orden
-            supabase.table('planificacion') \
-                .update({'fecha_hora_fin_real': ahora}) \
-                .eq('id_orden_trabajo', id_orden) \
-                .is_('fecha_hora_fin_real', 'null') \
-                .execute()
-            
-            logger.info(f"🔓 Bahía liberada manualmente para orden {id_orden}")
-            
-        elif bahia_numero:
-            # Liberar por número de bahía
-            supabase.table('planificacion') \
-                .update({'fecha_hora_fin_real': ahora}) \
-                .eq('bahia_asignada', bahia_numero) \
-                .is_('fecha_hora_fin_real', 'null') \
-                .not_.is_('fecha_hora_inicio_real', 'null') \
-                .execute()
-            
-            logger.info(f"🔓 Bahía {bahia_numero} liberada manualmente")
-        
-        return jsonify({'success': True, 'message': 'Bahía liberada correctamente'}), 200
-        
-    except Exception as e:
-        logger.error(f"Error liberando bahía: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+# =====================================================
+# REGISTRAR BLUEPRINT (para usar en app.py)
+# =====================================================
+# En tu app.py, registra el blueprint así:
+# from calendario_bahias import calendario_bahias_bp
+# app.register_blueprint(calendario_bahias_bp)

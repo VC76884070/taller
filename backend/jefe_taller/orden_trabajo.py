@@ -1,11 +1,10 @@
 # =====================================================
-# ÓRDENES DE TRABAJO - JEFE TALLER (COMPLETO Y CORREGIDO)
+# ÓRDENES DE TRABAJO - JEFE TALLER (VERSIÓN COMPLETA OPTIMIZADA)
 # =====================================================
 
 from flask import Blueprint, request, jsonify
 from config import config
 from decorators import jefe_taller_required
-import jwt
 import datetime
 import logging
 import uuid
@@ -15,9 +14,6 @@ import tempfile
 import io
 import cloudinary
 import cloudinary.uploader
-import cloudinary.api
-from functools import lru_cache
-from datetime import datetime as dt
 import time
 
 logger = logging.getLogger(__name__)
@@ -32,12 +28,10 @@ supabase = config.supabase
 # =====================================================
 
 class CacheManager:
-    """Gestor de caché simple en memoria"""
     def __init__(self):
         self._cache = {}
     
     def get(self, key):
-        """Obtener dato del caché si no ha expirado"""
         if key in self._cache:
             data, timestamp, ttl = self._cache[key]
             if time.time() - timestamp < ttl:
@@ -46,99 +40,80 @@ class CacheManager:
         return None
     
     def set(self, key, data, ttl=30):
-        """Guardar dato en caché con TTL en segundos"""
         self._cache[key] = (data, time.time(), ttl)
     
     def clear(self, key=None):
-        """Limpiar caché específico o todo"""
         if key:
             self._cache.pop(key, None)
         else:
             self._cache.clear()
 
-# Instancia global de caché
 cache = CacheManager()
 
+
 # =====================================================
-# ENDPOINTS OPTIMIZADOS
+# ENDPOINT 1: LISTAR TÉCNICOS (OPTIMIZADO)
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/tecnicos', methods=['GET'])
 @jefe_taller_required
 def listar_tecnicos(current_user):
-    """Listar técnicos con su disponibilidad actual"""
     try:
-        # Intentar obtener del caché
         cached_data = cache.get('tecnicos_list')
         if cached_data:
             return jsonify({'success': True, 'tecnicos': cached_data}), 200
         
-        # 🔥 CORRECCIÓN: Obtener técnicos mediante JOIN con tabla rol
-        # Primero obtenemos los ids de usuarios que tienen rol de técnico (id_rol = 3 según tus datos)
-        # De la tabla usuario_rol hacemos JOIN con rol para obtener el nombre_rol
+        MAX_ORDENES = 2
         
+        # Obtener IDs de técnicos
         roles_data = supabase.table('usuario_rol') \
-            .select('id_usuario, rol:rol!inner(nombre_rol)') \
+            .select('id_usuario') \
+            .eq('id_rol', 3) \
             .execute()
         
         if not roles_data.data:
             return jsonify({'success': True, 'tecnicos': []}), 200
         
-        # Filtrar solo los que tienen rol 'tecnico'
-        tecnicos_ids = []
-        for r in roles_data.data:
-            rol_info = r.get('rol', {})
-            if isinstance(rol_info, dict) and rol_info.get('nombre_rol') == 'tecnico':
-                tecnicos_ids.append(r['id_usuario'])
-            elif rol_info == 'tecnico':  # Para algunos formatos de respuesta
-                tecnicos_ids.append(r['id_usuario'])
+        tecnicos_ids = [r['id_usuario'] for r in roles_data.data]
         
-        if not tecnicos_ids:
-            return jsonify({'success': True, 'tecnicos': []}), 200
-        
-        # Obtener información detallada de los técnicos
+        # Obtener datos de técnicos
         usuarios_result = supabase.table('usuario') \
             .select('id, nombre, contacto, email') \
             .in_('id', tecnicos_ids) \
             .execute()
         
-        MAX_ORDENES = 2
+        if not usuarios_result.data:
+            return jsonify({'success': True, 'tecnicos': []}), 200
+        
+        # Obtener asignaciones activas
+        asignaciones = supabase.table('asignaciontecnico') \
+            .select('id_tecnico') \
+            .in_('id_tecnico', tecnicos_ids) \
+            .eq('tipo_asignacion', 'diagnostico') \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
+        ordenes_por_tecnico = {}
+        for a in (asignaciones.data or []):
+            tecnico_id = a.get('id_tecnico')
+            if tecnico_id:
+                ordenes_por_tecnico[tecnico_id] = ordenes_por_tecnico.get(tecnico_id, 0) + 1
+        
         tecnicos = []
+        for usuario in usuarios_result.data:
+            ordenes_activas = ordenes_por_tecnico.get(usuario['id'], 0)
+            tecnicos.append({
+                'id': usuario['id'],
+                'nombre': usuario.get('nombre', 'Técnico'),
+                'contacto': usuario.get('contacto', ''),
+                'email': usuario.get('email', ''),
+                'ordenes_activas': ordenes_activas,
+                'max_vehiculos': MAX_ORDENES,
+                'disponible': ordenes_activas < MAX_ORDENES,
+                'cupo_restante': MAX_ORDENES - ordenes_activas
+            })
         
-        if usuarios_result.data:
-            # Obtener órdenes activas por técnico (asignaciones activas)
-            asignaciones = supabase.table('asignaciontecnico') \
-                .select('id_tecnico, id_orden_trabajo, fecha_hora_final') \
-                .in_('id_tecnico', tecnicos_ids) \
-                .eq('tipo_asignacion', 'diagnostico') \
-                .is_('fecha_hora_final', 'null') \
-                .execute()
-            
-            # Contar órdenes activas por técnico
-            ordenes_por_tecnico = {}
-            for a in (asignaciones.data or []):
-                tecnico_id = a.get('id_tecnico')
-                if tecnico_id:
-                    ordenes_por_tecnico[tecnico_id] = ordenes_por_tecnico.get(tecnico_id, 0) + 1
-            
-            # Construir lista de técnicos
-            for usuario in usuarios_result.data:
-                ordenes_activas = ordenes_por_tecnico.get(usuario['id'], 0)
-                tecnicos.append({
-                    'id': usuario['id'],
-                    'nombre': usuario['nombre'],
-                    'contacto': usuario.get('contacto', ''),
-                    'email': usuario.get('email', ''),
-                    'ordenes_activas': ordenes_activas,
-                    'max_vehiculos': MAX_ORDENES,
-                    'disponible': ordenes_activas < MAX_ORDENES,
-                    'cupo_restante': MAX_ORDENES - ordenes_activas
-                })
-        
-        # Ordenar: primero disponibles, luego por carga de trabajo
         tecnicos.sort(key=lambda t: (not t['disponible'], t['ordenes_activas']))
-        
-        # Guardar en caché
         cache.set('tecnicos_list', tecnicos, ttl=30)
         
         return jsonify({'success': True, 'tecnicos': tecnicos}), 200
@@ -148,15 +123,182 @@ def listar_tecnicos(current_user):
         return jsonify({'error': str(e)}), 500
 
 
-@jefe_taller_ordenes_bp.route('/ordenes-activas', methods=['GET'])
+# =====================================================
+# ENDPOINT 2: LISTAR ÓRDENES ACTIVAS (OPTIMIZADO - UNA SOLA CONSULTA)
+# =====================================================
+
+@jefe_taller_ordenes_bp.route('/ordenes-activas-v2', methods=['GET'])
 @jefe_taller_required
-def listar_ordenes_activas(current_user):
-    """Listar órdenes activas - Primero EnRecepcion, luego EnDiagnostico"""
+def listar_ordenes_activas_v2(current_user):
+    """Listar órdenes activas - VERSIÓN OPTIMIZADA (una sola consulta masiva)"""
     try:
-        # 🔥 CORRECCIÓN: Incluir 'EnDiagnostico' y 'EnRecepcion'
-        resultado = supabase.table('ordentrabajo') \
+        estados_activos = [
+            'EnRecepcion', 'EnDiagnostico', 'DiagnosticoCompletado',
+            'CotizacionEnviada', 'CotizacionAceptada', 'CotizacionParcial',
+            'CotizacionRechazada', 'EnArmadoVehiculo', 'VehiculoArmado',
+            'EnReparacion', 'EnPausa', 'ReparacionCompletada'
+        ]
+        
+        # 1. Obtener TODAS las órdenes activas
+        ordenes_result = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
-            .in_('estado_global', ['EnRecepcion', 'EnDiagnostico', 'EnReparacion', 'EnPausa']) \
+            .in_('estado_global', estados_activos) \
+            .execute()
+        
+        if not ordenes_result.data:
+            return jsonify({'success': True, 'ordenes': []}), 200
+        
+        ordenes = ordenes_result.data
+        
+        # 2. Obtener TODOS los vehículos
+        vehiculos_ids = list(set([o['id_vehiculo'] for o in ordenes if o.get('id_vehiculo')]))
+        vehiculos_map = {}
+        
+        if vehiculos_ids:
+            vehiculos_result = supabase.table('vehiculo') \
+                .select('id, placa, marca, modelo, id_cliente') \
+                .in_('id', vehiculos_ids) \
+                .execute()
+            for v in (vehiculos_result.data or []):
+                vehiculos_map[v['id']] = v
+        
+        # 3. Obtener TODOS los clientes
+        clientes_ids = list(set([v['id_cliente'] for v in vehiculos_map.values() if v.get('id_cliente')]))
+        clientes_map = {}
+        
+        if clientes_ids:
+            clientes_result = supabase.table('cliente') \
+                .select('id, id_usuario') \
+                .in_('id', clientes_ids) \
+                .execute()
+            for c in (clientes_result.data or []):
+                clientes_map[c['id']] = c
+        
+        # 4. Obtener TODOS los usuarios
+        usuarios_ids = list(set([c['id_usuario'] for c in clientes_map.values() if c.get('id_usuario')]))
+        usuarios_map = {}
+        
+        if usuarios_ids:
+            usuarios_result = supabase.table('usuario') \
+                .select('id, nombre') \
+                .in_('id', usuarios_ids) \
+                .execute()
+            for u in (usuarios_result.data or []):
+                usuarios_map[u['id']] = u
+        
+        # 5. Obtener TODAS las asignaciones de técnicos
+        ordenes_ids = [o['id'] for o in ordenes]
+        asignaciones_map = {}
+        
+        if ordenes_ids:
+            asignaciones_result = supabase.table('asignaciontecnico') \
+                .select('id_orden_trabajo, id_tecnico') \
+                .in_('id_orden_trabajo', ordenes_ids) \
+                .eq('tipo_asignacion', 'diagnostico') \
+                .is_('fecha_hora_final', 'null') \
+                .execute()
+            
+            tecnicos_ids = list(set([a['id_tecnico'] for a in (asignaciones_result.data or []) if a.get('id_tecnico')]))
+            tecnicos_nombres = {}
+            
+            if tecnicos_ids:
+                tecnicos_result = supabase.table('usuario') \
+                    .select('id, nombre') \
+                    .in_('id', tecnicos_ids) \
+                    .execute()
+                for t in (tecnicos_result.data or []):
+                    tecnicos_nombres[t['id']] = t.get('nombre', 'Técnico')
+            
+            for a in (asignaciones_result.data or []):
+                orden_id = a.get('id_orden_trabajo')
+                tecnico_id = a.get('id_tecnico')
+                if orden_id and tecnico_id and tecnico_id in tecnicos_nombres:
+                    if orden_id not in asignaciones_map:
+                        asignaciones_map[orden_id] = []
+                    asignaciones_map[orden_id].append({
+                        'id': tecnico_id,
+                        'nombre': tecnicos_nombres[tecnico_id]
+                    })
+        
+        # 6. Obtener TODAS las planificaciones
+        planificaciones_map = {}
+        if ordenes_ids:
+            planificaciones_result = supabase.table('planificacion') \
+                .select('id_orden_trabajo, bahia_asignada, fecha_hora_inicio_estimado, horas_estimadas, fecha_hora_inicio_real') \
+                .in_('id_orden_trabajo', ordenes_ids) \
+                .execute()
+            for p in (planificaciones_result.data or []):
+                if p.get('id_orden_trabajo'):
+                    planificaciones_map[p['id_orden_trabajo']] = p
+        
+        # 7. Construir resultado
+        ordenes_resultado = []
+        for orden in ordenes:
+            vehiculo = vehiculos_map.get(orden.get('id_vehiculo'), {})
+            
+            # Obtener nombre del cliente
+            cliente_nombre = 'No registrado'
+            cliente_id = vehiculo.get('id_cliente')
+            if cliente_id and cliente_id in clientes_map:
+                usuario_id = clientes_map[cliente_id].get('id_usuario')
+                if usuario_id and usuario_id in usuarios_map:
+                    cliente_nombre = usuarios_map[usuario_id].get('nombre', 'No registrado')
+            
+            planificacion = planificaciones_map.get(orden['id'], {})
+            trabajo_iniciado = planificacion.get('fecha_hora_inicio_real') is not None
+            
+            ordenes_resultado.append({
+                'id_orden': orden['id'],
+                'codigo_unico': orden['codigo_unico'],
+                'fecha_ingreso': orden['fecha_ingreso'],
+                'estado_global': orden['estado_global'],
+                'vehiculo': {
+                    'placa': vehiculo.get('placa', 'S/N'),
+                    'marca': vehiculo.get('marca', ''),
+                    'modelo': vehiculo.get('modelo', ''),
+                    'cliente_nombre': cliente_nombre
+                },
+                'tecnicos': asignaciones_map.get(orden['id'], []),
+                'bahia_asignada': planificacion.get('bahia_asignada'),
+                'fecha_hora_inicio_estimado': planificacion.get('fecha_hora_inicio_estimado'),
+                'horas_estimadas': planificacion.get('horas_estimadas'),
+                'trabajo_iniciado': trabajo_iniciado
+            })
+        
+        # 8. ORDENAR: EnRecepcion primero, luego EnDiagnostico (últimas 5), luego el resto
+        en_recepcion = [o for o in ordenes_resultado if o['estado_global'] == 'EnRecepcion']
+        en_diagnostico = [o for o in ordenes_resultado if o['estado_global'] == 'EnDiagnostico']
+        otros = [o for o in ordenes_resultado if o['estado_global'] not in ['EnRecepcion', 'EnDiagnostico']]
+        
+        en_recepcion.sort(key=lambda o: o['fecha_ingreso'], reverse=True)
+        en_diagnostico.sort(key=lambda o: o['fecha_ingreso'], reverse=True)
+        otros.sort(key=lambda o: o['fecha_ingreso'], reverse=True)
+        
+        # Solo últimas 5 de EnDiagnostico
+        ordenes_final = en_recepcion + en_diagnostico[:5] + otros
+        
+        return jsonify({'success': True, 'ordenes': ordenes_final}), 200
+        
+    except Exception as e:
+        logger.error(f"Error en órdenes activas: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 3: LISTAR ÓRDENES FINALIZADAS (OPTIMIZADO)
+# =====================================================
+
+@jefe_taller_ordenes_bp.route('/ordenes-finalizadas', methods=['GET'])
+@jefe_taller_required
+def listar_ordenes_finalizadas(current_user):
+    try:
+        resultado = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, fecha_ingreso, fecha_salida, estado_global, id_vehiculo') \
+            .in_('estado_global', ['Finalizado', 'Entregado']) \
+            .order('fecha_ingreso', desc=True) \
+            .limit(50) \
             .execute()
         
         if not resultado.data:
@@ -164,22 +306,10 @@ def listar_ordenes_activas(current_user):
         
         ordenes = resultado.data
         
-        # 🔥 ORDENAR: Primero EnRecepcion, luego EnDiagnostico, luego los demás
-        # Definir el orden de prioridad
-        orden_prioridad = {
-            'EnRecepcion': 1,
-            'EnDiagnostico': 2,
-            'EnReparacion': 3,
-            'EnPausa': 4
-        }
-        
-        ordenes.sort(key=lambda o: (orden_prioridad.get(o['estado_global'], 99), o['fecha_ingreso']))
-        
-        ordenes_ids = [o['id'] for o in ordenes]
-        vehiculos_ids = list(set([o['id_vehiculo'] for o in ordenes if o.get('id_vehiculo')]))
-        
         # Obtener vehículos
+        vehiculos_ids = list(set([o['id_vehiculo'] for o in ordenes if o.get('id_vehiculo')]))
         vehiculos_map = {}
+        
         if vehiculos_ids:
             vehiculos = supabase.table('vehiculo') \
                 .select('id, placa, marca, modelo, id_cliente') \
@@ -189,9 +319,8 @@ def listar_ordenes_activas(current_user):
                 vehiculos_map[v['id']] = v
         
         # Obtener clientes
-        clientes_ids = list(set([v.get('id_cliente') for v in vehiculos_map.values() if v.get('id_cliente')]))
+        clientes_ids = list(set([v['id_cliente'] for v in vehiculos_map.values() if v.get('id_cliente')]))
         clientes_map = {}
-        usuarios_ids = []
         
         if clientes_ids:
             clientes = supabase.table('cliente') \
@@ -200,11 +329,11 @@ def listar_ordenes_activas(current_user):
                 .execute()
             for c in (clientes.data or []):
                 clientes_map[c['id']] = c
-                if c.get('id_usuario'):
-                    usuarios_ids.append(c['id_usuario'])
         
-        # Obtener usuarios (clientes)
+        # Obtener usuarios
+        usuarios_ids = list(set([c['id_usuario'] for c in clientes_map.values() if c.get('id_usuario')]))
         usuarios_map = {}
+        
         if usuarios_ids:
             usuarios = supabase.table('usuario') \
                 .select('id, nombre') \
@@ -213,137 +342,148 @@ def listar_ordenes_activas(current_user):
             for u in (usuarios.data or []):
                 usuarios_map[u['id']] = u
         
-        # Obtener técnicos por orden
-        tecnicos_por_orden = {}
-        if ordenes_ids:
-            asignaciones = supabase.table('asignaciontecnico') \
-                .select('id_orden_trabajo, id_tecnico') \
-                .in_('id_orden_trabajo', ordenes_ids) \
-                .eq('tipo_asignacion', 'diagnostico') \
-                .is_('fecha_hora_final', 'null') \
-                .execute()
-            
-            tecnicos_ids = list(set([a['id_tecnico'] for a in (asignaciones.data or []) if a.get('id_tecnico')]))
-            tecnicos_nombres_map = {}
-            
-            if tecnicos_ids:
-                tecnicos = supabase.table('usuario') \
-                    .select('id, nombre') \
-                    .in_('id', tecnicos_ids) \
-                    .execute()
-                for t in (tecnicos.data or []):
-                    tecnicos_nombres_map[t['id']] = t
-            
-            for a in (asignaciones.data or []):
-                orden_id = a.get('id_orden_trabajo')
-                if orden_id and orden_id not in tecnicos_por_orden:
-                    tecnicos_por_orden[orden_id] = []
-                if orden_id and a.get('id_tecnico') in tecnicos_nombres_map:
-                    tecnicos_por_orden[orden_id].append({
-                        'id': a['id_tecnico'],
-                        'nombre': tecnicos_nombres_map[a['id_tecnico']]['nombre']
-                    })
-        
-        # Obtener planificaciones
-        planificaciones_map = {}
-        if ordenes_ids:
-            planificaciones = supabase.table('planificacion') \
-                .select('id_orden_trabajo, bahia_asignada, fecha_hora_inicio_estimado, horas_estimadas, fecha_hora_inicio_real') \
-                .in_('id_orden_trabajo', ordenes_ids) \
-                .execute()
-            for p in (planificaciones.data or []):
-                if p.get('id_orden_trabajo'):
-                    planificaciones_map[p['id_orden_trabajo']] = p
-        
-        # Construir resultado
         ordenes_resultado = []
         for orden in ordenes:
-            v = vehiculos_map.get(orden.get('id_vehiculo'), {})
-            cliente_info = clientes_map.get(v.get('id_cliente'), {})
-            usuario_cliente = usuarios_map.get(cliente_info.get('id_usuario'), {})
-            planificacion_data = planificaciones_map.get(orden['id'], {})
+            vehiculo = vehiculos_map.get(orden.get('id_vehiculo'), {})
+            
+            cliente_nombre = 'No registrado'
+            cliente_id = vehiculo.get('id_cliente')
+            if cliente_id and cliente_id in clientes_map:
+                usuario_id = clientes_map[cliente_id].get('id_usuario')
+                if usuario_id and usuario_id in usuarios_map:
+                    cliente_nombre = usuarios_map[usuario_id].get('nombre', 'No registrado')
             
             ordenes_resultado.append({
-                'id': orden['id'],
-                'codigo_unico': orden['codigo_unico'],
-                'fecha_ingreso': orden['fecha_ingreso'],
-                'estado_global': orden['estado_global'],
-                'placa': v.get('placa', ''),
-                'marca': v.get('marca', ''),
-                'modelo': v.get('modelo', ''),
-                'cliente_nombre': usuario_cliente.get('nombre', 'No registrado'),
-                'tecnicos': tecnicos_por_orden.get(orden['id'], []),
-                'bahia_asignada': planificacion_data.get('bahia_asignada'),
-                'fecha_hora_inicio_estimado': planificacion_data.get('fecha_hora_inicio_estimado'),
-                'horas_estimadas': planificacion_data.get('horas_estimadas'),
-                'trabajo_iniciado': planificacion_data.get('fecha_hora_inicio_real') is not None
-            })
-        
-        return jsonify({'success': True, 'ordenes': ordenes_resultado}), 200
-        
-    except Exception as e:
-        logger.error(f"Error listando órdenes activas: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@jefe_taller_ordenes_bp.route('/ordenes-finalizadas', methods=['GET'])
-@jefe_taller_required
-def listar_ordenes_finalizadas(current_user):
-    """Listar órdenes finalizadas"""
-    try:
-        resultado = supabase.table('ordentrabajo') \
-            .select('''
-                id,
-                codigo_unico,
-                fecha_ingreso,
-                fecha_salida,
-                estado_global,
-                vehiculo:vehiculo!inner (
-                    placa,
-                    marca,
-                    modelo,
-                    cliente:cliente!inner (
-                        id_usuario,
-                        usuario:usuario!inner (
-                            nombre
-                        )
-                    )
-                )
-            ''') \
-            .in_('estado_global', ['Finalizado', 'Entregado']) \
-            .order('fecha_ingreso', desc=True) \
-            .limit(50) \
-            .execute()
-        
-        ordenes = []
-        for orden in (resultado.data or []):
-            vehiculo = orden.get('vehiculo', {})
-            cliente = vehiculo.get('cliente', {}) if vehiculo else {}
-            usuario = cliente.get('usuario', {}) if cliente else {}
-            
-            ordenes.append({
-                'id': orden['id'],
+                'id_orden': orden['id'],
                 'codigo_unico': orden['codigo_unico'],
                 'fecha_ingreso': orden['fecha_ingreso'],
                 'fecha_entrega': orden.get('fecha_salida'),
                 'estado_global': orden['estado_global'],
-                'placa': vehiculo.get('placa', ''),
-                'marca': vehiculo.get('marca', ''),
-                'modelo': vehiculo.get('modelo', ''),
-                'cliente_nombre': usuario.get('nombre', 'No registrado')
+                'vehiculo': {
+                    'placa': vehiculo.get('placa', 'S/N'),
+                    'marca': vehiculo.get('marca', ''),
+                    'modelo': vehiculo.get('modelo', ''),
+                    'cliente_nombre': cliente_nombre
+                }
             })
         
-        return jsonify({'success': True, 'ordenes': ordenes}), 200
+        return jsonify({'success': True, 'ordenes': ordenes_resultado}), 200
         
     except Exception as e:
         logger.error(f"Error listando órdenes finalizadas: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
+# =====================================================
+# ENDPOINT 4: DETALLE DE ORDEN
+# =====================================================
+
+@jefe_taller_ordenes_bp.route('/detalle-orden/<int:id_orden>', methods=['GET'])
+@jefe_taller_required
+def detalle_orden(current_user, id_orden):
+    try:
+        orden_result = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, fecha_ingreso, fecha_salida, estado_global, id_vehiculo') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if not orden_result.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        orden = orden_result.data[0]
+        
+        # Obtener vehículo
+        vehiculo = {}
+        if orden.get('id_vehiculo'):
+            vehiculo_resp = supabase.table('vehiculo') \
+                .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
+                .eq('id', orden['id_vehiculo']) \
+                .execute()
+            if vehiculo_resp.data:
+                vehiculo = vehiculo_resp.data[0]
+        
+        # Obtener cliente
+        cliente_nombre = 'No registrado'
+        if vehiculo.get('id_cliente'):
+            cliente_resp = supabase.table('cliente') \
+                .select('id_usuario') \
+                .eq('id', vehiculo['id_cliente']) \
+                .execute()
+            if cliente_resp.data and cliente_resp.data[0].get('id_usuario'):
+                usuario_resp = supabase.table('usuario') \
+                    .select('nombre') \
+                    .eq('id', cliente_resp.data[0]['id_usuario']) \
+                    .execute()
+                if usuario_resp.data:
+                    cliente_nombre = usuario_resp.data[0].get('nombre', 'No registrado')
+        
+        # Obtener técnicos
+        tecnicos = []
+        asignaciones_resp = supabase.table('asignaciontecnico') \
+            .select('id_tecnico') \
+            .eq('id_orden_trabajo', id_orden) \
+            .eq('tipo_asignacion', 'diagnostico') \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
+        for a in (asignaciones_resp.data or []):
+            if a.get('id_tecnico'):
+                tecnico_resp = supabase.table('usuario') \
+                    .select('id, nombre') \
+                    .eq('id', a['id_tecnico']) \
+                    .execute()
+                if tecnico_resp.data:
+                    tecnicos.append(tecnico_resp.data[0])
+        
+        # Obtener planificación
+        planificacion = {}
+        planif_resp = supabase.table('planificacion') \
+            .select('*') \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        if planif_resp.data:
+            planificacion = planif_resp.data[0]
+        
+        # Obtener recepción
+        recepcion = {}
+        recep_resp = supabase.table('recepcion') \
+            .select('transcripcion_problema') \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        if recep_resp.data:
+            recepcion = recep_resp.data[0]
+        
+        detalle = {
+            'id': orden['id'],
+            'codigo_unico': orden['codigo_unico'],
+            'fecha_ingreso': orden['fecha_ingreso'],
+            'fecha_salida': orden.get('fecha_salida'),
+            'estado_global': orden['estado_global'],
+            'placa': vehiculo.get('placa', ''),
+            'marca': vehiculo.get('marca', ''),
+            'modelo': vehiculo.get('modelo', ''),
+            'anio': vehiculo.get('anio'),
+            'kilometraje': vehiculo.get('kilometraje'),
+            'cliente': {'nombre': cliente_nombre, 'telefono': 'No registrado'},
+            'tecnicos': tecnicos,
+            'planificacion': planificacion,
+            'transcripcion_problema': recepcion.get('transcripcion_problema', '')
+        }
+        
+        return jsonify({'success': True, 'detalle': detalle}), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo detalle: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 5: ASIGNAR TÉCNICOS
+# =====================================================
+
 @jefe_taller_ordenes_bp.route('/asignar-tecnicos', methods=['POST'])
 @jefe_taller_required
 def asignar_tecnicos(current_user):
-    """Asignar técnicos a una orden"""
     try:
         data = request.get_json()
         id_orden = data.get('id_orden')
@@ -358,7 +498,6 @@ def asignar_tecnicos(current_user):
         
         MAX_ORDENES_POR_TECNICO = 2
         
-        # Validar disponibilidad de técnicos
         if tecnicos_ids:
             asignaciones_activas = supabase.table('asignaciontecnico') \
                 .select('id_tecnico') \
@@ -404,7 +543,6 @@ def asignar_tecnicos(current_user):
                 'fecha_hora_inicio': datetime.datetime.now().isoformat()
             }).execute()
         
-        # Limpiar caché de técnicos
         cache.clear('tecnicos_list')
         
         return jsonify({'success': True, 'message': 'Técnicos asignados correctamente'}), 200
@@ -414,68 +552,13 @@ def asignar_tecnicos(current_user):
         return jsonify({'error': str(e)}), 500
 
 
-@jefe_taller_ordenes_bp.route('/diagnostico-inicial', methods=['POST'])
-@jefe_taller_required
-def guardar_diagnostico_inicial(current_user):
-    """Guardar diagnóstico inicial"""
-    try:
-        data = request.get_json()
-        id_orden = data.get('id_orden')
-        diagnostico = data.get('diagnostico', '')
-        audio_url = data.get('audio_url')
-        
-        if not id_orden:
-            return jsonify({'error': 'ID de orden requerido'}), 400
-        
-        if not diagnostico:
-            return jsonify({'error': 'El diagnóstico es obligatorio'}), 400
-        
-        # Verificar si existe diagnóstico previo
-        diagnostico_existente = supabase.table('diagnostigoinicial') \
-            .select('id') \
-            .eq('id_orden_trabajo', id_orden) \
-            .execute()
-        
-        now = datetime.datetime.now().isoformat()
-        
-        if diagnostico_existente.data:
-            # Actualizar existente
-            update_data = {
-                'diagnostigo': diagnostico,
-                'fecha_hora': now,
-                'id_jefe_taller': current_user['id']
-            }
-            if audio_url:
-                update_data['url_grabacion'] = audio_url
-                
-            supabase.table('diagnostigoinicial') \
-                .update(update_data) \
-                .eq('id_orden_trabajo', id_orden) \
-                .execute()
-        else:
-            # Insertar nuevo
-            insert_data = {
-                'id_orden_trabajo': id_orden,
-                'id_jefe_taller': current_user['id'],
-                'diagnostigo': diagnostico,
-                'fecha_hora': now
-            }
-            if audio_url:
-                insert_data['url_grabacion'] = audio_url
-                
-            supabase.table('diagnostigoinicial').insert(insert_data).execute()
-        
-        return jsonify({'success': True, 'message': 'Diagnóstico guardado correctamente'}), 200
-        
-    except Exception as e:
-        logger.error(f"Error guardando diagnóstico: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
+# =====================================================
+# ENDPOINT 6: PLANIFICAR TRABAJO
+# =====================================================
 
 @jefe_taller_ordenes_bp.route('/planificar', methods=['POST'])
 @jefe_taller_required
 def planificar_trabajo(current_user):
-    """Guardar planificación"""
     try:
         data = request.get_json()
         id_orden = data.get('id_orden')
@@ -495,7 +578,6 @@ def planificar_trabajo(current_user):
         fecha_inicio_dt = datetime.datetime.fromisoformat(fecha_inicio)
         fecha_fin_dt = fecha_inicio_dt + datetime.timedelta(hours=float(horas_estimadas))
         
-        # Verificar si existe planificación previa
         planificacion_existente = supabase.table('planificacion') \
             .select('id') \
             .eq('id_orden_trabajo', id_orden) \
@@ -524,122 +606,235 @@ def planificar_trabajo(current_user):
         return jsonify({'error': str(e)}), 500
 
 
-@jefe_taller_ordenes_bp.route('/detalle-orden/<int:id_orden>', methods=['GET'])
+# =====================================================
+# ENDPOINT 7: GUARDAR DIAGNÓSTICO INICIAL
+# =====================================================
+
+@jefe_taller_ordenes_bp.route('/diagnostico-inicial', methods=['POST'])
 @jefe_taller_required
-def detalle_orden(current_user, id_orden):
-    """Obtener detalle completo de una orden"""
+def guardar_diagnostico_inicial(current_user):
     try:
-        # Obtener orden
-        orden_result = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, fecha_ingreso, fecha_salida, estado_global, id_vehiculo') \
+        data = request.get_json()
+        id_orden = data.get('id_orden')
+        diagnostico = data.get('diagnostico', '')
+        audio_url = data.get('audio_url')
+        
+        if not id_orden:
+            return jsonify({'error': 'ID de orden requerido'}), 400
+        if not diagnostico:
+            return jsonify({'error': 'El diagnóstico es obligatorio'}), 400
+        
+        diagnostico_existente = supabase.table('diagnostigoinicial') \
+            .select('id') \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
+        now = datetime.datetime.now().isoformat()
+        
+        if diagnostico_existente.data:
+            update_data = {
+                'diagnostigo': diagnostico,
+                'fecha_hora': now,
+                'id_jefe_taller': current_user['id']
+            }
+            if audio_url:
+                update_data['url_grabacion'] = audio_url
+                
+            supabase.table('diagnostigoinicial') \
+                .update(update_data) \
+                .eq('id_orden_trabajo', id_orden) \
+                .execute()
+        else:
+            insert_data = {
+                'id_orden_trabajo': id_orden,
+                'id_jefe_taller': current_user['id'],
+                'diagnostigo': diagnostico,
+                'fecha_hora': now
+            }
+            if audio_url:
+                insert_data['url_grabacion'] = audio_url
+                
+            supabase.table('diagnostigoinicial').insert(insert_data).execute()
+        
+        return jsonify({'success': True, 'message': 'Diagnóstico guardado correctamente'}), 200
+        
+    except Exception as e:
+        logger.error(f"Error guardando diagnóstico: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 8: CAMBIAR ESTADO DE ORDEN
+# =====================================================
+
+@jefe_taller_ordenes_bp.route('/cambiar-estado-orden', methods=['POST'])
+@jefe_taller_required
+def cambiar_estado_orden(current_user):
+    try:
+        data = request.get_json()
+        id_orden = data.get('id_orden')
+        nuevo_estado = data.get('estado_global')
+        
+        if not id_orden or not nuevo_estado:
+            return jsonify({'error': 'ID de orden y estado requeridos'}), 400
+        
+        supabase.table('ordentrabajo') \
+            .update({'estado_global': nuevo_estado}) \
             .eq('id', id_orden) \
             .execute()
         
-        if not orden_result.data or len(orden_result.data) == 0:
-            return jsonify({'error': 'Orden no encontrada'}), 404
-        
-        orden = orden_result.data[0]
-        
-        # Obtener vehículo
-        vehiculo_result = supabase.table('vehiculo') \
-            .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
-            .eq('id', orden.get('id_vehiculo')) \
-            .execute()
-        
-        v = vehiculo_result.data[0] if vehiculo_result.data else {}
-        
-        # Obtener cliente y usuario
-        cliente_info = {}
-        usuario_cliente = {}
-        
-        if v.get('id_cliente'):
-            cliente_result = supabase.table('cliente') \
-                .select('id, id_usuario') \
-                .eq('id', v['id_cliente']) \
-                .execute()
-            
-            if cliente_result.data:
-                cliente_info = cliente_result.data[0]
-                if cliente_info.get('id_usuario'):
-                    usuario_result = supabase.table('usuario') \
-                        .select('nombre, contacto') \
-                        .eq('id', cliente_info['id_usuario']) \
-                        .execute()
-                    if usuario_result.data:
-                        usuario_cliente = usuario_result.data[0]
-        
-        # Obtener recepción
-        recepcion_result = supabase.table('recepcion') \
-            .select('transcripcion_problema') \
-            .eq('id_orden_trabajo', id_orden) \
-            .execute()
-        recepcion_data = recepcion_result.data[0] if recepcion_result.data else {}
-        
-        # Obtener técnicos asignados
-        tecnicos = []
-        asignaciones_result = supabase.table('asignaciontecnico') \
-            .select('id_tecnico') \
-            .eq('id_orden_trabajo', id_orden) \
-            .eq('tipo_asignacion', 'diagnostico') \
-            .is_('fecha_hora_final', 'null') \
-            .execute()
-        
-        for asignacion in (asignaciones_result.data or []):
-            if asignacion.get('id_tecnico'):
-                tecnico_result = supabase.table('usuario') \
-                    .select('id, nombre') \
-                    .eq('id', asignacion['id_tecnico']) \
-                    .execute()
-                if tecnico_result.data:
-                    tecnicos.append(tecnico_result.data[0])
-        
-        # Obtener diagnóstico inicial
-        diagnostico_result = supabase.table('diagnostigoinicial') \
-            .select('diagnostigo, url_grabacion') \
-            .eq('id_orden_trabajo', id_orden) \
-            .execute()
-        diagnostico_data = diagnostico_result.data[0] if diagnostico_result.data else {}
-        
-        # Obtener planificación
-        planificacion_result = supabase.table('planificacion') \
-            .select('*') \
-            .eq('id_orden_trabajo', id_orden) \
-            .execute()
-        planificacion_data = planificacion_result.data[0] if planificacion_result.data else {}
-        
-        detalle = {
-            'id': orden['id'],
-            'codigo_unico': orden['codigo_unico'],
-            'fecha_ingreso': orden['fecha_ingreso'],
-            'fecha_salida': orden.get('fecha_salida'),
-            'estado_global': orden['estado_global'],
-            'placa': v.get('placa', ''),
-            'marca': v.get('marca', ''),
-            'modelo': v.get('modelo', ''),
-            'anio': v.get('anio'),
-            'kilometraje': v.get('kilometraje'),
-            'cliente': {
-                'nombre': usuario_cliente.get('nombre', 'No registrado'),
-                'telefono': usuario_cliente.get('contacto', 'No registrado')
-            },
-            'tecnicos': tecnicos,
-            'diagnostico_inicial': diagnostico_data.get('diagnostigo'),
-            'diagnostico_audio_url': diagnostico_data.get('url_grabacion'),
-            'planificacion': planificacion_data,
-            'transcripcion_problema': recepcion_data.get('transcripcion_problema', '')
-        }
-        
-        return jsonify({'success': True, 'detalle': detalle}), 200
+        return jsonify({'success': True, 'message': f'Orden cambiada a {nuevo_estado}'}), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo detalle de orden: {str(e)}")
+        logger.error(f"Error cambiando estado: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
+# =====================================================
+# ENDPOINT 9: ESTADO DE BAHÍAS
+# =====================================================
+
+@jefe_taller_ordenes_bp.route('/bahias/estado', methods=['GET'])
+@jefe_taller_required
+def get_estado_bahias(current_user):
+    try:
+        cached_data = cache.get('bahias_estado')
+        if cached_data:
+            return jsonify({'success': True, 'bahias': cached_data}), 200
+        
+        planificaciones_ocupadas = supabase.table('planificacion') \
+            .select('bahia_asignada, id_orden_trabajo, fecha_hora_inicio_real') \
+            .not_.is_('fecha_hora_inicio_real', 'null') \
+            .is_('fecha_hora_fin_real', 'null') \
+            .execute()
+        
+        planificaciones_reservadas = supabase.table('planificacion') \
+            .select('bahia_asignada, id_orden_trabajo, fecha_hora_inicio_estimado, horas_estimadas') \
+            .is_('fecha_hora_inicio_real', 'null') \
+            .is_('fecha_hora_fin_real', 'null') \
+            .execute()
+        
+        ordenes_ids = set()
+        for p in (planificaciones_ocupadas.data or []):
+            if p.get('id_orden_trabajo'):
+                ordenes_ids.add(p['id_orden_trabajo'])
+        for p in (planificaciones_reservadas.data or []):
+            if p.get('id_orden_trabajo'):
+                ordenes_ids.add(p['id_orden_trabajo'])
+        
+        ordenes_codigos = {}
+        if ordenes_ids:
+            ordenes_data = supabase.table('ordentrabajo') \
+                .select('id, codigo_unico, estado_global') \
+                .in_('id', list(ordenes_ids)) \
+                .execute()
+            for o in (ordenes_data.data or []):
+                ordenes_codigos[o['id']] = o
+        
+        bahias_ocupadas = {}
+        for p in (planificaciones_ocupadas.data or []):
+            bahia = p.get('bahia_asignada')
+            if bahia:
+                orden_info = ordenes_codigos.get(p['id_orden_trabajo'], {})
+                bahias_ocupadas[bahia] = {
+                    'estado': 'ocupado',
+                    'orden_codigo': orden_info.get('codigo_unico'),
+                    'inicio_real': p.get('fecha_hora_inicio_real')
+                }
+        
+        bahias_reservadas = {}
+        for p in (planificaciones_reservadas.data or []):
+            bahia = p.get('bahia_asignada')
+            if bahia and bahia not in bahias_ocupadas:
+                orden_info = ordenes_codigos.get(p['id_orden_trabajo'], {})
+                bahias_reservadas[bahia] = {
+                    'estado': 'reservado',
+                    'orden_codigo': orden_info.get('codigo_unico'),
+                    'fecha_inicio_estimado': p.get('fecha_hora_inicio_estimado'),
+                    'horas_estimadas': p.get('horas_estimadas')
+                }
+        
+        bahias = []
+        for i in range(1, 13):
+            if i in bahias_ocupadas:
+                info = bahias_ocupadas[i]
+                bahias.append({
+                    'numero': i,
+                    'estado': info['estado'],
+                    'orden_codigo': info.get('orden_codigo'),
+                    'inicio_real': info.get('inicio_real')
+                })
+            elif i in bahias_reservadas:
+                info = bahias_reservadas[i]
+                bahias.append({
+                    'numero': i,
+                    'estado': info['estado'],
+                    'orden_codigo': info.get('orden_codigo'),
+                    'fecha_inicio_estimado': info.get('fecha_inicio_estimado'),
+                    'horas_estimadas': info.get('horas_estimadas')
+                })
+            else:
+                bahias.append({
+                    'numero': i,
+                    'estado': 'libre',
+                    'orden_codigo': None
+                })
+        
+        cache.set('bahias_estado', bahias, ttl=10)
+        
+        return jsonify({'success': True, 'bahias': bahias}), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo estado de bahías: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 10: VERIFICAR DISPONIBILIDAD DE BAHÍA
+# =====================================================
+
+@jefe_taller_ordenes_bp.route('/verificar-bahia', methods=['POST'])
+@jefe_taller_required
+def verificar_bahia(current_user):
+    try:
+        data = request.get_json()
+        bahia = data.get('bahia')
+        fecha_inicio = data.get('fecha_inicio')
+        horas_estimadas = data.get('horas_estimadas', 1)
+        id_orden_actual = data.get('id_orden_actual')
+        
+        if not bahia or not fecha_inicio:
+            return jsonify({'error': 'Bahía y fecha de inicio requeridas'}), 400
+        
+        fecha_inicio_dt = datetime.datetime.fromisoformat(fecha_inicio)
+        fecha_fin_dt = fecha_inicio_dt + datetime.timedelta(hours=float(horas_estimadas))
+        
+        query = supabase.table('planificacion') \
+            .select('id') \
+            .eq('bahia_asignada', bahia) \
+            .filter('fecha_hora_inicio_estimado', 'lt', fecha_fin_dt.isoformat()) \
+            .filter('fecha_hora_fin_estimado', 'gt', fecha_inicio_dt.isoformat())
+        
+        if id_orden_actual:
+            query = query.neq('id_orden_trabajo', id_orden_actual)
+        
+        conflictos = query.execute()
+        disponible = len(conflictos.data or []) == 0
+        
+        return jsonify({'success': True, 'disponible': disponible}), 200
+        
+    except Exception as e:
+        logger.error(f"Error verificando bahía: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 11: DIAGNÓSTICO PENDIENTE
+# =====================================================
 
 @jefe_taller_ordenes_bp.route('/diagnostico-pendiente/<int:id_orden>', methods=['GET'])
 @jefe_taller_required
 def diagnostico_pendiente(current_user, id_orden):
-    """Verificar si hay diagnóstico técnico pendiente de aprobación"""
     try:
         diagnostico = supabase.table('diagnostico_tecnico') \
             .select('id, estado, version, id_tecnico') \
@@ -649,7 +844,7 @@ def diagnostico_pendiente(current_user, id_orden):
             .limit(1) \
             .execute()
         
-        if diagnostico.data and len(diagnostico.data) > 0:
+        if diagnostico.data:
             diag = diagnostico.data[0]
             tecnico_nombre = 'Desconocido'
             if diag.get('id_tecnico'):
@@ -674,186 +869,13 @@ def diagnostico_pendiente(current_user, id_orden):
         return jsonify({'enviado': False}), 200
 
 
-@jefe_taller_ordenes_bp.route('/bahias/estado', methods=['GET'])
-@jefe_taller_required
-def get_estado_bahias(current_user):
-    """Obtener estado de todas las bahías"""
-    try:
-        # Intentar obtener del caché
-        cached_data = cache.get('bahias_estado')
-        if cached_data:
-            return jsonify({'success': True, 'bahias': cached_data}), 200
-        
-        ahora = datetime.datetime.now()
-        
-        # 1. Obtener bahías OCUPADAS (trabajo en curso)
-        planificaciones_ocupadas = supabase.table('planificacion') \
-            .select('bahia_asignada, id_orden_trabajo, fecha_hora_inicio_real') \
-            .not_.is_('fecha_hora_inicio_real', 'null') \
-            .is_('fecha_hora_fin_real', 'null') \
-            .execute()
-        
-        # 2. Obtener bahías RESERVADAS (planificadas para futuro)
-        # 🔥 CORRECCIÓN: Incluir TODAS las planificaciones que no han comenzado
-        planificaciones_reservadas = supabase.table('planificacion') \
-            .select('bahia_asignada, id_orden_trabajo, fecha_hora_inicio_estimado, horas_estimadas') \
-            .is_('fecha_hora_inicio_real', 'null') \
-            .is_('fecha_hora_fin_real', 'null') \
-            .execute()
-        
-        # Obtener todos los IDs de órdenes para buscar códigos
-        ordenes_ids = set()
-        for p in (planificaciones_ocupadas.data or []):
-            if p.get('id_orden_trabajo'):
-                ordenes_ids.add(p['id_orden_trabajo'])
-        for p in (planificaciones_reservadas.data or []):
-            if p.get('id_orden_trabajo'):
-                ordenes_ids.add(p['id_orden_trabajo'])
-        
-        # Obtener códigos de órdenes
-        ordenes_codigos = {}
-        if ordenes_ids:
-            ordenes_data = supabase.table('ordentrabajo') \
-                .select('id, codigo_unico, estado_global') \
-                .in_('id', list(ordenes_ids)) \
-                .execute()
-            for o in (ordenes_data.data or []):
-                ordenes_codigos[o['id']] = o
-        
-        # Procesar bahías ocupadas
-        bahias_ocupadas = {}
-        for p in (planificaciones_ocupadas.data or []):
-            bahia = p.get('bahia_asignada')
-            if bahia:
-                orden_info = ordenes_codigos.get(p['id_orden_trabajo'], {})
-                bahias_ocupadas[bahia] = {
-                    'estado': 'ocupado',
-                    'orden_id': p['id_orden_trabajo'],
-                    'orden_codigo': orden_info.get('codigo_unico'),
-                    'orden_estado': orden_info.get('estado_global'),
-                    'inicio_real': p.get('fecha_hora_inicio_real')
-                }
-        
-        # Procesar bahías reservadas
-        bahias_reservadas = {}
-        for p in (planificaciones_reservadas.data or []):
-            bahia = p.get('bahia_asignada')
-            # Solo procesar si no está ocupada
-            if bahia and bahia not in bahias_ocupadas:
-                orden_info = ordenes_codigos.get(p['id_orden_trabajo'], {})
-                fecha_estimada = p.get('fecha_hora_inicio_estimado')
-                
-                # Verificar si es futura (comparación más robusta)
-                es_futura = True
-                if fecha_estimada:
-                    try:
-                        # Asegurar formato datetime
-                        if isinstance(fecha_estimada, str):
-                            fecha_estimada_dt = datetime.datetime.fromisoformat(fecha_estimada.replace('Z', '+00:00'))
-                        else:
-                            fecha_estimada_dt = fecha_estimada
-                        es_futura = fecha_estimada_dt > ahora
-                    except:
-                        es_futura = True
-                
-                # 🔥 Mostrar TODAS las reservas (no solo futuras)
-                bahias_reservadas[bahia] = {
-                    'estado': 'reservado',
-                    'orden_id': p['id_orden_trabajo'],
-                    'orden_codigo': orden_info.get('codigo_unico'),
-                    'orden_estado': orden_info.get('estado_global'),
-                    'fecha_inicio_estimado': fecha_estimada,
-                    'horas_estimadas': p.get('horas_estimadas'),
-                    'es_futura': es_futura
-                }
-        
-        # Construir lista de bahías 1-12
-        bahias = []
-        for i in range(1, 13):
-            if i in bahias_ocupadas:
-                info = bahias_ocupadas[i]
-                bahias.append({
-                    'numero': i,
-                    'estado': info['estado'],
-                    'orden_id': info.get('orden_id'),
-                    'orden_codigo': info.get('orden_codigo'),
-                    'orden_estado': info.get('orden_estado'),
-                    'inicio_real': info.get('inicio_real')
-                })
-            elif i in bahias_reservadas:
-                info = bahias_reservadas[i]
-                bahias.append({
-                    'numero': i,
-                    'estado': info['estado'],
-                    'orden_id': info.get('orden_id'),
-                    'orden_codigo': info.get('orden_codigo'),
-                    'orden_estado': info.get('orden_estado'),
-                    'fecha_inicio_estimado': info.get('fecha_inicio_estimado'),
-                    'horas_estimadas': info.get('horas_estimadas'),
-                    'es_futura': info.get('es_futura', True)
-                })
-            else:
-                bahias.append({
-                    'numero': i,
-                    'estado': 'libre',
-                    'orden_codigo': None,
-                    'orden_estado': None
-                })
-        
-        # 🔥 Log para depuración
-        logger.info(f"Estado de bahías - Ocupadas: {len(bahias_ocupadas)}, Reservadas: {len(bahias_reservadas)}")
-        
-        # Guardar en caché por 10 segundos
-        cache.set('bahias_estado', bahias, ttl=10)
-        
-        return jsonify({'success': True, 'bahias': bahias}), 200
-        
-    except Exception as e:
-        logger.error(f"Error obteniendo estado de bahías: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@jefe_taller_ordenes_bp.route('/verificar-bahia', methods=['POST'])
-@jefe_taller_required
-def verificar_bahia(current_user):
-    """Verificar disponibilidad de una bahía en un horario específico"""
-    try:
-        data = request.get_json()
-        bahia = data.get('bahia')
-        fecha_inicio = data.get('fecha_inicio')
-        horas_estimadas = data.get('horas_estimadas', 1)
-        id_orden_actual = data.get('id_orden_actual')
-        
-        if not bahia or not fecha_inicio:
-            return jsonify({'error': 'Bahía y fecha de inicio requeridas'}), 400
-        
-        fecha_inicio_dt = datetime.datetime.fromisoformat(fecha_inicio)
-        fecha_fin_dt = fecha_inicio_dt + datetime.timedelta(hours=float(horas_estimadas))
-        
-        # Verificar conflictos
-        query = supabase.table('planificacion') \
-            .select('id') \
-            .eq('bahia_asignada', bahia) \
-            .filter('fecha_hora_inicio_estimado', 'lt', fecha_fin_dt.isoformat()) \
-            .filter('fecha_hora_fin_estimado', 'gt', fecha_inicio_dt.isoformat())
-        
-        if id_orden_actual:
-            query = query.neq('id_orden_trabajo', id_orden_actual)
-        
-        conflictos = query.execute()
-        disponible = len(conflictos.data or []) == 0
-        
-        return jsonify({'success': True, 'disponible': disponible}), 200
-        
-    except Exception as e:
-        logger.error(f"Error verificando bahía: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
+# =====================================================
+# ENDPOINT 12: TRANSCRIBIR AUDIO
+# =====================================================
 
 @jefe_taller_ordenes_bp.route('/transcribir-audio', methods=['POST'])
 @jefe_taller_required
 def transcribir_audio_jefe_taller(current_user):
-    """Transcribir audio usando Whisper"""
     try:
         data = request.get_json()
         audio_base64 = data.get('audio')
@@ -861,7 +883,6 @@ def transcribir_audio_jefe_taller(current_user):
         if not audio_base64:
             return jsonify({'error': 'Audio no proporcionado'}), 400
         
-        # Verificar disponibilidad de Whisper
         WHISPER_AVAILABLE = False
         try:
             import whisper
@@ -872,13 +893,11 @@ def transcribir_audio_jefe_taller(current_user):
         if not WHISPER_AVAILABLE:
             return jsonify({'error': 'Whisper no está disponible en el servidor'}), 500
         
-        # Limpiar base64 si es necesario
         if 'base64,' in audio_base64:
             audio_base64 = audio_base64.split('base64,')[1]
         
         audio_bytes = base64.b64decode(audio_base64)
         
-        # Cargar modelo y transcribir
         model = whisper.load_model("base")
         temp_path = None
         try:
@@ -901,10 +920,13 @@ def transcribir_audio_jefe_taller(current_user):
         return jsonify({'error': str(e)}), 500
 
 
+# =====================================================
+# ENDPOINT 13: SUBIR AUDIO A CLOUDINARY
+# =====================================================
+
 @jefe_taller_ordenes_bp.route('/subir-audio-diagnostico', methods=['POST'])
 @jefe_taller_required
 def subir_audio_diagnostico(current_user):
-    """Subir audio diagnóstico a Cloudinary"""
     try:
         data = request.get_json()
         audio_base64 = data.get('audio')
@@ -921,7 +943,6 @@ def subir_audio_diagnostico(current_user):
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         audio_file.name = f"diagnostico_{id_orden}_{timestamp}.wav"
         
-        # Subir a Cloudinary
         resultado = cloudinary.uploader.upload(
             audio_file,
             folder=f"furia_motor/diagnosticos/{id_orden}",
@@ -936,36 +957,25 @@ def subir_audio_diagnostico(current_user):
     except Exception as e:
         logger.error(f"Error subiendo audio: {str(e)}")
         return jsonify({'error': str(e)}), 500
-        
 
-@jefe_taller_ordenes_bp.route('/cambiar-estado-orden', methods=['POST'])
+
+# =====================================================
+# ENDPOINT 14: NOTIFICACIONES
+# =====================================================
+
+@jefe_taller_ordenes_bp.route('/notificaciones', methods=['GET'])
 @jefe_taller_required
-def cambiar_estado_orden(current_user):
-    """Cambiar el estado global de una orden"""
+def obtener_notificaciones(current_user):
     try:
-        data = request.get_json()
-        id_orden = data.get('id_orden')
-        nuevo_estado = data.get('estado_global')
-        
-        if not id_orden or not nuevo_estado:
-            return jsonify({'error': 'ID de orden y estado requeridos'}), 400
-        
-        # Estados permitidos para este endpoint
-        estados_permitidos = ['EnDiagnostico', 'EnReparacion', 'EnPausa', 'ReparacionCompletada', 'Finalizado']
-        if nuevo_estado not in estados_permitidos:
-            return jsonify({'error': f'Estado {nuevo_estado} no permitido para esta acción'}), 400
-        
-        # Actualizar estado
-        supabase.table('ordentrabajo') \
-            .update({'estado_global': nuevo_estado}) \
-            .eq('id', id_orden) \
+        resultado = supabase.table('notificacion') \
+            .select('*') \
+            .eq('id_usuario_destino', current_user['id']) \
+            .order('fecha_envio', desc=True) \
+            .limit(20) \
             .execute()
         
-        # Limpiar cachés
-        cache.clear('ordenes_activas')
-        
-        return jsonify({'success': True, 'message': f'Orden cambiada a {nuevo_estado}'}), 200
+        return jsonify({'success': True, 'notificaciones': resultado.data or []}), 200
         
     except Exception as e:
-        logger.error(f"Error cambiando estado: {str(e)}")
+        logger.error(f"Error obteniendo notificaciones: {str(e)}")
         return jsonify({'error': str(e)}), 500

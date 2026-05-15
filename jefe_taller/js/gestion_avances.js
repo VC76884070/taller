@@ -1,9 +1,8 @@
 // =====================================================
-// GESTION_AVANCES.JS - JEFE DE TALLER
-// GESTIÓN DE AVANCES DE TRABAJO - VERSIÓN CORREGIDA
+// GESTION_AVANCES.JS - JEFE DE TALLER (VERSIÓN OPTIMIZADA)
+// SOLO ÚLTIMOS 10 AVANCES - CARGA RÁPIDA
 // =====================================================
 
-// 🔧 IMPORTANTE: Definir API_URL PRIMERO
 const API_URL = window.location.origin + '/api/jefe-taller/avances';
 
 let token = null;
@@ -11,7 +10,20 @@ let currentUser = null;
 let avancesPendientes = [];
 let avancesProcesados = [];
 
-console.log('🔧 Iniciando configuración de gestion_avances.js');
+// Control de polling y caché
+let pollingInterval = null;
+let isUpdating = false;
+let lastPendientesFetch = 0;
+let lastProcesadosFetch = 0;
+
+// TTL en milisegundos
+const CACHE_TTL = {
+    pendientes: 15000,   // 15 segundos
+    procesados: 30000,   // 30 segundos
+    contador: 30000      // 30 segundos
+};
+
+console.log('🔧 Iniciando configuración de gestion_avances.js (VERSIÓN OPTIMIZADA)');
 console.log('📍 API_URL configurada:', API_URL);
 
 // =====================================================
@@ -22,13 +34,6 @@ function getAuthHeaders() {
     let token = localStorage.getItem('furia_token');
     if (!token) token = localStorage.getItem('token');
     if (!token) token = sessionStorage.getItem('token');
-    
-    if (!token) {
-        console.warn('⚠️ No se encontró token');
-    } else {
-        console.log('🔑 Token obtenido (primeros 30 chars):', token.substring(0, 30) + '...');
-    }
-    
     return {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -119,42 +124,44 @@ function statusBadge(estado) {
 }
 
 // =====================================================
-// CARGA DE DATOS
+// CARGA DE DATOS OPTIMIZADA (SOLO ÚLTIMOS 10)
 // =====================================================
 
-async function cargarAvancesPendientes() {
-    console.log('🔄 Cargando avances pendientes...');
-    console.log('📍 URL base:', API_URL);
+async function cargarAvancesPendientes(forceRefresh = false) {
+    if (isUpdating && !forceRefresh) return;
+    
+    const now = Date.now();
+    
+    // Usar caché si no se fuerza actualización
+    if (!forceRefresh && avancesPendientes.length > 0 && (now - lastPendientesFetch) < CACHE_TTL.pendientes) {
+        console.log('📦 Usando caché de avances pendientes');
+        renderizarAvancesPendientes();
+        return;
+    }
+    
+    console.log('🔄 Cargando últimos 10 avances pendientes...');
     mostrarLoading(true);
+    isUpdating = true;
     
     try {
         const search = document.getElementById('searchPendientes')?.value.toLowerCase() || '';
-        
-        // Agregar timestamp para evitar caché
         const timestamp = new Date().getTime();
         const url = `${API_URL}/pendientes?_=${timestamp}`;
-        console.log(`📡 URL completa: ${url}`);
         
         const response = await fetch(url, {
             headers: getAuthHeaders(),
-            cache: 'no-cache',
-            pragma: 'no-cache'
+            cache: 'no-cache'
         });
         
-        console.log(`📊 Response status: ${response.status}`);
-        
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ Respuesta de error:', errorText.substring(0, 500));
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const data = await response.json();
-        console.log('📦 Datos recibidos:', data);
 
         if (data.success) {
             let avances = data.avances || [];
-            console.log(`✅ Avances encontrados: ${avances.length}`);
+            console.log(`✅ Avances pendientes encontrados: ${avances.length} (últimos 10)`);
             
             if (search) {
                 avances = avances.filter(a => 
@@ -162,53 +169,84 @@ async function cargarAvancesPendientes() {
                     (a.tecnico_nombre || '').toLowerCase().includes(search) ||
                     (a.orden_codigo || '').toLowerCase().includes(search)
                 );
-                console.log(`🔍 Filtrados por búsqueda: ${avances.length}`);
             }
             
             avancesPendientes = avances;
+            lastPendientesFetch = Date.now();
             renderizarAvancesPendientes();
             
-            const badge = document.getElementById('pendientesCount');
-            if (badge) badge.textContent = avancesPendientes.length;
+            // Actualizar badge con contador TOTAL (no solo los últimos 10)
+            actualizarContadorPendientes();
         } else {
-            console.error('❌ Error en respuesta:', data.error);
-            showToast(data.error || 'Error al cargar avances pendientes', 'error');
+            throw new Error(data.error || 'Error al cargar avances pendientes');
         }
     } catch (error) {
-        console.error('❌ Error detallado:', error);
-        console.error('❌ Stack trace:', error.stack);
+        console.error('❌ Error:', error);
         showToast('Error al cargar avances pendientes: ' + error.message, 'error');
     } finally {
         mostrarLoading(false);
+        isUpdating = false;
     }
 }
 
-async function cargarAvancesProcesados() {
+async function actualizarContadorPendientes() {
+    try {
+        const timestamp = new Date().getTime();
+        const response = await fetch(`${API_URL}/contador?_=${timestamp}`, {
+            headers: getAuthHeaders()
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const badge = document.getElementById('pendientesCount');
+            if (badge) {
+                const count = data.pendientes_count;
+                badge.textContent = count;
+                // Mostrar indicador visual si hay más de 10
+                if (count > 10) {
+                    badge.title = `Hay ${count} avances pendientes en total. Mostrando los últimos 10.`;
+                    badge.style.cursor = 'help';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error actualizando contador:', error);
+    }
+}
+
+async function cargarAvancesProcesados(forceRefresh = false) {
+    if (isUpdating && !forceRefresh) return;
+    
+    const now = Date.now();
+    
+    if (!forceRefresh && avancesProcesados.length > 0 && (now - lastProcesadosFetch) < CACHE_TTL.procesados) {
+        console.log('📦 Usando caché de avances procesados');
+        renderizarAvancesProcesados();
+        return;
+    }
+    
     console.log('🔄 Cargando avances procesados...');
     mostrarLoading(true);
     
     try {
         const estado = document.getElementById('filtroEstado')?.value || 'all';
         const search = document.getElementById('searchAprobados')?.value.toLowerCase() || '';
+        const timestamp = new Date().getTime();
         
-        let url = `${API_URL}/procesados`;
-        if (estado !== 'all') url += `?estado=${estado}`;
-        
-        console.log(`📡 URL llamada: ${url}`);
+        let url = `${API_URL}/procesados?_=${timestamp}`;
+        if (estado !== 'all') url += `&estado=${estado}`;
         
         const response = await fetch(url, {
             headers: getAuthHeaders(),
             cache: 'no-cache'
         });
         
-        console.log(`📊 Response status: ${response.status}`);
-        
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
         
         const data = await response.json();
-        console.log('📦 Datos recibidos:', data);
 
         if (data.success) {
             let avances = data.avances || [];
@@ -223,6 +261,7 @@ async function cargarAvancesProcesados() {
             }
             
             avancesProcesados = avances;
+            lastProcesadosFetch = Date.now();
             renderizarAvancesProcesados();
         }
     } catch (error) {
@@ -234,7 +273,7 @@ async function cargarAvancesProcesados() {
 }
 
 // =====================================================
-// RENDERIZADO
+// RENDERIZADO OPTIMIZADO
 // =====================================================
 
 function renderizarAvancesPendientes() {
@@ -253,7 +292,18 @@ function renderizarAvancesPendientes() {
         return;
     }
 
-    container.innerHTML = avancesPendientes.map(avance => {
+    // Mostrar indicador si hay más avances (basado en el contador)
+    const totalBadge = document.getElementById('pendientesCount');
+    const hayMas = totalBadge && parseInt(totalBadge.textContent) > 10;
+    
+    const hayMasHtml = hayMas ? `
+        <div class="info-banner">
+            <i class="fas fa-info-circle"></i>
+            Mostrando los últimos 10 avances. Hay <strong>${totalBadge.textContent}</strong> avances pendientes en total.
+        </div>
+    ` : '';
+
+    container.innerHTML = hayMasHtml + avancesPendientes.map(avance => {
         let fotosPreview = '';
         if (avance.fotos && avance.fotos.length > 0) {
             fotosPreview = avance.fotos.slice(0, 3).map(f => `
@@ -354,6 +404,26 @@ function renderizarAvancesProcesados() {
 }
 
 // =====================================================
+// POLLING OPTIMIZADO (SOLO EN PESTAÑA ACTIVA)
+// =====================================================
+
+function iniciarPolling() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    
+    pollingInterval = setInterval(() => {
+        if (!document.hidden && !isUpdating) {
+            const activeTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab');
+            
+            if (activeTab === 'tab-pendientes') {
+                cargarAvancesPendientes();
+            } else if (activeTab === 'tab-aprobados') {
+                cargarAvancesProcesados();
+            }
+        }
+    }, 30000); // 30 segundos
+}
+
+// =====================================================
 // VER DETALLE AVANCE
 // =====================================================
 
@@ -363,20 +433,15 @@ window.verDetalleAvance = async function(avanceId) {
     
     try {
         const url = `${API_URL}/detalle/${avanceId}`;
-        console.log(`📡 URL: ${url}`);
-        
         const response = await fetch(url, {
             headers: getAuthHeaders()
         });
-        
-        console.log(`📊 Response status: ${response.status}`);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
         
         const data = await response.json();
-        console.log('📦 Datos recibidos:', data);
 
         if (!data.success) {
             showToast(data.error || 'Error al cargar detalle', 'error');
@@ -461,27 +526,24 @@ window.abrirModalAprobar = async function(avanceId) {
 
 window.confirmarAprobar = async function() {
     const comentario = document.getElementById('comentarioAprobacion')?.value || '';
-    console.log(`✅ Confirmando aprobación del avance ${currentAvanceId} con comentario: "${comentario}"`);
+    console.log(`✅ Confirmando aprobación del avance ${currentAvanceId}`);
     
     mostrarLoading(true);
     try {
-        const url = `${API_URL}/aprobar/${currentAvanceId}`;
-        console.log(`📡 PUT ${url}`);
-        
-        const response = await fetch(url, {
+        const response = await fetch(`${API_URL}/aprobar/${currentAvanceId}`, {
             method: 'PUT',
             headers: getAuthHeaders(),
             body: JSON.stringify({ comentario: comentario })
         });
         
         const data = await response.json();
-        console.log('📦 Respuesta:', data);
         
         if (data.success) {
             showToast('✅ Avance aprobado correctamente', 'success');
             cerrarModal('modalAprobar');
-            await cargarAvancesPendientes();
-            await cargarAvancesProcesados();
+            // Recargar datos
+            await cargarAvancesPendientes(true);
+            await cargarAvancesProcesados(true);
         } else {
             showToast(data.error || 'Error al aprobar', 'error');
         }
@@ -524,27 +586,23 @@ window.confirmarRechazar = async function() {
         return;
     }
     
-    console.log(`❌ Confirmando rechazo del avance ${currentAvanceId} con motivo: "${motivo}"`);
+    console.log(`❌ Confirmando rechazo del avance ${currentAvanceId}`);
     
     mostrarLoading(true);
     try {
-        const url = `${API_URL}/rechazar/${currentAvanceId}`;
-        console.log(`📡 PUT ${url}`);
-        
-        const response = await fetch(url, {
+        const response = await fetch(`${API_URL}/rechazar/${currentAvanceId}`, {
             method: 'PUT',
             headers: getAuthHeaders(),
             body: JSON.stringify({ motivo: motivo })
         });
         
         const data = await response.json();
-        console.log('📦 Respuesta:', data);
         
         if (data.success) {
             showToast('✅ Avance rechazado. El técnico ha sido notificado.', 'success');
             cerrarModal('modalRechazar');
-            await cargarAvancesPendientes();
-            await cargarAvancesProcesados();
+            await cargarAvancesPendientes(true);
+            await cargarAvancesProcesados(true);
         } else {
             showToast(data.error || 'Error al rechazar', 'error');
         }
@@ -572,14 +630,11 @@ async function cargarUsuarioActual() {
             return null;
         }
         
-        console.log('✅ Token encontrado');
-
         const response = await fetch(`${API_URL}/verify-token`, {
             headers: getAuthHeaders()
         });
         
         const data = await response.json();
-        console.log('📦 Verify token response:', data);
 
         if (data.success && data.user) {
             currentUser = data.user;
@@ -633,33 +688,35 @@ function setupEventListeners() {
             
             if (tabId === 'tab-aprobados') {
                 cargarAvancesProcesados();
+            } else if (tabId === 'tab-pendientes') {
+                cargarAvancesPendientes();
             }
         });
     });
     
     const refreshPendientes = document.getElementById('refreshPendientesBtn');
     if (refreshPendientes) {
-        refreshPendientes.addEventListener('click', () => cargarAvancesPendientes());
+        refreshPendientes.addEventListener('click', () => cargarAvancesPendientes(true));
     }
     
     const refreshAprobados = document.getElementById('refreshAprobadosBtn');
     if (refreshAprobados) {
-        refreshAprobados.addEventListener('click', () => cargarAvancesProcesados());
+        refreshAprobados.addEventListener('click', () => cargarAvancesProcesados(true));
     }
     
     const searchPendientes = document.getElementById('searchPendientes');
     if (searchPendientes) {
-        searchPendientes.addEventListener('input', () => cargarAvancesPendientes());
+        searchPendientes.addEventListener('input', debounce(() => cargarAvancesPendientes(true), 500));
     }
     
     const searchAprobados = document.getElementById('searchAprobados');
     if (searchAprobados) {
-        searchAprobados.addEventListener('input', () => cargarAvancesProcesados());
+        searchAprobados.addEventListener('input', debounce(() => cargarAvancesProcesados(true), 500));
     }
     
     const filtroEstado = document.getElementById('filtroEstado');
     if (filtroEstado) {
-        filtroEstado.addEventListener('change', () => cargarAvancesProcesados());
+        filtroEstado.addEventListener('change', () => cargarAvancesProcesados(true));
     }
     
     document.querySelectorAll('.modal').forEach(modal => {
@@ -668,7 +725,6 @@ function setupEventListeners() {
         });
     });
     
-    // Botones de confirmación
     const btnAprobar = document.getElementById('btnConfirmarAprobar');
     if (btnAprobar) {
         btnAprobar.addEventListener('click', confirmarAprobar);
@@ -682,8 +738,20 @@ function setupEventListeners() {
     console.log('✅ Event listeners configurados');
 }
 
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
 async function inicializar() {
-    console.log('🚀 Inicializando gestion_avances.js (Jefe de Taller)');
+    console.log('🚀 Inicializando gestion_avances.js (VERSIÓN OPTIMIZADA)');
     console.log(`📡 API_URL: ${API_URL}`);
     
     const user = await cargarUsuarioActual();
@@ -692,9 +760,13 @@ async function inicializar() {
         return;
     }
     
-    await cargarAvancesPendientes();
-    await cargarAvancesProcesados();
+    await Promise.all([
+        cargarAvancesPendientes(),
+        cargarAvancesProcesados()
+    ]);
+    
     setupEventListeners();
+    iniciarPolling();
     
     console.log('✅ gestion_avances.js inicializado correctamente');
 }

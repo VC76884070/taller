@@ -13,14 +13,14 @@
 
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/cotizaciones.css">
-    
+
     <style>
         /* Estilos adicionales para validación de días */
         .form-input.error {
             border-color: #dc3545 !important;
             background-color: rgba(220, 53, 69, 0.05);
         }
-        
+
         .error-message {
             color: #dc3545;
             font-size: 0.75rem;
@@ -30,20 +30,64 @@
             gap: 0.5rem;
             animation: fadeInError 0.3s ease;
         }
-        
+
         @keyframes fadeInError {
-            from { opacity: 0; transform: translateY(-5px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(-5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
-        
+
         .required-field {
             color: #dc3545;
             margin-left: 0.25rem;
         }
-        
+
         .campo-obligatorio {
             border-left: 3px solid var(--rojo-primario);
             background: rgba(193, 18, 31, 0.05);
+        }
+
+        /* Loading overlay mejorado */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-content {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(193, 18, 31, 0.2);
+            border-radius: 50%;
+            border-top-color: var(--rojo-primario, #C1121F);
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 1rem auto;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
@@ -63,9 +107,7 @@
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
                     </div>
-                    <button class="btn-logout" id="logoutBtn" onclick="logout()">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </button>
+                    <!-- Botón de logout eliminado - ya está en el sidebar -->
                 </div>
             </header>
 
@@ -227,7 +269,8 @@
                         </div>
                         <div class="search-box">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="searchRepuestoTecnico" placeholder="Buscar por orden, vehículo o técnico...">
+                            <input type="text" id="searchRepuestoTecnico"
+                                placeholder="Buscar por orden, vehículo o técnico...">
                         </div>
                         <button class="btn-outline" id="refreshSolicitudesTecnico">
                             <i class="fas fa-sync-alt"></i> Actualizar
@@ -468,7 +511,8 @@
             <div class="modal-body" id="detalleCotizacionContainer"></div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalDetalleCotizacion')">Cerrar</button>
-                <button class="btn-success" id="descargarDocumentoBtn"><i class="fas fa-download"></i> Descargar Documento</button>
+                <button class="btn-success" id="descargarDocumentoBtn"><i class="fas fa-download"></i> Descargar
+                    Documento</button>
             </div>
         </div>
     </div>
@@ -582,7 +626,8 @@
                 <div id="reparacionOrdenInfo" class="orden-info-card" style="margin-bottom: 1rem;"></div>
 
                 <div class="form-group">
-                    <label><i class="fas fa-users"></i> Seleccionar Técnicos para la Reparación <span class="required-field">*</span></label>
+                    <label><i class="fas fa-users"></i> Seleccionar Técnicos para la Reparación <span
+                            class="required-field">*</span></label>
                     <p class="text-muted" style="margin-bottom: 0.5rem; font-size: 0.7rem;">
                         <i class="fas fa-info-circle"></i> Los técnicos marcados con ✓ están actualmente asignados.
                         Puedes mantenerlos o cambiarlos.
@@ -593,36 +638,42 @@
                             <i class="fas fa-spinner fa-pulse"></i> Cargando técnicos disponibles...
                         </div>
                     </div>
-                    <small class="text-muted"><i class="fas fa-info-circle"></i> Selecciona uno o más técnicos para la reparación</small>
+                    <small class="text-muted"><i class="fas fa-info-circle"></i> Selecciona uno o más técnicos para la
+                        reparación</small>
                 </div>
 
                 <!-- CAMPO DE DÍAS - AHORA OBLIGATORIO -->
                 <div class="form-group campo-obligatorio" style="padding: 0.75rem; border-radius: 8px;">
                     <label>
-                        <i class="fas fa-calendar-alt"></i> Plazo de Reparación Estimado 
+                        <i class="fas fa-calendar-alt"></i> Plazo de Reparación Estimado
                         <span class="required-field" style="color: #dc3545; font-weight: bold;">* OBLIGATORIO</span>
                     </label>
                     <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                        <input type="number" id="reparacionPlazoDias" class="form-input" style="width: 120px;" value="" min="1" placeholder="Ej: 3">
+                        <input type="number" id="reparacionPlazoDias" class="form-input" style="width: 120px;" value=""
+                            min="1" placeholder="Ej: 3">
                         <span>días hábiles</span>
                     </div>
                     <small class="text-muted" style="display: block; margin-top: 8px;">
-                        <i class="fas fa-info-circle"></i> Este plazo se mostrará al cliente en su calendario para que sepa cuánto tiempo estará su vehículo en el taller
+                        <i class="fas fa-info-circle"></i> Este plazo se mostrará al cliente en su calendario para que
+                        sepa cuánto tiempo estará su vehículo en el taller
                     </small>
                     <div id="plazoDiasError" class="error-message" style="display: none;">
-                        <i class="fas fa-exclamation-circle"></i> ⚠️ Debes especificar cuántos días hábiles durará la reparación
+                        <i class="fas fa-exclamation-circle"></i> ⚠️ Debes especificar cuántos días hábiles durará la
+                        reparación
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label><i class="fas fa-comment-dots"></i> Instrucciones Detalladas para el Técnico <span class="required-field">*</span></label>
+                    <label><i class="fas fa-comment-dots"></i> Instrucciones Detalladas para el Técnico <span
+                            class="required-field">*</span></label>
                     <textarea id="reparacionInstrucciones" class="form-textarea" rows="5"
                         placeholder="Ejemplo:&#10;- Realizar diagnóstico completo del motor&#10;- Revisar sistema eléctrico y computadora&#10;- Cambiar aceite y filtros&#10;- Probar funcionamiento al finalizar"
                         required></textarea>
                 </div>
 
                 <!-- Advertencia adicional -->
-                <div class="alert-warning" style="margin-top: 1rem; padding: 0.75rem; border-radius: 8px; background: rgba(245, 158, 11, 0.1); border-left: 3px solid #F59E0B;">
+                <div class="alert-warning"
+                    style="margin-top: 1rem; padding: 0.75rem; border-radius: 8px; background: rgba(245, 158, 11, 0.1); border-left: 3px solid #F59E0B;">
                     <i class="fas fa-exclamation-triangle" style="color: #F59E0B;"></i>
                     <strong>⚠️ Importante:</strong>
                     <ul style="margin: 0.5rem 0 0 1.5rem; font-size: 0.8rem;">
@@ -650,7 +701,7 @@
             </div>
             <div class="modal-body">
                 <div id="compraDirectaInfoAdicional" style="display: none;" class="orden-info-card"></div>
-                
+
                 <div class="form-group">
                     <label>Orden de Trabajo <span class="required">*</span></label>
                     <select id="compraDirecta_id_orden" class="form-select" required>
@@ -683,7 +734,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalNuevaSolicitudCompraDirecta')">Cancelar</button>
+                <button class="btn-secondary"
+                    onclick="cerrarModal('modalNuevaSolicitudCompraDirecta')">Cancelar</button>
                 <button class="btn-primary" id="btnConfirmarCompraDirecta">
                     <i class="fas fa-paper-plane"></i> Enviar Solicitud
                 </button>
@@ -692,11 +744,10 @@
     </div>
 
     <!-- Loading Overlay -->
-    <div id="loadingOverlay"
-        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
-        <div style="background: white; padding: 1.5rem; border-radius: 12px; text-align: center;">
-            <i class="fas fa-spinner fa-pulse fa-2x" style="color: var(--rojo-primario);"></i>
-            <p style="margin-top: 0.5rem;">Cargando...</p>
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p>Cargando...</p>
         </div>
     </div>
 

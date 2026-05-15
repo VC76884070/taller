@@ -98,8 +98,14 @@ except Exception as e:
 # =====================================================
 # JEFE TALLER
 # =====================================================
+print("🟡 Iniciando importación de Jefe Taller...")
+
 try:
+    print("🔹 Importando jefe_taller_ordenes_bp...")
     from jefe_taller.orden_trabajo import jefe_taller_ordenes_bp
+    print(f"🔹 jefe_taller_ordenes_bp importado, tipo: {type(jefe_taller_ordenes_bp)}")
+    
+    print("🔹 Importando otros blueprints...")
     from jefe_taller.calendario_bahias import calendario_bahias_bp
     from jefe_taller.historial_vehiculos import historial_vehiculos_bp
     from jefe_taller.perfil import perfil_bp   
@@ -109,29 +115,53 @@ try:
     from jefe_taller.reservas_solicitudes import reservas_solicitudes_bp
     from jefe_taller.control_calidad import control_calidad_bp
     from jefe_taller.gestion_avances import avance_jefe_bp
-    from jefe_taller.dashboard import dashboard_bp  # 👈 NUEVO
-
-# Luego, registra el blueprint:
-    app.register_blueprint(dashboard_bp, url_prefix='/api/jefe-taller')
-    print("🔵🔵🔵 Importación de gestion_avances exitosa 🔵🔵🔵")
+    from jefe_taller.dashboard import dashboard_bp
+    print("🔹 Todos los imports completados")
     
+    print("🔹 Registrando blueprints...")
     app.register_blueprint(jefe_taller_ordenes_bp, url_prefix='/api/jefe-taller')
+    print("  ✓ jefe_taller_ordenes_bp registrado")
     app.register_blueprint(calendario_bahias_bp, url_prefix='/api/jefe-taller')
+    print("  ✓ calendario_bahias_bp registrado")
     app.register_blueprint(historial_vehiculos_bp, url_prefix='/api/jefe-taller')
+    print("  ✓ historial_vehiculos_bp registrado")
     app.register_blueprint(perfil_bp, url_prefix='/api/jefe-taller')
+    print("  ✓ perfil_bp registrado")
     app.register_blueprint(jefe_taller_diagnostico_bp, url_prefix='/api/jefe-taller')
+    print("  ✓ jefe_taller_diagnostico_bp registrado")
     app.register_blueprint(cotizaciones_bp, url_prefix='/api/jefe-taller')
+    print("  ✓ cotizaciones_bp registrado")
     app.register_blueprint(admin_roles_bp, url_prefix='/api/jefe-taller')
+    print("  ✓ admin_roles_bp registrado")
     app.register_blueprint(reservas_solicitudes_bp, url_prefix='/api/jefe-taller')
+    print("  ✓ reservas_solicitudes_bp registrado")
     app.register_blueprint(control_calidad_bp)
+    print("  ✓ control_calidad_bp registrado")
     app.register_blueprint(avance_jefe_bp)
+    print("  ✓ avance_jefe_bp registrado")
+    app.register_blueprint(dashboard_bp, url_prefix='/api/jefe-taller')
+    print("  ✓ dashboard_bp registrado")
     
-    print("🔵🔵🔵 Blueprint de avance_jefe_bp registrado (sin url_prefix, porque ya lo tiene en el archivo) 🔵🔵🔵")
+    print("🔵🔵🔵 Blueprints de Jefe Taller registrados correctamente 🔵🔵🔵")
     logger.info("✅ Blueprints de Jefe Taller registrados correctamente")
+    
+except NameError as e:
+    print(f"🔴❌ NameError: {e}")
+    import traceback
+    traceback.print_exc()
+    logger.error(f"❌ NameError en blueprint de Jefe Taller: {e}")
+    
+except ImportError as e:
+    print(f"🔴❌ ImportError: {e}")
+    import traceback
+    traceback.print_exc()
+    logger.error(f"❌ ImportError en blueprint de Jefe Taller: {e}")
+    
 except Exception as e:
+    print(f"🔴❌ Exception: {e}")
+    import traceback
+    traceback.print_exc()
     logger.error(f"❌ Error registrando blueprints de Jefe Taller: {e}")
-    print(f"🔴 Error específico: {e}")
-
 # =====================================================
 # ENCARGADO DE REPUESTOS
 # =====================================================

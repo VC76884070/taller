@@ -1,7 +1,7 @@
 # =====================================================
 # COTIZACIONES - JEFE DE TALLER
 # FURIA MOTOR COMPANY SRL
-# VERSIÓN 4.0 - CON SOLICITUDES DE REPUESTOS DE TÉCNICOS Y COMPRA DIRECTA
+# VERSIÓN 4.1 - CON LIMITACIÓN DE REGISTROS (ÚLTIMOS 10)
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -15,8 +15,9 @@ from functools import wraps
 
 logger = logging.getLogger(__name__)
 print("="*60)
-print("🔥🔥🔥 VERSIÓN CORREGIDA DE COTIZACIONES - 2026-05-11 🔥🔥🔥")
+print("🔥🔥🔥 VERSIÓN CORREGIDA DE COTIZACIONES - CON LIMITACIÓN 10 REGISTROS 🔥🔥🔥")
 print("="*60)
+
 # =====================================================
 # CREAR BLUEPRINT
 # =====================================================
@@ -112,7 +113,7 @@ def obtener_encargados_repuestos():
         # Primero obtener el ID del rol 'encargado_repuestos'
         rol_result = supabase.table('rol') \
             .select('id') \
- .eq('nombre_rol', 'encargado_repuestos') \
+            .eq('nombre_rol', 'encargado_repuestos') \
             .execute()
         
         if not rol_result.data:
@@ -162,15 +163,15 @@ def obtener_encargados_repuestos():
         return []
 
 # =====================================================
-# APARTADO 1: ÓRDENES CON DIAGNÓSTICO APROBADO
+# APARTADO 1: ÓRDENES CON DIAGNÓSTICO APROBADO (ÚLTIMAS 10)
 # =====================================================
 
 @cotizaciones_bp.route('/ordenes-diagnostico-aprobado', methods=['GET'])
 @jefe_taller_required
 def obtener_ordenes_diagnostico_aprobado(current_user):
-    """Obtener SOLO órdenes con diagnóstico aprobado"""
+    """Obtener SOLO órdenes con diagnóstico aprobado (últimas 10)"""
     try:
-        logger.info("📢 Obteniendo órdenes con diagnóstico aprobado")
+        logger.info("📢 Obteniendo órdenes con diagnóstico aprobado (últimas 10)")
         
         ordenes_result = supabase.table('ordentrabajo') \
             .select('''
@@ -195,6 +196,8 @@ def obtener_ordenes_diagnostico_aprobado(current_user):
                 )
             ''') \
             .eq('estado_global', 'DiagnosticoAprobado') \
+            .order('id', desc=True) \
+            .limit(10) \
             .execute()
         
         if not ordenes_result.data:
@@ -269,13 +272,13 @@ def obtener_ordenes_diagnostico_aprobado(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# APARTADO 2: ÓRDENES PARA COTIZACIÓN AL CLIENTE
+# APARTADO 2: ÓRDENES PARA COTIZACIÓN AL CLIENTE (ÚLTIMAS 10)
 # =====================================================
 
 @cotizaciones_bp.route('/ordenes-con-servicios', methods=['GET'])
 @jefe_taller_required
 def obtener_ordenes_con_servicios(current_user):
-    """Obtener órdenes para el apartado de Cotización al Cliente"""
+    """Obtener órdenes para el apartado de Cotización al Cliente (últimas 10)"""
     try:
         estados_relevantes = [
             'DiagnosticoAprobado',
@@ -305,6 +308,8 @@ def obtener_ordenes_con_servicios(current_user):
                 )
             ''') \
             .in_('estado_global', estados_relevantes) \
+            .order('id', desc=True) \
+            .limit(10) \
             .execute()
         
         if not ordenes_result.data:
@@ -393,17 +398,19 @@ def obtener_ordenes_con_servicios(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# APARTADO 3: ÓRDENES APROBADAS (PARA SOLICITAR COTIZACIÓN)
+# APARTADO 3: ÓRDENES APROBADAS (PARA SOLICITAR COTIZACIÓN) - ÚLTIMAS 10
 # =====================================================
 
 @cotizaciones_bp.route('/ordenes-aprobadas', methods=['GET'])
 @jefe_taller_required
 def obtener_ordenes_aprobadas(current_user):
-    """Órdenes con diagnóstico APROBADO (para solicitar cotización)"""
+    """Órdenes con diagnóstico APROBADO (para solicitar cotización) - últimas 10"""
     try:
         ordenes_result = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, estado_global, id_vehiculo, vehiculo!inner(marca, modelo, placa)') \
             .eq('estado_global', 'DiagnosticoAprobado') \
+            .order('id', desc=True) \
+            .limit(10) \
             .execute()
         
         ordenes = []
@@ -423,17 +430,19 @@ def obtener_ordenes_aprobadas(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# APARTADO 4: ÓRDENES ACTIVAS (PARA COMPRA DIRECTA)
+# APARTADO 4: ÓRDENES ACTIVAS (PARA COMPRA DIRECTA) - ÚLTIMAS 10
 # =====================================================
 
 @cotizaciones_bp.route('/ordenes-activas', methods=['GET'])
 @jefe_taller_required
 def obtener_ordenes_activas(current_user):
-    """Obtener órdenes activas (EnReparacion, EnPausa) para compra directa"""
+    """Obtener órdenes activas (EnReparacion, EnPausa) para compra directa - últimas 10"""
     try:
         ordenes_result = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, estado_global, id_vehiculo, vehiculo!inner(marca, modelo, placa)') \
             .in_('estado_global', ['EnReparacion', 'EnPausa']) \
+            .order('id', desc=True) \
+            .limit(10) \
             .execute()
         
         ordenes = []
@@ -472,7 +481,7 @@ def obtener_encargados_repuestos_endpoint(current_user):
         return jsonify({'success': True, 'encargados': []}), 200
 
 # =====================================================
-# APARTADO 6: SOLICITUDES DE COTIZACIÓN
+# APARTADO 6: SOLICITUDES DE COTIZACIÓN (ÚLTIMAS 10)
 # =====================================================
 
 @cotizaciones_bp.route('/solicitudes-cotizacion', methods=['GET', 'POST', 'DELETE'])
@@ -494,7 +503,7 @@ def gestionar_solicitudes_cotizacion(current_user):
             if id_orden_trabajo and id_orden_trabajo != 'all':
                 query = query.eq('id_orden_trabajo', int(id_orden_trabajo))
             
-            query = query.order('fecha_solicitud', desc=True)
+            query = query.order('fecha_solicitud', desc=True).limit(10)
             result = query.execute()
             
             if not result.data:
@@ -654,13 +663,13 @@ def eliminar_solicitud_cotizacion(current_user, id_solicitud):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# APARTADO 7: SOLICITUDES DE REPUESTOS DE TÉCNICOS
+# APARTADO 7: SOLICITUDES DE REPUESTOS DE TÉCNICOS (ÚLTIMAS 10)
 # =====================================================
 
 @cotizaciones_bp.route('/solicitudes-repuestos-tecnico', methods=['GET'])
 @jefe_taller_required
 def obtener_solicitudes_repuestos_tecnico(current_user):
-    """Obtener solicitudes de repuestos hechas por técnicos"""
+    """Obtener solicitudes de repuestos hechas por técnicos (últimas 10)"""
     try:
         estado = request.args.get('estado', 'all')
         search = request.args.get('search', '')
@@ -671,7 +680,7 @@ def obtener_solicitudes_repuestos_tecnico(current_user):
         if estado != 'all':
             query = query.eq('estado', estado)
         
-        query = query.order('fecha_solicitud', desc=True)
+        query = query.order('fecha_solicitud', desc=True).limit(10)
         result = query.execute()
         
         if not result.data:
@@ -858,13 +867,13 @@ def crear_solicitud_compra_directa(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# APARTADO 9: SOLICITUDES DE COMPRA (DESDE COTIZACIÓN)
+# APARTADO 9: SOLICITUDES DE COMPRA (ÚLTIMAS 10)
 # =====================================================
 
 @cotizaciones_bp.route('/solicitudes-compra', methods=['GET', 'POST', 'PUT'])
 @jefe_taller_required
 def gestionar_solicitudes_compra(current_user):
-    """Gestionar solicitudes de compra"""
+    """Gestionar solicitudes de compra (últimas 10)"""
     
     if request.method == 'GET':
         try:
@@ -877,7 +886,7 @@ def gestionar_solicitudes_compra(current_user):
             if estado and estado != 'all':
                 query = query.eq('estado', estado)
             
-            query = query.order('fecha_solicitud', desc=True)
+            query = query.order('fecha_solicitud', desc=True).limit(10)
             result = query.execute()
             
             if not result.data:
@@ -1049,13 +1058,13 @@ def aprobar_solicitud_compra(current_user, id_solicitud):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# APARTADO 10: COTIZACIONES ENVIADAS
+# APARTADO 10: COTIZACIONES ENVIADAS (ÚLTIMAS 10)
 # =====================================================
 
 @cotizaciones_bp.route('/cotizaciones-enviadas', methods=['GET'])
 @jefe_taller_required
 def obtener_cotizaciones_enviadas(current_user):
-    """Obtener todas las cotizaciones"""
+    """Obtener todas las cotizaciones (últimas 10)"""
     try:
         estado_filtro = request.args.get('estado', 'all')
         
@@ -1064,7 +1073,7 @@ def obtener_cotizaciones_enviadas(current_user):
         if estado_filtro != 'all':
             query = query.eq('estado', estado_filtro)
         
-        query = query.order('fecha_envio', desc=True)
+        query = query.order('fecha_envio', desc=True).limit(10)
         cotizaciones = query.execute()
         
         if not cotizaciones.data:
@@ -1190,7 +1199,8 @@ def obtener_detalle_cotizacion(current_user, id_cotizacion):
                 'total': float(cot.get('total', 0)),
                 'estado': cot.get('estado', 'enviada'),
                 'notas': cot.get('notas'),
-                'nombre_archivo': cot.get('nombre_archivo')
+                'nombre_archivo': cot.get('nombre_archivo'),
+                'archivo_base64': cot.get('archivo_base64')
             }
         }), 200
         
@@ -1321,24 +1331,25 @@ def actualizar_cotizacion(current_user, id_cotizacion):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# APARTADO 13: HISTORIAL DE COTIZACIONES
+# APARTADO 13: HISTORIAL DE COTIZACIONES (ÚLTIMAS 10)
 # =====================================================
 
 @cotizaciones_bp.route('/historial-cotizaciones', methods=['GET'])
 @jefe_taller_required
 def obtener_historial_cotizaciones(current_user):
-    """Obtener historial de cotizaciones"""
+    """Obtener historial de cotizaciones (últimas 10)"""
     try:
         cotizaciones = supabase.table('cotizacion') \
             .select('*') \
             .order('fecha_envio', desc=True) \
+            .limit(10) \
             .execute()
         
         if not cotizaciones.data:
             return jsonify({'success': True, 'cotizaciones': []}), 200
         
         resultado = []
-        for cot in cotizaciones.data[:50]:
+        for cot in cotizaciones.data:
             resultado.append({
                 'id': cot.get('id'),
                 'id_orden_trabajo': cot.get('id_orden_trabajo'),
@@ -1472,6 +1483,7 @@ Instrucciones específicas:
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 # =====================================================
 # APARTADO 15: TÉCNICOS ASIGNADOS
 # =====================================================
@@ -1749,10 +1761,13 @@ def obtener_instrucciones_armado(current_user, id_orden):
 @cotizaciones_bp.route('/test-version', methods=['GET'])
 def test_version():
     return jsonify({
-        'version': 'VERSION_2026-05-11',
-        'message': 'El backend está usando el código actualizado'
+        'version': 'VERSION_2026-05-14_LIMIT_10',
+        'message': 'El backend está usando el código con limitación de 10 registros por listado'
     })
 
+# =====================================================
+# NUEVO ENDPOINT: INICIAR REPARACIÓN CON DÍAS (CORREGIDO)
+# =====================================================
 
 @cotizaciones_bp.route('/iniciar-reparacion-con-dias', methods=['POST'])
 @jefe_taller_required
@@ -1870,7 +1885,7 @@ def iniciar_reparacion_con_dias(current_user):
         except Exception as e:
             print(f"   ⚠️ Error al finalizar asignaciones: {e}")
         
-        # Crear nuevas asignaciones (SIN id_jefe_taller)
+        # Crear nuevas asignaciones
         for tecnico_id in tecnicos_ids:
             try:
                 supabase.table('asignaciontecnico').insert({
@@ -1878,7 +1893,8 @@ def iniciar_reparacion_con_dias(current_user):
                     'id_tecnico': tecnico_id,
                     'tipo_asignacion': 'reparacion',
                     'fecha_hora_inicio': ahora_str,
-                    'fecha_hora_final_estimada': fecha_estimada_fin_str
+                    'fecha_hora_final_estimada': fecha_estimada_fin_str,
+                    'id_jefe_taller': current_user['id']
                 }).execute()
                 print(f"   ✅ Técnico {tecnico_id} asignado")
             except Exception as e:

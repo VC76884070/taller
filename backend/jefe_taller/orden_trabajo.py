@@ -124,13 +124,164 @@ def listar_tecnicos(current_user):
 
 
 # =====================================================
-# ENDPOINT 2: LISTAR ÓRDENES ACTIVAS (OPTIMIZADO - UNA SOLA CONSULTA)
+# ENDPOINT 2: ÚLTIMAS 10 ÓRDENES ACTIVAS (NUEVO - MÁS RÁPIDO)
+# =====================================================
+
+@jefe_taller_ordenes_bp.route('/ultimas-ordenes', methods=['GET'])
+@jefe_taller_required
+def obtener_ultimas_ordenes(current_user):
+    """Obtiene SOLO las últimas 10 órdenes de trabajo activas - MÁXIMO RÁPIDO"""
+    try:
+        # Verificar caché
+        cached_data = cache.get('ultimas_ordenes')
+        if cached_data:
+            return jsonify({'success': True, 'ordenes': cached_data}), 200
+        
+        # 1. Obtener SOLO las últimas 10 órdenes activas
+        ordenes = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
+            .not_.in_('estado_global', ['Finalizado', 'Entregado']) \
+            .order('fecha_ingreso', desc=True) \
+            .limit(10) \
+            .execute()
+        
+        if not ordenes.data:
+            return jsonify({'success': True, 'ordenes': []}), 200
+        
+        ordenes_data = ordenes.data
+        ordenes_ids = [o['id'] for o in ordenes_data]
+        
+        # 2. Obtener vehículos de esas 10 órdenes (máximo 10)
+        vehiculos_ids = list(set([o['id_vehiculo'] for o in ordenes_data if o.get('id_vehiculo')]))
+        vehiculos_map = {}
+        
+        if vehiculos_ids:
+            vehiculos = supabase.table('vehiculo') \
+                .select('id, placa, marca, modelo, id_cliente') \
+                .in_('id', vehiculos_ids) \
+                .execute()
+            for v in (vehiculos.data or []):
+                vehiculos_map[v['id']] = v
+        
+        # 3. Obtener clientes de esos vehículos
+        clientes_ids = list(set([v['id_cliente'] for v in vehiculos_map.values() if v.get('id_cliente')]))
+        clientes_map = {}
+        
+        if clientes_ids:
+            clientes = supabase.table('cliente') \
+                .select('id, id_usuario') \
+                .in_('id', clientes_ids) \
+                .execute()
+            for c in (clientes.data or []):
+                clientes_map[c['id']] = c
+        
+        # 4. Obtener nombres de usuarios
+        usuarios_ids = list(set([c['id_usuario'] for c in clientes_map.values() if c.get('id_usuario')]))
+        usuarios_map = {}
+        
+        if usuarios_ids:
+            usuarios = supabase.table('usuario') \
+                .select('id, nombre') \
+                .in_('id', usuarios_ids) \
+                .execute()
+            for u in (usuarios.data or []):
+                usuarios_map[u['id']] = u
+        
+        # 5. Obtener asignaciones de técnicos
+        asignaciones = supabase.table('asignaciontecnico') \
+            .select('id_orden_trabajo, id_tecnico') \
+            .in_('id_orden_trabajo', ordenes_ids) \
+            .eq('tipo_asignacion', 'diagnostico') \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
+        tecnicos_ids = list(set([a['id_tecnico'] for a in (asignaciones.data or []) if a.get('id_tecnico')]))
+        tecnicos_nombres = {}
+        
+        if tecnicos_ids:
+            tecnicos = supabase.table('usuario') \
+                .select('id, nombre') \
+                .in_('id', tecnicos_ids) \
+                .execute()
+            for t in (tecnicos.data or []):
+                tecnicos_nombres[t['id']] = t.get('nombre', 'Técnico')
+        
+        asignaciones_map = {}
+        for a in (asignaciones.data or []):
+            orden_id = a.get('id_orden_trabajo')
+            tecnico_id = a.get('id_tecnico')
+            if orden_id and tecnico_id and tecnico_id in tecnicos_nombres:
+                if orden_id not in asignaciones_map:
+                    asignaciones_map[orden_id] = []
+                asignaciones_map[orden_id].append({
+                    'id': tecnico_id,
+                    'nombre': tecnicos_nombres[tecnico_id]
+                })
+        
+        # 6. Obtener planificaciones
+        planificaciones = supabase.table('planificacion') \
+            .select('id_orden_trabajo, bahia_asignada, fecha_hora_inicio_estimado, horas_estimadas, fecha_hora_inicio_real') \
+            .in_('id_orden_trabajo', ordenes_ids) \
+            .execute()
+        
+        planificaciones_map = {}
+        for p in (planificaciones.data or []):
+            if p.get('id_orden_trabajo'):
+                planificaciones_map[p['id_orden_trabajo']] = p
+        
+        # 7. Construir resultado
+        resultado = []
+        for orden in ordenes_data:
+            vehiculo = vehiculos_map.get(orden.get('id_vehiculo'), {})
+            
+            cliente_nombre = 'No registrado'
+            cliente_id = vehiculo.get('id_cliente')
+            if cliente_id and cliente_id in clientes_map:
+                usuario_id = clientes_map[cliente_id].get('id_usuario')
+                if usuario_id and usuario_id in usuarios_map:
+                    cliente_nombre = usuarios_map[usuario_id].get('nombre', 'No registrado')
+            
+            planificacion = planificaciones_map.get(orden['id'], {})
+            trabajo_iniciado = planificacion.get('fecha_hora_inicio_real') is not None
+            
+            resultado.append({
+                'id_orden': orden['id'],
+                'codigo_unico': orden['codigo_unico'],
+                'fecha_ingreso': orden['fecha_ingreso'],
+                'estado_global': orden['estado_global'],
+                'vehiculo': {
+                    'placa': vehiculo.get('placa', 'S/N'),
+                    'marca': vehiculo.get('marca', ''),
+                    'modelo': vehiculo.get('modelo', ''),
+                    'cliente_nombre': cliente_nombre
+                },
+                'tecnicos': asignaciones_map.get(orden['id'], []),
+                'bahia_asignada': planificacion.get('bahia_asignada'),
+                'fecha_hora_inicio_estimado': planificacion.get('fecha_hora_inicio_estimado'),
+                'horas_estimadas': planificacion.get('horas_estimadas'),
+                'trabajo_iniciado': trabajo_iniciado
+            })
+        
+        # Guardar en caché por 10 segundos
+        cache.set('ultimas_ordenes', resultado, ttl=10)
+        
+        return jsonify({'success': True, 'ordenes': resultado}), 200
+        
+    except Exception as e:
+        logger.error(f"Error en últimas órdenes: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 3: LISTAR ÓRDENES ACTIVAS COMPLETAS (PARA VER MÁS)
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/ordenes-activas-v2', methods=['GET'])
 @jefe_taller_required
 def listar_ordenes_activas_v2(current_user):
-    """Listar órdenes activas - VERSIÓN OPTIMIZADA (una sola consulta masiva)"""
+    """Listar órdenes activas - VERSIÓN COMPLETA (para cuando el usuario pide ver todas)"""
     try:
         estados_activos = [
             'EnRecepcion', 'EnDiagnostico', 'DiagnosticoCompletado',
@@ -287,7 +438,7 @@ def listar_ordenes_activas_v2(current_user):
 
 
 # =====================================================
-# ENDPOINT 3: LISTAR ÓRDENES FINALIZADAS (OPTIMIZADO)
+# ENDPOINT 4: LISTAR ÓRDENES FINALIZADAS (OPTIMIZADO)
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/ordenes-finalizadas', methods=['GET'])
@@ -375,7 +526,7 @@ def listar_ordenes_finalizadas(current_user):
 
 
 # =====================================================
-# ENDPOINT 4: DETALLE DE ORDEN
+# ENDPOINT 5: DETALLE DE ORDEN
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/detalle-orden/<int:id_orden>', methods=['GET'])
@@ -478,7 +629,7 @@ def detalle_orden(current_user, id_orden):
 
 
 # =====================================================
-# ENDPOINT 5: ASIGNAR TÉCNICOS
+# ENDPOINT 6: ASIGNAR TÉCNICOS
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/asignar-tecnicos', methods=['POST'])
@@ -543,7 +694,9 @@ def asignar_tecnicos(current_user):
                 'fecha_hora_inicio': datetime.datetime.now().isoformat()
             }).execute()
         
+        # Limpiar caché
         cache.clear('tecnicos_list')
+        cache.clear('ultimas_ordenes')
         
         return jsonify({'success': True, 'message': 'Técnicos asignados correctamente'}), 200
         
@@ -553,7 +706,7 @@ def asignar_tecnicos(current_user):
 
 
 # =====================================================
-# ENDPOINT 6: PLANIFICAR TRABAJO
+# ENDPOINT 7: PLANIFICAR TRABAJO
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/planificar', methods=['POST'])
@@ -599,6 +752,9 @@ def planificar_trabajo(current_user):
             planificacion_data['id_orden_trabajo'] = id_orden
             supabase.table('planificacion').insert(planificacion_data).execute()
         
+        # Limpiar caché
+        cache.clear('ultimas_ordenes')
+        
         return jsonify({'success': True, 'message': 'Planificación guardada correctamente'}), 200
         
     except Exception as e:
@@ -607,7 +763,7 @@ def planificar_trabajo(current_user):
 
 
 # =====================================================
-# ENDPOINT 7: GUARDAR DIAGNÓSTICO INICIAL
+# ENDPOINT 8: GUARDAR DIAGNÓSTICO INICIAL
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/diagnostico-inicial', methods=['POST'])
@@ -664,7 +820,7 @@ def guardar_diagnostico_inicial(current_user):
 
 
 # =====================================================
-# ENDPOINT 8: CAMBIAR ESTADO DE ORDEN
+# ENDPOINT 9: CAMBIAR ESTADO DE ORDEN
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/cambiar-estado-orden', methods=['POST'])
@@ -683,6 +839,9 @@ def cambiar_estado_orden(current_user):
             .eq('id', id_orden) \
             .execute()
         
+        # Limpiar caché
+        cache.clear('ultimas_ordenes')
+        
         return jsonify({'success': True, 'message': f'Orden cambiada a {nuevo_estado}'}), 200
         
     except Exception as e:
@@ -691,7 +850,7 @@ def cambiar_estado_orden(current_user):
 
 
 # =====================================================
-# ENDPOINT 9: ESTADO DE BAHÍAS
+# ENDPOINT 10: ESTADO DE BAHÍAS
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/bahias/estado', methods=['GET'])
@@ -790,7 +949,7 @@ def get_estado_bahias(current_user):
 
 
 # =====================================================
-# ENDPOINT 10: VERIFICAR DISPONIBILIDAD DE BAHÍA
+# ENDPOINT 11: VERIFICAR DISPONIBILIDAD DE BAHÍA
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/verificar-bahia', methods=['POST'])
@@ -829,7 +988,7 @@ def verificar_bahia(current_user):
 
 
 # =====================================================
-# ENDPOINT 11: DIAGNÓSTICO PENDIENTE
+# ENDPOINT 12: DIAGNÓSTICO PENDIENTE
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/diagnostico-pendiente/<int:id_orden>', methods=['GET'])
@@ -870,7 +1029,7 @@ def diagnostico_pendiente(current_user, id_orden):
 
 
 # =====================================================
-# ENDPOINT 12: TRANSCRIBIR AUDIO
+# ENDPOINT 13: TRANSCRIBIR AUDIO
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/transcribir-audio', methods=['POST'])
@@ -921,7 +1080,7 @@ def transcribir_audio_jefe_taller(current_user):
 
 
 # =====================================================
-# ENDPOINT 13: SUBIR AUDIO A CLOUDINARY
+# ENDPOINT 14: SUBIR AUDIO A CLOUDINARY
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/subir-audio-diagnostico', methods=['POST'])
@@ -960,7 +1119,7 @@ def subir_audio_diagnostico(current_user):
 
 
 # =====================================================
-# ENDPOINT 14: NOTIFICACIONES
+# ENDPOINT 15: NOTIFICACIONES
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/notificaciones', methods=['GET'])

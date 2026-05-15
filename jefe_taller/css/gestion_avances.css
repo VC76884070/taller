@@ -806,3 +806,55 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--rojo-primario);
 }
+/* Banner de información para indicar que hay más avances */
+.info-banner {
+    background: var(--color-info-light, rgba(59, 130, 246, 0.1));
+    border-left: 3px solid var(--color-info, #3B82F6);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    color: var(--color-info-dark, #1E40AF);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.info-banner i {
+    font-size: 1rem;
+}
+
+/* Skeleton loading para mejor experiencia */
+.skeleton-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-header {
+    height: 20px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    width: 60%;
+}
+
+.skeleton-body {
+    height: 80px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+.skeleton-footer {
+    height: 36px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    width: 40%;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}

@@ -1,7 +1,6 @@
 # =====================================================
-# GESTION_AVANCES.PY - JEFE DE TALLER
-# GESTIÓN DE AVANCES DE TRABAJO - VERSIÓN CORREGIDA
-# FURIA MOTOR COMPANY SRL
+# GESTION_AVANCES.PY - JEFE DE TALLER (VERSIÓN OPTIMIZADA)
+# SOLO ÚLTIMOS 10 AVANCES - MÁXIMA VELOCIDAD
 # =====================================================
 
 from flask import Blueprint, request, jsonify, g
@@ -10,6 +9,7 @@ from decorators import jefe_taller_required
 import datetime
 import logging
 import json
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,33 @@ avance_jefe_bp = Blueprint('avance_jefe', __name__, url_prefix='/api/jefe-taller
 
 SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
+
+# =====================================================
+# CACHE EN MEMORIA
+# =====================================================
+
+class CacheManager:
+    def __init__(self):
+        self._cache = {}
+    
+    def get(self, key):
+        if key in self._cache:
+            data, timestamp, ttl = self._cache[key]
+            if time.time() - timestamp < ttl:
+                return data
+            del self._cache[key]
+        return None
+    
+    def set(self, key, data, ttl=30):
+        self._cache[key] = (data, time.time(), ttl)
+    
+    def clear(self, key=None):
+        if key:
+            self._cache.pop(key, None)
+        else:
+            self._cache.clear()
+
+cache = CacheManager()
 
 
 # =====================================================
@@ -52,6 +79,54 @@ def parse_fotos(fotos_data):
         return []
 
 
+def obtener_datos_avances_con_join(avances_data):
+    """Optimizado: Obtener técnicos y órdenes en UNA SOLA consulta"""
+    if not avances_data:
+        return []
+    
+    # Extraer IDs únicos
+    tecnicos_ids = list(set([a['id_tecnico'] for a in avances_data]))
+    ordenes_ids = list(set([a['id_orden_trabajo'] for a in avances_data]))
+    
+    # Obtener todos los técnicos de una vez
+    tecnicos_map = {}
+    if tecnicos_ids:
+        tecnicos = supabase.table('usuario') \
+            .select('id, nombre') \
+            .in_('id', tecnicos_ids) \
+            .execute()
+        for t in (tecnicos.data or []):
+            tecnicos_map[t['id']] = t['nombre']
+    
+    # Obtener todas las órdenes de una vez
+    ordenes_map = {}
+    if ordenes_ids:
+        ordenes = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico') \
+            .in_('id', ordenes_ids) \
+            .execute()
+        for o in (ordenes.data or []):
+            ordenes_map[o['id']] = o['codigo_unico']
+    
+    # Construir resultado
+    resultado = []
+    for avance in avances_data:
+        resultado.append({
+            'id': avance['id'],
+            'titulo': avance['titulo'],
+            'descripcion': avance.get('descripcion', ''),
+            'fotos': parse_fotos(avance.get('fotos')),
+            'estado': avance['estado'],
+            'fecha_creacion': avance['fecha_creacion'],
+            'fecha_aprobacion': avance.get('fecha_aprobacion'),
+            'comentario_revision': avance.get('comentario_revision'),
+            'tecnico_nombre': tecnicos_map.get(avance['id_tecnico'], 'Desconocido'),
+            'orden_codigo': ordenes_map.get(avance['id_orden_trabajo'], 'N/A')
+        })
+    
+    return resultado
+
+
 # =====================================================
 # ENDPOINT DE PRUEBA
 # =====================================================
@@ -66,26 +141,28 @@ def test_endpoint():
 
 
 # =====================================================
-# ENDPOINT PENDIENTES
+# ENDPOINT PENDIENTES - SOLO ÚLTIMOS 10 (OPTIMIZADO)
 # =====================================================
 
 @avance_jefe_bp.route('/pendientes', methods=['GET'])
 @jefe_taller_required
 def obtener_avances_pendientes(current_user):
-    """Obtener avances pendientes de revisión"""
+    """Obtener SOLO los últimos 10 avances pendientes de revisión - MÁS RÁPIDO"""
     try:
         logger.info(f"🔍 Usuario {current_user.get('id')} solicitando avances pendientes")
         
-        # Validar autenticación
-        if not current_user or not current_user.get('id'):
-            logger.error("❌ Usuario no autenticado correctamente")
-            return jsonify({'success': False, 'error': 'Usuario no autenticado'}), 401
+        # Verificar caché
+        cached_data = cache.get('avances_pendientes')
+        if cached_data:
+            logger.info("📦 Usando caché de avances pendientes")
+            return jsonify({'success': True, 'avances': cached_data}), 200
         
-        # Consultar avances pendientes
+        # Consultar SOLO últimos 10 avances pendientes
         avances = supabase.table('avance_trabajo') \
-            .select('*') \
+            .select('id, titulo, descripcion, fotos, estado, fecha_creacion, id_tecnico, id_orden_trabajo') \
             .eq('estado', 'pendiente') \
             .order('fecha_creacion', desc=True) \
+            .limit(10) \
             .execute()
         
         logger.info(f"📊 Avances pendientes encontrados: {len(avances.data) if avances.data else 0}")
@@ -93,36 +170,13 @@ def obtener_avances_pendientes(current_user):
         if not avances.data:
             return jsonify({'success': True, 'avances': []}), 200
         
-        # Obtener información adicional (técnico, orden)
-        resultado = []
-        for avance in avances.data:
-            # Obtener nombre del técnico
-            tecnico = supabase.table('usuario') \
-                .select('nombre') \
-                .eq('id', avance['id_tecnico']) \
-                .execute()
-            
-            # Obtener código de la orden de trabajo
-            orden = supabase.table('ordentrabajo') \
-                .select('codigo_unico') \
-                .eq('id', avance['id_orden_trabajo']) \
-                .execute()
-            
-            # Parsear fotos
-            fotos = parse_fotos(avance.get('fotos'))
-            
-            resultado.append({
-                'id': avance['id'],
-                'titulo': avance['titulo'],
-                'descripcion': avance.get('descripcion', ''),
-                'fotos': fotos,
-                'estado': avance['estado'],
-                'fecha_creacion': avance['fecha_creacion'],
-                'tecnico_nombre': tecnico.data[0]['nombre'] if tecnico.data else 'Desconocido',
-                'orden_codigo': orden.data[0]['codigo_unico'] if orden.data else 'N/A'
-            })
+        # Obtener datos adicionales con JOIN optimizado
+        resultado = obtener_datos_avances_con_join(avances.data)
         
-        logger.info(f"✅ Devueltos {len(resultado)} avances pendientes")
+        # Guardar en caché por 15 segundos
+        cache.set('avances_pendientes', resultado, ttl=15)
+        
+        logger.info(f"✅ Devueltos {len(resultado)} avances pendientes (últimos 10)")
         return jsonify({'success': True, 'avances': resultado}), 200
         
     except Exception as e:
@@ -133,22 +187,62 @@ def obtener_avances_pendientes(current_user):
 
 
 # =====================================================
-# ENDPOINT PROCESADOS
+# ENDPOINT CONTADOR PENDIENTES (PARA EL BADGE)
+# =====================================================
+
+@avance_jefe_bp.route('/contador', methods=['GET'])
+@jefe_taller_required
+def obtener_contador_pendientes(current_user):
+    """Obtener solo el número TOTAL de avances pendientes (para el badge)"""
+    try:
+        # Verificar caché del contador
+        cached_count = cache.get('pendientes_count')
+        if cached_count is not None:
+            return jsonify({'success': True, 'pendientes_count': cached_count}), 200
+        
+        # Consulta ligera: solo contar, no traer datos
+        result = supabase.table('avance_trabajo') \
+            .select('id', count='exact') \
+            .eq('estado', 'pendiente') \
+            .execute()
+        
+        count = result.count if hasattr(result, 'count') else len(result.data or [])
+        
+        # Guardar en caché por 30 segundos
+        cache.set('pendientes_count', count, ttl=30)
+        
+        return jsonify({'success': True, 'pendientes_count': count}), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error en contador: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT PROCESADOS - SOLO ÚLTIMOS 20 (OPTIMIZADO)
 # =====================================================
 
 @avance_jefe_bp.route('/procesados', methods=['GET'])
 @jefe_taller_required
 def obtener_avances_procesados(current_user):
-    """Obtener avances ya procesados (aprobados o rechazados)"""
+    """Obtener SOLO los últimos 20 avances procesados (aprobados o rechazados)"""
     try:
         estado_filtro = request.args.get('estado', 'all')
         logger.info(f"🔍 Usuario {current_user.get('id')} solicitando avances procesados - Filtro: {estado_filtro}")
         
-        # Construir consulta
+        # Clave de caché según el filtro
+        cache_key = f'avances_procesados_{estado_filtro}'
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            logger.info(f"📦 Usando caché para {cache_key}")
+            return jsonify({'success': True, 'avances': cached_data}), 200
+        
+        # Construir consulta - SOLO últimos 20
         query = supabase.table('avance_trabajo') \
-            .select('*') \
+            .select('id, titulo, descripcion, fotos, estado, fecha_creacion, fecha_aprobacion, comentario_revision, id_tecnico, id_orden_trabajo') \
             .in_('estado', ['aprobado', 'rechazado']) \
-            .order('fecha_aprobacion', desc=True)
+            .order('fecha_aprobacion', desc=True) \
+            .limit(20)
         
         if estado_filtro in ['aprobado', 'rechazado']:
             query = query.eq('estado', estado_filtro)
@@ -158,35 +252,11 @@ def obtener_avances_procesados(current_user):
         if not avances.data:
             return jsonify({'success': True, 'avances': []}), 200
         
-        resultado = []
-        for avance in avances.data:
-            # Obtener nombre del técnico
-            tecnico = supabase.table('usuario') \
-                .select('nombre') \
-                .eq('id', avance['id_tecnico']) \
-                .execute()
-            
-            # Obtener código de la orden de trabajo
-            orden = supabase.table('ordentrabajo') \
-                .select('codigo_unico') \
-                .eq('id', avance['id_orden_trabajo']) \
-                .execute()
-            
-            # Parsear fotos
-            fotos = parse_fotos(avance.get('fotos'))
-            
-            resultado.append({
-                'id': avance['id'],
-                'titulo': avance['titulo'],
-                'descripcion': avance.get('descripcion', ''),
-                'fotos': fotos,
-                'estado': avance['estado'],
-                'fecha_creacion': avance['fecha_creacion'],
-                'fecha_aprobacion': avance.get('fecha_aprobacion'),
-                'comentario_revision': avance.get('comentario_revision'),
-                'tecnico_nombre': tecnico.data[0]['nombre'] if tecnico.data else 'Desconocido',
-                'orden_codigo': orden.data[0]['codigo_unico'] if orden.data else 'N/A'
-            })
+        # Obtener datos adicionales con JOIN optimizado
+        resultado = obtener_datos_avances_con_join(avances.data)
+        
+        # Guardar en caché por 30 segundos
+        cache.set(cache_key, resultado, ttl=30)
         
         logger.info(f"✅ Devueltos {len(resultado)} avances procesados")
         return jsonify({'success': True, 'avances': resultado}), 200
@@ -218,35 +288,12 @@ def obtener_detalle_avance(current_user, id_avance):
         
         avance_data = avance.data[0]
         
-        # Obtener nombre del técnico
-        tecnico = supabase.table('usuario') \
-            .select('nombre') \
-            .eq('id', avance_data['id_tecnico']) \
-            .execute()
-        
-        # Obtener código de la orden de trabajo
-        orden = supabase.table('ordentrabajo') \
-            .select('codigo_unico') \
-            .eq('id', avance_data['id_orden_trabajo']) \
-            .execute()
-        
-        # Parsear fotos
-        fotos = parse_fotos(avance_data.get('fotos'))
+        # Obtener datos adicionales con JOIN optimizado
+        resultado = obtener_datos_avances_con_join([avance_data])
         
         return jsonify({
             'success': True,
-            'avance': {
-                'id': avance_data['id'],
-                'titulo': avance_data['titulo'],
-                'descripcion': avance_data.get('descripcion', ''),
-                'fotos': fotos,
-                'estado': avance_data['estado'],
-                'fecha_creacion': avance_data['fecha_creacion'],
-                'fecha_aprobacion': avance_data.get('fecha_aprobacion'),
-                'comentario_revision': avance_data.get('comentario_revision'),
-                'tecnico_nombre': tecnico.data[0]['nombre'] if tecnico.data else 'Desconocido',
-                'orden_codigo': orden.data[0]['codigo_unico'] if orden.data else 'N/A'
-            }
+            'avance': resultado[0] if resultado else None
         }), 200
         
     except Exception as e:
@@ -299,6 +346,13 @@ def aprobar_avance(current_user, id_avance):
             mensaje += f" Comentario: {comentario}"
         
         notificar_tecnico(tecnico_id, 'avance_aprobado', mensaje, id_avance)
+        
+        # Limpiar caché
+        cache.clear('avances_pendientes')
+        cache.clear('pendientes_count')
+        cache.clear('avances_procesados_all')
+        cache.clear('avances_procesados_aprobado')
+        cache.clear('avances_procesados_rechazado')
         
         logger.info(f"✅ Avance {id_avance} aprobado correctamente")
         return jsonify({'success': True, 'message': 'Avance aprobado correctamente'}), 200
@@ -354,6 +408,13 @@ def rechazar_avance(current_user, id_avance):
         
         notificar_tecnico(tecnico_id, 'avance_rechazado', mensaje, id_avance)
         
+        # Limpiar caché
+        cache.clear('avances_pendientes')
+        cache.clear('pendientes_count')
+        cache.clear('avances_procesados_all')
+        cache.clear('avances_procesados_aprobado')
+        cache.clear('avances_procesados_rechazado')
+        
         logger.info(f"✅ Avance {id_avance} rechazado. Técnico {tecnico_id} notificado.")
         return jsonify({'success': True, 'message': 'Avance rechazado. El técnico ha sido notificado.'}), 200
         
@@ -374,29 +435,3 @@ def verify_token(current_user):
         'success': True, 
         'user': current_user
     }), 200
-
-
-# =====================================================
-# ENDPOINT CONTADOR (OPCIONAL)
-# =====================================================
-
-@avance_jefe_bp.route('/contador', methods=['GET'])
-@jefe_taller_required
-def obtener_contador_pendientes(current_user):
-    """Obtener solo el número de avances pendientes (para badge)"""
-    try:
-        avances = supabase.table('avance_trabajo') \
-            .select('id', count='exact') \
-            .eq('estado', 'pendiente') \
-            .execute()
-        
-        count = avances.count if hasattr(avances, 'count') else len(avances.data or [])
-        
-        return jsonify({
-            'success': True,
-            'pendientes_count': count
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"❌ Error en contador: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500

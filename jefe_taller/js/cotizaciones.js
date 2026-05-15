@@ -1064,7 +1064,7 @@ function renderOrdenesCotizacionCliente() {
             botonesHtml = `<button class="btn-outline" onclick="verInstruccionesArmado(${orden.id_orden})"><i class="fas fa-clipboard-list"></i> Ver Instrucciones</button>`;
         } else if (estadoOrden === ESTADOS_ORDEN.EN_REPARACION) {
             estadoBadge = `<span class="status-badge status-proceso"><i class="fas fa-wrench"></i> En Reparación</span>`;
-            botonesHtml = `<button class="btn-outline" onclick="verAvanceReparacion(${orden.id_orden})"><i class="fas fa-chart-line"></i> Ver Avance</button>`;
+            botonesHtml = `<button class="btn-outline" onclick="verAvanceReparacion(${orden.id_orden})"><i class="fas fa-eye"></i> Ver Detalle</button>`;
         }
         
         const totalCotizado = orden.cotizacion_total || orden.total_orden || 0;
@@ -2765,6 +2765,313 @@ async function verificarDiasGuardados(id_orden) {
     } catch (error) {
         console.error("Error verificando:", error);
     }
+}
+// =====================================================
+// VER AVANCES DE REPARACIÓN (FUNCIONAL)
+// =====================================================
+
+async function verAvanceReparacion(id_orden) {
+    console.log(`🔍 Ver avances de reparación para orden ${id_orden}`);
+    mostrarLoading(true);
+    
+    try {
+        const response = await fetch(`${API_URL}/orden/${id_orden}/avances-reparacion`, {
+            headers: getAuthHeaders()
+        });
+        
+        const data = await response.json();
+        console.log('📦 Avances recibidos:', data);
+        
+        if (!data.success) {
+            showToast(data.error || 'Error al cargar avances', 'error');
+            return;
+        }
+        
+        const avances = data.avances || [];
+        const ordenCodigo = data.orden_codigo || 'N/A';
+        
+        const container = document.getElementById('detalleCotizacionContainer');
+        
+        if (avances.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-chart-line fa-3x" style="color: var(--gris-texto); margin-bottom: 1rem;"></i>
+                    <h3>No hay avances registrados</h3>
+                    <p>La orden ${escapeHtml(ordenCodigo)} aún no tiene avances de reparación.</p>
+                    <p class="text-muted">Los técnicos pueden subir avances desde su aplicación móvil.</p>
+                </div>
+            `;
+        } else {
+            // Separar avances aprobados y pendientes
+            const aprobados = avances.filter(a => a.estado === 'aprobado');
+            const pendientes = avances.filter(a => a.estado === 'pendiente');
+            const rechazados = avances.filter(a => a.estado === 'rechazado');
+            
+            let avancesHtml = '';
+            
+            // Sección de avances pendientes
+            if (pendientes.length > 0) {
+                avancesHtml += `
+                    <div class="avances-seccion pendientes">
+                        <h3 style="color: var(--naranja-advertencia); margin-bottom: 1rem;">
+                            <i class="fas fa-clock"></i> Pendientes de Revisión (${pendientes.length})
+                        </h3>
+                        ${pendientes.map(avance => renderAvanceCard(avance)).join('')}
+                    </div>
+                `;
+            }
+            
+            // Sección de avances aprobados
+            if (aprobados.length > 0) {
+                avancesHtml += `
+                    <div class="avances-seccion aprobados" style="margin-top: 2rem;">
+                        <h3 style="color: var(--verde-exito); margin-bottom: 1rem;">
+                            <i class="fas fa-check-circle"></i> Avances Aprobados (${aprobados.length})
+                        </h3>
+                        ${aprobados.map(avance => renderAvanceCard(avance)).join('')}
+                    </div>
+                `;
+            }
+            
+            // Sección de avances rechazados
+            if (rechazados.length > 0) {
+                avancesHtml += `
+                    <div class="avances-seccion rechazados" style="margin-top: 2rem;">
+                        <h3 style="color: var(--rojo-primario); margin-bottom: 1rem;">
+                            <i class="fas fa-times-circle"></i> Avances Rechazados (${rechazados.length})
+                        </h3>
+                        ${rechazados.map(avance => renderAvanceCard(avance)).join('')}
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = `
+                <div class="avances-reparacion-container">
+                    <div class="orden-header-avances" style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border-color);">
+                        <h2><i class="fas fa-clipboard-list"></i> Avances de Reparación</h2>
+                        <p><strong>Orden:</strong> ${escapeHtml(ordenCodigo)}</p>
+                        <p><strong>Estado actual:</strong> ${statusBadge(data.estado_orden)}</p>
+                    </div>
+                    ${avancesHtml}
+                </div>
+            `;
+        }
+        
+        // Agregar estilos CSS para los avances
+        agregarEstilosAvances();
+        
+        abrirModal('modalDetalleCotizacion');
+        
+    } catch (error) {
+        console.error('❌ Error:', error);
+        showToast('Error al cargar los avances de reparación', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// Función auxiliar para renderizar una tarjeta de avance
+function renderAvanceCard(avance) {
+    // Generar preview de fotos
+    let fotosPreview = '';
+    if (avance.fotos && avance.fotos.length > 0) {
+        fotosPreview = `
+            <div class="avance-fotos-preview">
+                ${avance.fotos.slice(0, 4).map(foto => `
+                    <div class="avance-foto-item" onclick="verFotoAmpliada('${foto.url}')">
+                        <img src="${foto.url}" alt="Foto del avance">
+                        ${foto.comentario ? `<span class="foto-comentario-badge" title="${escapeHtml(foto.comentario)}"><i class="fas fa-comment"></i></span>` : ''}
+                    </div>
+                `).join('')}
+                ${avance.fotos.length > 4 ? `<div class="avance-foto-mas">+${avance.fotos.length - 4}</div>` : ''}
+            </div>
+        `;
+    }
+    
+    let estadoClass = '';
+    let estadoIcon = '';
+    let estadoTexto = '';
+    
+    switch (avance.estado) {
+        case 'aprobado':
+            estadoClass = 'status-aprobado';
+            estadoIcon = 'fa-check-circle';
+            estadoTexto = 'Aprobado';
+            break;
+        case 'pendiente':
+            estadoClass = 'status-pendiente';
+            estadoIcon = 'fa-clock';
+            estadoTexto = 'Pendiente';
+            break;
+        case 'rechazado':
+            estadoClass = 'status-rechazado';
+            estadoIcon = 'fa-times-circle';
+            estadoTexto = 'Rechazado';
+            break;
+        default:
+            estadoClass = 'status-pendiente';
+            estadoIcon = 'fa-clock';
+            estadoTexto = avance.estado || 'Desconocido';
+    }
+    
+    return `
+        <div class="avance-card-detalle" style="background: var(--bg-card); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1rem; border-left: 4px solid ${avance.estado === 'aprobado' ? '#10B981' : (avance.estado === 'pendiente' ? '#F59E0B' : '#EF4444')};">
+            <div class="avance-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; margin-bottom: 0.75rem;">
+                <div>
+                    <h4 style="margin: 0;">${escapeHtml(avance.titulo)}</h4>
+                    <div style="margin-top: 0.25rem;">
+                        <span class="tecnico-nombre"><i class="fas fa-user"></i> ${escapeHtml(avance.tecnico_nombre)}</span>
+                        ${avance.tecnico_contacto ? `<span style="margin-left: 0.75rem;"><i class="fas fa-phone"></i> ${escapeHtml(avance.tecnico_contacto)}</span>` : ''}
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <span class="status-badge ${estadoClass}"><i class="fas ${estadoIcon}"></i> ${estadoTexto}</span>
+                    <div style="font-size: 0.7rem; color: var(--gris-texto); margin-top: 0.25rem;">
+                        <i class="far fa-calendar-alt"></i> ${formatDate(avance.fecha_creacion)}
+                    </div>
+                </div>
+            </div>
+            
+            ${avance.descripcion ? `
+                <div class="avance-descripcion" style="margin: 0.75rem 0; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-md);">
+                    <i class="fas fa-align-left"></i> ${escapeHtml(avance.descripcion)}
+                </div>
+            ` : ''}
+            
+            ${fotosPreview}
+            
+            ${avance.comentario_revision ? `
+                <div class="avance-comentario" style="margin-top: 0.75rem; padding: 0.5rem; background: rgba(193, 18, 31, 0.1); border-radius: var(--radius-md);">
+                    <i class="fas fa-comment-dots"></i> <strong>Comentario de revisión:</strong>
+                    <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem;">${escapeHtml(avance.comentario_revision)}</p>
+                </div>
+            ` : ''}
+            
+            ${avance.fecha_aprobacion ? `
+                <div style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--gris-texto);">
+                    <i class="fas fa-check-circle"></i> Aprobado el: ${formatDate(avance.fecha_aprobacion)}
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// Función para agregar estilos CSS dinámicamente
+function agregarEstilosAvances() {
+    if (document.getElementById('avances-estilos')) return;
+    
+    const style = document.createElement('style');
+    style.id = 'avances-estilos';
+    style.textContent = `
+        .avances-reparacion-container {
+            max-height: 70vh;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+        
+        .avance-fotos-preview {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 0.75rem;
+        }
+        
+        .avance-foto-item {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid var(--border-color);
+            transition: transform 0.2s;
+        }
+        
+        .avance-foto-item:hover {
+            transform: scale(1.05);
+        }
+        
+        .avance-foto-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .foto-comentario-badge {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-size: 0.6rem;
+        }
+        
+        .avance-foto-mas {
+            width: 80px;
+            height: 80px;
+            background: var(--gris-oscuro);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--gris-texto);
+        }
+        
+        .avances-seccion {
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .orden-header-avances {
+            background: linear-gradient(135deg, var(--bg-card) 0%, var(--gris-oscuro) 100%);
+            padding: 1rem;
+            border-radius: var(--radius-lg);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// Función para ver foto ampliada (si no existe ya)
+function verFotoAmpliada(url) {
+    const modal = document.getElementById('modalFoto');
+    const img = document.getElementById('fotoAmpliada');
+    
+    if (!modal) {
+        // Crear modal de foto si no existe
+        const modalHtml = `
+            <div class="modal" id="modalFoto" onclick="cerrarModalFoto()">
+                <div class="modal-content" style="max-width: 90%; background: transparent;" onclick="event.stopPropagation()">
+                    <div style="text-align: right; margin-bottom: 0.5rem;">
+                        <button class="modal-close" onclick="cerrarModalFoto()" style="background: var(--bg-card);">&times;</button>
+                    </div>
+                    <img id="fotoAmpliada" src="" style="width: 100%; border-radius: var(--radius-lg);">
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    const fotoImg = document.getElementById('fotoAmpliada');
+    const fotoModal = document.getElementById('modalFoto');
+    
+    if (fotoImg) fotoImg.src = url;
+    if (fotoModal) fotoModal.classList.add('show');
+}
+
+function cerrarModalFoto() {
+    const modal = document.getElementById('modalFoto');
+    if (modal) modal.classList.remove('show');
 }
 
 // Exponer función para pruebas en consola

@@ -1,6 +1,7 @@
 // =====================================================
 // CONTROL_CALIDAD.JS - JEFE DE TALLER
 // GESTIÓN DE TRABAJOS COMPLETADOS POR TÉCNICOS
+// VERSIÓN: ÚLTIMAS 10 ÓRDENES POR PESTAÑA
 // =====================================================
 
 const API_URL = window.location.origin + '/api/jefe-taller';
@@ -16,6 +17,12 @@ function getAuthHeaders() {
     let token = localStorage.getItem('furia_token');
     if (!token) token = localStorage.getItem('token');
     if (!token) token = sessionStorage.getItem('token');
+    
+    if (!token) {
+        console.error('No se encontró token de autenticación');
+        return {};
+    }
+    
     return {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -33,6 +40,8 @@ function formatDate(dateStr) {
     if (!dateStr) return '-';
     try {
         const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr.split('T')[0];
+        
         return date.toLocaleDateString('es-BO', { 
             day: '2-digit', 
             month: '2-digit', 
@@ -57,7 +66,7 @@ function showToast(message, type = 'info') {
     if (type === 'error') icon = 'fa-exclamation-circle';
     if (type === 'warning') icon = 'fa-exclamation-triangle';
     
-    toast.innerHTML = `<i class="fas ${icon}"></i> ${message}`;
+    toast.innerHTML = `<i class="fas ${icon}"></i> <span>${message}</span>`;
     document.body.appendChild(toast);
     
     setTimeout(() => {
@@ -89,26 +98,51 @@ function statusBadge(estado) {
         'VehiculoArmado': 'status-VehiculoArmado',
         'ReparacionCompletada': 'status-ReparacionCompletada',
         'Finalizado': 'status-Finalizado',
-        'Entregado': 'status-Entregado'
+        'Entregado': 'status-Entregado',
+        'EnReparacion': 'status-EnReparacion'
     };
     
     const texto = {
         'VehiculoArmado': 'Vehículo Armado',
         'ReparacionCompletada': 'Reparación Completada',
         'Finalizado': 'Finalizado',
-        'Entregado': 'Entregado'
+        'Entregado': 'Entregado',
+        'EnReparacion': 'En Reparación'
     };
     
     const iconos = {
         'VehiculoArmado': 'fa-check-circle',
         'ReparacionCompletada': 'fa-wrench',
         'Finalizado': 'fa-flag-checkered',
-        'Entregado': 'fa-truck'
+        'Entregado': 'fa-truck',
+        'EnReparacion': 'fa-sync-alt'
     };
     
     return `<span class="status-badge ${map[estado] || 'status-pendiente'}">
         <i class="fas ${iconos[estado] || 'fa-clock'}"></i> ${texto[estado] || estado}
     </span>`;
+}
+
+function mostrarMensajeLimite(container, limite, total) {
+    // Eliminar mensaje existente
+    const existingMsg = document.querySelector('.info-message');
+    if (existingMsg) existingMsg.remove();
+    
+    // Si hay más órdenes que el límite, mostrar mensaje
+    if (total >= limite) {
+        const infoMsg = document.createElement('div');
+        infoMsg.className = 'info-message';
+        infoMsg.innerHTML = `
+            <i class="fas fa-info-circle"></i>
+            <span>Mostrando las <strong>últimas ${limite} órdenes</strong> más recientes. 
+            Utiliza los filtros para refinar la búsqueda.</span>
+        `;
+        
+        const containerParent = container.parentNode;
+        if (containerParent && !containerParent.querySelector('.info-message')) {
+            containerParent.insertBefore(infoMsg, container);
+        }
+    }
 }
 
 // =====================================================
@@ -121,32 +155,43 @@ async function cargarOrdenesPendientes() {
         const estado = document.getElementById('filtroEstado')?.value || 'all';
         const search = document.getElementById('searchInput')?.value.toLowerCase() || '';
         
-        let url = `${API_URL}/control-calidad/ordenes-pendientes`;
-        if (estado !== 'all') url += `?estado=${estado}`;
+        // Construir URL con límite de 10 órdenes
+        let url = `${API_URL}/control-calidad/ordenes-pendientes?limit=10`;
+        if (estado !== 'all') url += `&estado=${encodeURIComponent(estado)}`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+        
+        console.log('📡 Cargando órdenes pendientes:', url);
         
         const response = await fetch(url, { headers: getAuthHeaders() });
         const data = await response.json();
         
         if (data.success) {
-            let ordenes = data.ordenes || [];
-            
-            if (search) {
-                ordenes = ordenes.filter(o => 
-                    (o.codigo_unico || '').toLowerCase().includes(search) ||
-                    (o.cliente_nombre || '').toLowerCase().includes(search) ||
-                    (o.vehiculo || '').toLowerCase().includes(search)
-                );
-            }
-            
-            ordenesPendientes = ordenes;
+            ordenesPendientes = data.ordenes || [];
             renderizarOrdenesPendientes();
             
+            // Actualizar contador
             const badge = document.getElementById('pendientesCount');
-            if (badge) badge.textContent = ordenesPendientes.length;
+            if (badge) {
+                const totalOrdenes = data.total || ordenesPendientes.length;
+                badge.textContent = totalOrdenes;
+                
+                // Mostrar tooltip con información
+                badge.title = `Mostrando ${ordenesPendientes.length} de ${totalOrdenes} órdenes`;
+            }
+            
+            // Mostrar mensaje de límite
+            const container = document.getElementById('ordenesContainer');
+            if (container) {
+                mostrarMensajeLimite(container, data.limite || 10, data.total || ordenesPendientes.length);
+            }
+            
+            console.log(`✅ Cargadas ${ordenesPendientes.length} órdenes pendientes`);
+        } else {
+            showToast(data.error || 'Error al cargar órdenes pendientes', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
-        showToast('Error al cargar órdenes pendientes', 'error');
+        console.error('❌ Error en cargarOrdenesPendientes:', error);
+        showToast('Error de conexión al cargar órdenes pendientes', 'error');
     } finally {
         mostrarLoading(false);
     }
@@ -158,36 +203,40 @@ async function cargarOrdenesFinalizadas() {
         const estado = document.getElementById('filtroEstadoFinalizadas')?.value || 'all';
         const search = document.getElementById('searchFinalizadasInput')?.value.toLowerCase() || '';
         
-        let url = `${API_URL}/control-calidad/ordenes-finalizadas`;
-        if (estado !== 'all') url += `?estado=${estado}`;
+        // Construir URL con límite de 10 órdenes
+        let url = `${API_URL}/control-calidad/ordenes-finalizadas?limit=10`;
+        if (estado !== 'all') url += `&estado=${encodeURIComponent(estado)}`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+        
+        console.log('📡 Cargando órdenes finalizadas:', url);
         
         const response = await fetch(url, { headers: getAuthHeaders() });
         const data = await response.json();
         
         if (data.success) {
-            let ordenes = data.ordenes || [];
+            ordenesFinalizadas = data.ordenes || [];
+            renderizarOrdenesFinalizadas();
             
-            if (search) {
-                ordenes = ordenes.filter(o => 
-                    (o.codigo_unico || '').toLowerCase().includes(search) ||
-                    (o.cliente_nombre || '').toLowerCase().includes(search) ||
-                    (o.vehiculo || '').toLowerCase().includes(search)
-                );
+            // Mostrar mensaje de límite
+            const container = document.getElementById('ordenesFinalizadasContainer');
+            if (container) {
+                mostrarMensajeLimite(container, data.limite || 10, data.total || ordenesFinalizadas.length);
             }
             
-            ordenesFinalizadas = ordenes;
-            renderizarOrdenesFinalizadas();
+            console.log(`✅ Cargadas ${ordenesFinalizadas.length} órdenes finalizadas`);
+        } else {
+            showToast(data.error || 'Error al cargar órdenes finalizadas', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
-        showToast('Error al cargar órdenes finalizadas', 'error');
+        console.error('❌ Error en cargarOrdenesFinalizadas:', error);
+        showToast('Error de conexión al cargar órdenes finalizadas', 'error');
     } finally {
         mostrarLoading(false);
     }
 }
 
 // =====================================================
-// RENDERIZADO
+// RENDERIZADO DE ÓRDENES
 // =====================================================
 
 function renderizarOrdenesPendientes() {
@@ -206,28 +255,43 @@ function renderizarOrdenesPendientes() {
     }
     
     container.innerHTML = ordenesPendientes.map(orden => `
-        <div class="orden-card">
+        <div class="orden-card" data-orden-id="${orden.id_orden}">
             <div class="orden-header">
-                <div>
-                    <span class="orden-codigo"><i class="fas fa-tag"></i> ${escapeHtml(orden.codigo_unico)}</span>
-                    <span class="orden-vehiculo"><i class="fas fa-car"></i> ${escapeHtml(orden.vehiculo)}</span>
+                <div class="orden-header-left">
+                    <span class="orden-codigo">
+                        <i class="fas fa-tag"></i> 
+                        ${escapeHtml(orden.codigo_unico)}
+                    </span>
+                    <span class="orden-vehiculo">
+                        <i class="fas fa-car"></i> 
+                        ${escapeHtml(orden.vehiculo)}
+                    </span>
                 </div>
-                <div>
+                <div class="orden-header-right">
                     ${statusBadge(orden.estado_global)}
-                    <span class="orden-cliente"><i class="fas fa-user"></i> ${escapeHtml(orden.cliente_nombre)}</span>
+                    <span class="orden-cliente">
+                        <i class="fas fa-user"></i> 
+                        ${escapeHtml(orden.cliente_nombre)}
+                    </span>
                 </div>
             </div>
             <div class="orden-body">
                 <div class="detalle-row">
-                    <span class="detalle-label">Técnico(s):</span>
+                    <span class="detalle-label">
+                        <i class="fas fa-users"></i> Técnico(s):
+                    </span>
                     <span class="detalle-value">${escapeHtml(orden.tecnicos_nombres || 'No asignado')}</span>
                 </div>
                 <div class="detalle-row">
-                    <span class="detalle-label">Fecha inicio:</span>
+                    <span class="detalle-label">
+                        <i class="fas fa-calendar-alt"></i> Fecha inicio:
+                    </span>
                     <span class="detalle-value">${formatDate(orden.fecha_inicio)}</span>
                 </div>
                 <div class="detalle-row">
-                    <span class="detalle-label">Fecha finalización:</span>
+                    <span class="detalle-label">
+                        <i class="fas fa-calendar-check"></i> Fecha finalización:
+                    </span>
                     <span class="detalle-value">${formatDate(orden.fecha_fin)}</span>
                 </div>
             </div>
@@ -262,29 +326,44 @@ function renderizarOrdenesFinalizadas() {
     }
     
     container.innerHTML = ordenesFinalizadas.map(orden => `
-        <div class="orden-card">
+        <div class="orden-card" data-orden-id="${orden.id_orden}">
             <div class="orden-header">
-                <div>
-                    <span class="orden-codigo"><i class="fas fa-tag"></i> ${escapeHtml(orden.codigo_unico)}</span>
-                    <span class="orden-vehiculo"><i class="fas fa-car"></i> ${escapeHtml(orden.vehiculo)}</span>
+                <div class="orden-header-left">
+                    <span class="orden-codigo">
+                        <i class="fas fa-tag"></i> 
+                        ${escapeHtml(orden.codigo_unico)}
+                    </span>
+                    <span class="orden-vehiculo">
+                        <i class="fas fa-car"></i> 
+                        ${escapeHtml(orden.vehiculo)}
+                    </span>
                 </div>
-                <div>
+                <div class="orden-header-right">
                     ${statusBadge(orden.estado_global)}
-                    <span class="orden-cliente"><i class="fas fa-user"></i> ${escapeHtml(orden.cliente_nombre)}</span>
+                    <span class="orden-cliente">
+                        <i class="fas fa-user"></i> 
+                        ${escapeHtml(orden.cliente_nombre)}
+                    </span>
                 </div>
             </div>
             <div class="orden-body">
                 <div class="detalle-row">
-                    <span class="detalle-label">Técnico(s):</span>
+                    <span class="detalle-label">
+                        <i class="fas fa-users"></i> Técnico(s):
+                    </span>
                     <span class="detalle-value">${escapeHtml(orden.tecnicos_nombres || 'No asignado')}</span>
                 </div>
                 <div class="detalle-row">
-                    <span class="detalle-label">Fecha finalización:</span>
-                    <span class="detalle-value">${formatDate(orden.fecha_finalizacion || orden.fecha_aprobacion)}</span>
+                    <span class="detalle-label">
+                        <i class="fas fa-calendar-check"></i> Fecha finalización:
+                    </span>
+                    <span class="detalle-value">${formatDate(orden.fecha_finalizacion)}</span>
                 </div>
                 ${orden.comentarios_aprobacion ? `
                     <div class="detalle-row">
-                        <span class="detalle-label">Comentarios:</span>
+                        <span class="detalle-label">
+                            <i class="fas fa-comment"></i> Comentarios:
+                        </span>
                         <span class="detalle-value">${escapeHtml(orden.comentarios_aprobacion)}</span>
                     </div>
                 ` : ''}
@@ -305,6 +384,8 @@ function renderizarOrdenesFinalizadas() {
 window.verDetalleOrden = async function(ordenId) {
     mostrarLoading(true);
     try {
+        console.log(`🔍 Cargando detalle de orden ${ordenId}`);
+        
         const response = await fetch(`${API_URL}/control-calidad/detalle-orden/${ordenId}`, {
             headers: getAuthHeaders()
         });
@@ -317,70 +398,141 @@ window.verDetalleOrden = async function(ordenId) {
         
         const detalle = data.detalle;
         
+        // Procesar fotos
         const fotos = detalle.recepcion?.fotos || {};
         const fotosArray = Object.entries(fotos).filter(([_, url]) => url && url !== '');
         
         const detalleHtml = `
             <div style="display: grid; gap: 1rem;">
+                <!-- Información de la Orden -->
                 <div class="orden-info-card">
                     <h3><i class="fas fa-clipboard-list"></i> Información de la Orden</h3>
-                    <div class="detalle-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-top: 0.5rem;">
+                    <div class="detalle-grid">
                         <div><strong>Código:</strong> ${escapeHtml(detalle.orden?.codigo_unico || 'N/A')}</div>
                         <div><strong>Estado:</strong> ${statusBadge(detalle.orden?.estado_global)}</div>
+                        <div><strong>Prioridad:</strong> ${escapeHtml(detalle.orden?.prioridad || 'Normal')}</div>
                         <div><strong>Fecha Ingreso:</strong> ${formatDate(detalle.orden?.fecha_ingreso)}</div>
+                        <div><strong>Fecha Inicio:</strong> ${formatDate(detalle.orden?.fecha_inicio)}</div>
+                        <div><strong>Fecha Fin:</strong> ${formatDate(detalle.orden?.fecha_fin)}</div>
                         <div><strong>Técnico(s):</strong> ${escapeHtml(detalle.tecnicos_nombres || 'N/A')}</div>
+                        <div><strong>Kilometraje Ingreso:</strong> ${detalle.orden?.kilometraje_ingreso?.toLocaleString() || '0'} km</div>
                     </div>
+                    ${detalle.orden?.comentarios ? `
+                        <div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm);">
+                            <strong><i class="fas fa-comment"></i> Comentarios adicionales:</strong><br>
+                            ${escapeHtml(detalle.orden.comentarios)}
+                        </div>
+                    ` : ''}
                 </div>
                 
-                <div class="orden-info-card">
-                    <h3><i class="fas fa-car"></i> Datos del Vehículo</h3>
-                    <div class="detalle-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-top: 0.5rem;">
-                        <div><strong>Placa:</strong> ${escapeHtml(detalle.vehiculo?.placa || 'No registrada')}</div>
-                        <div><strong>Marca/Modelo:</strong> ${escapeHtml(detalle.vehiculo?.marca || '')} ${escapeHtml(detalle.vehiculo?.modelo || '')}</div>
-                        <div><strong>Año:</strong> ${detalle.vehiculo?.anio || 'N/A'}</div>
-                        <div><strong>Kilometraje:</strong> ${detalle.vehiculo?.kilometraje?.toLocaleString() || '0'} km</div>
-                    </div>
-                </div>
-                
-                <div class="orden-info-card">
-                    <h3><i class="fas fa-user"></i> Datos del Cliente</h3>
-                    <div class="detalle-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-top: 0.5rem;">
-                        <div><strong>Nombre:</strong> ${escapeHtml(detalle.cliente?.nombre || 'No registrado')}</div>
-                        <div><strong>Teléfono:</strong> ${escapeHtml(detalle.cliente?.telefono || 'No registrado')}</div>
-                        <div><strong>Email:</strong> ${escapeHtml(detalle.cliente?.email || 'No registrado')}</div>
-                    </div>
-                </div>
-                
-                ${detalle.diagnostico?.informe ? `
+                <!-- Datos del Vehículo -->
+                ${detalle.vehiculo ? `
                     <div class="orden-info-card">
-                        <h3><i class="fas fa-stethoscope"></i> Diagnóstico Técnico</h3>
-                        <div class="detalle-grid" style="margin-top: 0.5rem;">
-                            <div><strong>Informe:</strong> ${escapeHtml(detalle.diagnostico.informe)}</div>
-                            ${detalle.diagnostico.audio_url ? `<div><strong>Audio:</strong> <audio controls src="${detalle.diagnostico.audio_url}" style="max-width: 100%;"></audio></div>` : ''}
+                        <h3><i class="fas fa-car"></i> Datos del Vehículo</h3>
+                        <div class="detalle-grid">
+                            <div><strong>Placa:</strong> ${escapeHtml(detalle.vehiculo.placa || 'No registrada')}</div>
+                            <div><strong>Marca:</strong> ${escapeHtml(detalle.vehiculo.marca || 'N/A')}</div>
+                            <div><strong>Modelo:</strong> ${escapeHtml(detalle.vehiculo.modelo || 'N/A')}</div>
+                            <div><strong>Año:</strong> ${detalle.vehiculo.anio || 'N/A'}</div>
+                            <div><strong>Color:</strong> ${escapeHtml(detalle.vehiculo.color || 'N/A')}</div>
+                            <div><strong>Kilometraje:</strong> ${detalle.vehiculo.kilometraje?.toLocaleString() || '0'} km</div>
                         </div>
                     </div>
                 ` : ''}
                 
+                <!-- Datos del Cliente -->
+                ${detalle.cliente ? `
+                    <div class="orden-info-card">
+                        <h3><i class="fas fa-user"></i> Datos del Cliente</h3>
+                        <div class="detalle-grid">
+                            <div><strong>Nombre:</strong> ${escapeHtml(detalle.cliente.nombre || 'No registrado')}</div>
+                            <div><strong>Teléfono:</strong> ${escapeHtml(detalle.cliente.telefono || 'No registrado')}</div>
+                            <div><strong>Email:</strong> ${escapeHtml(detalle.cliente.email || 'No registrado')}</div>
+                            <div><strong>Dirección:</strong> ${escapeHtml(detalle.cliente.direccion || 'No registrada')}</div>
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Diagnóstico Técnico -->
+                ${detalle.diagnostico?.informe ? `
+                    <div class="orden-info-card">
+                        <h3><i class="fas fa-stethoscope"></i> Diagnóstico Técnico</h3>
+                        <div><strong>Informe:</strong> ${escapeHtml(detalle.diagnostico.informe)}</div>
+                        ${detalle.diagnostico.audio_url ? `
+                            <div style="margin-top: 0.5rem;">
+                                <strong>Audio:</strong><br>
+                                <audio controls src="${detalle.diagnostico.audio_url}" style="max-width: 100%; margin-top: 0.5rem;"></audio>
+                            </div>
+                        ` : ''}
+                        ${detalle.diagnostico.fecha_diagnostico ? `
+                            <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">
+                                <i class="fas fa-calendar"></i> ${formatDate(detalle.diagnostico.fecha_diagnostico)}
+                            </div>
+                        ` : ''}
+                    </div>
+                ` : ''}
+                
+                <!-- Servicios Realizados -->
                 ${detalle.servicios && detalle.servicios.length > 0 ? `
                     <div class="orden-info-card">
                         <h3><i class="fas fa-tools"></i> Servicios Realizados</h3>
                         ${detalle.servicios.map(s => `
-                            <div style="padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm); margin-bottom: 0.5rem;">
-                                <strong>${escapeHtml(s.descripcion)}</strong>
-                                ${s.precio ? `<span style="float: right;">Bs. ${s.precio.toFixed(2)}</span>` : ''}
+                            <div class="servicio-item">
+                                <div class="servicio-descripcion">
+                                    <strong>${escapeHtml(s.descripcion)}</strong>
+                                </div>
+                                <div class="servicio-detalles">
+                                    <span>Cantidad: ${s.cantidad}</span>
+                                    ${s.precio ? `<span>Total: Bs. ${s.precio.toFixed(2)}</span>` : ''}
+                                </div>
                             </div>
                         `).join('')}
                     </div>
                 ` : ''}
                 
+                <!-- Recepción y Problema -->
+                ${detalle.recepcion?.transcripcion_problema ? `
+                    <div class="orden-info-card">
+                        <h3><i class="fas fa-clipboard-list"></i> Problema Reportado</h3>
+                        <div>${escapeHtml(detalle.recepcion.transcripcion_problema)}</div>
+                        ${detalle.recepcion.audio_url ? `
+                            <div style="margin-top: 0.5rem;">
+                                <strong>Audio de recepción:</strong><br>
+                                <audio controls src="${detalle.recepcion.audio_url}" style="max-width: 100%; margin-top: 0.5rem;"></audio>
+                            </div>
+                        ` : ''}
+                    </div>
+                ` : ''}
+                
+                <!-- Fotos del Vehículo -->
                 ${fotosArray.length > 0 ? `
                     <div class="orden-info-card">
                         <h3><i class="fas fa-images"></i> Fotos del Vehículo (${fotosArray.length})</h3>
-                        <div class="fotos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem; margin-top: 0.5rem;">
+                        <div class="fotos-grid">
                             ${fotosArray.map(([nombre, url]) => `
-                                <div class="foto-item" onclick="verFotoAmpliada('${url}')" style="cursor: pointer;">
-                                    <img src="${url}" alt="${nombre}" style="width: 100%; height: 80px; object-fit: cover; border-radius: var(--radius-sm);">
-                                    <div style="font-size: 0.6rem; text-align: center; padding: 0.25rem;">${escapeHtml(nombre)}</div>
+                                <div class="foto-item" onclick="verFotoAmpliada('${url}')" title="${escapeHtml(nombre)}">
+                                    <img src="${url}" alt="${escapeHtml(nombre)}" loading="lazy">
+                                    <div class="foto-nombre">${escapeHtml(nombre.length > 20 ? nombre.substring(0, 20) + '...' : nombre)}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Historial de Cambios -->
+                ${detalle.historial && detalle.historial.length > 0 ? `
+                    <div class="orden-info-card">
+                        <h3><i class="fas fa-history"></i> Historial de Cambios</h3>
+                        <div class="historial-list">
+                            ${detalle.historial.map(h => `
+                                <div class="historial-item">
+                                    <div class="historial-fecha">${formatDate(h.fecha_cambio)}</div>
+                                    <div class="historial-cambio">
+                                        <span class="estado-anterior">${escapeHtml(h.estado_anterior || '?')}</span>
+                                        <i class="fas fa-arrow-right"></i>
+                                        <span class="estado-nuevo">${escapeHtml(h.estado_nuevo || '?')}</span>
+                                    </div>
+                                    ${h.comentarios ? `<div class="historial-comentario">${escapeHtml(h.comentarios)}</div>` : ''}
                                 </div>
                             `).join('')}
                         </div>
@@ -389,24 +541,38 @@ window.verDetalleOrden = async function(ordenId) {
             </div>
         `;
         
-        document.getElementById('detalleBody').innerHTML = detalleHtml;
-        abrirModal('modalDetalle');
+        const detalleBody = document.getElementById('detalleBody');
+        if (detalleBody) {
+            detalleBody.innerHTML = detalleHtml;
+            abrirModal('modalDetalle');
+        }
         
     } catch (error) {
-        console.error('Error:', error);
-        showToast('Error al cargar detalles', 'error');
+        console.error('❌ Error en verDetalleOrden:', error);
+        showToast('Error al cargar detalles de la orden', 'error');
     } finally {
         mostrarLoading(false);
     }
 };
 
+// =====================================================
+// FUNCIONES DE FOTOS
+// =====================================================
+
 window.verFotoAmpliada = function(url) {
-    document.getElementById('fotoAmpliada').src = url;
-    abrirModal('fotoModal');
+    const fotoModal = document.getElementById('fotoModal');
+    const fotoAmpliada = document.getElementById('fotoAmpliada');
+    
+    if (fotoAmpliada && url) {
+        fotoAmpliada.src = url;
+        if (fotoModal) abrirModal('fotoModal');
+    }
 };
 
 function cerrarFotoModal() {
     cerrarModal('fotoModal');
+    const fotoAmpliada = document.getElementById('fotoAmpliada');
+    if (fotoAmpliada) fotoAmpliada.src = '';
 }
 
 // =====================================================
@@ -417,27 +583,44 @@ let currentOrdenId = null;
 
 window.abrirModalFinalizar = async function(ordenId) {
     const orden = ordenesPendientes.find(o => o.id_orden === ordenId);
-    if (!orden) return;
+    if (!orden) {
+        showToast('No se encontró la orden', 'error');
+        return;
+    }
     
     currentOrdenId = ordenId;
     
     const infoContainer = document.getElementById('finalizarInfo');
-    infoContainer.innerHTML = `
-        <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(orden.codigo_unico)}</p>
-        <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(orden.vehiculo)}</p>
-        <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}</p>
-        <p><strong><i class="fas fa-check-circle"></i> Estado actual:</strong> ${statusBadge(orden.estado_global)}</p>
-    `;
+    if (infoContainer) {
+        infoContainer.innerHTML = `
+            <div class="orden-info-compact">
+                <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(orden.codigo_unico)}</p>
+                <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(orden.vehiculo)}</p>
+                <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}</p>
+                <p><strong><i class="fas fa-users"></i> Técnico(s):</strong> ${escapeHtml(orden.tecnicos_nombres || 'No asignado')}</p>
+                <p><strong><i class="fas fa-check-circle"></i> Estado actual:</strong> ${statusBadge(orden.estado_global)}</p>
+            </div>
+        `;
+    }
     
-    document.getElementById('comentariosFinalizar').value = '';
+    const comentariosInput = document.getElementById('comentariosFinalizar');
+    if (comentariosInput) comentariosInput.value = '';
+    
     abrirModal('modalFinalizar');
 };
 
 window.confirmarFinalizar = async function() {
     const comentarios = document.getElementById('comentariosFinalizar')?.value || '';
     
+    if (!currentOrdenId) {
+        showToast('Error: No se seleccionó ninguna orden', 'error');
+        return;
+    }
+    
     mostrarLoading(true);
     try {
+        console.log(`✅ Finalizando orden ${currentOrdenId}`);
+        
         const response = await fetch(`${API_URL}/control-calidad/finalizar-orden/${currentOrdenId}`, {
             method: 'PUT',
             headers: getAuthHeaders(),
@@ -449,14 +632,18 @@ window.confirmarFinalizar = async function() {
         if (data.success) {
             showToast('✅ Orden finalizada correctamente', 'success');
             cerrarModal('modalFinalizar');
+            
+            // Recargar ambas listas
             await cargarOrdenesPendientes();
             await cargarOrdenesFinalizadas();
+            
+            currentOrdenId = null;
         } else {
-            showToast(data.error || 'Error al finalizar', 'error');
+            showToast(data.error || 'Error al finalizar la orden', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
+        console.error('❌ Error en confirmarFinalizar:', error);
+        showToast('Error de conexión al finalizar la orden', 'error');
     } finally {
         mostrarLoading(false);
     }
@@ -468,19 +655,29 @@ window.confirmarFinalizar = async function() {
 
 window.abrirModalRechazar = async function(ordenId) {
     const orden = ordenesPendientes.find(o => o.id_orden === ordenId);
-    if (!orden) return;
+    if (!orden) {
+        showToast('No se encontró la orden', 'error');
+        return;
+    }
     
     currentOrdenId = ordenId;
     
     const infoContainer = document.getElementById('rechazarInfo');
-    infoContainer.innerHTML = `
-        <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(orden.codigo_unico)}</p>
-        <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(orden.vehiculo)}</p>
-        <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}</p>
-        <p><strong><i class="fas fa-tools"></i> Estado actual:</strong> ${statusBadge(orden.estado_global)}</p>
-    `;
+    if (infoContainer) {
+        infoContainer.innerHTML = `
+            <div class="orden-info-compact">
+                <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(orden.codigo_unico)}</p>
+                <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(orden.vehiculo)}</p>
+                <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}</p>
+                <p><strong><i class="fas fa-users"></i> Técnico(s):</strong> ${escapeHtml(orden.tecnicos_nombres || 'No asignado')}</p>
+                <p><strong><i class="fas fa-tools"></i> Estado actual:</strong> ${statusBadge(orden.estado_global)}</p>
+            </div>
+        `;
+    }
     
-    document.getElementById('instruccionesRechazo').value = '';
+    const instruccionesInput = document.getElementById('instruccionesRechazo');
+    if (instruccionesInput) instruccionesInput.value = '';
+    
     abrirModal('modalRechazar');
 };
 
@@ -492,8 +689,15 @@ window.confirmarRechazar = async function() {
         return;
     }
     
+    if (!currentOrdenId) {
+        showToast('Error: No se seleccionó ninguna orden', 'error');
+        return;
+    }
+    
     mostrarLoading(true);
     try {
+        console.log(`❌ Rechazando orden ${currentOrdenId}`);
+        
         const response = await fetch(`${API_URL}/control-calidad/rechazar-orden/${currentOrdenId}`, {
             method: 'PUT',
             headers: getAuthHeaders(),
@@ -505,40 +709,58 @@ window.confirmarRechazar = async function() {
         if (data.success) {
             showToast('✅ Orden enviada a revisión. El técnico ha sido notificado.', 'success');
             cerrarModal('modalRechazar');
+            
+            // Recargar ambas listas
             await cargarOrdenesPendientes();
             await cargarOrdenesFinalizadas();
+            
+            currentOrdenId = null;
         } else {
             showToast(data.error || 'Error al enviar a revisión', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
+        console.error('❌ Error en confirmarRechazar:', error);
+        showToast('Error de conexión al rechazar la orden', 'error');
     } finally {
         mostrarLoading(false);
     }
 };
 
 // =====================================================
-// FUNCIONES ADICIONALES
+// CONFIGURACIÓN DE TABS Y EVENTOS
 // =====================================================
 
 function setupTabs() {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
+    const tabs = document.querySelectorAll('.tab-btn');
+    
+    tabs.forEach(btn => {
         btn.addEventListener('click', function() {
             const tabId = this.getAttribute('data-tab');
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            this.classList.add('active');
-            document.getElementById(tabId)?.classList.add('active');
             
+            // Cambiar clase active en tabs
+            tabs.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Cambiar contenido
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            const activeTab = document.getElementById(tabId);
+            if (activeTab) activeTab.classList.add('active');
+            
+            // Recargar datos según la pestaña activa
             if (tabId === 'tab-finalizadas') {
                 cargarOrdenesFinalizadas();
+            } else if (tabId === 'tab-pendientes') {
+                cargarOrdenesPendientes();
             }
         });
     });
 }
 
 function setupEventListeners() {
+    // Botones de actualización
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', () => cargarOrdenesPendientes());
@@ -549,6 +771,7 @@ function setupEventListeners() {
         refreshFinalizadasBtn.addEventListener('click', () => cargarOrdenesFinalizadas());
     }
     
+    // Filtros de estado
     const filtroEstado = document.getElementById('filtroEstado');
     if (filtroEstado) {
         filtroEstado.addEventListener('change', () => cargarOrdenesPendientes());
@@ -559,16 +782,26 @@ function setupEventListeners() {
         filtroEstadoFinalizadas.addEventListener('change', () => cargarOrdenesFinalizadas());
     }
     
+    // Búsquedas con debounce
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
-        searchInput.addEventListener('input', () => cargarOrdenesPendientes());
+        let debounceTimer;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => cargarOrdenesPendientes(), 500);
+        });
     }
     
     const searchFinalizadasInput = document.getElementById('searchFinalizadasInput');
     if (searchFinalizadasInput) {
-        searchFinalizadasInput.addEventListener('input', () => cargarOrdenesFinalizadas());
+        let debounceTimer;
+        searchFinalizadasInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => cargarOrdenesFinalizadas(), 500);
+        });
     }
     
+    // Botones de confirmación de modales
     const btnConfirmarFinalizar = document.getElementById('btnConfirmarFinalizar');
     if (btnConfirmarFinalizar) {
         btnConfirmarFinalizar.addEventListener('click', confirmarFinalizar);
@@ -579,10 +812,22 @@ function setupEventListeners() {
         btnConfirmarRechazar.addEventListener('click', confirmarRechazar);
     }
     
+    // Cerrar modales al hacer clic fuera
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.classList.remove('active');
+            if (e.target === modal) {
+                modal.classList.remove('active');
+            }
         });
+    });
+    
+    // Cerrar modales con tecla ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal.active').forEach(modal => {
+                modal.classList.remove('active');
+            });
+        }
     });
 }
 
@@ -595,35 +840,41 @@ async function cargarUsuarioActual() {
         let token = localStorage.getItem('furia_token');
         if (!token) token = localStorage.getItem('token');
         if (!token) {
+            console.error('No se encontró token de autenticación');
             window.location.href = '/';
             return null;
         }
         
+        // Decodificar token JWT
         const payload = JSON.parse(atob(token.split('.')[1]));
         const userData = JSON.parse(localStorage.getItem('furia_user') || '{}');
         
         currentUser = {
             id: payload.user?.id || payload.id || userData?.id,
             nombre: payload.user?.nombre || payload.nombre || userData?.nombre || 'Usuario',
+            email: payload.user?.email || payload.email || userData?.email,
             roles: payload.user?.roles || payload.roles || userData?.roles || []
         };
         
+        console.log('✅ Usuario autenticado:', currentUser.nombre);
+        
+        // Actualizar fecha actual
         const fechaElement = document.getElementById('currentDate');
         if (fechaElement) {
-            fechaElement.innerHTML = new Date().toLocaleDateString('es-ES', { 
-                year: 'numeric', month: 'long', day: 'numeric' 
-            });
+            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            fechaElement.innerHTML = new Date().toLocaleDateString('es-ES', options);
         }
         
         return currentUser;
     } catch (error) {
-        console.error('Error:', error);
+        console.error('❌ Error al cargar usuario:', error);
         window.location.href = '/';
         return null;
     }
 }
 
 function logout() {
+    console.log('🚪 Cerrando sesión...');
     localStorage.clear();
     sessionStorage.clear();
     window.location.href = '/';
@@ -634,20 +885,25 @@ function logout() {
 // =====================================================
 
 async function inicializar() {
-    console.log('🚀 Inicializando control_calidad.js');
+    console.log('🚀 Inicializando Control de Calidad v2.0 - Últimas 10 órdenes');
     
     const user = await cargarUsuarioActual();
     if (!user) return;
     
-    await cargarOrdenesPendientes();
-    await cargarOrdenesFinalizadas();
+    // Cargar datos iniciales
+    await Promise.all([
+        cargarOrdenesPendientes(),
+        cargarOrdenesFinalizadas()
+    ]);
+    
+    // Configurar UI
     setupTabs();
     setupEventListeners();
     
-    console.log('✅ control_calidad.js inicializado correctamente');
+    console.log('✅ Control de Calidad inicializado correctamente');
 }
 
-// Exponer funciones globales
+// Exponer funciones globales necesarias
 window.verDetalleOrden = verDetalleOrden;
 window.verFotoAmpliada = verFotoAmpliada;
 window.cerrarFotoModal = cerrarFotoModal;
@@ -658,4 +914,9 @@ window.confirmarRechazar = confirmarRechazar;
 window.cerrarModal = cerrarModal;
 window.logout = logout;
 
-document.addEventListener('DOMContentLoaded', inicializar);
+// Inicializar cuando el DOM esté listo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', inicializar);
+} else {
+    inicializar();
+}

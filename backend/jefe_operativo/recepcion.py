@@ -922,10 +922,11 @@ def listar_sesiones_activas(current_user):
 @jefe_operativo_required
 def listar_recepciones(current_user):
     try:
-        # CORREGIDO: Usar la relación correcta
+        # LIMITAR A LAS ÚLTIMAS 10 RECEPCIONES
         resultado = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo, vehiculo!inner(placa, marca, modelo, cliente!inner(id_usuario, usuario!inner(nombre, contacto, ubicacion)))') \
             .order('fecha_ingreso', desc=True) \
+            .limit(10) \
             .execute()
         
         recepciones = []

@@ -1,22 +1,24 @@
 # =====================================================
-# HISTORIAL DE TRABAJOS - TÉCNICO MECÁNICO
-# FURIA MOTOR COMPANY SRL
+# HISTORIAL DE TRABAJOS - TÉCNICO MECÁNICO (OPTIMIZADO)
+# SOLO ÚLTIMOS 10 TRABAJOS
 # =====================================================
 
 from flask import Blueprint, request, jsonify, send_from_directory
 from config import config
-from decorators import tecnico_required  # ← Usar decorador unificado
+from decorators import tecnico_required
 import datetime
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
-# Crear blueprint con prefijo para evitar conflictos
 historial_bp = Blueprint('historial_tecnico', __name__, url_prefix='/tecnico')
 
-# Configuración
 SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
+
+# Thread pool para consultas paralelas
+executor = ThreadPoolExecutor(max_workers=4)
 
 
 # =====================================================
@@ -30,30 +32,32 @@ def historial_page(current_user):
 
 
 # =====================================================
-# API: OBTENER HISTORIAL DEL TÉCNICO
+# API: OBTENER ÚLTIMOS 10 TRABAJOS DEL TÉCNICO
 # =====================================================
 @historial_bp.route('/api/historial', methods=['GET'])
 @tecnico_required
 def obtener_historial(current_user):
     try:
         tecnico_id = current_user.get('id')
-        logger.info(f"🔍 Obteniendo historial para técnico ID: {tecnico_id}")
+        logger.info(f"🔍 Obteniendo últimos 10 trabajos para técnico ID: {tecnico_id}")
         
         if not tecnico_id:
             return jsonify({'error': 'ID de técnico no encontrado'}), 400
         
-        # Obtener todas las asignaciones del técnico (tanto activas como finalizadas)
+        # Obtener las últimas 10 asignaciones del técnico
         asignaciones = supabase.table('asignaciontecnico') \
             .select('id_orden_trabajo, fecha_hora_inicio, fecha_hora_final') \
             .eq('id_tecnico', tecnico_id) \
+            .order('fecha_hora_inicio', desc=True) \
+            .limit(10) \
             .execute()
         
         if not asignaciones.data:
             return jsonify({'success': True, 'trabajos': []}), 200
         
-        orden_ids = list(set([a['id_orden_trabajo'] for a in asignaciones.data]))
+        orden_ids = [a['id_orden_trabajo'] for a in asignaciones.data]
         
-        # Obtener órdenes de trabajo
+        # Obtener órdenes de trabajo (solo las últimas 10)
         ordenes = supabase.table('ordentrabajo') \
             .select('''
                 id, 
@@ -70,8 +74,8 @@ def obtener_historial(current_user):
         if not ordenes.data:
             return jsonify({'success': True, 'trabajos': []}), 200
         
-        # Obtener vehículos
-        vehiculos_ids = list(set([o['id_vehiculo'] for o in ordenes.data if o.get('id_vehiculo')]))
+        # Obtener vehículos (consulta masiva)
+        vehiculos_ids = list(set([o.get('id_vehiculo') for o in ordenes.data if o.get('id_vehiculo')]))
         vehiculos_map = {}
         
         if vehiculos_ids:
@@ -83,7 +87,7 @@ def obtener_historial(current_user):
             for v in (vehiculos.data or []):
                 vehiculos_map[v['id']] = v
         
-        # Obtener clientes
+        # Obtener clientes (consulta masiva)
         clientes_ids = list(set([v.get('id_cliente') for v in vehiculos_map.values() if v.get('id_cliente')]))
         clientes_map = {}
         
@@ -96,7 +100,7 @@ def obtener_historial(current_user):
             for c in (clientes.data or []):
                 clientes_map[c['id']] = c
         
-        # Obtener usuarios (clientes)
+        # Obtener usuarios (consulta masiva)
         usuarios_ids = list(set([c.get('id_usuario') for c in clientes_map.values() if c.get('id_usuario')]))
         usuarios_map = {}
         
@@ -109,12 +113,44 @@ def obtener_historial(current_user):
             for u in (usuarios.data or []):
                 usuarios_map[u['id']] = u
         
+        # Obtener diagnósticos (consulta masiva para todas las órdenes)
+        diagnosticos_map = {}
+        if orden_ids:
+            diagnosticos = supabase.table('diagnostico_tecnico') \
+                .select('id, id_orden_trabajo, transcripcion_informe, url_grabacion_informe, estado, fecha_envio') \
+                .in_('id_orden_trabajo', orden_ids) \
+                .eq('id_tecnico', tecnico_id) \
+                .order('version', desc=True) \
+                .execute()
+            
+            for d in (diagnosticos.data or []):
+                orden_id = d['id_orden_trabajo']
+                if orden_id not in diagnosticos_map:
+                    diagnosticos_map[orden_id] = d
+        
+        # Obtener servicios (consulta masiva para todos los diagnósticos)
+        diagnostico_ids = [d['id'] for d in diagnosticos_map.values()]
+        servicios_por_diagnostico = {}
+        
+        if diagnostico_ids:
+            servicios = supabase.table('servicio_tecnico') \
+                .select('id_diagnostico_tecnico, descripcion, orden') \
+                .in_('id_diagnostico_tecnico', diagnostico_ids) \
+                .order('orden') \
+                .execute()
+            
+            for s in (servicios.data or []):
+                diag_id = s['id_diagnostico_tecnico']
+                if diag_id not in servicios_por_diagnostico:
+                    servicios_por_diagnostico[diag_id] = []
+                servicios_por_diagnostico[diag_id].append(s['descripcion'])
+        
         # Construir respuesta
         trabajos = []
         for orden in ordenes.data:
             vehiculo = vehiculos_map.get(orden.get('id_vehiculo'), {})
             
-            # Obtener información del cliente
+            # Información del cliente
             cliente_nombre = 'No registrado'
             cliente_telefono = 'No registrado'
             cliente_ubicacion = 'No registrado'
@@ -129,26 +165,9 @@ def obtener_historial(current_user):
                     cliente_telefono = usuario.get('contacto') or 'No registrado'
                     cliente_ubicacion = usuario.get('ubicacion') or 'No registrado'
             
-            # Obtener diagnóstico más reciente del técnico para esta orden
-            diagnostico = supabase.table('diagnostico_tecnico') \
-                .select('id, transcripcion_informe, url_grabacion_informe, estado, fecha_envio') \
-                .eq('id_orden_trabajo', orden['id']) \
-                .eq('id_tecnico', tecnico_id) \
-                .order('version', desc=True) \
-                .limit(1) \
-                .execute()
-            
-            diagnostico_data = diagnostico.data[0] if diagnostico.data else None
-            
-            # Obtener servicios del diagnóstico
-            servicios = []
-            if diagnostico_data:
-                servicios_result = supabase.table('servicio_tecnico') \
-                    .select('descripcion') \
-                    .eq('id_diagnostico_tecnico', diagnostico_data['id']) \
-                    .order('orden') \
-                    .execute()
-                servicios = [s['descripcion'] for s in (servicios_result.data or [])]
+            # Diagnóstico
+            diagnostico = diagnosticos_map.get(orden['id'])
+            servicios = servicios_por_diagnostico.get(diagnostico['id'], []) if diagnostico else []
             
             trabajos.append({
                 'id': orden['id'],
@@ -164,10 +183,11 @@ def obtener_historial(current_user):
                 'cliente_nombre': cliente_nombre,
                 'cliente_telefono': cliente_telefono,
                 'cliente_ubicacion': cliente_ubicacion,
-                'servicios': servicios,
-                'diagnostico_estado': diagnostico_data.get('estado') if diagnostico_data else None
+                'servicios': servicios[:3],  # Solo primeros 3 servicios para vista previa
+                'diagnostico_estado': diagnostico.get('estado') if diagnostico else None
             })
         
+        logger.info(f"✅ Cargados {len(trabajos)} trabajos para técnico {tecnico_id}")
         return jsonify({'success': True, 'trabajos': trabajos}), 200
         
     except Exception as e:
@@ -178,7 +198,7 @@ def obtener_historial(current_user):
 
 
 # =====================================================
-# API: OBTENER DETALLE DE UN TRABAJO
+# API: OBTENER DETALLE DE UN TRABAJO (SIN CAMBIOS)
 # =====================================================
 @historial_bp.route('/api/historial/<int:id_orden>', methods=['GET'])
 @tecnico_required
@@ -249,7 +269,7 @@ def obtener_detalle_trabajo(current_user, id_orden):
                         cliente_telefono = usuario.get('contacto') or 'No registrado'
                         cliente_ubicacion = usuario.get('ubicacion') or 'No registrado'
         
-        # OBTENER DATOS DE LA RECEPCIÓN
+        # Obtener datos de la recepción
         recepcion_result = supabase.table('recepcion') \
             .select('''
                 url_lateral_izquierda, 

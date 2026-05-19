@@ -24,10 +24,11 @@
 
         <!-- MAIN CONTENT -->
         <main class="main-content">
+            <!-- Top Bar -->
             <div class="top-bar">
                 <div class="page-title">
-                    <h1>Proveedores</h1>
-                    <p>Gestión de proveedores de repuestos</p>
+                    <h1><i class="fas fa-truck"></i> Proveedores</h1>
+                    <p>Gestión de proveedores de repuestos y autopartes</p>
                 </div>
                 <div class="top-actions">
                     <button id="btnNuevoProveedor" class="btn-primary">
@@ -44,13 +45,9 @@
             <div class="filtros-bar">
                 <div class="search-box">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="searchInput" placeholder="Buscar por nombre, contacto o teléfono...">
+                    <input type="text" id="searchInput" placeholder="Buscar por nombre, propietario o teléfono...">
                 </div>
-                <select id="filtroEstado">
-                    <option value="all">Todos los estados</option>
-                    <option value="activo">Activos</option>
-                    <option value="inactivo">Inactivos</option>
-                </select>
+                <!-- El select de categorías se agregará dinámicamente con JavaScript -->
                 <button id="refreshBtn" class="btn-secondary">
                     <i class="fas fa-sync-alt"></i> Actualizar
                 </button>
@@ -58,95 +55,70 @@
 
             <!-- Grid de proveedores -->
             <div id="proveedoresGrid" class="proveedores-grid">
-                <!-- Se llena dinámicamente -->
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando proveedores...</p>
+                </div>
             </div>
         </main>
     </div>
 
-    <!-- Modal para crear/editar proveedor -->
+    <!-- ===================================================== -->
+    <!-- MODAL PARA CREAR/EDITAR PROVEEDOR -->
+    <!-- ===================================================== -->
     <div id="modalProveedor" class="modal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
                 <h3 id="modalTitle"><i class="fas fa-truck"></i> Nuevo Proveedor</h3>
                 <span class="close-modal" onclick="cerrarModal('modalProveedor')">&times;</span>
             </div>
-            <form id="proveedorForm" onsubmit="guardarProveedor(event)">
+            <!-- IMPORTANTE: NO usar onsubmit aquí, se maneja desde JS -->
+            <form id="proveedorForm">
                 <input type="hidden" id="proveedorId">
+
+                <!-- Fila 1: Nombre y Propietario -->
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Nombre *</label>
-                        <input type="text" id="nombre" required placeholder="Ej: Autorepuestos López">
+                        <label><i class="fas fa-building"></i> Nombre *</label>
+                        <input type="text" id="nombre" required placeholder="Ej: Autorepuestos López"
+                            autocomplete="off">
                     </div>
                     <div class="form-group">
-                        <label>RUC/NIT</label>
-                        <input type="text" id="ruc" placeholder="Número de identificación tributaria">
+                        <label><i class="fas fa-user"></i> Propietario</label>
+                        <input type="text" id="propietario" placeholder="Nombre del propietario o representante"
+                            autocomplete="off">
                     </div>
                 </div>
+
+                <!-- Fila 2: Teléfono y Categoría -->
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Contacto Principal</label>
-                        <input type="text" id="contacto" placeholder="Nombre del contacto">
+                        <label><i class="fas fa-phone"></i> Teléfono *</label>
+                        <input type="tel" id="telefono" required placeholder="Ej: 71234567" autocomplete="off">
                     </div>
                     <div class="form-group">
-                        <label>Cargo del Contacto</label>
-                        <input type="text" id="cargo" placeholder="Ej: Gerente de Ventas">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Teléfono *</label>
-                        <input type="tel" id="telefono" required placeholder="Ej: 71234567">
-                    </div>
-                    <div class="form-group">
-                        <label>Teléfono Alternativo</label>
-                        <input type="tel" id="telefono2" placeholder="Opcional">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Email</label>
-                        <input type="email" id="email" placeholder="ventas@proveedor.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Sitio Web</label>
-                        <input type="url" id="website" placeholder="www.proveedor.com">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Dirección</label>
-                    <textarea id="direccion" rows="2" placeholder="Dirección completa"></textarea>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Categorías de repuestos</label>
-                        <select id="categorias" multiple>
-                            <option value="filtros">Filtros</option>
-                            <option value="frenos">Frenos</option>
-                            <option value="motor">Motor</option>
-                            <option value="electrico">Eléctrico</option>
-                            <option value="suspension">Suspensión</option>
-                            <option value="transmision">Transmisión</option>
-                            <option value="lubricantes">Lubricantes</option>
-                            <option value="herramientas">Herramientas</option>
+                        <label><i class="fas fa-tag"></i> Categoría</label>
+                        <select id="id_filtro">
+                            <option value="">Seleccionar categoría</option>
                         </select>
-                        <small>Mantén presionado Ctrl para seleccionar múltiples</small>
-                    </div>
-                    <div class="form-group">
-                        <label>Estado</label>
-                        <select id="estado">
-                            <option value="activo">Activo</option>
-                            <option value="inactivo">Inactivo</option>
-                        </select>
+                        <small>Selecciona el tipo de repuestos que ofrece</small>
                     </div>
                 </div>
+
+                <!-- Fila 3: Ubicación GPS -->
                 <div class="form-group">
-                    <label>Notas / Observaciones</label>
-                    <textarea id="notas" rows="2" placeholder="Información adicional sobre el proveedor..."></textarea>
+                    <label><i class="fas fa-map-marker-alt"></i> Ubicación GPS</label>
+                    <input type="text" id="ubicacion_gps" placeholder="Ej: -17.123456, -66.123456 o dirección"
+                        autocomplete="off">
+                    <small>Coordenadas o dirección física del proveedor</small>
                 </div>
+
+                <!-- Botones de acción -->
                 <div class="form-actions">
-                    <button type="button" class="btn-secondary"
-                        onclick="cerrarModal('modalProveedor')">Cancelar</button>
-                    <button type="submit" class="btn-primary">
+                    <button type="button" class="btn-secondary" onclick="cerrarModal('modalProveedor')">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="submit" class="btn-primary" id="btnGuardarProveedor">
                         <i class="fas fa-save"></i> Guardar Proveedor
                     </button>
                 </div>
@@ -154,51 +126,89 @@
         </div>
     </div>
 
-    <!-- Modal para ver detalle -->
+    <!-- ===================================================== -->
+    <!-- MODAL PARA VER DETALLE DEL PROVEEDOR -->
+    <!-- ===================================================== -->
     <div id="modalDetalle" class="modal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
                 <h3><i class="fas fa-info-circle"></i> Detalle de Proveedor</h3>
                 <span class="close-modal" onclick="cerrarModal('modalDetalle')">&times;</span>
             </div>
-            <div id="modalDetalleBody"></div>
+            <div id="modalDetalleBody">
+                <!-- Contenido dinámico desde JavaScript -->
+            </div>
             <div class="detalle-actions">
-                <button class="btn-secondary" onclick="cerrarModal('modalDetalle')">Cerrar</button>
-                <button class="btn-primary" id="btnEditarDesdeDetalle" onclick="editarDesdeDetalle()">
-                    <i class="fas fa-edit"></i> Editar
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalle')">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+                <button class="btn-primary" onclick="editarDesdeDetalle()">
+                    <i class="fas fa-edit"></i> Editar Proveedor
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Modal para confirmar eliminación -->
+    <!-- ===================================================== -->
+    <!-- MODAL PARA CONFIRMAR ELIMINACIÓN -->
+    <!-- ===================================================== -->
     <div id="modalEliminar" class="modal">
         <div class="modal-content modal-sm">
             <div class="modal-header">
                 <h3><i class="fas fa-trash-alt"></i> Eliminar Proveedor</h3>
                 <span class="close-modal" onclick="cerrarModal('modalEliminar')">&times;</span>
             </div>
-            <div id="modalEliminarBody">
+            <div class="modal-body">
                 <p>¿Estás seguro de que deseas eliminar este proveedor?</p>
-                <p class="text-warning" id="proveedorNombreEliminar"></p>
-                <p><small>Esta acción no se puede deshacer.</small></p>
+                <div class="text-warning" id="proveedorNombreEliminar"
+                    style="text-align: center; margin: 1rem 0; font-size: 1.1rem;"></div>
+                <p><small><i class="fas fa-exclamation-triangle"></i> Esta acción no se puede deshacer.</small></p>
             </div>
             <div class="form-actions">
-                <button class="btn-secondary" onclick="cerrarModal('modalEliminar')">Cancelar</button>
+                <button class="btn-secondary" onclick="cerrarModal('modalEliminar')">
+                    <i class="fas fa-ban"></i> Cancelar
+                </button>
                 <button class="btn-danger" onclick="confirmarEliminar()">
-                    <i class="fas fa-trash-alt"></i> Eliminar
+                    <i class="fas fa-trash-alt"></i> Sí, Eliminar
                 </button>
             </div>
         </div>
     </div>
 
+    <!-- ===================================================== -->
     <!-- LOADING OVERLAY -->
+    <!-- ===================================================== -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
     </div>
 
+    <!-- ===================================================== -->
+    <!-- SCRIPTS -->
+    <!-- ===================================================== -->
     <script src="js/include.js"></script>
     <script src="js/proveedores.js"></script>
+
+    <script>
+        // Función adicional para cerrar modales con ESC
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal.active').forEach(modal => {
+                    if (typeof cerrarModal === 'function') {
+                        cerrarModal(modal.id);
+                    } else {
+                        modal.classList.remove('active');
+                    }
+                });
+            }
+        });
+
+        // Prevenir cierre accidental de modales al hacer click dentro
+        document.querySelectorAll('.modal-content').forEach(content => {
+            content.addEventListener('click', function (e) {
+                e.stopPropagation();
+            });
+        });
+    </script>
 </body>
 
 </html>

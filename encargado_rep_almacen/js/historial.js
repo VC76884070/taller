@@ -1,5 +1,6 @@
 // =====================================================
 // HISTORIAL.JS - ENCARGADO DE REPUESTOS
+// VERSIÓN CORREGIDA - MODALES FIJOS Y ESTADOS MEJORADOS
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
@@ -77,12 +78,26 @@ function showToast(message, type = 'info') {
 
 function cerrarModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) modal.classList.remove('active');
+    if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
 }
 
 function abrirModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) modal.classList.add('active');
+    if (modal) {
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        
+        // Asegurar que el modal se muestre correctamente
+        setTimeout(() => {
+            const modalContent = modal.querySelector('.modal-content');
+            if (modalContent) {
+                modalContent.scrollTop = 0;
+            }
+        }, 50);
+    }
 }
 
 function mostrarLoading(mostrar) {
@@ -92,53 +107,47 @@ function mostrarLoading(mostrar) {
     }
 }
 
+// Función mejorada para el estado
 function statusBadge(estado) {
-    const map = {
-        'pendiente': 'status-pendiente',
-        'cotizado': 'status-cotizado',
-        'aprobado': 'status-aprobado',
-        'comprado': 'status-comprado',
-        'entregado': 'status-entregado'
+    const estados = {
+        'pendiente': { class: 'status-pendiente', text: 'Pendiente', icon: 'fa-clock' },
+        'cotizado': { class: 'status-cotizado', text: 'Cotizado', icon: 'fa-check-circle' },
+        'aprobado': { class: 'status-aprobado', text: 'Aprobado', icon: 'fa-check-double' },
+        'comprado': { class: 'status-comprado', text: 'Comprado', icon: 'fa-shopping-cart' },
+        'entregado': { class: 'status-entregado', text: 'Entregado', icon: 'fa-truck' }
     };
     
-    const texto = {
-        'pendiente': 'Pendiente',
-        'cotizado': 'Cotizado',
-        'aprobado': 'Aprobado',
-        'comprado': 'Comprado',
-        'entregado': 'Entregado'
-    };
+    const e = estados[estado] || estados['pendiente'];
     
-    const iconos = {
-        'pendiente': 'fa-clock',
-        'cotizado': 'fa-check-circle',
-        'aprobado': 'fa-check-double',
-        'comprado': 'fa-shopping-cart',
-        'entregado': 'fa-truck'
-    };
-    
-    return `<span class="status-badge ${map[estado] || 'status-pendiente'}">
-        <i class="fas ${iconos[estado] || 'fa-clock'}"></i> ${texto[estado] || estado}
+    return `<span class="status-badge ${e.class}">
+        <i class="fas ${e.icon}"></i> ${e.text}
     </span>`;
 }
 
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
 // =====================================================
-// CARGA DE DATOS
+// CARGA DE DATOS (LIMITADO A 10 REGISTROS)
 // =====================================================
 
 async function cargarCotizaciones() {
+    mostrarLoading(true);
+    
     try {
         const search = document.getElementById('searchInput')?.value.toLowerCase() || '';
         const estado = document.getElementById('filtroEstado')?.value || 'all';
-        const fechaInicio = document.getElementById('fechaInicio')?.value;
-        const fechaFin = document.getElementById('fechaFin')?.value;
         
-        let url = `${API_URL}/historial/cotizaciones`;
-        const params = new URLSearchParams();
-        if (estado !== 'all') params.append('estado', estado);
-        if (fechaInicio) params.append('fecha_inicio', fechaInicio);
-        if (fechaFin) params.append('fecha_fin', fechaFin);
-        if (params.toString()) url += `?${params.toString()}`;
+        let url = `${API_URL}/historial/cotizaciones?limit=10`;
         
         const response = await fetch(url, { headers: getAuthHeaders() });
         const data = await response.json();
@@ -154,26 +163,29 @@ async function cargarCotizaciones() {
                 );
             }
             
+            if (estado !== 'all') {
+                cotizaciones = cotizaciones.filter(c => c.estado === estado);
+            }
+            
+            cotizaciones = cotizaciones.slice(0, 10);
             renderTablaCotizaciones(cotizaciones);
         }
     } catch (error) {
         console.error('Error cargando cotizaciones:', error);
+        renderTablaCotizaciones([]);
+    } finally {
+        mostrarLoading(false);
     }
 }
 
 async function cargarCompras() {
+    mostrarLoading(true);
+    
     try {
         const search = document.getElementById('searchInput')?.value.toLowerCase() || '';
         const estado = document.getElementById('filtroEstado')?.value || 'all';
-        const fechaInicio = document.getElementById('fechaInicio')?.value;
-        const fechaFin = document.getElementById('fechaFin')?.value;
         
-        let url = `${API_URL}/historial/compras`;
-        const params = new URLSearchParams();
-        if (estado !== 'all') params.append('estado', estado);
-        if (fechaInicio) params.append('fecha_inicio', fechaInicio);
-        if (fechaFin) params.append('fecha_fin', fechaFin);
-        if (params.toString()) url += `?${params.toString()}`;
+        let url = `${API_URL}/historial/compras?limit=10`;
         
         const response = await fetch(url, { headers: getAuthHeaders() });
         const data = await response.json();
@@ -189,26 +201,28 @@ async function cargarCompras() {
                 );
             }
             
+            if (estado !== 'all') {
+                compras = compras.filter(c => c.estado === estado);
+            }
+            
+            compras = compras.slice(0, 10);
             renderTablaCompras(compras);
         }
     } catch (error) {
         console.error('Error cargando compras:', error);
+        renderTablaCompras([]);
+    } finally {
+        mostrarLoading(false);
     }
 }
 
 async function cargarEntregas() {
+    mostrarLoading(true);
+    
     try {
         const search = document.getElementById('searchInput')?.value.toLowerCase() || '';
-        const estado = document.getElementById('filtroEstado')?.value || 'all';
-        const fechaInicio = document.getElementById('fechaInicio')?.value;
-        const fechaFin = document.getElementById('fechaFin')?.value;
         
-        let url = `${API_URL}/historial/entregas`;
-        const params = new URLSearchParams();
-        if (estado !== 'all') params.append('estado', estado);
-        if (fechaInicio) params.append('fecha_inicio', fechaInicio);
-        if (fechaFin) params.append('fecha_fin', fechaFin);
-        if (params.toString()) url += `?${params.toString()}`;
+        let url = `${API_URL}/historial/entregas?limit=10`;
         
         const response = await fetch(url, { headers: getAuthHeaders() });
         const data = await response.json();
@@ -219,19 +233,24 @@ async function cargarEntregas() {
             if (search) {
                 entregas = entregas.filter(e => 
                     (e.orden_codigo || '').toLowerCase().includes(search) ||
-                    (e.repuesto || '').toLowerCase().includes(search) ||
-                    (e.destinatario || '').toLowerCase().includes(search)
+                    (e.repuesto || '').toLowerCase().includes(search)
                 );
             }
             
+            entregas = entregas.slice(0, 10);
             renderTablaEntregas(entregas);
         }
     } catch (error) {
         console.error('Error cargando entregas:', error);
+        renderTablaEntregas([]);
+    } finally {
+        mostrarLoading(false);
     }
 }
 
 async function cargarEstadisticas() {
+    mostrarLoading(true);
+    
     try {
         const response = await fetch(`${API_URL}/historial/estadisticas`, {
             headers: getAuthHeaders()
@@ -252,6 +271,8 @@ async function cargarEstadisticas() {
         }
     } catch (error) {
         console.error('Error cargando estadísticas:', error);
+    } finally {
+        mostrarLoading(false);
     }
 }
 
@@ -265,10 +286,11 @@ function renderTablaCotizaciones(cotizaciones) {
     
     if (cotizaciones.length === 0) {
         tbody.innerHTML = `
-            <tr>
-                <td colspan="9" style="text-align: center; padding: 2rem;">
-                    <i class="fas fa-inbox" style="font-size: 2rem; color: var(--gris-texto);"></i>
+            <tr class="empty-row">
+                <td colspan="9" style="text-align: center; padding: 3rem;">
+                    <i class="fas fa-inbox" style="font-size: 3rem; color: var(--gris-texto); margin-bottom: 1rem; display: block;"></i>
                     <p>No hay cotizaciones registradas</p>
+                    <small>Las cotizaciones aparecerán aquí cuando las crees</small>
                 </td>
             </tr>
         `;
@@ -279,10 +301,10 @@ function renderTablaCotizaciones(cotizaciones) {
         <tr>
             <td>#${c.id}</td>
             <td>${formatDate(c.fecha_solicitud)}</td>
-            <td><strong>${escapeHtml(c.orden_codigo)}</strong></td>
-            <td>${escapeHtml(c.vehiculo)}</td>
-            <td>${escapeHtml(c.repuesto)}</td>
-            <td>${c.cantidad}</td>
+            <td><strong>${escapeHtml(c.orden_codigo || 'N/A')}</strong></td>
+            <td>${escapeHtml((c.vehiculo || 'N/A').substring(0, 35))}</td>
+            <td>${escapeHtml(c.repuesto || 'N/A')}</td>
+            <td>${c.cantidad || 1}</td>
             <td>${c.precio ? `Bs. ${c.precio.toFixed(2)}` : '-'}</td>
             <td>${statusBadge(c.estado)}</td>
             <td>
@@ -300,10 +322,11 @@ function renderTablaCompras(compras) {
     
     if (compras.length === 0) {
         tbody.innerHTML = `
-            <tr>
-                <td colspan="10" style="text-align: center; padding: 2rem;">
-                    <i class="fas fa-inbox" style="font-size: 2rem; color: var(--gris-texto);"></i>
+            <tr class="empty-row">
+                <td colspan="10" style="text-align: center; padding: 3rem;">
+                    <i class="fas fa-inbox" style="font-size: 3rem; color: var(--gris-texto); margin-bottom: 1rem; display: block;"></i>
                     <p>No hay compras registradas</p>
+                    <small>Las compras aparecerán aquí cuando las realices</small>
                 </td>
             </tr>
         `;
@@ -315,10 +338,10 @@ function renderTablaCompras(compras) {
             <td>#${c.id}</td>
             <td>${formatDate(c.fecha_solicitud)}</td>
             <td>${c.fecha_compra ? formatDate(c.fecha_compra) : '-'}</td>
-            <td><strong>${escapeHtml(c.orden_codigo)}</strong></td>
-            <td>${escapeHtml(c.proveedor)}</td>
-            <td>${escapeHtml(c.repuesto)}</td>
-            <td>${c.cantidad}</td>
+            <td><strong>${escapeHtml(c.orden_codigo || 'N/A')}</strong></td>
+            <td>${escapeHtml(c.proveedor || 'N/A')}</td>
+            <td>${escapeHtml(c.repuesto || 'N/A')}</td>
+            <td>${c.cantidad || 1}</td>
             <td>${c.monto ? `Bs. ${c.monto.toFixed(2)}` : '-'}</td>
             <td>${statusBadge(c.estado)}</td>
             <td>
@@ -336,10 +359,11 @@ function renderTablaEntregas(entregas) {
     
     if (entregas.length === 0) {
         tbody.innerHTML = `
-            <tr>
-                <td colspan="9" style="text-align: center; padding: 2rem;">
-                    <i class="fas fa-inbox" style="font-size: 2rem; color: var(--gris-texto);"></i>
+            <tr class="empty-row">
+                <td colspan="9" style="text-align: center; padding: 3rem;">
+                    <i class="fas fa-inbox" style="font-size: 3rem; color: var(--gris-texto); margin-bottom: 1rem; display: block;"></i>
                     <p>No hay entregas registradas</p>
+                    <small>Las entregas aparecerán aquí cuando se entreguen los repuestos</small>
                 </td>
             </tr>
         `;
@@ -350,10 +374,10 @@ function renderTablaEntregas(entregas) {
         <tr>
             <td>#${e.id}</td>
             <td>${formatDate(e.fecha_entrega)}</td>
-            <td><strong>${escapeHtml(e.orden_codigo)}</strong></td>
-            <td>${escapeHtml(e.vehiculo)}</td>
-            <td>${escapeHtml(e.repuesto)}</td>
-            <td>${e.cantidad}</td>
+            <td><strong>${escapeHtml(e.orden_codigo || 'N/A')}</strong></td>
+            <td>${escapeHtml((e.vehiculo || 'N/A').substring(0, 35))}</td>
+            <td>${escapeHtml(e.repuesto || 'N/A')}</td>
+            <td>${e.cantidad || 1}</td>
             <td>${escapeHtml(e.destinatario || 'N/A')}</td>
             <td>${statusBadge(e.estado)}</td>
             <td>
@@ -380,6 +404,11 @@ function renderMovimientosChart(data) {
     const entregas = data.map(d => d.entregas || 0);
     
     if (movimientosChart) movimientosChart.destroy();
+    
+    if (meses.length === 0) {
+        canvas.parentElement.innerHTML = '<p style="text-align: center; color: var(--gris-texto); padding: 2rem;">No hay datos para mostrar</p>';
+        return;
+    }
     
     movimientosChart = new Chart(ctx, {
         type: 'line',
@@ -419,13 +448,17 @@ function renderMovimientosChart(data) {
                 legend: {
                     position: 'bottom',
                     labels: { color: '#8E8E93' }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
                 }
             },
             scales: {
                 y: {
                     beginAtZero: true,
                     grid: { color: '#2C2C2E' },
-                    ticks: { color: '#8E8E93' }
+                    ticks: { color: '#8E8E93', stepSize: 1 }
                 },
                 x: {
                     grid: { color: '#2C2C2E' },
@@ -441,8 +474,8 @@ function renderEstadoChart(estados) {
     if (!canvas) return;
     
     const ctx = canvas.getContext('2d');
-    const labels = Object.keys(estados);
-    const values = Object.values(estados);
+    const labels = Object.keys(estados).filter(k => estados[k] > 0);
+    const values = labels.map(l => estados[l]);
     const colores = {
         'pendiente': '#F59E0B',
         'cotizado': '#2563EB',
@@ -454,28 +487,41 @@ function renderEstadoChart(estados) {
     
     if (estadoChart) estadoChart.destroy();
     
-    estadoChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: labels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
-            datasets: [{
-                data: values,
-                backgroundColor: backgroundColors,
-                borderWidth: 0,
-                borderRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: { color: '#8E8E93' }
+    if (values.length > 0 && values.some(v => v > 0)) {
+        estadoChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
+                datasets: [{
+                    data: values,
+                    backgroundColor: backgroundColors,
+                    borderWidth: 0,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#8E8E93' }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const total = values.reduce((a, b) => a + b, 0);
+                                const percentage = ((context.raw / total) * 100).toFixed(1);
+                                return `${context.label}: ${context.raw} (${percentage}%)`;
+                            }
+                        }
+                    }
                 }
             }
-        }
-    });
+        });
+    } else {
+        canvas.parentElement.innerHTML = '<p style="text-align: center; color: var(--gris-texto); padding: 2rem;">No hay datos para mostrar</p>';
+    }
 }
 
 function renderTopProveedores(proveedores) {
@@ -483,7 +529,7 @@ function renderTopProveedores(proveedores) {
     if (!container) return;
     
     if (proveedores.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: var(--gris-texto);">No hay datos</p>';
+        container.innerHTML = '<p style="text-align: center; color: var(--gris-texto); padding: 2rem;">No hay datos de proveedores</p>';
         return;
     }
     
@@ -496,7 +542,7 @@ function renderTopProveedores(proveedores) {
 }
 
 // =====================================================
-// DETALLES
+// DETALLES - MODALES COMPLETOS
 // =====================================================
 
 async function verDetalleCotizacion(id) {
@@ -507,80 +553,94 @@ async function verDetalleCotizacion(id) {
         });
         const data = await response.json();
         
-        if (data.success) {
+        if (data.success && data.cotizacion) {
             const c = data.cotizacion;
             const items = c.items || [];
             
-            const itemsHtml = items.map(item => `
-                <tr>
-                    <td>${escapeHtml(item.descripcion)}</td>
-                    <td>${item.cantidad}</td>
-                    <td>${item.detalle || '-'}</td>
-                </tr>
-            `).join('');
+            // Construir HTML de items
+            let itemsHtml = '';
+            if (items.length > 0) {
+                itemsHtml = `
+                    <div class="detalle-items">
+                        <label><i class="fas fa-cubes"></i> Items solicitados</label>
+                        <div class="items-table">
+                            <table>
+                                <thead>
+                                    <tr><th>Descripción</th><th>Cantidad</th><th>Detalle</th></tr>
+                                </thead>
+                                <tbody>
+                                    ${items.map(item => `
+                                        <tr>
+                                            <td>${escapeHtml(item.descripcion)}</td>
+                                            <td>${item.cantidad}</td>
+                                            <td>${escapeHtml(item.detalle || '-')}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
             
             const modalBody = document.getElementById('modalDetalleCotizacionBody');
             modalBody.innerHTML = `
                 <div class="detalle-grid">
                     <div class="detalle-item">
-                        <label>Solicitud ID</label>
-                        <p>#${c.id}</p>
+                        <label><i class="fas fa-hashtag"></i> Solicitud ID</label>
+                        <p><strong>#${c.id}</strong></p>
                     </div>
                     <div class="detalle-item">
-                        <label>Fecha Solicitud</label>
+                        <label><i class="fas fa-calendar"></i> Fecha Solicitud</label>
                         <p>${formatDateTime(c.fecha_solicitud)}</p>
                     </div>
                     <div class="detalle-item">
-                        <label>Orden de Trabajo</label>
-                        <p><strong>${escapeHtml(c.orden_codigo)}</strong></p>
+                        <label><i class="fas fa-clipboard-list"></i> Orden de Trabajo</label>
+                        <p><strong>${escapeHtml(c.orden_codigo || 'N/A')}</strong></p>
                     </div>
                     <div class="detalle-item">
-                        <label>Vehículo</label>
-                        <p>${escapeHtml(c.vehiculo)}</p>
+                        <label><i class="fas fa-car"></i> Vehículo</label>
+                        <p>${escapeHtml(c.vehiculo || 'N/A')}</p>
                     </div>
                     <div class="detalle-item">
-                        <label>Servicio</label>
-                        <p>${escapeHtml(c.servicio_descripcion)}</p>
-                    </div>
-                    <div class="detalle-item">
-                        <label>Estado</label>
+                        <label><i class="fas fa-tag"></i> Estado</label>
                         <p>${statusBadge(c.estado)}</p>
                     </div>
-                    <div class="detalle-items">
-                        <label>Items solicitados</label>
-                        <table>
-                            <thead>
-                                <tr><th>Descripción</th><th>Cantidad</th><th>Detalle</th></tr>
-                            </thead>
-                            <tbody>${itemsHtml}</tbody>
-                        </table>
-                    </div>
-                    ${c.precio_cotizado ? `
+                    ${c.fecha_respuesta ? `
                         <div class="detalle-item">
-                            <label>Precio Cotizado</label>
-                            <p class="text-success">Bs. ${c.precio_cotizado.toFixed(2)}</p>
+                            <label><i class="fas fa-reply"></i> Fecha Respuesta</label>
+                            <p>${formatDateTime(c.fecha_respuesta)}</p>
+                        </div>
+                    ` : ''}
+                    ${itemsHtml}
+                    ${c.precio_cotizado ? `
+                        <div class="detalle-item detalle-full">
+                            <label><i class="fas fa-dollar-sign"></i> Precio Cotizado</label>
+                            <p class="precio-destacado">Bs. ${c.precio_cotizado.toFixed(2)}</p>
                         </div>
                         <div class="detalle-item">
-                            <label>Proveedor</label>
+                            <label><i class="fas fa-truck"></i> Proveedor</label>
                             <p>${escapeHtml(c.proveedor_info || '-')}</p>
                         </div>
                     ` : ''}
                     ${c.observacion_jefe_taller ? `
-                        <div class="detalle-item">
-                            <label>Observación Jefe Taller</label>
-                            <p>${escapeHtml(c.observacion_jefe_taller)}</p>
+                        <div class="detalle-item detalle-full">
+                            <label><i class="fas fa-comment-dots"></i> Observación del Jefe de Taller</label>
+                            <p class="observacion-texto">${escapeHtml(c.observacion_jefe_taller)}</p>
                         </div>
                     ` : ''}
                     ${c.respuesta_encargado ? `
-                        <div class="detalle-item">
-                            <label>Tu respuesta</label>
-                            <p>${escapeHtml(c.respuesta_encargado)}</p>
+                        <div class="detalle-item detalle-full">
+                            <label><i class="fas fa-reply"></i> Tu respuesta</label>
+                            <p class="respuesta-texto">${escapeHtml(c.respuesta_encargado)}</p>
                         </div>
                     ` : ''}
                 </div>
             `;
             
             abrirModal('modalDetalleCotizacion');
+        } else {
+            showToast('Error al cargar el detalle', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -598,59 +658,72 @@ async function verDetalleCompra(id) {
         });
         const data = await response.json();
         
-        if (data.success) {
+        if (data.success && data.compra) {
             const c = data.compra;
             const items = c.items || [];
             
-            const itemsHtml = items.map(item => `
-                <tr>
-                    <td>${escapeHtml(item.descripcion)}</td>
-                    <td>${item.cantidad}</td>
-                    <td>${item.detalle || '-'}</td>
-                </tr>
-            `).join('');
+            let itemsHtml = '';
+            if (items.length > 0) {
+                itemsHtml = `
+                    <div class="detalle-items">
+                        <label><i class="fas fa-shopping-cart"></i> Items comprados</label>
+                        <div class="items-table">
+                            <table>
+                                <thead>
+                                    <tr><th>Descripción</th><th>Cantidad</th><th>Detalle</th></tr>
+                                </thead>
+                                <tbody>
+                                    ${items.map(item => `
+                                        <tr>
+                                            <td>${escapeHtml(item.descripcion)}</td>
+                                            <td>${item.cantidad}</td>
+                                            <td>${escapeHtml(item.detalle || '-')}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
             
             const modalBody = document.getElementById('modalDetalleCompraBody');
             modalBody.innerHTML = `
                 <div class="detalle-grid">
                     <div class="detalle-item">
-                        <label>Solicitud ID</label>
-                        <p>#${c.id}</p>
+                        <label><i class="fas fa-hashtag"></i> Solicitud ID</label>
+                        <p><strong>#${c.id}</strong></p>
                     </div>
                     <div class="detalle-item">
-                        <label>Fecha Solicitud</label>
+                        <label><i class="fas fa-calendar"></i> Fecha Solicitud</label>
                         <p>${formatDateTime(c.fecha_solicitud)}</p>
                     </div>
+                    ${c.fecha_compra ? `
+                        <div class="detalle-item">
+                            <label><i class="fas fa-check-circle"></i> Fecha Compra</label>
+                            <p>${formatDateTime(c.fecha_compra)}</p>
+                        </div>
+                    ` : ''}
                     <div class="detalle-item">
-                        <label>Fecha Compra</label>
-                        <p>${c.fecha_compra ? formatDateTime(c.fecha_compra) : '-'}</p>
+                        <label><i class="fas fa-clipboard-list"></i> Orden de Trabajo</label>
+                        <p><strong>${escapeHtml(c.orden_codigo || 'N/A')}</strong></p>
                     </div>
                     <div class="detalle-item">
-                        <label>Orden de Trabajo</label>
-                        <p><strong>${escapeHtml(c.orden_codigo)}</strong></p>
+                        <label><i class="fas fa-truck"></i> Proveedor</label>
+                        <p>${escapeHtml(c.proveedor || 'N/A')}</p>
                     </div>
                     <div class="detalle-item">
-                        <label>Proveedor</label>
-                        <p>${escapeHtml(c.proveedor)}</p>
+                        <label><i class="fas fa-dollar-sign"></i> Monto Total</label>
+                        <p class="precio-destacado">${c.precio_cotizado ? `Bs. ${c.precio_cotizado.toFixed(2)}` : '-'}</p>
                     </div>
                     <div class="detalle-item">
-                        <label>Monto Total</label>
-                        <p class="text-success">Bs. ${c.monto?.toFixed(2) || '0.00'}</p>
-                    </div>
-                    <div class="detalle-item">
-                        <label>Estado</label>
+                        <label><i class="fas fa-tag"></i> Estado</label>
                         <p>${statusBadge(c.estado)}</p>
                     </div>
-                    <div class="detalle-items">
-                        <label>Items comprados</label>
-                        <table>
-                            <thead><tr><th>Descripción</th><th>Cantidad</th><th>Detalle</th></tr></thead>
-                            <tbody>${itemsHtml}</tbody>
-                        </table>
-                    </div>
+                    ${itemsHtml}
                     ${c.notas_compra ? `
-                        <div class="detalle-item">
-                            <label>Notas de compra</label>
+                        <div class="detalle-item detalle-full">
+                            <label><i class="fas fa-sticky-note"></i> Notas de compra</label>
                             <p>${escapeHtml(c.notas_compra)}</p>
                         </div>
                     ` : ''}
@@ -658,6 +731,8 @@ async function verDetalleCompra(id) {
             `;
             
             abrirModal('modalDetalleCompra');
+        } else {
+            showToast('Error al cargar el detalle', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -675,54 +750,65 @@ async function verDetalleEntrega(id) {
         });
         const data = await response.json();
         
-        if (data.success) {
+        if (data.success && data.entrega) {
             const e = data.entrega;
             const items = e.items || [];
             
-            const itemsHtml = items.map(item => `
-                <tr>
-                    <td>${escapeHtml(item.descripcion)}</td>
-                    <td>${item.cantidad}</td>
-                </tr>
-            `).join('');
+            let itemsHtml = '';
+            if (items.length > 0) {
+                itemsHtml = `
+                    <div class="detalle-items">
+                        <label><i class="fas fa-boxes"></i> Items entregados</label>
+                        <div class="items-table">
+                            <table>
+                                <thead>
+                                    <tr><th>Descripción</th><th>Cantidad</th></tr>
+                                </thead>
+                                <tbody>
+                                    ${items.map(item => `
+                                        <tr>
+                                            <td>${escapeHtml(item.descripcion)}</td>
+                                            <td>${item.cantidad}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
             
             const modalBody = document.getElementById('modalDetalleEntregaBody');
             modalBody.innerHTML = `
                 <div class="detalle-grid">
                     <div class="detalle-item">
-                        <label>Solicitud ID</label>
-                        <p>#${e.id}</p>
+                        <label><i class="fas fa-hashtag"></i> Entrega ID</label>
+                        <p><strong>#${e.id}</strong></p>
                     </div>
                     <div class="detalle-item">
-                        <label>Fecha Entrega</label>
+                        <label><i class="fas fa-calendar"></i> Fecha Entrega</label>
                         <p>${formatDateTime(e.fecha_entrega)}</p>
                     </div>
                     <div class="detalle-item">
-                        <label>Orden de Trabajo</label>
-                        <p><strong>${escapeHtml(e.orden_codigo)}</strong></p>
+                        <label><i class="fas fa-clipboard-list"></i> Orden de Trabajo</label>
+                        <p><strong>${escapeHtml(e.orden_codigo || 'N/A')}</strong></p>
                     </div>
                     <div class="detalle-item">
-                        <label>Vehículo</label>
-                        <p>${escapeHtml(e.vehiculo)}</p>
+                        <label><i class="fas fa-car"></i> Vehículo</label>
+                        <p>${escapeHtml(e.vehiculo || 'N/A')}</p>
                     </div>
                     <div class="detalle-item">
-                        <label>Destinatario</label>
+                        <label><i class="fas fa-user"></i> Destinatario</label>
                         <p>${escapeHtml(e.destinatario || 'No registrado')}</p>
                     </div>
                     <div class="detalle-item">
-                        <label>Estado</label>
+                        <label><i class="fas fa-tag"></i> Estado</label>
                         <p>${statusBadge(e.estado)}</p>
                     </div>
-                    <div class="detalle-items">
-                        <label>Items entregados</label>
-                        <table>
-                            <thead><tr><th>Descripción</th><th>Cantidad</th></tr></thead>
-                            <tbody>${itemsHtml}</tbody>
-                        </table>
-                    </div>
+                    ${itemsHtml}
                     ${e.notas_entrega ? `
-                        <div class="detalle-item">
-                            <label>Notas de entrega</label>
+                        <div class="detalle-item detalle-full">
+                            <label><i class="fas fa-sticky-note"></i> Notas de entrega</label>
                             <p>${escapeHtml(e.notas_entrega)}</p>
                         </div>
                     ` : ''}
@@ -730,6 +816,8 @@ async function verDetalleEntrega(id) {
             `;
             
             abrirModal('modalDetalleEntrega');
+        } else {
+            showToast('Error al cargar el detalle', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -744,48 +832,53 @@ async function verDetalleEntrega(id) {
 // =====================================================
 
 function exportarDatos() {
-    const tabla = currentTab === 'cotizaciones' ? 'tablaCotizaciones' :
-                  currentTab === 'compras' ? 'tablaCompras' : 'tablaEntregas';
+    const tablaId = currentTab === 'cotizaciones' ? 'tablaCotizaciones' :
+                    currentTab === 'compras' ? 'tablaCompras' : 'tablaEntregas';
     
-    const tablaElement = document.getElementById(tabla);
-    if (!tablaElement) return;
+    const tablaBody = document.getElementById(tablaId);
+    if (!tablaBody) return;
     
-    const rows = tablaElement.querySelectorAll('tr');
+    const rows = tablaBody.querySelectorAll('tr');
+    if (rows.length === 0 || (rows.length === 1 && rows[0].classList.contains('empty-row'))) {
+        showToast('No hay datos para exportar', 'warning');
+        return;
+    }
+    
     let csv = [];
     
     // Cabeceras
     const headers = [];
-    const firstRow = rows[0];
-    if (firstRow) {
-        firstRow.querySelectorAll('th').forEach(th => {
+    const headerRow = document.querySelector(`#${tablaId}`).closest('.table-container')?.querySelector('thead tr');
+    if (headerRow) {
+        headerRow.querySelectorAll('th').forEach(th => {
             headers.push(th.innerText);
         });
     }
-    csv.push(headers.join(','));
+    if (headers.length) csv.push(headers.join(','));
     
     // Datos
     rows.forEach(row => {
         const rowData = [];
         row.querySelectorAll('td').forEach(td => {
             let text = td.innerText;
-            // Limpiar HTML
-            text = text.replace(/<[^>]*>/g, '');
-            // Escapar comillas
             text = text.replace(/"/g, '""');
             rowData.push(`"${text}"`);
         });
         if (rowData.length) csv.push(rowData.join(','));
     });
     
-    const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `historial_${currentTab}_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    
-    showToast('Exportación completada', 'success');
+    if (csv.length > 1) {
+        const blob = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `historial_${currentTab}_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Exportación completada', 'success');
+    }
 }
 
 // =====================================================
@@ -822,7 +915,7 @@ async function cargarUsuarioActual() {
                                     currentUser.roles?.includes('encargado_rep_almacen');
         
         if (!tieneRolRepuestos) {
-            showToast('No tienes permisos', 'error');
+            showToast('No tienes permisos para acceder a esta sección', 'error');
             setTimeout(() => window.location.href = '/', 2000);
             return null;
         }
@@ -861,71 +954,64 @@ function setupEventListeners() {
             });
             document.getElementById(`tab-${tabId}`).classList.add('active');
             
-            // Cargar datos según pestaña
-            mostrarLoading(true);
             if (tabId === 'cotizaciones') await cargarCotizaciones();
             else if (tabId === 'compras') await cargarCompras();
             else if (tabId === 'entregas') await cargarEntregas();
             else if (tabId === 'estadisticas') await cargarEstadisticas();
-            mostrarLoading(false);
         });
     });
     
-    // Botones
+    // Botón de actualizar
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', async () => {
-            mostrarLoading(true);
             if (currentTab === 'cotizaciones') await cargarCotizaciones();
             else if (currentTab === 'compras') await cargarCompras();
             else if (currentTab === 'entregas') await cargarEntregas();
             else if (currentTab === 'estadisticas') await cargarEstadisticas();
-            mostrarLoading(false);
-            showToast('Actualizado', 'success');
+            showToast('Datos actualizados', 'success');
         });
     }
     
+    // Botón de exportar
     const exportBtn = document.getElementById('exportBtn');
     if (exportBtn) {
         exportBtn.addEventListener('click', exportarDatos);
     }
     
-    // Filtros
+    // Búsqueda con debounce
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
-        searchInput.addEventListener('input', () => {
+        const debouncedSearch = debounce(() => {
             if (currentTab === 'cotizaciones') cargarCotizaciones();
             else if (currentTab === 'compras') cargarCompras();
             else if (currentTab === 'entregas') cargarEntregas();
-        });
+        }, 500);
+        searchInput.addEventListener('input', debouncedSearch);
     }
     
+    // Filtro de estado
     const filtroEstado = document.getElementById('filtroEstado');
     if (filtroEstado) {
         filtroEstado.addEventListener('change', () => {
             if (currentTab === 'cotizaciones') cargarCotizaciones();
             else if (currentTab === 'compras') cargarCompras();
-            else if (currentTab === 'entregas') cargarEntregas();
-        });
-    }
-    
-    const fechaInicio = document.getElementById('fechaInicio');
-    const fechaFin = document.getElementById('fechaFin');
-    if (fechaInicio && fechaFin) {
-        [fechaInicio, fechaFin].forEach(input => {
-            input.addEventListener('change', () => {
-                if (currentTab === 'cotizaciones') cargarCotizaciones();
-                else if (currentTab === 'compras') cargarCompras();
-                else if (currentTab === 'entregas') cargarEntregas();
-            });
         });
     }
     
     // Cerrar modales
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.classList.remove('active');
+            if (e.target === modal) cerrarModal(modal.id);
         });
+    });
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal.active').forEach(modal => {
+                cerrarModal(modal.id);
+            });
+        }
     });
 }
 
@@ -948,4 +1034,11 @@ window.verDetalleCompra = verDetalleCompra;
 window.verDetalleEntrega = verDetalleEntrega;
 window.cerrarModal = cerrarModal;
 
-document.addEventListener('DOMContentLoaded', inicializar);
+// Inicializar
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', inicializar);
+} else {
+    inicializar();
+}
+
+console.log('✅ historial.js cargado correctamente');

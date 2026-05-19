@@ -80,6 +80,7 @@ function crearSidebarRespaldo(container) {
                     ${crearMenuItem('dashboard', 'Dashboard Técnico', 'chart-line', currentPage, '')}
                     ${crearMenuItem('orden_trabajo', 'Órdenes de Trabajo', 'clipboard-list', currentPage, '')}
                     ${crearMenuItem('calendario_bahias', 'Calendario y Bahías', 'calendar-alt', currentPage, '')}
+                    ${crearMenuItem('reservas_solicitudes', 'Reservas y Solicitudes', 'calendar-check', currentPage, '')}
                     ${crearMenuItem('historial_vehiculos', 'Historial', 'history', currentPage, '')}
                     ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage, '')}
                 </ul>
@@ -138,7 +139,7 @@ function obtenerPaginaActual() {
         'historial_vehiculos': 'historial_vehiculos',
         'perfil': 'perfil',
         'admin_roles': 'admin_roles',
-        'reservas_solicitudes': 'reservas_solicitudes'
+        'reservas_solicitudes': 'reservas_solicitudes'  // Agregado aquí
     };
     
     return pageMapping[pageName] || pageName;

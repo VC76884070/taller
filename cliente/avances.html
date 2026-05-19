@@ -30,58 +30,120 @@
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
                     </div>
-                    <button class="btn-logout" onclick="cerrarSesion()">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </button>
                 </div>
             </header>
 
-            <div class="content">
-                <!-- Selector de vehículo - diseño elegante -->
-                <div class="vehiculo-selector">
-                    <label class="selector-label">
-                        <i class="fas fa-car"></i>
-                        <span>Mi vehículo</span>
-                    </label>
-                    <div class="selector-control">
-                        <select id="selectVehiculo" class="vehiculo-select">
+            <!-- Dashboard de métricas de avances -->
+            <div class="dashboard-stats">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="totalAvances">0</h3>
+                        <p>Avances Registrados</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-image"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="totalFotos">0</h3>
+                        <p>Fotos Compartidas</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-calendar-week"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="ultimoAvance">-</h3>
+                        <p>Última Actualización</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Selector de vehículo mejorado -->
+            <div class="vehiculo-selector-premium">
+                <div class="selector-header">
+                    <i class="fas fa-car"></i>
+                    <span>Seleccionar Vehículo</span>
+                </div>
+                <div class="selector-body">
+                    <div class="selector-input-group">
+                        <select id="selectVehiculo" class="vehiculo-select-premium">
                             <option value="">-- Seleccionar vehículo --</option>
                         </select>
-                        <button id="btnVerAvances" class="btn-ver">
+                        <button id="btnVerAvances" class="btn-ver-premium">
                             <i class="fas fa-eye"></i>
                             <span>Ver progreso</span>
                         </button>
                     </div>
                 </div>
-
-                <!-- Contenedor de contenido dinámico -->
-                <div id="contenidoDinamico"></div>
             </div>
+
+            <!-- Contenedor de contenido dinámico -->
+            <div id="contenidoDinamico" class="contenido-dinamico"></div>
         </main>
     </div>
 
-    <!-- Modal de detalle -->
+    <!-- Modal de detalle de avance -->
     <div class="modal" id="modalDetalle">
-        <div class="modal-content modal-detalle">
+        <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h2><i class="fas fa-clipboard-list"></i> <span id="modalTitulo">Detalle</span></h2>
-                <button class="modal-close" onclick="cerrarModal('modalDetalle')">&times;</button>
+                <h3>
+                    <i class="fas fa-clipboard-list"></i>
+                    <span id="modalTitulo">Detalle del Avance</span>
+                </h3>
+                <button class="modal-close" onclick="cerrarModal('modalDetalle')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
             <div class="modal-body" id="modalCuerpo"></div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalle')">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- Modal de foto ampliada -->
     <div class="modal modal-fullscreen" id="modalFoto" onclick="cerrarModalFoto()">
         <div class="modal-foto-container" onclick="event.stopPropagation()">
-            <button class="modal-foto-close" onclick="cerrarModalFoto()">&times;</button>
+            <button class="modal-foto-close" onclick="cerrarModalFoto()">
+                <i class="fas fa-times"></i>
+            </button>
             <img id="fotoAmpliada" src="" alt="Foto ampliada">
+            <div class="modal-foto-caption" id="fotoCaption"></div>
+        </div>
+    </div>
+
+    <!-- Modal de orden activa -->
+    <div class="modal" id="modalOrden">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-info-circle"></i>
+                    <span>Información de la Orden</span>
+                </h3>
+                <button class="modal-close" onclick="cerrarModal('modalOrden')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="modalOrdenCuerpo"></div>
+            <div class="modal-footer">
+                <button class="btn-primary" onclick="cerrarModal('modalOrden')">
+                    <i class="fas fa-check"></i> Entendido
+                </button>
+            </div>
         </div>
     </div>
 
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
-        <p>Cargando...</p>
+        <p>Cargando avances...</p>
     </div>
 
     <script src="js/include.js"></script>

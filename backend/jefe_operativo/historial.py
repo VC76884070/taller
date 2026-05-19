@@ -167,11 +167,17 @@ def obtener_historial_vehiculo(current_user):
         
         # Aplicar filtros
         if fecha_desde:
-            fecha_desde_dt = datetime.datetime.fromisoformat(fecha_desde).date()
-            ordenes_resultado = [o for o in ordenes_resultado if datetime.datetime.fromisoformat(o['fecha_ingreso']).date() >= fecha_desde_dt]
+            try:
+                fecha_desde_dt = datetime.datetime.fromisoformat(fecha_desde).date()
+                ordenes_resultado = [o for o in ordenes_resultado if datetime.datetime.fromisoformat(o['fecha_ingreso']).date() >= fecha_desde_dt]
+            except:
+                pass
         if fecha_hasta:
-            fecha_hasta_dt = datetime.datetime.fromisoformat(fecha_hasta).date()
-            ordenes_resultado = [o for o in ordenes_resultado if datetime.datetime.fromisoformat(o['fecha_ingreso']).date() <= fecha_hasta_dt]
+            try:
+                fecha_hasta_dt = datetime.datetime.fromisoformat(fecha_hasta).date()
+                ordenes_resultado = [o for o in ordenes_resultado if datetime.datetime.fromisoformat(o['fecha_ingreso']).date() <= fecha_hasta_dt]
+            except:
+                pass
         if estado:
             ordenes_resultado = [o for o in ordenes_resultado if o['estado_global'] == estado]
         
@@ -251,10 +257,14 @@ def obtener_fotos_orden(current_user, id_orden):
 @jefe_operativo_historial_bp.route('/ultimas-ordenes', methods=['GET'])
 @jefe_operativo_required
 def obtener_ultimas_ordenes(current_user):
-    """Obtener las últimas órdenes de trabajo"""
+    """Obtener las últimas 10 órdenes de trabajo"""
     try:
         limite = request.args.get('limite', 10, type=int)
+        # Limitar a máximo 10
+        if limite > 10:
+            limite = 10
         
+        # Obtener las últimas órdenes
         ordenes_result = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_salida, id_vehiculo, id_jefe_operativo') \
             .order('fecha_ingreso', desc=True) \
@@ -262,7 +272,17 @@ def obtener_ultimas_ordenes(current_user):
             .execute()
         
         if not ordenes_result.data:
-            return jsonify({'success': True, 'ordenes': [], 'resumen': {}}), 200
+            return jsonify({
+                'success': True, 
+                'ordenes': [], 
+                'resumen': {
+                    'total': 0, 
+                    'entregados': 0, 
+                    'en_proceso': 0, 
+                    'en_pausa': 0, 
+                    'en_recepcion': 0
+                }
+            }), 200
         
         ordenes = ordenes_result.data
         

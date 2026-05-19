@@ -620,11 +620,3 @@ def obtener_detalle_orden(current_user, id_orden):
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
-
-# =====================================================
-# REGISTRAR BLUEPRINT (para usar en app.py)
-# =====================================================
-# En tu app.py, registra el blueprint así:
-# from calendario_bahias import calendario_bahias_bp
-# app.register_blueprint(calendario_bahias_bp)

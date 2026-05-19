@@ -748,7 +748,16 @@ body {
         justify-content: center;
     }
 }
+/* Asegurar que el ícono de calendar-check se vea bien */
+.fa-calendar-check {
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+}
 
+/* Si usas Font Awesome 5 */
+.fa-calendar-check:before {
+    content: "\f274";
+}
 @media (max-width: 480px) {
     .bahias-grid {
         grid-template-columns: 1fr;

@@ -1,10 +1,113 @@
 /* =====================================================
    COTIZACIONES.CSS - CLIENTE
    TEMA OSCURO - FURIA MOTOR
-   VERSIÓN MEJORADA CON MODALES Y ESPACIADOS
+   VERSIÓN COMPLETA Y CORREGIDA
    ===================================================== */
 
-/* Cotizaciones Grid */
+/* =====================================================
+   FILTROS BAR
+   ===================================================== */
+
+.filtros-bar {
+    padding: 1.2rem 2rem;
+    background: transparent;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.search-box {
+    flex: 1;
+    min-width: 250px;
+    position: relative;
+}
+
+.search-box i {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--gris-texto);
+    font-size: 0.9rem;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 0.7rem 1rem 0.7rem 2.5rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    color: var(--blanco);
+    font-family: inherit;
+    transition: var(--transition);
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: var(--rojo-primario);
+    box-shadow: var(--shadow-red);
+}
+
+.search-box input::placeholder {
+    color: var(--gris-texto);
+}
+
+.filter-group {
+    min-width: 200px;
+}
+
+.filter-group select {
+    width: 100%;
+    padding: 0.7rem 1.5rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    color: var(--blanco);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.filter-group select:focus {
+    outline: none;
+    border-color: var(--rojo-primario);
+}
+
+.filter-group select option {
+    background: var(--bg-card);
+    color: var(--blanco);
+}
+
+.btn-filter {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--gris-texto);
+    padding: 0.7rem 1.2rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.btn-filter:hover {
+    border-color: var(--rojo-primario);
+    color: var(--rojo-primario);
+    background: rgba(193, 18, 31, 0.1);
+}
+
+/* =====================================================
+   COTIZACIONES GRID
+   ===================================================== */
+
 .cotizaciones-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
@@ -12,138 +115,177 @@
     padding: 2rem;
 }
 
-.cotizacion-card {
+/* =====================================================
+   COTIZACION CARD PREMIUM
+   ===================================================== */
+
+.cotizacion-card-premium {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
-    overflow: hidden;
     border: 1px solid var(--border-color);
+    overflow: hidden;
     transition: var(--transition-slow);
     cursor: pointer;
 }
 
-.cotizacion-card:hover {
+.cotizacion-card-premium:hover {
     transform: translateY(-4px);
     box-shadow: var(--shadow-lg);
     border-color: rgba(193, 18, 31, 0.3);
 }
 
-.cotizacion-header {
-    background: linear-gradient(135deg, var(--gris-oscuro) 0%, var(--bg-card) 100%);
+/* Card Header */
+.card-header-premium {
     padding: 1rem 1.5rem;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    border-bottom: 2px solid var(--rojo-primario);
-}
-
-.cotizacion-info {
-    display: flex;
     gap: 1rem;
+    background: linear-gradient(135deg, rgba(193, 18, 31, 0.05), transparent);
     flex-wrap: wrap;
-    align-items: center;
 }
 
-.cotizacion-codigo {
-    font-weight: 600;
-    color: var(--blanco);
-    font-size: 0.9rem;
+.cotizacion-icono {
+    width: 48px;
+    height: 48px;
+    background: rgba(193, 18, 31, 0.1);
+    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    justify-content: center;
 }
 
-.cotizacion-codigo i {
+.cotizacion-icono i {
+    font-size: 1.5rem;
     color: var(--rojo-primario);
-    font-size: 1rem;
 }
 
-.cotizacion-fecha {
+.cotizacion-info-header {
+    flex: 1;
+}
+
+.cotizacion-info-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+    font-family: monospace;
+    letter-spacing: 1px;
+}
+
+.cotizacion-info-header p {
     font-size: 0.75rem;
     color: var(--gris-texto);
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
 }
 
-.cotizacion-fecha i {
-    font-size: 0.7rem;
-}
-
-/* Estados de cotización */
-.cotizacion-estado {
+/* Estado Badge */
+.estado-badge-premium {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.25rem 0.75rem;
+    gap: 0.5rem;
+    padding: 0.3rem 0.8rem;
     border-radius: var(--radius-full);
     font-size: 0.7rem;
     font-weight: 600;
 }
 
+/* Estados de cotización */
 .estado-enviada {
-    background: rgba(245, 158, 11, 0.2);
+    background: rgba(245, 158, 11, 0.15);
     color: #F59E0B;
 }
 
 .estado-aprobada, .estado-aprobado_total {
-    background: rgba(16, 185, 129, 0.2);
+    background: rgba(16, 185, 129, 0.15);
     color: #10B981;
 }
 
 .estado-parcial, .estado-aprobado_parcial {
-    background: rgba(37, 99, 235, 0.2);
+    background: rgba(37, 99, 235, 0.15);
     color: #3B82F6;
 }
 
 .estado-rechazada {
-    background: rgba(193, 18, 31, 0.2);
+    background: rgba(193, 18, 31, 0.15);
     color: #C1121F;
 }
 
-.cotizacion-body {
-    padding: 1.5rem;
-}
-
-.vehiculo-info {
-    margin-bottom: 1rem;
-    background: var(--bg-primary);
-    padding: 0.75rem;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-color);
-}
-
-.vehiculo-info p {
-    margin: 0.25rem 0;
-    font-size: 0.85rem;
-    color: var(--gris-texto);
-}
-
-.vehiculo-info strong {
-    color: var(--blanco);
-}
-
-.servicios-resumen {
+/* Card Body */
+.card-body-premium {
+    padding: 1rem 1.5rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.75rem 1rem;
-    background: var(--gris-oscuro);
-    border-radius: var(--radius-md);
-    margin: 1rem 0;
-    transition: var(--transition);
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
-.servicios-resumen:hover {
-    background: var(--gris-medio);
+.info-tag {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+}
+
+.info-tag i {
+    color: var(--rojo-primario);
+}
+
+.monto-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.monto-label {
+    font-size: 0.7rem;
+    color: var(--gris-texto);
+}
+
+.monto-valor {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--verde-exito);
+}
+
+.monto-valor.diagnostico {
+    color: var(--ambar-alerta);
+}
+
+.diagnostico-badge {
+    background: rgba(245, 158, 11, 0.15);
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-full);
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--ambar-alerta);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    margin-left: 0.5rem;
+}
+
+.diagnostico-badge i {
+    font-size: 0.6rem;
+}
+
+/* Card Footer */
+.card-footer-premium {
+    padding: 0.8rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-card);
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .servicios-count {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.85rem;
+    font-size: 0.7rem;
     color: var(--gris-texto);
 }
 
@@ -151,34 +293,18 @@
     color: var(--rojo-primario);
 }
 
-.monto-total {
-    font-weight: 700;
-    color: var(--verde-exito);
-    font-size: 1rem;
-}
-
-.cotizacion-footer {
-    display: flex;
-    gap: 0.75rem;
-    justify-content: flex-end;
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border-color);
-    flex-wrap: wrap;
-}
-
 .btn-aprobar {
     background: linear-gradient(135deg, var(--verde-exito), #0e9f6e);
     color: var(--blanco);
     border: none;
-    padding: 0.5rem 1rem;
+    padding: 0.4rem 1rem;
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: var(--transition);
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
     font-weight: 500;
 }
 
@@ -191,14 +317,14 @@
     background: var(--gris-medio);
     color: var(--blanco);
     border: none;
-    padding: 0.5rem 1rem;
+    padding: 0.4rem 1rem;
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: var(--transition);
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
     font-weight: 500;
 }
 
@@ -209,7 +335,7 @@
 }
 
 /* =====================================================
-   MODAL DE DETALLE DE COTIZACIÓN MEJORADO
+   MODAL DE DETALLE DE COTIZACIÓN
    ===================================================== */
 
 .modal {
@@ -245,7 +371,6 @@
     max-height: 90vh;
     overflow-y: auto;
     width: 90%;
-    max-width: 800px;
     opacity: 0;
     transform: scale(0.95) translateY(-20px);
     transition: var(--transition-bounce);
@@ -259,6 +384,14 @@
 
 .modal-lg {
     max-width: 900px;
+}
+
+.modal-sm {
+    max-width: 450px;
+}
+
+.modal-print {
+    max-width: 800px;
 }
 
 .modal-header {
@@ -281,6 +414,7 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    margin: 0;
     background: linear-gradient(135deg, var(--blanco), var(--rojo-primario));
     -webkit-background-clip: text;
     background-clip: text;
@@ -295,43 +429,119 @@
     font-size: 1.4rem;
 }
 
-.close-modal {
-    background: var(--gris-oscuro);
-    border: none;
-    color: var(--gris-texto);
-    font-size: 1.5rem;
-    cursor: pointer;
-    transition: var(--transition);
-    padding: 0;
-    border-radius: var(--radius-full);
-    line-height: 1;
+.modal-close {
     width: 36px;
     height: 36px;
+    border-radius: var(--radius-full);
+    background: var(--gris-oscuro);
+    border: 1px solid var(--border-color);
+    color: var(--gris-texto);
+    cursor: pointer;
+    transition: var(--transition);
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 1.2rem;
 }
 
-.close-modal:hover {
-    color: var(--blanco);
+.modal-close:hover {
     background: var(--rojo-primario);
+    color: var(--blanco);
+    border-color: var(--rojo-primario);
     transform: rotate(90deg);
 }
 
-#modalDetalleBody {
+.modal-close i {
+    font-size: 1rem;
+}
+
+.modal-body {
     padding: 2rem;
     max-height: 60vh;
     overflow-y: auto;
 }
 
-/* Servicios en detalle */
-.servicios-lista {
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
     display: flex;
-    flex-direction: column;
+    justify-content: flex-end;
     gap: 1rem;
+    background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    flex-wrap: wrap;
 }
 
-.servicio-cotizacion-item {
+/* =====================================================
+   DETALLE GRID PREMIUM
+   ===================================================== */
+
+.detalle-grid-premium {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.detalle-card {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+.detalle-card-title {
+    padding: 1rem 1.25rem;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.detalle-card-title i {
+    color: var(--rojo-primario);
+}
+
+.detalle-card-content {
+    padding: 1.25rem;
+}
+
+/* Info rows */
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-row .label {
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+}
+
+.info-row .value {
+    font-size: 0.85rem;
+    color: var(--blanco);
+}
+
+/* =====================================================
+   SERVICIOS EN DETALLE
+   ===================================================== */
+
+.servicios-lista-detalle {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.servicio-item-detalle {
     background: var(--bg-primary);
     border-radius: var(--radius-md);
     padding: 1rem;
@@ -340,11 +550,11 @@
     animation: slideInRight 0.3s ease backwards;
 }
 
-.servicio-cotizacion-item:nth-child(1) { animation-delay: 0.05s; }
-.servicio-cotizacion-item:nth-child(2) { animation-delay: 0.1s; }
-.servicio-cotizacion-item:nth-child(3) { animation-delay: 0.15s; }
-.servicio-cotizacion-item:nth-child(4) { animation-delay: 0.2s; }
-.servicio-cotizacion-item:nth-child(5) { animation-delay: 0.25s; }
+.servicio-item-detalle:nth-child(1) { animation-delay: 0.05s; }
+.servicio-item-detalle:nth-child(2) { animation-delay: 0.1s; }
+.servicio-item-detalle:nth-child(3) { animation-delay: 0.15s; }
+.servicio-item-detalle:nth-child(4) { animation-delay: 0.2s; }
+.servicio-item-detalle:nth-child(5) { animation-delay: 0.25s; }
 
 @keyframes slideInRight {
     from {
@@ -357,13 +567,13 @@
     }
 }
 
-.servicio-cotizacion-item.aprobado {
+.servicio-item-detalle.aprobado {
     border-color: var(--verde-exito);
     background: rgba(16, 185, 129, 0.05);
     box-shadow: 0 0 10px rgba(16, 185, 129, 0.1);
 }
 
-.servicio-info {
+.servicio-info-detalle {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -374,15 +584,14 @@
 
 .servicio-descripcion {
     color: var(--blanco);
-    font-size: 0.9rem;
-    font-weight: 500;
+    font-size: 0.85rem;
     flex: 1;
 }
 
 .servicio-precio {
     font-weight: 700;
     color: var(--verde-exito);
-    font-size: 1rem;
+    font-size: 0.9rem;
 }
 
 .servicio-acciones {
@@ -391,21 +600,24 @@
     border-top: 1px solid var(--border-color);
 }
 
-.servicio-aprobado {
+.servicio-aprobado-badge {
     margin-top: 0.5rem;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: var(--verde-exito);
     display: flex;
     align-items: center;
     gap: 0.4rem;
 }
 
-.servicio-aprobado i {
+.servicio-aprobado-badge i {
     font-size: 0.7rem;
 }
 
-/* Checkbox personalizado */
-.checkbox-container {
+/* =====================================================
+   CHECKBOX PERSONALIZADO
+   ===================================================== */
+
+.checkbox-label {
     display: inline-flex;
     align-items: center;
     gap: 0.6rem;
@@ -415,15 +627,15 @@
     transition: var(--transition);
 }
 
-.checkbox-container:hover {
+.checkbox-label:hover {
     color: var(--blanco);
 }
 
-.checkbox-container input {
+.checkbox-label input {
     display: none;
 }
 
-.checkmark {
+.checkbox-custom {
     width: 18px;
     height: 18px;
     background: var(--gris-medio);
@@ -431,18 +643,17 @@
     display: inline-block;
     position: relative;
     transition: var(--transition);
-    cursor: pointer;
 }
 
-.checkbox-container:hover .checkmark {
+.checkbox-label:hover .checkbox-custom {
     background: var(--rojo-primario);
 }
 
-.checkbox-container input:checked + .checkmark {
+.checkbox-label input:checked + .checkbox-custom {
     background: var(--verde-exito);
 }
 
-.checkbox-container input:checked + .checkmark:after {
+.checkbox-label input:checked + .checkbox-custom:after {
     content: '✓';
     position: absolute;
     top: 50%;
@@ -453,27 +664,124 @@
     font-weight: bold;
 }
 
-.total-general {
-    text-align: right;
+/* =====================================================
+   TOTALES EN DETALLE
+   ===================================================== */
+
+.totales-detalle {
     margin-top: 1.5rem;
     padding-top: 1rem;
     border-top: 2px solid var(--border-color);
-    font-size: 1rem;
+}
+
+.total-linea {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    font-size: 0.9rem;
+}
+
+.total-linea.diagnostico {
+    color: var(--ambar-alerta);
+}
+
+.total-linea.gran-total {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed var(--border-color);
+    font-size: 1.1rem;
+    font-weight: 700;
 }
 
 .total-monto {
-    font-size: 1.3rem;
-    font-weight: 800;
     color: var(--verde-exito);
-    margin-left: 0.5rem;
+    font-size: 1.2rem;
 }
 
-/* Botón peligro */
-.btn-danger {
+/* =====================================================
+   DIAGNOSTICO WARNING
+   ===================================================== */
+
+.diagnostico-warning {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
+    border-left: 4px solid var(--ambar-alerta);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.diagnostico-warning i {
+    color: var(--ambar-alerta);
+    font-size: 1.2rem;
+    margin-top: 0.2rem;
+}
+
+.diagnostico-warning strong {
+    color: var(--ambar-alerta);
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.diagnostico-warning p {
+    color: var(--gris-texto);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+/* =====================================================
+   BOTONES
+   ===================================================== */
+
+.btn-primary {
     background: linear-gradient(135deg, var(--rojo-primario), var(--rojo-oscuro));
     color: var(--blanco);
     border: none;
-    padding: 0.7rem 1.5rem;
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, var(--rojo-oscuro), var(--rojo-primario));
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-red);
+}
+
+.btn-secondary {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--gris-texto);
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.btn-secondary:hover {
+    border-color: var(--rojo-primario);
+    color: var(--rojo-primario);
+    background: rgba(193, 18, 31, 0.1);
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, var(--ambar-alerta), #D97706);
+    color: var(--blanco);
+    border: none;
+    padding: 0.6rem 1.2rem;
     border-radius: var(--radius-md);
     font-weight: 600;
     cursor: pointer;
@@ -484,86 +792,15 @@
     font-size: 0.85rem;
 }
 
-.btn-danger:hover {
+.btn-warning:hover {
     transform: translateY(-2px);
-    box-shadow: var(--shadow-red);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
 
-.detalle-actions {
-    padding: 1rem 1.5rem;
-    border-top: 1px solid var(--border-color);
-    display: flex;
-    justify-content: flex-end;
-    gap: 1rem;
-    position: sticky;
-    bottom: 0;
-    background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
-    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
-}
+/* =====================================================
+   EMPTY STATES
+   ===================================================== */
 
-/* Modal para impresión */
-.modal-print {
-    max-width: 800px;
-    width: 90%;
-}
-
-/* Vista previa de impresión */
-.cotizacion-print {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    padding: 2rem;
-    max-width: 800px;
-    margin: 0 auto;
-    background: white;
-    border-radius: var(--radius-lg);
-}
-
-#printContent {
-    background: white;
-    border-radius: var(--radius-lg);
-}
-
-.cotizacion-print h1 {
-    color: var(--rojo-primario);
-    margin-bottom: 0.5rem;
-    font-size: 1.8rem;
-}
-
-.cotizacion-print hr {
-    border: 1px solid var(--rojo-primario);
-    margin: 1rem 0;
-}
-
-.cotizacion-print table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-}
-
-.cotizacion-print th,
-.cotizacion-print td {
-    padding: 0.75rem;
-    border-bottom: 1px solid #ddd;
-    text-align: left;
-}
-
-.cotizacion-print th {
-    background: #f5f5f5;
-    font-weight: 600;
-    color: #333;
-}
-
-.cotizacion-print td {
-    color: #555;
-}
-
-.cotizacion-print .total {
-    text-align: right;
-    font-size: 1.2rem;
-    font-weight: bold;
-    margin-top: 1rem;
-}
-
-/* Empty State */
 .empty-state {
     text-align: center;
     padding: 3rem;
@@ -590,7 +827,155 @@
     font-size: 0.75rem;
 }
 
-/* Toast Notifications */
+.empty-state.premium {
+    text-align: center;
+    padding: 4rem;
+}
+
+.empty-state.premium i {
+    font-size: 4rem;
+    color: var(--gris-medio);
+    margin-bottom: 1rem;
+}
+
+.empty-state.premium h3 {
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state.premium p {
+    color: var(--gris-texto);
+    margin-bottom: 1.5rem;
+}
+
+.empty-state-small {
+    text-align: center;
+    padding: 2rem;
+    color: var(--gris-texto);
+}
+
+.empty-state-small i {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    color: var(--gris-medio);
+}
+
+/* =====================================================
+   IMPRESIÓN
+   ===================================================== */
+
+.print-content {
+    background: white;
+    border-radius: var(--radius-lg);
+}
+
+.cotizacion-print {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    padding: 2rem;
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    border-radius: var(--radius-lg);
+}
+
+.print-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.print-header h1 {
+    color: #C1121F;
+    margin: 0.5rem 0;
+    font-size: 1.8rem;
+}
+
+.print-header p {
+    color: #666;
+    margin: 0;
+}
+
+.print-header hr {
+    border: 1px solid #C1121F;
+    margin: 1rem 0;
+}
+
+.print-body {
+    margin: 2rem 0;
+}
+
+.print-body .info-section {
+    background: #f5f5f5;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+}
+
+.print-body .info-section p {
+    margin: 0.25rem 0;
+    color: #333;
+}
+
+.print-body h3 {
+    color: #333;
+    margin-bottom: 1rem;
+}
+
+.print-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+}
+
+.print-body th,
+.print-body td {
+    padding: 0.75rem;
+    border-bottom: 1px solid #ddd;
+    text-align: left;
+}
+
+.print-body th {
+    background: #f5f5f5;
+    font-weight: 600;
+    color: #333;
+}
+
+.print-body td {
+    color: #555;
+}
+
+.print-body .total-row {
+    background: #f5f5f5;
+    font-weight: bold;
+}
+
+.print-body .total-row td {
+    color: #333;
+}
+
+.print-body .diagnostico-nota {
+    background: #fff3e0;
+    padding: 1rem;
+    border-left: 4px solid #F59E0B;
+    border-radius: 8px;
+    margin-top: 1.5rem;
+}
+
+.print-body .diagnostico-nota p {
+    margin: 0;
+    color: #333;
+}
+
+.print-footer {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #999;
+    margin-top: 2rem;
+}
+
+/* =====================================================
+   TOAST NOTIFICATIONS
+   ===================================================== */
+
 .toast-notification {
     position: fixed;
     bottom: 20px;
@@ -630,7 +1015,10 @@
     }
 }
 
-/* Loading Overlay */
+/* =====================================================
+   LOADING OVERLAY
+   ===================================================== */
+
 .loading-overlay {
     display: none;
     position: fixed;
@@ -674,42 +1062,56 @@
 }
 
 @media (max-width: 768px) {
+    .filtros-bar {
+        padding: 1rem;
+        flex-direction: column;
+    }
+    
+    .search-box {
+        width: 100%;
+    }
+    
+    .filter-group {
+        width: 100%;
+    }
+    
+    .btn-filter {
+        width: 100%;
+        justify-content: center;
+    }
+    
     .cotizaciones-grid {
         padding: 1rem;
         grid-template-columns: 1fr;
     }
     
-    .cotizacion-header {
-        flex-direction: column;
-        align-items: flex-start;
+    .card-header-premium {
+        flex-wrap: wrap;
     }
     
-    .servicios-resumen {
-        flex-direction: column;
-        gap: 0.5rem;
-        text-align: center;
+    .cotizacion-info-header {
+        flex: 1 1 100%;
+        order: 2;
     }
     
-    .cotizacion-footer {
-        flex-direction: column;
+    .estado-badge-premium {
+        order: 1;
     }
     
-    .cotizacion-footer button {
-        width: 100%;
-        justify-content: center;
+    .cotizacion-icono {
+        order: 0;
     }
     
-    .servicio-info {
+    .card-body-premium {
         flex-direction: column;
         text-align: center;
-        gap: 0.5rem;
     }
     
-    .detalle-actions {
+    .card-footer-premium {
         flex-direction: column;
     }
     
-    .detalle-actions button {
+    .card-footer-premium button {
         width: 100%;
         justify-content: center;
     }
@@ -722,23 +1124,30 @@
         font-size: 1.1rem;
     }
     
-    #modalDetalleBody {
+    .modal-body {
         padding: 1rem;
+    }
+    
+    .modal-footer {
+        flex-direction: column;
+    }
+    
+    .modal-footer button {
+        width: 100%;
+        justify-content: center;
     }
     
     .modal-content {
         width: 95%;
     }
-}
-
-@media (max-width: 480px) {
-    .cotizacion-info {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.3rem;
+    
+    .detalle-grid-premium {
+        grid-template-columns: 1fr;
     }
     
-    .servicio-info {
+    .servicio-info-detalle {
+        flex-direction: column;
+        text-align: center;
         gap: 0.3rem;
     }
     
@@ -750,415 +1159,33 @@
         font-size: 0.85rem;
     }
 }
-/* =====================================================
-   COSTO DE DIAGNÓSTICO - NUEVO ESTILO
-   ===================================================== */
 
-.diagnostico-warning {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
-    border-left: 4px solid var(--ambar-alerta);
-    padding: 1rem;
-    border-radius: var(--radius-md);
-    margin-bottom: 1.5rem;
-    animation: slideInRight 0.3s ease;
-}
-
-.diagnostico-warning i {
-    color: var(--ambar-alerta);
-    font-size: 1.1rem;
-    margin-right: 0.5rem;
-}
-
-.diagnostico-warning p {
-    color: var(--gris-texto);
-    font-size: 0.85rem;
-    margin: 0.25rem 0 0 0;
-}
-
-.diagnostico-warning strong {
-    color: var(--ambar-alerta);
-}
-
-/* Mensaje de diagnóstico en el modal */
-.diagnostico-message {
-    background: rgba(245, 158, 11, 0.1);
-    border: 1px dashed var(--ambar-alerta);
-    border-radius: var(--radius-md);
-    padding: 1rem;
-    margin-top: 1rem;
-    text-align: center;
-}
-
-.diagnostico-message i {
-    color: var(--ambar-alerta);
-    font-size: 1.2rem;
-    margin-right: 0.5rem;
-}
-
-.diagnostico-message span {
-    color: var(--ambar-alerta);
-    font-weight: 700;
-    font-size: 1.1rem;
-}
-
-.diagnostico-message p {
-    color: var(--gris-texto);
-    font-size: 0.8rem;
-    margin-top: 0.5rem;
-}
-/* Estilos para edición de cotizaciones */
-.tiempo-restante {
-    background: linear-gradient(135deg, #FFF3E0, #FFE0B2);
-    border-left: 4px solid #F59E0B;
-    padding: 12px 16px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    color: #78350F;
-}
-
-.tiempo-restante i {
-    font-size: 20px;
-    color: #F59E0B;
-}
-
-.tiempo-restante small {
-    font-size: 11px;
-    color: #78350F;
-    margin-left: auto;
-}
-
-.alert-warning {
-    background: #FEF3C7;
-    border-left: 4px solid #F59E0B;
-    padding: 12px 16px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    color: #78350F;
-}
-
-.alert-warning i {
-    color: #F59E0B;
-    margin-right: 8px;
-}
-
-.btn-warning {
-    background: #F59E0B;
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-warning:hover {
-    background: #D97706;
-    transform: translateY(-1px);
-}
-
-.servicio-edicion-item {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 12px;
-    margin-bottom: 8px;
-}
-
-.servicio-info-edicion {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex: 1;
-    margin-left: 40px;
-}
-
-.servicio-info-edicion .precio {
-    color: var(--rojo-primario);
-    font-weight: 600;
-}
-
-.checkbox-container {
-    display: flex;
-    align-items: center;
-    position: relative;
-    padding-left: 35px;
-    cursor: pointer;
-    font-size: 14px;
-    user-select: none;
-    width: 100%;
-}
-
-.checkbox-container input {
-    position: absolute;
-    opacity: 0;
-    cursor: pointer;
-    height: 0;
-    width: 0;
-}
-
-.checkmark {
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 20px;
-    width: 20px;
-    background-color: var(--gris-medio);
-    border-radius: 4px;
-}
-
-.checkbox-container:hover input ~ .checkmark {
-    background-color: var(--gris-claro);
-}
-
-.checkbox-container input:checked ~ .checkmark {
-    background-color: var(--rojo-primario);
-}
-
-.checkmark:after {
-    content: "";
-    position: absolute;
-    display: none;
-}
-
-.checkbox-container input:checked ~ .checkmark:after {
-    display: block;
-}
-
-.checkbox-container .checkmark:after {
-    left: 7px;
-    top: 3px;
-    width: 5px;
-    height: 10px;
-    border: solid white;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-}
-
-.comentarios-area {
-    margin-top: 16px;
-}
-
-.comentarios-area label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 500;
-    color: var(--gris-texto);
-}
-
-.comentarios-area textarea {
-    width: 100%;
-    padding: 10px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    color: var(--blanco);
-    font-family: inherit;
-    resize: vertical;
-}
-
-.comentarios-area textarea:focus {
-    outline: none;
-    border-color: var(--rojo-primario);
-}
-/* =====================================================
-   COSTO DE DIAGNÓSTICO - ESTILOS ADICIONALES
-   ===================================================== */
-
-.diagnostico-warning {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
-    border-left: 4px solid var(--ambar-alerta);
-    padding: 1rem;
-    border-radius: var(--radius-md);
-    margin-bottom: 1.5rem;
-    animation: slideInRight 0.3s ease;
-}
-
-.diagnostico-warning i {
-    color: var(--ambar-alerta);
-    font-size: 1.1rem;
-    margin-right: 0.5rem;
-}
-
-.diagnostico-warning p, .diagnostico-warning strong {
-    color: var(--gris-texto);
-}
-
-.diagnostico-warning strong {
-    color: var(--ambar-alerta);
-}
-
-.diagnostico-message {
-    background: rgba(245, 158, 11, 0.1);
-    border: 1px dashed var(--ambar-alerta);
-    border-radius: var(--radius-md);
-    padding: 1rem;
-    margin-top: 1rem;
-    text-align: center;
-}
-
-.diagnostico-message i {
-    color: var(--ambar-alerta);
-    font-size: 1.2rem;
-    margin-right: 0.5rem;
-}
-
-.diagnostico-message span {
-    color: var(--ambar-alerta);
-    font-weight: 700;
-    font-size: 1.1rem;
-}
-
-.diagnostico-message p {
-    color: var(--gris-texto);
-    font-size: 0.8rem;
-    margin-top: 0.5rem;
-}
-
-/* Estado para cotización rechazada con diagnóstico */
-.estado-diagnostico {
-    background: rgba(245, 158, 11, 0.2);
-    color: #F59E0B;
-}
-
-/* Badge de costo diagnóstico en la tarjeta */
-.diagnostico-badge {
-    background: rgba(245, 158, 11, 0.15);
-    padding: 0.25rem 0.6rem;
-    border-radius: var(--radius-full);
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--ambar-alerta);
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-}
-
-.diagnostico-badge i {
-    font-size: 0.6rem;
-}
-
-/* Alerta de diagnóstico en rechazo */
-.alert-diagnostico {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.05));
-    border: 1px solid var(--ambar-alerta);
-    border-radius: var(--radius-md);
-    padding: 1rem;
-    margin-bottom: 1rem;
-}
-
-.alert-diagnostico i {
-    color: var(--ambar-alerta);
-    font-size: 1.2rem;
-}
-
-.alert-diagnostico p {
-    color: var(--gris-texto);
-    margin: 0;
-}
-
-.alert-diagnostico strong {
-    color: var(--ambar-alerta);
-}
-/* =====================================================
-   COSTO DE DIAGNÓSTICO - ESTILOS ADICIONALES
-   ===================================================== */
-
-.diagnostico-warning {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
-    border-left: 4px solid var(--ambar-alerta);
-    padding: 1rem;
-    border-radius: var(--radius-md);
-    margin-bottom: 1.5rem;
-    animation: slideInRight 0.3s ease;
-}
-
-.diagnostico-warning i {
-    color: var(--ambar-alerta);
-    font-size: 1.1rem;
-    margin-right: 0.5rem;
-}
-
-.diagnostico-warning p, .diagnostico-warning strong {
-    color: var(--gris-texto);
-}
-
-.diagnostico-warning strong {
-    color: var(--ambar-alerta);
-}
-
-.diagnostico-message {
-    background: rgba(245, 158, 11, 0.1);
-    border: 1px dashed var(--ambar-alerta);
-    border-radius: var(--radius-md);
-    padding: 1rem;
-    margin-top: 1rem;
-    text-align: center;
-}
-
-.diagnostico-message i {
-    color: var(--ambar-alerta);
-    font-size: 1.2rem;
-    margin-right: 0.5rem;
-}
-
-.diagnostico-message span {
-    color: var(--ambar-alerta);
-    font-weight: 700;
-    font-size: 1.1rem;
-}
-
-.diagnostico-message p {
-    color: var(--gris-texto);
-    font-size: 0.8rem;
-    margin-top: 0.5rem;
-}
-
-/* Estado para cotización rechazada con diagnóstico */
-.estado-diagnostico {
-    background: rgba(245, 158, 11, 0.2);
-    color: #F59E0B;
-}
-
-/* Badge de costo diagnóstico en la tarjeta */
-.diagnostico-badge {
-    background: rgba(245, 158, 11, 0.15);
-    padding: 0.25rem 0.6rem;
-    border-radius: var(--radius-full);
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--ambar-alerta);
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-}
-
-.diagnostico-badge i {
-    font-size: 0.6rem;
-}
-
-/* Alerta de diagnóstico en rechazo */
-.alert-diagnostico {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.05));
-    border: 1px solid var(--ambar-alerta);
-    border-radius: var(--radius-md);
-    padding: 1rem;
-    margin-bottom: 1rem;
-}
-
-.alert-diagnostico i {
-    color: var(--ambar-alerta);
-    font-size: 1.2rem;
-}
-
-.alert-diagnostico p {
-    color: var(--gris-texto);
-    margin: 0;
-}
-
-.alert-diagnostico strong {
-    color: var(--ambar-alerta);
-}
+@media (max-width: 480px) {
+    .cotizacion-info-header h3 {
+        font-size: 0.85rem;
+    }
+    
+    .cotizacion-info-header p {
+        font-size: 0.7rem;
+    }
+    
+    .monto-valor {
+        font-size: 0.85rem;
+    }
+    
+    .diagnostico-warning {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .diagnostico-warning i {
+        margin: 0 auto;
+    }
+    
+    .total-linea {
+        flex-direction: column;
+        align-items: center;
+        gap: 0.25rem;
+        text-align: center;
+    }
+}   

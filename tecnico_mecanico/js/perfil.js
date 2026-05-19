@@ -1,11 +1,11 @@
 // =====================================================
-// PERFIL - TÉCNICO MECÁNICO
-// FURIA MOTOR COMPANY SRL
+// PERFIL - TÉCNICO MECÁNICO (VERSIÓN OPTIMIZADA)
 // =====================================================
 
 let token = null;
 let usuarioActual = null;
 let datosOriginales = {};
+let isLoading = false;
 
 // =====================================================
 // UTILIDADES
@@ -72,6 +72,23 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Mostrar skeleton loading
+function showSkeletonLoading() {
+    const statsItems = document.querySelectorAll('.stat-value');
+    statsItems.forEach(item => {
+        if (item.textContent === '0' || item.textContent === '-') {
+            item.classList.add('skeleton');
+        }
+    });
+}
+
+function hideSkeletonLoading() {
+    const skeletonItems = document.querySelectorAll('.skeleton');
+    skeletonItems.forEach(item => {
+        item.classList.remove('skeleton');
+    });
+}
+
 // =====================================================
 // VERIFICACIÓN DE AUTENTICACIÓN
 // =====================================================
@@ -106,12 +123,15 @@ async function verificarToken() {
 }
 
 // =====================================================
-// CARGAR DATOS DEL PERFIL
+// CARGAR PERFIL (OPTIMIZADO - UNA SOLA LLAMADA)
 // =====================================================
 
 async function cargarPerfil() {
+    if (isLoading) return;
+    isLoading = true;
+    
     try {
-        showToast('Cargando datos...', 'info');
+        showSkeletonLoading();
         
         const response = await fetch('/tecnico/api/perfil', {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -123,34 +143,8 @@ async function cargarPerfil() {
             usuarioActual = data.usuario;
             datosOriginales = { ...usuarioActual };
             
-            // Actualizar UI
-            document.getElementById('nombreUsuario').textContent = usuarioActual.nombre || 'Técnico';
-            document.getElementById('nombre').value = usuarioActual.nombre || '';
-            document.getElementById('email').value = usuarioActual.email || '';
-            document.getElementById('contacto').value = usuarioActual.contacto || '';
-            document.getElementById('ubicacion').value = usuarioActual.ubicacion || '';
-            
-            // Avatar
-            if (usuarioActual.avatar_url) {
-                document.getElementById('avatarImg').src = usuarioActual.avatar_url;
-            } else {
-                document.getElementById('avatarImg').src = 'https://ui-avatars.com/api/?background=C1121F&color=fff&name=' + encodeURIComponent(usuarioActual.nombre || 'Técnico');
-            }
-            
-            // Estadísticas
-            document.getElementById('totalTrabajos').textContent = data.estadisticas?.total_trabajos || 0;
-            document.getElementById('trabajosCompletados').textContent = data.estadisticas?.trabajos_completados || 0;
-            document.getElementById('trabajosActivos').textContent = data.estadisticas?.trabajos_activos || 0;
-            document.getElementById('fechaRegistro').textContent = formatFecha(usuarioActual.fecha_registro);
-            
-            // Información de cuenta
-            document.getElementById('infoId').textContent = usuarioActual.id || '-';
-            document.getElementById('infoRol').textContent = 'Técnico Mecánico';
-            document.getElementById('infoFechaRegistro').textContent = formatFecha(usuarioActual.fecha_registro);
-            document.getElementById('infoEmail').textContent = usuarioActual.email || '-';
-            document.getElementById('infoContacto').textContent = usuarioActual.contacto || 'No registrado';
-            document.getElementById('infoUbicacion').textContent = usuarioActual.ubicacion || 'No registrada';
-            document.getElementById('infoUltimaActividad').textContent = 'Hoy';
+            // Actualizar UI de forma eficiente
+            actualizarUI(usuarioActual, data.estadisticas);
             
             showToast('Perfil cargado correctamente', 'success');
         } else {
@@ -159,7 +153,41 @@ async function cargarPerfil() {
     } catch (error) {
         console.error('Error cargando perfil:', error);
         showToast('Error al cargar perfil', 'error');
+    } finally {
+        isLoading = false;
+        hideSkeletonLoading();
     }
+}
+
+function actualizarUI(usuario, estadisticas) {
+    // Datos personales
+    document.getElementById('nombreUsuario').textContent = usuario.nombre || 'Técnico';
+    document.getElementById('nombre').value = usuario.nombre || '';
+    document.getElementById('email').value = usuario.email || '';
+    document.getElementById('contacto').value = usuario.contacto || '';
+    document.getElementById('ubicacion').value = usuario.ubicacion || '';
+    
+    // Avatar
+    if (usuario.avatar_url) {
+        document.getElementById('avatarImg').src = usuario.avatar_url;
+    } else {
+        document.getElementById('avatarImg').src = 'https://ui-avatars.com/api/?background=C1121F&color=fff&name=' + encodeURIComponent(usuario.nombre || 'Técnico');
+    }
+    
+    // Estadísticas
+    document.getElementById('totalTrabajos').textContent = estadisticas?.total_trabajos || 0;
+    document.getElementById('trabajosCompletados').textContent = estadisticas?.trabajos_completados || 0;
+    document.getElementById('trabajosActivos').textContent = estadisticas?.trabajos_activos || 0;
+    document.getElementById('fechaRegistro').textContent = formatFecha(usuario.fecha_registro);
+    
+    // Información de cuenta
+    document.getElementById('infoId').textContent = usuario.id || '-';
+    document.getElementById('infoRol').textContent = 'Técnico Mecánico';
+    document.getElementById('infoFechaRegistro').textContent = formatFecha(usuario.fecha_registro);
+    document.getElementById('infoEmail').textContent = usuario.email || '-';
+    document.getElementById('infoContacto').textContent = usuario.contacto || 'No registrado';
+    document.getElementById('infoUbicacion').textContent = usuario.ubicacion || 'No registrada';
+    document.getElementById('infoUltimaActividad').textContent = 'Hoy';
 }
 
 // =====================================================
@@ -194,7 +222,8 @@ async function actualizarAvatar(file) {
         const data = await response.json();
         
         if (data.success) {
-            document.getElementById('avatarImg').src = data.avatar_url + '?t=' + Date.now();
+            const avatarImg = document.getElementById('avatarImg');
+            avatarImg.src = data.avatar_url + '?t=' + Date.now();
             usuarioActual.avatar_url = data.avatar_url;
             showToast('Avatar actualizado', 'success');
         } else {
@@ -262,7 +291,7 @@ async function guardarDatosPersonales() {
             datosOriginales = { ...usuarioActual };
             document.getElementById('nombreUsuario').textContent = datos.nombre;
             
-            // Actualizar avatar si cambió el nombre
+            // Actualizar avatar si cambió el nombre y no hay avatar personalizado
             if (!usuarioActual.avatar_url) {
                 document.getElementById('avatarImg').src = 'https://ui-avatars.com/api/?background=C1121F&color=fff&name=' + encodeURIComponent(datos.nombre);
             }

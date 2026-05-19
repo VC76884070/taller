@@ -1720,6 +1720,8 @@ function initRecepcionesPanel() {
     if (btnSiguiente) btnSiguiente.addEventListener('click', () => { paginaActual++; filtrarYMostrarRecepciones(); });
 }
 
+// Modifica esta función en tu recepcion.js
+
 async function cargarRecepciones() {
     try {
         const response = await fetch(`${API_URL}/jefe-operativo/listar-recepciones`, {
@@ -1727,7 +1729,8 @@ async function cargarRecepciones() {
         });
         const data = await response.json();
         if (response.ok && data.recepciones) {
-            recepcionesActuales = data.recepciones;
+            // LIMITAR A LAS ÚLTIMAS 10 RECEPCIONES
+            recepcionesActuales = data.recepciones.slice(0, 10);
             const count = document.getElementById('recepcionesCount');
             if (count) count.textContent = recepcionesActuales.length;
             filtrarYMostrarRecepciones();
@@ -1739,31 +1742,44 @@ async function cargarRecepciones() {
     }
 }
 
+// Modifica esta función también
+
 function filtrarYMostrarRecepciones() {
-    let filtradas = [...recepcionesActuales];
+    let filtradas = [...recepcionesActuales]; // Ya solo tiene 10 máximo
     const searchTerm = document.getElementById('searchRecepcion')?.value.toLowerCase() || '';
-    if (searchTerm) filtradas = filtradas.filter(r => r.codigo_unico?.toLowerCase().includes(searchTerm) || r.placa?.toLowerCase().includes(searchTerm) || r.cliente_nombre?.toLowerCase().includes(searchTerm));
+    if (searchTerm) filtradas = filtradas.filter(r => 
+        r.codigo_unico?.toLowerCase().includes(searchTerm) || 
+        r.placa?.toLowerCase().includes(searchTerm) || 
+        r.cliente_nombre?.toLowerCase().includes(searchTerm)
+    );
+    
     const fechaDesde = document.getElementById('fechaDesde')?.value;
     const fechaHasta = document.getElementById('fechaHasta')?.value;
     if (fechaDesde) filtradas = filtradas.filter(r => r.fecha_ingreso >= fechaDesde);
     if (fechaHasta) filtradas = filtradas.filter(r => r.fecha_ingreso <= fechaHasta + 'T23:59:59');
+    
     const estadoFiltro = document.getElementById('estadoFiltro')?.value;
     if (estadoFiltro && estadoFiltro !== 'todos') filtradas = filtradas.filter(r => r.estado_global === estadoFiltro);
+    
     const totalItems = filtradas.length;
     const totalPaginas = Math.ceil(totalItems / itemsPorPagina);
+    
     if (paginaActual > totalPaginas) paginaActual = totalPaginas || 1;
+    
     const inicio = (paginaActual - 1) * itemsPorPagina;
     const fin = inicio + itemsPorPagina;
     const paginadas = filtradas.slice(inicio, fin);
+    
     const paginaInfo = document.getElementById('paginaInfo');
     if (paginaInfo) paginaInfo.textContent = `Página ${paginaActual} de ${totalPaginas || 1}`;
+    
     const btnAnterior = document.getElementById('btnPaginaAnterior');
     const btnSiguiente = document.getElementById('btnPaginaSiguiente');
     if (btnAnterior) btnAnterior.disabled = paginaActual <= 1;
     if (btnSiguiente) btnSiguiente.disabled = paginaActual >= totalPaginas;
+    
     renderRecepcionesList(paginadas);
 }
-
 function renderRecepcionesList(recepciones) {
     const list = document.getElementById('recepcionesList');
     if (!list) return;

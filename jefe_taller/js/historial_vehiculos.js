@@ -1,30 +1,34 @@
 // =====================================================
 // HISTORIAL DE VEHÍCULOS - JEFE TALLER
+// VERSIÓN CORREGIDA
 // =====================================================
 
-const API_URL = 'http://localhost:5000/api';
 let userInfo = null;
-let vehiculoActual = null;
-let ultimosResultados = null;
 
 // =====================================================
 // INICIALIZACIÓN
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 Inicializando página de historial (Jefe Taller)...');
+    console.log('🚀 Inicializando Historial - Jefe Taller...');
     
     const autenticado = await checkAuth();
     if (!autenticado) return;
     
-    initPage();
-    setupEventListeners();
+    mostrarFechaActual();
     
+    // Cargar últimas órdenes automáticamente
     await cargarUltimasOrdenes();
+    
+    configurarEventListeners();
+    setupModalTabs();
 });
 
+// =====================================================
+// CHECK AUTH
+// =====================================================
 async function checkAuth() {
     const token = localStorage.getItem('furia_token');
-    const userData = localStorage.getItem('furia_user');
+    const userInfoRaw = localStorage.getItem('furia_user');
     
     if (!token) {
         window.location.href = '/';
@@ -32,199 +36,275 @@ async function checkAuth() {
     }
     
     try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        userInfo = payload.user;
+        userInfo = JSON.parse(userInfoRaw || '{}');
         
-        // Obtener roles del token o del localStorage
-        let userRoles = [];
+        const verifyResponse = await fetch('/api/verify-token', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
         
-        if (userInfo && userInfo.roles && Array.isArray(userInfo.roles)) {
-            userRoles = userInfo.roles;
-        } else if (userData) {
-            const user = JSON.parse(userData);
-            userRoles = user.roles || [];
-        }
-        
-        // Verificar si tiene rol de jefe_taller
-        const tieneRolJefeTaller = userRoles.includes('jefe_taller');
-        
-        if (!tieneRolJefeTaller) {
-            console.warn('Usuario no tiene rol jefe_taller. Roles:', userRoles);
-            mostrarNotificacion('No tienes permisos para acceder a esta sección', 'error');
-            setTimeout(() => {
-                window.location.href = '/';
-            }, 2000);
+        if (!verifyResponse.ok) {
+            localStorage.clear();
+            window.location.href = '/';
             return false;
         }
         
-        console.log('✅ Autenticación exitosa - Roles:', userRoles);
+        const verifyData = await verifyResponse.json();
+        if (verifyData.user) {
+            userInfo = verifyData.user;
+            localStorage.setItem('furia_user', JSON.stringify(userInfo));
+        }
+        
+        const roles = userInfo.roles || [];
+        const tieneRolJefeTaller = roles.includes('jefe_taller');
+        
+        if (!tieneRolJefeTaller) {
+            if (roles.includes('jefe_operativo')) {
+                window.location.href = '/jefe_operativo/dashboard.html';
+            } else {
+                window.location.href = '/';
+            }
+            return false;
+        }
+        
+        console.log('✅ Autenticación exitosa - Jefe Taller');
         return true;
         
     } catch (error) {
-        console.error('Error verificando autenticación:', error);
+        console.error('Error en checkAuth:', error);
         window.location.href = '/';
         return false;
     }
 }
 
-function initPage() {
-    const now = new Date();
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    const dateStr = now.toLocaleDateString('es-ES', options);
-    
-    const dateDisplay = document.getElementById('currentDate');
-    if (dateDisplay) {
-        dateDisplay.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
-    }
-    
-    const userNameElement = document.querySelector('.user-name');
-    if (userNameElement && userInfo.nombre) {
-        userNameElement.textContent = userInfo.nombre;
-    }
-}
-
-function setupEventListeners() {
-    const btnBuscar = document.getElementById('btnBuscar');
-    const btnLimpiar = document.getElementById('btnLimpiar');
-    const searchPlaca = document.getElementById('searchPlaca');
-    
-    if (btnBuscar) btnBuscar.addEventListener('click', buscarHistorial);
-    if (btnLimpiar) btnLimpiar.addEventListener('click', limpiarBusqueda);
-    if (searchPlaca) searchPlaca.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') buscarHistorial();
-    });
-    
-    // Filtros
-    const filterEstado = document.getElementById('filterEstado');
-    const fechaDesde = document.getElementById('fechaDesde');
-    const fechaHasta = document.getElementById('fechaHasta');
-    
-    if (filterEstado) filterEstado.addEventListener('change', aplicarFiltros);
-    if (fechaDesde) fechaDesde.addEventListener('change', aplicarFiltros);
-    if (fechaHasta) fechaHasta.addEventListener('change', aplicarFiltros);
-}
-
-function getAuthToken() {
-    return localStorage.getItem('furia_token');
-}
-
-function getHeaders() {
-    return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-    };
-}
-
 // =====================================================
-// APLICAR FILTROS
+// CARGAR ÚLTIMAS 10 ÓRDENES
 // =====================================================
-function aplicarFiltros() {
-    if (!ultimosResultados) return;
+async function cargarUltimasOrdenes() {
+    const container = document.getElementById('resultadosContainer');
     
-    const estadoFiltro = document.getElementById('filterEstado')?.value || '';
-    const fechaDesde = document.getElementById('fechaDesde')?.value || '';
-    const fechaHasta = document.getElementById('fechaHasta')?.value || '';
-    
-    let ordenesFiltradas = [...ultimosResultados.ordenes];
-    
-    if (estadoFiltro) {
-        ordenesFiltradas = ordenesFiltradas.filter(o => o.estado_global === estadoFiltro);
-    }
-    
-    if (fechaDesde) {
-        const desde = new Date(fechaDesde);
-        desde.setHours(0, 0, 0, 0);
-        ordenesFiltradas = ordenesFiltradas.filter(o => {
-            const fechaIngreso = new Date(o.fecha_ingreso);
-            return fechaIngreso >= desde;
-        });
-    }
-    
-    if (fechaHasta) {
-        const hasta = new Date(fechaHasta);
-        hasta.setHours(23, 59, 59, 999);
-        ordenesFiltradas = ordenesFiltradas.filter(o => {
-            const fechaIngreso = new Date(o.fecha_ingreso);
-            return fechaIngreso <= hasta;
-        });
-    }
-    
-    const resumen = {
-        total: ordenesFiltradas.length,
-        entregados: ordenesFiltradas.filter(o => o.estado_global === 'Entregado' || o.estado_global === 'Finalizado').length,
-        en_proceso: ordenesFiltradas.filter(o => o.estado_global === 'EnProceso').length,
-        en_pausa: ordenesFiltradas.filter(o => o.estado_global === 'EnPausa').length,
-        en_recepcion: ordenesFiltradas.filter(o => o.estado_global === 'EnRecepcion').length
-    };
-    
-    renderizarOrdenes(ordenesFiltradas, resumen, ultimosResultados.vehiculo);
-}
-
-// =====================================================
-// BUSCAR HISTORIAL
-// =====================================================
-async function buscarHistorial() {
-    const placa = document.getElementById('searchPlaca')?.value.trim().toUpperCase();
-    
-    if (!placa) {
-        mostrarNotificacion('Ingresa una placa para buscar', 'warning');
+    if (!container) {
+        console.error('❌ No se encontró resultadosContainer');
         return;
     }
     
-    mostrarLoading(true);
-    
     try {
-        let url = `${API_URL}/jefe-taller/historial-vehiculo?placa=${encodeURIComponent(placa)}`;
+        mostrarLoading(container, 'Cargando últimas órdenes...');
         
-        const response = await fetch(url, { headers: getHeaders() });
-        const data = await response.json();
+        const token = localStorage.getItem('furia_token');
+        console.log('📡 Llamando a /api/jefe-taller/ultimas-ordenes');
         
-        if (!response.ok) throw new Error(data.error || 'Error al buscar historial');
+        const response = await fetch('/api/jefe-taller/ultimas-ordenes?limite=10', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
         
-        if (!data.vehiculo) {
-            mostrarResultadosVacio(placa);
-            return;
+        console.log('📡 Respuesta status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`Error HTTP ${response.status}`);
         }
         
-        ultimosResultados = {
-            vehiculo: data.vehiculo,
-            ordenes: data.ordenes || [],
-            resumen_original: data.resumen || {}
-        };
+        const data = await response.json();
+        console.log('📡 Datos recibidos:', data);
         
-        aplicarFiltros();
+        // ✅ Verificar que la respuesta tenga la estructura esperada
+        if (data.success) {
+            const ordenes = data.ordenes || [];
+            const resumen = data.resumen || {
+                total: 0,
+                entregados: 0,
+                en_proceso: 0,
+                en_pausa: 0,
+                en_recepcion: 0
+            };
+            
+            mostrarUltimasOrdenes(ordenes, resumen);
+        } else {
+            mostrarError(container, data.error || 'Error al cargar órdenes');
+        }
         
     } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion(error.message, 'error');
-        mostrarResultadosVacio(placa);
-    } finally {
-        mostrarLoading(false);
+        console.error('❌ Error:', error);
+        mostrarError(container, 'Error de conexión al servidor: ' + error.message);
     }
 }
 
-function limpiarBusqueda() {
-    document.getElementById('searchPlaca').value = '';
-    document.getElementById('fechaDesde').value = '';
-    document.getElementById('fechaHasta').value = '';
-    document.getElementById('filterEstado').value = '';
+// =====================================================
+// MOSTRAR ÚLTIMAS ÓRDENES
+// =====================================================
+function mostrarUltimasOrdenes(ordenes, resumen) {
+    const container = document.getElementById('resultadosContainer');
     
-    ultimosResultados = null;
-    vehiculoActual = null;
+    if (!container) return;
     
-    cargarUltimasOrdenes();
+    if (!ordenes || ordenes.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-folder-open"></i>
+                <h3>No hay órdenes recientes</h3>
+                <p>Las últimas órdenes aparecerán aquí automáticamente.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Asegurar que resumen tenga valores por defecto
+    const total = resumen.total || ordenes.length;
+    const entregados = resumen.entregados || 0;
+    const en_proceso = resumen.en_proceso || 0;
+    const en_pausa = resumen.en_pausa || 0;
+    const en_recepcion = resumen.en_recepcion || 0;
+    
+    let html = `
+        <div class="ultimas-ordenes-banner">
+            <i class="fas fa-clock"></i>
+            <span>Últimas ${ordenes.length} órdenes de trabajo</span>
+            <small><i class="fas fa-sync-alt"></i> Actualizado automáticamente</small>
+        </div>
+        
+        <div class="resumen-stats">
+            <div class="stat-card">
+                <div class="stat-number">${total}</div>
+                <div class="stat-label">Total</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${entregados}</div>
+                <div class="stat-label">Entregados</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${en_proceso}</div>
+                <div class="stat-label">En Proceso</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${en_pausa}</div>
+                <div class="stat-label">En Pausa</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${en_recepcion}</div>
+                <div class="stat-label">En Recepción</div>
+            </div>
+        </div>
+        
+        <div class="ordenes-lista">
+    `;
+    
+    ordenes.forEach(orden => {
+        const estadoClass = getEstadoClass(orden.estado_global);
+        const estadoText = getEstadoText(orden.estado_global);
+        const fechaIngreso = formatFecha(orden.fecha_ingreso);
+        const vehiculoDisplay = orden.vehiculo_info || `${orden.marca || ''} ${orden.modelo || ''} (${orden.placa || 'N/A'})`.trim() || 'Vehículo sin datos';
+        
+        html += `
+            <div class="orden-historial-card">
+                <div class="orden-card-header">
+                    <div class="orden-codigo">
+                        <i class="fas fa-hashtag"></i> ${escapeHtml(orden.codigo_unico || 'N/A')}
+                    </div>
+                    <div class="orden-estado ${estadoClass}">${estadoText}</div>
+                    <div class="orden-fecha">
+                        <i class="fas fa-calendar-alt"></i> ${fechaIngreso}
+                    </div>
+                </div>
+                <div class="orden-card-body">
+                    <div class="orden-info-row">
+                        <div class="orden-info-item">
+                            <span class="orden-info-label">Vehículo</span>
+                            <span class="orden-info-value"><strong>${escapeHtml(vehiculoDisplay)}</strong></span>
+                        </div>
+                        <div class="orden-info-item">
+                            <span class="orden-info-label">Jefe Operativo</span>
+                            <span class="orden-info-value">${escapeHtml(orden.jefe_operativo_nombre || 'No asignado')}</span>
+                        </div>
+                        <div class="orden-info-item">
+                            <span class="orden-info-label">Técnicos</span>
+                            <span class="orden-info-value">${orden.tecnicos?.map(t => escapeHtml(t.nombre)).join(', ') || 'Sin asignar'}</span>
+                        </div>
+                    </div>
+                    ${orden.diagnostico_inicial ? `
+                        <div class="orden-info-item">
+                            <span class="orden-info-label">Diagnóstico</span>
+                            <span class="orden-info-value">${escapeHtml(orden.diagnostico_inicial.substring(0, 80))}${orden.diagnostico_inicial.length > 80 ? '...' : ''}</span>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="orden-card-footer">
+                    <button class="btn-accion" onclick="verDetalleCompletoOrden(${orden.id})">
+                        <i class="fas fa-eye"></i> Ver Detalle Completo
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += `</div>`;
+    container.innerHTML = html;
 }
 
 // =====================================================
-// RENDERIZADO
+// BUSCAR POR PLACA
 // =====================================================
-function renderizarOrdenes(ordenes, resumen, vehiculo) {
-    const container = document.getElementById('resultadosContainer');
-    if (!container) return;
+async function buscarHistorial() {
+    const placa = document.getElementById('searchPlaca').value.trim().toUpperCase();
     
-    const totalServicios = ordenes.length;
+    if (!placa) {
+        await cargarUltimasOrdenes();
+        return;
+    }
+    
+    const container = document.getElementById('resultadosContainer');
+    
+    try {
+        mostrarLoading(container, `Buscando historial de ${placa}...`);
+        
+        const token = localStorage.getItem('furia_token');
+        const estado = document.getElementById('filterEstado').value;
+        const fechaDesde = document.getElementById('fechaDesde').value;
+        const fechaHasta = document.getElementById('fechaHasta').value;
+        
+        let url = `/api/jefe-taller/historial-vehiculo?placa=${encodeURIComponent(placa)}`;
+        if (estado) url += `&estado=${estado}`;
+        if (fechaDesde) url += `&fecha_desde=${fechaDesde}`;
+        if (fechaHasta) url += `&fecha_hasta=${fechaHasta}`;
+        
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) throw new Error('Error al buscar');
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            if (data.vehiculo) {
+                mostrarHistorialVehiculo(data);
+            } else {
+                mostrarSinResultados(container, `No se encontró el vehículo con placa ${placa}`);
+            }
+        } else {
+            mostrarError(container, data.error || 'Error al buscar');
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarError(container, 'Error de conexión al servidor');
+    }
+}
+
+// =====================================================
+// MOSTRAR HISTORIAL DE VEHÍCULO
+// =====================================================
+function mostrarHistorialVehiculo(data) {
+    const container = document.getElementById('resultadosContainer');
+    const vehiculo = data.vehiculo;
+    const ordenes = data.ordenes || [];
+    const resumen = data.resumen || {};
     
     let html = `
+        <div style="margin-bottom: 1rem;">
+            <button class="btn-limpiar" onclick="cargarUltimasOrdenes()">
+                <i class="fas fa-arrow-left"></i> Ver últimas órdenes
+            </button>
+        </div>
+        
         <div class="vehiculo-info-card">
             <div class="vehiculo-info-grid">
                 <div class="vehiculo-info-item">
@@ -232,12 +312,16 @@ function renderizarOrdenes(ordenes, resumen, vehiculo) {
                     <span class="vehiculo-placa">${escapeHtml(vehiculo.placa)}</span>
                 </div>
                 <div class="vehiculo-info-item">
-                    <span class="vehiculo-info-label">Marca / Modelo</span>
+                    <span class="vehiculo-info-label">Marca/Modelo</span>
                     <span class="vehiculo-info-value">${escapeHtml(vehiculo.marca || 'N/A')} ${escapeHtml(vehiculo.modelo || '')}</span>
                 </div>
                 <div class="vehiculo-info-item">
                     <span class="vehiculo-info-label">Año</span>
                     <span class="vehiculo-info-value">${vehiculo.anio || 'N/A'}</span>
+                </div>
+                <div class="vehiculo-info-item">
+                    <span class="vehiculo-info-label">Kilometraje</span>
+                    <span class="vehiculo-info-value">${vehiculo.kilometraje?.toLocaleString() || 'N/A'} km</span>
                 </div>
                 <div class="vehiculo-info-item">
                     <span class="vehiculo-info-label">Cliente</span>
@@ -252,58 +336,54 @@ function renderizarOrdenes(ordenes, resumen, vehiculo) {
         
         <div class="resumen-stats">
             <div class="stat-card">
-                <div class="stat-number">${totalServicios}</div>
-                <div class="stat-label">Servicios realizados</div>
+                <div class="stat-number">${resumen.total || ordenes.length}</div>
+                <div class="stat-label">Total Servicios</div>
             </div>
             <div class="stat-card">
                 <div class="stat-number">${resumen.entregados || 0}</div>
                 <div class="stat-label">Completados</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">${resumen.en_proceso || 0}</div>
-                <div class="stat-label">En proceso</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${resumen.en_recepcion || 0}</div>
-                <div class="stat-label">En recepción</div>
+                <div class="stat-number">${(resumen.en_proceso || 0) + (resumen.en_pausa || 0)}</div>
+                <div class="stat-label">En Taller</div>
             </div>
         </div>
     `;
     
-    if (ordenes.length === 0) {
-        html += `<div class="empty-state"><i class="fas fa-folder-open"></i><p>No hay órdenes de trabajo para este vehículo con los filtros seleccionados</p></div>`;
-    } else {
+    if (ordenes.length > 0) {
         html += `<div class="ordenes-lista">`;
         
         ordenes.forEach(orden => {
-            const fechaIngreso = new Date(orden.fecha_ingreso).toLocaleDateString();
+            const estadoClass = getEstadoClass(orden.estado_global);
+            const estadoText = getEstadoText(orden.estado_global);
+            const fechaIngreso = formatFecha(orden.fecha_ingreso);
             
             html += `
                 <div class="orden-historial-card">
                     <div class="orden-card-header">
-                        <span class="orden-codigo">${escapeHtml(orden.codigo_unico)}</span>
-                        <span class="orden-estado ${orden.estado_global}">${orden.estado_global}</span>
-                        <span class="orden-fecha"><i class="far fa-calendar-alt"></i> ${fechaIngreso}</span>
+                        <div class="orden-codigo">
+                            <i class="fas fa-hashtag"></i> ${escapeHtml(orden.codigo_unico || 'N/A')}
+                        </div>
+                        <div class="orden-estado ${estadoClass}">${estadoText}</div>
+                        <div class="orden-fecha">
+                            <i class="fas fa-calendar-alt"></i> ${fechaIngreso}
+                        </div>
                     </div>
                     <div class="orden-card-body">
-                        <div class="orden-info-row">
-                            <div class="orden-info-item">
-                                <span class="orden-info-label">Jefe Operativo</span>
-                                <span class="orden-info-value">${escapeHtml(orden.jefe_operativo_nombre || 'No registrado')}</span>
-                            </div>
-                            <div class="orden-info-item">
-                                <span class="orden-info-label">Técnicos</span>
-                                <span class="orden-info-value">${orden.tecnicos?.map(t => escapeHtml(t.nombre)).join(', ') || 'Sin asignar'}</span>
-                            </div>
-                        </div>
                         ${orden.diagnostico_inicial ? `
-                            <div class="diagnosticos-preview">
-                                <div class="diagnostico-item">
-                                    <i class="fas fa-stethoscope"></i> 
-                                    <strong>Diagnóstico:</strong> ${escapeHtml(orden.diagnostico_inicial.substring(0, 100))}${orden.diagnostico_inicial.length > 100 ? '...' : ''}
-                                </div>
+                            <div class="orden-info-item">
+                                <span class="orden-info-label">Diagnóstico Inicial</span>
+                                <span class="orden-info-value">${escapeHtml(orden.diagnostico_inicial.substring(0, 100))}${orden.diagnostico_inicial.length > 100 ? '...' : ''}</span>
                             </div>
                         ` : ''}
+                        <div class="orden-info-item">
+                            <span class="orden-info-label">Jefe Operativo</span>
+                            <span class="orden-info-value">${escapeHtml(orden.jefe_operativo_nombre || 'N/A')}</span>
+                        </div>
+                        <div class="orden-info-item">
+                            <span class="orden-info-label">Técnicos</span>
+                            <span class="orden-info-value">${orden.tecnicos?.map(t => escapeHtml(t.nombre)).join(', ') || 'Sin asignar'}</span>
+                        </div>
                     </div>
                     <div class="orden-card-footer">
                         <button class="btn-accion" onclick="verDetalleCompletoOrden(${orden.id})">
@@ -315,407 +395,235 @@ function renderizarOrdenes(ordenes, resumen, vehiculo) {
         });
         
         html += `</div>`;
-    }
-    
-    container.innerHTML = html;
-}
-
-// =====================================================
-// CARGAR ÚLTIMAS ÓRDENES
-// =====================================================
-async function cargarUltimasOrdenes() {
-    mostrarLoading(true);
-    
-    try {
-        const response = await fetch(`${API_URL}/jefe-taller/ultimas-ordenes?limite=10`, {
-            headers: getHeaders()
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) throw new Error(data.error || 'Error cargando últimas órdenes');
-        
-        renderizarUltimasOrdenes(data);
-        
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion(error.message, 'error');
-        mostrarResultadosVacioUltimas();
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-function renderizarUltimasOrdenes(data) {
-    const container = document.getElementById('resultadosContainer');
-    if (!container) return;
-    
-    const ordenes = data.ordenes || [];
-    const resumen = data.resumen || {};
-    
-    let html = `
-        <div class="ultimas-ordenes-banner">
-            <i class="fas fa-clock"></i>
-            <span>Últimas 10 órdenes registradas</span>
-            <small>(Busca una placa específica para ver el historial completo)</small>
-        </div>
-        
-        <div class="resumen-stats">
-            <div class="stat-card">
-                <div class="stat-number">${resumen.total || 0}</div>
-                <div class="stat-label">Últimas órdenes</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${resumen.entregados || 0}</div>
-                <div class="stat-label">Completados</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${resumen.en_proceso || 0}</div>
-                <div class="stat-label">En proceso</div>
-            </div>
-        </div>
-    `;
-    
-    if (ordenes.length === 0) {
-        html += `<div class="empty-state"><i class="fas fa-folder-open"></i><p>No hay órdenes de trabajo registradas</p></div>`;
     } else {
-        html += `<div class="ordenes-lista">`;
-        
-        ordenes.forEach(orden => {
-            const fechaIngreso = new Date(orden.fecha_ingreso).toLocaleDateString();
-            
-            html += `
-                <div class="orden-historial-card">
-                    <div class="orden-card-header">
-                        <span class="orden-codigo">${escapeHtml(orden.codigo_unico)}</span>
-                        <span class="orden-estado ${orden.estado_global}">${orden.estado_global}</span>
-                        <span class="orden-fecha"><i class="far fa-calendar-alt"></i> ${fechaIngreso}</span>
-                    </div>
-                    <div class="orden-card-body">
-                        <div class="orden-info-row">
-                            <div class="orden-info-item">
-                                <span class="orden-info-label">Vehículo</span>
-                                <span class="orden-info-value">${escapeHtml(orden.placa || 'N/A')} - ${escapeHtml(orden.marca || '')} ${escapeHtml(orden.modelo || '')}</span>
-                            </div>
-                            <div class="orden-info-item">
-                                <span class="orden-info-label">Técnicos</span>
-                                <span class="orden-info-value">${orden.tecnicos?.map(t => escapeHtml(t.nombre)).join(', ') || 'Sin asignar'}</span>
-                            </div>
-                        </div>
-                        ${orden.diagnostico_inicial ? `
-                            <div class="diagnosticos-preview">
-                                <div class="diagnostico-item">
-                                    <i class="fas fa-stethoscope"></i> 
-                                    <strong>Diagnóstico:</strong> ${escapeHtml(orden.diagnostico_inicial.substring(0, 100))}${orden.diagnostico_inicial.length > 100 ? '...' : ''}
-                                </div>
-                            </div>
-                        ` : ''}
-                    </div>
-                    <div class="orden-card-footer">
-                        <button class="btn-accion" onclick="verDetalleCompletoOrden(${orden.id})">
-                            <i class="fas fa-eye"></i> Ver Detalle Completo
-                        </button>
-                    </div>
-                </div>
-            `;
-        });
-        
-        html += `</div>`;
+        html += `
+            <div class="empty-state">
+                <i class="fas fa-clipboard-list"></i>
+                <h3>Sin historial de servicios</h3>
+                <p>Este vehículo no tiene órdenes de trabajo registradas.</p>
+            </div>
+        `;
     }
     
     container.innerHTML = html;
 }
 
 // =====================================================
-// VER DETALLE COMPLETO DE ORDEN
+// VER DETALLE COMPLETO
 // =====================================================
-async function verDetalleCompletoOrden(idOrden) {
-    try {
-        mostrarNotificacion('Cargando detalle completo...', 'info');
-        
-        const response = await fetch(`${API_URL}/jefe-taller/detalle-completo-orden/${idOrden}`, {
-            headers: getHeaders()
-        });
-        
-        const data = await response.json();
-        if (!response.ok || !data.detalle) throw new Error(data.error || 'Error cargando detalle');
-        
-        const detalle = data.detalle;
-        mostrarModalDetalleCompleto(detalle);
-        
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion(error.message, 'error');
-    }
-}
-
-function mostrarModalDetalleCompleto(detalle) {
+window.verDetalleCompletoOrden = async function(idOrden) {
     const modal = document.getElementById('modalDetalleOrden');
-    const body = document.getElementById('modalDetalleBody');
+    if (!modal) return;
     
-    // Datos del cliente y vehículo
-    const datosClienteVehiculoHtml = `
-        <div class="detalle-seccion">
-            <h4><i class="fas fa-user-circle"></i> 👤 DATOS DEL CLIENTE</h4>
-            <div class="detalle-grid">
-                <div class="detalle-item">
-                    <span class="detalle-label">Nombre completo</span>
-                    <span class="detalle-value">${escapeHtml(detalle.cliente_nombre || 'No registrado')}</span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Teléfono / Contacto</span>
-                    <span class="detalle-value">${escapeHtml(detalle.cliente_telefono || 'No registrado')}</span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Dirección / Ubicación</span>
-                    <span class="detalle-value">${escapeHtml(detalle.cliente_ubicacion || 'No registrada')}</span>
-                </div>
-            </div>
-        </div>
+    try {
+        modal.classList.add('show');
         
-        <div class="detalle-seccion">
-            <h4><i class="fas fa-car"></i> 🚗 DATOS DEL VEHÍCULO</h4>
-            <div class="detalle-grid">
-                <div class="detalle-item">
-                    <span class="detalle-label">Placa</span>
-                    <span class="detalle-value" style="font-family: monospace; font-size: 1.1rem; color: var(--rojo-primario);">${escapeHtml(detalle.placa || 'No registrada')}</span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Marca</span>
-                    <span class="detalle-value">${escapeHtml(detalle.marca || 'No registrada')}</span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Modelo</span>
-                    <span class="detalle-value">${escapeHtml(detalle.modelo || 'No registrado')}</span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Año</span>
-                    <span class="detalle-value">${detalle.anio || 'No registrado'}</span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Kilometraje</span>
-                    <span class="detalle-value">${detalle.kilometraje?.toLocaleString() || '0'} km</span>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Recepción
-    const recepcionHtml = `
-        <div class="detalle-seccion recepcion">
-            <h4><i class="fas fa-clipboard-list"></i> 📋 RECEPCIÓN (Jefe Operativo)</h4>
-            <div class="detalle-grid">
-                <div class="detalle-item">
-                    <span class="detalle-label">Jefe Operativo</span>
-                    <span class="detalle-value">${escapeHtml(detalle.jefe_operativo_nombre || 'No registrado')}</span>
-                </div>
-                <div class="detalle-item">
-                    <span class="detalle-label">Fecha de ingreso</span>
-                    <span class="detalle-value">${new Date(detalle.fecha_ingreso).toLocaleString()}</span>
-                </div>
-            </div>
-            <div class="detalle-descripcion">
-                <strong>Descripción del problema:</strong><br>
-                ${escapeHtml(detalle.descripcion_problema || 'No se registró descripción')}
-            </div>
-            ${detalle.audio_recepcion ? `
-                <div class="audio-player">
-                    <strong>Audio de recepción:</strong>
-                    <audio controls src="${detalle.audio_recepcion}"></audio>
-                </div>
-            ` : ''}
-        </div>
-    `;
-    
-    // Fotos de recepción
-    let fotosHtml = '';
-    if (detalle.fotos && Object.keys(detalle.fotos).length > 0) {
-        const fotosLista = [];
-        const camposFotos = [
-            { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo' },
-            { campo: 'url_lateral_derecha', label: 'Lateral Derecho' },
-            { campo: 'url_foto_frontal', label: 'Frontal' },
-            { campo: 'url_foto_trasera', label: 'Trasera' },
-            { campo: 'url_foto_superior', label: 'Superior' },
-            { campo: 'url_foto_inferior', label: 'Inferior' },
-            { campo: 'url_foto_tablero', label: 'Tablero' }
-        ];
+        const token = localStorage.getItem('furia_token');
+        const response = await fetch(`/api/jefe-taller/detalle-completo-orden/${idOrden}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
         
-        for (const campo of camposFotos) {
-            if (detalle.fotos[campo.campo]) {
-                fotosLista.push(`
-                    <div class="foto-item" onclick="verImagenAmpliada('${detalle.fotos[campo.campo]}', '${campo.label}')">
-                        <img src="${detalle.fotos[campo.campo]}" alt="${campo.label}" onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%25%22%20height%3D%22100%25%22%20viewBox%3D%220%200%20200%20200%22%3E%3Crect%20width%3D%22200%22%20height%3D%22200%22%20fill%3D%22%23333%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dy%3D%22.3em%22%20fill%3D%22%23999%22%3ESin%20imagen%3C%2Ftext%3E%3C%2Fsvg%3E'">
-                        <div class="foto-label">${campo.label}</div>
-                    </div>
-                `);
-            }
+        if (!response.ok) throw new Error('Error al cargar detalle');
+        
+        const data = await response.json();
+        
+        if (data.success && data.detalle) {
+            cargarDetalleEnTabs(data.detalle);
+        } else {
+            mostrarNotificacion(data.error || 'Error al cargar detalle', 'error');
         }
         
-        if (fotosLista.length > 0) {
-            fotosHtml = `
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion('Error de conexión al servidor', 'error');
+    }
+};
+
+// =====================================================
+// CARGAR DETALLE EN TABS (VERSIÓN SIMPLIFICADA)
+// =====================================================
+function cargarDetalleEnTabs(detalle) {
+    // Tab 1: Cliente y Vehículo
+    const clienteVehiculoContainer = document.getElementById('clienteVehiculoContent');
+    if (clienteVehiculoContainer) {
+        clienteVehiculoContainer.innerHTML = `
+            <div class="detalle-seccion">
+                <h4><i class="fas fa-user-circle"></i> Datos del Cliente</h4>
+                <div class="detalle-grid">
+                    <div class="detalle-item">
+                        <span class="detalle-label">Nombre</span>
+                        <span class="detalle-value">${escapeHtml(detalle.cliente_nombre || 'No registrado')}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Teléfono</span>
+                        <span class="detalle-value">${escapeHtml(detalle.cliente_telefono || 'No registrado')}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="detalle-seccion">
+                <h4><i class="fas fa-car"></i> Datos del Vehículo</h4>
+                <div class="detalle-grid">
+                    <div class="detalle-item">
+                        <span class="detalle-label">Placa</span>
+                        <span class="detalle-value">${escapeHtml(detalle.placa || 'N/A')}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Marca/Modelo</span>
+                        <span class="detalle-value">${escapeHtml(detalle.marca || 'N/A')} ${escapeHtml(detalle.modelo || '')}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Año/Km</span>
+                        <span class="detalle-value">${detalle.anio || 'N/A'} / ${detalle.kilometraje?.toLocaleString() || '0'} km</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Tab 2: Recepción
+    const recepcionContainer = document.getElementById('recepcionContent');
+    if (recepcionContainer) {
+        recepcionContainer.innerHTML = `
+            <div class="detalle-seccion">
+                <h4><i class="fas fa-clipboard-list"></i> Recepción</h4>
+                <div class="detalle-descripcion">
+                    <strong>Problema:</strong><br>
+                    ${escapeHtml(detalle.descripcion_problema || 'No se registró descripción')}
+                </div>
+                ${detalle.audio_recepcion ? `
+                    <div class="audio-player">
+                        <audio controls src="${detalle.audio_recepcion}"></audio>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    // Tab 3: Diagnósticos
+    const diagnosticosContainer = document.getElementById('diagnosticosContent');
+    if (diagnosticosContainer) {
+        let diagnosticosHtml = '';
+        
+        if (detalle.diagnostico_inicial) {
+            diagnosticosHtml += `
                 <div class="detalle-seccion">
-                    <h4><i class="fas fa-camera"></i> 📸 FOTOS DE RECEPCIÓN</h4>
-                    <div class="fotos-grid">${fotosLista.join('')}</div>
+                    <h4><i class="fas fa-stethoscope"></i> Diagnóstico Inicial</h4>
+                    <div class="detalle-descripcion">${escapeHtml(detalle.diagnostico_inicial)}</div>
                 </div>
             `;
         }
+        
+        if (!diagnosticosHtml) {
+            diagnosticosHtml = '<div class="empty-state"><p>No hay diagnósticos registrados</p></div>';
+        }
+        
+        diagnosticosContainer.innerHTML = diagnosticosHtml;
     }
     
-    // Técnicos asignados
-    let tecnicosHtml = '';
-    if (detalle.tecnicos_asignados && detalle.tecnicos_asignados.length > 0) {
-        tecnicosHtml = `
-            <div class="detalle-seccion">
-                <h4><i class="fas fa-users"></i> 👨‍🔧 TÉCNICOS ASIGNADOS</h4>
-                <div class="detalle-grid">
-                    ${detalle.tecnicos_asignados.map(t => `
+    // Tab 4: Servicios
+    const serviciosContainer = document.getElementById('serviciosContent');
+    if (serviciosContainer) {
+        if (detalle.servicios && detalle.servicios.length > 0) {
+            serviciosContainer.innerHTML = `
+                <div class="detalle-seccion">
+                    <h4><i class="fas fa-dollar-sign"></i> Servicios</h4>
+                    <div class="detalle-grid">
+                        ${detalle.servicios.map(s => `
+                            <div class="detalle-item">
+                                <span class="detalle-label">${escapeHtml(s.descripcion)}</span>
+                                <span class="detalle-value">Bs. ${s.precio?.toFixed(2) || '0.00'}</span>
+                            </div>
+                        `).join('')}
                         <div class="detalle-item">
-                            <span class="tecnico-badge"><i class="fas fa-user"></i> ${escapeHtml(t.nombre)}</span>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-    }
-    
-    // Diagnóstico Inicial
-    const diagnosticoInicialHtml = detalle.diagnostico_inicial ? `
-        <div class="detalle-seccion diagnostico-inicial">
-            <h4><i class="fas fa-stethoscope"></i> 🔵 DIAGNÓSTICO INICIAL (Jefe de Taller)</h4>
-            <div class="detalle-descripcion">${escapeHtml(detalle.diagnostico_inicial)}</div>
-            ${detalle.audio_diagnostico_inicial ? `
-                <div class="audio-player">
-                    <strong>Audio del diagnóstico inicial:</strong>
-                    <audio controls src="${detalle.audio_diagnostico_inicial}"></audio>
-                </div>
-            ` : ''}
-        </div>
-    ` : '';
-    
-    // Diagnósticos Técnicos
-    let diagnosticosTecnicosHtml = '';
-    if (detalle.diagnosticos_tecnicos && detalle.diagnosticos_tecnicos.length > 0) {
-        diagnosticosTecnicosHtml = detalle.diagnosticos_tecnicos.map(dt => `
-            <div class="detalle-seccion diagnostico-tecnico">
-                <h4><i class="fas fa-microscope"></i> 🔴 DIAGNÓSTICO TÉCNICO (Versión ${dt.version})</h4>
-                <div class="detalle-grid">
-                    <div class="detalle-item">
-                        <span class="detalle-label">Técnico</span>
-                        <span class="detalle-value">${escapeHtml(dt.tecnico_nombre || 'No registrado')}</span>
-                    </div>
-                    <div class="detalle-item">
-                        <span class="detalle-label">Fecha</span>
-                        <span class="detalle-value">${new Date(dt.fecha_envio).toLocaleString()}</span>
-                    </div>
-                    <div class="detalle-item">
-                        <span class="detalle-label">Estado</span>
-                        <span class="detalle-value">${dt.estado === 'aprobado' ? '✅ Aprobado' : (dt.estado === 'rechazado' ? '❌ Rechazado' : '⏳ Pendiente')}</span>
-                    </div>
-                </div>
-                <div class="detalle-descripcion">
-                    <strong>Informe del técnico:</strong><br>
-                    ${escapeHtml(dt.informe || 'No hay informe detallado')}
-                </div>
-                ${dt.url_grabacion_informe ? `
-                    <div class="audio-player">
-                        <strong>Audio del diagnóstico técnico:</strong>
-                        <audio controls src="${dt.url_grabacion_informe}"></audio>
-                    </div>
-                ` : ''}
-                ${dt.fotos && dt.fotos.length > 0 ? `
-                    <div>
-                        <strong>Fotos del diagnóstico técnico:</strong>
-                        <div class="fotos-grid">
-                            ${dt.fotos.map(foto => `
-                                <div class="foto-item" onclick="verImagenAmpliada('${foto.url_foto}', 'Foto técnica')">
-                                    <img src="${foto.url_foto}" alt="Foto técnica" onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%25%22%20height%3D%22100%25%22%20viewBox%3D%220%200%20200%20200%22%3E%3Crect%20width%3D%22200%22%20height%3D%22200%22%20fill%3D%22%23333%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dy%3D%22.3em%22%20fill%3D%22%23999%22%3ESin%20imagen%3C%2Ftext%3E%3C%2Fsvg%3E'">
-                                    <div class="foto-label">${escapeHtml(foto.descripcion_tecnico || 'Sin descripción')}</div>
-                                </div>
-                            `).join('')}
+                            <span class="detalle-label"><strong>TOTAL</strong></span>
+                            <span class="detalle-value"><strong>Bs. ${detalle.total?.toFixed(2) || '0.00'}</strong></span>
                         </div>
                     </div>
-                ` : ''}
-                ${dt.observaciones ? `
-                    <div class="detalle-descripcion" style="background: rgba(193,18,31,0.1);">
-                        <strong>Observaciones del Jefe de Taller:</strong><br>
-                        ${escapeHtml(dt.observaciones)}
-                    </div>
-                ` : ''}
-            </div>
-        `).join('');
-    }
-    
-    // Servicios cotizados
-    let serviciosHtml = '';
-    if (detalle.servicios && detalle.servicios.length > 0) {
-        serviciosHtml = `
-            <div class="detalle-seccion">
-                <h4><i class="fas fa-dollar-sign"></i> 💰 SERVICIOS COTIZADOS</h4>
-                <div class="detalle-grid">
-                    ${detalle.servicios.map(s => `
-                        <div class="detalle-item">
-                            <span class="detalle-label">${escapeHtml(s.descripcion)}</span>
-                            <span class="detalle-value">Bs. ${s.precio?.toFixed(2) || '0.00'}</span>
-                        </div>
-                    `).join('')}
-                    <div class="detalle-item">
-                        <span class="detalle-label"><strong>TOTAL</strong></span>
-                        <span class="detalle-value" style="color: var(--verde-exito);"><strong>Bs. ${detalle.total?.toFixed(2) || '0.00'}</strong></span>
-                    </div>
                 </div>
-            </div>
-        `;
+            `;
+        } else {
+            serviciosContainer.innerHTML = '<div class="empty-state"><p>No hay servicios registrados</p></div>';
+        }
     }
-    
-    body.innerHTML = `
-        ${datosClienteVehiculoHtml}
-        ${recepcionHtml}
-        ${fotosHtml}
-        ${tecnicosHtml}
-        ${diagnosticoInicialHtml}
-        ${diagnosticosTecnicosHtml}
-        ${serviciosHtml}
-    `;
-    
-    modal.classList.add('show');
 }
 
 // =====================================================
 // FUNCIONES AUXILIARES
 // =====================================================
-function mostrarResultadosVacio(placa) {
-    const container = document.getElementById('resultadosContainer');
-    if (!container) return;
-    
+function mostrarLoading(container, mensaje) {
     container.innerHTML = `
-        <div class="empty-state">
-            <i class="fas fa-car-side"></i>
-            <p>No se encontró el vehículo con placa <strong>${escapeHtml(placa)}</strong></p>
-            <p style="font-size: 0.8rem; margin-top: 0.5rem;">Verifica que la placa sea correcta</p>
+        <div class="loading-state">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>${mensaje}</p>
         </div>
     `;
 }
 
-function mostrarResultadosVacioUltimas() {
-    const container = document.getElementById('resultadosContainer');
-    if (!container) return;
-    
+function mostrarError(container, mensaje) {
+    container.innerHTML = `
+        <div class="empty-state">
+            <i class="fas fa-exclamation-triangle"></i>
+            <h3>Error</h3>
+            <p>${mensaje}</p>
+            <button class="btn-buscar" onclick="cargarUltimasOrdenes()" style="margin-top: 1rem;">
+                <i class="fas fa-sync-alt"></i> Reintentar
+            </button>
+        </div>
+    `;
+}
+
+function mostrarSinResultados(container, mensaje) {
     container.innerHTML = `
         <div class="empty-state">
             <i class="fas fa-search"></i>
-            <p>No hay órdenes registradas</p>
-            <p style="font-size: 0.8rem; margin-top: 0.5rem;">Ingresa una placa para buscar el historial completo</p>
+            <h3>Sin resultados</h3>
+            <p>${mensaje}</p>
+            <button class="btn-buscar" onclick="cargarUltimasOrdenes()" style="margin-top: 1rem;">
+                <i class="fas fa-history"></i> Ver últimas órdenes
+            </button>
         </div>
     `;
 }
 
-function mostrarLoading(show) {
-    const container = document.getElementById('resultadosContainer');
-    if (!container) return;
-    
-    if (show) {
-        container.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i><p>Cargando...</p></div>`;
+function getEstadoClass(estado) {
+    if (!estado) return '';
+    if (estado === 'Entregado' || estado === 'Finalizado') return 'Entregado';
+    if (estado === 'EnProceso') return 'EnProceso';
+    if (estado === 'EnRecepcion') return 'EnRecepcion';
+    if (estado === 'EnPausa') return 'EnPausa';
+    return '';
+}
+
+function getEstadoText(estado) {
+    if (!estado) return 'Desconocido';
+    if (estado === 'Entregado') return 'Entregado';
+    if (estado === 'Finalizado') return 'Finalizado';
+    if (estado === 'EnProceso') return 'En Proceso';
+    if (estado === 'EnRecepcion') return 'En Recepción';
+    if (estado === 'EnPausa') return 'En Pausa';
+    return estado;
+}
+
+function formatFecha(fecha) {
+    if (!fecha) return 'N/A';
+    try {
+        const date = new Date(fecha);
+        return date.toLocaleDateString('es-CL', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+    } catch (e) {
+        return fecha;
+    }
+}
+
+function mostrarFechaActual() {
+    const ahora = new Date();
+    const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
+    const dateElement = document.getElementById('currentDate');
+    if (dateElement) {
+        dateElement.textContent = ahora.toLocaleDateString('es-CL', opciones);
     }
 }
 
@@ -732,15 +640,7 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
     
     const toast = document.createElement('div');
     toast.className = `toast-notification ${tipo}`;
-    
-    const iconos = {
-        success: 'fa-check-circle',
-        error: 'fa-exclamation-circle',
-        warning: 'fa-exclamation-triangle',
-        info: 'fa-info-circle'
-    };
-    
-    toast.innerHTML = `<i class="fas ${iconos[tipo] || iconos.info}"></i><span>${escapeHtml(mensaje)}</span>`;
+    toast.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : tipo === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i><span>${escapeHtml(mensaje)}</span>`;
     document.body.appendChild(toast);
     
     setTimeout(() => {
@@ -751,29 +651,70 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
     }, 3000);
 }
 
-function verImagenAmpliada(url, titulo) {
+function setupModalTabs() {
+    const tabs = document.querySelectorAll('.modal-tab');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            const tabId = this.getAttribute('data-tab');
+            tabs.forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            document.querySelectorAll('.modal-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            const activeContent = document.getElementById(`tab-${tabId}`);
+            if (activeContent) activeContent.classList.add('active');
+        });
+    });
+}
+
+function configurarEventListeners() {
+    const btnBuscar = document.getElementById('btnBuscar');
+    const btnLimpiar = document.getElementById('btnLimpiar');
+    const searchPlaca = document.getElementById('searchPlaca');
+    
+    if (btnBuscar) btnBuscar.addEventListener('click', buscarHistorial);
+    if (btnLimpiar) {
+        btnLimpiar.addEventListener('click', () => {
+            document.getElementById('searchPlaca').value = '';
+            document.getElementById('filterEstado').value = '';
+            document.getElementById('fechaDesde').value = '';
+            document.getElementById('fechaHasta').value = '';
+            cargarUltimasOrdenes();
+        });
+    }
+    if (searchPlaca) {
+        searchPlaca.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') buscarHistorial();
+        });
+    }
+}
+
+window.verImagenAmpliada = function(url, titulo) {
     const modal = document.getElementById('modalImagen');
     const tituloSpan = document.getElementById('imagenTitulo');
     const imagen = document.getElementById('imagenAmpliada');
     
     if (tituloSpan) tituloSpan.textContent = titulo || 'Imagen';
     if (imagen) imagen.src = url;
-    
-    modal.classList.add('show');
-}
+    if (modal) modal.classList.add('show');
+};
 
-function cerrarModalImagen() {
+window.cerrarModalImagen = function() {
     const modal = document.getElementById('modalImagen');
     if (modal) modal.classList.remove('show');
-}
+};
 
-function cerrarModalDetalle() {
+window.cerrarModalDetalle = function() {
     const modal = document.getElementById('modalDetalleOrden');
     if (modal) modal.classList.remove('show');
-}
+};
 
-// Exponer funciones globales
-window.verDetalleCompletoOrden = verDetalleCompletoOrden;
-window.cerrarModalDetalle = cerrarModalDetalle;
-window.verImagenAmpliada = verImagenAmpliada;
-window.cerrarModalImagen = cerrarModalImagen;
+// Cerrar modales con ESC
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const modalDetalle = document.getElementById('modalDetalleOrden');
+        const modalImagen = document.getElementById('modalImagen');
+        if (modalDetalle) modalDetalle.classList.remove('show');
+        if (modalImagen) modalImagen.classList.remove('show');
+    }
+});

@@ -1,6 +1,6 @@
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA ENCARGADO DE REPUESTOS
-// VERSIÓN CORREGIDA CON LAS NUEVAS PESTAÑAS
+// VERSIÓN CORREGIDA - Rutas correctas
 // =====================================================
 
 // Configuración
@@ -11,18 +11,30 @@ const CONFIG = {
     userRole: 'Encargado de Repuestos'
 };
 
-// Mapeo de páginas a archivos
+// =====================================================
+// ⚠️ IMPORTANTE: CORREGIR ESTAS RUTAS ⚠️
+// =====================================================
 const PAGE_FILES = {
     'dashboard': 'dashboard.html',
-    'cotizaciones': 'solicitudes_cotizacion.html',
-    'compras': 'solicitudes_compra.html',
+    'cotizaciones': 'solicitudes_cotizacion.html',  // ← Corregido
+    'compras': 'solicitudes_compra.html',           // ← Corregido
     'proveedores': 'proveedores.html',
     'historial': 'historial.html',
     'perfil': 'perfil.html'
 };
 
+// Nombres amigables
+const PAGE_NAMES = {
+    'dashboard': 'Dashboard',
+    'cotizaciones': 'Solicitudes de Cotización',
+    'compras': 'Solicitudes de Compra',
+    'proveedores': 'Proveedores',
+    'historial': 'Historial',
+    'perfil': 'Perfil'
+};
+
 // =====================================================
-// FUNCIÓN PRINCIPAL PARA INCLUIR EL SIDEBAR
+// FUNCIÓN PRINCIPAL
 // =====================================================
 async function includeSidebar() {
     const sidebarContainer = document.getElementById('sidebar-container');
@@ -85,16 +97,16 @@ function crearSidebarRespaldo(container) {
             </div>
             <nav class="sidebar-nav">
                 <ul>
-                    ${crearMenuItem('dashboard', 'Dashboard', 'chart-pie', currentPage, '')}
-                    ${crearMenuItem('cotizaciones', 'Solicitudes de Cotización', 'file-invoice-dollar', currentPage, '')}
-                    ${crearMenuItem('compras', 'Solicitudes de Compra', 'shopping-cart', currentPage, '')}
-                    ${crearMenuItem('proveedores', 'Proveedores', 'truck', currentPage, '')}
-                    ${crearMenuItem('historial', 'Historial', 'history', currentPage, '')}
-                    ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage, '')}
+                    ${crearMenuItem('dashboard', 'Dashboard', 'chart-line', currentPage)}
+                    ${crearMenuItem('cotizaciones', 'Solicitudes Cotización', 'file-invoice-dollar', currentPage)}
+                    ${crearMenuItem('compras', 'Solicitudes Compra', 'shopping-cart', currentPage)}
+                    ${crearMenuItem('proveedores', 'Proveedores', 'truck', currentPage)}
+                    ${crearMenuItem('historial', 'Historial', 'history', currentPage)}
+                    ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage)}
                 </ul>
                 <ul class="sidebar-bottom">
                     <li class="nav-item">
-                        <a href="#" onclick="logout()" class="nav-link">
+                        <a href="#" onclick="cerrarSesion()" class="nav-link">
                             <i class="fas fa-sign-out-alt"></i>
                             <span>Cerrar Sesión</span>
                         </a>
@@ -105,16 +117,15 @@ function crearSidebarRespaldo(container) {
     `;
 }
 
-function crearMenuItem(page, label, icon, currentPage, badge) {
+function crearMenuItem(page, label, icon, currentPage) {
     const isActive = currentPage === page ? 'active' : '';
     const href = PAGE_FILES[page] || `${page}.html`;
     
     return `
         <li class="nav-item ${isActive}" data-page="${page}">
-            <a href="${href}" class="nav-link">
+            <a href="${href}" class="nav-link ${isActive}">
                 <i class="fas fa-${icon}"></i>
                 <span>${label}</span>
-                ${badge}
             </a>
         </li>
     `;
@@ -123,63 +134,116 @@ function crearMenuItem(page, label, icon, currentPage, badge) {
 function inicializarSidebar() {
     setTimeout(() => {
         const currentPage = obtenerPaginaActual();
+        console.log('📄 Página actual detectada:', currentPage);
+        
         marcarItemActivo(currentPage);
         actualizarNombreUsuario();
-        actualizarBadgeNotificaciones();
+        actualizarEnlacesSidebar();
+        
+        const items = document.querySelectorAll('.nav-item');
+        console.log(`📋 Encontrados ${items.length} items en el sidebar`);
     }, 100);
 }
 
 function obtenerPaginaActual() {
     const path = window.location.pathname;
     const filename = path.split('/').pop() || 'dashboard.html';
-    const pageName = filename.replace('.html', '');
     
-    // Buscar coincidencia en PAGE_FILES
-    for (const [key, value] of Object.entries(PAGE_FILES)) {
-        if (value === filename || key === pageName) {
-            return key;
-        }
+    console.log('🔍 Archivo actual:', filename);
+    
+    // =====================================================
+    // ⚠️ CORREGIR ESTE MAPEO ⚠️
+    // =====================================================
+    const fileToPage = {
+        'dashboard.html': 'dashboard',
+        'solicitudes_cotizacion.html': 'cotizaciones',  // ← Corregido
+        'solicitudes_compra.html': 'compras',           // ← Corregido
+        'proveedores.html': 'proveedores',
+        'historial.html': 'historial',
+        'perfil.html': 'perfil'
+    };
+    
+    if (fileToPage[filename]) {
+        console.log('✅ Página encontrada:', fileToPage[filename]);
+        return fileToPage[filename];
     }
     
+    // Para páginas que no están en el mapeo
+    if (filename === 'dashboard.html') {
+        return 'dashboard';
+    }
+    
+    console.log('⚠️ Usando dashboard por defecto');
     return 'dashboard';
 }
 
 function marcarItemActivo(currentPage) {
+    // Remover clase active de todos
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
         const link = item.querySelector('.nav-link');
         if (link) link.classList.remove('active');
     });
     
-    const activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
+    // Buscar por data-page
+    let activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
+    
+    // Si no encuentra, buscar por href
+    if (!activeItem) {
+        const currentFile = window.location.pathname.split('/').pop();
+        document.querySelectorAll('.nav-item').forEach(item => {
+            const link = item.querySelector('.nav-link');
+            const href = link?.getAttribute('href');
+            if (href && href === currentFile) {
+                activeItem = item;
+            }
+        });
+    }
+    
+    // Marcar el activo
     if (activeItem) {
         activeItem.classList.add('active');
         const activeLink = activeItem.querySelector('.nav-link');
-        if (activeLink) activeLink.classList.add('active');
-    } else {
-        const defaultItem = document.querySelector('.nav-item[data-page="dashboard"]');
-        if (defaultItem) {
-            defaultItem.classList.add('active');
-            const defaultLink = defaultItem.querySelector('.nav-link');
-            if (defaultLink) defaultLink.classList.add('active');
+        if (activeLink) {
+            activeLink.classList.add('active');
         }
+        console.log('✅ Menú activo:', currentPage);
+    } else {
+        console.warn('⚠️ No se encontró el menú para:', currentPage);
     }
+}
+
+function actualizarEnlacesSidebar() {
+    document.querySelectorAll('.nav-link[href]').forEach(link => {
+        const href = link.getAttribute('href');
+        if (href && !href.startsWith('javascript') && href !== '#' && !href.startsWith('http')) {
+            if (!href.includes('.html')) {
+                const page = link.closest('.nav-item')?.getAttribute('data-page');
+                if (page && PAGE_FILES[page]) {
+                    link.setAttribute('href', PAGE_FILES[page]);
+                }
+            }
+        }
+    });
 }
 
 function obtenerUsuarioActual() {
     try {
         const userStr = localStorage.getItem('furia_user');
+        
         if (userStr) {
             const user = JSON.parse(userStr);
             return {
                 nombre: user.nombre || CONFIG.defaultUserName,
+                email: user.email || '',
                 rol: user.rol || 'encargado_repuestos'
             };
         }
     } catch (error) {
         console.error('Error obteniendo usuario:', error);
     }
-    return { nombre: CONFIG.defaultUserName };
+    
+    return { nombre: CONFIG.defaultUserName, email: '', rol: 'encargado_repuestos' };
 }
 
 function actualizarNombreUsuario() {
@@ -190,33 +254,20 @@ function actualizarNombreUsuario() {
     userNameSpan.textContent = user.nombre;
 }
 
-function actualizarBadgeNotificaciones() {
-    // Actualizar badge de notificaciones si existe
-    const badge = document.getElementById('notificacionesBadge');
-    if (badge) {
-        const stockBajo = localStorage.getItem('stock_bajo_count') || '0';
-        if (stockBajo !== '0') {
-            badge.textContent = stockBajo;
-            badge.style.display = 'inline';
-        } else {
-            badge.style.display = 'none';
-        }
-    }
-}
-
-// Función global de logout
-window.logout = function() {
+// Cierre de sesión
+window.cerrarSesion = function() {
     if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
         localStorage.removeItem('furia_token');
         localStorage.removeItem('furia_user');
         localStorage.removeItem('furia_remembered');
-        localStorage.removeItem('furia_remembered_type');
-        localStorage.removeItem('furia_selected_role');
-        localStorage.removeItem('furia_selected_role_user');
-        localStorage.removeItem('stock_bajo_count');
         window.location.href = '../../login.html';
     }
 };
 
-// Inicializar cuando el DOM esté listo
+// Recargar sidebar
+window.recargarSidebar = function() {
+    includeSidebar();
+};
+
+// Inicializar
 document.addEventListener('DOMContentLoaded', includeSidebar);

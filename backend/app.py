@@ -1,4 +1,4 @@
-from flask import Flask, send_from_directory, jsonify, request
+from flask import Flask, send_from_directory, jsonify, request, Response
 from flask_cors import CORS
 import os
 import sys
@@ -30,7 +30,7 @@ def is_railway():
 
 # Crear aplicación Flask
 app = Flask(__name__, 
-            static_folder=PROJECT_DIR,  # Ahora apunta a la raíz del proyecto
+            static_folder=PROJECT_DIR,
             static_url_path='')
 
 # =====================================================
@@ -49,8 +49,63 @@ CORS(app,
      expose_headers=['Content-Type', 'Authorization'])
 
 # =====================================================
-# MIDDLEWARE
+# MIDDLEWARE PARA INYECTAR CONFIGURACIÓN
 # =====================================================
+
+@app.after_request
+def add_cors_headers(response):
+    """Agrega headers CORS a todas las respuestas"""
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
+
+@app.route('/api-config.js')
+def serve_api_config():
+    """Sirve un archivo JS con la configuración de API automática"""
+    config_js = f"""// Configuración automática de API - Generada por Flask
+(function() {{
+    // Detectar si estamos en producción o desarrollo
+    const isProduction = window.location.hostname !== 'localhost' && 
+                        !window.location.hostname.includes('127.0.0.1') &&
+                        !window.location.hostname.includes('192.168.');
+    
+    // Configurar la URL base de la API
+    window.API_BASE_URL = isProduction ? '' : 'http://localhost:5000';
+    window.IS_PRODUCTION = isProduction;
+    
+    // Interceptar todas las peticiones fetch que vayan a localhost
+    const originalFetch = window.fetch;
+    window.fetch = function(url, options) {{
+        if (typeof url === 'string') {{
+            // Reemplazar localhost:5000 por la URL relativa
+            let newUrl = url.replace('http://localhost:5000', '');
+            newUrl = newUrl.replace('http://127.0.0.1:5000', '');
+            newUrl = newUrl.replace('https://localhost:5000', '');
+            
+            if (newUrl !== url) {{
+                console.log('🔄 URL corregida:', url, '→', newUrl);
+                return originalFetch(newUrl, options);
+            }}
+        }}
+        return originalFetch(url, options);
+    }};
+    
+    // Función helper para hacer peticiones a la API
+    window.apiFetch = function(endpoint, options = {{}}) {{
+        let url = endpoint;
+        if (!url.startsWith('http')) {{
+            url = (window.API_BASE_URL || '') + (endpoint.startsWith('/') ? endpoint : '/' + endpoint);
+        }}
+        return originalFetch(url, options);
+    }};
+    
+    console.log('✅ API Config cargada - Modo:', isProduction ? 'PRODUCCIÓN' : 'DESARROLLO');
+    console.log('📡 API Base URL:', window.API_BASE_URL || '(relativa)');
+}})();
+"""
+    return Response(config_js, mimetype='application/javascript')
+
 @app.before_request
 def before_request():
     if request.method == 'POST' and request.endpoint and 'api' in request.endpoint:
@@ -59,6 +114,37 @@ def before_request():
                 request.get_json(force=True)
             except Exception:
                 pass
+    
+    # Inyectar el script de configuración en las respuestas HTML
+    if request.path.endswith('.html') or request.path == '/' or request.path == '':
+        pass  # Se maneja en after_request
+
+@app.after_request
+def inject_config_script(response):
+    """Inyecta el script de configuración en todas las páginas HTML"""
+    if response.content_type and 'text/html' in response.content_type:
+        try:
+            # Obtener el contenido HTML
+            html = response.get_data(as_text=True)
+            
+            # Buscar el final del head o el inicio del body para inyectar
+            script_tag = '<script src="/api-config.js"></script>'
+            
+            if '</head>' in html:
+                # Inyectar antes de cerrar head
+                html = html.replace('</head>', f'    {script_tag}\n</head>')
+            elif '<body>' in html:
+                # Inyectar después de abrir body
+                html = html.replace('<body>', f'<body>\n    {script_tag}')
+            else:
+                # Inyectar al inicio
+                html = f'{script_tag}\n{html}'
+            
+            response.set_data(html)
+        except Exception as e:
+            print(f"⚠️ Error inyectando script: {e}")
+    
+    return response
 
 # =====================================================
 # IMPORTAR BLUEPRINTS
@@ -119,11 +205,7 @@ except Exception as e:
 print("🟡 Iniciando importación de Jefe Taller...")
 
 try:
-    print("🔹 Importando jefe_taller_ordenes_bp...")
     from jefe_taller.orden_trabajo import jefe_taller_ordenes_bp
-    print(f"🔹 jefe_taller_ordenes_bp importado, tipo: {type(jefe_taller_ordenes_bp)}")
-    
-    print("🔹 Importando otros blueprints...")
     from jefe_taller.calendario_bahias import calendario_bahias_bp
     from jefe_taller.historial_vehiculos import historial_vehiculos_bp
     from jefe_taller.perfil import perfil_bp   
@@ -134,52 +216,22 @@ try:
     from jefe_taller.control_calidad import control_calidad_bp
     from jefe_taller.gestion_avances import avance_jefe_bp
     from jefe_taller.dashboard import dashboard_bp
-    print("🔹 Todos los imports completados")
     
-    print("🔹 Registrando blueprints...")
     app.register_blueprint(jefe_taller_ordenes_bp, url_prefix='/api/jefe-taller')
-    print("  ✓ jefe_taller_ordenes_bp registrado")
     app.register_blueprint(calendario_bahias_bp, url_prefix='/api/jefe-taller')
-    print("  ✓ calendario_bahias_bp registrado")
     app.register_blueprint(historial_vehiculos_bp, url_prefix='/api/jefe-taller')
-    print("  ✓ historial_vehiculos_bp registrado")
     app.register_blueprint(perfil_bp, url_prefix='/api/jefe-taller')
-    print("  ✓ perfil_bp registrado")
     app.register_blueprint(jefe_taller_diagnostico_bp, url_prefix='/api/jefe-taller')
-    print("  ✓ jefe_taller_diagnostico_bp registrado")
     app.register_blueprint(cotizaciones_bp, url_prefix='/api/jefe-taller')
-    print("  ✓ cotizaciones_bp registrado")
     app.register_blueprint(admin_roles_bp, url_prefix='/api/jefe-taller')
-    print("  ✓ admin_roles_bp registrado")
     app.register_blueprint(reservas_solicitudes_bp, url_prefix='/api/jefe-taller')
-    print("  ✓ reservas_solicitudes_bp registrado")
     app.register_blueprint(control_calidad_bp)
-    print("  ✓ control_calidad_bp registrado")
     app.register_blueprint(avance_jefe_bp)
-    print("  ✓ avance_jefe_bp registrado")
     app.register_blueprint(dashboard_bp, url_prefix='/api/jefe-taller')
-    print("  ✓ dashboard_bp registrado")
     
-    print("🔵🔵🔵 Blueprints de Jefe Taller registrados correctamente 🔵🔵🔵")
     logger.info("✅ Blueprints de Jefe Taller registrados correctamente")
-    
-except NameError as e:
-    print(f"🔴❌ NameError: {e}")
-    import traceback
-    traceback.print_exc()
-    logger.error(f"❌ NameError en blueprint de Jefe Taller: {e}")
-    
-except ImportError as e:
-    print(f"🔴❌ ImportError: {e}")
-    import traceback
-    traceback.print_exc()
-    logger.error(f"❌ ImportError en blueprint de Jefe Taller: {e}")
-    
 except Exception as e:
-    print(f"🔴❌ Exception: {e}")
-    import traceback
-    traceback.print_exc()
-    logger.error(f"❌ Error registrando blueprints de Jefe Taller: {e}")
+    logger.error(f"❌ Error en blueprints de Jefe Taller: {e}")
 
 # =====================================================
 # ENCARGADO DE REPUESTOS
@@ -230,12 +282,11 @@ except Exception as e:
     logger.error(f"❌ Error registrando blueprints de Cliente: {e}")
 
 # =====================================================
-# RUTAS ESTÁTICAS - CORREGIDAS PARA RAILWAY
+# RUTAS ESTÁTICAS
 # =====================================================
 
 @app.route('/css/<path:filename>')
 def serve_css(filename):
-    # Buscar en las carpetas de cada rol (ahora usando PROJECT_DIR)
     roles = ['login', 'jefe_operativo', 'jefe_taller', 'encargado_rep_almacen', 'tecnico_mecanico', 'cliente']
     for role in roles:
         ruta = os.path.join(PROJECT_DIR, role, 'css', filename)
@@ -266,10 +317,7 @@ def serve_login_html():
 
 @app.route('/registro-personal.html')
 def serve_registro_personal():
-    try:
-        return send_from_directory(os.path.join(PROJECT_DIR, 'login'), 'registro-personal.html')
-    except:
-        return send_from_directory(PROJECT_DIR, 'registro-personal.html')
+    return send_from_directory(os.path.join(PROJECT_DIR, 'login'), 'registro-personal.html')
 
 @app.route('/recuperar-contrasena.html')
 def serve_recuperar_contrasena():
@@ -327,8 +375,6 @@ def serve_html(path):
     html_routes = {
         'registro-personal.html': os.path.join(PROJECT_DIR, 'login', 'registro-personal.html'),
         'recuperar-contrasena.html': os.path.join(PROJECT_DIR, 'login', 'recuperar-contrasena.html'),
-        
-        # Jefe Operativo
         'jefe_operativo': os.path.join(PROJECT_DIR, 'jefe_operativo', 'dashboard.html'),
         'jefe_operativo/dashboard': os.path.join(PROJECT_DIR, 'jefe_operativo', 'dashboard.html'),
         'jefe_operativo/recepcion': os.path.join(PROJECT_DIR, 'jefe_operativo', 'recepcion.html'),
@@ -340,8 +386,6 @@ def serve_html(path):
         'jefe_operativo/historial': os.path.join(PROJECT_DIR, 'jefe_operativo', 'historial.html'),
         'jefe_operativo/perfil': os.path.join(PROJECT_DIR, 'jefe_operativo', 'perfil.html'),
         'jefe_operativo/control_calidad': os.path.join(PROJECT_DIR, 'jefe_operativo', 'control_calidad.html'),
-        
-        # Jefe Taller
         'jefe_taller': os.path.join(PROJECT_DIR, 'jefe_taller', 'dashboard.html'),
         'jefe_taller/dashboard': os.path.join(PROJECT_DIR, 'jefe_taller', 'dashboard.html'),
         'jefe_taller/orden_trabajo': os.path.join(PROJECT_DIR, 'jefe_taller', 'orden_trabajo.html'),
@@ -355,8 +399,6 @@ def serve_html(path):
         'jefe_taller/admin_roles': os.path.join(PROJECT_DIR, 'jefe_taller', 'admin_roles.html'),
         'jefe_taller/gestion_avances': os.path.join(PROJECT_DIR, 'jefe_taller', 'gestion_avances.html'),
         'jefe_taller/perfil': os.path.join(PROJECT_DIR, 'jefe_taller', 'perfil.html'),
-        
-        # Encargado Repuestos
         'encargado_rep_almacen': os.path.join(PROJECT_DIR, 'encargado_rep_almacen', 'dashboard.html'),
         'encargado_rep_almacen/dashboard': os.path.join(PROJECT_DIR, 'encargado_rep_almacen', 'dashboard.html'),
         'encargado_rep_almacen/solicitudes_cotizacion': os.path.join(PROJECT_DIR, 'encargado_rep_almacen', 'solicitudes_cotizacion.html'),
@@ -364,16 +406,12 @@ def serve_html(path):
         'encargado_rep_almacen/proveedores': os.path.join(PROJECT_DIR, 'encargado_rep_almacen', 'proveedores.html'),
         'encargado_rep_almacen/historial': os.path.join(PROJECT_DIR, 'encargado_rep_almacen', 'historial.html'),
         'encargado_rep_almacen/perfil': os.path.join(PROJECT_DIR, 'encargado_rep_almacen', 'perfil.html'),
-        
-        # Técnico Mecánico
         'tecnico_mecanico': os.path.join(PROJECT_DIR, 'tecnico_mecanico', 'misvehiculos.html'),
         'tecnico_mecanico/misvehiculos': os.path.join(PROJECT_DIR, 'tecnico_mecanico', 'misvehiculos.html'),
         'tecnico_mecanico/diagnostico': os.path.join(PROJECT_DIR, 'tecnico_mecanico', 'diagnostico.html'),
         'tecnico_mecanico/historial': os.path.join(PROJECT_DIR, 'tecnico_mecanico', 'historial.html'),
         'tecnico_mecanico/avance': os.path.join(PROJECT_DIR, 'tecnico_mecanico', 'avance.html'),
         'tecnico_mecanico/perfil': os.path.join(PROJECT_DIR, 'tecnico_mecanico', 'perfil.html'),
-        
-        # Cliente
         'cliente': os.path.join(PROJECT_DIR, 'cliente', 'misvehiculos.html'),
         'cliente/misvehiculos': os.path.join(PROJECT_DIR, 'cliente', 'misvehiculos.html'),
         'cliente/misreservas': os.path.join(PROJECT_DIR, 'cliente', 'misreservas.html'),
@@ -414,15 +452,10 @@ def test_api():
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Endpoint para health check de Railway"""
     return jsonify({
         'status': 'healthy',
         'timestamp': __import__('datetime').datetime.now().isoformat()
     }), 200
-
-# =====================================================
-# ENDPOINT DE PRUEBA PARA AVANCES (DIRECTO)
-# =====================================================
 
 @app.route('/api/jefe-taller/avances/test-directo', methods=['GET'])
 def test_avances_directo():
@@ -452,7 +485,6 @@ def internal_error(error):
 # =====================================================
 
 if __name__ == '__main__':
-    # Railway asigna el puerto automáticamente
     port = int(os.environ.get('PORT', 5000))
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     
@@ -467,7 +499,6 @@ if __name__ == '__main__':
     print("="*60)
     print(f"📡 Servidor iniciado en: http://0.0.0.0:{port}")
     print(f"🔧 Modo debug: {debug_mode}")
-    print(f"📁 Directorio proyecto: {PROJECT_DIR}")
     print("="*60)
     print("✅ Frontend accesible en:")
     print(f"   • Login:              http://localhost:{port}/")
@@ -476,13 +507,6 @@ if __name__ == '__main__':
     print(f"   • Encargado Repuestos: http://localhost:{port}/encargado_rep_almacen")
     print(f"   • Técnico Mecánico:   http://localhost:{port}/tecnico_mecanico")
     print(f"   • Cliente:            http://localhost:{port}/cliente")
-    print("="*60)
-    print("📁 API Endpoints por Rol:")
-    print("   • Técnico Mecánico:     /tecnico/*")
-    print("   • Jefe Operativo:       /api/jefe-operativo/*")
-    print("   • Jefe Taller:          /api/jefe-taller/*")
-    print("   • Encargado Repuestos:  /api/encargado-repuestos/*")
-    print("   • Cliente:              /api/cliente/*")
     print("="*60)
     
     app.run(debug=debug_mode, host='0.0.0.0', port=port, threaded=True)

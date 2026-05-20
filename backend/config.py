@@ -53,4 +53,4 @@ class Config:
     CLOUDINARY_CONFIGURED = cloudinary_configured
 
 config = Config()
-supabase = config.supabase
+supabase = config.supabase if hasattr(config, 'supabase') else None

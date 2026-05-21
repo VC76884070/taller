@@ -9,8 +9,11 @@ from config import config
 import jwt
 import datetime
 import logging
-
+import os
 logger = logging.getLogger(__name__)
+IS_PRODUCTION = os.environ.get('RAILWAY_ENVIRONMENT') is not None or os.environ.get('PORT') is not None
+API_BASE_URL = '' if IS_PRODUCTION else 'http://localhost:5000'
+
 
 # Crear el blueprint - ¡IMPORTANTE! La URL prefix debe ser consistente
 admin_roles_bp = Blueprint('admin_roles', __name__, url_prefix='/api/admin')

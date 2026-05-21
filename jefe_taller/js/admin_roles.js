@@ -1,23 +1,30 @@
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
-// =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
-
-// =====================================================
 // ADMINISTRACIÓN DE ROLES - JEFE TALLER (COMPLETO)
 // FURIA MOTOR COMPANY SRL
+// VERSIÓN CORREGIDA - USA VARIABLE GLOBAL DE INCLUDE.JS
 // =====================================================
 
-const API_URL = `${API_BASE_URL}/api/jefe-taller`; // CAMBIADO: debe coincidir con el prefix del blueprint
+// =====================================================
+// CONFIGURACIÓN DE API - USA VARIABLE GLOBAL
+// =====================================================
+// La variable API_BASE_URL ya está declarada en include.js como window.API_BASE_URL
+// Si por alguna razón no existe (página cargada sola), la creamos
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 admin_roles.js - Modo DESARROLLO (fallback)');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 admin_roles.js - Modo PRODUCCIÓN (fallback)');
+        return '';
+    })();
+}
+
+// Usar el endpoint correcto para jefe-taller (NO /api/admin)
+const API_URL = `${window.API_BASE_URL}/api/jefe-taller`;
+
 let usuariosData = [];
 let clientesData = [];
 let rolesData = [];
@@ -38,6 +45,9 @@ const ROLES_CRITICOS = {
 // =====================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 Inicializando admin_roles.js');
+    console.log('📡 API_URL:', API_URL);
+    
     const autenticado = await checkAuth();
     if (!autenticado) return;
     
@@ -57,7 +67,7 @@ async function checkAuth() {
     const userData = localStorage.getItem('furia_user');
     
     if (!token) {
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = window.API_BASE_URL + '/';
         return false;
     }
     
@@ -78,7 +88,7 @@ async function checkAuth() {
         if (!esJefeTaller) {
             mostrarNotificacion('No tienes permisos para acceder a esta sección', 'error');
             setTimeout(() => {
-                window.location.href = API_BASE_URL + '/jefe_taller/dashboard.html';
+                window.location.href = window.API_BASE_URL + '/jefe_taller/dashboard.html';
             }, 2000);
             return false;
         }
@@ -87,7 +97,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error verificando autenticación:', error);
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = window.API_BASE_URL + '/';
         return false;
     }
 }
@@ -150,7 +160,7 @@ function cambiarPestana(tabId) {
 function logout() {
     localStorage.removeItem('furia_token');
     localStorage.removeItem('furia_user');
-    window.location.href = API_BASE_URL + '/';
+    window.location.href = window.API_BASE_URL + '/';
 }
 
 // =====================================================
@@ -448,7 +458,7 @@ function renderPersonalTable(usuarios) {
                     <i class="fas fa-trash-alt"></i>
                 </button>
             </td>
-        </tr>
+        <tr>
     `).join('');
 }
 
@@ -952,7 +962,7 @@ async function saveRoles() {
 }
 
 // =====================================================
-// MODAL DE TAREAS PENDIENTES (NUEVO)
+// MODAL DE TAREAS PENDIENTES
 // =====================================================
 
 function mostrarModalTareasPendientes(data, usuario, esParaEliminacion = false) {
@@ -969,9 +979,6 @@ function mostrarModalTareasPendientes(data, usuario, esParaEliminacion = false) 
     
     const tareas = data.tareas_pendientes || [];
     const totalTareas = data.total_tareas || tareas.length;
-    
-    const rolesAfectadosTexto = data.error ? data.error.split('porque')[0] : 
-        (esParaEliminacion ? 'eliminar al usuario' : 'quitar el(los) rol(es)');
     
     modal.innerHTML = `
         <div class="modal-content" style="max-width: 600px;">

@@ -1,12 +1,13 @@
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA JEFE DE TALLER
-// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
+// VERSIÓN CON VARIABLE GLOBAL PARA COMPARTIR CON OTROS SCRIPTS
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// CONFIGURACIÓN DE API - VARIABLE GLOBAL
 // =====================================================
-const API_BASE_URL = (() => {
+// Declarar como variable global accesible desde cualquier script
+window.API_BASE_URL = (() => {
     if (window.location.hostname === 'localhost' || 
         window.location.hostname === '127.0.0.1' ||
         window.location.hostname.includes('192.168.')) {
@@ -16,6 +17,9 @@ const API_BASE_URL = (() => {
     console.log('📡 Include.js (Jefe Taller) - Modo PRODUCCIÓN');
     return '';
 })();
+
+// Crear constante local para usar dentro de este archivo
+const API_BASE_URL = window.API_BASE_URL;
 
 // Configuración
 const CONFIG = {
@@ -97,6 +101,7 @@ function crearSidebarRespaldo(container) {
                     ${crearMenuItem('calendario_bahias', 'Calendario y Bahías', 'calendar-alt', currentPage, '')}
                     ${crearMenuItem('reservas_solicitudes', 'Reservas y Solicitudes', 'calendar-check', currentPage, '')}
                     ${crearMenuItem('historial_vehiculos', 'Historial', 'history', currentPage, '')}
+                    ${crearMenuItem('admin_roles', 'Administrar Roles', 'users-cog', currentPage, '')}
                     ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage, '')}
                 </ul>
                 <ul class="sidebar-bottom">
@@ -142,7 +147,6 @@ function obtenerPaginaActual() {
     const filename = path.split('/').pop() || 'dashboard.html';
     let pageName = filename.replace('.html', '');
     
-    // Mapear nombres de archivo a los data-page
     const pageMapping = {
         'dashboard': 'dashboard',
         'orden_trabajo': 'orden_trabajo',
@@ -207,7 +211,7 @@ let notificacionesInterval = null;
 
 async function cargarNotificaciones() {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/jefe-taller/notificaciones`, {
+        const response = await fetch(`${window.API_BASE_URL}/api/jefe-taller/notificaciones`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
         });
         
@@ -219,7 +223,6 @@ async function cargarNotificaciones() {
         }
     } catch (error) {
         console.error('Error cargando notificaciones:', error);
-        // Datos de ejemplo mientras no hay backend
         notificaciones = [
             { id: 1, leida: false, mensaje: 'Nuevo diagnóstico pendiente de revisión', tipo: 'diagnostico' },
             { id: 2, leida: false, mensaje: 'Orden OT-250401-001 completada por técnico', tipo: 'orden' },
@@ -262,8 +265,6 @@ function mostrarNotificaciones() {
         }
         
         mostrarNotificacionToast(mensaje, tipo);
-        
-        // Marcar como leída (simulado)
         notif.leida = true;
     });
     
@@ -317,7 +318,7 @@ window.cerrarSesion = function() {
     if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
         localStorage.removeItem('furia_token');
         localStorage.removeItem('furia_user');
-        window.location.href = `${API_BASE_URL}/`;
+        window.location.href = `${window.API_BASE_URL}/`;
     }
 };
 

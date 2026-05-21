@@ -1,9 +1,23 @@
 // =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+// =====================================================
 // COTIZACIONES.JS - JEFE DE TALLER
 // VERSIÓN 5.0 - CON SOLICITUDES DE TÉCNICOS Y COMPRA DIRECTA UNIFICADA
 // =====================================================
 
-const API_URL = window.location.origin + '/api/jefe-taller';
+const API_URL = API_BASE_URL + '/api/jefe-taller';
 let currentUser = null;
 let currentUserRoles = [];
 
@@ -2159,7 +2173,7 @@ async function cargarUsuarioActual() {
     try {
         let token = localStorage.getItem('furia_token') || localStorage.getItem('token');
         if (!token) { 
-            window.location.href = '/'; 
+            window.location.href = API_BASE_URL + '/'; 
             return null; 
         }
         const payload = JSON.parse(atob(token.split('.')[1]));
@@ -2177,7 +2191,7 @@ async function cargarUsuarioActual() {
         
         if (!tieneRolJefeTaller) { 
             showToast('No tienes permisos para acceder a esta sección', 'error'); 
-            setTimeout(() => { window.location.href = '/'; }, 2000); 
+            setTimeout(() => { window.location.href = API_BASE_URL + '/'; }, 2000); 
             return null; 
         }
         
@@ -2189,7 +2203,7 @@ async function cargarUsuarioActual() {
         return currentUser;
     } catch (error) { 
         console.error('Error al cargar usuario:', error);
-        window.location.href = '/'; 
+        window.location.href = API_BASE_URL + '/'; 
         return null; 
     }
 }
@@ -2219,7 +2233,7 @@ async function cargarDatosIniciales() {
 function logout() { 
     localStorage.clear(); 
     sessionStorage.clear(); 
-    window.location.href = '/'; 
+    window.location.href = API_BASE_URL + '/'; 
 }
 
 async function inicializar() {
@@ -2231,6 +2245,7 @@ async function inicializar() {
     setupEventListeners();
     console.log('✅ cotizaciones.js inicializado correctamente');
 }
+
 function renderSolicitudesCompra() {
     const tbody = document.getElementById('tablaSolicitudesCompra');
     if (!tbody) return;
@@ -2682,24 +2697,6 @@ function verComprobanteCompra(idSolicitud) {
     abrirModal('modalDetalleCotizacion');
 }
 
-// Función para descargar el comprobante
-function descargarComprobante(idSolicitud, extension) {
-    const solicitud = solicitudesCompra.find(s => s.id === idSolicitud);
-    if (!solicitud || !solicitud.comprobante_url) {
-        showToast('No hay comprobante para descargar', 'warning');
-        return;
-    }
-    
-    // Crear un enlace temporal para descargar
-    const link = document.createElement('a');
-    link.href = solicitud.comprobante_url;
-    link.download = `comprobante_${solicitud.orden_codigo}_${solicitud.id}.${extension}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    showToast('Descargando comprobante...', 'success');
-}
 // Función para descargar el comprobante (CORREGIDA)
 async function descargarComprobante(idSolicitud) {
     const solicitud = solicitudesCompra.find(s => s.id === idSolicitud);
@@ -2742,6 +2739,7 @@ async function descargarComprobante(idSolicitud) {
         mostrarLoading(false);
     }
 }
+
 async function verificarDiasGuardados(id_orden) {
     try {
         const response = await fetch(`${API_URL}/orden/${id_orden}/tecnicos-asignados`, {
@@ -2766,6 +2764,7 @@ async function verificarDiasGuardados(id_orden) {
         console.error("Error verificando:", error);
     }
 }
+
 // =====================================================
 // VER AVANCES DE REPARACIÓN (FUNCIONAL)
 // =====================================================

@@ -1,9 +1,24 @@
 // =====================================================
 // DASHBOARD.JS - JEFE OPERATIVO (VERSIÓN FINAL)
 // SIN AUTO-REFRESH Y SIN REDIRECCIONES
+// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
 // =====================================================
 
-const API_URL = window.location.origin + '/api';
+// =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+const API_URL = `${API_BASE_URL}/api`;
 let calendar = null;
 let isLoading = false;
 let dashboardLoadTimeout = null;
@@ -14,6 +29,7 @@ let dashboardLoadTimeout = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Inicializando Dashboard Jefe Operativo');
+    console.log('📡 API_BASE_URL:', API_BASE_URL);
     
     const autenticado = await checkAuth();
     if (!autenticado) return;
@@ -39,7 +55,7 @@ async function checkAuth() {
     const userInfoRaw = localStorage.getItem('furia_user');
     
     if (!token) {
-        window.location.href = '/';
+        window.location.href = `${API_BASE_URL}/`;
         return false;
     }
     
@@ -50,9 +66,9 @@ async function checkAuth() {
         
         if (!tieneAcceso) {
             if (roles.includes('jefe_taller')) {
-                window.location.href = '/jefe_taller/dashboard.html';
+                window.location.href = `${API_BASE_URL}/jefe_taller/dashboard.html`;
             } else {
-                window.location.href = '/';
+                window.location.href = `${API_BASE_URL}/`;
             }
             return false;
         }
@@ -60,7 +76,7 @@ async function checkAuth() {
         return true;
     } catch (error) {
         console.error('Error en checkAuth:', error);
-        window.location.href = '/';
+        window.location.href = `${API_BASE_URL}/`;
         return false;
     }
 }
@@ -663,7 +679,7 @@ window.logout = function() {
         clearTimeout(dashboardLoadTimeout);
     }
     localStorage.clear();
-    window.location.href = '/';
+    window.location.href = `${API_BASE_URL}/`;
 };
 
 // Recargar datos manualmente desde consola (útil para debugging)

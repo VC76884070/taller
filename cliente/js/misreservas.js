@@ -1,9 +1,23 @@
 // =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+// =====================================================
 // MIS RESERVAS - CLIENTE
 // VERSIÓN CON DÍAS PINTADOS EN EL CALENDARIO
 // =====================================================
 
-const API_URL = '';
+const API_URL = API_BASE_URL;
 let userInfo = null;
 let calendar = null;
 let solicitudActualId = null;
@@ -30,7 +44,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function checkAuth() {
     const token = localStorage.getItem('furia_token');
     if (!token) {
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return false;
     }
     try {
@@ -39,7 +53,7 @@ async function checkAuth() {
         return true;
     } catch (error) {
         console.error('Error verificando autenticación:', error);
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return false;
     }
 }
@@ -132,7 +146,7 @@ function cambiarTab(tabId) {
 
 async function cargarMisDatos() {
     try {
-        const response = await fetch(`/api/cliente/mi-perfil`, { headers: getHeaders() });
+        const response = await fetch(`${API_URL}/api/cliente/mi-perfil`, { headers: getHeaders() });
         const data = await response.json();
         if (response.ok && data.cliente) {
             const userNameElement = document.querySelector('.user-name');
@@ -148,7 +162,7 @@ async function cargarMisVehiculos() {
     if (!selectVehiculo) return;
     
     try {
-        const response = await fetch(`/api/cliente/mi-perfil`, { headers: getHeaders() });
+        const response = await fetch(`${API_URL}/api/cliente/mi-perfil`, { headers: getHeaders() });
         const data = await response.json();
         
         selectVehiculo.innerHTML = '<option value="">-- Selecciona un vehículo --</option>';
@@ -212,7 +226,7 @@ function initCalendar() {
 async function cargarEventosCalendario(info, successCallback, failureCallback) {
     try {
         // Solo reservas confirmadas (citas)
-        const reservasResponse = await fetch(`/api/cliente/reservas-confirmadas`, { headers: getHeaders() });
+        const reservasResponse = await fetch(`${API_URL}/api/cliente/reservas-confirmadas`, { headers: getHeaders() });
         const reservasData = await reservasResponse.json();
         
         const eventos = [];
@@ -249,7 +263,7 @@ async function cargarEventosCalendario(info, successCallback, failureCallback) {
 
 async function pintarDiasReparacion() {
     try {
-        const tallerResponse = await fetch(`/api/cliente/vehiculos-en-taller`, { headers: getHeaders() });
+        const tallerResponse = await fetch(`${API_URL}/api/cliente/vehiculos-en-taller`, { headers: getHeaders() });
         const tallerData = await tallerResponse.json();
         
         if (!tallerData.ordenes || tallerData.ordenes.length === 0) return;
@@ -346,7 +360,7 @@ async function verDetalleReservaPorId(reservaId) {
 async function verDetalleOrdenTaller(ordenId) {
     mostrarLoading(true);
     try {
-        const response = await fetch(`/api/cliente/orden-trabajo/${ordenId}`, { headers: getHeaders() });
+        const response = await fetch(`${API_URL}/api/cliente/orden-trabajo/${ordenId}`, { headers: getHeaders() });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Error cargando orden');
         
@@ -439,7 +453,7 @@ async function cargarMisSolicitudes() {
     const filtroEstado = document.getElementById('filtroEstadoSolicitud')?.value || 'todos';
     
     try {
-        const response = await fetch(`/api/cliente/solicitudes`, { headers: getHeaders() });
+        const response = await fetch(`${API_URL}/api/cliente/solicitudes`, { headers: getHeaders() });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Error cargando solicitudes');
         
@@ -522,7 +536,7 @@ function abrirModalHorarios(solicitudId) { solicitudActualId = solicitudId; carg
 
 async function cargarYMostrarHorarios(solicitudId) {
     try {
-        const response = await fetch(`/api/cliente/solicitudes`, { headers: getHeaders() });
+        const response = await fetch(`${API_URL}/api/cliente/solicitudes`, { headers: getHeaders() });
         const data = await response.json();
         const solicitud = data.solicitudes.find(s => s.id === solicitudId);
         if (!solicitud || !solicitud.horarios_propuestos) return;
@@ -541,7 +555,7 @@ async function cargarYMostrarHorarios(solicitudId) {
 async function seleccionarHorario(solicitudId, horario) {
     mostrarLoading(true);
     try {
-        const response = await fetch(`/api/cliente/aceptar-horario/${solicitudId}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ horario_seleccionado: horario }) });
+        const response = await fetch(`${API_URL}/api/cliente/aceptar-horario/${solicitudId}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ horario_seleccionado: horario }) });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Error al confirmar horario');
         mostrarNotificacion('🎉 ¡Reserva confirmada!', 'success');
@@ -558,7 +572,7 @@ async function rechazarHorarios() {
     if (!confirm('¿Rechazar estos horarios? La solicitud será cancelada.')) return;
     mostrarLoading(true);
     try {
-        const response = await fetch(`/api/cliente/rechazar-horarios/${solicitudActualId}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ motivo: 'Cliente no aceptó los horarios' }) });
+        const response = await fetch(`${API_URL}/api/cliente/rechazar-horarios/${solicitudActualId}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ motivo: 'Cliente no aceptó los horarios' }) });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Error al rechazar horarios');
         mostrarNotificacion('Horarios rechazados', 'info');
@@ -578,7 +592,7 @@ async function confirmarCancelacion() {
     const motivo = document.getElementById('motivoCancelacion')?.value || '';
     mostrarLoading(true);
     try {
-        const response = await fetch(`/api/cliente/cancelar-reserva/${reservaCancelarId}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ motivo }) });
+        const response = await fetch(`${API_URL}/api/cliente/cancelar-reserva/${reservaCancelarId}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ motivo }) });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Error al cancelar reserva');
         mostrarNotificacion('Reserva cancelada', 'success');
@@ -610,7 +624,7 @@ async function enviarSolicitud(e) {
     
     mostrarLoading(true);
     try {
-        const response = await fetch(`/api/cliente/solicitar`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ id_vehiculo: parseInt(vehiculoId), fecha_deseada: fechaDeseada, hora_deseada: horaDeseada || null, descripcion_problema: descripcionProblema, mensaje_adicional: mensajeAdicional || null }) });
+        const response = await fetch(`${API_URL}/api/cliente/solicitar`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ id_vehiculo: parseInt(vehiculoId), fecha_deseada: fechaDeseada, hora_deseada: horaDeseada || null, descripcion_problema: descripcionProblema, mensaje_adicional: mensajeAdicional || null }) });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Error al enviar solicitud');
         alert('✅ Solicitud enviada. El taller te responderá pronto.');
@@ -635,7 +649,7 @@ function limpiarFormulario() {
 
 async function verDetalleSolicitud(solicitudId) {
     try {
-        const response = await fetch(`/api/cliente/solicitudes`, { headers: getHeaders() });
+        const response = await fetch(`${API_URL}/api/cliente/solicitudes`, { headers: getHeaders() });
         const data = await response.json();
         const solicitud = data.solicitudes?.find(s => s.id == solicitudId);
         if (!solicitud) { mostrarNotificacion('Solicitud no encontrada', 'error'); return; }

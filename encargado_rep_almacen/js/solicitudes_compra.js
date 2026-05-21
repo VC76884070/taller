@@ -1,9 +1,23 @@
 // =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+// =====================================================
 // SOLICITUDES_COMPRA.JS - ENCARGADO DE REPUESTOS
 // FURIA MOTOR COMPANY SRL - VERSIÓN COMPLETA
 // =====================================================
 
-const API_URL = window.location.origin + '/api/encargado-repuestos';
+const API_URL = API_BASE_URL + '/api/encargado-repuestos';
 
 // Configuración de Cloudinary (hardcodeada temporalmente)
 const CLOUDINARY_CLOUD_NAME = 'drpt6ztkd';
@@ -206,7 +220,7 @@ async function cargarSolicitudes() {
         });
         
         if (response.status === 401) {
-            window.location.href = '/';
+            window.location.href = API_BASE_URL + '/';
             return;
         }
         
@@ -799,7 +813,7 @@ async function cargarUsuarioActual() {
         if (!token) token = localStorage.getItem('token');
         
         if (!token) {
-            window.location.href = '/';
+            window.location.href = API_BASE_URL + '/';
             return null;
         }
         
@@ -832,7 +846,7 @@ async function cargarUsuarioActual() {
         if (!tieneRolRepuestos) {
             showToast('No tienes permisos para acceder a esta sección', 'error');
             setTimeout(() => {
-                window.location.href = '/';
+                window.location.href = API_BASE_URL + '/';
             }, 2000);
             return null;
         }
@@ -849,7 +863,7 @@ async function cargarUsuarioActual() {
         
     } catch (error) {
         console.error('Error obteniendo usuario:', error);
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return null;
     }
 }
@@ -857,7 +871,7 @@ async function cargarUsuarioActual() {
 function logout() {
     localStorage.clear();
     sessionStorage.clear();
-    window.location.href = '/';
+    window.location.href = API_BASE_URL + '/';
 }
 
 // =====================================================

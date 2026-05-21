@@ -1,6 +1,21 @@
 // =====================================================
 // PERFIL - TÉCNICO MECÁNICO (VERSIÓN OPTIMIZADA)
+// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
 // =====================================================
+
+// =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
 
 let token = null;
 let usuarioActual = null;
@@ -33,6 +48,7 @@ function showToast(message, type = 'success') {
     if (!container) {
         container = document.createElement('div');
         container.id = 'toast-container';
+        container.style.cssText = `position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;`;
         document.body.appendChild(container);
     }
     
@@ -44,6 +60,14 @@ function showToast(message, type = 'success') {
                  type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
     
     toast.innerHTML = `<i class="fas ${icon}"></i><span>${message}</span>`;
+    toast.style.cssText = `
+        background: var(--bg-card); color: var(--blanco); padding: 0.75rem 1.25rem;
+        border-radius: 10px; display: flex; align-items: center; gap: 0.75rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-left: 4px solid ${type === 'success' ? '#10B981' : type === 'error' ? '#C1121F' : type === 'warning' ? '#F59E0B' : '#1E3A5F'};
+        animation: slideIn 0.3s ease;
+    `;
+    
     container.appendChild(toast);
     
     setTimeout(() => {
@@ -100,7 +124,7 @@ async function verificarToken() {
     }
     
     try {
-        const response = await fetch('/api/verify-token', {
+        const response = await fetch(`${API_BASE_URL}/api/verify-token`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -133,7 +157,7 @@ async function cargarPerfil() {
     try {
         showSkeletonLoading();
         
-        const response = await fetch('/tecnico/api/perfil', {
+        const response = await fetch(`${API_BASE_URL}/tecnico/api/perfil`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -161,33 +185,65 @@ async function cargarPerfil() {
 
 function actualizarUI(usuario, estadisticas) {
     // Datos personales
-    document.getElementById('nombreUsuario').textContent = usuario.nombre || 'Técnico';
-    document.getElementById('nombre').value = usuario.nombre || '';
-    document.getElementById('email').value = usuario.email || '';
-    document.getElementById('contacto').value = usuario.contacto || '';
-    document.getElementById('ubicacion').value = usuario.ubicacion || '';
+    const nombreElement = document.getElementById('nombreUsuario');
+    if (nombreElement) nombreElement.textContent = usuario.nombre || 'Técnico';
+    
+    const nombreInput = document.getElementById('nombre');
+    if (nombreInput) nombreInput.value = usuario.nombre || '';
+    
+    const emailInput = document.getElementById('email');
+    if (emailInput) emailInput.value = usuario.email || '';
+    
+    const contactoInput = document.getElementById('contacto');
+    if (contactoInput) contactoInput.value = usuario.contacto || '';
+    
+    const ubicacionInput = document.getElementById('ubicacion');
+    if (ubicacionInput) ubicacionInput.value = usuario.ubicacion || '';
     
     // Avatar
-    if (usuario.avatar_url) {
-        document.getElementById('avatarImg').src = usuario.avatar_url;
-    } else {
-        document.getElementById('avatarImg').src = 'https://ui-avatars.com/api/?background=C1121F&color=fff&name=' + encodeURIComponent(usuario.nombre || 'Técnico');
+    const avatarImg = document.getElementById('avatarImg');
+    if (avatarImg) {
+        if (usuario.avatar_url) {
+            avatarImg.src = usuario.avatar_url;
+        } else {
+            avatarImg.src = 'https://ui-avatars.com/api/?background=C1121F&color=fff&name=' + encodeURIComponent(usuario.nombre || 'Técnico');
+        }
     }
     
     // Estadísticas
-    document.getElementById('totalTrabajos').textContent = estadisticas?.total_trabajos || 0;
-    document.getElementById('trabajosCompletados').textContent = estadisticas?.trabajos_completados || 0;
-    document.getElementById('trabajosActivos').textContent = estadisticas?.trabajos_activos || 0;
-    document.getElementById('fechaRegistro').textContent = formatFecha(usuario.fecha_registro);
+    const totalTrabajos = document.getElementById('totalTrabajos');
+    if (totalTrabajos) totalTrabajos.textContent = estadisticas?.total_trabajos || 0;
+    
+    const trabajosCompletados = document.getElementById('trabajosCompletados');
+    if (trabajosCompletados) trabajosCompletados.textContent = estadisticas?.trabajos_completados || 0;
+    
+    const trabajosActivos = document.getElementById('trabajosActivos');
+    if (trabajosActivos) trabajosActivos.textContent = estadisticas?.trabajos_activos || 0;
+    
+    const fechaRegistro = document.getElementById('fechaRegistro');
+    if (fechaRegistro) fechaRegistro.textContent = formatFecha(usuario.fecha_registro);
     
     // Información de cuenta
-    document.getElementById('infoId').textContent = usuario.id || '-';
-    document.getElementById('infoRol').textContent = 'Técnico Mecánico';
-    document.getElementById('infoFechaRegistro').textContent = formatFecha(usuario.fecha_registro);
-    document.getElementById('infoEmail').textContent = usuario.email || '-';
-    document.getElementById('infoContacto').textContent = usuario.contacto || 'No registrado';
-    document.getElementById('infoUbicacion').textContent = usuario.ubicacion || 'No registrada';
-    document.getElementById('infoUltimaActividad').textContent = 'Hoy';
+    const infoId = document.getElementById('infoId');
+    if (infoId) infoId.textContent = usuario.id || '-';
+    
+    const infoRol = document.getElementById('infoRol');
+    if (infoRol) infoRol.textContent = 'Técnico Mecánico';
+    
+    const infoFechaRegistro = document.getElementById('infoFechaRegistro');
+    if (infoFechaRegistro) infoFechaRegistro.textContent = formatFecha(usuario.fecha_registro);
+    
+    const infoEmail = document.getElementById('infoEmail');
+    if (infoEmail) infoEmail.textContent = usuario.email || '-';
+    
+    const infoContacto = document.getElementById('infoContacto');
+    if (infoContacto) infoContacto.textContent = usuario.contacto || 'No registrado';
+    
+    const infoUbicacion = document.getElementById('infoUbicacion');
+    if (infoUbicacion) infoUbicacion.textContent = usuario.ubicacion || 'No registrada';
+    
+    const infoUltimaActividad = document.getElementById('infoUltimaActividad');
+    if (infoUltimaActividad) infoUltimaActividad.textContent = 'Hoy';
 }
 
 // =====================================================
@@ -213,7 +269,7 @@ async function actualizarAvatar(file) {
     try {
         showToast('Subiendo avatar...', 'info');
         
-        const response = await fetch('/tecnico/api/perfil/avatar', {
+        const response = await fetch(`${API_BASE_URL}/tecnico/api/perfil/avatar`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` },
             body: formData
@@ -223,8 +279,10 @@ async function actualizarAvatar(file) {
         
         if (data.success) {
             const avatarImg = document.getElementById('avatarImg');
-            avatarImg.src = data.avatar_url + '?t=' + Date.now();
-            usuarioActual.avatar_url = data.avatar_url;
+            if (avatarImg) {
+                avatarImg.src = data.avatar_url + '?t=' + Date.now();
+            }
+            if (usuarioActual) usuarioActual.avatar_url = data.avatar_url;
             showToast('Avatar actualizado', 'success');
         } else {
             showToast(data.error || 'Error al actualizar avatar', 'error');
@@ -240,8 +298,8 @@ async function actualizarAvatar(file) {
 // =====================================================
 
 function validarDatosPersonales() {
-    const nombre = document.getElementById('nombre').value.trim();
-    const email = document.getElementById('email').value.trim();
+    const nombre = document.getElementById('nombre')?.value.trim() || '';
+    const email = document.getElementById('email')?.value.trim() || '';
     
     if (!nombre) {
         showToast('El nombre es requerido', 'warning');
@@ -266,16 +324,16 @@ async function guardarDatosPersonales() {
     if (!validarDatosPersonales()) return;
     
     const datos = {
-        nombre: document.getElementById('nombre').value.trim(),
-        email: document.getElementById('email').value.trim(),
-        contacto: document.getElementById('contacto').value.trim(),
-        ubicacion: document.getElementById('ubicacion').value.trim()
+        nombre: document.getElementById('nombre')?.value.trim() || '',
+        email: document.getElementById('email')?.value.trim() || '',
+        contacto: document.getElementById('contacto')?.value.trim() || '',
+        ubicacion: document.getElementById('ubicacion')?.value.trim() || ''
     };
     
     try {
         showToast('Guardando cambios...', 'info');
         
-        const response = await fetch('/tecnico/api/perfil', {
+        const response = await fetch(`${API_BASE_URL}/tecnico/api/perfil`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -289,17 +347,27 @@ async function guardarDatosPersonales() {
         if (data.success) {
             usuarioActual = { ...usuarioActual, ...datos };
             datosOriginales = { ...usuarioActual };
-            document.getElementById('nombreUsuario').textContent = datos.nombre;
+            
+            const nombreUsuario = document.getElementById('nombreUsuario');
+            if (nombreUsuario) nombreUsuario.textContent = datos.nombre;
             
             // Actualizar avatar si cambió el nombre y no hay avatar personalizado
             if (!usuarioActual.avatar_url) {
-                document.getElementById('avatarImg').src = 'https://ui-avatars.com/api/?background=C1121F&color=fff&name=' + encodeURIComponent(datos.nombre);
+                const avatarImg = document.getElementById('avatarImg');
+                if (avatarImg) {
+                    avatarImg.src = 'https://ui-avatars.com/api/?background=C1121F&color=fff&name=' + encodeURIComponent(datos.nombre);
+                }
             }
             
             // Actualizar información de cuenta
-            document.getElementById('infoEmail').textContent = datos.email || '-';
-            document.getElementById('infoContacto').textContent = datos.contacto || 'No registrado';
-            document.getElementById('infoUbicacion').textContent = datos.ubicacion || 'No registrada';
+            const infoEmail = document.getElementById('infoEmail');
+            if (infoEmail) infoEmail.textContent = datos.email || '-';
+            
+            const infoContacto = document.getElementById('infoContacto');
+            if (infoContacto) infoContacto.textContent = datos.contacto || 'No registrado';
+            
+            const infoUbicacion = document.getElementById('infoUbicacion');
+            if (infoUbicacion) infoUbicacion.textContent = datos.ubicacion || 'No registrada';
             
             cerrarConfirmModal();
             showToast('Datos actualizados correctamente', 'success');
@@ -317,9 +385,9 @@ async function guardarDatosPersonales() {
 // =====================================================
 
 function validarPassword() {
-    const actual = document.getElementById('passwordActual').value;
-    const nueva = document.getElementById('nuevaPassword').value;
-    const confirmar = document.getElementById('confirmarPassword').value;
+    const actual = document.getElementById('passwordActual')?.value || '';
+    const nueva = document.getElementById('nuevaPassword')?.value || '';
+    const confirmar = document.getElementById('confirmarPassword')?.value || '';
     
     if (!actual) {
         showToast('Ingresa tu contraseña actual', 'warning');
@@ -345,38 +413,44 @@ function validarPassword() {
 }
 
 function verificarRequisitosPassword() {
-    const nueva = document.getElementById('nuevaPassword').value;
-    const confirmar = document.getElementById('confirmarPassword').value;
+    const nueva = document.getElementById('nuevaPassword')?.value || '';
+    const confirmar = document.getElementById('confirmarPassword')?.value || '';
     
     const reqLength = document.getElementById('req-length');
     const reqNumber = document.getElementById('req-number');
     const reqMatch = document.getElementById('req-match');
     
     // Longitud
-    if (nueva.length >= 6) {
-        reqLength.classList.add('valid');
-        reqLength.innerHTML = '<i class="fas fa-check-circle"></i> Mínimo 6 caracteres';
-    } else {
-        reqLength.classList.remove('valid');
-        reqLength.innerHTML = '<i class="fas fa-circle"></i> Mínimo 6 caracteres';
+    if (reqLength) {
+        if (nueva.length >= 6) {
+            reqLength.classList.add('valid');
+            reqLength.innerHTML = '<i class="fas fa-check-circle"></i> Mínimo 6 caracteres';
+        } else {
+            reqLength.classList.remove('valid');
+            reqLength.innerHTML = '<i class="fas fa-circle"></i> Mínimo 6 caracteres';
+        }
     }
     
     // Número
-    if (/\d/.test(nueva)) {
-        reqNumber.classList.add('valid');
-        reqNumber.innerHTML = '<i class="fas fa-check-circle"></i> Al menos un número';
-    } else {
-        reqNumber.classList.remove('valid');
-        reqNumber.innerHTML = '<i class="fas fa-circle"></i> Al menos un número';
+    if (reqNumber) {
+        if (/\d/.test(nueva)) {
+            reqNumber.classList.add('valid');
+            reqNumber.innerHTML = '<i class="fas fa-check-circle"></i> Al menos un número';
+        } else {
+            reqNumber.classList.remove('valid');
+            reqNumber.innerHTML = '<i class="fas fa-circle"></i> Al menos un número';
+        }
     }
     
     // Coincidencia
-    if (nueva && nueva === confirmar) {
-        reqMatch.classList.add('valid');
-        reqMatch.innerHTML = '<i class="fas fa-check-circle"></i> Las contraseñas coinciden';
-    } else {
-        reqMatch.classList.remove('valid');
-        reqMatch.innerHTML = '<i class="fas fa-circle"></i> Las contraseñas coinciden';
+    if (reqMatch) {
+        if (nueva && nueva === confirmar) {
+            reqMatch.classList.add('valid');
+            reqMatch.innerHTML = '<i class="fas fa-check-circle"></i> Las contraseñas coinciden';
+        } else {
+            reqMatch.classList.remove('valid');
+            reqMatch.innerHTML = '<i class="fas fa-circle"></i> Las contraseñas coinciden';
+        }
     }
 }
 
@@ -384,14 +458,14 @@ async function cambiarPassword() {
     if (!validarPassword()) return;
     
     const data = {
-        password_actual: document.getElementById('passwordActual').value,
-        nueva_password: document.getElementById('nuevaPassword').value
+        password_actual: document.getElementById('passwordActual')?.value || '',
+        nueva_password: document.getElementById('nuevaPassword')?.value || ''
     };
     
     try {
         showToast('Cambiando contraseña...', 'info');
         
-        const response = await fetch('/tecnico/api/perfil/password', {
+        const response = await fetch(`${API_BASE_URL}/tecnico/api/perfil/password`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -404,7 +478,8 @@ async function cambiarPassword() {
         
         if (result.success) {
             cerrarPasswordModal();
-            document.getElementById('formCambiarPassword').reset();
+            const formPassword = document.getElementById('formCambiarPassword');
+            if (formPassword) formPassword.reset();
             verificarRequisitosPassword();
             showToast('Contraseña cambiada correctamente', 'success');
         } else {
@@ -432,7 +507,8 @@ function initTabs() {
             tabContents.forEach(c => c.classList.remove('active'));
             
             btn.classList.add('active');
-            document.getElementById(`tab-${tabId}`).classList.add('active');
+            const targetTab = document.getElementById(`tab-${tabId}`);
+            if (targetTab) targetTab.classList.add('active');
         });
     });
 }
@@ -442,19 +518,23 @@ function initTabs() {
 // =====================================================
 
 function abrirConfirmModal() {
-    document.getElementById('confirmModal').classList.add('show');
+    const modal = document.getElementById('confirmModal');
+    if (modal) modal.classList.add('show');
 }
 
 function cerrarConfirmModal() {
-    document.getElementById('confirmModal').classList.remove('show');
+    const modal = document.getElementById('confirmModal');
+    if (modal) modal.classList.remove('show');
 }
 
 function abrirPasswordModal() {
-    document.getElementById('passwordModal').classList.add('show');
+    const modal = document.getElementById('passwordModal');
+    if (modal) modal.classList.add('show');
 }
 
 function cerrarPasswordModal() {
-    document.getElementById('passwordModal').classList.remove('show');
+    const modal = document.getElementById('passwordModal');
+    if (modal) modal.classList.remove('show');
 }
 
 // =====================================================
@@ -462,15 +542,22 @@ function cerrarPasswordModal() {
 // =====================================================
 
 function cancelarEdicionDatos() {
-    document.getElementById('nombre').value = datosOriginales.nombre || '';
-    document.getElementById('email').value = datosOriginales.email || '';
-    document.getElementById('contacto').value = datosOriginales.contacto || '';
-    document.getElementById('ubicacion').value = datosOriginales.ubicacion || '';
+    const nombreInput = document.getElementById('nombre');
+    const emailInput = document.getElementById('email');
+    const contactoInput = document.getElementById('contacto');
+    const ubicacionInput = document.getElementById('ubicacion');
+    
+    if (nombreInput) nombreInput.value = datosOriginales.nombre || '';
+    if (emailInput) emailInput.value = datosOriginales.email || '';
+    if (contactoInput) contactoInput.value = datosOriginales.contacto || '';
+    if (ubicacionInput) ubicacionInput.value = datosOriginales.ubicacion || '';
+    
     showToast('Cambios descartados', 'info');
 }
 
 function cancelarCambioPassword() {
-    document.getElementById('formCambiarPassword').reset();
+    const formPassword = document.getElementById('formCambiarPassword');
+    if (formPassword) formPassword.reset();
     verificarRequisitosPassword();
     showToast('Cambios descartados', 'info');
 }
@@ -490,6 +577,9 @@ function cerrarSesion() {
 // =====================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 Inicializando perfil.js');
+    console.log('📡 API_BASE_URL:', API_BASE_URL);
+    
     token = getToken();
     
     if (!token) {
@@ -526,7 +616,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (avatarContainer && avatarInput) {
         avatarContainer.addEventListener('click', () => avatarInput.click());
         avatarInput.addEventListener('change', (e) => {
-            if (e.target.files[0]) actualizarAvatar(e.target.files[0]);
+            if (e.target.files && e.target.files[0]) actualizarAvatar(e.target.files[0]);
         });
     }
     
@@ -553,7 +643,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sidebarContainer = document.getElementById('sidebar-container');
     if (sidebarContainer) {
         try {
-            const response = await fetch('/tecnico_mecanico/components/sidebar.html');
+            const response = await fetch(`${API_BASE_URL}/tecnico_mecanico/components/sidebar.html`);
             if (response.ok) {
                 sidebarContainer.innerHTML = await response.text();
             }
@@ -566,4 +656,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.cerrarSesion = cerrarSesion;
     window.cerrarConfirmModal = cerrarConfirmModal;
     window.cerrarPasswordModal = cerrarPasswordModal;
+    window.cancelarEdicionDatos = cancelarEdicionDatos;
+    window.cancelarCambioPassword = cancelarCambioPassword;
+    
+    console.log('✅ perfil.js cargado correctamente');
 });

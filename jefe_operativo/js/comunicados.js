@@ -1,9 +1,24 @@
 // =====================================================
 // COMUNICADOS - JEFE OPERATIVO
+// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
 // =====================================================
 
+// =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
 // Configuración
-const API_URL = 'http://localhost:5000/api';
+const API_URL = `${API_BASE_URL}/api`;
 let quillEditor = null;
 let comunicadosData = [];
 let currentFilter = 'todos';
@@ -65,7 +80,7 @@ async function checkAuth() {
     
     if (!token) {
         console.error('No hay token');
-        window.location.href = '/';
+        window.location.href = `${API_BASE_URL}/`;
         return false;
     }
     
@@ -74,14 +89,14 @@ async function checkAuth() {
         console.log('UserInfo:', userInfo);
         
         // Verificar token con backend
-        const verifyResponse = await fetch('/api/verify-token', {
+        const verifyResponse = await fetch(`${API_BASE_URL}/api/verify-token`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (!verifyResponse.ok) {
             console.error('Token inválido');
             localStorage.clear();
-            window.location.href = '/';
+            window.location.href = `${API_BASE_URL}/`;
             return false;
         }
         
@@ -101,9 +116,9 @@ async function checkAuth() {
         if (!tieneRolJefeOperativo) {
             console.error('No tiene permisos de jefe_operativo');
             if (roles.includes('jefe_taller')) {
-                window.location.href = '/jefe_taller/dashboard.html';
+                window.location.href = `${API_BASE_URL}/jefe_taller/dashboard.html`;
             } else {
-                window.location.href = '/';
+                window.location.href = `${API_BASE_URL}/`;
             }
             return false;
         }
@@ -113,7 +128,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error en checkAuth:', error);
-        window.location.href = '/';
+        window.location.href = `${API_BASE_URL}/`;
         return false;
     }
 }
@@ -789,7 +804,7 @@ window.logout = () => {
     localStorage.removeItem('furia_user');
     localStorage.removeItem('furia_remembered');
     localStorage.removeItem('furia_remembered_type');
-    window.location.href = '/';
+    window.location.href = `${API_BASE_URL}/`;
 };
 
 // Exportar funciones globales

@@ -1,9 +1,23 @@
 // =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+// =====================================================
 // PERFIL.JS - ENCARGADO DE REPUESTOS
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
-const API_URL = window.location.origin + '/api/encargado-repuestos';
+const API_URL = API_BASE_URL + '/api/encargado-repuestos';
 let currentUser = null;
 let currentTab = 'informacion';
 let editMode = false;
@@ -102,7 +116,7 @@ async function cargarPerfil() {
         });
         
         if (response.status === 401) {
-            window.location.href = '/';
+            window.location.href = API_BASE_URL + '/';
             return;
         }
         
@@ -682,7 +696,7 @@ async function cargarUsuarioActual() {
         if (!token) token = localStorage.getItem('token');
         
         if (!token) {
-            window.location.href = '/';
+            window.location.href = API_BASE_URL + '/';
             return null;
         }
         
@@ -710,7 +724,7 @@ async function cargarUsuarioActual() {
         return currentUser;
     } catch (error) {
         console.error('Error:', error);
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return null;
     }
 }

@@ -1,4 +1,18 @@
 // =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+// =====================================================
 // INCLUDE.JS - CLIENTE (CORREGIDO)
 // FURIA MOTOR COMPANY SRL
 // =====================================================
@@ -8,7 +22,7 @@ const CONFIG = {
     logoPath: '../../img/logoblanco.jpeg',
     defaultUserName: 'Cliente',
     userRole: 'Cliente',
-    API_URL: '/api/cliente'
+    API_URL: API_BASE_URL + '/api/cliente'
 };
 
 const PAGE_FILES = {
@@ -39,7 +53,7 @@ async function verificarAutenticacion() {
     
     if (!token) {
         console.log('❌ No hay token');
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return false;
     }
     
@@ -51,7 +65,7 @@ async function verificarAutenticacion() {
         if (response.status === 401) {
             console.log('❌ Token inválido o expirado');
             localStorage.clear();
-            window.location.href = '/';
+            window.location.href = API_BASE_URL + '/';
             return false;
         }
         
@@ -69,7 +83,7 @@ async function verificarAutenticacion() {
         return false;
     } catch (error) {
         console.error('Error verificando autenticación:', error);
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return false;
     }
 }
@@ -198,7 +212,7 @@ window.navegarPagina = function(event, page) {
     // Verificar autenticación antes de navegar
     const token = localStorage.getItem('furia_token') || localStorage.getItem('token');
     if (!token) {
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return;
     }
     
@@ -220,7 +234,7 @@ function inicializarSidebar() {
                     const token = localStorage.getItem('furia_token') || localStorage.getItem('token');
                     if (!token) {
                         e.preventDefault();
-                        window.location.href = '/';
+                        window.location.href = API_BASE_URL + '/';
                     }
                 }
             });
@@ -318,7 +332,7 @@ window.logout = function() {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
     }
 };
 

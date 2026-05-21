@@ -1,10 +1,24 @@
 // =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+// =====================================================
 // CONTROL_CALIDAD.JS - JEFE DE TALLER
 // GESTIÓN DE TRABAJOS COMPLETADOS POR TÉCNICOS
 // VERSIÓN: ÚLTIMAS 10 ÓRDENES POR PESTAÑA
 // =====================================================
 
-const API_URL = window.location.origin + '/api/jefe-taller';
+const API_URL = API_BASE_URL + '/api/jefe-taller';
 let currentUser = null;
 let ordenesPendientes = [];
 let ordenesFinalizadas = [];
@@ -841,7 +855,7 @@ async function cargarUsuarioActual() {
         if (!token) token = localStorage.getItem('token');
         if (!token) {
             console.error('No se encontró token de autenticación');
-            window.location.href = '/';
+            window.location.href = API_BASE_URL + '/';
             return null;
         }
         
@@ -868,7 +882,7 @@ async function cargarUsuarioActual() {
         return currentUser;
     } catch (error) {
         console.error('❌ Error al cargar usuario:', error);
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return null;
     }
 }
@@ -877,7 +891,7 @@ function logout() {
     console.log('🚪 Cerrando sesión...');
     localStorage.clear();
     sessionStorage.clear();
-    window.location.href = '/';
+    window.location.href = API_BASE_URL + '/';
 }
 
 // =====================================================

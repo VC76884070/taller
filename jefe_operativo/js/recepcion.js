@@ -1,7 +1,24 @@
 // =====================================================
-// CONFIGURACIÓN
+// RECEPCION.JS - JEFE OPERATIVO
+// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
 // =====================================================
-const API_URL = 'http://localhost:5000/api';
+
+// =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Recepcion.js - Modo DESARROLLO');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Recepcion.js - Modo PRODUCCIÓN');
+    return '';
+})();
+
+// Configuración
+const API_URL = `${API_BASE_URL}/api`;
 const logger = {
     info: (...args) => console.log('[INFO]', ...args),
     error: (...args) => console.error('[ERROR]', ...args),
@@ -106,6 +123,9 @@ async function verificarSesionAbandonada() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 Inicializando recepcion.js (Jefe Operativo)');
+    console.log('📡 API_BASE_URL:', API_BASE_URL);
+    
     const autenticado = await checkAuth();
     if (!autenticado) return;
     
@@ -139,7 +159,7 @@ async function checkAuth() {
     
     if (!token) {
         console.error('No hay token');
-        window.location.href = '/';
+        window.location.href = `${API_BASE_URL}/`;
         return false;
     }
     
@@ -148,7 +168,7 @@ async function checkAuth() {
         console.log('userInfo parseado:', userInfo);
         
         // Verificar si el token es válido con el backend
-        const verifyResponse = await fetch('/api/verify-token', {
+        const verifyResponse = await fetch(`${API_BASE_URL}/api/verify-token`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -157,7 +177,7 @@ async function checkAuth() {
         if (!verifyResponse.ok) {
             console.error('Token inválido según backend');
             localStorage.clear();
-            window.location.href = '/';
+            window.location.href = `${API_BASE_URL}/`;
             return false;
         }
         
@@ -183,9 +203,9 @@ async function checkAuth() {
             console.error('No tiene rol jefe_operativo');
             // Si no es jefe_operativo pero es jefe_taller, ir a dashboard de taller
             if (userInfo.roles && userInfo.roles.includes('jefe_taller')) {
-                window.location.href = '/jefe_taller/dashboard.html';
+                window.location.href = `${API_BASE_URL}/jefe_taller/dashboard.html`;
             } else {
-                window.location.href = '/';
+                window.location.href = `${API_BASE_URL}/`;
             }
             return false;
         }
@@ -195,10 +215,11 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error en checkAuth:', error);
-        window.location.href = '/';
+        window.location.href = `${API_BASE_URL}/`;
         return false;
     }
 }
+
 function initPage() {
     const now = new Date();
     const options = { 
@@ -747,7 +768,7 @@ function actualizarUIconDatos() {
     if (datos.descripcion && datos.descripcion.audio_url) {
         const audioUrl = datos.descripcion.audio_url;
         if (audioPreview && audioUrl && audioUrl !== 'null' && audioUrl !== 'None') {
-            const fullAudioUrl = audioUrl.startsWith('http') ? audioUrl : `${API_URL}${audioUrl}`;
+            const fullAudioUrl = audioUrl.startsWith('http') ? audioUrl : `${API_BASE_URL}${audioUrl}`;
             if (audioPreview.src !== fullAudioUrl) {
                 audioPreview.src = fullAudioUrl;
                 audioPreview.style.display = 'block';
@@ -834,8 +855,8 @@ function actualizarFotosDesdeSesion(fotos) {
                 
                 if (preview && uploadDiv) {
                     let fullUrl = url;
-                    if (url.startsWith('/uploads/')) fullUrl = `${API_URL}${url}`;
-                    else if (!url.startsWith('http')) fullUrl = `${API_URL}/uploads/${url}`;
+                    if (url.startsWith('/uploads/')) fullUrl = `${API_BASE_URL}${url}`;
+                    else if (!url.startsWith('http')) fullUrl = `${API_BASE_URL}/uploads/${url}`;
                     
                     const img = new Image();
                     img.onload = () => {
@@ -1696,7 +1717,7 @@ window.logout = () => {
     localStorage.removeItem('furia_remembered');
     localStorage.removeItem('furia_remembered_type');
     localStorage.removeItem('sesion_actual');
-    window.location.href = '/';
+    window.location.href = `${API_BASE_URL}/`;
 };
 
 // =====================================================
@@ -1720,8 +1741,6 @@ function initRecepcionesPanel() {
     if (btnSiguiente) btnSiguiente.addEventListener('click', () => { paginaActual++; filtrarYMostrarRecepciones(); });
 }
 
-// Modifica esta función en tu recepcion.js
-
 async function cargarRecepciones() {
     try {
         const response = await fetch(`${API_URL}/jefe-operativo/listar-recepciones`, {
@@ -1729,7 +1748,6 @@ async function cargarRecepciones() {
         });
         const data = await response.json();
         if (response.ok && data.recepciones) {
-            // LIMITAR A LAS ÚLTIMAS 10 RECEPCIONES
             recepcionesActuales = data.recepciones.slice(0, 10);
             const count = document.getElementById('recepcionesCount');
             if (count) count.textContent = recepcionesActuales.length;
@@ -1742,10 +1760,8 @@ async function cargarRecepciones() {
     }
 }
 
-// Modifica esta función también
-
 function filtrarYMostrarRecepciones() {
-    let filtradas = [...recepcionesActuales]; // Ya solo tiene 10 máximo
+    let filtradas = [...recepcionesActuales];
     const searchTerm = document.getElementById('searchRecepcion')?.value.toLowerCase() || '';
     if (searchTerm) filtradas = filtradas.filter(r => 
         r.codigo_unico?.toLowerCase().includes(searchTerm) || 
@@ -1780,6 +1796,7 @@ function filtrarYMostrarRecepciones() {
     
     renderRecepcionesList(paginadas);
 }
+
 function renderRecepcionesList(recepciones) {
     const list = document.getElementById('recepcionesList');
     if (!list) return;
@@ -1837,7 +1854,7 @@ function mostrarModalDetalle(detalle) {
             <div class="detalle-seccion"><h4><i class="fas fa-user"></i> Datos del Cliente</h4><div class="detalle-grid"><div class="detalle-item"><span class="detalle-label">Nombre</span><span class="detalle-value">${escapeHtml(detalle.cliente_nombre || 'N/A')}</span></div><div class="detalle-item"><span class="detalle-label">Teléfono</span><span class="detalle-value">${escapeHtml(detalle.cliente_telefono || 'N/A')}</span></div><div class="detalle-item"><span class="detalle-label">Ubicación</span><span class="detalle-value">${escapeHtml(detalle.cliente_ubicacion || 'N/A')}</span></div></div></div>
             <div class="detalle-seccion"><h4><i class="fas fa-car"></i> Datos del Vehículo</h4><div class="detalle-grid"><div class="detalle-item"><span class="detalle-label">Placa</span><span class="detalle-value">${escapeHtml(detalle.placa || 'N/A')}</span></div><div class="detalle-item"><span class="detalle-label">Marca</span><span class="detalle-value">${escapeHtml(detalle.marca || 'N/A')}</span></div><div class="detalle-item"><span class="detalle-label">Modelo</span><span class="detalle-value">${escapeHtml(detalle.modelo || 'N/A')}</span></div><div class="detalle-item"><span class="detalle-label">Año</span><span class="detalle-value">${detalle.anio || 'N/A'}</span></div><div class="detalle-item"><span class="detalle-label">Kilometraje</span><span class="detalle-value">${detalle.kilometraje?.toLocaleString() || '0'} km</span></div></div></div>
             <div class="detalle-seccion"><h4><i class="fas fa-camera"></i> Registro Fotográfico</h4>${fotosHtml}</div>
-            <div class="detalle-seccion"><h4><i class="fas fa-pencil-alt"></i> Descripción del Problema</h4><div class="detalle-descripcion">${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}</div>${detalle.audio_url ? `<div class="detalle-audio"><audio controls><source src="${detalle.audio_url}" type="audio/wav">Tu navegador no soporta el elemento de audio.</audio></div>` : ''}</div>
+            <div class="detalle-seccion"><h4><i class="fas fa-pencil-alt"></i> Descripción del Problema</h4><div class="detalle-descripcion">${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}</div>${detalle.audio_url ? `<div class="detalle-audio"><audio controls><source src="${detalle.audio_url.startsWith('http') ? detalle.audio_url : API_BASE_URL + detalle.audio_url}" type="audio/wav">Tu navegador no soporta el elemento de audio.</audio></div>` : ''}</div>
         </div>
     `;
     modal.classList.add('show');

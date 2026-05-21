@@ -2,7 +2,24 @@
 // LOGIN - FURIA MOTOR COMPANY - VERSIÓN COMPLETA CORREGIDA
 // =====================================================
 
-const API_URL = 'http://localhost:5000/api';
+// =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    // Si estamos en localhost o 127.0.0.1
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    // En producción (Render, Railway, etc.), usar URL relativa
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+// URL de API con el path completo
+const API_URL = `${API_BASE_URL}/api`;
 
 const ROLE_CONFIG = {
     'jefe_taller': {
@@ -77,6 +94,7 @@ let pendingToken = null;
 // =====================================================
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Inicializando login');
+    console.log('📡 API URL:', API_URL);
     setupEventListeners();
     checkSavedSession();
 });
@@ -123,7 +141,7 @@ function toggleLoginFields() {
 }
 
 // =====================================================
-// LOGIN
+// LOGIN - CORREGIDO CON API_URL DINÁMICA
 // =====================================================
 async function handleLogin(e) {
     e.preventDefault();
@@ -143,6 +161,7 @@ async function handleLogin(e) {
     console.log('🔐 === INICIANDO LOGIN ===');
     console.log('Tipo:', selectedType);
     console.log('Identificador:', identifier);
+    console.log('API_URL:', API_URL);
     
     try {
         const response = await fetch(`${API_URL}/login`, {
@@ -456,6 +475,7 @@ async function checkSavedSession() {
         }
     }
 }
+
 // =====================================================
 // UTILIDADES
 // =====================================================
@@ -502,3 +522,4 @@ window.logout = () => {
 };
 
 console.log('✅ login.js cargado correctamente');
+console.log('📡 API URL configurada:', API_URL);

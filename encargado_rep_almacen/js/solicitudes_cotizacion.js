@@ -1,10 +1,24 @@
 // =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+// =====================================================
 // SOLICITUDES_COTIZACION.JS - ENCARGADO DE REPUESTOS
 // VERSIÓN OPTIMIZADA - ÚLTIMAS 10 + PAGINACIÓN + CACHÉ
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
-const API_URL = window.location.origin + '/api/encargado-repuestos';
+const API_URL = API_BASE_URL + '/api/encargado-repuestos';
 
 // Configuración de paginación
 const PAGE_SIZE = 10;  // ← SOLO 10 POR PÁGINA
@@ -185,7 +199,7 @@ async function cargarSolicitudes(resetPage = true) {
         
         if (response.status === 401) {
             showToast('Sesión expirada, redirigiendo...', 'warning');
-            setTimeout(() => { window.location.href = '/'; }, 1500);
+            setTimeout(() => { window.location.href = API_BASE_URL + '/'; }, 1500);
             return;
         }
         
@@ -646,6 +660,49 @@ async function verDetalle(idSolicitud) {
 // AUTENTICACIÓN E INICIALIZACIÓN
 // =====================================================
 
+async function cargarUsuarioActual() {
+    try {
+        let token = localStorage.getItem('furia_token');
+        if (!token) token = localStorage.getItem('token');
+        
+        if (!token) {
+            window.location.href = API_BASE_URL + '/';
+            return null;
+        }
+        
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        
+        let userData = null;
+        try {
+            const userStr = localStorage.getItem('furia_user');
+            if (userStr) userData = JSON.parse(userStr);
+        } catch (e) {}
+        
+        currentUser = {
+            id: payload.user?.id || payload.id || payload.user_id || userData?.id,
+            nombre: payload.user?.nombre || payload.nombre || userData?.nombre || 'Usuario',
+            email: payload.user?.email || payload.email || userData?.email,
+            roles: payload.user?.roles || payload.roles || userData?.roles || [],
+            rol_principal: payload.user?.rol_principal || payload.rol_principal || userData?.rol_principal
+        };
+        
+        const tieneRolRepuestos = currentUser.roles?.includes('encargado_repuestos') || 
+                                    currentUser.roles?.includes('encargado_rep_almacen');
+        
+        if (!tieneRolRepuestos) {
+            showToast('No tienes permisos para acceder a esta sección', 'error');
+            setTimeout(() => { window.location.href = API_BASE_URL + '/'; }, 2000);
+            return null;
+        }
+        
+        return currentUser;
+    } catch (error) {
+        console.error('Error:', error);
+        window.location.href = API_BASE_URL + '/';
+        return null;
+    }
+}
+
 function setupEventListeners() {
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) {
@@ -685,6 +742,9 @@ function setupEventListeners() {
 
 async function inicializar() {
     console.log('🚀 Inicializando solicitudes_cotizacion.js (Optimizado)');
+    
+    const user = await cargarUsuarioActual();
+    if (!user) return;
     
     // Mostrar fecha
     const fechaElement = document.getElementById('currentDate');

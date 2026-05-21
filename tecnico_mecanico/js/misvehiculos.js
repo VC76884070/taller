@@ -2,7 +2,22 @@
 // MIS VEHÍCULOS - TÉCNICO MECÁNICO
 // VERSIÓN COMPLETA CON BOTONES SEPARADOS Y HISTORIAL
 // FURIA MOTOR COMPANY SRL
+// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
 // =====================================================
+
+// =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
 
 // Configuración de roles
 const ROLE_CONFIG = {
@@ -20,6 +35,9 @@ let token = null;
 let usuarioActual = null;
 let rolesUsuario = [];
 let comunicadosVistos = [];
+
+// Items para solicitud de repuestos
+let itemsSolicitud = [];
 
 // =====================================================
 // UTILIDADES
@@ -133,6 +151,57 @@ function tieneRolTecnico(roles) {
 }
 
 // =====================================================
+// FUNCIONES PARA SOLICITUD DE REPUESTOS
+// =====================================================
+function limpiarItemsSolicitud() {
+    itemsSolicitud = [];
+    renderizarItemsSolicitud();
+}
+
+function renderizarItemsSolicitud() {
+    const container = document.getElementById('itemsSolicitudContainer');
+    if (!container) return;
+    
+    if (itemsSolicitud.length === 0) {
+        container.innerHTML = '<div class="empty-items" style="text-align: center; padding: 1rem; color: var(--gris-texto);">No hay repuestos agregados. Agrega los repuestos que necesitas.</div>';
+        return;
+    }
+    
+    container.innerHTML = itemsSolicitud.map((item, idx) => `
+        <div class="solicitud-item" style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <input type="text" placeholder="Descripción del repuesto" value="${escapeHtml(item.descripcion)}" 
+                   style="flex: 2; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-dark); color: var(--blanco);"
+                   onchange="actualizarItemSolicitud(${idx}, 'descripcion', this.value)">
+            <input type="number" placeholder="Cantidad" value="${item.cantidad || 1}" 
+                   style="width: 80px; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-dark); color: var(--blanco);"
+                   onchange="actualizarItemSolicitud(${idx}, 'cantidad', parseInt(this.value) || 1)">
+            <input type="text" placeholder="Detalle adicional (opcional)" value="${escapeHtml(item.detalle || '')}"
+                   style="flex: 1; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-dark); color: var(--blanco);"
+                   onchange="actualizarItemSolicitud(${idx}, 'detalle', this.value)">
+            <button class="btn-sm btn-danger-sm" onclick="eliminarItemSolicitud(${idx})" style="padding: 0.5rem 0.75rem;">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+function agregarItemSolicitud() {
+    itemsSolicitud.push({ descripcion: '', cantidad: 1, detalle: '' });
+    renderizarItemsSolicitud();
+}
+
+function actualizarItemSolicitud(index, campo, valor) {
+    if (itemsSolicitud[index]) {
+        itemsSolicitud[index][campo] = valor;
+    }
+}
+
+function eliminarItemSolicitud(index) {
+    itemsSolicitud.splice(index, 1);
+    renderizarItemsSolicitud();
+}
+
+// =====================================================
 // AUTENTICACIÓN
 // =====================================================
 async function verificarToken() {
@@ -149,7 +218,7 @@ async function verificarToken() {
             rolesUsuario = (usuarioActual.roles || []).map(r => normalizarRol(r));
         }
         
-        const response = await fetch('/tecnico/verify-token', {
+        const response = await fetch(`${API_BASE_URL}/tecnico/verify-token`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -225,7 +294,7 @@ async function cargarVehiculos() {
     
     try {
         const timestamp = new Date().getTime();
-        const response = await fetch(`/tecnico/get-mis-vehiculos?_=${timestamp}`, {
+        const response = await fetch(`${API_BASE_URL}/tecnico/get-mis-vehiculos?_=${timestamp}`, {
             method: 'GET',
             headers: { 
                 'Authorization': `Bearer ${token}`,
@@ -268,9 +337,6 @@ async function cargarVehiculos() {
 
 // =====================================================
 // RENDERIZADO DE VEHÍCULOS CON BOTÓN DE HISTORIAL
-// =====================================================
-// =====================================================
-// RENDERIZADO DE VEHÍCULOS - CON ESTADOS FINALES
 // =====================================================
 function renderVehiculos() {
     const grid = document.getElementById('vehiculosGrid');
@@ -337,7 +403,6 @@ function renderVehiculos() {
             `;
         }
         else if (estadoGlobal === 'Entregado') {
-            // Estado entregado - ya no debería aparecer, pero por si acaso
             badgeHtml = `<span class="asignacion-badge entregado"><i class="fas fa-truck"></i> 🚗 ENTREGADO</span>`;
             botonesHtml = `
                 <div class="botones-container">
@@ -537,7 +602,7 @@ async function confirmarEmpezarDiagnostico() {
     showToast('Iniciando trabajo...', 'info');
     
     try {
-        const response = await fetch('/tecnico/empezar-diagnostico', {
+        const response = await fetch(`${API_BASE_URL}/tecnico/empezar-diagnostico`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ id_orden: parseInt(ordenId) })
@@ -588,7 +653,7 @@ async function confirmarInicioReparacion() {
     showToast('Iniciando reparación...', 'info');
     
     try {
-        const response = await fetch('/tecnico/iniciar-reparacion', {
+        const response = await fetch(`${API_BASE_URL}/tecnico/iniciar-reparacion`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ id_orden: parseInt(ordenId) })
@@ -634,7 +699,7 @@ async function confirmarPausaManual() {
     showToast('Pausando reparación...', 'info');
     
     try {
-        const response = await fetch('/tecnico/pausar-reparacion-manual', {
+        const response = await fetch(`${API_BASE_URL}/tecnico/pausar-reparacion-manual`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ id_orden: parseInt(ordenId), motivo: motivo })
@@ -683,7 +748,7 @@ async function confirmarSolicitarRepuestos() {
     showToast('Enviando solicitud de repuestos...', 'info');
     
     try {
-        const response = await fetch('/tecnico/solicitar-repuestos-sin-pausa', {
+        const response = await fetch(`${API_BASE_URL}/tecnico/solicitar-repuestos-sin-pausa`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ 
@@ -734,7 +799,7 @@ async function confirmarReanudarReparacion() {
     showToast('Reanudando reparación...', 'info');
     
     try {
-        const response = await fetch('/tecnico/reanudar-reparacion', {
+        const response = await fetch(`${API_BASE_URL}/tecnico/reanudar-reparacion`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ id_orden: parseInt(ordenId) })
@@ -766,7 +831,7 @@ window.mostrarFinalizarModal = async function(ordenId) {
     }
     
     try {
-        const response = await fetch(`/tecnico/verificar-solicitudes-pendientes/${ordenId}`, {
+        const response = await fetch(`${API_BASE_URL}/tecnico/verificar-solicitudes-pendientes/${ordenId}`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -800,7 +865,7 @@ async function confirmarFinalizarReparacion() {
     showToast('Finalizando reparación...', 'info');
     
     try {
-        const response = await fetch('/tecnico/finalizar-reparacion', {
+        const response = await fetch(`${API_BASE_URL}/tecnico/finalizar-reparacion`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ id_orden: parseInt(ordenId) })
@@ -829,7 +894,7 @@ window.marcarArmadoCompletado = async function(ordenId) {
     showToast('Procesando armado completado...', 'info');
     
     try {
-        const response = await fetch('/tecnico/marcar-armado-completado', {
+        const response = await fetch(`${API_BASE_URL}/tecnico/marcar-armado-completado`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ id_orden: parseInt(ordenId) })
@@ -854,7 +919,7 @@ window.verHistorialSolicitudes = async function(ordenId) {
     showToast('Cargando historial de solicitudes...', 'info');
     
     try {
-        const response = await fetch(`/tecnico/historial-solicitudes/${ordenId}`, {
+        const response = await fetch(`${API_BASE_URL}/tecnico/historial-solicitudes/${ordenId}`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -993,16 +1058,13 @@ function cerrarHistorialModal() {
 }
 
 // =====================================================
-// DETALLE DE ORDEN
-// =====================================================
-// =====================================================
 // DETALLE DE ORDEN - CON INSTRUCCIONES DE REVISIÓN
 // =====================================================
 window.verDetalle = async function(ordenId) {
     showToast('Cargando detalles...', 'info');
     
     try {
-        const response = await fetch(`/tecnico/detalle-orden/${ordenId}`, {
+        const response = await fetch(`${API_BASE_URL}/tecnico/detalle-orden/${ordenId}`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -1128,7 +1190,7 @@ window.verDetalle = async function(ordenId) {
 // Función para marcar instrucción como leída
 window.marcarInstruccionLeida = async function(instruccionId, ordenId) {
     try {
-        const response = await fetch(`/tecnico/marcar-instruccion-leida/${instruccionId}`, {
+        const response = await fetch(`${API_BASE_URL}/tecnico/marcar-instruccion-leida/${instruccionId}`, {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -1173,7 +1235,7 @@ window.cargarComunicados = async function() {
         if (vistosStorage) comunicadosVistos = JSON.parse(vistosStorage);
         
         const timestamp = new Date().getTime();
-        const response = await fetch(`/tecnico/comunicados?_=${timestamp}`, {
+        const response = await fetch(`${API_BASE_URL}/tecnico/comunicados?_=${timestamp}`, {
             headers: { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' }
         });
         
@@ -1248,7 +1310,7 @@ function verComunicadoCompleto(id) {
         if (elemento) elemento.classList.remove('nuevo');
     }
     
-    fetch(`/tecnico/comunicados/${id}`, { headers: { 'Authorization': `Bearer ${token}` } })
+    fetch(`${API_BASE_URL}/tecnico/comunicados/${id}`, { headers: { 'Authorization': `Bearer ${token}` } })
         .then(response => response.json())
         .then(result => {
             if (result.success && result.data) {
@@ -1307,6 +1369,9 @@ window.cerrarSesion = function() {
 // INICIALIZACIÓN
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 Inicializando misvehiculos.js');
+    console.log('📡 API_BASE_URL:', API_BASE_URL);
+    
     const tokenValido = await verificarToken();
     if (!tokenValido) return;
     

@@ -1,10 +1,24 @@
 // =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+// =====================================================
 // HISTORIAL.JS - ENCARGADO DE REPUESTOS
 // VERSIÓN CORREGIDA - MODALES FIJOS Y ESTADOS MEJORADOS
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
-const API_URL = window.location.origin + '/api/encargado-repuestos';
+const API_URL = API_BASE_URL + '/api/encargado-repuestos';
 let currentUser = null;
 let currentTab = 'cotizaciones';
 
@@ -891,7 +905,7 @@ async function cargarUsuarioActual() {
         if (!token) token = localStorage.getItem('token');
         
         if (!token) {
-            window.location.href = '/';
+            window.location.href = API_BASE_URL + '/';
             return null;
         }
         
@@ -916,7 +930,7 @@ async function cargarUsuarioActual() {
         
         if (!tieneRolRepuestos) {
             showToast('No tienes permisos para acceder a esta sección', 'error');
-            setTimeout(() => window.location.href = '/', 2000);
+            setTimeout(() => window.location.href = API_BASE_URL + '/', 2000);
             return null;
         }
         
@@ -929,7 +943,7 @@ async function cargarUsuarioActual() {
         return currentUser;
     } catch (error) {
         console.error('Error:', error);
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return null;
     }
 }

@@ -1,18 +1,36 @@
 // =====================================================
 // PERFIL - JEFE TALLER (VERSIÓN SIMPLIFICADA)
+// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
 // =====================================================
 
-const API_URL = 'http://localhost:5000/api';
+// =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Perfil.js (Jefe Taller) - Modo DESARROLLO');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Perfil.js (Jefe Taller) - Modo PRODUCCIÓN');
+    return '';
+})();
+
+const API_URL = `${API_BASE_URL}/api`;
 let avatarBase64 = null;
 
 // =====================================================
 // INICIALIZACIÓN
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 Inicializando perfil.js (Jefe Taller)');
+    console.log('📡 API_BASE_URL:', API_BASE_URL);
+    
     // Solo verificar que exista token, no validar roles específicos
     const token = localStorage.getItem('furia_token');
     if (!token) {
-        window.location.href = '/';
+        window.location.href = `${API_BASE_URL}/`;
         return;
     }
     
@@ -314,7 +332,7 @@ async function cambiarPassword() {
 function logout() {
     localStorage.removeItem('furia_token');
     localStorage.removeItem('furia_user');
-    window.location.href = '/';
+    window.location.href = `${API_BASE_URL}/`;
 }
 
 // =====================================================

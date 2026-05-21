@@ -1,8 +1,22 @@
 // =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+// =====================================================
 // DASHBOARD JEFE DE TALLER - SIN DATOS DE EJEMPLO
 // =====================================================
 
-const API_URL = window.location.origin + '/api';
+const API_URL = API_BASE_URL + '/api';
 let calendar = null;
 let currentUser = null;
 let rolesUsuario = [];
@@ -26,7 +40,7 @@ async function checkAuth() {
     const token = localStorage.getItem('furia_token');
     
     if (!token) {
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return false;
     }
     
@@ -42,9 +56,9 @@ async function checkAuth() {
         
         if (!tieneRolJefeTaller) {
             if (rolesUsuario.includes('jefe_operativo')) {
-                window.location.href = '/jefe_operativo/dashboard.html';
+                window.location.href = API_BASE_URL + '/jefe_operativo/dashboard.html';
             } else {
-                window.location.href = '/';
+                window.location.href = API_BASE_URL + '/';
             }
             return false;
         }
@@ -53,7 +67,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error verificando autenticación:', error);
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return false;
     }
 }
@@ -512,23 +526,23 @@ window.verDetalleBahia = (numero) => {
 
 window.revisarDiagnostico = (id) => {
     if (id) {
-        window.location.href = `/jefe_taller/diagnosticos.html?diagnostico_id=${id}`;
+        window.location.href = API_BASE_URL + `/jefe_taller/diagnosticos.html?diagnostico_id=${id}`;
     }
 };
 
 window.verCotizacion = (id) => {
     if (id) {
-        window.location.href = `/jefe_taller/cotizaciones.html?id=${id}`;
+        window.location.href = API_BASE_URL + `/jefe_taller/cotizaciones.html?id=${id}`;
     }
 };
 
 window.verOrdenTrabajo = (id) => {
     if (id) {
-        window.location.href = `/jefe_taller/orden_trabajo.html?id=${id}`;
+        window.location.href = API_BASE_URL + `/jefe_taller/orden_trabajo.html?id=${id}`;
     }
 };
 
 window.logout = () => {
     localStorage.clear();
-    window.location.href = '/';
+    window.location.href = API_BASE_URL + '/';
 };

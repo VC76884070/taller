@@ -1,11 +1,26 @@
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA JEFE OPERATIVO
+// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
 // =====================================================
+
+// =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Include.js - Modo DESARROLLO');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Include.js - Modo PRODUCCIÓN');
+    return '';
+})();
 
 // Configuración
 const CONFIG = {
-    sidebarPath: 'components/sidebar.html',
-    logoPath: '../img/logoblanco.jpeg',
+    sidebarPath: `${API_BASE_URL}/jefe_operativo/components/sidebar.html`,
+    logoPath: `${API_BASE_URL}/img/logoblanco.jpeg`,
     defaultUserName: 'María González',
     userRole: 'Jefe Operativo'
 };
@@ -229,6 +244,7 @@ function obtenerUsuarioActual() {
         roles: ['jefe_operativo']
     };
 }
+
 // =====================================================
 // ACTUALIZAR NOMBRE DE USUARIO EN EL SIDEBAR
 // =====================================================
@@ -256,7 +272,7 @@ function configurarLogout() {
             localStorage.removeItem('furia_remembered_type');
             
             // Redirigir al login
-            window.location.href = '/';
+            window.location.href = `${API_BASE_URL}/`;
         }
     };
 }

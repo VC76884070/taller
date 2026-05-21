@@ -1,6 +1,21 @@
 // =====================================================
 // HISTORIAL.JS - VERSIÓN CORREGIDA
+// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
 // =====================================================
+
+// =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
 
 let userInfo = null;
 let ordenesCache = [];
@@ -10,6 +25,7 @@ let ordenesCache = [];
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Inicializando Historial...');
+    console.log('📡 API_BASE_URL:', API_BASE_URL);
     
     // Verificar autenticación
     const isAuth = await checkAuth();
@@ -41,7 +57,7 @@ async function checkAuth() {
     
     if (!token) {
         console.error('No hay token');
-        window.location.href = '/';
+        window.location.href = `${API_BASE_URL}/`;
         return false;
     }
     
@@ -49,14 +65,14 @@ async function checkAuth() {
         userInfo = JSON.parse(userInfoRaw || '{}');
         console.log('UserInfo:', userInfo);
         
-        const verifyResponse = await fetch('/api/verify-token', {
+        const verifyResponse = await fetch(`${API_BASE_URL}/api/verify-token`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (!verifyResponse.ok) {
             console.error('Token inválido');
             localStorage.clear();
-            window.location.href = '/';
+            window.location.href = `${API_BASE_URL}/`;
             return false;
         }
         
@@ -75,9 +91,9 @@ async function checkAuth() {
         if (!tieneRolJefeOperativo) {
             console.error('No tiene permisos de jefe_operativo');
             if (roles.includes('jefe_taller')) {
-                window.location.href = '/jefe_taller/dashboard.html';
+                window.location.href = `${API_BASE_URL}/jefe_taller/dashboard.html`;
             } else {
-                window.location.href = '/';
+                window.location.href = `${API_BASE_URL}/`;
             }
             return false;
         }
@@ -87,7 +103,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error en checkAuth:', error);
-        window.location.href = '/';
+        window.location.href = `${API_BASE_URL}/`;
         return false;
     }
 }
@@ -108,7 +124,7 @@ async function loadSidebar() {
             await includeSidebar();
         } else {
             // Fallback: cargar sidebar manualmente
-            const response = await fetch('/jefe_operativo/components/sidebar.html');
+            const response = await fetch(`${API_BASE_URL}/jefe_operativo/components/sidebar.html`);
             if (response.ok) {
                 const html = await response.text();
                 sidebarContainer.innerHTML = html;
@@ -130,7 +146,7 @@ async function cargarUltimasOrdenes() {
         mostrarLoading(container, 'Cargando últimas órdenes...');
         
         const token = localStorage.getItem('furia_token');
-        const response = await fetch('/api/jefe-operativo/ultimas-ordenes?limite=10', {
+        const response = await fetch(`${API_BASE_URL}/api/jefe-operativo/ultimas-ordenes?limite=10`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -279,7 +295,7 @@ async function buscarPorPlaca() {
         const fechaDesde = document.getElementById('fechaDesde').value;
         const fechaHasta = document.getElementById('fechaHasta').value;
         
-        let url = `/api/jefe-operativo/historial-vehiculo?placa=${encodeURIComponent(placa)}`;
+        let url = `${API_BASE_URL}/api/jefe-operativo/historial-vehiculo?placa=${encodeURIComponent(placa)}`;
         if (estado) url += `&estado=${estado}`;
         if (fechaDesde) url += `&fecha_desde=${fechaDesde}`;
         if (fechaHasta) url += `&fecha_hasta=${fechaHasta}`;
@@ -454,7 +470,7 @@ window.verFotosOrden = async function(idOrden) {
         `;
         
         const token = localStorage.getItem('furia_token');
-        const response = await fetch(`/api/jefe-operativo/orden-fotos/${idOrden}`, {
+        const response = await fetch(`${API_BASE_URL}/api/jefe-operativo/orden-fotos/${idOrden}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -521,7 +537,7 @@ window.verDetalleOrden = async function(idOrden) {
         `;
         
         const token = localStorage.getItem('furia_token');
-        const response = await fetch(`/api/jefe-operativo/detalle-completo-orden/${idOrden}`, {
+        const response = await fetch(`${API_BASE_URL}/api/jefe-operativo/detalle-completo-orden/${idOrden}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -670,7 +686,7 @@ function renderDetalleOrdenCompleto(detalle) {
                         <tr style="border-bottom: 1px solid var(--border-color);">
                             <th style="text-align: left; padding: 0.5rem;">Servicio</th>
                             <th style="text-align: right; padding: 0.5rem;">Precio</th>
-                        </tr>
+                        </table>
                     </thead>
                     <tbody>
                         ${detalle.servicios.map(s => `

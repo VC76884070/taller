@@ -1,8 +1,23 @@
 // =====================================================
 // ÓRDENES DE TRABAJO - JEFE TALLER (VERSIÓN OPTIMIZADA)
+// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
 // =====================================================
 
-const API_URL = '/api';
+// =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 OrdenTrabajo.js - Modo DESARROLLO');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 OrdenTrabajo.js - Modo PRODUCCIÓN');
+    return '';
+})();
+
+const API_URL = `${API_BASE_URL}/api`;
 let userInfo = null;
 let pollingInterval = null;
 let rolesUsuario = [];
@@ -88,6 +103,9 @@ function puedeEditarOrden(estadoGlobal, trabajoIniciado = false) {
 // =====================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 Inicializando orden_trabajo.js (Jefe Taller)');
+    console.log('📡 API_BASE_URL:', API_BASE_URL);
+    
     const autenticado = await checkAuth();
     if (!autenticado) return;
     
@@ -118,7 +136,7 @@ async function checkAuth() {
     const userData = localStorage.getItem('furia_user');
     
     if (!token) {
-        window.location.href = '/';
+        window.location.href = `${API_BASE_URL}/`;
         return false;
     }
     
@@ -137,7 +155,7 @@ async function checkAuth() {
         const tieneRolPermitido = rolesUsuario.includes('jefe_taller') || rolesUsuario.includes('jefe_operativo');
         
         if (!tieneRolPermitido) {
-            window.location.href = '/';
+            window.location.href = `${API_BASE_URL}/`;
             return false;
         }
         
@@ -145,7 +163,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error verificando autenticación:', error);
-        window.location.href = '/';
+        window.location.href = `${API_BASE_URL}/`;
         return false;
     }
 }

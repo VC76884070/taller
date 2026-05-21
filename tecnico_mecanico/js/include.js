@@ -1,11 +1,26 @@
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA TÉCNICO MECÁNICO
+// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
 // =====================================================
+
+// =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Include.js - Modo DESARROLLO');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Include.js - Modo PRODUCCIÓN');
+    return '';
+})();
 
 // Configuración
 const CONFIG = {
-    sidebarPath: 'components/sidebar.html',
-    logoPath: '../../img/logoblanco.jpeg',
+    sidebarPath: `${API_BASE_URL}/tecnico_mecanico/components/sidebar.html`,
+    logoPath: `${API_BASE_URL}/img/logoblanco.jpeg`,
     defaultUserName: 'Técnico',
     userRole: 'Técnico Mecánico'
 };
@@ -37,11 +52,11 @@ function obtenerUsuarioActual() {
                 console.warn('⚠️ Usuario no tiene rol técnico, redirigiendo');
                 
                 if (roles.includes('jefe_taller')) {
-                    window.location.href = '/jefe_taller/dashboard.html';
+                    window.location.href = `${API_BASE_URL}/jefe_taller/dashboard.html`;
                 } else if (roles.includes('jefe_operativo')) {
-                    window.location.href = '/jefe_operativo/dashboard.html';
+                    window.location.href = `${API_BASE_URL}/jefe_operativo/dashboard.html`;
                 } else {
-                    window.location.href = '/';
+                    window.location.href = `${API_BASE_URL}/`;
                 }
                 return { nombre: user.nombre, roles: roles, tieneAcceso: false };
             }
@@ -90,9 +105,7 @@ function eliminarBotonesCerrarSesionAdicionales() {
         '.btn-logout', 
         '.cerrar-sesion', 
         '[onclick="logout()"]', 
-        '[onclick="cerrarSesion()"]',
-        'a:contains("Cerrar Sesión")',
-        'button:contains("Cerrar Sesión")'
+        '[onclick="cerrarSesion()"]'
     ];
     
     selectors.forEach(selector => {
@@ -470,7 +483,7 @@ window.cerrarSesion = function() {
         localStorage.removeItem('furia_remembered_type');
         localStorage.removeItem('furia_selected_role');
         localStorage.removeItem('furia_selected_role_user');
-        window.location.href = '/';
+        window.location.href = `${API_BASE_URL}/`;
     }
 };
 

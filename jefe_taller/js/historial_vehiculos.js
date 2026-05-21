@@ -1,4 +1,18 @@
 // =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+// =====================================================
 // HISTORIAL DE VEHÍCULOS - JEFE TALLER
 // VERSIÓN CORREGIDA
 // =====================================================
@@ -31,20 +45,20 @@ async function checkAuth() {
     const userInfoRaw = localStorage.getItem('furia_user');
     
     if (!token) {
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return false;
     }
     
     try {
         userInfo = JSON.parse(userInfoRaw || '{}');
         
-        const verifyResponse = await fetch('/api/verify-token', {
+        const verifyResponse = await fetch(`${API_BASE_URL}/api/verify-token`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (!verifyResponse.ok) {
             localStorage.clear();
-            window.location.href = '/';
+            window.location.href = API_BASE_URL + '/';
             return false;
         }
         
@@ -59,9 +73,9 @@ async function checkAuth() {
         
         if (!tieneRolJefeTaller) {
             if (roles.includes('jefe_operativo')) {
-                window.location.href = '/jefe_operativo/dashboard.html';
+                window.location.href = API_BASE_URL + '/jefe_operativo/dashboard.html';
             } else {
-                window.location.href = '/';
+                window.location.href = API_BASE_URL + '/';
             }
             return false;
         }
@@ -71,7 +85,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error en checkAuth:', error);
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return false;
     }
 }
@@ -93,7 +107,7 @@ async function cargarUltimasOrdenes() {
         const token = localStorage.getItem('furia_token');
         console.log('📡 Llamando a /api/jefe-taller/ultimas-ordenes');
         
-        const response = await fetch('/api/jefe-taller/ultimas-ordenes?limite=10', {
+        const response = await fetch(`${API_BASE_URL}/api/jefe-taller/ultimas-ordenes?limite=10`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -260,7 +274,7 @@ async function buscarHistorial() {
         const fechaDesde = document.getElementById('fechaDesde').value;
         const fechaHasta = document.getElementById('fechaHasta').value;
         
-        let url = `/api/jefe-taller/historial-vehiculo?placa=${encodeURIComponent(placa)}`;
+        let url = `${API_BASE_URL}/api/jefe-taller/historial-vehiculo?placa=${encodeURIComponent(placa)}`;
         if (estado) url += `&estado=${estado}`;
         if (fechaDesde) url += `&fecha_desde=${fechaDesde}`;
         if (fechaHasta) url += `&fecha_hasta=${fechaHasta}`;
@@ -419,7 +433,7 @@ window.verDetalleCompletoOrden = async function(idOrden) {
         modal.classList.add('show');
         
         const token = localStorage.getItem('furia_token');
-        const response = await fetch(`/api/jefe-taller/detalle-completo-orden/${idOrden}`, {
+        const response = await fetch(`${API_BASE_URL}/api/jefe-taller/detalle-completo-orden/${idOrden}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         

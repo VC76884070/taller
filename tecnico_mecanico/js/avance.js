@@ -1,10 +1,25 @@
 // =====================================================
 // AVANCE.JS - TÉCNICO MECÁNICO
 // REGISTRO DE AVANCES DE TRABAJO - CADA ORDEN TIENE UN SOLO AVANCE
-// VERSIÓN CORREGIDA CON ACTUALIZACIÓN
+// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
 // =====================================================
 
-const API_URL = window.location.origin + '/tecnico';
+// =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+const API_URL = `${API_BASE_URL}/tecnico`;
+
 let token = null;
 let currentUser = null;
 let currentOrdenId = null;
@@ -804,6 +819,7 @@ function setupEventListeners() {
 
 async function inicializar() {
     console.log('🚀 Inicializando avance.js');
+    console.log('📡 API URL:', API_URL);
 
     const user = await cargarUsuarioActual();
     if (!user) return;

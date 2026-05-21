@@ -1,10 +1,21 @@
 // =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+// =====================================================
 // DASHBOARD ENCARGADO DE REPUESTOS - VERSIÓN SIMPLIFICADA
 // SOLO FUNCIONES DEL DASHBOARD (sin tabs)
 // =====================================================
-
-// Configuración
-const API_URL = 'http://localhost:5000/api';
 
 // Elementos DOM
 const currentDateSpan = document.getElementById('currentDate');
@@ -41,7 +52,7 @@ async function checkAuth() {
     const userData = localStorage.getItem('furia_user');
     
     if (!token) {
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return false;
     }
     
@@ -56,7 +67,7 @@ async function checkAuth() {
         
         if (!tieneRol) {
             console.warn('❌ Usuario no tiene permisos');
-            window.location.href = '/';
+            window.location.href = API_BASE_URL + '/';
             return false;
         }
         
@@ -70,7 +81,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error:', error);
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
         return false;
     }
 }
@@ -103,7 +114,7 @@ async function loadDashboardData() {
         mostrarLoading(true);
         
         // Intentar conectar al backend
-        const response = await fetch(`${API_URL}/encargado-repuestos/dashboard`, {
+        const response = await fetch(`${API_BASE_URL}/api/encargado-repuestos/dashboard`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -332,7 +343,7 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
 window.cerrarSesion = function() {
     if (confirm('¿Cerrar sesión?')) {
         localStorage.clear();
-        window.location.href = '/';
+        window.location.href = API_BASE_URL + '/';
     }
 };
 

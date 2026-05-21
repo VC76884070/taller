@@ -1,11 +1,26 @@
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA JEFE DE TALLER
+// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
 // =====================================================
+
+// =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Include.js (Jefe Taller) - Modo DESARROLLO');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Include.js (Jefe Taller) - Modo PRODUCCIÓN');
+    return '';
+})();
 
 // Configuración
 const CONFIG = {
-    sidebarPath: 'components/sidebar.html',
-    logoPath: '../img/logoblanco.jpeg',
+    sidebarPath: `${API_BASE_URL}/jefe_taller/components/sidebar.html`,
+    logoPath: `${API_BASE_URL}/img/logoblanco.jpeg`,
     defaultUserName: 'Carlos Rodríguez',
     userRole: 'Jefe de Taller'
 };
@@ -139,7 +154,7 @@ function obtenerPaginaActual() {
         'historial_vehiculos': 'historial_vehiculos',
         'perfil': 'perfil',
         'admin_roles': 'admin_roles',
-        'reservas_solicitudes': 'reservas_solicitudes'  // Agregado aquí
+        'reservas_solicitudes': 'reservas_solicitudes'
     };
     
     return pageMapping[pageName] || pageName;
@@ -192,7 +207,7 @@ let notificacionesInterval = null;
 
 async function cargarNotificaciones() {
     try {
-        const response = await fetch(`${API_URL}/jefe-taller/notificaciones`, {
+        const response = await fetch(`${API_BASE_URL}/api/jefe-taller/notificaciones`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
         });
         
@@ -302,7 +317,7 @@ window.cerrarSesion = function() {
     if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
         localStorage.removeItem('furia_token');
         localStorage.removeItem('furia_user');
-        window.location.href = '/';
+        window.location.href = `${API_BASE_URL}/`;
     }
 };
 

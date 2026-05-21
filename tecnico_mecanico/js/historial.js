@@ -1,7 +1,22 @@
 // =====================================================
 // HISTORIAL DE TRABAJOS - TÉCNICO MECÁNICO (OPTIMIZADO)
 // SOLO ÚLTIMOS 10 TRABAJOS
+// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
 // =====================================================
+
+// =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
 
 let token = null;
 let trabajos = [];
@@ -87,7 +102,7 @@ async function verificarToken() {
     }
     
     try {
-        const response = await fetch('/api/verify-token', {
+        const response = await fetch(`${API_BASE_URL}/api/verify-token`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -117,7 +132,7 @@ async function cargarHistorial() {
     try {
         showToast('Cargando últimos trabajos...', 'info');
         
-        const response = await fetch('/tecnico/api/historial', {
+        const response = await fetch(`${API_BASE_URL}/tecnico/api/historial`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -288,19 +303,19 @@ function actualizarPaginacion() {
     const btnSiguiente = document.getElementById('btnPaginaSiguiente');
     
     if (totalPaginas <= 1) {
-        paginationContainer.style.display = 'none';
+        if (paginationContainer) paginationContainer.style.display = 'none';
         return;
     }
     
-    paginationContainer.style.display = 'flex';
-    paginacionInfo.textContent = `Mostrando ${trabajosFiltrados.length} de ${trabajos.length} trabajos`;
+    if (paginationContainer) paginationContainer.style.display = 'flex';
+    if (paginacionInfo) paginacionInfo.textContent = `Mostrando ${trabajosFiltrados.length} de ${trabajos.length} trabajos`;
     
     const inicio = (paginaActual - 1) * itemsPorPagina + 1;
     const fin = Math.min(paginaActual * itemsPorPagina, trabajosFiltrados.length);
-    paginasInfo.textContent = `Página ${paginaActual} de ${totalPaginas} (${inicio}-${fin})`;
+    if (paginasInfo) paginasInfo.textContent = `Página ${paginaActual} de ${totalPaginas} (${inicio}-${fin})`;
     
-    btnAnterior.disabled = paginaActual <= 1;
-    btnSiguiente.disabled = paginaActual >= totalPaginas;
+    if (btnAnterior) btnAnterior.disabled = paginaActual <= 1;
+    if (btnSiguiente) btnSiguiente.disabled = paginaActual >= totalPaginas;
 }
 
 function cambiarPagina(direccion) {
@@ -316,14 +331,14 @@ function cambiarPagina(direccion) {
 }
 
 // =====================================================
-// DETALLE DEL TRABAJO (SIN CAMBIOS)
+// DETALLE DEL TRABAJO
 // =====================================================
 
 async function verDetalle(id) {
     try {
         showToast('Cargando detalles...', 'info');
         
-        const response = await fetch(`/tecnico/api/historial/${id}`, {
+        const response = await fetch(`${API_BASE_URL}/tecnico/api/historial/${id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -347,8 +362,129 @@ function mostrarModalDetalle(detalle) {
     
     if (!modal || !body) return;
     
-    // Las funciones de renderizado se mantienen igual
-    // ... (mantener el mismo código de renderizado del modal)
+    // Servicios HTML
+    let serviciosHtml = '';
+    if (detalle.servicios && detalle.servicios.length > 0) {
+        serviciosHtml = `
+            <div class="detalle-seccion">
+                <h4><i class="fas fa-tools"></i> Servicios Realizados</h4>
+                <div class="servicios-listado">
+                    ${detalle.servicios.map(s => `
+                        <div class="servicio-realizado">
+                            <i class="fas fa-wrench"></i>
+                            <span>${escapeHtml(s)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Fotos HTML
+    let fotosHtml = '';
+    if (detalle.fotos && detalle.fotos.length > 0) {
+        fotosHtml = `
+            <div class="detalle-seccion">
+                <h4><i class="fas fa-camera"></i> Fotos del Trabajo</h4>
+                <div class="fotos-grid-detalle">
+                    ${detalle.fotos.map(foto => `
+                        <div class="foto-item" onclick="verImagenAmpliada('${foto.url}', 'Foto de ${detalle.codigo_unico}')">
+                            <img src="${foto.url}" alt="Foto del trabajo">
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Estado del diagnóstico
+    let diagnosticoHtml = '';
+    if (detalle.diagnostico) {
+        let estadoBadge = '';
+        switch (detalle.diagnostico.estado) {
+            case 'aprobado':
+                estadoBadge = '<span class="diagnostico-aprobado"><i class="fas fa-check-circle"></i> Aprobado</span>';
+                break;
+            case 'rechazado':
+                estadoBadge = '<span class="diagnostico-rechazado"><i class="fas fa-times-circle"></i> Rechazado</span>';
+                break;
+            default:
+                estadoBadge = '<span class="diagnostico-pendiente"><i class="fas fa-clock"></i> Pendiente</span>';
+        }
+        
+        diagnosticoHtml = `
+            <div class="detalle-seccion">
+                <h4><i class="fas fa-stethoscope"></i> Diagnóstico</h4>
+                <div class="diagnostico-info">
+                    <div class="diagnostico-estado">${estadoBadge}</div>
+                    ${detalle.diagnostico.informe ? `
+                        <div class="diagnostico-informe">
+                            <strong>Informe:</strong>
+                            <p>${escapeHtml(detalle.diagnostico.informe)}</p>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+    
+    body.innerHTML = `
+        <div class="detalle-container">
+            <div class="detalle-header">
+                <div class="detalle-titulo">
+                    <i class="fas fa-clipboard-list"></i>
+                    <h3>Orden: ${escapeHtml(detalle.codigo_unico)}</h3>
+                </div>
+                <span class="estado-badge estado-${detalle.estado_global}">
+                    ${detalle.estado_global || 'En Recepción'}
+                </span>
+            </div>
+            
+            <div class="detalle-info-grid">
+                <div class="info-card">
+                    <i class="fas fa-user"></i>
+                    <div>
+                        <label>Cliente</label>
+                        <p>${escapeHtml(detalle.cliente_nombre || 'N/A')}</p>
+                    </div>
+                </div>
+                <div class="info-card">
+                    <i class="fas fa-car"></i>
+                    <div>
+                        <label>Vehículo</label>
+                        <p>${escapeHtml(detalle.marca || '')} ${escapeHtml(detalle.modelo || '')}</p>
+                    </div>
+                </div>
+                <div class="info-card">
+                    <i class="fas fa-id-card"></i>
+                    <div>
+                        <label>Placa</label>
+                        <p>${escapeHtml(detalle.placa || 'N/A')}</p>
+                    </div>
+                </div>
+                <div class="info-card">
+                    <i class="fas fa-calendar-alt"></i>
+                    <div>
+                        <label>Fecha Ingreso</label>
+                        <p>${formatFecha(detalle.fecha_ingreso)}</p>
+                    </div>
+                </div>
+                ${detalle.fecha_entrega ? `
+                    <div class="info-card">
+                        <i class="fas fa-check-circle"></i>
+                        <div>
+                            <label>Fecha Entrega</label>
+                            <p>${formatFecha(detalle.fecha_entrega)}</p>
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+            
+            ${diagnosticoHtml}
+            ${serviciosHtml}
+            ${fotosHtml}
+        </div>
+    `;
     
     modal.classList.add('show');
 }
@@ -379,22 +515,87 @@ function exportarDetalle() {
 }
 
 function generarHTMLExportacion(detalle) {
-    // Mantener la misma función de exportación
-    return `<!DOCTYPE html>...`; // (mismo código)
+    return `<!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Detalle Trabajo - ${detalle.codigo_unico}</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+            h1 { color: #333; border-bottom: 2px solid #e63946; padding-bottom: 10px; }
+            h2 { color: #555; margin-top: 25px; }
+            .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 20px 0; }
+            .info-item { background: #f5f5f5; padding: 10px; border-radius: 8px; }
+            .info-item label { font-weight: bold; display: block; margin-bottom: 5px; }
+            .servicio { background: #e8f4f8; padding: 8px; margin: 5px 0; border-radius: 5px; }
+            .foto { margin: 10px; max-width: 300px; }
+            .foto img { width: 100%; border-radius: 8px; }
+            .estado { display: inline-block; padding: 5px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+            .estado-Finalizado { background: #d4edda; color: #155724; }
+            .estado-EnProceso { background: #cfe2ff; color: #084298; }
+        </style>
+    </head>
+    <body>
+        <h1><i class="fas fa-clipboard-list"></i> Detalle Trabajo - ${escapeHtml(detalle.codigo_unico)}</h1>
+        <div class="info-grid">
+            <div class="info-item"><label>Cliente</label>${escapeHtml(detalle.cliente_nombre || 'N/A')}</div>
+            <div class="info-item"><label>Vehículo</label>${escapeHtml(detalle.marca || '')} ${escapeHtml(detalle.modelo || '')}</div>
+            <div class="info-item"><label>Placa</label>${escapeHtml(detalle.placa || 'N/A')}</div>
+            <div class="info-item"><label>Fecha Ingreso</label>${formatFecha(detalle.fecha_ingreso)}</div>
+            <div class="info-item"><label>Estado</label><span class="estado estado-${detalle.estado_global}">${detalle.estado_global || 'En Recepción'}</span></div>
+        </div>
+        
+        ${detalle.diagnostico && detalle.diagnostico.informe ? `
+            <h2>Diagnóstico</h2>
+            <div class="info-item"><label>Informe</label><p>${escapeHtml(detalle.diagnostico.informe)}</p></div>
+        ` : ''}
+        
+        ${detalle.servicios && detalle.servicios.length > 0 ? `
+            <h2>Servicios Realizados</h2>
+            ${detalle.servicios.map(s => `<div class="servicio">✓ ${escapeHtml(s)}</div>`).join('')}
+        ` : ''}
+        
+        ${detalle.fotos && detalle.fotos.length > 0 ? `
+            <h2>Fotos del Trabajo</h2>
+            <div style="display: flex; flex-wrap: wrap;">
+                ${detalle.fotos.map(foto => `<div class="foto"><img src="${foto.url}" alt="Foto trabajo"></div>`).join('')}
+            </div>
+        ` : ''}
+        
+        <p style="margin-top: 40px; color: #888;">Documento generado el ${new Date().toLocaleString()}</p>
+    </body>
+    </html>`;
 }
 
 function verImagenAmpliada(url, titulo) {
     const modal = document.createElement('div');
     modal.className = 'modal-imagen';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.9);
+        z-index: 10000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+    `;
     modal.innerHTML = `
-        <div class="modal-imagen-content">
-            <button class="modal-imagen-close" onclick="this.parentElement.parentElement.remove()">&times;</button>
-            <img src="${url}" alt="${titulo}">
-            <p>${titulo}</p>
+        <div style="position: relative; max-width: 90%; max-height: 90%;">
+            <button style="position: absolute; top: -40px; right: 0; background: none; border: none; color: white; font-size: 30px; cursor: pointer;">&times;</button>
+            <img src="${url}" alt="${titulo}" style="max-width: 100%; max-height: 80vh; border-radius: 8px;">
+            <p style="color: white; text-align: center; margin-top: 10px;">${titulo}</p>
         </div>
     `;
     document.body.appendChild(modal);
-    modal.style.display = 'flex';
+    
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) modal.remove();
+    });
+    modal.querySelector('button').addEventListener('click', () => modal.remove());
 }
 
 // =====================================================
@@ -418,6 +619,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = '/';
         return;
     }
+    
+    console.log('📡 API_BASE_URL:', API_BASE_URL);
     
     const tokenValido = await verificarToken();
     if (!tokenValido) return;
@@ -446,7 +649,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sidebarContainer = document.getElementById('sidebar-container');
     if (sidebarContainer) {
         try {
-            const response = await fetch('/tecnico_mecanico/components/sidebar.html');
+            const response = await fetch(`${API_BASE_URL}/tecnico_mecanico/components/sidebar.html`);
             if (response.ok) {
                 sidebarContainer.innerHTML = await response.text();
             }
@@ -461,4 +664,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.exportarDetalle = exportarDetalle;
     window.cerrarSesion = cerrarSesion;
     window.verImagenAmpliada = verImagenAmpliada;
+    
+    console.log('✅ historial.js cargado correctamente');
 });

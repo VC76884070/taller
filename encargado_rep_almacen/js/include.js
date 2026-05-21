@@ -1,4 +1,18 @@
 // =====================================================
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// =====================================================
+const API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+    return '';
+})();
+
+// =====================================================
 // INCLUDE.JS - SIDEBAR PARA ENCARGADO DE REPUESTOS
 // VERSIÓN CORREGIDA - Rutas correctas
 // =====================================================
@@ -260,7 +274,7 @@ window.cerrarSesion = function() {
         localStorage.removeItem('furia_token');
         localStorage.removeItem('furia_user');
         localStorage.removeItem('furia_remembered');
-        window.location.href = '../../login.html';
+        window.location.href = API_BASE_URL + '/login.html';
     }
 };
 

@@ -4,9 +4,13 @@
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// NOTA: API_BASE_URL ya está definida globalmente por include.js
+// como window.API_BASE_URL. NO redeclarar como const aquí.
 // =====================================================
-const API_BASE_URL = (() => {
+
+// Usar la variable global directamente o crear una referencia local
+const API_BASE_URL = window.API_BASE_URL || (() => {
+    // Fallback solo si no existe la variable global
     if (window.location.hostname === 'localhost' || 
         window.location.hostname === '127.0.0.1' ||
         window.location.hostname.includes('192.168.')) {

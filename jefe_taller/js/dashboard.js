@@ -1,22 +1,27 @@
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
-// =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
-
-// =====================================================
 // DASHBOARD JEFE DE TALLER - SIN DATOS DE EJEMPLO
+// VERSIÓN CORREGIDA - USA VARIABLE GLOBAL DE INCLUDE.JS
 // =====================================================
 
-const API_URL = API_BASE_URL + '/api';
+// =====================================================
+// CONFIGURACIÓN DE API - USA VARIABLE GLOBAL
+// =====================================================
+// La variable API_BASE_URL ya está declarada en include.js como window.API_BASE_URL
+// Si por alguna razón no existe (página cargada sola), la creamos
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 dashboard.js - Modo DESARROLLO (fallback)');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 dashboard.js - Modo PRODUCCIÓN (fallback)');
+        return '';
+    })();
+}
+
+const API_URL = window.API_BASE_URL + '/api';
 let calendar = null;
 let currentUser = null;
 let rolesUsuario = [];
@@ -27,6 +32,7 @@ let rolesUsuario = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Inicializando dashboard Jefe Taller');
+    console.log('📡 API_URL:', API_URL);
     
     const autenticado = await checkAuth();
     if (!autenticado) return;
@@ -40,7 +46,7 @@ async function checkAuth() {
     const token = localStorage.getItem('furia_token');
     
     if (!token) {
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = window.API_BASE_URL + '/';
         return false;
     }
     
@@ -56,9 +62,9 @@ async function checkAuth() {
         
         if (!tieneRolJefeTaller) {
             if (rolesUsuario.includes('jefe_operativo')) {
-                window.location.href = API_BASE_URL + '/jefe_operativo/dashboard.html';
+                window.location.href = window.API_BASE_URL + '/jefe_operativo/dashboard.html';
             } else {
-                window.location.href = API_BASE_URL + '/';
+                window.location.href = window.API_BASE_URL + '/';
             }
             return false;
         }
@@ -67,7 +73,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error verificando autenticación:', error);
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = window.API_BASE_URL + '/';
         return false;
     }
 }
@@ -526,23 +532,23 @@ window.verDetalleBahia = (numero) => {
 
 window.revisarDiagnostico = (id) => {
     if (id) {
-        window.location.href = API_BASE_URL + `/jefe_taller/diagnosticos.html?diagnostico_id=${id}`;
+        window.location.href = window.API_BASE_URL + `/jefe_taller/diagnostico.html?diagnostico_id=${id}`;
     }
 };
 
 window.verCotizacion = (id) => {
     if (id) {
-        window.location.href = API_BASE_URL + `/jefe_taller/cotizaciones.html?id=${id}`;
+        window.location.href = window.API_BASE_URL + `/jefe_taller/cotizaciones.html?id=${id}`;
     }
 };
 
 window.verOrdenTrabajo = (id) => {
     if (id) {
-        window.location.href = API_BASE_URL + `/jefe_taller/orden_trabajo.html?id=${id}`;
+        window.location.href = window.API_BASE_URL + `/jefe_taller/orden_trabajo.html?id=${id}`;
     }
 };
 
 window.logout = () => {
     localStorage.clear();
-    window.location.href = API_BASE_URL + '/';
+    window.location.href = window.API_BASE_URL + '/';
 };

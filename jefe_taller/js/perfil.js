@@ -1,23 +1,27 @@
 // =====================================================
 // PERFIL - JEFE TALLER (VERSIÓN SIMPLIFICADA)
-// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
+// VERSIÓN CORREGIDA - USA VARIABLE GLOBAL DE INCLUDE.JS
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// CONFIGURACIÓN DE API - USA VARIABLE GLOBAL
 // =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Perfil.js (Jefe Taller) - Modo DESARROLLO');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Perfil.js (Jefe Taller) - Modo PRODUCCIÓN');
-    return '';
-})();
+// La variable API_BASE_URL ya está declarada en include.js como window.API_BASE_URL
+// Si por alguna razón no existe (página cargada sola), la creamos
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 perfil.js (Jefe Taller) - Modo DESARROLLO (fallback)');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 perfil.js (Jefe Taller) - Modo PRODUCCIÓN (fallback)');
+        return '';
+    })();
+}
 
-const API_URL = `${API_BASE_URL}/api`;
+const API_URL = `${window.API_BASE_URL}/api`;
 let avatarBase64 = null;
 
 // =====================================================
@@ -25,12 +29,12 @@ let avatarBase64 = null;
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Inicializando perfil.js (Jefe Taller)');
-    console.log('📡 API_BASE_URL:', API_BASE_URL);
+    console.log('📡 API_BASE_URL:', window.API_BASE_URL);
     
     // Solo verificar que exista token, no validar roles específicos
     const token = localStorage.getItem('furia_token');
     if (!token) {
-        window.location.href = `${API_BASE_URL}/`;
+        window.location.href = `${window.API_BASE_URL}/`;
         return;
     }
     
@@ -332,7 +336,7 @@ async function cambiarPassword() {
 function logout() {
     localStorage.removeItem('furia_token');
     localStorage.removeItem('furia_user');
-    window.location.href = `${API_BASE_URL}/`;
+    window.location.href = `${window.API_BASE_URL}/`;
 }
 
 // =====================================================

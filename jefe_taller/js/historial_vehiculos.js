@@ -1,21 +1,25 @@
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// HISTORIAL DE VEHÍCULOS - JEFE TALLER
+// VERSIÓN CORREGIDA - USA VARIABLE GLOBAL DE INCLUDE.JS
 // =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
 
 // =====================================================
-// HISTORIAL DE VEHÍCULOS - JEFE TALLER
-// VERSIÓN CORREGIDA
+// CONFIGURACIÓN DE API - USA VARIABLE GLOBAL
 // =====================================================
+// La variable API_BASE_URL ya está declarada en include.js como window.API_BASE_URL
+// Si por alguna razón no existe (página cargada sola), la creamos
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 historial_vehiculos.js - Modo DESARROLLO (fallback)');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 historial_vehiculos.js - Modo PRODUCCIÓN (fallback)');
+        return '';
+    })();
+}
 
 let userInfo = null;
 
@@ -24,6 +28,7 @@ let userInfo = null;
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Inicializando Historial - Jefe Taller...');
+    console.log('📡 API_BASE_URL:', window.API_BASE_URL);
     
     const autenticado = await checkAuth();
     if (!autenticado) return;
@@ -45,20 +50,20 @@ async function checkAuth() {
     const userInfoRaw = localStorage.getItem('furia_user');
     
     if (!token) {
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = window.API_BASE_URL + '/';
         return false;
     }
     
     try {
         userInfo = JSON.parse(userInfoRaw || '{}');
         
-        const verifyResponse = await fetch(`${API_BASE_URL}/api/verify-token`, {
+        const verifyResponse = await fetch(`${window.API_BASE_URL}/api/verify-token`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (!verifyResponse.ok) {
             localStorage.clear();
-            window.location.href = API_BASE_URL + '/';
+            window.location.href = window.API_BASE_URL + '/';
             return false;
         }
         
@@ -73,9 +78,9 @@ async function checkAuth() {
         
         if (!tieneRolJefeTaller) {
             if (roles.includes('jefe_operativo')) {
-                window.location.href = API_BASE_URL + '/jefe_operativo/dashboard.html';
+                window.location.href = window.API_BASE_URL + '/jefe_operativo/dashboard.html';
             } else {
-                window.location.href = API_BASE_URL + '/';
+                window.location.href = window.API_BASE_URL + '/';
             }
             return false;
         }
@@ -85,7 +90,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error en checkAuth:', error);
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = window.API_BASE_URL + '/';
         return false;
     }
 }
@@ -107,7 +112,7 @@ async function cargarUltimasOrdenes() {
         const token = localStorage.getItem('furia_token');
         console.log('📡 Llamando a /api/jefe-taller/ultimas-ordenes');
         
-        const response = await fetch(`${API_BASE_URL}/api/jefe-taller/ultimas-ordenes?limite=10`, {
+        const response = await fetch(`${window.API_BASE_URL}/api/jefe-taller/ultimas-ordenes?limite=10`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -120,7 +125,6 @@ async function cargarUltimasOrdenes() {
         const data = await response.json();
         console.log('📡 Datos recibidos:', data);
         
-        // ✅ Verificar que la respuesta tenga la estructura esperada
         if (data.success) {
             const ordenes = data.ordenes || [];
             const resumen = data.resumen || {
@@ -161,7 +165,6 @@ function mostrarUltimasOrdenes(ordenes, resumen) {
         return;
     }
     
-    // Asegurar que resumen tenga valores por defecto
     const total = resumen.total || ordenes.length;
     const entregados = resumen.entregados || 0;
     const en_proceso = resumen.en_proceso || 0;
@@ -274,7 +277,7 @@ async function buscarHistorial() {
         const fechaDesde = document.getElementById('fechaDesde').value;
         const fechaHasta = document.getElementById('fechaHasta').value;
         
-        let url = `${API_BASE_URL}/api/jefe-taller/historial-vehiculo?placa=${encodeURIComponent(placa)}`;
+        let url = `${window.API_BASE_URL}/api/jefe-taller/historial-vehiculo?placa=${encodeURIComponent(placa)}`;
         if (estado) url += `&estado=${estado}`;
         if (fechaDesde) url += `&fecha_desde=${fechaDesde}`;
         if (fechaHasta) url += `&fecha_hasta=${fechaHasta}`;
@@ -433,7 +436,7 @@ window.verDetalleCompletoOrden = async function(idOrden) {
         modal.classList.add('show');
         
         const token = localStorage.getItem('furia_token');
-        const response = await fetch(`${API_BASE_URL}/api/jefe-taller/detalle-completo-orden/${idOrden}`, {
+        const response = await fetch(`${window.API_BASE_URL}/api/jefe-taller/detalle-completo-orden/${idOrden}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         

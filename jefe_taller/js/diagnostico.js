@@ -1,23 +1,28 @@
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
-// =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
-
-// =====================================================
 // DIAGNOSTICO.JS - JEFE DE TALLER
 // Gestión de diagnósticos técnicos - SOLO ÚLTIMOS 5 POR ESTADO
+// VERSIÓN CORREGIDA - USA VARIABLE GLOBAL DE INCLUDE.JS
 // =====================================================
 
-const API_URL = API_BASE_URL + '/api';
+// =====================================================
+// CONFIGURACIÓN DE API - USA VARIABLE GLOBAL
+// =====================================================
+// La variable API_BASE_URL ya está declarada en include.js como window.API_BASE_URL
+// Si por alguna razón no existe (página cargada sola), la creamos
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 diagnostico.js - Modo DESARROLLO (fallback)');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 diagnostico.js - Modo PRODUCCIÓN (fallback)');
+        return '';
+    })();
+}
+
+const API_URL = window.API_BASE_URL + '/api';
 let userInfo = null;
 let currentUserRoles = [];
 
@@ -45,6 +50,7 @@ let isRecording = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Inicializando página de diagnósticos...');
+    console.log('📡 API_URL:', API_URL);
     
     const autenticado = await checkAuth();
     if (!autenticado) return;
@@ -59,7 +65,7 @@ async function checkAuth() {
     const userData = localStorage.getItem('furia_user');
     
     if (!token) {
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = window.API_BASE_URL + '/';
         return false;
     }
     
@@ -81,7 +87,7 @@ async function checkAuth() {
         
         if (!tieneRolJefeTaller) {
             mostrarNotificacion('No tienes permisos para acceder a esta sección', 'error');
-            setTimeout(() => { window.location.href = API_BASE_URL + '/'; }, 2000);
+            setTimeout(() => { window.location.href = window.API_BASE_URL + '/'; }, 2000);
             return false;
         }
         
@@ -90,7 +96,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error verificando autenticación:', error);
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = window.API_BASE_URL + '/';
         return false;
     }
 }
@@ -1017,7 +1023,7 @@ window.verImagenAmpliada = function(url) {
 function logout() {
     localStorage.removeItem('furia_token');
     localStorage.removeItem('furia_user');
-    window.location.href = API_BASE_URL + '/';
+    window.location.href = window.API_BASE_URL + '/';
 }
 
 // Exponer funciones globales

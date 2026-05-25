@@ -1,7 +1,16 @@
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// GESTION_AVANCES.JS - JEFE DE TALLER (VERSIÓN OPTIMIZADA)
+// SOLO ÚLTIMOS 10 AVANCES - CARGA RÁPIDA
 // =====================================================
-const API_BASE_URL = (() => {
+
+// =====================================================
+// NOTA: API_BASE_URL ya está definida globalmente por include.js
+// como window.API_BASE_URL. NO redeclarar como const aquí.
+// =====================================================
+
+// Usar la variable global directamente o crear una referencia local
+const API_BASE_URL = window.API_BASE_URL || (() => {
+    // Fallback solo si no existe la variable global
     if (window.location.hostname === 'localhost' || 
         window.location.hostname === '127.0.0.1' ||
         window.location.hostname.includes('192.168.')) {
@@ -11,11 +20,6 @@ const API_BASE_URL = (() => {
     console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
     return '';
 })();
-
-// =====================================================
-// GESTION_AVANCES.JS - JEFE DE TALLER (VERSIÓN OPTIMIZADA)
-// SOLO ÚLTIMOS 10 AVANCES - CARGA RÁPIDA
-// =====================================================
 
 const API_URL = API_BASE_URL + '/api/jefe-taller/avances';
 

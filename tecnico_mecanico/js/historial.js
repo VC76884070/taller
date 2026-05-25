@@ -1,22 +1,27 @@
 // =====================================================
 // HISTORIAL DE TRABAJOS - TÉCNICO MECÁNICO (OPTIMIZADO)
 // SOLO ÚLTIMOS 10 TRABAJOS
-// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
+// VERSIÓN CORREGIDA - USA DIRECTAMENTE window.API_BASE_URL
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// NOTA: API_BASE_URL ya está definida globalmente por include.js
+// como window.API_BASE_URL. NO redeclarar como const aquí.
 // =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
+
+// Verificar si existe la variable global, si no, crearla (solo por si acaso)
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 historial.js - Modo DESARROLLO (fallback)');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 historial.js - Modo PRODUCCIÓN (fallback)');
+        return '';
+    })();
+}
 
 let token = null;
 let trabajos = [];
@@ -97,12 +102,12 @@ function escapeHtml(text) {
 
 async function verificarToken() {
     if (!token) {
-        window.location.href = '/';
+        window.location.href = `${window.API_BASE_URL}/`;
         return false;
     }
     
     try {
-        const response = await fetch(`${API_BASE_URL}/api/verify-token`, {
+        const response = await fetch(`${window.API_BASE_URL}/api/verify-token`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -112,14 +117,14 @@ async function verificarToken() {
         if (!data.valid) {
             localStorage.removeItem('furia_token');
             localStorage.removeItem('furia_user');
-            window.location.href = '/';
+            window.location.href = `${window.API_BASE_URL}/`;
             return false;
         }
         
         return true;
     } catch (error) {
         console.error('Error verificando token:', error);
-        window.location.href = '/';
+        window.location.href = `${window.API_BASE_URL}/`;
         return false;
     }
 }
@@ -132,7 +137,7 @@ async function cargarHistorial() {
     try {
         showToast('Cargando últimos trabajos...', 'info');
         
-        const response = await fetch(`${API_BASE_URL}/tecnico/api/historial`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/historial`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -338,7 +343,7 @@ async function verDetalle(id) {
     try {
         showToast('Cargando detalles...', 'info');
         
-        const response = await fetch(`${API_BASE_URL}/tecnico/api/historial/${id}`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/historial/${id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -605,7 +610,7 @@ function verImagenAmpliada(url, titulo) {
 function cerrarSesion() {
     localStorage.removeItem('furia_token');
     localStorage.removeItem('furia_user');
-    window.location.href = '/';
+    window.location.href = `${window.API_BASE_URL}/`;
 }
 
 // =====================================================
@@ -616,11 +621,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     token = getToken();
     
     if (!token) {
-        window.location.href = '/';
+        window.location.href = `${window.API_BASE_URL}/`;
         return;
     }
     
-    console.log('📡 API_BASE_URL:', API_BASE_URL);
+    console.log('📡 window.API_BASE_URL:', window.API_BASE_URL);
     
     const tokenValido = await verificarToken();
     if (!tokenValido) return;
@@ -649,7 +654,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sidebarContainer = document.getElementById('sidebar-container');
     if (sidebarContainer) {
         try {
-            const response = await fetch(`${API_BASE_URL}/tecnico_mecanico/components/sidebar.html`);
+            const response = await fetch(`${window.API_BASE_URL}/tecnico_mecanico/components/sidebar.html`);
             if (response.ok) {
                 sidebarContainer.innerHTML = await response.text();
             }

@@ -1,22 +1,15 @@
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
-// =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
-
-// =====================================================
 // MISVEHICULOS.JS - CLIENTE (VERSIÓN OPTIMIZADA)
+// VERSIÓN CORREGIDA - USA window.API_BASE_URL
 // =====================================================
 
-const API_URL = API_BASE_URL + '/api/cliente';
+// =====================================================
+// CONFIGURACIÓN DE API - USA LA VARIABLE GLOBAL
+// =====================================================
+// NOTA: window.API_BASE_URL ya está declarada en include.js
+// No declarar const API_BASE_URL aquí
+
+const API_URL = `${window.API_BASE_URL}/api/cliente`;
 let currentUser = null;
 let vehiculos = [];
 let currentVehiculo = null;
@@ -108,7 +101,7 @@ async function cargarUsuarioActual() {
         let token = localStorage.getItem('furia_token');
         if (!token) token = localStorage.getItem('token');
         if (!token) {
-            window.location.href = API_BASE_URL + '/';
+            window.location.href = `${window.API_BASE_URL}/`;
             return null;
         }
 
@@ -129,7 +122,7 @@ async function cargarUsuarioActual() {
 
         return currentUser;
     } catch (error) {
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = `${window.API_BASE_URL}/`;
         return null;
     }
 }
@@ -137,7 +130,7 @@ async function cargarUsuarioActual() {
 function cerrarSesion() {
     localStorage.clear();
     sessionStorage.clear();
-    window.location.href = API_BASE_URL + '/';
+    window.location.href = `${window.API_BASE_URL}/`;
 }
 
 // =====================================================
@@ -437,7 +430,7 @@ function renderizarVehiculos() {
                 <i class="fas fa-car-side"></i>
                 <h3>No tienes vehículos registrados</h3>
                 <p>Registra tu primer vehículo para comenzar a dar seguimiento</p>
-                <button class="btn-primary" onclick="window.location.href='${API_BASE_URL}/cliente/registro-vehiculo.html'">
+                <button class="btn-primary" onclick="window.location.href='${window.API_BASE_URL}/cliente/registro-vehiculo.html'">
                     <i class="fas fa-plus"></i> Registrar vehículo
                 </button>
             </div>
@@ -675,7 +668,7 @@ function abrirModal(modalId) {
 function irAvances() {
     if (currentVehiculo) {
         localStorage.setItem('vehiculo_seleccionado', JSON.stringify(currentVehiculo));
-        window.location.href = API_BASE_URL + '/cliente/avances.html';
+        window.location.href = `${window.API_BASE_URL}/cliente/avances.html`;
     } else {
         showToast('Selecciona un vehículo primero', 'warning');
     }
@@ -784,6 +777,9 @@ function setupEventListeners() {
 // =====================================================
 
 async function inicializar() {
+    console.log('🚀 Inicializando misvehiculos.js (Cliente)');
+    console.log('📡 window.API_BASE_URL:', window.API_BASE_URL);
+    
     await cargarUsuarioActual();
     await cargarVehiculos();
     setupTabs();

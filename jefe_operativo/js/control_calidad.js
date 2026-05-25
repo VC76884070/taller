@@ -1,24 +1,16 @@
 // =====================================================
 // CONTROL_CALIDAD.JS - JEFE OPERATIVO
 // GESTIÓN DE TRABAJOS COMPLETADOS POR TÉCNICOS
-// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
+// VERSIÓN CORREGIDA - USA window.API_BASE_URL
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// CONFIGURACIÓN DE API - USA LA VARIABLE GLOBAL
 // =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
+// NOTA: window.API_BASE_URL ya está declarada en include.js
+// No declarar const API_BASE_URL aquí
 
-const API_URL = `${API_BASE_URL}/api/jefe-operativo`;
+const API_URL = `${window.API_BASE_URL}/api/jefe-operativo`;
 let currentUser = null;
 let ordenesPendientes = [];
 let ordenesFinalizadas = [];
@@ -610,7 +602,7 @@ async function cargarUsuarioActual() {
         let token = localStorage.getItem('furia_token');
         if (!token) token = localStorage.getItem('token');
         if (!token) {
-            window.location.href = `${API_BASE_URL}/`;
+            window.location.href = `${window.API_BASE_URL}/`;
             return null;
         }
         
@@ -633,7 +625,7 @@ async function cargarUsuarioActual() {
         return currentUser;
     } catch (error) {
         console.error('Error:', error);
-        window.location.href = `${API_BASE_URL}/`;
+        window.location.href = `${window.API_BASE_URL}/`;
         return null;
     }
 }
@@ -641,7 +633,7 @@ async function cargarUsuarioActual() {
 function logout() {
     localStorage.clear();
     sessionStorage.clear();
-    window.location.href = `${API_BASE_URL}/`;
+    window.location.href = `${window.API_BASE_URL}/`;
 }
 
 // =====================================================
@@ -650,7 +642,7 @@ function logout() {
 
 async function inicializar() {
     console.log('🚀 Inicializando control_calidad.js (Jefe Operativo)');
-    console.log('📡 API_BASE_URL:', API_BASE_URL);
+    console.log('📡 window.API_BASE_URL:', window.API_BASE_URL);
     
     const user = await cargarUsuarioActual();
     if (!user) return;

@@ -1,24 +1,16 @@
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
-// =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
-
-// =====================================================
 // PROVEEDORES.JS - ENCARGADO DE REPUESTOS
-// VERSIÓN FINAL CORREGIDA - SIN DOBLE ENVÍO
+// VERSIÓN FINAL CORREGIDA - USA window.API_BASE_URL
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
-const API_URL = API_BASE_URL + '/api/encargado-repuestos';
+// =====================================================
+// CONFIGURACIÓN DE API - USA LA VARIABLE GLOBAL
+// =====================================================
+// NOTA: window.API_BASE_URL ya está declarada en include.js
+// No declarar const API_BASE_URL aquí
+
+const API_URL = `${window.API_BASE_URL}/api/encargado-repuestos`;
 
 // Variables globales
 let currentUser = null;
@@ -180,7 +172,7 @@ async function cargarProveedores() {
         
         if (response.status === 401) {
             showToast('Sesión expirada, redirigiendo...', 'warning');
-            setTimeout(() => { window.location.href = API_BASE_URL + '/'; }, 1500);
+            setTimeout(() => { window.location.href = `${window.API_BASE_URL}/`; }, 1500);
             return;
         }
         
@@ -543,7 +535,7 @@ async function cargarUsuarioActual() {
         if (!token) token = localStorage.getItem('token');
         
         if (!token) {
-            window.location.href = API_BASE_URL + '/';
+            window.location.href = `${window.API_BASE_URL}/`;
             return null;
         }
         
@@ -571,7 +563,7 @@ async function cargarUsuarioActual() {
         
         if (!tieneRolRepuestos) {
             showToast('No tienes permisos para acceder a esta sección', 'error');
-            setTimeout(() => { window.location.href = API_BASE_URL + '/'; }, 2000);
+            setTimeout(() => { window.location.href = `${window.API_BASE_URL}/`; }, 2000);
             return null;
         }
         
@@ -586,7 +578,7 @@ async function cargarUsuarioActual() {
         
     } catch (error) {
         console.error('Error:', error);
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = `${window.API_BASE_URL}/`;
         return null;
     }
 }
@@ -659,6 +651,7 @@ async function inicializar() {
     }
     
     console.log('🚀 Inicializando proveedores.js');
+    console.log('📡 window.API_BASE_URL:', window.API_BASE_URL);
     
     const user = await cargarUsuarioActual();
     if (!user) return;

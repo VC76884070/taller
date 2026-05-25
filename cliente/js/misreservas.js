@@ -1,23 +1,25 @@
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// CONFIGURACIÓN DE API - USA VARIABLE GLOBAL
 // =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+        return '';
+    })();
+}
 
 // =====================================================
 // MIS RESERVAS - CLIENTE
 // VERSIÓN CON DÍAS PINTADOS EN EL CALENDARIO
 // =====================================================
 
-const API_URL = API_BASE_URL;
+const API_URL = window.API_BASE_URL;
 let userInfo = null;
 let calendar = null;
 let solicitudActualId = null;
@@ -29,6 +31,7 @@ let reservaCancelarId = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Inicializando Mis Reservas...');
+    console.log('📡 API_BASE_URL:', window.API_BASE_URL);
     
     const autenticado = await checkAuth();
     if (!autenticado) return;
@@ -44,7 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function checkAuth() {
     const token = localStorage.getItem('furia_token');
     if (!token) {
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = window.API_BASE_URL + '/';
         return false;
     }
     try {
@@ -53,7 +56,7 @@ async function checkAuth() {
         return true;
     } catch (error) {
         console.error('Error verificando autenticación:', error);
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = window.API_BASE_URL + '/';
         return false;
     }
 }

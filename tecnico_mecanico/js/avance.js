@@ -1,24 +1,16 @@
 // =====================================================
 // AVANCE.JS - TÉCNICO MECÁNICO
 // REGISTRO DE AVANCES DE TRABAJO - CADA ORDEN TIENE UN SOLO AVANCE
-// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
+// VERSIÓN CORREGIDA - USA window.API_BASE_URL
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// CONFIGURACIÓN DE API - USA LA VARIABLE GLOBAL
 // =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
+// NOTA: window.API_BASE_URL ya está declarada en include.js
+// No declarar const API_BASE_URL aquí
 
-const API_URL = `${API_BASE_URL}/tecnico`;
+const API_URL = `${window.API_BASE_URL}/tecnico`;
 
 let token = null;
 let currentUser = null;
@@ -820,6 +812,7 @@ function setupEventListeners() {
 async function inicializar() {
     console.log('🚀 Inicializando avance.js');
     console.log('📡 API URL:', API_URL);
+    console.log('📡 window.API_BASE_URL:', window.API_BASE_URL);
 
     const user = await cargarUsuarioActual();
     if (!user) return;

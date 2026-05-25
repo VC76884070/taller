@@ -1,23 +1,25 @@
 // =====================================================
+// CONFIGURACIÓN DE API - USA VARIABLE GLOBAL
+// =====================================================
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 Modo DESARROLLO - Usando localhost:5000');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
+        return '';
+    })();
+}
+
+// =====================================================
 // DIAGNÓSTICO TÉCNICO - TÉCNICO MECÁNICO
 // FURIA MOTOR COMPANY SRL - VERSIÓN COMPLETA
 // INCLUYE: DIAGNÓSTICO + ARMADO DE VEHÍCULOS + DETALLES
 // VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
 // =====================================================
-
-// =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
-// =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
 
 let token = null;
 let userInfo = null;
@@ -156,7 +158,7 @@ async function verificarToken() {
             userInfo = JSON.parse(userData);
         }
         
-        const response = await fetch(`${API_BASE_URL}/api/verify-token`, {
+        const response = await fetch(`${window.API_BASE_URL}/api/verify-token`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -209,7 +211,7 @@ async function cargarOrdenes() {
     
     try {
         console.log('Cargando órdenes...');
-        const response = await fetch(`${API_BASE_URL}/tecnico/api/ordenes-tecnico`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/ordenes-tecnico`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -229,7 +231,7 @@ async function cargarOrdenes() {
             for (let orden of ordenesTecnico) {
                 if (orden.estado_global === 'EnArmadoVehiculo') {
                     try {
-                        const instruccionesResp = await fetch(`${API_BASE_URL}/tecnico/api/orden/${orden.orden_id}/instrucciones-armado`, {
+                        const instruccionesResp = await fetch(`${window.API_BASE_URL}/tecnico/api/orden/${orden.orden_id}/instrucciones-armado`, {
                             headers: { 'Authorization': `Bearer ${token}` }
                         });
                         const instruccionesData = await instruccionesResp.json();
@@ -435,7 +437,7 @@ async function verDetallesOrden(id_orden, codigo) {
     mostrarLoading(true);
     
     try {
-        const response = await fetch(`${API_BASE_URL}/tecnico/api/orden/${id_orden}/detalles-completos`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/orden/${id_orden}/detalles-completos`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -819,7 +821,7 @@ async function cargarDiagnosticoSeleccionado() {
 async function cargarDiagnosticoExistente(ordenId) {
     try {
         console.log(`Cargando diagnóstico para orden ${ordenId}`);
-        const response = await fetch(`${API_BASE_URL}/tecnico/api/diagnostico/${ordenId}`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/diagnostico/${ordenId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -1159,7 +1161,7 @@ async function subirAudio(audioBlob) {
     
     try {
         showToast('Subiendo audio...', 'info');
-        const response = await fetch(`${API_BASE_URL}/tecnico/api/diagnostico/subir-audio`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/diagnostico/subir-audio`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` },
             body: formData
@@ -1266,7 +1268,7 @@ async function subirFoto(file, index) {
     
     try {
         showToast('Subiendo foto...', 'info');
-        const response = await fetch(`${API_BASE_URL}/tecnico/api/diagnostico/subir-foto`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/diagnostico/subir-foto`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` },
             body: formData
@@ -1292,7 +1294,7 @@ async function subirFoto(file, index) {
 
 async function eliminarFoto(fotoId) {
     try {
-        const response = await fetch(`${API_BASE_URL}/tecnico/api/diagnostico/eliminar-foto/${fotoId}`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/diagnostico/eliminar-foto/${fotoId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -1385,7 +1387,7 @@ async function guardarDiagnostico(enviar = false) {
     try {
         showToast(enviar ? 'Enviando diagnóstico...' : 'Guardando borrador...', 'info');
         
-        const response = await fetch(`${API_BASE_URL}/tecnico/api/diagnostico/guardar`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/diagnostico/guardar`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1432,7 +1434,7 @@ async function marcarArmadoCompletadoDesdeTarjeta(id_orden, codigo) {
     mostrarLoading(true);
     
     try {
-        const response = await fetch(`${API_BASE_URL}/tecnico/api/armado/completar/${id_orden}`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/armado/completar/${id_orden}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -1497,7 +1499,7 @@ function cerrarSesion() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Inicializando página de diagnóstico técnico...');
-    console.log('📡 API_BASE_URL:', API_BASE_URL);
+    console.log('📡 API_BASE_URL:', window.API_BASE_URL);
     
     const tokenValido = await verificarToken();
     if (!tokenValido) return;
@@ -1559,7 +1561,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sidebarContainer = document.getElementById('sidebar-container');
     if (sidebarContainer) {
         try {
-            const response = await fetch(`${API_BASE_URL}/tecnico_mecanico/components/sidebar.html`);
+            const response = await fetch(`${window.API_BASE_URL}/tecnico_mecanico/components/sidebar.html`);
             if (response.ok) {
                 sidebarContainer.innerHTML = await response.text();
             }

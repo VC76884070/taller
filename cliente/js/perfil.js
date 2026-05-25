@@ -1,23 +1,29 @@
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
-// =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
-
-// =====================================================
 // PERFIL-CLIENTE.JS - CLIENTE
 // FURIA MOTOR COMPANY SRL
+// VERSIÓN CORREGIDA - USA DIRECTAMENTE window.API_BASE_URL
 // =====================================================
 
-const API_URL = API_BASE_URL + '/api/cliente';
+// =====================================================
+// NOTA: API_BASE_URL ya está definida globalmente por include.js
+// como window.API_BASE_URL. NO redeclarar como const aquí.
+// =====================================================
+
+// Verificar si existe la variable global, si no, crearla (solo por si acaso)
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 perfil-cliente.js - Modo DESARROLLO (fallback)');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 perfil-cliente.js - Modo PRODUCCIÓN (fallback)');
+        return '';
+    })();
+}
+
+const API_URL = window.API_BASE_URL + '/api/cliente';
 let currentUser = null;
 let editMode = false;
 let avatarSeleccionado = 'user';
@@ -364,7 +370,7 @@ async function cargarPerfil() {
         });
         
         if (response.status === 401) {
-            window.location.href = API_BASE_URL + '/';
+            window.location.href = window.API_BASE_URL + '/';
             return;
         }
         
@@ -556,8 +562,8 @@ function renderActividad(actividad, pagination) {
                 <td colspan="4" style="text-align: center; padding: 2rem;">
                     <i class="fas fa-history" style="font-size: 2rem; color: var(--gris-texto);"></i>
                     <p>No hay actividad registrada</p>
-                  </td>
-              </tr>
+                  <\/td>
+              <\/tr>
         `;
         return;
     }
@@ -571,10 +577,10 @@ function renderActividad(actividad, pagination) {
     
     tbody.innerHTML = actividad.map(a => `
         <tr>
-            <td>${formatDateTime(a.fecha)}</td>
-            <td><i class="fas ${iconos[a.accion] || 'fa-circle'}"></i> ${escapeHtml(a.accion_texto || a.accion)}</td>
-            <td>${escapeHtml(a.descripcion || '-')}</td>
-            <td>${a.ip || '-'}</td>
+            <td>${formatDateTime(a.fecha)}<\/td>
+            <td><i class="fas ${iconos[a.accion] || 'fa-circle'}"></i> ${escapeHtml(a.accion_texto || a.accion)}<\/td>
+            <td>${escapeHtml(a.descripcion || '-')}<\/td>
+            <td>${a.ip || '-'}<\/td>
         </tr>
     `).join('');
     
@@ -1050,7 +1056,7 @@ async function cargarUsuarioActual() {
         if (!token) token = localStorage.getItem('token');
         
         if (!token) {
-            window.location.href = API_BASE_URL + '/';
+            window.location.href = window.API_BASE_URL + '/';
             return null;
         }
         
@@ -1077,7 +1083,7 @@ async function cargarUsuarioActual() {
         return currentUser;
     } catch (error) {
         console.error('Error:', error);
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = window.API_BASE_URL + '/';
         return null;
     }
 }
@@ -1121,6 +1127,7 @@ function setupEventListeners() {
 
 async function inicializar() {
     console.log('🚀 Inicializando perfil-cliente.js');
+    console.log('📡 API_URL:', API_URL);
     
     const user = await cargarUsuarioActual();
     if (!user) return;

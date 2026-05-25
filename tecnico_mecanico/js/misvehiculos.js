@@ -2,22 +2,14 @@
 // MIS VEHÍCULOS - TÉCNICO MECÁNICO
 // VERSIÓN COMPLETA CON BOTONES SEPARADOS Y HISTORIAL
 // FURIA MOTOR COMPANY SRL
-// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
+// VERSIÓN CORREGIDA - USA window.API_BASE_URL
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// CONFIGURACIÓN DE API - USA LA VARIABLE GLOBAL
 // =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
+// NOTA: window.API_BASE_URL ya está declarada en include.js
+// No declarar const API_BASE_URL aquí
 
 // Configuración de roles
 const ROLE_CONFIG = {
@@ -218,7 +210,7 @@ async function verificarToken() {
             rolesUsuario = (usuarioActual.roles || []).map(r => normalizarRol(r));
         }
         
-        const response = await fetch(`${API_BASE_URL}/tecnico/verify-token`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/verify-token`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -294,7 +286,7 @@ async function cargarVehiculos() {
     
     try {
         const timestamp = new Date().getTime();
-        const response = await fetch(`${API_BASE_URL}/tecnico/get-mis-vehiculos?_=${timestamp}`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/get-mis-vehiculos?_=${timestamp}`, {
             method: 'GET',
             headers: { 
                 'Authorization': `Bearer ${token}`,
@@ -602,7 +594,7 @@ async function confirmarEmpezarDiagnostico() {
     showToast('Iniciando trabajo...', 'info');
     
     try {
-        const response = await fetch(`${API_BASE_URL}/tecnico/empezar-diagnostico`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/empezar-diagnostico`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ id_orden: parseInt(ordenId) })
@@ -653,7 +645,7 @@ async function confirmarInicioReparacion() {
     showToast('Iniciando reparación...', 'info');
     
     try {
-        const response = await fetch(`${API_BASE_URL}/tecnico/iniciar-reparacion`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/iniciar-reparacion`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ id_orden: parseInt(ordenId) })
@@ -699,7 +691,7 @@ async function confirmarPausaManual() {
     showToast('Pausando reparación...', 'info');
     
     try {
-        const response = await fetch(`${API_BASE_URL}/tecnico/pausar-reparacion-manual`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/pausar-reparacion-manual`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ id_orden: parseInt(ordenId), motivo: motivo })
@@ -748,7 +740,7 @@ async function confirmarSolicitarRepuestos() {
     showToast('Enviando solicitud de repuestos...', 'info');
     
     try {
-        const response = await fetch(`${API_BASE_URL}/tecnico/solicitar-repuestos-sin-pausa`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/solicitar-repuestos-sin-pausa`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ 
@@ -799,7 +791,7 @@ async function confirmarReanudarReparacion() {
     showToast('Reanudando reparación...', 'info');
     
     try {
-        const response = await fetch(`${API_BASE_URL}/tecnico/reanudar-reparacion`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/reanudar-reparacion`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ id_orden: parseInt(ordenId) })
@@ -831,7 +823,7 @@ window.mostrarFinalizarModal = async function(ordenId) {
     }
     
     try {
-        const response = await fetch(`${API_BASE_URL}/tecnico/verificar-solicitudes-pendientes/${ordenId}`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/verificar-solicitudes-pendientes/${ordenId}`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -865,7 +857,7 @@ async function confirmarFinalizarReparacion() {
     showToast('Finalizando reparación...', 'info');
     
     try {
-        const response = await fetch(`${API_BASE_URL}/tecnico/finalizar-reparacion`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/finalizar-reparacion`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ id_orden: parseInt(ordenId) })
@@ -894,7 +886,7 @@ window.marcarArmadoCompletado = async function(ordenId) {
     showToast('Procesando armado completado...', 'info');
     
     try {
-        const response = await fetch(`${API_BASE_URL}/tecnico/marcar-armado-completado`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/marcar-armado-completado`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ id_orden: parseInt(ordenId) })
@@ -919,7 +911,7 @@ window.verHistorialSolicitudes = async function(ordenId) {
     showToast('Cargando historial de solicitudes...', 'info');
     
     try {
-        const response = await fetch(`${API_BASE_URL}/tecnico/historial-solicitudes/${ordenId}`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/historial-solicitudes/${ordenId}`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -1064,7 +1056,7 @@ window.verDetalle = async function(ordenId) {
     showToast('Cargando detalles...', 'info');
     
     try {
-        const response = await fetch(`${API_BASE_URL}/tecnico/detalle-orden/${ordenId}`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/detalle-orden/${ordenId}`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -1190,7 +1182,7 @@ window.verDetalle = async function(ordenId) {
 // Función para marcar instrucción como leída
 window.marcarInstruccionLeida = async function(instruccionId, ordenId) {
     try {
-        const response = await fetch(`${API_BASE_URL}/tecnico/marcar-instruccion-leida/${instruccionId}`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/marcar-instruccion-leida/${instruccionId}`, {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -1235,7 +1227,7 @@ window.cargarComunicados = async function() {
         if (vistosStorage) comunicadosVistos = JSON.parse(vistosStorage);
         
         const timestamp = new Date().getTime();
-        const response = await fetch(`${API_BASE_URL}/tecnico/comunicados?_=${timestamp}`, {
+        const response = await fetch(`${window.API_BASE_URL}/tecnico/comunicados?_=${timestamp}`, {
             headers: { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' }
         });
         
@@ -1310,7 +1302,7 @@ function verComunicadoCompleto(id) {
         if (elemento) elemento.classList.remove('nuevo');
     }
     
-    fetch(`${API_BASE_URL}/tecnico/comunicados/${id}`, { headers: { 'Authorization': `Bearer ${token}` } })
+    fetch(`${window.API_BASE_URL}/tecnico/comunicados/${id}`, { headers: { 'Authorization': `Bearer ${token}` } })
         .then(response => response.json())
         .then(result => {
             if (result.success && result.data) {
@@ -1370,7 +1362,7 @@ window.cerrarSesion = function() {
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Inicializando misvehiculos.js');
-    console.log('📡 API_BASE_URL:', API_BASE_URL);
+    console.log('📡 window.API_BASE_URL:', window.API_BASE_URL);
     
     const tokenValido = await verificarToken();
     if (!tokenValido) return;

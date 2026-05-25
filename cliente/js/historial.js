@@ -1,23 +1,16 @@
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
-// =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
-
-// =====================================================
 // HISTORIAL-CLIENTE.JS - CLIENTE
+// VERSIÓN CORREGIDA - USA window.API_BASE_URL
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
-const API_URL = API_BASE_URL + '/api/cliente';
+// =====================================================
+// CONFIGURACIÓN DE API - USA LA VARIABLE GLOBAL
+// =====================================================
+// NOTA: window.API_BASE_URL ya está declarada en include.js
+// No declarar const API_BASE_URL aquí
+
+const API_URL = `${window.API_BASE_URL}/api/cliente`;
 let currentUser = null;
 let currentTab = 'vehiculos';
 let serviciosPage = 1;
@@ -133,7 +126,7 @@ async function cargarVehiculos() {
         });
         
         if (response.status === 401) {
-            window.location.href = API_BASE_URL + '/';
+            window.location.href = `${window.API_BASE_URL}/`;
             return;
         }
         
@@ -266,7 +259,7 @@ function renderizarServicios(servicios) {
     
     if (servicios.length === 0) {
         tbody.innerHTML = `
-            <tr>
+            <tr class="empty-row">
                 <td colspan="7" style="text-align: center; padding: 2rem;">
                     <i class="fas fa-inbox"></i>
                     <p>No hay servicios registrados</p>
@@ -750,7 +743,8 @@ function descargarDocumentoDirecto(tipo, id) {
 
 async function verServiciosVehiculo(vehiculoId) {
     // Cambiar a pestaña de servicios y filtrar por vehículo
-    document.querySelector('.tab-btn-historial[data-tab="servicios"]').click();
+    const tabBtn = document.querySelector('.tab-btn-historial[data-tab="servicios"]');
+    if (tabBtn) tabBtn.click();
     // Aquí se podría implementar filtro por vehículo
 }
 
@@ -785,7 +779,7 @@ async function cargarUsuarioActual() {
         if (!token) token = localStorage.getItem('token');
         
         if (!token) {
-            window.location.href = API_BASE_URL + '/';
+            window.location.href = `${window.API_BASE_URL}/`;
             return null;
         }
         
@@ -795,7 +789,7 @@ async function cargarUsuarioActual() {
         
         if (response.status === 401) {
             localStorage.clear();
-            window.location.href = API_BASE_URL + '/';
+            window.location.href = `${window.API_BASE_URL}/`;
             return null;
         }
         
@@ -815,7 +809,7 @@ async function cargarUsuarioActual() {
         return null;
     } catch (error) {
         console.error('Error:', error);
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = `${window.API_BASE_URL}/`;
         return null;
     }
 }
@@ -887,6 +881,7 @@ function setupEventListeners() {
 
 async function inicializar() {
     console.log('🚀 Inicializando historial-cliente.js');
+    console.log('📡 window.API_BASE_URL:', window.API_BASE_URL);
     
     const user = await cargarUsuarioActual();
     if (!user) return;

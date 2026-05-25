@@ -1,23 +1,29 @@
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
-// =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
-
-// =====================================================
 // SOLICITUDES_COMPRA.JS - ENCARGADO DE REPUESTOS
 // FURIA MOTOR COMPANY SRL - VERSIÓN COMPLETA
+// VERSIÓN CORREGIDA - USA DIRECTAMENTE window.API_BASE_URL
 // =====================================================
 
-const API_URL = API_BASE_URL + '/api/encargado-repuestos';
+// =====================================================
+// NOTA: API_BASE_URL ya está definida globalmente por include.js
+// como window.API_BASE_URL. NO redeclarar como const aquí.
+// =====================================================
+
+// Verificar si existe la variable global, si no, crearla (solo por si acaso)
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 solicitudes_compra.js - Modo DESARROLLO (fallback)');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 solicitudes_compra.js - Modo PRODUCCIÓN (fallback)');
+        return '';
+    })();
+}
+
+const API_URL = window.API_BASE_URL + '/api/encargado-repuestos';
 
 // Configuración de Cloudinary (hardcodeada temporalmente)
 const CLOUDINARY_CLOUD_NAME = 'drpt6ztkd';
@@ -220,7 +226,7 @@ async function cargarSolicitudes() {
         });
         
         if (response.status === 401) {
-            window.location.href = API_BASE_URL + '/';
+            window.location.href = window.API_BASE_URL + '/';
             return;
         }
         
@@ -813,7 +819,7 @@ async function cargarUsuarioActual() {
         if (!token) token = localStorage.getItem('token');
         
         if (!token) {
-            window.location.href = API_BASE_URL + '/';
+            window.location.href = window.API_BASE_URL + '/';
             return null;
         }
         
@@ -846,7 +852,7 @@ async function cargarUsuarioActual() {
         if (!tieneRolRepuestos) {
             showToast('No tienes permisos para acceder a esta sección', 'error');
             setTimeout(() => {
-                window.location.href = API_BASE_URL + '/';
+                window.location.href = window.API_BASE_URL + '/';
             }, 2000);
             return null;
         }
@@ -863,7 +869,7 @@ async function cargarUsuarioActual() {
         
     } catch (error) {
         console.error('Error obteniendo usuario:', error);
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = window.API_BASE_URL + '/';
         return null;
     }
 }
@@ -871,7 +877,7 @@ async function cargarUsuarioActual() {
 function logout() {
     localStorage.clear();
     sessionStorage.clear();
-    window.location.href = API_BASE_URL + '/';
+    window.location.href = window.API_BASE_URL + '/';
 }
 
 // =====================================================
@@ -911,6 +917,7 @@ function setupEventListeners() {
 
 async function inicializar() {
     console.log('🚀 Inicializando solicitudes_compra.js');
+    console.log('📡 API_URL:', API_URL);
     
     const user = await cargarUsuarioActual();
     if (!user) return;

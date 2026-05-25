@@ -1,24 +1,29 @@
 // =====================================================
 // COMUNICADOS - JEFE OPERATIVO
-// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
+// VERSIÓN CORREGIDA - USA DIRECTAMENTE window.API_BASE_URL
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// NOTA: API_BASE_URL ya está definida globalmente por include.js
+// como window.API_BASE_URL. NO redeclarar como const aquí.
 // =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
+
+// Verificar si existe la variable global, si no, crearla (solo por si acaso)
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 comunicados.js - Modo DESARROLLO (fallback)');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 comunicados.js - Modo PRODUCCIÓN (fallback)');
+        return '';
+    })();
+}
 
 // Configuración
-const API_URL = `${API_BASE_URL}/api`;
+const API_URL = `${window.API_BASE_URL}/api`;
 let quillEditor = null;
 let comunicadosData = [];
 let currentFilter = 'todos';
@@ -55,6 +60,9 @@ let pendingConfirmAction = null;
 // INICIALIZACIÓN
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 Inicializando comunicados.js');
+    console.log('📡 API_URL:', API_URL);
+    
     const autenticado = await checkAuth();
     if (!autenticado) return;
     
@@ -80,7 +88,7 @@ async function checkAuth() {
     
     if (!token) {
         console.error('No hay token');
-        window.location.href = `${API_BASE_URL}/`;
+        window.location.href = `${window.API_BASE_URL}/`;
         return false;
     }
     
@@ -89,14 +97,14 @@ async function checkAuth() {
         console.log('UserInfo:', userInfo);
         
         // Verificar token con backend
-        const verifyResponse = await fetch(`${API_BASE_URL}/api/verify-token`, {
+        const verifyResponse = await fetch(`${window.API_BASE_URL}/api/verify-token`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (!verifyResponse.ok) {
             console.error('Token inválido');
             localStorage.clear();
-            window.location.href = `${API_BASE_URL}/`;
+            window.location.href = `${window.API_BASE_URL}/`;
             return false;
         }
         
@@ -116,9 +124,9 @@ async function checkAuth() {
         if (!tieneRolJefeOperativo) {
             console.error('No tiene permisos de jefe_operativo');
             if (roles.includes('jefe_taller')) {
-                window.location.href = `${API_BASE_URL}/jefe_taller/dashboard.html`;
+                window.location.href = `${window.API_BASE_URL}/jefe_taller/dashboard.html`;
             } else {
-                window.location.href = `${API_BASE_URL}/`;
+                window.location.href = `${window.API_BASE_URL}/`;
             }
             return false;
         }
@@ -128,7 +136,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error en checkAuth:', error);
-        window.location.href = `${API_BASE_URL}/`;
+        window.location.href = `${window.API_BASE_URL}/`;
         return false;
     }
 }
@@ -804,7 +812,7 @@ window.logout = () => {
     localStorage.removeItem('furia_user');
     localStorage.removeItem('furia_remembered');
     localStorage.removeItem('furia_remembered_type');
-    window.location.href = `${API_BASE_URL}/`;
+    window.location.href = `${window.API_BASE_URL}/`;
 };
 
 // Exportar funciones globales

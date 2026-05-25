@@ -2,27 +2,28 @@
 // CONTROL_CALIDAD.JS - JEFE DE TALLER
 // GESTIÓN DE TRABAJOS COMPLETADOS POR TÉCNICOS
 // VERSIÓN: ÚLTIMAS 10 ÓRDENES POR PESTAÑA
+// VERSIÓN CORREGIDA - USA VARIABLE GLOBAL DE INCLUDE.JS
 // =====================================================
 
 // =====================================================
-// NOTA: API_BASE_URL ya está definida globalmente por include.js
-// como window.API_BASE_URL. NO redeclarar como const aquí.
+// CONFIGURACIÓN DE API - USA VARIABLE GLOBAL
 // =====================================================
+// La variable API_BASE_URL ya está declarada en include.js como window.API_BASE_URL
+// Si por alguna razón no existe (página cargada sola), la creamos
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 control_calidad.js - Modo DESARROLLO (fallback)');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 control_calidad.js - Modo PRODUCCIÓN (fallback)');
+        return '';
+    })();
+}
 
-// Usar la variable global directamente o crear una referencia local
-const API_BASE_URL = window.API_BASE_URL || (() => {
-    // Fallback solo si no existe la variable global
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
-
-const API_URL = API_BASE_URL + '/api/jefe-taller';
+const API_URL = window.API_BASE_URL + '/api/jefe-taller';
 let currentUser = null;
 let ordenesPendientes = [];
 let ordenesFinalizadas = [];
@@ -859,7 +860,7 @@ async function cargarUsuarioActual() {
         if (!token) token = localStorage.getItem('token');
         if (!token) {
             console.error('No se encontró token de autenticación');
-            window.location.href = API_BASE_URL + '/';
+            window.location.href = window.API_BASE_URL + '/';
             return null;
         }
         
@@ -886,7 +887,7 @@ async function cargarUsuarioActual() {
         return currentUser;
     } catch (error) {
         console.error('❌ Error al cargar usuario:', error);
-        window.location.href = API_BASE_URL + '/';
+        window.location.href = window.API_BASE_URL + '/';
         return null;
     }
 }
@@ -895,7 +896,7 @@ function logout() {
     console.log('🚪 Cerrando sesión...');
     localStorage.clear();
     sessionStorage.clear();
-    window.location.href = API_BASE_URL + '/';
+    window.location.href = window.API_BASE_URL + '/';
 }
 
 // =====================================================
@@ -904,6 +905,7 @@ function logout() {
 
 async function inicializar() {
     console.log('🚀 Inicializando Control de Calidad v2.0 - Últimas 10 órdenes');
+    console.log('📡 API_URL:', API_URL);
     
     const user = await cargarUsuarioActual();
     if (!user) return;

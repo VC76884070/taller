@@ -1,6 +1,6 @@
 // =====================================================
 // RESERVAS Y SOLICITUDES - JEFE TALLER
-// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
+// VERSIÓN CORREGIDA - USA VARIABLE GLOBAL DE INCLUDE.JS
 // =====================================================
 
 // =====================================================
@@ -14,10 +14,10 @@ const API_BASE_URL = window.API_BASE_URL || (() => {
     if (window.location.hostname === 'localhost' || 
         window.location.hostname === '127.0.0.1' ||
         window.location.hostname.includes('192.168.')) {
-        console.log('📡 Reservas.js - Modo DESARROLLO');
+        console.log('📡 Reservas.js - Modo DESARROLLO (fallback)');
         return 'http://localhost:5000';
     }
-    console.log('📡 Reservas.js - Modo PRODUCCIÓN');
+    console.log('📡 Reservas.js - Modo PRODUCCIÓN (fallback)');
     return '';
 })();
 

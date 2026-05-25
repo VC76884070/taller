@@ -1,6 +1,6 @@
 // =====================================================
 // ÓRDENES DE TRABAJO - JEFE TALLER (VERSIÓN OPTIMIZADA)
-// VERSIÓN CORREGIDA - USA VARIABLE GLOBAL DE INCLUDE.JS
+// VERSIÓN CORREGIDA - USA DIRECTAMENTE window.API_BASE_URL
 // =====================================================
 
 // =====================================================
@@ -8,20 +8,21 @@
 // como window.API_BASE_URL. NO redeclarar como const aquí.
 // =====================================================
 
-// Usar la variable global directamente o crear una referencia local
-const API_BASE_URL = window.API_BASE_URL || (() => {
-    // Fallback solo si no existe la variable global
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 OrdenTrabajo.js - Modo DESARROLLO (fallback)');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 OrdenTrabajo.js - Modo PRODUCCIÓN (fallback)');
-    return '';
-})();
+// Verificar si existe la variable global, si no, crearla (solo por si acaso)
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 OrdenTrabajo.js - Modo DESARROLLO (fallback)');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 OrdenTrabajo.js - Modo PRODUCCIÓN (fallback)');
+        return '';
+    })();
+}
 
-const API_URL = `${API_BASE_URL}/api`;
+const API_URL = `${window.API_BASE_URL}/api`;
 let userInfo = null;
 let pollingInterval = null;
 let rolesUsuario = [];
@@ -108,7 +109,7 @@ function puedeEditarOrden(estadoGlobal, trabajoIniciado = false) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Inicializando orden_trabajo.js (Jefe Taller)');
-    console.log('📡 API_BASE_URL:', API_BASE_URL);
+    console.log('📡 API_URL:', API_URL);
     
     const autenticado = await checkAuth();
     if (!autenticado) return;
@@ -119,7 +120,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Cargar datos en paralelo para mayor velocidad
     await Promise.all([
         cargarTecnicos(),
-        cargarUltimasOrdenesActivas(),  // NUEVO: usa el endpoint rápido
+        cargarUltimasOrdenesActivas(),
         cargarOrdenesFinalizadas()
     ]);
     
@@ -128,7 +129,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Detectar cuando la página se vuelve visible para actualizar
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {
-            // Actualización silenciosa en segundo plano
             cargarUltimasOrdenesActivas(true);
             cargarOrdenesFinalizadas(true);
         }
@@ -140,7 +140,7 @@ async function checkAuth() {
     const userData = localStorage.getItem('furia_user');
     
     if (!token) {
-        window.location.href = `${API_BASE_URL}/`;
+        window.location.href = `${window.API_BASE_URL}/`;
         return false;
     }
     
@@ -159,7 +159,7 @@ async function checkAuth() {
         const tieneRolPermitido = rolesUsuario.includes('jefe_taller') || rolesUsuario.includes('jefe_operativo');
         
         if (!tieneRolPermitido) {
-            window.location.href = `${API_BASE_URL}/`;
+            window.location.href = `${window.API_BASE_URL}/`;
             return false;
         }
         
@@ -167,7 +167,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error verificando autenticación:', error);
-        window.location.href = `${API_BASE_URL}/`;
+        window.location.href = `${window.API_BASE_URL}/`;
         return false;
     }
 }
@@ -197,7 +197,6 @@ function setupEventListeners() {
         });
     });
     
-    // Botones de refresh
     document.getElementById('refreshActivas')?.addEventListener('click', () => {
         cargarUltimasOrdenesActivas(true);
     });
@@ -205,7 +204,6 @@ function setupEventListeners() {
         cargarOrdenesFinalizadas(true);
     });
     
-    // Filtros de órdenes activas
     const searchActivas = document.getElementById('searchActivas');
     const tecnicoFiltro = document.getElementById('tecnicoFiltro');
     const estadoFiltroActivas = document.getElementById('estadoFiltroActivas');
@@ -216,7 +214,6 @@ function setupEventListeners() {
     if (tecnicoFiltro) tecnicoFiltro.addEventListener('change', () => filtrarOrdenesActivas());
     if (estadoFiltroActivas) estadoFiltroActivas.addEventListener('change', () => filtrarOrdenesActivas());
     
-    // Filtros de órdenes finalizadas
     const searchFinalizadas = document.getElementById('searchFinalizadas');
     const fechaDesdeFinalizadas = document.getElementById('fechaDesdeFinalizadas');
     const fechaHastaFinalizadas = document.getElementById('fechaHastaFinalizadas');
@@ -227,7 +224,6 @@ function setupEventListeners() {
     if (fechaDesdeFinalizadas) fechaDesdeFinalizadas.addEventListener('change', () => filtrarOrdenesFinalizadas());
     if (fechaHastaFinalizadas) fechaHastaFinalizadas.addEventListener('change', () => filtrarOrdenesFinalizadas());
     
-    // Cerrar modales con ESC
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             cerrarModalGestionOrden();
@@ -256,7 +252,6 @@ function cambiarPestana(tabId) {
     tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.tab === tabId));
     panels.forEach(panel => panel.classList.toggle('active', panel.id === `panel-${tabId}`));
     
-    // Actualizar datos si es necesario al cambiar de pestaña
     if (tabId === 'activas') {
         cargarUltimasOrdenesActivas();
     } else if (tabId === 'finalizadas') {
@@ -268,14 +263,11 @@ function cambiarPestana(tabId) {
 // API CALLS - VERSIÓN OPTIMIZADA
 // =====================================================
 
-// NUEVO: Cargar SOLO las últimas 10 órdenes activas (más rápido)
 async function cargarUltimasOrdenesActivas(forceRefresh = false) {
-    // Evitar múltiples llamadas simultáneas
     if (isUpdating) return;
     
     const now = Date.now();
     
-    // Usar caché si no se fuerza actualización
     if (!forceRefresh && ordenesActivas.length > 0 && (now - lastActivasFetch) < CACHE_TTL.activas) {
         renderOrdenesActivas(ordenesActivas);
         return;
@@ -287,7 +279,6 @@ async function cargarUltimasOrdenesActivas(forceRefresh = false) {
         const container = document.getElementById('ordenesActivasList');
         if (!container) return;
         
-        // Mostrar skeleton loading solo en primera carga
         if (ordenesActivas.length === 0) {
             container.innerHTML = `
                 <div class="skeleton-loading">
@@ -302,7 +293,6 @@ async function cargarUltimasOrdenesActivas(forceRefresh = false) {
             `;
         }
         
-        // Usar el endpoint optimizado de últimas 10 órdenes
         const response = await fetch(`${API_URL}/jefe-taller/ultimas-ordenes`, {
             headers: { 
                 'Authorization': `Bearer ${localStorage.getItem('furia_token')}`,
@@ -320,12 +310,10 @@ async function cargarUltimasOrdenesActivas(forceRefresh = false) {
             ordenesActivas = data.ordenes;
             lastActivasFetch = Date.now();
             
-            // Actualizar contador
             const countElement = document.getElementById('activasCount');
             if (countElement) {
                 const totalActivas = ordenesActivas.length;
                 countElement.textContent = totalActivas;
-                // Si hay exactamente 10, mostrar un indicador de que puede haber más
                 if (totalActivas === 10) {
                     countElement.title = "Mostrando últimas 10 órdenes. Puede haber más.";
                 }
@@ -357,7 +345,6 @@ async function cargarUltimasOrdenesActivas(forceRefresh = false) {
     }
 }
 
-// Función para cargar TODAS las órdenes activas (cuando el usuario lo solicite)
 async function cargarTodasOrdenesActivas() {
     mostrarNotificacion('Cargando todas las órdenes activas...', 'info');
     
@@ -385,7 +372,6 @@ async function cargarTodasOrdenesActivas() {
 
 async function cargarTecnicos(forceRefresh = false) {
     try {
-        // Verificar caché
         if (!forceRefresh) {
             const cached = dataCache.get('tecnicos');
             if (cached) {
@@ -421,12 +407,10 @@ function actualizarFiltroTecnicos() {
 }
 
 async function cargarOrdenesFinalizadas(forceRefresh = false) {
-    // Evitar múltiples llamadas simultáneas
     if (isUpdating && !forceRefresh) return;
     
     const now = Date.now();
     
-    // Usar caché si no se fuerza actualización
     if (!forceRefresh && ordenesFinalizadas.length > 0 && (now - lastFinalizadasFetch) < CACHE_TTL.finalizadas) {
         renderOrdenesFinalizadas(ordenesFinalizadas);
         return;
@@ -609,7 +593,6 @@ function renderOrdenesActivas(ordenes) {
         `;
     }).join('');
     
-    // Agregar botón "Ver más" si hay exactamente 10 órdenes (probablemente hay más)
     const verMasBtn = ordenes.length === 10 ? `
         <div class="ver-mas-container">
             <button class="btn-ver-mas" onclick="cargarTodasOrdenesActivas()">
@@ -717,20 +700,17 @@ function filtrarOrdenesFinalizadas() {
 function iniciarPolling() {
     if (pollingInterval) clearInterval(pollingInterval);
     
-    // Polling menos frecuente: cada 60 segundos
     pollingInterval = setInterval(() => {
-        // Solo actualizar si la página es visible y no hay una actualización en curso
         if (!document.hidden && !isUpdating) {
             const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
             
             if (activeTab === 'activas') {
-                // Actualización silenciosa en segundo plano
                 cargarUltimasOrdenesActivas();
             } else if (activeTab === 'finalizadas') {
                 cargarOrdenesFinalizadas();
             }
         }
-    }, 60000); // 60 segundos
+    }, 60000);
 }
 
 // =====================================================
@@ -745,7 +725,6 @@ function escapeHtml(text) {
 }
 
 function mostrarNotificacion(mensaje, tipo = 'info') {
-    // Eliminar notificaciones anteriores
     const existingToasts = document.querySelectorAll('.toast-notification');
     existingToasts.forEach(toast => toast.remove());
     
@@ -766,7 +745,6 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
     
     document.body.appendChild(toast);
     
-    // Animación de entrada
     setTimeout(() => {
         toast.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => toast.remove(), 300);
@@ -793,12 +771,10 @@ async function abrirModalGestionOrden(idOrden) {
         
         ordenEnGestion = data.detalle;
         
-        // Cargar técnicos si es necesario
         if (tecnicosDisponibles.length === 0) {
             await cargarTecnicos();
         }
         
-        // Renderizar el modal de gestión
         renderModalGestionOrden();
         
         const modal = document.getElementById('modalGestionOrden');
@@ -816,7 +792,6 @@ function renderModalGestionOrden() {
     
     if (!body || !ordenEnGestion) return;
     
-    // HTML del modal (simplificado para este ejemplo)
     body.innerHTML = `
         <div class="gestion-orden-container">
             <div class="info-orden">
@@ -883,7 +858,6 @@ function renderModalGestionOrden() {
         `;
     }
     
-    // Configurar eventos de audio (simplificado)
     setupAudioEvents();
 }
 
@@ -918,7 +892,6 @@ async function iniciarGrabacionAudio() {
                 audioElem.style.display = 'block';
             }
             
-            // Detener todas las pistas del stream
             stream.getTracks().forEach(track => track.stop());
         };
         
@@ -958,11 +931,9 @@ async function guardarGestionOrden() {
     mostrarNotificacion('Guardando cambios...', 'info');
     
     try {
-        // Obtener técnicos seleccionados
         const tecnicosSeleccionados = Array.from(document.querySelectorAll('input[name="tecnico"]:checked'))
             .map(cb => parseInt(cb.value));
         
-        // Guardar asignación de técnicos
         if (tecnicosSeleccionados.length > 0) {
             const asignarResponse = await fetch(`${API_URL}/jefe-taller/asignar-tecnicos`, {
                 method: 'POST',
@@ -983,7 +954,6 @@ async function guardarGestionOrden() {
             }
         }
         
-        // Guardar planificación
         const bahia = document.getElementById('bahia')?.value;
         const fechaInicio = document.getElementById('fecha_inicio')?.value;
         const horasEstimadas = document.getElementById('horas_estimadas')?.value;
@@ -1009,12 +979,10 @@ async function guardarGestionOrden() {
             }
         }
         
-        // Guardar diagnóstico (si hay audio, subirlo primero)
         const diagnostico = document.getElementById('diagnostico')?.value;
         let audioUrl = null;
         
         if (audioBlob) {
-            // Convertir audio a base64
             const reader = new FileReader();
             audioUrl = await new Promise((resolve, reject) => {
                 reader.onloadend = () => resolve(reader.result);
@@ -1022,7 +990,6 @@ async function guardarGestionOrden() {
                 reader.readAsDataURL(audioBlob);
             });
             
-            // Subir audio
             const audioResponse = await fetch(`${API_URL}/jefe-taller/subir-audio-diagnostico`, {
                 method: 'POST',
                 headers: {
@@ -1063,7 +1030,6 @@ async function guardarGestionOrden() {
         
         mostrarNotificacion('Cambios guardados correctamente', 'success');
         
-        // Limpiar caché y recargar datos
         dataCache.clear('tecnicos');
         await cargarUltimasOrdenesActivas(true);
         await cargarTecnicos(true);
@@ -1080,7 +1046,6 @@ function cerrarModalGestionOrden() {
     const modal = document.getElementById('modalGestionOrden');
     if (modal) modal.classList.remove('show');
     
-    // Detener grabación si está activa
     if (mediaRecorder && isRecording) {
         mediaRecorder.stop();
         isRecording = false;
@@ -1208,7 +1173,6 @@ async function verDiagnosticoPendiente(idOrden) {
     }
 }
 
-// Exponer funciones globales
 window.verDetalleOrden = verDetalleOrden;
 window.cerrarModalDetalleOrden = cerrarModalDetalleOrden;
 window.cerrarModalHistorialDiagnostico = cerrarModalHistorialDiagnostico;

@@ -1,6 +1,6 @@
 // =====================================================
 // RESERVAS Y SOLICITUDES - JEFE TALLER
-// VERSIÓN CORREGIDA - USA VARIABLE GLOBAL DE INCLUDE.JS
+// VERSIÓN CORREGIDA - USA DIRECTAMENTE window.API_BASE_URL
 // =====================================================
 
 // =====================================================
@@ -8,20 +8,21 @@
 // como window.API_BASE_URL. NO redeclarar como const aquí.
 // =====================================================
 
-// Usar la variable global directamente o crear una referencia local
-const API_BASE_URL = window.API_BASE_URL || (() => {
-    // Fallback solo si no existe la variable global
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Reservas.js - Modo DESARROLLO (fallback)');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Reservas.js - Modo PRODUCCIÓN (fallback)');
-    return '';
-})();
+// Verificar si existe la variable global, si no, crearla (solo por si acaso)
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 Reservas.js - Modo DESARROLLO (fallback)');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 Reservas.js - Modo PRODUCCIÓN (fallback)');
+        return '';
+    })();
+}
 
-const API_URL = `${API_BASE_URL}/api`;
+const API_URL = `${window.API_BASE_URL}/api`;
 let userInfo = null;
 let calendar = null;
 
@@ -30,7 +31,7 @@ let calendar = null;
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Inicializando Reservas y Solicitudes...');
-    console.log('📡 API_BASE_URL:', API_BASE_URL);
+    console.log('📡 API_URL:', API_URL);
     
     const autenticado = await checkAuth();
     if (!autenticado) return;
@@ -46,7 +47,7 @@ async function checkAuth() {
     const token = localStorage.getItem('furia_token');
     
     if (!token) {
-        window.location.href = `${API_BASE_URL}/`;
+        window.location.href = `${window.API_BASE_URL}/`;
         return false;
     }
     
@@ -69,7 +70,7 @@ async function checkAuth() {
         if (!tieneRolJefeTaller) {
             mostrarNotificacion('No tienes permisos para acceder a esta sección', 'error');
             setTimeout(() => {
-                window.location.href = `${API_BASE_URL}/`;
+                window.location.href = `${window.API_BASE_URL}/`;
             }, 2000);
             return false;
         }
@@ -80,7 +81,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('Error verificando autenticación:', error);
-        window.location.href = `${API_BASE_URL}/`;
+        window.location.href = `${window.API_BASE_URL}/`;
         return false;
     }
 }

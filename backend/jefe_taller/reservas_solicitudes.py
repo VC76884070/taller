@@ -1,6 +1,6 @@
 # =====================================================
 # RESERVAS Y SOLICITUDES - JEFE TALLER
-# =====================================================
+# ========================================================
 
 from flask import Blueprint, request, jsonify
 from config import config

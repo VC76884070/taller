@@ -1,5 +1,5 @@
 # =====================================================
-# PERFIL.PY - ENCARGADO DE REPUESTOS
+# PERFIL.PY - ENCARGADO DE REPUESTOS (VERSIÓN CORREGIDA)
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
@@ -10,15 +10,11 @@ import datetime
 import logging
 import json
 import hashlib
-import secrets
 from io import StringIO, BytesIO
 import csv
 
 logger = logging.getLogger(__name__)
 
-# =====================================================
-# CREAR BLUEPRINT
-# =====================================================
 perfil_repuestos_bp = Blueprint('perfil_repuestos', __name__, url_prefix='/api/encargado-repuestos')
 
 SECRET_KEY = config.SECRET_KEY
@@ -29,11 +25,9 @@ supabase = config.supabase
 # =====================================================
 
 def hash_password(password):
-    """Hashear contraseña"""
     return hashlib.sha256(password.encode()).hexdigest()
 
 def verify_password(password, hashed):
-    """Verificar contraseña"""
     return hash_password(password) == hashed
 
 # =====================================================
@@ -45,8 +39,9 @@ def verify_password(password, hashed):
 def obtener_perfil(current_user):
     """Obtener información del perfil del encargado"""
     try:
+        # Usar las columnas que existen en la tabla usuario
         result = supabase.table('usuario') \
-            .select('id, nombre, email, telefono, whatsapp, direccion, avatar, created_at, updated_at') \
+            .select('id, nombre, email, contacto, ubicacion, avatar_url, fecha_registro, rol_principal') \
             .eq('id', current_user['id']) \
             .execute()
         
@@ -55,18 +50,39 @@ def obtener_perfil(current_user):
         
         usuario = result.data[0]
         
-        # Obtener preferencias de notificaciones
-        prefs_result = supabase.table('preferencias_notificaciones') \
-            .select('preferencias') \
-            .eq('id_usuario', current_user['id']) \
-            .execute()
+        # Procesar avatar_url para devolver solo el nombre
+        avatar_url = usuario.get('avatar_url', '')
+        avatar_nombre = 'box'  # valor por defecto
         
-        preferencias = {}
-        if prefs_result.data and prefs_result.data[0].get('preferencias'):
-            try:
-                preferencias = json.loads(prefs_result.data[0]['preferencias'])
-            except:
-                preferencias = {}
+        if avatar_url:
+            # Si es 'avatar_box', extraer 'box'
+            if avatar_url.startswith('avatar_'):
+                avatar_nombre = avatar_url.replace('avatar_', '')
+            else:
+                avatar_nombre = avatar_url
+        
+        # Preferencias de notificaciones por defecto
+        preferencias = {
+            'nueva_cotizacion': True,
+            'compra_confirmada': True,
+            'entrega_realizada': True,
+            'stock_bajo': True
+        }
+        
+        # Intentar obtener preferencias de notificaciones (opcional)
+        try:
+            prefs_result = supabase.table('preferencias_notificaciones') \
+                .select('preferencias') \
+                .eq('id_usuario', current_user['id']) \
+                .execute()
+            
+            if prefs_result.data and prefs_result.data[0].get('preferencias'):
+                try:
+                    preferencias = json.loads(prefs_result.data[0]['preferencias'])
+                except:
+                    preferencias = {}
+        except Exception as e:
+            logger.warning(f"No se pudieron obtener preferencias: {e}")
         
         return jsonify({
             'success': True,
@@ -74,13 +90,13 @@ def obtener_perfil(current_user):
                 'id': usuario.get('id'),
                 'nombre': usuario.get('nombre'),
                 'email': usuario.get('email'),
-                'telefono': usuario.get('telefono'),
-                'whatsapp': usuario.get('whatsapp'),
-                'direccion': usuario.get('direccion'),
-                'avatar': usuario.get('avatar', 'box'),
+                'telefono': usuario.get('contacto', ''),
+                'whatsapp': usuario.get('contacto', ''),
+                'direccion': usuario.get('ubicacion', ''),
+                'avatar': avatar_nombre,  # Devuelve solo 'box', 'user', etc.
                 'preferencias_notificaciones': preferencias,
-                'created_at': usuario.get('created_at'),
-                'updated_at': usuario.get('updated_at')
+                'created_at': usuario.get('fecha_registro'),
+                'rol_principal': usuario.get('rol_principal')
             }
         }), 200
         
@@ -98,9 +114,8 @@ def actualizar_perfil(current_user):
         
         update_data = {
             'nombre': data.get('nombre'),
-            'telefono': data.get('telefono'),
-            'whatsapp': data.get('whatsapp'),
-            'direccion': data.get('direccion'),
+            'contacto': data.get('telefono'),
+            'ubicacion': data.get('direccion'),
             'updated_at': datetime.datetime.now().isoformat()
         }
         
@@ -130,8 +145,11 @@ def actualizar_avatar(current_user):
         data = request.get_json()
         avatar = data.get('avatar', 'box')
         
+        # Guardar como 'avatar_nombre' para mantener consistencia
+        avatar_url = f'avatar_{avatar}'
+        
         result = supabase.table('usuario') \
-            .update({'avatar': avatar, 'updated_at': datetime.datetime.now().isoformat()}) \
+            .update({'avatar_url': avatar_url}) \
             .eq('id', current_user['id']) \
             .execute()
         
@@ -156,20 +174,22 @@ def cambiar_password(current_user):
         
         # Verificar contraseña actual
         result = supabase.table('usuario') \
-            .select('password') \
+            .select('contrasenia') \
             .eq('id', current_user['id']) \
             .execute()
         
         if not result.data:
             return jsonify({'error': 'Usuario no encontrado'}), 404
         
-        if not verify_password(password_actual, result.data[0]['password']):
+        from werkzeug.security import check_password_hash, generate_password_hash
+        
+        if not check_password_hash(result.data[0]['contrasenia'], password_actual):
             return jsonify({'error': 'Contraseña actual incorrecta'}), 401
         
         # Actualizar contraseña
-        nuevo_hash = hash_password(password_nueva)
+        nuevo_hash = generate_password_hash(password_nueva)
         supabase.table('usuario') \
-            .update({'password': nuevo_hash, 'updated_at': datetime.datetime.now().isoformat()}) \
+            .update({'contrasenia': nuevo_hash}) \
             .eq('id', current_user['id']) \
             .execute()
         
@@ -181,7 +201,7 @@ def cambiar_password(current_user):
 
 
 # =====================================================
-# ENDPOINTS - NOTIFICACIONES
+# ENDPOINTS - NOTIFICACIONES (OPCIONALES)
 # =====================================================
 
 @perfil_repuestos_bp.route('/perfil/notificaciones', methods=['GET'])
@@ -292,7 +312,6 @@ def actualizar_preferencias_notificaciones(current_user):
 def obtener_sesiones(current_user):
     """Obtener sesiones activas del usuario"""
     try:
-        # Obtener token actual
         token_actual = request.headers.get('Authorization', '').replace('Bearer ', '')
         
         result = supabase.table('sesion_usuario') \
@@ -306,13 +325,12 @@ def obtener_sesiones(current_user):
         for s in (result.data or []):
             sesiones.append({
                 'id': s.get('id'),
-                'token': s.get('token_hash'),
                 'dispositivo': s.get('dispositivo', 'desktop'),
                 'dispositivo_nombre': s.get('dispositivo_nombre', 'Desconocido'),
                 'ip': s.get('ip'),
                 'ultima_actividad': s.get('ultima_actividad'),
                 'fecha_creacion': s.get('fecha_creacion'),
-                'es_actual': s.get('token_hash') == token_actual[:50]  # Comparar hash parcial
+                'es_actual': s.get('token_hash') == token_actual[:50] if s.get('token_hash') else False
             })
         
         return jsonify({'success': True, 'sesiones': sesiones}), 200
@@ -373,7 +391,6 @@ def obtener_actividad(current_user):
         limit = request.args.get('limit', 20, type=int)
         offset = (page - 1) * limit
         
-        # Obtener total
         total_result = supabase.table('actividad_usuario') \
             .select('id', count='exact') \
             .eq('id_usuario', current_user['id']) \
@@ -381,7 +398,6 @@ def obtener_actividad(current_user):
         
         total = total_result.count if hasattr(total_result, 'count') else 0
         
-        # Obtener datos
         result = supabase.table('actividad_usuario') \
             .select('*') \
             .eq('id_usuario', current_user['id']) \
@@ -416,14 +432,10 @@ def exportar_actividad(current_user):
             .order('fecha', desc=True) \
             .execute()
         
-        # Crear CSV
         output = StringIO()
         writer = csv.writer(output)
-        
-        # Escribir cabeceras
         writer.writerow(['Fecha', 'Acción', 'Descripción', 'IP'])
         
-        # Escribir datos
         for a in (result.data or []):
             writer.writerow([
                 a.get('fecha', ''),

@@ -1,6 +1,7 @@
 # =====================================================
 # DASHBOARD - JEFE DE TALLER
 # FURIA MOTOR COMPANY SRL
+# VERSIÓN CORREGIDA - INCLUYE FECHA_INGRESO
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -193,27 +194,26 @@ def obtener_diagnosticos_pendientes(current_user):
 def obtener_ordenes_activas(current_user):
     """Obtener órdenes activas para el dashboard (con días estimados)"""
     try:
-        # Estados que consideramos activos (NO finalizados)
+        print("🔍 Consultando órdenes activas...")
+        
+        # Obtener órdenes activas (no finalizadas ni entregadas)
         ordenes = supabase.table('ordentrabajo') \
-            .select('''
-                id,
-                codigo_unico,
-                estado_global,
-                fecha_ingreso,
-                fecha_estimada_finalizacion,
-                dias_estimados_reparacion,
-                id_vehiculo
-            ''') \
+            .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_estimada_finalizacion, dias_estimados_reparacion, id_vehiculo') \
             .not_.in_('estado_global', ['Finalizado', 'Entregado']) \
-            .order('fecha_ingreso', desc=False) \
             .execute()
         
         print(f"📊 Órdenes activas encontradas: {len(ordenes.data or [])}")
         
+        # Debug: imprimir primera orden para verificar campos
+        if ordenes.data and len(ordenes.data) > 0:
+            print(f"📋 Campos de la primera orden: {list(ordenes.data[0].keys())}")
+            print(f"📋 fecha_ingreso: {ordenes.data[0].get('fecha_ingreso')}")
+        
         resultado = []
         for orden in (ordenes.data or []):
-            # Obtener datos del vehículo
             vehiculo = None
+            
+            # Obtener datos del vehículo
             if orden.get('id_vehiculo'):
                 try:
                     vehiculo_result = supabase.table('vehiculo') \
@@ -229,33 +229,18 @@ def obtener_ordenes_activas(current_user):
                             'modelo': v.get('modelo', '')
                         }
                 except Exception as e:
-                    logger.warning(f"Error obteniendo vehículo: {e}")
+                    print(f"⚠️ Error obteniendo vehículo: {e}")
             
             if not vehiculo:
                 vehiculo = {'placa': 'N/A', 'marca': '', 'modelo': ''}
-            
-            # Calcular días restantes
-            dias_restantes = None
-            fecha_estimada = orden.get('fecha_estimada_finalizacion')
-            if fecha_estimada:
-                try:
-                    if isinstance(fecha_estimada, str):
-                        fecha_fin = datetime.datetime.fromisoformat(fecha_estimada.replace('Z', '+00:00'))
-                    else:
-                        fecha_fin = fecha_estimada
-                    hoy = datetime.datetime.now()
-                    dias_restantes = (fecha_fin - hoy).days
-                except Exception:
-                    pass
             
             resultado.append({
                 'id_orden': orden.get('id'),
                 'codigo_unico': orden.get('codigo_unico'),
                 'estado_global': orden.get('estado_global'),
-                'fecha_ingreso': orden.get('fecha_ingreso'),
+                'fecha_ingreso': orden.get('fecha_ingreso'),  # ESTO ES CLAVE
                 'fecha_estimada_finalizacion': orden.get('fecha_estimada_finalizacion'),
                 'dias_estimados_reparacion': orden.get('dias_estimados_reparacion'),
-                'dias_restantes': dias_restantes,
                 'vehiculo': vehiculo
             })
         
@@ -265,7 +250,7 @@ def obtener_ordenes_activas(current_user):
         }), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo órdenes activas: {str(e)}")
+        print(f"❌ Error obteniendo órdenes activas: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': True, 'ordenes': []}), 200
@@ -368,7 +353,7 @@ def obtener_stats_dashboard(current_user):
         print("="*50)
         
         # =====================================================
-        # 1. ÓRDENES ACTIVAS (CORREGIDO)
+        # 1. ÓRDENES ACTIVAS
         # =====================================================
         ordenes_activas_result = supabase.table('ordentrabajo') \
             .select('id', count='exact') \
@@ -379,7 +364,7 @@ def obtener_stats_dashboard(current_user):
         print(f"✅ Órdenes activas: {ordenes_activas_count}")
         
         # =====================================================
-        # 2. ÓRDENES EN PAUSA (NUEVO - CORREGIDO)
+        # 2. ÓRDENES EN PAUSA
         # =====================================================
         ordenes_pausa_result = supabase.table('ordentrabajo') \
             .select('id', count='exact') \
@@ -390,9 +375,8 @@ def obtener_stats_dashboard(current_user):
         print(f"✅ Órdenes en pausa: {ordenes_pausa_count}")
         
         # =====================================================
-        # 3. TÉCNICOS TRABAJANDO (CORREGIDO)
+        # 3. TÉCNICOS TRABAJANDO
         # =====================================================
-        # Método 1: Contar técnicos con asignaciones activas
         tecnicos_activos_result = supabase.table('asignaciontecnico') \
             .select('id_tecnico', distinct=True) \
             .is_('fecha_hora_final', 'null') \
@@ -400,17 +384,14 @@ def obtener_stats_dashboard(current_user):
         
         tecnicos_activos_count = len(set([t['id_tecnico'] for t in (tecnicos_activos_result.data or [])]))
         
-        # Método 2 (fallback): Si no hay asignaciones, contar por rol
         if tecnicos_activos_count == 0:
             try:
-                # Usar la tabla correcta 'usuario_rol'
                 roles_result = supabase.table('usuario_rol') \
                     .select('id_usuario, rol:rol_id(nombre_rol)') \
                     .execute()
                 
                 tecnicos_set = set()
                 for item in (roles_result.data or []):
-                    # Obtener nombre del rol
                     rol_data = item.get('rol', {})
                     if isinstance(rol_data, dict):
                         nombre_rol = rol_data.get('nombre_rol', '')
@@ -429,9 +410,8 @@ def obtener_stats_dashboard(current_user):
         print(f"✅ Técnicos activos final: {tecnicos_activos_count}")
         
         # =====================================================
-        # 4. BAHÍAS OCUPADAS (CORREGIDO)
+        # 4. BAHÍAS OCUPADAS
         # =====================================================
-        # Usar la vista corregida o consulta directa
         bahias_result = supabase.table('planificacion') \
             .select('bahia_asignada, fecha_hora_inicio_real, fecha_hora_fin_real, ordentrabajo!inner(estado_global)') \
             .is_('fecha_hora_fin_real', 'null') \
@@ -443,19 +423,14 @@ def obtener_stats_dashboard(current_user):
             if not bahia:
                 continue
             
-            # Verificar si está ocupada según criterios correctos
             tiene_inicio_real = p.get('fecha_hora_inicio_real') is not None
             
-            # Obtener estado de la orden
             orden_data = p.get('ordentrabajo', {})
             if isinstance(orden_data, dict):
                 estado_orden = orden_data.get('estado_global', '')
             else:
                 estado_orden = ''
             
-            # Una bahía está ocupada si:
-            # 1. Tiene inicio real Y no tiene fin real, O
-            # 2. La orden no está finalizada/entregada
             if tiene_inicio_real or estado_orden not in ['Finalizado', 'Entregado']:
                 bahias_ocupadas_set.add(bahia)
         
@@ -491,7 +466,6 @@ def obtener_stats_dashboard(current_user):
         import traceback
         traceback.print_exc()
         
-        # Retornar valores por defecto en caso de error
         return jsonify({
             'success': True, 
             'stats': {
@@ -546,3 +520,84 @@ def marcar_notificacion_leida(current_user, id_notificacion):
     except Exception as e:
         logger.error(f"Error marcando notificación: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 7: EVENTOS PARA CALENDARIO (NUEVO)
+# =====================================================
+
+@dashboard_bp.route('/eventos-calendario', methods=['GET'])
+@jefe_taller_required
+def obtener_eventos_calendario(current_user):
+    """Obtener eventos para el calendario (solo fecha_ingreso y placa)"""
+    try:
+        print("📅 Consultando eventos para calendario...")
+        
+        ordenes = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, fecha_ingreso, id_vehiculo') \
+            .not_.in_('estado_global', ['Finalizado', 'Entregado']) \
+            .execute()
+        
+        eventos = []
+        for orden in (ordenes.data or []):
+            if orden.get('fecha_ingreso'):
+                # Obtener placa del vehículo
+                placa = "Vehículo"
+                if orden.get('id_vehiculo'):
+                    try:
+                        vehiculo_result = supabase.table('vehiculo') \
+                            .select('placa') \
+                            .eq('id', orden['id_vehiculo']) \
+                            .execute()
+                        if vehiculo_result.data:
+                            placa = vehiculo_result.data[0].get('placa', 'Vehículo')
+                    except Exception as e:
+                        print(f"⚠️ Error obteniendo vehículo: {e}")
+                
+                eventos.append({
+                    'id': orden.get('id'),
+                    'title': f"🔧 {placa}",
+                    'start': orden.get('fecha_ingreso'),
+                    'backgroundColor': '#FF9800',
+                    'borderColor': '#FF9800',
+                    'extendedProps': {
+                        'orden_id': orden.get('id'),
+                        'codigo_unico': orden.get('codigo_unico')
+                    }
+                })
+        
+        print(f"📅 Eventos generados: {len(eventos)}")
+        return jsonify({
+            'success': True,
+            'eventos': eventos
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Error en eventos-calendario: {e}")
+        return jsonify({'success': True, 'eventos': []}), 200
+
+
+# =====================================================
+# ENDPOINT 8: TEST PARA VERIFICAR CAMPOS
+# =====================================================
+
+@dashboard_bp.route('/test-ordenes', methods=['GET'])
+@jefe_taller_required
+def test_ordenes(current_user):
+    """Endpoint de prueba para verificar campos de la tabla ordentrabajo"""
+    try:
+        ordenes = supabase.table('ordentrabajo') \
+            .select('*') \
+            .limit(1) \
+            .execute()
+        
+        if ordenes.data and len(ordenes.data) > 0:
+            return jsonify({
+                'success': True,
+                'campos': list(ordenes.data[0].keys()),
+                'primera_orden': ordenes.data[0]
+            }), 200
+        else:
+            return jsonify({'success': False, 'message': 'No hay órdenes'}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500

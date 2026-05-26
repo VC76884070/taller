@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jefe Operativo - Dashboard | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- FullCalendar CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/jefe_operativo/css/dashboard.css">
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-chart-line"></i> Dashboard Operativo</h1>
+                    <p>Panel de control - Gestión de entregas y taller</p>
+                </div>
+
+                <div class="top-actions">
+                    <div class="notification-icon" id="notificationIcon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificacionesCount">0</span>
+                    </div>
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content">
+                <!-- KPI CARDS -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Vehículos ingresados hoy</span>
+                            <i class="fas fa-car-side kpi-icon-small"></i>
+                        </div>
+                        <div class="kpi-value" id="ingresadosHoy">0</div>
+                        <div class="kpi-footer">
+                            <span class="kpi-trend"><i class="fas fa-clock"></i> Registros del día</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Vehículos en taller</span>
+                            <i class="fas fa-wrench kpi-icon-small"></i>
+                        </div>
+                        <div class="kpi-value" id="enProceso">0</div>
+                        <div class="kpi-footer">
+                            <span class="kpi-trend"><i class="fas fa-charging-station"></i> En reparación</span>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Trabajos en pausa</span>
+                            <i class="fas fa-pause-circle kpi-icon-small"></i>
+                        </div>
+                        <div class="kpi-value" id="enPausa">0</div>
+                        <div class="kpi-footer">
+                            <span class="kpi-trend negative">
+                                <i class="fas fa-exclamation-triangle"></i> Requieren atención
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Grid de dos columnas -->
+                <div class="dashboard-grid">
+                    <!-- Columna Izquierda -->
+                    <div class="left-column">
+                        <!-- Calendario Mensual con Días Pintados -->
+                        <div class="card calendario-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-calendar-alt"></i> Calendario de Reparaciones</h3>
+                                <div class="calendario-leyenda">
+                                    <span class="leyenda-item"><span class="color-reparacion"></span> En
+                                        reparación</span>
+                                    <span class="leyenda-item"><span class="color-entrega"></span> Entrega</span>
+                                    <span class="leyenda-item"><span class="color-atrasado"></span> Atrasado</span>
+                                </div>
+                            </div>
+                            <div class="calendario-wrapper">
+                                <div id="calendarioOperativo"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Columna Derecha -->
+                    <div class="right-column">
+                        <!-- Próximas Entregas -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-clock"></i> Próximas Entregas</h3>
+                                <span class="badge-info" id="proximasEntregasCount">0</span>
+                            </div>
+                            <div class="entregas-list" id="entregasList">
+                                <div class="empty-state">Cargando...</div>
+                            </div>
+                        </div>
+
+                        <!-- Vehículos en Taller -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-car"></i> Vehículos en Taller</h3>
+                                <span class="badge-info" id="vehiculosTallerCount">0</span>
+                            </div>
+                            <div class="vehiculos-taller-list" id="vehiculosTallerList">
+                                <div class="empty-state">Cargando...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" style="display: none;">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/es.min.js"></script>
+    <script src="/jefe_operativo/js/include.js"></script>
+    <script src="/jefe_operativo/js/dashboard.js"></script>
+</body>
+
+</html>

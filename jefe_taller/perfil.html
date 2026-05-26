@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perfil | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Estilos -->
+    <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_taller/css/perfil.css">
+
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-user-circle"></i> Mi Perfil</h1>
+                    <p>Gestiona tu información personal y cuenta</p>
+                </div>
+                <div class="top-actions">
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificacionesCount">0</span>
+                    </div>
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content">
+                <div class="perfil-container">
+
+                    <!-- Tarjeta de Perfil -->
+                    <div class="perfil-card">
+                        <div class="perfil-avatar-section">
+                            <div class="avatar-container">
+                                <img id="avatarPreview" src="" alt="Avatar" class="avatar-img">
+                                <div class="avatar-overlay" onclick="document.getElementById('avatarInput').click()">
+                                    <i class="fas fa-camera"></i>
+                                    <span>Cambiar foto</span>
+                                </div>
+                            </div>
+                            <input type="file" id="avatarInput" accept="image/*" style="display: none;">
+                            <h2 id="userNameDisplay">Cargando...</h2>
+                            <span class="user-role-badge" id="userRoleDisplay">Jefe de Taller</span>
+                        </div>
+
+                        <div class="perfil-form-section">
+                            <form id="perfilForm">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label><i class="fas fa-user"></i> Nombre completo</label>
+                                        <input type="text" id="nombre" class="form-input" placeholder="Tu nombre">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-envelope"></i> Correo electrónico</label>
+                                        <input type="email" id="email" class="form-input"
+                                            placeholder="correo@ejemplo.com">
+                                    </div>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label><i class="fas fa-phone"></i> Teléfono / Contacto</label>
+                                        <input type="text" id="contacto" class="form-input" placeholder="Ej: 76543210">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-map-marker-alt"></i> Ubicación</label>
+                                        <input type="text" id="ubicacion" class="form-input"
+                                            placeholder="Dirección o ubicación">
+                                    </div>
+                                </div>
+
+                                <div class="form-actions">
+                                    <button type="button" class="btn-primary" id="btnGuardarPerfil">
+                                        <i class="fas fa-save"></i> Guardar Cambios
+                                    </button>
+                                    <button type="button" class="btn-secondary" id="btnCancelar">
+                                        <i class="fas fa-undo"></i> Cancelar
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Tarjeta de Cambio de Contraseña -->
+                    <div class="password-card">
+                        <h3><i class="fas fa-lock"></i> Cambiar Contraseña</h3>
+                        <form id="passwordForm">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fas fa-key"></i> Contraseña actual</label>
+                                    <input type="password" id="currentPassword" class="form-input"
+                                        placeholder="Ingresa tu contraseña actual">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fas fa-lock"></i> Nueva contraseña</label>
+                                    <input type="password" id="newPassword" class="form-input"
+                                        placeholder="Nueva contraseña">
+                                    <small class="form-hint">Mínimo 6 caracteres</small>
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-check-circle"></i> Confirmar nueva contraseña</label>
+                                    <input type="password" id="confirmPassword" class="form-input"
+                                        placeholder="Confirma tu nueva contraseña">
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn-primary" id="btnCambiarPassword">
+                                    <i class="fas fa-sync-alt"></i> Actualizar Contraseña
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Tarjeta de Estadísticas Personales -->
+                    <div class="stats-card">
+                        <h3><i class="fas fa-chart-line"></i> Mi Actividad</h3>
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <div class="stat-number" id="ordenesAtendidas">0</div>
+                                <div class="stat-label">Órdenes atendidas</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number" id="diagnosticosRevisados">0</div>
+                                <div class="stat-label">Diagnósticos revisados</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number" id="miembroDesde">-</div>
+                                <div class="stat-label">Miembro desde</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number" id="ultimoAcceso">-</div>
+                                <div class="stat-label">Último acceso</div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/jefe_taller/js/include.js"></script>
+    <script src="/jefe_taller/js/perfil.js"></script>
+</body>
+
+</html>

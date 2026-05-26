@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario y Bahías | FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Estilos -->
+    <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_taller/css/calendario_bahias.css">
+
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-calendar-alt"></i> Calendario de Trabajos</h1>
+                    <p>Visualiza y gestiona las órdenes de trabajo programadas</p>
+                </div>
+                <div class="top-actions">
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificacionesCount">0</span>
+                    </div>
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content">
+                <!-- Pestañas -->
+                <div class="tabs-container">
+                    <button class="tab-btn active" data-tab="calendario">
+                        <i class="fas fa-calendar-alt"></i> Calendario Mensual
+                    </button>
+                    <button class="tab-btn" data-tab="bahias">
+                        <i class="fas fa-warehouse"></i> Estado de Bahías
+                    </button>
+                    <button class="tab-btn" data-tab="estadisticas">
+                        <i class="fas fa-chart-pie"></i> Estadísticas
+                    </button>
+                </div>
+
+                <!-- ==================== PANEL CALENDARIO ==================== -->
+                <div class="tab-panel active" id="panel-calendario">
+                    <div class="calendario-mensual-container">
+                        <div class="calendario-header">
+                            <div class="calendario-nav">
+                                <button id="prevMesBtn" class="btn-nav">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <h2 id="mesActual" class="mes-titulo">Enero 2024</h2>
+                                <button id="nextMesBtn" class="btn-nav">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                                <button id="hoyBtn" class="btn-hoy">
+                                    <i class="fas fa-calendar-day"></i> Hoy
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Días de la semana -->
+                        <div class="calendario-dias-semana">
+                            <div class="dia-semana">LUN</div>
+                            <div class="dia-semana">MAR</div>
+                            <div class="dia-semana">MIÉ</div>
+                            <div class="dia-semana">JUE</div>
+                            <div class="dia-semana">VIE</div>
+                            <div class="dia-semana">SÁB</div>
+                            <div class="dia-semana">DOM</div>
+                        </div>
+
+                        <!-- Grid de días del mes -->
+                        <div class="calendario-grid" id="calendarioGrid">
+                            <!-- Generado por JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== PANEL BAHÍAS ==================== -->
+                <div class="tab-panel" id="panel-bahias">
+                    <div class="bahias-container">
+                        <div class="bahias-header">
+                            <h3><i class="fas fa-warehouse"></i> Estado de Bahías</h3>
+                            <span class="badge-info" id="bahiasOcupadas">0/12 ocupadas</span>
+                            <button class="btn-refresh" id="refreshBahiasBtn">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="bahias-grid" id="bahiasGrid">
+                            <div class="loading-state">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Cargando estado de bahías...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== PANEL ESTADÍSTICAS ==================== -->
+                <div class="tab-panel" id="panel-estadisticas">
+                    <div class="estadisticas-container">
+                        <!-- Tarjetas resumen -->
+                        <div class="stats-cards">
+                            <div class="stat-card">
+                                <div class="stat-icon total">
+                                    <i class="fas fa-chart-line"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <h3 id="totalOrdenes">0</h3>
+                                    <p>Total Órdenes</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon en-proceso">
+                                    <i class="fas fa-tools"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <h3 id="enProcesoCount">0</h3>
+                                    <p>En Proceso</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon en-pausa">
+                                    <i class="fas fa-pause-circle"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <h3 id="enPausaCount">0</h3>
+                                    <p>En Pausa</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon entregadas">
+                                    <i class="fas fa-check-circle"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <h3 id="entregadasCount">0</h3>
+                                    <p>Entregadas</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Gráficos principales -->
+                        <div class="charts-row">
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h4><i class="fas fa-chart-pie"></i> Distribución por Estado</h4>
+                                </div>
+                                <canvas id="estadosChart" width="400" height="400"></canvas>
+                            </div>
+
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h4><i class="fas fa-chart-line"></i> Evolución Mensual</h4>
+                                </div>
+                                <canvas id="evolucionChart" width="400" height="400"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="charts-row">
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h4><i class="fas fa-stethoscope"></i> Diagnósticos Técnicos</h4>
+                                </div>
+                                <canvas id="diagnosticosChart" width="400" height="400"></canvas>
+                            </div>
+
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h4><i class="fas fa-chart-bar"></i> Carga de Trabajo</h4>
+                                </div>
+                                <canvas id="cargaChart" width="400" height="400"></canvas>
+                                <div id="tecnicosCargaList" class="tecnicos-lista-mini"></div>
+                            </div>
+                        </div>
+
+                        <!-- Diagnósticos por estado (resumen numérico) -->
+                        <div class="diagnosticos-stats">
+                            <h3><i class="fas fa-stethoscope"></i> Resumen de Diagnósticos</h3>
+                            <div class="diagnosticos-stats-grid">
+                                <div class="diag-stat pendiente">
+                                    <span class="diag-label">Pendientes</span>
+                                    <span class="diag-count" id="diagPendientes">0</span>
+                                </div>
+                                <div class="diag-stat aprobado">
+                                    <span class="diag-label">Aprobados</span>
+                                    <span class="diag-count" id="diagAprobados">0</span>
+                                </div>
+                                <div class="diag-stat rechazado">
+                                    <span class="diag-label">Rechazados</span>
+                                    <span class="diag-count" id="diagRechazados">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ==================== MODALES ==================== -->
+
+    <!-- Modal para ver detalle del día -->
+    <div class="modal" id="modalDetalleDia">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2 id="modalDiaTitulo"><i class="fas fa-calendar-day"></i> Órdenes del día</h2>
+                <button class="modal-close" onclick="cerrarModalDetalleDia()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalDiaBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalDetalleDia()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver detalle de orden -->
+    <div class="modal" id="modalDetalleOrden">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2><i class="fas fa-clipboard-list"></i> Detalle de Orden</h2>
+                <button class="modal-close" onclick="cerrarModalDetalleOrden()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalDetalleOrdenBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalDetalleOrden()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver detalle de bahía -->
+    <div class="modal" id="modalDetalleBahia">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2><i class="fas fa-warehouse"></i> Detalle de Bahía</h2>
+                <button class="modal-close" onclick="cerrarModalBahia()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBahiaBody">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalBahia()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/jefe_taller/js/include.js"></script>
+    <script src="/jefe_taller/js/calendario_bahias.js"></script>
+</body>
+
+</html>

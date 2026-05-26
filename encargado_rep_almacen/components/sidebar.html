@@ -1,0 +1,78 @@
+<!-- SIDEBAR - ENCARGADO DE REPUESTOS/ALMACÉN -->
+<aside class="sidebar">
+    <div class="sidebar-header">
+        <img src="../../img/logoblanco.jpeg" alt="FURIA MOTOR" class="sidebar-logo">
+        <span class="sidebar-brand">FURIA MOTOR</span>
+    </div>
+
+    <div class="sidebar-user">
+        <div class="user-avatar">
+            <i class="fas fa-boxes"></i>
+        </div>
+        <div class="user-info">
+            <span class="user-name" id="userName">Cargando...</span>
+            <span class="user-role">Encargado de Repuestos</span>
+        </div>
+    </div>
+
+    <nav class="sidebar-nav">
+        <ul>
+            <!-- 1. DASHBOARD -->
+            <li class="nav-item" data-page="dashboard">
+                <a href="dashboard.html" class="nav-link">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+
+            <!-- 2. SOLICITUDES DE COTIZACIÓN -->
+            <li class="nav-item" data-page="cotizaciones">
+                <a href="solicitudes_cotizacion.html" class="nav-link">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                    <span>Solicitudes Cotización</span>
+                </a>
+            </li>
+
+            <!-- 3. SOLICITUDES DE COMPRA -->
+            <li class="nav-item" data-page="compras">
+                <a href="solicitudes_compra.html" class="nav-link">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span>Solicitudes Compra</span>
+                </a>
+            </li>
+
+            <!-- 4. PROVEEDORES -->
+            <li class="nav-item" data-page="proveedores">
+                <a href="proveedores.html" class="nav-link">
+                    <i class="fas fa-truck"></i>
+                    <span>Proveedores</span>
+                </a>
+            </li>
+
+            <!-- 5. HISTORIAL -->
+            <li class="nav-item" data-page="historial">
+                <a href="historial.html" class="nav-link">
+                    <i class="fas fa-history"></i>
+                    <span>Historial</span>
+                </a>
+            </li>
+
+            <!-- 6. PERFIL -->
+            <li class="nav-item" data-page="perfil">
+                <a href="perfil.html" class="nav-link">
+                    <i class="fas fa-user-circle"></i>
+                    <span>Perfil</span>
+                </a>
+            </li>
+        </ul>
+
+        <ul class="sidebar-bottom">
+            <li class="nav-item">
+                <a href="#" onclick="cerrarSesion()" class="nav-link">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Cerrar Sesión</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</aside>

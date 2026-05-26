@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial de Vehículos | FURIA MOTOR - Jefe Taller</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Estilos -->
+    <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_taller/css/historial_vehiculos.css">
+
+    <style>
+        /* Estilos para tabs dentro del modal */
+        .modal-tabs {
+            display: flex;
+            gap: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+        }
+
+        .modal-tab {
+            padding: 0.5rem 1rem;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.85rem;
+            border-radius: var(--radius-sm);
+            transition: all 0.2s;
+        }
+
+        .modal-tab:hover {
+            background: var(--gris-oscuro);
+            color: var(--texto-primario);
+        }
+
+        .modal-tab.active {
+            background: var(--rojo-primario);
+            color: white;
+        }
+
+        .modal-tab-content {
+            display: none;
+        }
+
+        .modal-tab-content.active {
+            display: block;
+        }
+
+        .detalle-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .detalle-item {
+            background: var(--bg-card);
+            padding: 0.75rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+        }
+
+        .detalle-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .detalle-value {
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .detalle-descripcion {
+            background: var(--gris-oscuro);
+            padding: 0.75rem;
+            border-radius: var(--radius-md);
+            margin: 0.5rem 0;
+        }
+
+        .fotos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+
+        .foto-item {
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s;
+        }
+
+        .foto-item:hover {
+            transform: scale(1.02);
+        }
+
+        .foto-item img {
+            width: 100%;
+            height: 80px;
+            object-fit: cover;
+        }
+
+        .foto-label {
+            font-size: 0.65rem;
+            padding: 0.25rem;
+            text-align: center;
+            background: var(--bg-card);
+        }
+
+        .audio-player {
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background: var(--gris-oscuro);
+            border-radius: var(--radius-md);
+        }
+
+        .audio-player audio {
+            width: 100%;
+            margin-top: 0.5rem;
+        }
+
+        .tecnico-badge {
+            display: inline-block;
+            background: var(--rojo-primario);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+        <div id="sidebar-container"></div>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-history"></i> Historial de Vehículos</h1>
+                    <p>Consulta el historial completo de servicios por vehículo</p>
+                </div>
+                <div class="top-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content">
+                <div class="historial-container">
+
+                    <!-- Panel de Búsqueda -->
+                    <div class="busqueda-panel">
+                        <div class="busqueda-grid">
+                            <div class="form-group">
+                                <label><i class="fas fa-search"></i> Buscar por placa</label>
+                                <input type="text" id="searchPlaca" class="form-input" placeholder="Ej: 123ABC, 456DEF"
+                                    autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-filter"></i> Filtrar por estado</label>
+                                <select id="filterEstado" class="form-select">
+                                    <option value="">Todos</option>
+                                    <option value="Entregado">Entregados</option>
+                                    <option value="Finalizado">Finalizados</option>
+                                    <option value="EnProceso">En Proceso</option>
+                                    <option value="EnRecepcion">En Recepción</option>
+                                    <option value="EnPausa">En Pausa</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-calendar"></i> Desde</label>
+                                <input type="date" id="fechaDesde" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-calendar"></i> Hasta</label>
+                                <input type="date" id="fechaHasta" class="form-input">
+                            </div>
+                            <button class="btn-buscar" id="btnBuscar">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                            <button class="btn-limpiar" id="btnLimpiar">
+                                <i class="fas fa-eraser"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Resultados -->
+                    <div id="resultadosContainer">
+                        <div class="loading-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Cargando últimas órdenes...</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal para ver detalle de orden (CON TABS) -->
+    <div class="modal" id="modalDetalleOrden">
+        <div class="modal-content modal-xl">
+            <div class="modal-header">
+                <h2><i class="fas fa-clipboard-list"></i> Detalle Completo de Orden</h2>
+                <button class="modal-close" onclick="cerrarModalDetalle()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Tabs dentro del modal -->
+                <div class="modal-tabs">
+                    <button class="modal-tab active" data-tab="cliente-vehiculo">👤 Cliente & Vehículo</button>
+                    <button class="modal-tab" data-tab="recepcion">📋 Recepción</button>
+                    <button class="modal-tab" data-tab="diagnosticos">🔬 Diagnósticos</button>
+                    <button class="modal-tab" data-tab="servicios">💰 Servicios</button>
+                </div>
+
+                <div id="tab-cliente-vehiculo" class="modal-tab-content active">
+                    <div id="clienteVehiculoContent"></div>
+                </div>
+                <div id="tab-recepcion" class="modal-tab-content">
+                    <div id="recepcionContent"></div>
+                </div>
+                <div id="tab-diagnosticos" class="modal-tab-content">
+                    <div id="diagnosticosContent"></div>
+                </div>
+                <div id="tab-servicios" class="modal-tab-content">
+                    <div id="serviciosContent"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalDetalle()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver imágenes ampliadas -->
+    <div class="modal" id="modalImagen">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2><i class="fas fa-image"></i> <span id="imagenTitulo">Imagen</span></h2>
+                <button class="modal-close" onclick="cerrarModalImagen()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <img id="imagenAmpliada" src="" alt="Imagen ampliada"
+                    style="width: 100%; border-radius: var(--radius-md);">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalImagen()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/jefe_taller/js/include.js"></script>
+    <script src="/jefe_taller/js/historial_vehiculos.js"></script>
+</body>
+
+</html>

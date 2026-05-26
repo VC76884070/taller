@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recuperar Contraseña - FURIA MOTOR</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+        }
+
+        .recuperar-container {
+            max-width: 500px;
+            width: 100%;
+            margin: 2rem;
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--gris-medio);
+            text-decoration: none;
+            margin-bottom: 1rem;
+            transition: var(--transition);
+        }
+
+        .back-link:hover {
+            color: var(--rojo-primario);
+        }
+
+        .recuperar-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+        }
+
+        .recuperar-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .recuperar-header i {
+            font-size: 3rem;
+            color: var(--rojo-primario);
+            margin-bottom: 1rem;
+        }
+
+        .recuperar-header h2 {
+            color: var(--blanco);
+            margin-bottom: 0.5rem;
+        }
+
+        .recuperar-header p {
+            color: var(--gris-medio);
+            font-size: 0.85rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.85rem;
+            color: var(--gris-medio);
+        }
+
+        .form-group label .required {
+            color: var(--rojo-primario);
+            margin-left: 2px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-md);
+            font-size: 0.95rem;
+            color: var(--blanco);
+            transition: var(--transition);
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--rojo-primario);
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 0 4px rgba(193, 18, 31, 0.1);
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 0.9rem;
+            background: linear-gradient(135deg, var(--rojo-primario), var(--rojo-acento));
+            color: var(--blanco);
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            cursor: pointer;
+            transition: var(--transition);
+            margin-top: 0.5rem;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .code-inputs {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            margin: 1.5rem 0;
+        }
+
+        .code-digit {
+            width: 50px;
+            height: 60px;
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-md);
+            color: var(--blanco);
+            transition: var(--transition);
+        }
+
+        .code-digit:focus {
+            outline: none;
+            border-color: var(--rojo-primario);
+            box-shadow: 0 0 0 4px rgba(193, 18, 31, 0.1);
+        }
+
+        .resend-code {
+            text-align: center;
+            margin-top: 1rem;
+        }
+
+        .resend-code button {
+            background: none;
+            border: none;
+            color: var(--rojo-primario);
+            cursor: pointer;
+            font-size: 0.85rem;
+            text-decoration: underline;
+            transition: var(--transition);
+        }
+
+        .resend-code button:hover {
+            color: var(--rojo-acento);
+        }
+
+        .resend-code button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .timer-text {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+            text-align: center;
+        }
+
+        .info-message {
+            background: rgba(30, 58, 95, 0.3);
+            border-left: 4px solid var(--azul-profundo);
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            color: var(--gris-claro);
+        }
+
+        .info-message i {
+            color: var(--azul-profundo);
+            margin-right: 0.5rem;
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 10000;
+        }
+
+        .toast {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.5rem;
+            margin-bottom: 0.5rem;
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            animation: slideInRight 0.3s ease;
+            max-width: 350px;
+            border-left: 4px solid transparent;
+            color: var(--blanco);
+        }
+
+        .toast.success {
+            border-left-color: var(--verde-exito);
+        }
+
+        .toast.error {
+            border-left-color: var(--rojo-primario);
+        }
+
+        .toast.warning {
+            border-left-color: var(--ambar-alerta);
+        }
+
+        .toast.info {
+            border-left-color: var(--azul-profundo);
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .step {
+            transition: all 0.3s ease;
+        }
+
+        .password-wrapper {
+            position: relative;
+        }
+
+        .password-wrapper input {
+            padding-right: 3rem;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--gris-medio);
+            cursor: pointer;
+            z-index: 1;
+            transition: var(--transition);
+        }
+
+        .password-toggle:hover {
+            color: var(--rojo-primario);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="recuperar-container">
+        <a href="/" class="back-link">
+            <i class="fas fa-arrow-left"></i>
+            Volver al inicio
+        </a>
+
+        <div class="recuperar-card">
+            <div class="recuperar-header">
+                <i class="fas fa-key"></i>
+                <h2>Recuperar Contraseña</h2>
+                <p>Ingresa tu número de documento para restablecer tu contraseña</p>
+            </div>
+
+            <!-- Paso 1: Solicitar documento -->
+            <div id="step1" class="step">
+                <form id="documentForm">
+                    <div class="form-group">
+                        <label>Número de documento <span class="required">*</span></label>
+                        <input type="text" id="documento" class="form-control" placeholder="1234567" required>
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-top: 0.25rem;">
+                            Ingresa tu número de documento (CI) registrado en el sistema
+                        </div>
+                    </div>
+                    <button type="submit" class="submit-btn" id="sendCodeBtn">
+                        <span>Enviar código de verificación</span>
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Paso 2: Ingresar código -->
+            <div id="step2" class="step" style="display: none;">
+                <p style="color: var(--gris-claro); text-align: center;">Ingresa el código de 6 dígitos enviado a tu
+                    correo</p>
+                <div class="code-inputs">
+                    <input type="text" maxlength="1" class="code-digit" data-index="0">
+                    <input type="text" maxlength="1" class="code-digit" data-index="1">
+                    <input type="text" maxlength="1" class="code-digit" data-index="2">
+                    <input type="text" maxlength="1" class="code-digit" data-index="3">
+                    <input type="text" maxlength="1" class="code-digit" data-index="4">
+                    <input type="text" maxlength="1" class="code-digit" data-index="5">
+                </div>
+                <div class="resend-code">
+                    <button type="button" id="resendCodeBtn" onclick="resendCode()">
+                        <i class="fas fa-redo-alt"></i> Reenviar código
+                    </button>
+                    <div id="timerText" class="timer-text"></div>
+                </div>
+                <button type="button" class="submit-btn" id="verifyCodeBtn" onclick="verifyCode()">
+                    <span>Verificar código</span>
+                    <i class="fas fa-check"></i>
+                </button>
+            </div>
+
+            <!-- Paso 3: Cambiar contraseña -->
+            <div id="step3" class="step" style="display: none;">
+                <p style="color: var(--gris-claro); text-align: center;">Ingresa tu nueva contraseña</p>
+                <div class="form-group">
+                    <label>Nueva contraseña <span class="required">*</span></label>
+                    <div class="password-wrapper">
+                        <input type="password" id="newPassword" class="form-control" placeholder="••••••••" required>
+                        <button type="button" class="password-toggle"
+                            onclick="togglePassword('newPassword', 'toggleIcon1')">
+                            <i class="fas fa-eye" id="toggleIcon1"></i>
+                        </button>
+                    </div>
+                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-top: 0.25rem;">
+                        Mínimo 6 caracteres
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Confirmar contraseña <span class="required">*</span></label>
+                    <div class="password-wrapper">
+                        <input type="password" id="confirmPassword" class="form-control" placeholder="••••••••"
+                            required>
+                        <button type="button" class="password-toggle"
+                            onclick="togglePassword('confirmPassword', 'toggleIcon2')">
+                            <i class="fas fa-eye" id="toggleIcon2"></i>
+                        </button>
+                    </div>
+                </div>
+                <button type="button" class="submit-btn" id="changePasswordBtn" onclick="changePassword()">
+                    <span>Cambiar contraseña</span>
+                    <i class="fas fa-save"></i>
+                </button>
+            </div>
+
+            <div class="info-message">
+                <i class="fas fa-info-circle"></i>
+                <strong>¿No recibiste el código?</strong>
+                <p style="margin-top: 0.5rem;">Revisa tu bandeja de spam o correo no deseado. Si aún no lo recibes,
+                    puedes solicitar un nuevo código después de 60 segundos.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        const API_URL = 'http://localhost:5000/api';
+        const toastContainer = document.getElementById('toastContainer');
+
+        let documento = '';
+        let email = '';
+        let codigoEnviado = '';
+        let timerInterval = null;
+        let timeLeft = 0;
+
+        // Paso 1: Enviar documento
+        document.getElementById('documentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            documento = document.getElementById('documento').value.trim();
+
+            if (!documento) {
+                showToast('Ingresa tu número de documento', 'warning');
+                return;
+            }
+
+            if (!documento.match(/^\d+$/)) {
+                showToast('El documento debe contener solo números', 'error');
+                return;
+            }
+
+            const sendBtn = document.getElementById('sendCodeBtn');
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+
+            try {
+                const response = await fetch(`${API_URL}/recuperar/solicitar-por-documento`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        documento: documento
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Error al enviar el código');
+                }
+
+                email = data.email;
+                showToast('✅ Código enviado a tu correo electrónico', 'success');
+
+                // Mostrar paso 2
+                document.getElementById('step1').style.display = 'none';
+                document.getElementById('step2').style.display = 'block';
+
+                // Iniciar timer
+                startTimer(60);
+
+                // Limpiar inputs de código
+                document.querySelectorAll('.code-digit').forEach(input => {
+                    input.value = '';
+                });
+
+                // Enfocar primer input
+                document.querySelector('.code-digit')?.focus();
+
+            } catch (error) {
+                showToast(error.message, 'error');
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<span>Enviar código de verificación</span><i class="fas fa-paper-plane"></i>';
+            }
+        });
+
+        // Configurar inputs de código
+        function setupCodeInputs() {
+            const codeDigits = document.querySelectorAll('.code-digit');
+            codeDigits.forEach((input, index) => {
+                input.dataset.index = index;
+                input.addEventListener('input', (e) => {
+                    if (e.target.value.length === 1 && index < codeDigits.length - 1) {
+                        codeDigits[index + 1].focus();
+                    }
+                });
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Backspace' && e.target.value === '' && index > 0) {
+                        codeDigits[index - 1].focus();
+                    }
+                });
+            });
+        }
+
+        setupCodeInputs();
+
+        function getCode() {
+            let code = '';
+            document.querySelectorAll('.code-digit').forEach(input => {
+                code += input.value;
+            });
+            return code;
+        }
+
+        async function verifyCode() {
+            const codigo = getCode();
+
+            if (codigo.length !== 6) {
+                showToast('Ingresa el código de 6 dígitos', 'warning');
+                return;
+            }
+
+            const verifyBtn = document.getElementById('verifyCodeBtn');
+            verifyBtn.disabled = true;
+            verifyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
+
+            try {
+                const response = await fetch(`${API_URL}/recuperar/verificar-por-documento`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        documento: documento,
+                        codigo: codigo
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Código inválido');
+                }
+
+                showToast('✅ Código verificado correctamente', 'success');
+
+                // Mostrar paso 3
+                document.getElementById('step2').style.display = 'none';
+                document.getElementById('step3').style.display = 'block';
+
+                // Detener timer
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                }
+
+            } catch (error) {
+                showToast(error.message, 'error');
+                verifyBtn.disabled = false;
+                verifyBtn.innerHTML = '<span>Verificar código</span><i class="fas fa-check"></i>';
+            }
+        }
+
+        async function resendCode() {
+            const resendBtn = document.getElementById('resendCodeBtn');
+            resendBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_URL}/recuperar/solicitar-por-documento`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        documento: documento
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Error al reenviar el código');
+                }
+
+                showToast('✅ Código reenviado a tu correo', 'success');
+
+                // Reiniciar timer
+                startTimer(60);
+
+                // Limpiar inputs de código
+                document.querySelectorAll('.code-digit').forEach(input => {
+                    input.value = '';
+                });
+
+                document.querySelector('.code-digit')?.focus();
+
+            } catch (error) {
+                showToast(error.message, 'error');
+                resendBtn.disabled = false;
+            }
+        }
+
+        function startTimer(seconds) {
+            if (timerInterval) clearInterval(timerInterval);
+
+            timeLeft = seconds;
+            const timerText = document.getElementById('timerText');
+            const resendBtn = document.getElementById('resendCodeBtn');
+
+            resendBtn.disabled = true;
+
+            timerInterval = setInterval(() => {
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    resendBtn.disabled = false;
+                    timerText.innerHTML = '';
+                } else {
+                    const minutos = Math.floor(timeLeft / 60);
+                    const segundos = timeLeft % 60;
+                    timerText.innerHTML = `Puedes reenviar el código en ${minutos}:${segundos.toString().padStart(2, '0')}`;
+                    timeLeft--;
+                }
+            }, 1000);
+        }
+
+        async function changePassword() {
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            if (!newPassword || !confirmPassword) {
+                showToast('Por favor completa todos los campos', 'warning');
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                showToast('La contraseña debe tener al menos 6 caracteres', 'warning');
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                showToast('Las contraseñas no coinciden', 'error');
+                return;
+            }
+
+            const changeBtn = document.getElementById('changePasswordBtn');
+            changeBtn.disabled = true;
+            changeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cambiando contraseña...';
+
+            try {
+                const response = await fetch(`${API_URL}/recuperar/cambiar-por-documento`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        documento: documento,
+                        nueva_contrasena: newPassword
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Error al cambiar la contraseña');
+                }
+
+                showToast('✅ Contraseña cambiada exitosamente', 'success');
+
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 2000);
+
+            } catch (error) {
+                showToast(error.message, 'error');
+                changeBtn.disabled = false;
+                changeBtn.innerHTML = '<span>Cambiar contraseña</span><i class="fas fa-save"></i>';
+            }
+        }
+
+        function togglePassword(inputId, iconId) {
+            const input = document.getElementById(inputId);
+            const icon = document.getElementById(iconId);
+
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-exclamation-circle',
+                warning: 'fa-exclamation-triangle',
+                info: 'fa-info-circle'
+            };
+
+            toast.innerHTML = `
+                <i class="fas ${icons[type]}"></i>
+                <span>${message}</span>
+            `;
+
+            toastContainer.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 5000);
+        }
+
+        // Funciones globales
+        window.verifyCode = verifyCode;
+        window.resendCode = resendCode;
+        window.changePassword = changePassword;
+        window.togglePassword = togglePassword;
+    </script>
+</body>
+
+</html>

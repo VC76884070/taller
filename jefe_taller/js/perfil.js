@@ -1,0 +1,379 @@
+// =====================================================
+// PERFIL - JEFE TALLER (VERSIÓN SIMPLIFICADA)
+// VERSIÓN CORREGIDA - USA VARIABLE GLOBAL DE INCLUDE.JS
+// =====================================================
+
+// =====================================================
+// CONFIGURACIÓN DE API - USA VARIABLE GLOBAL
+// =====================================================
+// La variable API_BASE_URL ya está declarada en include.js como window.API_BASE_URL
+// Si por alguna razón no existe (página cargada sola), la creamos
+if (typeof window.API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = (() => {
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('192.168.')) {
+            console.log('📡 perfil.js (Jefe Taller) - Modo DESARROLLO (fallback)');
+            return 'http://localhost:5000';
+        }
+        console.log('📡 perfil.js (Jefe Taller) - Modo PRODUCCIÓN (fallback)');
+        return '';
+    })();
+}
+
+const API_URL = `${window.API_BASE_URL}/api`;
+let avatarBase64 = null;
+
+// =====================================================
+// INICIALIZACIÓN
+// =====================================================
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 Inicializando perfil.js (Jefe Taller)');
+    console.log('📡 API_BASE_URL:', window.API_BASE_URL);
+    
+    // Solo verificar que exista token, no validar roles específicos
+    const token = localStorage.getItem('furia_token');
+    if (!token) {
+        window.location.href = `${window.API_BASE_URL}/`;
+        return;
+    }
+    
+    initPage();
+    setupEventListeners();
+    await cargarDatosPerfil();
+    await cargarEstadisticas();
+});
+
+function initPage() {
+    const now = new Date();
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const dateStr = now.toLocaleDateString('es-ES', options);
+    
+    const dateDisplay = document.getElementById('currentDate');
+    if (dateDisplay) {
+        dateDisplay.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+    }
+}
+
+function setupEventListeners() {
+    document.getElementById('btnGuardarPerfil')?.addEventListener('click', guardarPerfil);
+    document.getElementById('btnCambiarPassword')?.addEventListener('click', cambiarPassword);
+    document.getElementById('btnCancelar')?.addEventListener('click', cancelarEdicion);
+    document.getElementById('avatarInput')?.addEventListener('change', previewAvatar);
+}
+
+function getHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+    };
+}
+
+// =====================================================
+// CARGAR DATOS DEL PERFIL
+// =====================================================
+
+async function cargarDatosPerfil() {
+    try {
+        const response = await fetch(`${API_URL}/jefe-taller/perfil`, {
+            headers: getHeaders()
+        });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error cargando perfil');
+        }
+        
+        const usuario = data.usuario;
+        
+        // Llenar formulario
+        document.getElementById('nombre').value = usuario.nombre || '';
+        document.getElementById('email').value = usuario.email || '';
+        document.getElementById('contacto').value = usuario.contacto || '';
+        document.getElementById('ubicacion').value = usuario.ubicacion || '';
+        document.getElementById('userNameDisplay').textContent = usuario.nombre || 'Jefe de Taller';
+        
+        // Mostrar avatar
+        const avatarPreview = document.getElementById('avatarPreview');
+        if (usuario.avatar_url) {
+            avatarPreview.src = usuario.avatar_url;
+        } else {
+            avatarPreview.src = 'https://ui-avatars.com/api/?background=C1121F&color=fff&name=' + encodeURIComponent(usuario.nombre || 'Jefe Taller');
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion(error.message, 'error');
+    }
+}
+
+async function cargarEstadisticas() {
+    try {
+        const response = await fetch(`${API_URL}/jefe-taller/perfil/estadisticas`, {
+            headers: getHeaders()
+        });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error cargando estadísticas');
+        }
+        
+        document.getElementById('ordenesAtendidas').textContent = data.estadisticas.ordenes_atendidas || 0;
+        document.getElementById('diagnosticosRevisados').textContent = data.estadisticas.diagnosticos_revisados || 0;
+        document.getElementById('miembroDesde').textContent = data.estadisticas.miembro_desde || '-';
+        document.getElementById('ultimoAcceso').textContent = data.estadisticas.ultimo_acceso || '-';
+        
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+// =====================================================
+// PREVISUALIZAR AVATAR
+// =====================================================
+
+function previewAvatar(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+        mostrarNotificacion('Selecciona una imagen válida', 'warning');
+        return;
+    }
+    
+    if (file.size > 2 * 1024 * 1024) {
+        mostrarNotificacion('La imagen no debe superar los 2MB', 'warning');
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        avatarBase64 = e.target.result;
+        document.getElementById('avatarPreview').src = avatarBase64;
+    };
+    reader.readAsDataURL(file);
+}
+
+// =====================================================
+// GUARDAR PERFIL
+// =====================================================
+
+async function guardarPerfil() {
+    const nombre = document.getElementById('nombre').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const contacto = document.getElementById('contacto').value.trim();
+    const ubicacion = document.getElementById('ubicacion').value.trim();
+    
+    if (!nombre) {
+        mostrarNotificacion('El nombre es requerido', 'warning');
+        return;
+    }
+    
+    if (!email) {
+        mostrarNotificacion('El correo electrónico es requerido', 'warning');
+        return;
+    }
+    
+    if (!email.includes('@')) {
+        mostrarNotificacion('Ingresa un correo válido', 'warning');
+        return;
+    }
+    
+    mostrarNotificacion('Guardando cambios...', 'info');
+    
+    try {
+        // Subir avatar si hay uno nuevo
+        let avatarUrl = null;
+        if (avatarBase64) {
+            const avatarResponse = await fetch(`${API_URL}/jefe-taller/perfil/avatar`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({ avatar: avatarBase64 })
+            });
+            
+            if (avatarResponse.status === 401) {
+                logout();
+                return;
+            }
+            
+            const avatarData = await avatarResponse.json();
+            if (avatarResponse.ok && avatarData.avatar_url) {
+                avatarUrl = avatarData.avatar_url;
+            } else {
+                throw new Error(avatarData.error || 'Error subiendo avatar');
+            }
+        }
+        
+        // Guardar datos del perfil
+        const response = await fetch(`${API_URL}/jefe-taller/perfil`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({
+                nombre,
+                email,
+                contacto,
+                ubicacion,
+                avatar_url: avatarUrl
+            })
+        });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error guardando perfil');
+        }
+        
+        // Actualizar localStorage
+        const storedUser = JSON.parse(localStorage.getItem('furia_user') || '{}');
+        storedUser.nombre = nombre;
+        storedUser.email = email;
+        localStorage.setItem('furia_user', JSON.stringify(storedUser));
+        
+        // Actualizar display
+        document.getElementById('userNameDisplay').textContent = nombre;
+        
+        mostrarNotificacion('Perfil actualizado correctamente', 'success');
+        avatarBase64 = null;
+        
+        // Recargar datos
+        await cargarDatosPerfil();
+        
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion(error.message, 'error');
+    }
+}
+
+function cancelarEdicion() {
+    cargarDatosPerfil();
+    avatarBase64 = null;
+    document.getElementById('avatarInput').value = '';
+    mostrarNotificacion('Cambios descartados', 'info');
+}
+
+// =====================================================
+// CAMBIAR CONTRASEÑA
+// =====================================================
+
+async function cambiarPassword() {
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    if (!currentPassword) {
+        mostrarNotificacion('Ingresa tu contraseña actual', 'warning');
+        return;
+    }
+    
+    if (!newPassword) {
+        mostrarNotificacion('Ingresa una nueva contraseña', 'warning');
+        return;
+    }
+    
+    if (newPassword.length < 6) {
+        mostrarNotificacion('La nueva contraseña debe tener al menos 6 caracteres', 'warning');
+        return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+        mostrarNotificacion('Las contraseñas no coinciden', 'warning');
+        return;
+    }
+    
+    mostrarNotificacion('Actualizando contraseña...', 'info');
+    
+    try {
+        const response = await fetch(`${API_URL}/jefe-taller/perfil/cambiar-password`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({
+                current_password: currentPassword,
+                new_password: newPassword
+            })
+        });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error cambiando contraseña');
+        }
+        
+        // Limpiar formulario
+        document.getElementById('currentPassword').value = '';
+        document.getElementById('newPassword').value = '';
+        document.getElementById('confirmPassword').value = '';
+        
+        mostrarNotificacion('Contraseña actualizada correctamente', 'success');
+        
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion(error.message, 'error');
+    }
+}
+
+function logout() {
+    localStorage.removeItem('furia_token');
+    localStorage.removeItem('furia_user');
+    window.location.href = `${window.API_BASE_URL}/`;
+}
+
+// =====================================================
+// FUNCIONES AUXILIARES
+// =====================================================
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function mostrarNotificacion(mensaje, tipo = 'info') {
+    const existingToasts = document.querySelectorAll('.toast-notification');
+    existingToasts.forEach(toast => toast.remove());
+    
+    const toast = document.createElement('div');
+    toast.className = `toast-notification ${tipo}`;
+    
+    const iconos = {
+        success: 'fa-check-circle',
+        error: 'fa-exclamation-circle',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
+    };
+    
+    toast.innerHTML = `<i class="fas ${iconos[tipo] || iconos.info}"></i><span>${escapeHtml(mensaje)}</span>`;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        if (toast && document.body.contains(toast)) {
+            toast.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => { if (document.body.contains(toast)) document.body.removeChild(toast); }, 300);
+        }
+    }, 3000);
+}
+
+// Exponer funciones globales
+window.logout = logout;

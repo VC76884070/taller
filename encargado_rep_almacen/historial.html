@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial | Encargado Repuestos - FURIA MOTOR</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/historial.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- SIDEBAR -->
+        <div id="sidebar-container"></div>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <div class="top-bar">
+                <div class="page-title">
+                    <h1>Historial de Movimientos</h1>
+                    <p>Registro completo de cotizaciones, compras y entregas</p>
+                </div>
+                <div class="top-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pestañas de historial -->
+            <div class="historial-tabs">
+                <button class="tab-btn-historial active" data-tab="cotizaciones">
+                    <i class="fas fa-file-invoice-dollar"></i> Cotizaciones
+                </button>
+                <button class="tab-btn-historial" data-tab="compras">
+                    <i class="fas fa-shopping-cart"></i> Compras
+                </button>
+                <button class="tab-btn-historial" data-tab="entregas">
+                    <i class="fas fa-truck"></i> Entregas
+                </button>
+                <button class="tab-btn-historial" data-tab="estadisticas">
+                    <i class="fas fa-chart-line"></i> Estadísticas
+                </button>
+            </div>
+
+            <!-- Filtros -->
+            <div class="filtros-bar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Buscar por orden, repuesto o proveedor...">
+                </div>
+                <select id="filtroEstado">
+                    <option value="all">Todos los estados</option>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="cotizado">Cotizado</option>
+                    <option value="comprado">Comprado</option>
+                    <option value="entregado">Entregado</option>
+                </select>
+                <div class="date-range">
+                    <input type="date" id="fechaInicio" placeholder="Fecha inicio">
+                    <span>a</span>
+                    <input type="date" id="fechaFin" placeholder="Fecha fin">
+                </div>
+                <button id="refreshBtn" class="btn-secondary">
+                    <i class="fas fa-sync-alt"></i> Actualizar
+                </button>
+                <button id="exportBtn" class="btn-primary">
+                    <i class="fas fa-download"></i> Exportar
+                </button>
+            </div>
+
+            <!-- Tabla de Cotizaciones -->
+            <div id="tab-cotizaciones" class="tab-historial active">
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Fecha</th>
+                                <th>Orden</th>
+                                <th>Vehículo</th>
+                                <th>Repuesto</th>
+                                <th>Cantidad</th>
+                                <th>Precio</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaCotizaciones">
+                            <!-- Datos dinámicos -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tabla de Compras -->
+            <div id="tab-compras" class="tab-historial">
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Fecha Solicitud</th>
+                                <th>Fecha Compra</th>
+                                <th>Orden</th>
+                                <th>Proveedor</th>
+                                <th>Repuesto</th>
+                                <th>Cantidad</th>
+                                <th>Monto</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaCompras">
+                            <!-- Datos dinámicos -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tabla de Entregas -->
+            <div id="tab-entregas" class="tab-historial">
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Fecha Entrega</th>
+                                <th>Orden</th>
+                                <th>Vehículo</th>
+                                <th>Repuesto</th>
+                                <th>Cantidad</th>
+                                <th>Destinatario</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaEntregas">
+                            <!-- Datos dinámicos -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Estadísticas -->
+            <div id="tab-estadisticas" class="tab-historial">
+                <div class="stats-grid">
+                    <div class="stats-card">
+                        <h3><i class="fas fa-chart-pie"></i> Resumen General</h3>
+                        <div class="stats-summary">
+                            <div class="summary-item">
+                                <span class="summary-label">Total Cotizaciones</span>
+                                <span class="summary-value" id="totalCotizaciones">0</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Total Compras</span>
+                                <span class="summary-value" id="totalCompras">0</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Total Entregas</span>
+                                <span class="summary-value" id="totalEntregas">0</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Monto Total Compras</span>
+                                <span class="summary-value" id="montoTotalCompras">Bs. 0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="stats-card">
+                        <h3><i class="fas fa-chart-line"></i> Movimientos por Mes</h3>
+                        <canvas id="movimientosChart" height="250"></canvas>
+                    </div>
+
+                    <div class="stats-card">
+                        <h3><i class="fas fa-chart-bar"></i> Top Proveedores</h3>
+                        <div id="topProveedoresList" class="top-proveedores-list">
+                            <!-- Datos dinámicos -->
+                        </div>
+                    </div>
+
+                    <div class="stats-card">
+                        <h3><i class="fas fa-chart-pie"></i> Estado de Solicitudes</h3>
+                        <canvas id="estadoChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal para ver detalle de cotización -->
+    <div id="modalDetalleCotizacion" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3><i class="fas fa-file-invoice-dollar"></i> Detalle de Cotización</h3>
+                <span class="close-modal" onclick="cerrarModal('modalDetalleCotizacion')">&times;</span>
+            </div>
+            <div id="modalDetalleCotizacionBody"></div>
+            <div class="detalle-actions">
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalleCotizacion')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver detalle de compra -->
+    <div id="modalDetalleCompra" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3><i class="fas fa-shopping-cart"></i> Detalle de Compra</h3>
+                <span class="close-modal" onclick="cerrarModal('modalDetalleCompra')">&times;</span>
+            </div>
+            <div id="modalDetalleCompraBody"></div>
+            <div class="detalle-actions">
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalleCompra')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver detalle de entrega -->
+    <div id="modalDetalleEntrega" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3><i class="fas fa-truck"></i> Detalle de Entrega</h3>
+                <span class="close-modal" onclick="cerrarModal('modalDetalleEntrega')">&times;</span>
+            </div>
+            <div id="modalDetalleEntregaBody"></div>
+            <div class="detalle-actions">
+                <button class="btn-secondary" onclick="cerrarModal('modalDetalleEntrega')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOADING OVERLAY -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <script src="js/include.js"></script>
+    <script src="js/historial.js"></script>
+</body>
+
+</html>

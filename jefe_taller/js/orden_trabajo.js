@@ -260,7 +260,7 @@ function cambiarPestana(tabId) {
 }
 
 // =====================================================
-// API CALLS - VERSIÓN OPTIMIZADA
+// API CALLS - VERSIÓN OPTIMIZADA (CORS CORREGIDO)
 // =====================================================
 
 async function cargarUltimasOrdenesActivas(forceRefresh = false) {
@@ -293,10 +293,11 @@ async function cargarUltimasOrdenesActivas(forceRefresh = false) {
             `;
         }
         
+        // CORRECCIÓN: Eliminar el header 'Cache-Control' que causaba error CORS
         const response = await fetch(`${API_URL}/jefe-taller/ultimas-ordenes`, {
             headers: { 
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`,
-                'Cache-Control': forceRefresh ? 'no-cache' : 'max-age=30'
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                // 'Cache-Control' eliminado - causaba error CORS
             }
         });
         

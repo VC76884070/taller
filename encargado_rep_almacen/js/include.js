@@ -12,6 +12,9 @@ const API_BASE_URL = (() => {
     return '';
 })();
 
+// ✅ EXPORTAR VARIABLE GLOBAL PARA OTROS SCRIPTS
+window.API_BASE_URL = API_BASE_URL;
+
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA ENCARGADO DE REPUESTOS
 // VERSIÓN CORREGIDA - Rutas correctas
@@ -19,25 +22,22 @@ const API_BASE_URL = (() => {
 
 // Configuración
 const CONFIG = {
-    sidebarPath: 'components/sidebar.html',
-    logoPath: '../../img/logoblanco.jpeg',
-    defaultUserName: 'Roberto Vargas',
+    sidebarPath: `${API_BASE_URL}/encargado_rep_almacen/components/sidebar.html`,
+    logoPath: `${API_BASE_URL}/img/logoblanco.jpeg`,
+    defaultUserName: 'Encargado Repuestos',
     userRole: 'Encargado de Repuestos'
 };
 
-// =====================================================
-// ⚠️ IMPORTANTE: CORREGIR ESTAS RUTAS ⚠️
-// =====================================================
+// Mapeo de páginas
 const PAGE_FILES = {
     'dashboard': 'dashboard.html',
-    'cotizaciones': 'solicitudes_cotizacion.html',  // ← Corregido
-    'compras': 'solicitudes_compra.html',           // ← Corregido
+    'cotizaciones': 'solicitudes_cotizacion.html',
+    'compras': 'solicitudes_compra.html',
     'proveedores': 'proveedores.html',
     'historial': 'historial.html',
     'perfil': 'perfil.html'
 };
 
-// Nombres amigables
 const PAGE_NAMES = {
     'dashboard': 'Dashboard',
     'cotizaciones': 'Solicitudes de Cotización',
@@ -61,6 +61,7 @@ async function includeSidebar() {
     mostrarLoader(sidebarContainer);
     
     try {
+        console.log('🔄 Cargando sidebar desde:', CONFIG.sidebarPath);
         const response = await fetch(CONFIG.sidebarPath);
         
         if (!response.ok) {
@@ -137,7 +138,7 @@ function crearMenuItem(page, label, icon, currentPage) {
     
     return `
         <li class="nav-item ${isActive}" data-page="${page}">
-            <a href="${href}" class="nav-link ${isActive}">
+            <a href="${href}" class="nav-link">
                 <i class="fas fa-${icon}"></i>
                 <span>${label}</span>
             </a>
@@ -165,13 +166,10 @@ function obtenerPaginaActual() {
     
     console.log('🔍 Archivo actual:', filename);
     
-    // =====================================================
-    // ⚠️ CORREGIR ESTE MAPEO ⚠️
-    // =====================================================
     const fileToPage = {
         'dashboard.html': 'dashboard',
-        'solicitudes_cotizacion.html': 'cotizaciones',  // ← Corregido
-        'solicitudes_compra.html': 'compras',           // ← Corregido
+        'solicitudes_cotizacion.html': 'cotizaciones',
+        'solicitudes_compra.html': 'compras',
         'proveedores.html': 'proveedores',
         'historial.html': 'historial',
         'perfil.html': 'perfil'
@@ -182,27 +180,19 @@ function obtenerPaginaActual() {
         return fileToPage[filename];
     }
     
-    // Para páginas que no están en el mapeo
-    if (filename === 'dashboard.html') {
-        return 'dashboard';
-    }
-    
     console.log('⚠️ Usando dashboard por defecto');
     return 'dashboard';
 }
 
 function marcarItemActivo(currentPage) {
-    // Remover clase active de todos
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
         const link = item.querySelector('.nav-link');
         if (link) link.classList.remove('active');
     });
     
-    // Buscar por data-page
     let activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
     
-    // Si no encuentra, buscar por href
     if (!activeItem) {
         const currentFile = window.location.pathname.split('/').pop();
         document.querySelectorAll('.nav-item').forEach(item => {
@@ -214,7 +204,6 @@ function marcarItemActivo(currentPage) {
         });
     }
     
-    // Marcar el activo
     if (activeItem) {
         activeItem.classList.add('active');
         const activeLink = activeItem.querySelector('.nav-link');
@@ -268,20 +257,17 @@ function actualizarNombreUsuario() {
     userNameSpan.textContent = user.nombre;
 }
 
-// Cierre de sesión
 window.cerrarSesion = function() {
     if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
         localStorage.removeItem('furia_token');
         localStorage.removeItem('furia_user');
         localStorage.removeItem('furia_remembered');
-        window.location.href = API_BASE_URL + '/login.html';
+        window.location.href = API_BASE_URL + '/';
     }
 };
 
-// Recargar sidebar
 window.recargarSidebar = function() {
     includeSidebar();
 };
 
-// Inicializar
 document.addEventListener('DOMContentLoaded', includeSidebar);

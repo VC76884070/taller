@@ -225,7 +225,7 @@
         </div>
     </div>
 
-    <!-- Modal de FINALIZAR REPARACIÓN (CORREGIDO - SIN MENSAJE DE BAHÍA) -->
+    <!-- Modal de FINALIZAR REPARACIÓN -->
     <div class="modal" id="finalizarModal">
         <div class="modal-content modal-sm">
             <div class="modal-header">
@@ -239,7 +239,6 @@
                     <i class="fas fa-exclamation-triangle" style="color: var(--ambar-alerta);"></i>
                     <span style="font-size: 0.8rem;">⚠️ Tienes solicitudes de repuestos pendientes</span>
                 </div>
-                <!-- ELIMINADO: mensaje de bahía -->
                 <div id="finalizarInfo" class="modal-info"></div>
                 <input type="hidden" id="ordenIdFinalizar">
             </div>
@@ -297,10 +296,10 @@
     <!-- Toast Container -->
     <div id="toast-container"></div>
 
-    <!-- Variables para items de solicitud -->
+    <!-- Variables para items de solicitud - CORREGIDO: let → var -->
     <script>
         // Variables globales para items de solicitud de repuestos
-        let itemsSolicitud = [];
+        var itemsSolicitud = [];
 
         // Funciones para manejar items de solicitud
         function renderItemsSolicitud() {

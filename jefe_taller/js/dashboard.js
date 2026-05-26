@@ -1,13 +1,8 @@
 // =====================================================
-// DASHBOARD JEFE DE TALLER - SIN DATOS DE EJEMPLO
+// DASHBOARD JEFE DE TALLER - VERSIÓN CORREGIDA
 // VERSIÓN CORREGIDA - USA VARIABLE GLOBAL DE INCLUDE.JS
 // =====================================================
 
-// =====================================================
-// CONFIGURACIÓN DE API - USA VARIABLE GLOBAL
-// =====================================================
-// La variable API_BASE_URL ya está declarada en include.js como window.API_BASE_URL
-// Si por alguna razón no existe (página cargada sola), la creamos
 if (typeof window.API_BASE_URL === 'undefined') {
     window.API_BASE_URL = (() => {
         if (window.location.hostname === 'localhost' || 
@@ -40,6 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initPage();
     await loadDashboardData();
     setupEventListeners();
+    iniciarPolling();
 });
 
 async function checkAuth() {
@@ -97,8 +93,43 @@ function setupEventListeners() {
     }
 }
 
+function iniciarPolling() {
+    setInterval(() => {
+        loadDashboardDataSilencioso();
+    }, 30000);
+}
+
+async function loadDashboardDataSilencioso() {
+    try {
+        const token = localStorage.getItem('furia_token');
+        
+        const [bahiasRes, ordenesRes] = await Promise.all([
+            fetch(`${API_URL}/jefe-taller/bahias-estado`, { headers: { 'Authorization': `Bearer ${token}` } }),
+            fetch(`${API_URL}/jefe-taller/ordenes-activas`, { headers: { 'Authorization': `Bearer ${token}` } })
+        ]);
+        
+        const bahias = bahiasRes.ok ? await bahiasRes.json() : null;
+        const ordenesActivas = ordenesRes.ok ? await ordenesRes.json() : null;
+        
+        if (bahias && bahias.bahias) {
+            renderizarBahias(bahias.bahias);
+        }
+        
+        if (ordenesActivas && ordenesActivas.ordenes) {
+            renderizarVehiculosTaller(ordenesActivas.ordenes);
+            const vehiculosCount = document.getElementById('vehiculosTallerCount');
+            if (vehiculosCount) vehiculosCount.textContent = ordenesActivas.ordenes.length;
+        }
+        
+        if (calendar) calendar.refetchEvents();
+        
+    } catch (error) {
+        console.error('Error en polling silencioso:', error);
+    }
+}
+
 // =====================================================
-// CALENDARIO - SOLO CON ÓRDENES ACTIVAS
+// CALENDARIO - USANDO ENDPOINT ESPECÍFICO
 // =====================================================
 
 function initCalendar() {
@@ -129,50 +160,57 @@ function initCalendar() {
     });
     
     calendar.render();
-    setTimeout(() => pintarDiasReparacion(), 300);
+    setTimeout(() => pintarDiasReparacion(), 500);
 }
 
 async function cargarEventosCalendario(info, successCallback, failureCallback) {
     try {
         const token = localStorage.getItem('furia_token');
         
-        // Solo cargar órdenes activas del taller
-        const ordenesResponse = await fetch(`${API_URL}/jefe-taller/ordenes-activas`, {
+        console.log('📅 Cargando eventos del calendario...');
+        
+        // Usar el nuevo endpoint específico para el calendario
+        const response = await fetch(`${API_URL}/jefe-taller/eventos-calendario`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
-        if (!ordenesResponse.ok) {
-            console.error('Error cargando órdenes para calendario:', ordenesResponse.status);
+        if (!response.ok) {
+            console.error('Error en respuesta:', response.status);
             successCallback([]);
             return;
         }
         
-        const ordenesData = await ordenesResponse.json();
+        const data = await response.json();
+        console.log('📅 Eventos recibidos:', data);
+        
         const eventos = [];
         
-        if (ordenesData.ordenes && ordenesData.ordenes.length > 0) {
-            ordenesData.ordenes.forEach(orden => {
-                if (orden.fecha_ingreso) {
-                    const fechaIngreso = new Date(orden.fecha_ingreso);
-                    eventos.push({
-                        id: `orden_${orden.id_orden}`,
-                        title: `🔧 ${orden.vehiculo?.placa || 'Vehículo'}`,
-                        start: fechaIngreso,
-                        backgroundColor: '#FF9800',
-                        borderColor: '#FF9800',
-                        extendedProps: {
-                            tipo: 'orden',
-                            orden_codigo: orden.codigo_unico,
-                            placa: orden.vehiculo?.placa
-                        }
-                    });
+        if (data.success && data.eventos && data.eventos.length > 0) {
+            data.eventos.forEach(evento => {
+                // Validar fecha
+                let fechaEvento = new Date(evento.start);
+                if (isNaN(fechaEvento.getTime())) {
+                    console.warn(`Fecha inválida para evento: ${evento.title}`);
+                    return;
                 }
+                
+                eventos.push({
+                    id: evento.id,
+                    title: evento.title,
+                    start: fechaEvento,
+                    backgroundColor: evento.backgroundColor || '#FF9800',
+                    borderColor: evento.borderColor || '#FF9800',
+                    textColor: '#ffffff',
+                    extendedProps: {
+                        orden_id: evento.extendedProps?.orden_id,
+                        codigo_unico: evento.extendedProps?.codigo_unico
+                    }
+                });
             });
         }
         
-        console.log(`📅 Eventos cargados: ${eventos.length}`);
+        console.log(`📅 Eventos cargados para calendario: ${eventos.length}`);
         successCallback(eventos);
-        setTimeout(() => pintarDiasReparacion(), 150);
         
     } catch (error) {
         console.error('Error cargando eventos:', error);
@@ -184,14 +222,12 @@ async function pintarDiasReparacion() {
     try {
         const token = localStorage.getItem('furia_token');
         
+        // Para pintar días, seguimos usando ordenes-activas que tiene más información
         const response = await fetch(`${API_URL}/jefe-taller/ordenes-activas`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
-        if (!response.ok) {
-            console.error('Error obteniendo órdenes para pintar días:', response.status);
-            return;
-        }
+        if (!response.ok) return;
         
         const data = await response.json();
         
@@ -206,35 +242,46 @@ async function pintarDiasReparacion() {
         hoy.setHours(0, 0, 0, 0);
         
         data.ordenes.forEach(orden => {
-            if (!orden.fecha_estimada_finalizacion && !orden.dias_estimados_reparacion) return;
+            let fechaIngreso;
             
-            const fechaIngreso = new Date(orden.fecha_ingreso);
-            let fechaFin;
+            if (orden.fecha_ingreso) {
+                try {
+                    if (typeof orden.fecha_ingreso === 'string') {
+                        fechaIngreso = new Date(orden.fecha_ingreso);
+                        if (isNaN(fechaIngreso.getTime())) {
+                            fechaIngreso = new Date(orden.fecha_ingreso.split('T')[0]);
+                        }
+                    } else {
+                        fechaIngreso = new Date(orden.fecha_ingreso);
+                    }
+                } catch (e) {
+                    fechaIngreso = new Date();
+                }
+            } else {
+                fechaIngreso = new Date();
+            }
             
-            if (orden.fecha_estimada_finalizacion) {
-                fechaFin = new Date(orden.fecha_estimada_finalizacion);
-            } else if (orden.dias_estimados_reparacion) {
-                fechaFin = new Date(fechaIngreso);
+            let fechaFin = new Date(fechaIngreso);
+            
+            if (orden.dias_estimados_reparacion) {
                 fechaFin.setDate(fechaIngreso.getDate() + orden.dias_estimados_reparacion);
             } else {
                 return;
             }
             
-            const placa = orden.vehiculo?.placa || orden.placa || 'Vehículo';
-            const modelo = orden.vehiculo?.modelo || orden.modelo || '';
-            const cliente = orden.cliente_nombre || 'Cliente';
-            const diasEstimados = orden.dias_estimados_reparacion || 
-                Math.ceil((fechaFin - fechaIngreso) / (1000 * 60 * 60 * 24));
+            const vehiculo = orden.vehiculo || {};
+            const placa = vehiculo.placa || orden.codigo_unico || 'Vehículo';
+            const modelo = vehiculo.modelo || '';
+            const cliente = vehiculo.cliente_nombre || 'Cliente';
+            const diasEstimados = orden.dias_estimados_reparacion;
             
             const dias = [];
             let currentDate = new Date(fechaIngreso);
             currentDate.setHours(0, 0, 0, 0);
             
-            let contador = 0;
-            while (currentDate <= fechaFin && contador < 90) {
+            while (currentDate <= fechaFin) {
                 dias.push(new Date(currentDate));
                 currentDate.setDate(currentDate.getDate() + 1);
-                contador++;
             }
             
             dias.forEach(dia => {
@@ -270,15 +317,8 @@ async function pintarDiasReparacion() {
     }
 }
 
-function verDetalleEvento(event) {
-    const props = event.extendedProps;
-    if (props.tipo === 'orden') {
-        mostrarNotificacion(`Orden: ${props.orden_codigo} - ${props.placa}`, 'info');
-    }
-}
-
 // =====================================================
-// CARGAR DATOS REALES DEL DASHBOARD (SIN EJEMPLOS)
+// CARGAR DATOS DEL DASHBOARD
 // =====================================================
 
 async function loadDashboardData() {
@@ -286,7 +326,8 @@ async function loadDashboardData() {
     try {
         const token = localStorage.getItem('furia_token');
         
-        // Cargar todos los datos en paralelo
+        console.log('🔄 Cargando datos del dashboard...');
+        
         const [bahiasRes, diagnosticosRes, cotizacionesRes, ordenesRes] = await Promise.all([
             fetch(`${API_URL}/jefe-taller/bahias-estado`, { headers: { 'Authorization': `Bearer ${token}` } }),
             fetch(`${API_URL}/jefe-taller/diagnosticos-pendientes`, { headers: { 'Authorization': `Bearer ${token}` } }),
@@ -299,61 +340,69 @@ async function loadDashboardData() {
         const cotizaciones = cotizacionesRes.ok ? await cotizacionesRes.json() : null;
         const ordenesActivas = ordenesRes.ok ? await ordenesRes.json() : null;
         
-        // Mostrar en consola para depuración
         console.log('📊 Datos recibidos:');
         console.log('- Bahías:', bahias?.bahias?.length || 0);
-        console.log('- Diagnósticos pendientes:', diagnosticos?.diagnosticos?.length || 0);
+        console.log('- Diagnósticos:', diagnosticos?.diagnosticos?.length || 0);
         console.log('- Cotizaciones:', cotizaciones?.cotizaciones?.length || 0);
         console.log('- Órdenes activas:', ordenesActivas?.ordenes?.length || 0);
         
+        // Mostrar la primera orden para debug
+        if (ordenesActivas && ordenesActivas.ordenes && ordenesActivas.ordenes.length > 0) {
+            console.log('📋 Primera orden:', ordenesActivas.ordenes[0]);
+        }
+        
         actualizarUI(bahias, diagnosticos, cotizaciones, ordenesActivas);
+        
+        if (calendar) {
+            setTimeout(() => {
+                console.log('🔄 Refrescando calendario...');
+                calendar.refetchEvents();
+            }, 500);
+        }
         
     } catch (error) {
         console.error('Error cargando dashboard:', error);
         mostrarNotificacion('Error al cargar datos del servidor', 'error');
-        // NO mostrar datos de ejemplo, dejar vacío
     } finally {
         mostrarLoading(false);
     }
 }
 
 function actualizarUI(bahias, diagnosticos, cotizaciones, ordenesActivas) {
-    // Actualizar bahías (si hay datos)
+    // Bahías
     if (bahias && bahias.bahias && bahias.bahias.length > 0) {
         renderizarBahias(bahias.bahias);
     } else {
-        renderizarVacio('bahiasGrid', 'No hay información de bahías disponible');
+        renderizarVacio('bahiasGrid', 'No hay información de bahías');
     }
     
-    // Actualizar diagnósticos pendientes
+    // Diagnósticos pendientes
     if (diagnosticos && diagnosticos.diagnosticos && diagnosticos.diagnosticos.length > 0) {
         renderizarDiagnosticos(diagnosticos.diagnosticos);
         const pendientesCount = document.getElementById('pendientesCount');
         if (pendientesCount) pendientesCount.textContent = diagnosticos.diagnosticos.length;
     } else {
         renderizarVacio('diagnosticosList', 'No hay diagnósticos pendientes');
-        if (document.getElementById('pendientesCount')) {
-            document.getElementById('pendientesCount').textContent = '0';
-        }
+        const pendientesCount = document.getElementById('pendientesCount');
+        if (pendientesCount) pendientesCount.textContent = '0';
     }
     
-    // Actualizar próximas entregas (cotizaciones)
+    // Cotizaciones (próximas entregas)
     if (cotizaciones && cotizaciones.cotizaciones && cotizaciones.cotizaciones.length > 0) {
         renderizarEntregas(cotizaciones.cotizaciones);
     } else {
         renderizarVacio('entregasList', 'No hay cotizaciones enviadas');
     }
     
-    // Actualizar vehículos en taller
+    // Vehículos en taller
     if (ordenesActivas && ordenesActivas.ordenes && ordenesActivas.ordenes.length > 0) {
         renderizarVehiculosTaller(ordenesActivas.ordenes);
         const vehiculosCount = document.getElementById('vehiculosTallerCount');
         if (vehiculosCount) vehiculosCount.textContent = ordenesActivas.ordenes.length;
     } else {
         renderizarVacio('vehiculosTallerList', 'No hay vehículos en taller');
-        if (document.getElementById('vehiculosTallerCount')) {
-            document.getElementById('vehiculosTallerCount').textContent = '0';
-        }
+        const vehiculosCount = document.getElementById('vehiculosTallerCount');
+        if (vehiculosCount) vehiculosCount.textContent = '0';
     }
 }
 
@@ -365,7 +414,7 @@ function renderizarVacio(containerId, mensaje) {
 }
 
 // =====================================================
-// FUNCIONES DE RENDERIZADO CON DATOS REALES
+// RENDERIZADO DE BAHÍAS
 // =====================================================
 
 function renderizarBahias(bahias) {
@@ -374,13 +423,13 @@ function renderizarBahias(bahias) {
     
     const estadosTexto = { 
         'ocupada': 'Ocupada', 
-        'reservado': 'Reservada', 
+        'reservada': 'Reservada', 
         'libre': 'Libre' 
     };
     
     const estadosColor = {
         'ocupada': '#E91E63',
-        'reservado': '#FF9800',
+        'reservada': '#FF9800',
         'libre': '#4CAF50'
     };
     
@@ -395,105 +444,145 @@ function renderizarBahias(bahias) {
             <div class="bahia-estado" style="color: ${estadosColor[b.estado] || '#666'}">
                 ${estadosTexto[b.estado] || b.estado}
             </div>
-            ${b.tecnico ? `<div class="bahia-tecnico"><i class="fas fa-user"></i> ${b.tecnico}</div>` : ''}
-            ${b.orden_codigo ? `<div class="bahia-orden"><i class="fas fa-clipboard"></i> ${b.orden_codigo}</div>` : ''}
+            ${b.tecnico ? `<div class="bahia-tecnico"><i class="fas fa-user"></i> ${escapeHtml(b.tecnico)}</div>` : ''}
+            ${b.orden_codigo ? `<div class="bahia-orden"><i class="fas fa-clipboard"></i> ${escapeHtml(b.orden_codigo)}</div>` : ''}
         </div>
     `).join('');
 }
+
+// =====================================================
+// RENDERIZADO DE DIAGNÓSTICOS
+// =====================================================
 
 function renderizarDiagnosticos(diagnosticos) {
     const container = document.getElementById('diagnosticosList');
     if (!container) return;
     
-    container.innerHTML = diagnosticos.map(d => `
-        <div class="diagnostico-item" onclick="revisarDiagnostico(${d.diagnostico_id || d.id})">
-            <div class="diagnostico-icon"><i class="fas fa-stethoscope"></i></div>
-            <div class="diagnostico-content">
-                <h4>${d.vehiculo || 'Vehículo'} <span class="placa">${d.placa || ''}</span></h4>
-                <p class="informe-preview">${d.informe ? d.informe.substring(0, 80) : 'Sin informe'}${d.informe?.length > 80 ? '...' : ''}</p>
-                <div class="diagnostico-meta">
-                    <span class="tecnico"><i class="fas fa-user"></i> ${d.tecnico_nombre || 'Sin técnico'}</span>
-                    <span class="fecha"><i class="far fa-calendar"></i> ${formatearFecha(d.fecha_envio)}</span>
+    if (!diagnosticos || diagnosticos.length === 0) {
+        renderizarVacio('diagnosticosList', 'No hay diagnósticos pendientes');
+        return;
+    }
+    
+    container.innerHTML = diagnosticos.map(d => {
+        const vehiculo = d.vehiculo || 'Vehículo';
+        const placa = d.placa || '';
+        const informe = d.informe || 'Sin informe';
+        const fecha = formatearFecha(d.fecha_envio);
+        const tecnico = d.tecnico_nombre || 'Sin técnico';
+        const diagnosticoId = d.diagnostico_id || d.id;
+        
+        return `
+            <div class="diagnostico-item" onclick="revisarDiagnostico(${diagnosticoId})">
+                <div class="diagnostico-icon"><i class="fas fa-stethoscope"></i></div>
+                <div class="diagnostico-content">
+                    <h4>${escapeHtml(vehiculo)} ${placa ? `<span class="placa">${escapeHtml(placa)}</span>` : ''}</h4>
+                    <p class="informe-preview">${escapeHtml(informe.substring(0, 80))}${informe.length > 80 ? '...' : ''}</p>
+                    <div class="diagnostico-meta">
+                        <span class="tecnico"><i class="fas fa-user"></i> ${escapeHtml(tecnico)}</span>
+                        <span class="fecha"><i class="far fa-calendar"></i> ${fecha}</span>
+                    </div>
+                </div>
+                <div class="diagnostico-action">
+                    <button class="btn-revisar">Revisar</button>
                 </div>
             </div>
-            <div class="diagnostico-action">
-                <button class="btn-revisar">Revisar</button>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
+
+// =====================================================
+// RENDERIZADO DE ENTREGAS (COTIZACIONES)
+// =====================================================
 
 function renderizarEntregas(cotizaciones) {
     const container = document.getElementById('entregasList');
     if (!container) return;
     
-    container.innerHTML = cotizaciones.slice(0, 5).map(c => `
-        <div class="entrega-item" onclick="verCotizacion(${c.id})">
-            <div class="entrega-icon"><i class="fas fa-file-invoice-dollar"></i></div>
-            <div class="entrega-content">
-                <h4>${c.vehiculo || 'Vehículo'} <span class="placa">${c.placa || ''}</span></h4>
-                <p class="cliente"><i class="fas fa-user"></i> ${c.cliente_nombre || 'Cliente no registrado'}</p>
-                <p class="entrega-total">Bs. ${c.total?.toFixed(2) || '0.00'}</p>
+    if (!cotizaciones || cotizaciones.length === 0) {
+        renderizarVacio('entregasList', 'No hay cotizaciones pendientes');
+        return;
+    }
+    
+    container.innerHTML = cotizaciones.slice(0, 5).map(c => {
+        const vehiculo = c.vehiculo || 'Vehículo';
+        const placa = c.placa || '';
+        const cliente = c.cliente_nombre || 'Cliente';
+        const total = c.total || 0;
+        const estado = c.estado || 'enviada';
+        
+        return `
+            <div class="entrega-item" onclick="verCotizacion(${c.id})">
+                <div class="entrega-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+                <div class="entrega-content">
+                    <h4>${escapeHtml(vehiculo)} ${placa ? `<span class="placa">${escapeHtml(placa)}</span>` : ''}</h4>
+                    <p class="cliente"><i class="fas fa-user"></i> ${escapeHtml(cliente)}</p>
+                    <p class="entrega-total">Bs. ${total.toFixed(2)}</p>
+                </div>
+                <div class="entrega-status">
+                    <span class="status-badge ${estado === 'aprobada' ? 'aprobada' : 'pendiente'}">
+                        ${estado === 'aprobada' ? 'Aprobada' : 'Pendiente'}
+                    </span>
+                </div>
             </div>
-            <div class="entrega-status">
-                <span class="status-badge ${c.estado === 'aprobada' ? 'aprobada' : 'pendiente'}">
-                    ${c.estado === 'aprobada' ? 'Aprobada' : 'Enviada'}
-                </span>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
+
+// =====================================================
+// RENDERIZADO DE VEHÍCULOS EN TALLER
+// =====================================================
 
 function renderizarVehiculosTaller(ordenes) {
     const container = document.getElementById('vehiculosTallerList');
     if (!container) return;
     
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
+    if (!ordenes || ordenes.length === 0) {
+        renderizarVacio('vehiculosTallerList', 'No hay vehículos en taller');
+        return;
+    }
     
     const estadoColor = {
         'EnRecepcion': '#FF9800',
         'EnDiagnostico': '#2196F3',
-        'EnProceso': '#4CAF50',
+        'EnReparacion': '#4CAF50',
         'EnPausa': '#9E9E9E',
         'PendienteAprobacion': '#FF5722'
     };
     
+    const estadoDisplay = {
+        'EnRecepcion': 'En Recepción',
+        'EnDiagnostico': 'En Diagnóstico',
+        'EnReparacion': 'En Reparación',
+        'EnPausa': 'En Pausa',
+        'ReparacionCompletada': 'Reparación Completada',
+        'Finalizado': 'Finalizado',
+        'Entregado': 'Entregado'
+    };
+    
     container.innerHTML = ordenes.map(orden => {
-        let diasClass = 'normal';
-        let diasTexto = '';
+        const vehiculo = orden.vehiculo || {};
+        const placa = vehiculo.placa || orden.codigo_unico || 'Vehículo';
+        const marca = vehiculo.marca || '';
+        const modelo = vehiculo.modelo || '';
+        const estadoGlobal = orden.estado_global;
+        const ordenId = orden.id_orden || orden.id;
         
-        if (orden.fecha_estimada_finalizacion) {
-            const fechaFin = new Date(orden.fecha_estimada_finalizacion);
-            const diffDays = Math.ceil((fechaFin - hoy) / (1000 * 60 * 60 * 24));
-            
-            if (diffDays < 0) {
-                diasClass = 'atrasado';
-                diasTexto = `Atrasado ${Math.abs(diffDays)}d`;
-            } else if (diffDays === 0) {
-                diasClass = 'urgente';
-                diasTexto = 'Entrega hoy';
-            } else if (diffDays <= 3) {
-                diasClass = 'urgente';
-                diasTexto = `${diffDays} días`;
-            } else {
-                diasTexto = `${diffDays} días`;
-            }
-        } else if (orden.dias_estimados_reparacion) {
+        let diasTexto = '';
+        if (orden.dias_estimados_reparacion) {
             diasTexto = `${orden.dias_estimados_reparacion} días estimados`;
         }
         
         return `
-            <div class="vehiculo-taller-item" onclick="verOrdenTrabajo(${orden.id_orden || orden.id})">
+            <div class="vehiculo-taller-item" onclick="verOrdenTrabajo(${ordenId})">
                 <div class="vehiculo-taller-icon"><i class="fas fa-car-side"></i></div>
                 <div class="vehiculo-taller-info">
-                    <div class="vehiculo-taller-placa">${orden.vehiculo?.placa || orden.placa || 'Vehículo'}</div>
-                    <div class="vehiculo-taller-modelo">${orden.vehiculo?.marca || ''} ${orden.vehiculo?.modelo || ''}</div>
-                    <div class="vehiculo-taller-estado" style="color: ${estadoColor[orden.estado_global] || '#666'}">
-                        <i class="fas fa-circle" style="font-size: 8px;"></i> ${orden.estado_global || 'En proceso'}
+                    <div class="vehiculo-taller-placa">${escapeHtml(placa)}</div>
+                    <div class="vehiculo-taller-modelo">${escapeHtml(marca)} ${escapeHtml(modelo)}</div>
+                    <div class="vehiculo-taller-estado" style="color: ${estadoColor[estadoGlobal] || '#666'}">
+                        <i class="fas fa-circle" style="font-size: 8px;"></i> ${estadoDisplay[estadoGlobal] || estadoGlobal || 'En proceso'}
                     </div>
                 </div>
-                ${diasTexto ? `<div class="vehiculo-taller-dias ${diasClass}">${diasTexto}</div>` : ''}
+                ${diasTexto ? `<div class="vehiculo-taller-dias">${diasTexto}</div>` : ''}
             </div>
         `;
     }).join('');
@@ -505,8 +594,20 @@ function renderizarVehiculosTaller(ordenes) {
 
 function formatearFecha(fecha) {
     if (!fecha) return 'Fecha no disponible';
-    const d = new Date(fecha);
-    return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    try {
+        const d = new Date(fecha);
+        if (isNaN(d.getTime())) return fecha;
+        return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch (e) {
+        return fecha;
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function mostrarLoading(mostrar) {
@@ -517,7 +618,8 @@ function mostrarLoading(mostrar) {
 function mostrarNotificacion(mensaje, tipo = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast-notification ${tipo}`;
-    toast.innerHTML = `<span><i class="fas ${tipo === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i> ${mensaje}</span>`;
+    const icon = tipo === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    toast.innerHTML = `<span><i class="fas ${icon}"></i> ${escapeHtml(mensaje)}</span>`;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);
 }

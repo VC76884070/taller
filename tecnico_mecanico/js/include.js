@@ -1,6 +1,6 @@
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA TÉCNICO MECÁNICO
-// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
+// VERSIÓN CORREGIDA CON URL DINÁMICA Y RESALTADO DE MENÚ
 // =====================================================
 
 // =====================================================
@@ -16,6 +16,9 @@ const API_BASE_URL = (() => {
     console.log('📡 Include.js - Modo PRODUCCIÓN');
     return '';
 })();
+
+// Exportar API_BASE_URL globalmente para otros scripts
+window.API_BASE_URL = API_BASE_URL;
 
 // Configuración
 const CONFIG = {
@@ -178,7 +181,7 @@ async function includeSidebar() {
         
         inicializarSidebar();
         
-        // IMPORTANTE: Eliminar botones adicionales después de cargar el sidebar
+        // Eliminar botones adicionales después de cargar el sidebar
         setTimeout(() => {
             eliminarBotonesCerrarSesionAdicionales();
         }, 150);
@@ -292,12 +295,18 @@ function crearMenuItem(page, label, icon, currentPage) {
 // INICIALIZAR SIDEBAR
 // =====================================================
 function inicializarSidebar() {
+    // Esperar a que el sidebar esté en el DOM
     setTimeout(() => {
         const currentPage = obtenerPaginaActual();
+        console.log('📍 Página actual:', currentPage);
+        
+        // Marcar item activo
         marcarItemActivo(currentPage);
+        
+        // Actualizar nombre del usuario
         actualizarNombreUsuario();
         
-        // Corregir el onclick del botón cerrar sesión en el sidebar
+        // Corregir el onclick del botón cerrar sesión
         corregirBotonCerrarSesion();
         
         // Mostrar indicador de múltiples roles
@@ -307,7 +316,105 @@ function inicializarSidebar() {
         }
         
         console.log('✅ Sidebar inicializado correctamente');
-    }, 100);
+    }, 150);
+}
+
+// =====================================================
+// MARCAR ITEM ACTIVO - CORREGIDO
+// =====================================================
+function marcarItemActivo(currentPage) {
+    // Buscar todos los items del menú
+    const navItems = document.querySelectorAll('.nav-item');
+    console.log('🔍 Items encontrados en el menú:', navItems.length);
+    
+    // Remover clase active de todos
+    navItems.forEach(item => {
+        item.classList.remove('active');
+    });
+    
+    // Buscar el item que coincide con la página actual
+    let found = false;
+    navItems.forEach(item => {
+        const page = item.getAttribute('data-page');
+        console.log(`📄 Comparando: data-page="${page}" con currentPage="${currentPage}"`);
+        if (page === currentPage) {
+            item.classList.add('active');
+            console.log(`✅ Activado: ${currentPage}`);
+            found = true;
+        }
+    });
+    
+    // Si no se encontró por data-page, intentar por href
+    if (!found) {
+        const currentPath = window.location.pathname;
+        console.log('🔍 Buscando por href, path actual:', currentPath);
+        navItems.forEach(item => {
+            const link = item.querySelector('a');
+            if (link) {
+                const href = link.getAttribute('href');
+                if (href && currentPath.includes(href.replace('.html', ''))) {
+                    item.classList.add('active');
+                    console.log(`✅ Activado por href: ${href}`);
+                    found = true;
+                }
+            }
+        });
+    }
+    
+    if (!found) {
+        console.warn('⚠️ No se encontró el item del menú para:', currentPage);
+    }
+}
+
+// =====================================================
+// FORZAR RESALTADO DEL MENÚ DESPUÉS DE CARGA COMPLETA
+// =====================================================
+function forzarResaltadoMenu() {
+    const currentPage = obtenerPaginaActual();
+    console.log('🔄 Forzando resaltado para:', currentPage);
+    
+    // Intentar cada 300ms hasta que el sidebar esté cargado
+    let intentos = 0;
+    const maxIntentos = 15;
+    
+    const intervalo = setInterval(() => {
+        intentos++;
+        const navItems = document.querySelectorAll('.nav-item');
+        
+        if (navItems.length > 0) {
+            // Encontramos el sidebar
+            navItems.forEach(item => item.classList.remove('active'));
+            
+            // Buscar por data-page
+            let activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
+            if (activeItem) {
+                activeItem.classList.add('active');
+                console.log(`✅ Menú resaltado: ${currentPage} (por data-page)`);
+                clearInterval(intervalo);
+                return;
+            }
+            
+            // Si no encuentra por data-page, intentar por href
+            const currentPath = window.location.pathname;
+            for (const item of navItems) {
+                const link = item.querySelector('a');
+                if (link && link.getAttribute('href')) {
+                    const href = link.getAttribute('href');
+                    if (currentPath.includes(href.replace('.html', ''))) {
+                        item.classList.add('active');
+                        console.log(`✅ Menú resaltado por href: ${href}`);
+                        clearInterval(intervalo);
+                        return;
+                    }
+                }
+            }
+        }
+        
+        if (intentos >= maxIntentos) {
+            console.warn('⚠️ No se pudo resaltar el menú después de', maxIntentos, 'intentos');
+            clearInterval(intervalo);
+        }
+    }, 300);
 }
 
 // =====================================================
@@ -437,28 +544,26 @@ window.mostrarCambioRol = function() {
 function obtenerPaginaActual() {
     const path = window.location.pathname;
     const filename = path.split('/').pop() || 'misvehiculos.html';
-    const pageName = filename.replace('.html', '');
+    let pageName = filename.replace('.html', '');
+    
+    // Normalizar nombres
+    const pageMap = {
+        'misvehiculos': 'misvehiculos',
+        'diagnostico': 'diagnostico',
+        'avance': 'avance',
+        'historial': 'historial',
+        'perfil': 'perfil',
+        'dashboard': 'misvehiculos' // fallback
+    };
     
     const validPages = ['misvehiculos', 'diagnostico', 'avance', 'historial', 'perfil'];
     
     if (validPages.includes(pageName)) {
         return pageName;
     }
-    return 'misvehiculos';
-}
-
-// =====================================================
-// MARCAR ITEM ACTIVO
-// =====================================================
-function marcarItemActivo(currentPage) {
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
-    });
     
-    const activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
-    if (activeItem) {
-        activeItem.classList.add('active');
-    }
+    // Si no está en la lista, intentar mapear
+    return pageMap[pageName] || 'misvehiculos';
 }
 
 // =====================================================
@@ -603,10 +708,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (mutation.addedNodes.length) {
                 setTimeout(() => {
                     eliminarBotonesCerrarSesionAdicionales();
+                    // Forzar resaltado del menú cuando se agreguen nuevos nodos
+                    forzarResaltadoMenu();
                 }, 100);
             }
         });
     });
     
     observer.observe(document.body, { childList: true, subtree: true });
+    
+    // Forzar resaltado después de que todo cargue
+    setTimeout(() => {
+        forzarResaltadoMenu();
+    }, 500);
 });

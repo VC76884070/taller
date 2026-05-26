@@ -125,6 +125,7 @@ async function cargarUltimasOrdenes() {
         const data = await response.json();
         console.log('📡 Datos recibidos:', data);
         
+        // ✅ Verificar que la respuesta tenga la estructura esperada
         if (data.success) {
             const ordenes = data.ordenes || [];
             const resumen = data.resumen || {
@@ -147,7 +148,7 @@ async function cargarUltimasOrdenes() {
 }
 
 // =====================================================
-// MOSTRAR ÚLTIMAS ÓRDENES
+// MOSTRAR ÚLTIMAS ÓRDENES - CORREGIDO
 // =====================================================
 function mostrarUltimasOrdenes(ordenes, resumen) {
     const container = document.getElementById('resultadosContainer');
@@ -165,11 +166,12 @@ function mostrarUltimasOrdenes(ordenes, resumen) {
         return;
     }
     
-    const total = resumen.total || ordenes.length;
-    const entregados = resumen.entregados || 0;
-    const en_proceso = resumen.en_proceso || 0;
-    const en_pausa = resumen.en_pausa || 0;
-    const en_recepcion = resumen.en_recepcion || 0;
+    // Calcular estadísticas a partir de los datos reales
+    const total = ordenes.length;
+    const entregados = ordenes.filter(o => o.estado_global === 'Entregado' || o.estado_global === 'Finalizado').length;
+    const en_proceso = ordenes.filter(o => o.estado_global === 'EnReparacion' || o.estado_global === 'EnDiagnostico').length;
+    const en_pausa = ordenes.filter(o => o.estado_global === 'EnPausa').length;
+    const en_recepcion = ordenes.filter(o => o.estado_global === 'EnRecepcion').length;
     
     let html = `
         <div class="ultimas-ordenes-banner">
@@ -208,7 +210,22 @@ function mostrarUltimasOrdenes(ordenes, resumen) {
         const estadoClass = getEstadoClass(orden.estado_global);
         const estadoText = getEstadoText(orden.estado_global);
         const fechaIngreso = formatFecha(orden.fecha_ingreso);
-        const vehiculoDisplay = orden.vehiculo_info || `${orden.marca || ''} ${orden.modelo || ''} (${orden.placa || 'N/A'})`.trim() || 'Vehículo sin datos';
+        
+        // ✅ CORRECCIÓN: Extraer datos del vehículo correctamente
+        const vehiculo = orden.vehiculo || {};
+        const marca = vehiculo.marca || '';
+        const modelo = vehiculo.modelo || '';
+        const placa = vehiculo.placa || 'N/A';
+        const clienteNombre = vehiculo.cliente_nombre || 'Cliente no registrado';
+        
+        // Construir display del vehículo
+        const vehiculoDisplay = `${marca} ${modelo}`.trim();
+        const vehiculoConPlaca = vehiculoDisplay ? `${vehiculoDisplay} (${placa})` : placa;
+        
+        // ✅ CORRECCIÓN: Obtener técnicos correctamente
+        const tecnicosNombres = orden.tecnicos && orden.tecnicos.length > 0 
+            ? orden.tecnicos.map(t => t.nombre).join(', ') 
+            : 'Sin asignar';
         
         html += `
             <div class="orden-historial-card">
@@ -225,17 +242,23 @@ function mostrarUltimasOrdenes(ordenes, resumen) {
                     <div class="orden-info-row">
                         <div class="orden-info-item">
                             <span class="orden-info-label">Vehículo</span>
-                            <span class="orden-info-value"><strong>${escapeHtml(vehiculoDisplay)}</strong></span>
+                            <span class="orden-info-value"><strong>${escapeHtml(vehiculoConPlaca)}</strong></span>
                         </div>
                         <div class="orden-info-item">
-                            <span class="orden-info-label">Jefe Operativo</span>
-                            <span class="orden-info-value">${escapeHtml(orden.jefe_operativo_nombre || 'No asignado')}</span>
+                            <span class="orden-info-label">Cliente</span>
+                            <span class="orden-info-value">${escapeHtml(clienteNombre)}</span>
                         </div>
                         <div class="orden-info-item">
                             <span class="orden-info-label">Técnicos</span>
-                            <span class="orden-info-value">${orden.tecnicos?.map(t => escapeHtml(t.nombre)).join(', ') || 'Sin asignar'}</span>
+                            <span class="orden-info-value">${escapeHtml(tecnicosNombres)}</span>
                         </div>
                     </div>
+                    ${orden.bahia_asignada ? `
+                        <div class="orden-info-item">
+                            <span class="orden-info-label">Bahía</span>
+                            <span class="orden-info-value"><i class="fas fa-warehouse"></i> Bahía ${orden.bahia_asignada}</span>
+                        </div>
+                    ` : ''}
                     ${orden.diagnostico_inicial ? `
                         <div class="orden-info-item">
                             <span class="orden-info-label">Diagnóstico</span>
@@ -244,7 +267,7 @@ function mostrarUltimasOrdenes(ordenes, resumen) {
                     ` : ''}
                 </div>
                 <div class="orden-card-footer">
-                    <button class="btn-accion" onclick="verDetalleCompletoOrden(${orden.id})">
+                    <button class="btn-accion" onclick="verDetalleCompletoOrden(${orden.id_orden || orden.id})">
                         <i class="fas fa-eye"></i> Ver Detalle Completo
                     </button>
                 </div>
@@ -457,7 +480,10 @@ window.verDetalleCompletoOrden = async function(idOrden) {
 };
 
 // =====================================================
-// CARGAR DETALLE EN TABS (VERSIÓN SIMPLIFICADA)
+// CARGAR DETALLE EN TABS
+// =====================================================
+// =====================================================
+// CARGAR DETALLE EN TABS - CON FOTOS DE RECEPCIÓN
 // =====================================================
 function cargarDetalleEnTabs(detalle) {
     // Tab 1: Cliente y Vehículo
@@ -497,22 +523,60 @@ function cargarDetalleEnTabs(detalle) {
         `;
     }
     
-    // Tab 2: Recepción
+    // Tab 2: Recepción (CON FOTOS)
     const recepcionContainer = document.getElementById('recepcionContent');
     if (recepcionContainer) {
+        // Procesar fotos de recepción
+        const fotosRecepcion = detalle.fotos || {};
+        const fotosArray = Object.entries(fotosRecepcion).filter(([key, url]) => url && url !== 'null' && url !== 'None' && url !== '');
+        
+        // Nombres amigables para las fotos
+        const nombresFotos = {
+            'url_lateral_izquierda': 'Lateral Izquierdo',
+            'url_lateral_derecha': 'Lateral Derecho',
+            'url_foto_frontal': 'Frontal',
+            'url_foto_trasera': 'Trasera',
+            'url_foto_superior': 'Superior',
+            'url_foto_inferior': 'Inferior',
+            'url_foto_tablero': 'Tablero'
+        };
+        
+        let fotosHtml = '';
+        if (fotosArray.length > 0) {
+            fotosHtml = `
+                <div class="fotos-seccion" style="margin-top: 1.5rem;">
+                    <h5 style="margin-bottom: 0.75rem; color: var(--gris-texto);">
+                        <i class="fas fa-camera"></i> Fotos del Vehículo (${fotosArray.length})
+                    </h5>
+                    <div class="fotos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.75rem;">
+                        ${fotosArray.map(([key, url]) => {
+                            const nombre = nombresFotos[key] || key.replace(/url_/g, '').replace(/_/g, ' ').toUpperCase();
+                            return `
+                                <div class="foto-item" onclick="verImagenAmpliada('${url}', '${escapeHtml(nombre)}')" style="cursor: pointer; text-align: center;">
+                                    <img src="${url}" alt="${nombre}" style="width: 100%; height: 100px; object-fit: cover; border-radius: var(--radius-sm);" onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%25%22%20height%3D%22100%25%22%20viewBox%3D%220%200%20200%20200%22%3E%3Crect%20width%3D%22200%22%20height%3D%22200%22%20fill%3D%22%23333%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dy%3D%22.3em%22%20fill%3D%22%23999%22%3ESin%20imagen%3C%2Ftext%3E%3C%2Fsvg%3E'">
+                                    <div style="font-size: 0.7rem; padding: 0.25rem; color: var(--gris-texto);">${escapeHtml(nombre)}</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
         recepcionContainer.innerHTML = `
             <div class="detalle-seccion">
-                <h4><i class="fas fa-clipboard-list"></i> Recepción</h4>
-                <div class="detalle-descripcion">
-                    <strong>Problema:</strong><br>
+                <h4><i class="fas fa-clipboard-list"></i> Problema Reportado</h4>
+                <div class="detalle-descripcion" style="background: var(--gris-oscuro); padding: 0.75rem; border-radius: var(--radius-md);">
                     ${escapeHtml(detalle.descripcion_problema || 'No se registró descripción')}
                 </div>
                 ${detalle.audio_recepcion ? `
-                    <div class="audio-player">
-                        <audio controls src="${detalle.audio_recepcion}"></audio>
+                    <div class="audio-player" style="margin-top: 1rem;">
+                        <strong><i class="fas fa-microphone-alt"></i> Audio del cliente:</strong>
+                        <audio controls src="${detalle.audio_recepcion}" style="width: 100%; margin-top: 0.5rem;"></audio>
                     </div>
                 ` : ''}
             </div>
+            ${fotosHtml}
         `;
     }
     
@@ -521,11 +585,51 @@ function cargarDetalleEnTabs(detalle) {
     if (diagnosticosContainer) {
         let diagnosticosHtml = '';
         
+        // Diagnóstico Inicial (del jefe operativo/taller)
         if (detalle.diagnostico_inicial) {
             diagnosticosHtml += `
                 <div class="detalle-seccion">
                     <h4><i class="fas fa-stethoscope"></i> Diagnóstico Inicial</h4>
-                    <div class="detalle-descripcion">${escapeHtml(detalle.diagnostico_inicial)}</div>
+                    <div class="detalle-descripcion" style="background: var(--gris-oscuro); padding: 0.75rem; border-radius: var(--radius-md);">
+                        ${escapeHtml(detalle.diagnostico_inicial)}
+                    </div>
+                    ${detalle.audio_diagnostico_inicial ? `
+                        <div class="audio-player" style="margin-top: 1rem;">
+                            <strong><i class="fas fa-microphone-alt"></i> Audio del diagnóstico:</strong>
+                            <audio controls src="${detalle.audio_diagnostico_inicial}" style="width: 100%; margin-top: 0.5rem;"></audio>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        // Diagnósticos técnicos (del técnico mecánico)
+        if (detalle.diagnosticos_tecnicos && detalle.diagnosticos_tecnicos.length > 0) {
+            diagnosticosHtml += `
+                <div class="detalle-seccion">
+                    <h4><i class="fas fa-microscope"></i> Diagnósticos Técnicos</h4>
+                    ${detalle.diagnosticos_tecnicos.map(dt => `
+                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: var(--radius-md); border-left: 3px solid var(--rojo-primario);">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <strong>Versión ${dt.version}</strong>
+                                <span style="font-size: 0.7rem; color: var(--gris-texto);">${formatFecha(dt.fecha_envio)}</span>
+                            </div>
+                            <p style="margin: 0;">${escapeHtml(dt.informe || 'Sin informe')}</p>
+                            ${dt.tecnico_nombre ? `<div style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--gris-texto);"><i class="fas fa-user"></i> Técnico: ${escapeHtml(dt.tecnico_nombre)}</div>` : ''}
+                            ${dt.url_grabacion_informe ? `
+                                <audio controls src="${dt.url_grabacion_informe}" style="width: 100%; margin-top: 0.5rem;"></audio>
+                            ` : ''}
+                            ${dt.fotos && dt.fotos.length > 0 ? `
+                                <div class="fotos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 0.5rem; margin-top: 0.5rem;">
+                                    ${dt.fotos.map(foto => `
+                                        <div class="foto-item" onclick="verImagenAmpliada('${foto.url_foto}', 'Foto diagnóstico')" style="cursor: pointer;">
+                                            <img src="${foto.url_foto}" style="width: 100%; height: 60px; object-fit: cover; border-radius: var(--radius-sm);">
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
                 </div>
             `;
         }
@@ -541,19 +645,20 @@ function cargarDetalleEnTabs(detalle) {
     const serviciosContainer = document.getElementById('serviciosContent');
     if (serviciosContainer) {
         if (detalle.servicios && detalle.servicios.length > 0) {
+            const totalServicios = detalle.servicios.reduce((sum, s) => sum + (s.precio || 0), 0);
             serviciosContainer.innerHTML = `
                 <div class="detalle-seccion">
-                    <h4><i class="fas fa-dollar-sign"></i> Servicios</h4>
-                    <div class="detalle-grid">
+                    <h4><i class="fas fa-dollar-sign"></i> Servicios Cotizados</h4>
+                    <div class="servicios-lista" style="display: flex; flex-direction: column; gap: 0.5rem;">
                         ${detalle.servicios.map(s => `
-                            <div class="detalle-item">
-                                <span class="detalle-label">${escapeHtml(s.descripcion)}</span>
-                                <span class="detalle-value">Bs. ${s.precio?.toFixed(2) || '0.00'}</span>
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm);">
+                                <span>${escapeHtml(s.descripcion)}</span>
+                                <span style="font-weight: 600; color: var(--rojo-primario);">Bs. ${s.precio?.toFixed(2) || '0.00'}</span>
                             </div>
                         `).join('')}
-                        <div class="detalle-item">
-                            <span class="detalle-label"><strong>TOTAL</strong></span>
-                            <span class="detalle-value"><strong>Bs. ${detalle.total?.toFixed(2) || '0.00'}</strong></span>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--rojo-primario); border-radius: var(--radius-sm); color: white; margin-top: 0.5rem;">
+                            <strong>TOTAL</strong>
+                            <strong>Bs. ${totalServicios.toFixed(2)}</strong>
                         </div>
                     </div>
                 </div>
@@ -604,27 +709,39 @@ function mostrarSinResultados(container, mensaje) {
 
 function getEstadoClass(estado) {
     if (!estado) return '';
-    if (estado === 'Entregado' || estado === 'Finalizado') return 'Entregado';
-    if (estado === 'EnProceso') return 'EnProceso';
-    if (estado === 'EnRecepcion') return 'EnRecepcion';
-    if (estado === 'EnPausa') return 'EnPausa';
-    return '';
+    const estadoMap = {
+        'Entregado': 'Entregado',
+        'Finalizado': 'Finalizado',
+        'EnReparacion': 'EnProceso',
+        'EnDiagnostico': 'EnDiagnostico',
+        'EnRecepcion': 'EnRecepcion',
+        'EnPausa': 'EnPausa',
+        'ReparacionCompletada': 'ReparacionCompletada'
+    };
+    return estadoMap[estado] || '';
 }
 
 function getEstadoText(estado) {
     if (!estado) return 'Desconocido';
-    if (estado === 'Entregado') return 'Entregado';
-    if (estado === 'Finalizado') return 'Finalizado';
-    if (estado === 'EnProceso') return 'En Proceso';
-    if (estado === 'EnRecepcion') return 'En Recepción';
-    if (estado === 'EnPausa') return 'En Pausa';
-    return estado;
+    const estadoMap = {
+        'Entregado': 'Entregado',
+        'Finalizado': 'Finalizado',
+        'EnReparacion': 'En Reparación',
+        'EnDiagnostico': 'En Diagnóstico',
+        'EnRecepcion': 'En Recepción',
+        'EnPausa': 'En Pausa',
+        'ReparacionCompletada': 'Reparación Completada'
+    };
+    return estadoMap[estado] || estado;
 }
 
 function formatFecha(fecha) {
     if (!fecha) return 'N/A';
     try {
         const date = new Date(fecha);
+        if (isNaN(date.getTime())) {
+            return fecha.split('T')[0];
+        }
         return date.toLocaleDateString('es-CL', {
             day: '2-digit',
             month: '2-digit',
@@ -707,13 +824,35 @@ function configurarEventListeners() {
 }
 
 window.verImagenAmpliada = function(url, titulo) {
-    const modal = document.getElementById('modalImagen');
-    const tituloSpan = document.getElementById('imagenTitulo');
-    const imagen = document.getElementById('imagenAmpliada');
+    // Crear modal para ver imagen ampliada
+    const modal = document.createElement('div');
+    modal.className = 'modal-imagen';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.9);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    `;
+    modal.innerHTML = `
+        <div style="position: relative; max-width: 90%; max-height: 90%;">
+            <button style="position: absolute; top: -40px; right: 0; background: none; border: none; color: white; font-size: 30px; cursor: pointer;">&times;</button>
+            <img src="${url}" alt="${escapeHtml(titulo)}" style="max-width: 100%; max-height: 80vh; border-radius: 8px;">
+            <p style="color: white; text-align: center; margin-top: 10px;">${escapeHtml(titulo)}</p>
+        </div>
+    `;
+    document.body.appendChild(modal);
     
-    if (tituloSpan) tituloSpan.textContent = titulo || 'Imagen';
-    if (imagen) imagen.src = url;
-    if (modal) modal.classList.add('show');
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) modal.remove();
+    });
+    modal.querySelector('button').addEventListener('click', () => modal.remove());
 };
 
 window.cerrarModalImagen = function() {

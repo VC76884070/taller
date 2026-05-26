@@ -1,74 +1,39 @@
 // =====================================================
-// PERFIL.JS - ENCARGADO DE REPUESTOS
+// PERFIL.JS - ENCARGADO DE REPUESTOS (VERSIÓN SIMPLIFICADA)
 // FURIA MOTOR COMPANY SRL
-// VERSIÓN CORREGIDA - USA DIRECTAMENTE window.API_BASE_URL
 // =====================================================
 
-// =====================================================
-// NOTA: API_BASE_URL ya está definida globalmente por include.js
-// como window.API_BASE_URL. NO redeclarar como const aquí.
-// =====================================================
+// NOTA: API_BASE_URL ya está declarada en include.js como window.API_BASE_URL
+// NO redeclarar const API_BASE_URL aquí
 
-// Verificar si existe la variable global, si no, crearla (solo por si acaso)
+// Verificar que existe la variable global, si no, usar fallback
 if (typeof window.API_BASE_URL === 'undefined') {
+    console.warn('⚠️ window.API_BASE_URL no definida, usando fallback');
     window.API_BASE_URL = (() => {
-        if (window.location.hostname === 'localhost' || 
-            window.location.hostname === '127.0.0.1' ||
-            window.location.hostname.includes('192.168.')) {
-            console.log('📡 perfil.js (Repuestos) - Modo DESARROLLO (fallback)');
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             return 'http://localhost:5000';
         }
-        console.log('📡 perfil.js (Repuestos) - Modo PRODUCCIÓN (fallback)');
         return '';
     })();
 }
 
-const API_URL = window.API_BASE_URL + '/api/encargado-repuestos';
+const API_URL = `${window.API_BASE_URL}/api/encargado-repuestos`;
+
 let currentUser = null;
-let currentTab = 'informacion';
 let editMode = false;
 let avatarSeleccionado = 'box';
 
 // =====================================================
-// FUNCIONES DE UTILIDAD
+// UTILIDADES
 // =====================================================
 
 function getAuthHeaders() {
     let token = localStorage.getItem('furia_token');
     if (!token) token = localStorage.getItem('token');
-    if (!token) token = sessionStorage.getItem('token');
-    
     return {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
     };
-}
-
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function formatDateTime(dateStr) {
-    if (!dateStr) return '-';
-    try {
-        const date = new Date(dateStr);
-        return date.toLocaleString('es-BO');
-    } catch {
-        return dateStr;
-    }
-}
-
-function formatDate(dateStr) {
-    if (!dateStr) return '-';
-    try {
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    } catch {
-        return dateStr;
-    }
 }
 
 function showToast(message, type = 'info') {
@@ -77,7 +42,6 @@ function showToast(message, type = 'info') {
     
     const toast = document.createElement('div');
     toast.className = `toast-notification ${type}`;
-    
     let icon = 'fa-info-circle';
     if (type === 'success') icon = 'fa-check-circle';
     if (type === 'error') icon = 'fa-exclamation-circle';
@@ -110,8 +74,53 @@ function mostrarLoading(mostrar) {
     }
 }
 
+function togglePassword(inputId) {
+    const input = document.getElementById(inputId);
+    const btn = input.nextElementSibling;
+    if (input.type === 'password') {
+        input.type = 'text';
+        btn.innerHTML = '<i class="fas fa-eye-slash"></i>';
+    } else {
+        input.type = 'password';
+        btn.innerHTML = '<i class="fas fa-eye"></i>';
+    }
+}
+
+function checkPasswordStrength() {
+    const password = document.getElementById('passwordNueva').value;
+    const strengthDiv = document.getElementById('passwordStrength');
+    
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (password.match(/[a-z]/)) strength++;
+    if (password.match(/[A-Z]/)) strength++;
+    if (password.match(/[0-9]/)) strength++;
+    if (password.match(/[^a-zA-Z0-9]/)) strength++;
+    
+    let message = '';
+    let className = '';
+    
+    if (strength <= 2) {
+        message = 'Débil';
+        className = 'weak';
+    } else if (strength <= 4) {
+        message = 'Media';
+        className = 'medium';
+    } else {
+        message = 'Fuerte';
+        className = 'strong';
+    }
+    
+    strengthDiv.innerHTML = message;
+    strengthDiv.className = `password-strength ${className}`;
+}
+
 // =====================================================
-// CARGA DE DATOS DEL PERFIL
+// CARGAR PERFIL
+// =====================================================
+
+// =====================================================
+// CARGAR PERFIL - CORREGIDO PARA AVATAR
 // =====================================================
 
 async function cargarPerfil() {
@@ -131,216 +140,56 @@ async function cargarPerfil() {
         if (data.success) {
             const usuario = data.usuario;
             
-            // Actualizar campos del formulario
             document.getElementById('nombre').value = usuario.nombre || '';
             document.getElementById('email').value = usuario.email || '';
             document.getElementById('telefono').value = usuario.telefono || '';
             document.getElementById('whatsapp').value = usuario.whatsapp || '';
             document.getElementById('direccion').value = usuario.direccion || '';
             
-            // Actualizar display
             document.getElementById('displayNombre').textContent = usuario.nombre || 'Usuario';
             document.getElementById('displayEmail').textContent = usuario.email || '';
             
-            // Cargar avatar
-            avatarSeleccionado = usuario.avatar || 'box';
-            actualizarAvatar(avatarSeleccionado);
-            
-            // Cargar preferencias de notificaciones
-            if (usuario.preferencias_notificaciones) {
-                const prefs = usuario.preferencias_notificaciones;
-                document.getElementById('notif_nueva_cotizacion').checked = prefs.nueva_cotizacion !== false;
-                document.getElementById('notif_compra_confirmada').checked = prefs.compra_confirmada !== false;
-                document.getElementById('notif_entrega_realizada').checked = prefs.entrega_realizada !== false;
-                document.getElementById('notif_stock_bajo').checked = prefs.stock_bajo !== false;
+            // CORREGIDO: Extraer el nombre del avatar de la URL
+            let avatarNombre = 'box'; // valor por defecto
+            if (usuario.avatar) {
+                // Si viene como 'avatar_box', extraer 'box'
+                if (usuario.avatar.includes('avatar_')) {
+                    avatarNombre = usuario.avatar.replace('avatar_', '');
+                } else {
+                    avatarNombre = usuario.avatar;
+                }
             }
+            avatarSeleccionado = avatarNombre;
+            actualizarAvatar(avatarSeleccionado);
+        } else {
+            showToast(data.error || 'Error al cargar perfil', 'error');
         }
     } catch (error) {
-        console.error('Error cargando perfil:', error);
+        console.error('Error:', error);
         showToast('Error al cargar perfil', 'error');
     } finally {
         mostrarLoading(false);
     }
 }
 
-async function cargarSesiones() {
-    try {
-        const response = await fetch(`${API_URL}/perfil/sesiones`, {
-            headers: getAuthHeaders()
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            renderSesiones(data.sesiones);
-        }
-    } catch (error) {
-        console.error('Error cargando sesiones:', error);
-    }
-}
-
-async function cargarNotificacionesRecientes() {
-    try {
-        const response = await fetch(`${API_URL}/perfil/notificaciones`, {
-            headers: getAuthHeaders()
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            renderNotificacionesRecientes(data.notificaciones);
-        }
-    } catch (error) {
-        console.error('Error cargando notificaciones:', error);
-    }
-}
-
-async function cargarActividad(page = 1) {
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/perfil/actividad?page=${page}&limit=20`, {
-            headers: getAuthHeaders()
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            renderActividad(data.actividad, data.pagination);
-        }
-    } catch (error) {
-        console.error('Error cargando actividad:', error);
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-// =====================================================
-// RENDERIZADO
-// =====================================================
-
-function renderSesiones(sesiones) {
-    const container = document.getElementById('sesionesList');
-    if (!container) return;
-    
-    if (sesiones.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: var(--gris-texto);">No hay sesiones activas</p>';
-        return;
-    }
-    
-    container.innerHTML = sesiones.map(s => `
-        <div class="sesion-item ${s.es_actual ? 'sesion-actual' : ''}">
-            <div class="sesion-info">
-                <span class="sesion-dispositivo">
-                    <i class="fas ${s.dispositivo === 'mobile' ? 'fa-mobile-alt' : 'fa-laptop'}"></i>
-                    ${escapeHtml(s.dispositivo_nombre || 'Dispositivo desconocido')}
-                    ${s.es_actual ? '<span class="rol-badge" style="margin-left: 0.5rem;">Actual</span>' : ''}
-                </span>
-                <span class="sesion-fecha">Última actividad: ${formatDate(s.ultima_actividad)}</span>
-                <span class="sesion-fecha">IP: ${s.ip || 'Desconocida'}</span>
-            </div>
-            ${!s.es_actual ? `
-                <button class="btn-cerrar-sesion" onclick="cerrarSesion('${s.id}')">
-                    <i class="fas fa-sign-out-alt"></i> Cerrar
-                </button>
-            ` : ''}
-        </div>
-    `).join('');
-}
-
-function renderNotificacionesRecientes(notificaciones) {
-    const container = document.getElementById('notificacionesRecientes');
-    if (!container) return;
-    
-    if (notificaciones.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: var(--gris-texto); padding: 2rem;">No hay notificaciones recientes</p>';
-        return;
-    }
-    
+function actualizarAvatar(avatar) {
+    const avatarPreview = document.getElementById('avatarPreview');
     const iconos = {
-        'solicitud_cotizacion': 'fa-file-invoice-dollar',
-        'cotizacion_recibida': 'fa-check-circle',
-        'compra_realizada': 'fa-shopping-cart',
-        'entrega_realizada': 'fa-truck'
+        'box': 'fa-boxes',
+        'user': 'fa-user-circle',
+        'truck': 'fa-truck',
+        'warehouse': 'fa-warehouse'
     };
-    
-    container.innerHTML = notificaciones.map(n => `
-        <div class="notificacion-reciente ${n.leida ? 'leida' : ''}" onclick="marcarLeida(${n.id})">
-            <div class="notificacion-icon">
-                <i class="fas ${iconos[n.tipo] || 'fa-bell'}"></i>
-            </div>
-            <div class="notificacion-content">
-                <div class="notificacion-mensaje">${escapeHtml(n.mensaje)}</div>
-                <div class="notificacion-fecha">${formatDate(n.fecha_envio)}</div>
-            </div>
-        </div>
-    `).join('');
-}
-
-function renderActividad(actividad, pagination) {
-    const tbody = document.getElementById('actividadList');
-    if (!tbody) return;
-    
-    if (actividad.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="4" style="text-align: center; padding: 2rem;">
-                    <i class="fas fa-history" style="font-size: 2rem; color: var(--gris-texto);"></i>
-                    <p>No hay actividad registrada</p>
-                </td>
-            </tr>
-        `;
-        return;
-    }
-    
-    const iconos = {
-        'login': 'fa-sign-in-alt',
-        'logout': 'fa-sign-out-alt',
-        'cotizacion_creada': 'fa-file-invoice-dollar',
-        'cotizacion_cotizada': 'fa-tags',
-        'compra_registrada': 'fa-shopping-cart',
-        'entrega_registrada': 'fa-truck'
-    };
-    
-    tbody.innerHTML = actividad.map(a => `
-        <tr>
-            <td>${formatDateTime(a.fecha)}</td>
-            <td><i class="fas ${iconos[a.accion] || 'fa-circle'}"></i> ${escapeHtml(a.accion_texto || a.accion)}</td>
-            <td>${escapeHtml(a.descripcion || '-')}</td>
-            <td>${a.ip || '-'}</td>
-        </tr>
-    `).join('');
-    
-    // Renderizar paginación
-    renderPagination(pagination);
-}
-
-function renderPagination(pagination) {
-    const container = document.getElementById('pagination');
-    if (!container) return;
-    
-    if (!pagination || pagination.total_pages <= 1) {
-        container.innerHTML = '';
-        return;
-    }
-    
-    let html = '';
-    for (let i = 1; i <= pagination.total_pages; i++) {
-        html += `
-            <button class="page-btn ${i === pagination.current_page ? 'active' : ''}" onclick="cargarActividad(${i})">
-                ${i}
-            </button>
-        `;
-    }
-    container.innerHTML = html;
+    avatarPreview.innerHTML = `<i class="fas ${iconos[avatar] || 'fa-boxes'}"></i>`;
 }
 
 // =====================================================
-// FUNCIONES DEL PERFIL
+// EDITAR INFORMACIÓN
 // =====================================================
 
 function toggleEditInfo() {
     editMode = !editMode;
-    const inputs = document.querySelectorAll('#formInformacion input');
+    const inputs = document.querySelectorAll('#formInformacion .form-control');
     const actions = document.getElementById('infoActions');
     const editBtn = document.getElementById('btnEditarInfo');
     
@@ -359,7 +208,7 @@ function toggleEditInfo() {
 
 function cancelarEdicionInfo() {
     editMode = false;
-    const inputs = document.querySelectorAll('#formInformacion input');
+    const inputs = document.querySelectorAll('#formInformacion .form-control');
     const actions = document.getElementById('infoActions');
     const editBtn = document.getElementById('btnEditarInfo');
     
@@ -369,8 +218,6 @@ function cancelarEdicionInfo() {
     
     actions.style.display = 'none';
     editBtn.style.display = 'flex';
-    
-    // Recargar datos originales
     cargarPerfil();
 }
 
@@ -397,17 +244,19 @@ async function guardarInformacion(event) {
         if (result.success) {
             showToast('Información actualizada', 'success');
             cancelarEdicionInfo();
-            cargarPerfil();
         } else {
             showToast(result.error || 'Error al actualizar', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
         showToast('Error de conexión', 'error');
     } finally {
         mostrarLoading(false);
     }
 }
+
+// =====================================================
+// CAMBIAR CONTRASEÑA
+// =====================================================
 
 async function cambiarPassword(event) {
     event.preventDefault();
@@ -447,7 +296,6 @@ async function cambiarPassword(event) {
             showToast(result.error || 'Error al cambiar contraseña', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
         showToast('Error de conexión', 'error');
     } finally {
         mostrarLoading(false);
@@ -464,22 +312,12 @@ function abrirModalAvatar() {
 
 function seleccionarAvatar(avatar) {
     avatarSeleccionado = avatar;
-    // Marcar visualmente la opción seleccionada
     document.querySelectorAll('.avatar-option').forEach(opt => {
         opt.style.borderColor = 'transparent';
     });
-    event.currentTarget.style.borderColor = 'var(--rojo-primario)';
-}
-
-function actualizarAvatar(avatar) {
-    const avatarPreview = document.getElementById('avatarPreview');
-    const iconos = {
-        'box': 'fa-boxes',
-        'user': 'fa-user-circle',
-        'truck': 'fa-truck',
-        'warehouse': 'fa-warehouse'
-    };
-    avatarPreview.innerHTML = `<i class="fas ${iconos[avatar] || 'fa-boxes'}"></i>`;
+    if (event && event.currentTarget) {
+        event.currentTarget.style.borderColor = 'var(--rojo-primario)';
+    }
 }
 
 async function guardarAvatar() {
@@ -497,6 +335,11 @@ async function guardarAvatar() {
             showToast('Avatar actualizado', 'success');
             actualizarAvatar(avatarSeleccionado);
             cerrarModal('modalAvatar');
+            
+            // Recargar perfil para actualizar todo
+            setTimeout(() => {
+                cargarPerfil();
+            }, 500);
         } else {
             showToast(result.error || 'Error al actualizar avatar', 'error');
         }
@@ -505,190 +348,6 @@ async function guardarAvatar() {
         showToast('Error de conexión', 'error');
     } finally {
         mostrarLoading(false);
-    }
-}
-
-// =====================================================
-// NOTIFICACIONES
-// =====================================================
-
-async function guardarPreferencias(event) {
-    event.preventDefault();
-    
-    const preferencias = {
-        nueva_cotizacion: document.getElementById('notif_nueva_cotizacion').checked,
-        compra_confirmada: document.getElementById('notif_compra_confirmada').checked,
-        entrega_realizada: document.getElementById('notif_entrega_realizada').checked,
-        stock_bajo: document.getElementById('notif_stock_bajo').checked
-    };
-    
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/perfil/notificaciones/preferencias`, {
-            method: 'PUT',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ preferencias })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast('Preferencias guardadas', 'success');
-        } else {
-            showToast(result.error || 'Error al guardar', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-async function marcarLeida(id) {
-    try {
-        const response = await fetch(`${API_URL}/perfil/notificaciones/${id}/leer`, {
-            method: 'PUT',
-            headers: getAuthHeaders()
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            await cargarNotificacionesRecientes();
-        }
-    } catch (error) {
-        console.error('Error:', error);
-    }
-}
-
-async function marcarTodasLeidas() {
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/perfil/notificaciones/leer-todas`, {
-            method: 'PUT',
-            headers: getAuthHeaders()
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast('Todas las notificaciones marcadas como leídas', 'success');
-            await cargarNotificacionesRecientes();
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-// =====================================================
-// SESIONES
-// =====================================================
-
-async function cerrarSesion(sessionId) {
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/perfil/sesiones/${sessionId}`, {
-            method: 'DELETE',
-            headers: getAuthHeaders()
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast('Sesión cerrada', 'success');
-            await cargarSesiones();
-        } else {
-            showToast(result.error || 'Error al cerrar sesión', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-async function cerrarTodasSesiones() {
-    if (!confirm('¿Cerrar todas las sesiones excepto esta? Esto cerrará sesión en todos tus otros dispositivos.')) return;
-    
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/perfil/sesiones/cerrar-todas`, {
-            method: 'DELETE',
-            headers: getAuthHeaders()
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast('Todas las demás sesiones han sido cerradas', 'success');
-            await cargarSesiones();
-        } else {
-            showToast(result.error || 'Error al cerrar sesiones', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-// =====================================================
-// ACTIVIDAD
-// =====================================================
-
-function exportarActividad() {
-    window.location.href = `${API_URL}/perfil/actividad/exportar?token=${localStorage.getItem('furia_token')}`;
-}
-
-// =====================================================
-// SEGURIDAD DE CONTRASEÑA
-// =====================================================
-
-function checkPasswordStrength() {
-    const password = document.getElementById('passwordNueva').value;
-    const strengthDiv = document.getElementById('passwordStrength');
-    
-    let strength = 0;
-    let message = '';
-    let className = '';
-    
-    if (password.length >= 8) strength++;
-    if (password.match(/[a-z]/)) strength++;
-    if (password.match(/[A-Z]/)) strength++;
-    if (password.match(/[0-9]/)) strength++;
-    if (password.match(/[^a-zA-Z0-9]/)) strength++;
-    
-    if (strength <= 2) {
-        message = 'Débil';
-        className = 'weak';
-    } else if (strength <= 4) {
-        message = 'Media';
-        className = 'medium';
-    } else {
-        message = 'Fuerte';
-        className = 'strong';
-    }
-    
-    strengthDiv.innerHTML = message;
-    strengthDiv.className = `password-strength ${className}`;
-}
-
-function togglePassword(inputId) {
-    const input = document.getElementById(inputId);
-    const button = input.nextElementSibling;
-    
-    if (input.type === 'password') {
-        input.type = 'text';
-        button.innerHTML = '<i class="fas fa-eye-slash"></i>';
-    } else {
-        input.type = 'password';
-        button.innerHTML = '<i class="fas fa-eye"></i>';
     }
 }
 
@@ -707,24 +366,20 @@ async function cargarUsuarioActual() {
         }
         
         const payload = JSON.parse(atob(token.split('.')[1]));
-        
-        let userData = null;
-        try {
-            const userStr = localStorage.getItem('furia_user');
-            if (userStr) userData = JSON.parse(userStr);
-        } catch (e) {}
+        const userData = JSON.parse(localStorage.getItem('furia_user') || '{}');
         
         currentUser = {
-            id: payload.user?.id || payload.id || payload.user_id || userData?.id,
+            id: payload.user?.id || payload.id || userData?.id,
             nombre: payload.user?.nombre || payload.nombre || userData?.nombre || 'Usuario',
-            email: payload.user?.email || payload.email || userData?.email,
-            roles: payload.user?.roles || payload.roles || userData?.roles || []
+            email: payload.user?.email || payload.email || userData?.email
         };
         
         const fechaElement = document.getElementById('currentDate');
         if (fechaElement) {
             const hoy = new Date();
-            fechaElement.textContent = hoy.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+            fechaElement.textContent = hoy.toLocaleDateString('es-ES', { 
+                year: 'numeric', month: 'long', day: 'numeric' 
+            });
         }
         
         return currentUser;
@@ -740,45 +395,18 @@ async function cargarUsuarioActual() {
 // =====================================================
 
 function setupEventListeners() {
-    // Pestañas
-    const tabBtns = document.querySelectorAll('.tab-btn-perfil');
-    tabBtns.forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const tabId = btn.getAttribute('data-tab');
-            currentTab = tabId;
-            
-            tabBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            
-            document.querySelectorAll('.tab-perfil').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.getElementById(`tab-${tabId}`).classList.add('active');
-            
-            // Cargar datos según pestaña
-            if (tabId === 'seguridad') {
-                await cargarSesiones();
-            } else if (tabId === 'notificaciones') {
-                await cargarNotificacionesRecientes();
-            } else if (tabId === 'actividad') {
-                await cargarActividad();
-            }
-        });
-    });
-    
-    // Botón editar info
     const btnEditar = document.getElementById('btnEditarInfo');
-    if (btnEditar) {
-        btnEditar.addEventListener('click', toggleEditInfo);
-    }
+    if (btnEditar) btnEditar.addEventListener('click', toggleEditInfo);
     
-    // Password strength
-    const passwordInput = document.getElementById('passwordNueva');
-    if (passwordInput) {
-        passwordInput.addEventListener('input', checkPasswordStrength);
-    }
+    const formInfo = document.getElementById('formInformacion');
+    if (formInfo) formInfo.addEventListener('submit', guardarInformacion);
     
-    // Cerrar modales
+    const formPassword = document.getElementById('formPassword');
+    if (formPassword) formPassword.addEventListener('submit', cambiarPassword);
+    
+    const passwordNueva = document.getElementById('passwordNueva');
+    if (passwordNueva) passwordNueva.addEventListener('input', checkPasswordStrength);
+    
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) modal.classList.remove('active');
@@ -787,8 +415,9 @@ function setupEventListeners() {
 }
 
 async function inicializar() {
-    console.log('🚀 Inicializando perfil.js (Repuestos)');
+    console.log('🚀 Inicializando perfil.js (Simplificado)');
     console.log('📡 API_URL:', API_URL);
+    console.log('📡 window.API_BASE_URL:', window.API_BASE_URL);
     
     const user = await cargarUsuarioActual();
     if (!user) return;
@@ -807,13 +436,6 @@ window.cambiarPassword = cambiarPassword;
 window.abrirModalAvatar = abrirModalAvatar;
 window.seleccionarAvatar = seleccionarAvatar;
 window.guardarAvatar = guardarAvatar;
-window.guardarPreferencias = guardarPreferencias;
-window.marcarLeida = marcarLeida;
-window.marcarTodasLeidas = marcarTodasLeidas;
-window.cerrarSesion = cerrarSesion;
-window.cerrarTodasSesiones = cerrarTodasSesiones;
-window.exportarActividad = exportarActividad;
-window.cargarActividad = cargarActividad;
 window.togglePassword = togglePassword;
 window.cerrarModal = cerrarModal;
 

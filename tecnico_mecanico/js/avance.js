@@ -1,23 +1,23 @@
 // =====================================================
 // AVANCE.JS - TÉCNICO MECÁNICO
-// REGISTRO DE AVANCES DE TRABAJO - CADA ORDEN TIENE UN SOLO AVANCE
-// VERSIÓN CORREGIDA - USA window.API_BASE_URL
+// REGISTRO DE AVANCES DE TRABAJO
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - USA LA VARIABLE GLOBAL
+// CONFIGURACIÓN DE API - USA LA VARIABLE GLOBAL DE INCLUDE.JS
 // =====================================================
-// NOTA: window.API_BASE_URL ya está declarada en include.js
-// No declarar const API_BASE_URL aquí
+// API_BASE_URL viene de include.js, la accedemos via window
+const API_URL = `${window.API_BASE_URL || ''}/tecnico`;
 
-const API_URL = `${window.API_BASE_URL}/tecnico`;
+console.log('📡 avance.js - API_URL:', API_URL);
+console.log('📡 avance.js - window.API_BASE_URL:', window.API_BASE_URL);
 
 let token = null;
 let currentUser = null;
 let currentOrdenId = null;
 let fotosData = {};
 let avancesActuales = [];
-let avanceEditandoId = null; // Variable para saber si estamos editando un avance existente
+let avanceEditandoId = null;
 
 // Configuración de Cloudinary
 const CLOUDINARY_CLOUD_NAME = 'drpt6ztkd';
@@ -153,9 +153,13 @@ async function cargarOrdenesEnReparacion() {
         const response = await fetch(`${API_URL}/ordenes-en-reparacion`, {
             headers: getAuthHeaders()
         });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
-
-        console.log('Órdenes cargadas:', JSON.stringify(data, null, 2));
+        console.log('Órdenes cargadas:', data);
 
         if (data.success) {
             const select = document.getElementById('selectOrden');
@@ -168,7 +172,6 @@ async function cargarOrdenesEnReparacion() {
                         option.value = orden.id;
                         option.textContent = `${orden.codigo_unico} - ${orden.vehiculo}`;
                         select.appendChild(option);
-                        console.log(`✅ Opción agregada: ${option.value} - ${option.textContent}`);
                     }
                 }
                 
@@ -183,7 +186,7 @@ async function cargarOrdenesEnReparacion() {
         }
     } catch (error) {
         console.error('Error:', error);
-        showToast('Error al cargar órdenes', 'error');
+        showToast('Error al cargar órdenes: ' + error.message, 'error');
     } finally {
         mostrarLoading(false);
     }
@@ -220,8 +223,6 @@ async function cargarAvances() {
             if (avancesSection) avancesSection.style.display = 'block';
             
             document.getElementById('formAvance').style.display = 'none';
-            
-            // Resetear estado de edición
             avanceEditandoId = null;
         } else {
             showToast(data.error || 'Error al cargar avances', 'error');
@@ -267,35 +268,29 @@ function renderizarAvances() {
         let estadoClass = '';
         let estadoText = '';
         let puedeActualizar = false;
-        let puedeCrear = false;
         
         switch (avance.estado) {
             case 'pendiente':
                 estadoClass = 'status-pendiente';
                 estadoText = '⏳ Pendiente de revisión';
                 puedeActualizar = true;
-                puedeCrear = false;
                 break;
             case 'aprobado':
                 estadoClass = 'status-aprobado';
                 estadoText = '✅ Aprobado';
                 puedeActualizar = false;
-                puedeCrear = false;
                 break;
             case 'rechazado':
                 estadoClass = 'status-rechazado';
                 estadoText = '❌ Rechazado - Corregir';
                 puedeActualizar = true;
-                puedeCrear = false;
                 break;
             default:
                 estadoClass = 'status-pendiente';
                 estadoText = 'Pendiente';
                 puedeActualizar = true;
-                puedeCrear = false;
         }
 
-        // Mostrar comentario de revisión si existe
         const comentarioRevisionHtml = avance.comentario_revision ? `
             <div class="comentario-revision">
                 <i class="fas fa-comment-dots"></i>
@@ -332,7 +327,7 @@ function renderizarAvances() {
 }
 
 // =====================================================
-// NUEVO AVANCE
+// FORMULARIO - LIMPIAR Y RESETEAR
 // =====================================================
 
 function limpiarFormulario() {
@@ -372,7 +367,7 @@ function resetearBotonesFormulario() {
 }
 
 // =====================================================
-// CONFIGURAR SUBIDA DE FOTOS
+// SUBIDA DE FOTOS A CLOUDINARY
 // =====================================================
 
 function configurarSubidaFotos() {
@@ -380,15 +375,9 @@ function configurarSubidaFotos() {
         const input = document.getElementById(`fotoInput_${i}`);
         if (!input) continue;
 
-        // Remover evento anterior si existe
         const newInput = input.cloneNode(true);
         input.parentNode.replaceChild(newInput, input);
-        
-        // Agregar nuevo evento
         newInput.addEventListener('change', (e) => procesarFoto(i, e));
-        
-        // Actualizar la referencia en el DOM
-        document.getElementById(`fotoInput_${i}`)?.setAttribute('onclick', '');
     }
 }
 
@@ -479,21 +468,17 @@ window.cargarAvanceParaActualizar = async function(avanceId) {
     
     console.log('📝 Cargando avance para actualizar:', avance);
     
-    // Mostrar mensaje de advertencia según el estado
     if (avance.estado === 'pendiente') {
         showToast('⚠️ Este avance está pendiente de revisión. Al actualizarlo, se notificará nuevamente al jefe de taller.', 'warning');
     } else if (avance.estado === 'rechazado') {
         showToast('📝 Este avance fue rechazado. Corrige las observaciones y vuelve a enviar.', 'info');
     }
     
-    // Limpiar formulario
     limpiarFormulario();
     
-    // Cargar datos del avance
     document.getElementById('tituloAvance').value = avance.titulo || '';
     document.getElementById('descripcionAvance').value = avance.descripcion || '';
     
-    // Cargar fotos existentes
     if (avance.fotos && avance.fotos.length > 0) {
         for (let i = 0; i < avance.fotos.length && i < 10; i++) {
             const foto = avance.fotos[i];
@@ -502,7 +487,6 @@ window.cargarAvanceParaActualizar = async function(avanceId) {
                 comentario: foto.comentario || ''
             };
             
-            // Actualizar preview
             const preview = document.querySelector(`.foto-upload-item[data-index="${i}"] .foto-preview`);
             if (preview) {
                 preview.style.backgroundImage = `url('${foto.url}')`;
@@ -512,19 +496,16 @@ window.cargarAvanceParaActualizar = async function(avanceId) {
                 preview.innerHTML = '';
             }
             
-            // Cargar comentario
             const comentarioInput = document.getElementById(`comentario_${i}`);
             if (comentarioInput) {
                 comentarioInput.value = foto.comentario || '';
             }
             
-            // Mostrar botón de eliminar
             const removeBtn = document.querySelector(`.foto-upload-item[data-index="${i}"] .btn-remove-foto`);
             if (removeBtn) removeBtn.style.display = 'block';
         }
     }
     
-    // Cambiar el texto de los botones
     const guardarBtn = document.getElementById('btnGuardarAvance');
     const enviarBtn = document.getElementById('btnEnviarRevision');
     
@@ -535,19 +516,14 @@ window.cargarAvanceParaActualizar = async function(avanceId) {
         enviarBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar a Revisión (Actualizar)';
     }
     
-    // Guardar el ID del avance que estamos actualizando
     avanceEditandoId = avanceId;
-    
-    // Configurar subida de fotos y mostrar formulario
     configurarSubidaFotos();
     document.getElementById('formAvance').style.display = 'block';
-    
-    // Scroll al formulario
     document.getElementById('formAvance').scrollIntoView({ behavior: 'smooth' });
 };
 
 // =====================================================
-// GUARDAR AVANCE (CREAR O ACTUALIZAR)
+// GUARDAR AVANCE
 // =====================================================
 
 async function guardarAvance(estado) {
@@ -575,11 +551,8 @@ async function guardarAvance(estado) {
     mostrarLoading(true);
 
     try {
-        let response;
         let method = avanceEditandoId ? 'PUT' : 'POST';
         let url = `${API_URL}/avances`;
-        
-        console.log(`📡 Enviando ${method} a: ${url}`);
         
         const body = {
             id_orden_trabajo: parseInt(currentOrdenId),
@@ -589,9 +562,11 @@ async function guardarAvance(estado) {
             estado: estado === 'pendiente' ? 'pendiente' : 'borrador'
         };
         
-        console.log('📦 Body:', body);
+        if (avanceEditandoId) {
+            body.id = avanceEditandoId;
+        }
         
-        response = await fetch(url, {
+        const response = await fetch(url, {
             method: method,
             headers: getAuthHeaders(),
             body: JSON.stringify(body)
@@ -612,13 +587,8 @@ async function guardarAvance(estado) {
             }
             
             showToast(mensaje, 'success');
-            
-            // Limpiar estado de edición
             avanceEditandoId = null;
-            
-            // Restaurar textos de botones
             resetearBotonesFormulario();
-            
             limpiarFormulario();
             document.getElementById('formAvance').style.display = 'none';
             await cargarAvances();
@@ -653,22 +623,17 @@ window.verDetalleAvance = async function(avanceId) {
     ` : '<p>No hay fotos registradas</p>';
 
     let estadoBadge = '';
-    let estadoClass = '';
     switch (avance.estado) {
         case 'pendiente':
-            estadoClass = 'status-pendiente';
             estadoBadge = '<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> Pendiente de revisión</span>';
             break;
         case 'aprobado':
-            estadoClass = 'status-aprobado';
             estadoBadge = '<span class="status-badge status-aprobado"><i class="fas fa-check-circle"></i> Aprobado</span>';
             break;
         case 'rechazado':
-            estadoClass = 'status-rechazado';
             estadoBadge = '<span class="status-badge status-rechazado"><i class="fas fa-times-circle"></i> Rechazado</span>';
             break;
         default:
-            estadoClass = 'status-pendiente';
             estadoBadge = '<span class="status-badge status-pendiente">Pendiente</span>';
     }
 
@@ -712,13 +677,10 @@ function cerrarModalFoto() {
 // =====================================================
 
 function setupEventListeners() {
-    // Selector de orden
     const selectOrden = document.getElementById('selectOrden');
     if (selectOrden) {
         selectOrden.addEventListener('change', (e) => {
             const selectedValue = e.target.value;
-            console.log('Orden seleccionada:', selectedValue);
-            
             if (selectedValue && selectedValue !== 'null' && selectedValue !== 'undefined' && selectedValue !== '') {
                 currentOrdenId = selectedValue;
                 cargarAvances();
@@ -730,13 +692,11 @@ function setupEventListeners() {
         });
     }
 
-    // Botón cargar avances
     const btnCargar = document.getElementById('btnCargarAvances');
     if (btnCargar) {
         btnCargar.addEventListener('click', () => {
             const select = document.getElementById('selectOrden');
             const selectedValue = select.value;
-            
             if (selectedValue && selectedValue !== 'null' && selectedValue !== 'undefined' && selectedValue !== '') {
                 currentOrdenId = selectedValue;
                 cargarAvances();
@@ -746,7 +706,6 @@ function setupEventListeners() {
         });
     }
 
-    // Botón nuevo avance
     const btnNuevoAvance = document.getElementById('btnNuevoAvance');
     if (btnNuevoAvance) {
         btnNuevoAvance.addEventListener('click', () => {
@@ -755,18 +714,13 @@ function setupEventListeners() {
                 return;
             }
             
-            // Verificar si ya existe un avance
             if (avancesActuales.length > 0 && !avanceEditandoId) {
                 showToast('⚠️ Ya existe un avance para esta orden. Usa el botón ACTUALIZAR en la tarjeta.', 'warning');
                 return;
             }
             
-            // Resetear estado de edición
             avanceEditandoId = null;
-            
-            // Restaurar textos de botones
             resetearBotonesFormulario();
-            
             limpiarFormulario();
             configurarSubidaFotos();
             document.getElementById('formAvance').style.display = 'block';
@@ -774,7 +728,6 @@ function setupEventListeners() {
         });
     }
 
-    // Botón cancelar avance
     const btnCancelarAvance = document.getElementById('btnCancelarAvance');
     if (btnCancelarAvance) {
         btnCancelarAvance.addEventListener('click', () => {
@@ -785,19 +738,16 @@ function setupEventListeners() {
         });
     }
 
-    // Botón guardar borrador
     const btnGuardarAvance = document.getElementById('btnGuardarAvance');
     if (btnGuardarAvance) {
         btnGuardarAvance.addEventListener('click', () => guardarAvance('borrador'));
     }
 
-    // Botón enviar a revisión
     const btnEnviarRevision = document.getElementById('btnEnviarRevision');
     if (btnEnviarRevision) {
         btnEnviarRevision.addEventListener('click', () => guardarAvance('pendiente'));
     }
 
-    // Cerrar modales al hacer clic fuera
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) modal.classList.remove('show');
@@ -811,8 +761,7 @@ function setupEventListeners() {
 
 async function inicializar() {
     console.log('🚀 Inicializando avance.js');
-    console.log('📡 API URL:', API_URL);
-    console.log('📡 window.API_BASE_URL:', window.API_BASE_URL);
+    console.log('📡 API_URL:', API_URL);
 
     const user = await cargarUsuarioActual();
     if (!user) return;
@@ -833,7 +782,7 @@ window.cerrarModalFoto = cerrarModalFoto;
 window.eliminarFoto = eliminarFoto;
 window.cargarAvanceParaActualizar = cargarAvanceParaActualizar;
 
-// Iniciar cuando el DOM esté listo
+// Iniciar
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', inicializar);
 } else {

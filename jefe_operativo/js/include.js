@@ -1,12 +1,13 @@
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA JEFE OPERATIVO
-// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
+// VERSIÓN CORREGIDA CON VARIABLE GLOBAL
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// CONFIGURACIÓN DE API - VARIABLE GLOBAL
 // =====================================================
-const API_BASE_URL = (() => {
+// Declarar como variable global accesible desde cualquier script
+window.API_BASE_URL = (() => {
     if (window.location.hostname === 'localhost' || 
         window.location.hostname === '127.0.0.1' ||
         window.location.hostname.includes('192.168.')) {
@@ -16,6 +17,9 @@ const API_BASE_URL = (() => {
     console.log('📡 Include.js - Modo PRODUCCIÓN');
     return '';
 })();
+
+// También crear constante local para usar dentro de este archivo
+const API_BASE_URL = window.API_BASE_URL;
 
 // Configuración
 const CONFIG = {
@@ -88,7 +92,7 @@ function mostrarLoader(container) {
 }
 
 // =====================================================
-// SIDEBAR DE RESPALDO (FALLBACK)
+// SIDEBAR DE RESPALDO (FALLBACK) - CORREGIDO
 // =====================================================
 function crearSidebarRespaldo(container) {
     const user = obtenerUsuarioActual();
@@ -116,14 +120,15 @@ function crearSidebarRespaldo(container) {
                 </div>
             </div>
 
-            <!-- NAVIGATION MENU -->
+            <!-- NAVIGATION MENU - CORREGIDO data-page -->
             <nav class="sidebar-nav">
                 <ul>
                     ${crearMenuItem('dashboard', 'Dashboard', 'chart-pie', currentPage)}
                     ${crearMenuItem('recepcion', 'Recepción de Vehículos', 'car', currentPage)}
                     ${crearMenuItem('cotizaciones', 'Cotizaciones', 'file-invoice-dollar', currentPage)}
                     ${crearMenuItem('pro_vehiculo', 'Vehículos en Proceso', 'cogs', currentPage, '8')}
-                    ${crearMenuItem('control_salida', 'Control de Salidas', 'check-circle', currentPage)}
+                    ${crearMenuItem('control_calidad', 'Control de Calidad', 'check-circle', currentPage)}
+                    ${crearMenuItem('control_salida', 'Control de Salidas', 'sign-out-alt', currentPage)}
                     ${crearMenuItem('rendicion', 'Rendición Diaria', 'hand-holding-usd', currentPage)}
                     ${crearMenuItem('comunicados', 'Comunicados', 'bullhorn', currentPage)}
                     ${crearMenuItem('historial', 'Historial', 'history', currentPage)}
@@ -186,12 +191,28 @@ function inicializarSidebar() {
 }
 
 // =====================================================
-// OBTENER PÁGINA ACTUAL
+// OBTENER PÁGINA ACTUAL - CORREGIDO
 // =====================================================
 function obtenerPaginaActual() {
     const path = window.location.pathname;
     const filename = path.split('/').pop() || 'dashboard.html';
-    return filename.replace('.html', '');
+    let pageName = filename.replace('.html', '');
+    
+    // Mapeo de nombres de archivo a data-page
+    const pageMapping = {
+        'dashboard': 'dashboard',
+        'recepcion': 'recepcion',
+        'cotizaciones': 'cotizaciones',
+        'pro_vehiculo': 'pro_vehiculo',
+        'control_calidad': 'control_calidad',
+        'control_salida': 'control_salida',
+        'rendicion_diaria': 'rendicion',
+        'comunicados': 'comunicados',
+        'historial': 'historial',
+        'perfil': 'perfil'
+    };
+    
+    return pageMapping[pageName] || pageName;
 }
 
 // =====================================================
@@ -211,6 +232,7 @@ function marcarItemActivo(currentPage) {
             activeItem.classList.add('active');
             console.log(`✅ Item activo: ${currentPage}`);
         } else {
+            console.log(`⚠️ No se encontró item para página: ${currentPage}`);
             // Si no encuentra, activar dashboard por defecto
             const dashboardItem = document.querySelector('.nav-item[data-page="dashboard"]');
             if (dashboardItem) dashboardItem.classList.add('active');
@@ -219,7 +241,7 @@ function marcarItemActivo(currentPage) {
 }
 
 // =====================================================
-// OBTENER USUARIO ACTUAL DESDE LOCALSTORAGE - CORREGIDO
+// OBTENER USUARIO ACTUAL DESDE LOCALSTORAGE
 // =====================================================
 function obtenerUsuarioActual() {
     try {
@@ -272,7 +294,7 @@ function configurarLogout() {
             localStorage.removeItem('furia_remembered_type');
             
             // Redirigir al login
-            window.location.href = `${API_BASE_URL}/`;
+            window.location.href = `${window.API_BASE_URL}/`;
         }
     };
 }

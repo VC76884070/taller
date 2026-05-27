@@ -4,184 +4,169 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mi Perfil | Encargado Repuestos - FURIA MOTOR</title>
+    <title>Dashboard - Encargado Repuestos | FURIA MOTOR</title>
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/dashboard.css">
-    <link rel="stylesheet" href="css/perfil.css">
 </head>
 
 <body>
     <div class="app">
-        <!-- SIDEBAR -->
         <div id="sidebar-container"></div>
 
-        <!-- MAIN CONTENT -->
         <main class="main-content">
-            <div class="top-bar">
+            <header class="top-bar">
                 <div class="page-title">
-                    <h1>Mi Perfil</h1>
-                    <p>Gestiona tu información personal y contraseña</p>
+                    <h1>Panel de Control</h1>
+                    <p>Gestión de repuestos y compras</p>
                 </div>
                 <div class="top-actions">
+                    <button class="btn-secondary" id="refreshBtn">
+                        <i class="fas fa-sync-alt"></i> Actualizar
+                    </button>
+                    <div class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificacionesBadge">0</span>
+                    </div>
                     <div class="date-display">
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
                     </div>
                 </div>
+            </header>
+
+            <!-- KPIs -->
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-icon"><i class="fas fa-clock"></i></div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Pendientes</span>
+                        <span class="kpi-value" id="solicitudesPendientes">--</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon"><i class="fas fa-check-circle"></i></div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Compradas</span>
+                        <span class="kpi-value" id="solicitudesCompradas">--</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon"><i class="fas fa-truck"></i></div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Entregadas</span>
+                        <span class="kpi-value" id="solicitudesEntregadas">--</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon"><i class="fas fa-chart-line"></i></div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Total</span>
+                        <span class="kpi-value" id="totalSolicitudes">--</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon"><i class="fas fa-dollar-sign"></i></div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Compras del mes</span>
+                        <span class="kpi-value" id="comprasMes">--</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon"><i class="fas fa-tools"></i></div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Órdenes activas</span>
+                        <span class="kpi-value" id="ordenesActivas">--</span>
+                    </div>
+                </div>
             </div>
 
-            <div class="content">
-                <div class="perfil-grid">
-                    <!-- Columna Izquierda - Avatar -->
-                    <div class="perfil-card avatar-card">
-                        <div class="avatar-container">
-                            <div class="avatar-large" id="avatarPreview">
-                                <i class="fas fa-boxes"></i>
-                            </div>
-                            <button class="btn-cambiar-avatar" onclick="abrirModalAvatar()">
-                                <i class="fas fa-camera"></i> Cambiar avatar
-                            </button>
+            <!-- Dashboard Grid -->
+            <div class="dashboard-grid">
+                <!-- Columna Izquierda -->
+                <div class="left-column">
+                    <!-- Comunicados -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-bullhorn"></i> Comunicados</h3>
                         </div>
-                        <div class="info-basica">
-                            <h2 id="displayNombre">Cargando...</h2>
-                            <p class="rol-badge">Encargado de Repuestos</p>
-                            <p class="email-display" id="displayEmail">cargando@email.com</p>
+                        <div class="comunicados-list" id="comunicadosList">
+                            <div class="loading-placeholder">Cargando comunicados...</div>
                         </div>
                     </div>
 
-                    <!-- Columna Derecha - Información y Contraseña -->
-                    <div class="perfil-card">
-                        <!-- Información Personal -->
+                    <!-- Solicitudes Recientes -->
+                    <div class="card">
                         <div class="card-header">
-                            <h3><i class="fas fa-user-circle"></i> Información Personal</h3>
-                            <button class="btn-secondary btn-sm" id="btnEditarInfo">
-                                <i class="fas fa-pen"></i> Editar
-                            </button>
+                            <h3><i class="fas fa-shopping-cart"></i> Solicitudes Recientes</h3>
+                            <a href="solicitudes_compra.html" class="card-link">Ver todas →</a>
                         </div>
-                        <form id="formInformacion">
-                            <div class="form-group">
-                                <label>Nombre Completo</label>
-                                <input type="text" id="nombre" class="form-control" disabled>
-                            </div>
-                            <div class="form-group">
-                                <label>Correo Electrónico</label>
-                                <input type="email" id="email" class="form-control" disabled>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>Teléfono</label>
-                                    <input type="tel" id="telefono" class="form-control" disabled>
-                                </div>
-                                <div class="form-group">
-                                    <label>WhatsApp</label>
-                                    <input type="tel" id="whatsapp" class="form-control" disabled>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label>Dirección</label>
-                                <input type="text" id="direccion" class="form-control" disabled>
-                            </div>
-                            <div class="form-actions" id="infoActions" style="display: none;">
-                                <button type="button" class="btn-secondary" onclick="cancelarEdicionInfo()">Cancelar</button>
-                                <button type="submit" class="btn-primary">Guardar Cambios</button>
-                            </div>
-                        </form>
+                        <div class="solicitudes-list" id="solicitudesRecientesList">
+                            <div class="loading-placeholder">Cargando solicitudes...</div>
+                        </div>
+                    </div>
 
-                        <div class="divider"></div>
-
-                        <!-- Cambiar Contraseña -->
+                    <!-- Proveedores Destacados -->
+                    <div class="card">
                         <div class="card-header">
-                            <h3><i class="fas fa-lock"></i> Cambiar Contraseña</h3>
+                            <h3><i class="fas fa-truck"></i> Proveedores Destacados</h3>
                         </div>
-                        <form id="formPassword">
-                            <div class="form-group">
-                                <label>Contraseña Actual</label>
-                                <div class="password-input-group">
-                                    <input type="password" id="passwordActual" class="form-control" required>
-                                    <button type="button" class="toggle-password" onclick="togglePassword('passwordActual')">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label>Nueva Contraseña</label>
-                                <div class="password-input-group">
-                                    <input type="password" id="passwordNueva" class="form-control" required>
-                                    <button type="button" class="toggle-password" onclick="togglePassword('passwordNueva')">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                </div>
-                                <div class="password-strength" id="passwordStrength"></div>
-                            </div>
-                            <div class="form-group">
-                                <label>Confirmar Nueva Contraseña</label>
-                                <div class="password-input-group">
-                                    <input type="password" id="passwordConfirmar" class="form-control" required>
-                                    <button type="button" class="toggle-password" onclick="togglePassword('passwordConfirmar')">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit" class="btn-primary">
-                                    <i class="fas fa-sync-alt"></i> Cambiar Contraseña
-                                </button>
-                            </div>
-                        </form>
+                        <div class="proveedores-list" id="proveedoresList">
+                            <div class="loading-placeholder">Cargando proveedores...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Columna Derecha -->
+                <div class="right-column">
+                    <!-- Gráfico de Compras -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-chart-line"></i> Compras por Mes</h3>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="comprasChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Calendario de Entregas -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-calendar-alt"></i> Próximas Entregas</h3>
+                        </div>
+                        <div class="calendario-list" id="calendarioList">
+                            <div class="loading-placeholder">Cargando entregas...</div>
+                        </div>
+                    </div>
+
+                    <!-- Notificaciones -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-bell"></i> Notificaciones</h3>
+                        </div>
+                        <div class="notificaciones-list" id="notificacionesList">
+                            <div class="loading-placeholder">Cargando notificaciones...</div>
+                        </div>
                     </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Modal para cambiar avatar -->
-    <div id="modalAvatar" class="modal">
-        <div class="modal-content modal-sm">
-            <div class="modal-header">
-                <h3><i class="fas fa-image"></i> Cambiar Avatar</h3>
-                <span class="close-modal" onclick="cerrarModal('modalAvatar')">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div class="avatar-options">
-                    <div class="avatar-option" onclick="seleccionarAvatar('box')">
-                        <i class="fas fa-boxes"></i>
-                        <span>Repuestos</span>
-                    </div>
-                    <div class="avatar-option" onclick="seleccionarAvatar('user')">
-                        <i class="fas fa-user-circle"></i>
-                        <span>Usuario</span>
-                    </div>
-                    <div class="avatar-option" onclick="seleccionarAvatar('truck')">
-                        <i class="fas fa-truck"></i>
-                        <span>Proveedor</span>
-                    </div>
-                    <div class="avatar-option" onclick="seleccionarAvatar('warehouse')">
-                        <i class="fas fa-warehouse"></i>
-                        <span>Almacén</span>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalAvatar')">Cancelar</button>
-                <button class="btn-primary" onclick="guardarAvatar()">Guardar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- LOADING OVERLAY -->
+    <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
     </div>
 
     <script src="js/include.js"></script>
-    <script src="js/perfil.js"></script>
+    <script src="js/dashboard.js"></script>
 </body>
 
 </html>

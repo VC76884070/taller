@@ -1,0 +1,18 @@
+{
+  "name": "TORQUE - Sistema Taller Mecánico",
+  "short_name": "TORQUE",
+  "description": "Sistema de gestión para taller mecánico",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#C1121F",
+  "background_color": "#0A0A0C",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icono.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -242,7 +242,11 @@ try:
     from encargado_rep_almacen.proveedores import proveedores_bp
     from encargado_rep_almacen.historial import historial_repuestos_bp
     from encargado_rep_almacen.perfil import perfil_repuestos_bp
-    
+    # Importar el blueprint del dashboard de encargado de repuestos
+    from encargado_rep_almacen.dashboard import dashboard_bp
+
+    # Registrar el blueprint
+    app.register_blueprint(dashboard_bp)
     app.register_blueprint(solicitudes_cotizacion_bp, url_prefix='/api/encargado-repuestos')
     app.register_blueprint(solicitudes_compra_bp, url_prefix='/api/encargado-repuestos')
     app.register_blueprint(proveedores_bp, url_prefix='/api/encargado-repuestos')

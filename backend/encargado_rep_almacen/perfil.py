@@ -1,5 +1,5 @@
 # =====================================================
-# PERFIL.PY - ENCARGADO DE REPUESTOS (VERSIÓN CORREGIDA)
+# PERFIL.PY - ENCARGADO DE REPUESTOS (VERSIÓN COMPLETA CORREGIDA)
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
@@ -31,116 +31,41 @@ def verify_password(password, hashed):
     return hash_password(password) == hashed
 
 # =====================================================
-# ENDPOINTS - INFORMACIÓN PERSONAL
+# ENDPOINTS - AVATAR (DEBEN IR PRIMERO PARA EVITAR CONFLICTOS)
 # =====================================================
 
-@perfil_repuestos_bp.route('/perfil', methods=['GET'])
+@perfil_repuestos_bp.route('/perfil/avatar-url', methods=['PUT', 'POST'])
 @encargado_repuestos_required
-def obtener_perfil(current_user):
-    """Obtener información del perfil del encargado"""
-    try:
-        # Usar las columnas que existen en la tabla usuario
-        result = supabase.table('usuario') \
-            .select('id, nombre, email, contacto, ubicacion, avatar_url, fecha_registro, rol_principal') \
-            .eq('id', current_user['id']) \
-            .execute()
-        
-        if not result.data:
-            return jsonify({'error': 'Usuario no encontrado'}), 404
-        
-        usuario = result.data[0]
-        
-        # Procesar avatar_url para devolver solo el nombre
-        avatar_url = usuario.get('avatar_url', '')
-        avatar_nombre = 'box'  # valor por defecto
-        
-        if avatar_url:
-            # Si es 'avatar_box', extraer 'box'
-            if avatar_url.startswith('avatar_'):
-                avatar_nombre = avatar_url.replace('avatar_', '')
-            else:
-                avatar_nombre = avatar_url
-        
-        # Preferencias de notificaciones por defecto
-        preferencias = {
-            'nueva_cotizacion': True,
-            'compra_confirmada': True,
-            'entrega_realizada': True,
-            'stock_bajo': True
-        }
-        
-        # Intentar obtener preferencias de notificaciones (opcional)
-        try:
-            prefs_result = supabase.table('preferencias_notificaciones') \
-                .select('preferencias') \
-                .eq('id_usuario', current_user['id']) \
-                .execute()
-            
-            if prefs_result.data and prefs_result.data[0].get('preferencias'):
-                try:
-                    preferencias = json.loads(prefs_result.data[0]['preferencias'])
-                except:
-                    preferencias = {}
-        except Exception as e:
-            logger.warning(f"No se pudieron obtener preferencias: {e}")
-        
-        return jsonify({
-            'success': True,
-            'usuario': {
-                'id': usuario.get('id'),
-                'nombre': usuario.get('nombre'),
-                'email': usuario.get('email'),
-                'telefono': usuario.get('contacto', ''),
-                'whatsapp': usuario.get('contacto', ''),
-                'direccion': usuario.get('ubicacion', ''),
-                'avatar': avatar_nombre,  # Devuelve solo 'box', 'user', etc.
-                'preferencias_notificaciones': preferencias,
-                'created_at': usuario.get('fecha_registro'),
-                'rol_principal': usuario.get('rol_principal')
-            }
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error obteniendo perfil: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@perfil_repuestos_bp.route('/perfil', methods=['PUT'])
-@encargado_repuestos_required
-def actualizar_perfil(current_user):
-    """Actualizar información del perfil"""
+def actualizar_avatar_url(current_user):
+    """Actualizar avatar con URL de Cloudinary (imagen real)"""
     try:
         data = request.get_json()
+        avatar_url = data.get('avatar_url')
         
-        update_data = {
-            'nombre': data.get('nombre'),
-            'contacto': data.get('telefono'),
-            'ubicacion': data.get('direccion'),
-            'updated_at': datetime.datetime.now().isoformat()
-        }
-        
-        # Remover campos None
-        update_data = {k: v for k, v in update_data.items() if v is not None}
+        if not avatar_url:
+            return jsonify({'error': 'URL de avatar requerida'}), 400
         
         result = supabase.table('usuario') \
-            .update(update_data) \
+            .update({'avatar_url': avatar_url}) \
             .eq('id', current_user['id']) \
             .execute()
         
         if not result.data:
-            return jsonify({'error': 'Error al actualizar perfil'}), 500
+            return jsonify({'error': 'Error al actualizar avatar'}), 500
         
-        return jsonify({'success': True, 'message': 'Perfil actualizado'}), 200
+        logger.info(f"✅ Avatar URL actualizado para usuario {current_user['id']}")
+        
+        return jsonify({'success': True, 'message': 'Avatar actualizado'}), 200
         
     except Exception as e:
-        logger.error(f"Error actualizando perfil: {str(e)}")
+        logger.error(f"Error actualizando avatar URL: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
 @perfil_repuestos_bp.route('/perfil/avatar', methods=['PUT'])
 @encargado_repuestos_required
 def actualizar_avatar(current_user):
-    """Actualizar avatar del usuario"""
+    """Actualizar avatar con icono predefinido"""
     try:
         data = request.get_json()
         avatar = data.get('avatar', 'box')
@@ -163,6 +88,96 @@ def actualizar_avatar(current_user):
         return jsonify({'error': str(e)}), 500
 
 
+# =====================================================
+# ENDPOINTS - INFORMACIÓN PERSONAL
+# =====================================================
+
+@perfil_repuestos_bp.route('/perfil', methods=['GET'])
+@encargado_repuestos_required
+def obtener_perfil(current_user):
+    """Obtener información del perfil del encargado"""
+    try:
+        result = supabase.table('usuario') \
+            .select('id, nombre, email, contacto, ubicacion, avatar_url, fecha_registro, rol_principal') \
+            .eq('id', current_user['id']) \
+            .execute()
+        
+        if not result.data:
+            return jsonify({'error': 'Usuario no encontrado'}), 404
+        
+        usuario = result.data[0]
+        
+        # Procesar avatar_url
+        avatar_url = usuario.get('avatar_url', '')
+        avatar_valor = 'box'
+        
+        if avatar_url:
+            if avatar_url.startswith('http'):
+                avatar_valor = avatar_url
+            elif avatar_url.startswith('avatar_'):
+                avatar_valor = avatar_url.replace('avatar_', '')
+            else:
+                avatar_valor = avatar_url
+        
+        # Preferencias por defecto (sin consultar tabla que no existe)
+        preferencias = {
+            'nueva_cotizacion': True,
+            'compra_confirmada': True,
+            'entrega_realizada': True,
+            'stock_bajo': True
+        }
+        
+        return jsonify({
+            'success': True,
+            'usuario': {
+                'id': usuario.get('id'),
+                'nombre': usuario.get('nombre'),
+                'email': usuario.get('email'),
+                'telefono': usuario.get('contacto', ''),
+                'whatsapp': usuario.get('contacto', ''),
+                'direccion': usuario.get('ubicacion', ''),
+                'avatar': avatar_valor,
+                'preferencias_notificaciones': preferencias,
+                'created_at': usuario.get('fecha_registro'),
+                'rol_principal': usuario.get('rol_principal')
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo perfil: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@perfil_repuestos_bp.route('/perfil', methods=['PUT'])
+@encargado_repuestos_required
+def actualizar_perfil(current_user):
+    """Actualizar información del perfil"""
+    try:
+        data = request.get_json()
+        
+        update_data = {
+            'nombre': data.get('nombre'),
+            'contacto': data.get('telefono'),
+            'ubicacion': data.get('direccion'),
+        }
+        
+        update_data = {k: v for k, v in update_data.items() if v is not None}
+        
+        result = supabase.table('usuario') \
+            .update(update_data) \
+            .eq('id', current_user['id']) \
+            .execute()
+        
+        if not result.data:
+            return jsonify({'error': 'Error al actualizar perfil'}), 500
+        
+        return jsonify({'success': True, 'message': 'Perfil actualizado'}), 200
+        
+    except Exception as e:
+        logger.error(f"Error actualizando perfil: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 @perfil_repuestos_bp.route('/perfil/cambiar-password', methods=['PUT'])
 @encargado_repuestos_required
 def cambiar_password(current_user):
@@ -172,7 +187,6 @@ def cambiar_password(current_user):
         password_actual = data.get('password_actual')
         password_nueva = data.get('password_nueva')
         
-        # Verificar contraseña actual
         result = supabase.table('usuario') \
             .select('contrasenia') \
             .eq('id', current_user['id']) \
@@ -186,7 +200,6 @@ def cambiar_password(current_user):
         if not check_password_hash(result.data[0]['contrasenia'], password_actual):
             return jsonify({'error': 'Contraseña actual incorrecta'}), 401
         
-        # Actualizar contraseña
         nuevo_hash = generate_password_hash(password_nueva)
         supabase.table('usuario') \
             .update({'contrasenia': nuevo_hash}) \
@@ -201,7 +214,7 @@ def cambiar_password(current_user):
 
 
 # =====================================================
-# ENDPOINTS - NOTIFICACIONES (OPCIONALES)
+# ENDPOINTS - NOTIFICACIONES (Manejo de error si tabla no existe)
 # =====================================================
 
 @perfil_repuestos_bp.route('/perfil/notificaciones', methods=['GET'])
@@ -261,45 +274,6 @@ def marcar_todas_notificaciones_leidas(current_user):
         
     except Exception as e:
         logger.error(f"Error marcando todas las notificaciones: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@perfil_repuestos_bp.route('/perfil/notificaciones/preferencias', methods=['PUT'])
-@encargado_repuestos_required
-def actualizar_preferencias_notificaciones(current_user):
-    """Actualizar preferencias de notificaciones"""
-    try:
-        data = request.get_json()
-        preferencias = data.get('preferencias', {})
-        
-        # Verificar si ya existe registro
-        existing = supabase.table('preferencias_notificaciones') \
-            .select('id') \
-            .eq('id_usuario', current_user['id']) \
-            .execute()
-        
-        if existing.data:
-            supabase.table('preferencias_notificaciones') \
-                .update({
-                    'preferencias': json.dumps(preferencias),
-                    'updated_at': datetime.datetime.now().isoformat()
-                }) \
-                .eq('id_usuario', current_user['id']) \
-                .execute()
-        else:
-            supabase.table('preferencias_notificaciones') \
-                .insert({
-                    'id_usuario': current_user['id'],
-                    'preferencias': json.dumps(preferencias),
-                    'created_at': datetime.datetime.now().isoformat(),
-                    'updated_at': datetime.datetime.now().isoformat()
-                }) \
-                .execute()
-        
-        return jsonify({'success': True, 'message': 'Preferencias actualizadas'}), 200
-        
-    except Exception as e:
-        logger.error(f"Error actualizando preferencias: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -456,24 +430,6 @@ def exportar_actividad(current_user):
     except Exception as e:
         logger.error(f"Error exportando actividad: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
-
-# =====================================================
-# FUNCIÓN PARA REGISTRAR ACTIVIDAD
-# =====================================================
-
-def registrar_actividad(usuario_id, accion, descripcion, ip=None):
-    """Registrar actividad del usuario"""
-    try:
-        supabase.table('actividad_usuario').insert({
-            'id_usuario': usuario_id,
-            'accion': accion,
-            'descripcion': descripcion,
-            'ip': ip,
-            'fecha': datetime.datetime.now().isoformat()
-        }).execute()
-    except Exception as e:
-        logger.error(f"Error registrando actividad: {e}")
 
 
 # =====================================================

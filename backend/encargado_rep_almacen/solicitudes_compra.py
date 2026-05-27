@@ -1,7 +1,6 @@
 # =====================================================
 # SOLICITUDES_COMPRA.PY - ENCARGADO DE REPUESTOS
-# FURIA MOTOR COMPANY SRL
-# VERSIÓN CON COMPROBANTE DE COMPRA
+# VERSIÓN CORREGIDA - OBTENER SERVICIO DESDE LA ORDEN
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -13,9 +12,6 @@ import json
 
 logger = logging.getLogger(__name__)
 
-# =====================================================
-# CREAR BLUEPRINT
-# =====================================================
 solicitudes_compra_bp = Blueprint('solicitudes_compra', __name__, url_prefix='/api/encargado-repuestos')
 
 SECRET_KEY = config.SECRET_KEY
@@ -34,6 +30,39 @@ def parse_items(items_data):
         return items_data
     except:
         return []
+
+def obtener_servicio_desde_orden(id_orden_trabajo):
+    """Obtener la descripción del servicio asociado a una orden de trabajo"""
+    try:
+        # Buscar en diagnóstico_tecnico (tiene id_servicio)
+        diagnostico = supabase.table('diagnostico_tecnico') \
+            .select('id_servicio, servicios!inner(descripcion)') \
+            .eq('id_orden_trabajo', id_orden_trabajo) \
+            .order('version', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if diagnostico.data and diagnostico.data[0].get('id_servicio'):
+            servicio = diagnostico.data[0].get('servicios', {})
+            return servicio.get('descripcion', 'Servicio técnico')
+        
+        # Buscar en servicio_tecnico directamente (si hay relación)
+        # Obtener servicio de la orden desde la planificación
+        planificacion = supabase.table('planificacion') \
+            .select('id_servicio, servicio_tecnico!inner(descripcion)') \
+            .eq('id_orden_trabajo', id_orden_trabajo) \
+            .limit(1) \
+            .execute()
+        
+        if planificacion.data and planificacion.data[0].get('id_servicio'):
+            servicio = planificacion.data[0].get('servicio_tecnico', {})
+            return servicio.get('descripcion', 'Servicio técnico')
+        
+        return None
+    except Exception as e:
+        logger.warning(f"Error obteniendo servicio desde orden {id_orden_trabajo}: {e}")
+        return None
+
 
 # =====================================================
 # ENDPOINTS
@@ -59,11 +88,15 @@ def obtener_solicitudes_compra(current_user):
         if not result.data:
             return jsonify({'success': True, 'solicitudes': []}), 200
         
+        # Obtener IDs únicos de órdenes
         ordenes_ids = list(set([s.get('id_orden_trabajo') for s in result.data if s.get('id_orden_trabajo')]))
-        servicios_ids = list(set([s.get('id_servicio') for s in result.data if s.get('id_servicio')]))
         
+        # Mapa de órdenes con vehículo
         ordenes_map = {}
+        ordenes_servicio_map = {}  # Mapa para guardar el servicio de cada orden
+        
         if ordenes_ids:
+            # Obtener información de las órdenes
             ordenes_result = supabase.table('ordentrabajo') \
                 .select('id, codigo_unico, id_vehiculo, vehiculo!inner(marca, modelo, placa)') \
                 .in_('id', ordenes_ids) \
@@ -75,19 +108,24 @@ def obtener_solicitudes_compra(current_user):
                     'codigo_unico': o.get('codigo_unico'),
                     'vehiculo': f"{v.get('marca', '')} {v.get('modelo', '')} ({v.get('placa', '')})".strip()
                 }
-        
-        servicios_map = {}
-        if servicios_ids:
-            servicios_result = supabase.table('servicio_tecnico') \
-                .select('id, descripcion') \
-                .in_('id', servicios_ids) \
-                .execute()
-            for s in (servicios_result.data or []):
-                servicios_map[s['id']] = s.get('descripcion')
+                
+                # Obtener servicio para esta orden
+                servicio = obtener_servicio_desde_orden(o['id'])
+                if servicio:
+                    ordenes_servicio_map[o['id']] = servicio
         
         solicitudes = []
         for s in result.data:
-            orden_info = ordenes_map.get(s.get('id_orden_trabajo'), {})
+            orden_id = s.get('id_orden_trabajo')
+            orden_info = ordenes_map.get(orden_id, {})
+            
+            # Obtener servicio - primero de nuestro mapa, si no, intentar obtener ahora
+            servicio_desc = ordenes_servicio_map.get(orden_id)
+            if not servicio_desc:
+                servicio_desc = obtener_servicio_desde_orden(orden_id)
+            
+            if not servicio_desc:
+                servicio_desc = 'Servicio técnico'
             
             items = parse_items(s.get('items'))
             if not items and s.get('descripcion_pieza'):
@@ -99,12 +137,11 @@ def obtener_solicitudes_compra(current_user):
             
             solicitudes.append({
                 'id': s.get('id'),
-                'id_orden_trabajo': s.get('id_orden_trabajo'),
-                'id_servicio': s.get('id_servicio'),
+                'id_orden_trabajo': orden_id,
                 'id_solicitud_cotizacion': s.get('id_solicitud_cotizacion'),
                 'orden_codigo': orden_info.get('codigo_unico', 'N/A'),
                 'vehiculo': orden_info.get('vehiculo', 'N/A'),
-                'servicio_descripcion': servicios_map.get(s.get('id_servicio'), 'N/A'),
+                'servicio_descripcion': servicio_desc,
                 'items': items,
                 'descripcion_pieza': items[0].get('descripcion') if items else s.get('descripcion_pieza'),
                 'cantidad': items[0].get('cantidad') if items else s.get('cantidad', 1),
@@ -118,9 +155,10 @@ def obtener_solicitudes_compra(current_user):
                 'respuesta_encargado': s.get('respuesta_encargado'),
                 'notas_compra': s.get('notas_compra'),
                 'notas_entrega': s.get('notas_entrega'),
-                'comprobante_url': s.get('comprobante_url'),           # NUEVO
-                'numero_factura': s.get('numero_factura'),             # NUEVO
-                'proveedor_nombre': s.get('proveedor_nombre')          # NUEVO
+                'comprobante_url': s.get('comprobante_url'),
+                'numero_factura': s.get('numero_factura'),
+                'proveedor_nombre': s.get('proveedor_nombre'),
+                'monto_compra': float(s.get('monto_compra')) if s.get('monto_compra') else None
             })
         
         return jsonify({'success': True, 'solicitudes': solicitudes}), 200
@@ -140,6 +178,10 @@ def marcar_como_comprado(current_user, id_solicitud):
         data = request.get_json()
         fecha_compra = data.get('fecha_compra')
         notas_compra = data.get('notas_compra', '')
+        numero_factura = data.get('numero_factura', '')
+        proveedor_nombre = data.get('proveedor_nombre', '')
+        monto_compra = data.get('monto_compra')
+        comprobante_url = data.get('comprobante_url')
         
         # Verificar que la solicitud existe
         check = supabase.table('solicitud_compra') \
@@ -163,6 +205,15 @@ def marcar_como_comprado(current_user, id_solicitud):
             'respuesta_encargado': f"Compra realizada el {fecha_compra or ahora.split('T')[0]}"
         }
         
+        if numero_factura:
+            update_data['numero_factura'] = numero_factura
+        if proveedor_nombre:
+            update_data['proveedor_nombre'] = proveedor_nombre
+        if monto_compra:
+            update_data['monto_compra'] = monto_compra
+        if comprobante_url:
+            update_data['comprobante_url'] = comprobante_url
+        
         result = supabase.table('solicitud_compra') \
             .update(update_data) \
             .eq('id', id_solicitud) \
@@ -171,9 +222,7 @@ def marcar_como_comprado(current_user, id_solicitud):
         if not result.data:
             return jsonify({'error': 'Error al actualizar la solicitud'}), 500
         
-        # =====================================================
-        # ACTUALIZAR LA SOLICITUD DEL TÉCNICO a "completado"
-        # =====================================================
+        # Actualizar solicitud del técnico
         try:
             solicitud_tecnico = supabase.table('solicitud_repuestos_tecnico') \
                 .select('id, estado') \
@@ -192,16 +241,16 @@ def marcar_como_comprado(current_user, id_solicitud):
                     }) \
                     .eq('id', solicitud_tecnico.data[0]['id']) \
                     .execute()
-                logger.info(f"✅ Solicitud de técnico #{solicitud_tecnico.data[0]['id']} actualizada a 'completado'")
+                logger.info(f"✅ Solicitud de técnico actualizada a 'completado'")
         except Exception as e:
-            logger.warning(f"Error actualizando solicitud de técnico a completado: {e}")
+            logger.warning(f"Error actualizando solicitud de técnico: {e}")
         
         # Notificar al jefe de taller
         try:
             supabase.table('notificacion').insert({
                 'id_usuario_destino': check.data[0]['id_jefe_taller'],
                 'tipo': 'compra_realizada',
-                'mensaje': f"🛒 Compra realizada para solicitud #{id_solicitud}",
+                'mensaje': f"🛒 Compra realizada para solicitud #{id_solicitud} - Factura: {numero_factura or 'N/A'}",
                 'fecha_envio': ahora,
                 'leida': False
             }).execute()
@@ -254,21 +303,17 @@ def registrar_entrega(current_user, id_solicitud):
         if not result.data:
             return jsonify({'error': 'Error al actualizar la solicitud'}), 500
         
-        # =====================================================
-        # ACTUALIZAR LA SOLICITUD DEL TÉCNICO
-        # Buscar la solicitud_repuestos_tecnico relacionada con esta orden
-        # =====================================================
+        # Actualizar solicitud del técnico a "entregado"
         try:
             solicitud_tecnico = supabase.table('solicitud_repuestos_tecnico') \
                 .select('id, estado') \
                 .eq('id_orden_trabajo', check.data[0]['id_orden_trabajo']) \
-                .eq('estado', 'completado') \
+                .in_('estado', ['completado', 'pendiente', 'en_proceso']) \
                 .order('fecha_solicitud', desc=True) \
                 .limit(1) \
                 .execute()
             
             if solicitud_tecnico.data:
-                # Actualizar la solicitud del técnico a "entregado"
                 supabase.table('solicitud_repuestos_tecnico') \
                     .update({
                         'estado': 'entregado',
@@ -278,29 +323,7 @@ def registrar_entrega(current_user, id_solicitud):
                     }) \
                     .eq('id', solicitud_tecnico.data[0]['id']) \
                     .execute()
-                logger.info(f"✅ Solicitud de técnico #{solicitud_tecnico.data[0]['id']} actualizada a 'entregado'")
-            else:
-                # Si no hay solicitud de técnico en estado 'completado', buscar por orden
-                solicitud_tecnico_pendiente = supabase.table('solicitud_repuestos_tecnico') \
-                    .select('id, estado') \
-                    .eq('id_orden_trabajo', check.data[0]['id_orden_trabajo']) \
-                    .in_('estado', ['pendiente', 'en_proceso', 'completado']) \
-                    .order('fecha_solicitud', desc=True) \
-                    .limit(1) \
-                    .execute()
-                
-                if solicitud_tecnico_pendiente.data:
-                    supabase.table('solicitud_repuestos_tecnico') \
-                        .update({
-                            'estado': 'entregado',
-                            'fecha_entrega': fecha_entrega or ahora,
-                            'respuesta': f"Repuestos entregados el {fecha_entrega or ahora.split('T')[0]}",
-                            'fecha_respuesta': ahora
-                        }) \
-                        .eq('id', solicitud_tecnico_pendiente.data[0]['id']) \
-                        .execute()
-                    logger.info(f"✅ Solicitud de técnico #{solicitud_tecnico_pendiente.data[0]['id']} actualizada a 'entregado'")
-                    
+                logger.info(f"✅ Solicitud de técnico actualizada a 'entregado'")
         except Exception as e:
             logger.warning(f"Error actualizando solicitud de técnico: {e}")
         
@@ -316,7 +339,7 @@ def registrar_entrega(current_user, id_solicitud):
         except Exception as e:
             logger.warning(f"Error enviando notificación: {e}")
         
-        # También notificar al técnico
+        # Notificar al técnico
         try:
             tecnico_asignado = supabase.table('asignaciontecnico') \
                 .select('id_tecnico') \
@@ -342,6 +365,7 @@ def registrar_entrega(current_user, id_solicitud):
     except Exception as e:
         logger.error(f"Error registrando entrega: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @solicitudes_compra_bp.route('/solicitudes-compra/stats', methods=['GET'])
 @encargado_repuestos_required
@@ -393,19 +417,3 @@ def obtener_estadisticas(current_user):
 @solicitudes_compra_bp.route('/test-compra', methods=['GET'])
 def test_endpoint():
     return jsonify({'success': True, 'message': 'Endpoint de solicitudes_compra funcionando'}), 200
-
-
-@solicitudes_compra_bp.route('/cloudinary-config', methods=['GET'])
-@encargado_repuestos_required
-def obtener_cloudinary_config(current_user):
-    """Obtener configuración de Cloudinary para el frontend"""
-    try:
-        from config import config
-        return jsonify({
-            'success': True,
-            'cloud_name': config.CLOUDINARY_CLOUD_NAME,
-            'upload_preset': 'furia_motor_preset'  # Debes crear este preset en Cloudinary
-        }), 200
-    except Exception as e:
-        logger.error(f"Error obteniendo config Cloudinary: {e}")
-        return jsonify({'error': str(e)}), 500

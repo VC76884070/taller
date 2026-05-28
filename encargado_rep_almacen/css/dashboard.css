@@ -1,7 +1,7 @@
 /* =====================================================
    DASHBOARD ENCARGADO DE REPUESTOS - TEMA OSCURO
    FURIA MOTOR COMPANY SRL
-   VERSIÓN COMPLETA CON SIDEBAR MEJORADO
+   VERSIÓN COMPLETA CON COMPONENTES RESPONSIVOS
    ===================================================== */
 
 /* =====================================================
@@ -75,15 +75,71 @@ body {
     overflow-x: hidden;
 }
 
+body.sidebar-open {
+    overflow: hidden;
+}
+
 .app {
     display: flex;
     min-height: 100vh;
 }
 
 /* =====================================================
+   ========== BOTÓN HAMBURGUESA ==========
+   ===================================================== */
+.hamburger-menu {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    width: 45px;
+    height: 45px;
+    background: var(--rojo-primario);
+    border: none;
+    border-radius: var(--radius-md);
+    color: white;
+    font-size: 1.3rem;
+    cursor: pointer;
+    z-index: 1002;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-lg);
+    transition: var(--transition);
+}
+
+.hamburger-menu:hover {
+    background: var(--rojo-oscuro);
+    transform: scale(1.05);
+}
+
+.hamburger-menu.active {
+    background: var(--rojo-oscuro);
+    left: 275px;
+}
+
+/* =====================================================
+   ========== OVERLAY PARA CERRAR SIDEBAR ==========
+   ===================================================== */
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 998;
+    display: none;
+    transition: var(--transition);
+}
+
+.sidebar-overlay.active {
+    display: block;
+}
+
+/* =====================================================
    ========== SIDEBAR MEJORADO ==========
    ===================================================== */
-
 .sidebar {
     position: fixed;
     left: 0;
@@ -95,9 +151,10 @@ body {
     display: flex;
     flex-direction: column;
     z-index: 1000;
-    transition: var(--transition-slow);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     overflow-y: auto;
     overflow-x: hidden;
+    transform: translateX(0);
 }
 
 /* Scrollbar del sidebar */
@@ -330,6 +387,7 @@ body {
     display: flex;
     align-items: center;
     gap: 1rem;
+    flex-wrap: wrap;
 }
 
 /* Botón actualizar */
@@ -482,6 +540,7 @@ body {
     font-weight: 700;
     color: var(--blanco);
     line-height: 1.2;
+    word-break: break-word;
 }
 
 /* Colores específicos para KPIs */
@@ -543,6 +602,7 @@ body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .card-header h3 i {
@@ -556,6 +616,7 @@ body {
     font-size: 0.75rem;
     font-weight: 600;
     transition: var(--transition);
+    white-space: nowrap;
 }
 
 .card-link:hover {
@@ -610,11 +671,13 @@ body {
     font-size: 0.85rem;
     color: var(--blanco);
     flex: 1;
+    word-break: break-word;
 }
 
 .comunicado-fecha {
     font-size: 0.65rem;
     color: var(--gris-texto);
+    white-space: nowrap;
 }
 
 .comunicado-preview {
@@ -622,6 +685,7 @@ body {
     color: var(--gris-texto);
     line-height: 1.4;
     margin-left: 1.5rem;
+    word-break: break-word;
 }
 
 /* =====================================================
@@ -645,6 +709,8 @@ body {
     cursor: pointer;
     transition: var(--transition);
     border: 1px solid var(--border-color);
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .solicitud-item:hover {
@@ -654,6 +720,7 @@ body {
 
 .solicitud-info {
     flex: 1;
+    min-width: 120px;
 }
 
 .solicitud-orden {
@@ -661,6 +728,7 @@ body {
     color: var(--blanco);
     font-size: 0.85rem;
     margin-bottom: 0.2rem;
+    word-break: break-word;
 }
 
 .solicitud-items {
@@ -678,6 +746,7 @@ body {
     padding: 0.2rem 0.5rem;
     border-radius: var(--radius-full);
     margin-bottom: 0.25rem;
+    white-space: nowrap;
 }
 
 .solicitud-estado.status-pendiente {
@@ -699,6 +768,7 @@ body {
     display: block;
     font-size: 0.65rem;
     color: var(--gris-texto);
+    white-space: nowrap;
 }
 
 /* =====================================================
@@ -721,6 +791,9 @@ body {
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     transition: var(--transition);
+    cursor: pointer;
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .proveedor-item:hover {
@@ -732,6 +805,7 @@ body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    flex: 1;
 }
 
 .proveedor-info i {
@@ -743,6 +817,7 @@ body {
     font-size: 0.85rem;
     color: var(--blanco);
     font-weight: 500;
+    word-break: break-word;
 }
 
 .proveedor-veces {
@@ -751,6 +826,7 @@ body {
     background: rgba(16, 185, 129, 0.1);
     padding: 0.2rem 0.5rem;
     border-radius: var(--radius-full);
+    white-space: nowrap;
 }
 
 /* =====================================================
@@ -772,6 +848,7 @@ body {
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     transition: var(--transition);
+    flex-wrap: wrap;
 }
 
 .evento-item:hover {
@@ -803,6 +880,7 @@ body {
 
 .evento-info {
     flex: 1;
+    min-width: 150px;
 }
 
 .evento-titulo {
@@ -810,11 +888,13 @@ body {
     color: var(--blanco);
     font-size: 0.85rem;
     margin-bottom: 0.25rem;
+    word-break: break-word;
 }
 
 .evento-proveedor {
     font-size: 0.7rem;
     color: var(--gris-texto);
+    word-break: break-word;
 }
 
 /* =====================================================
@@ -863,6 +943,7 @@ body {
     justify-content: center;
     color: var(--rojo-primario);
     font-size: 0.9rem;
+    flex-shrink: 0;
 }
 
 .notificacion-content {
@@ -874,6 +955,7 @@ body {
     color: var(--blanco);
     margin-bottom: 0.25rem;
     line-height: 1.4;
+    word-break: break-word;
 }
 
 .notificacion-fecha {
@@ -888,6 +970,7 @@ body {
     height: 250px;
     position: relative;
     margin: 0.5rem 0;
+    width: 100%;
 }
 
 /* =====================================================
@@ -1059,149 +1142,471 @@ body {
 .card:nth-child(4) { animation-delay: 0.2s; }
 
 /* =====================================================
-   RESPONSIVE
+   ========== RESPONSIVE - TABLETS Y MÓVILES (max 1024px) ==========
    ===================================================== */
-@media (max-width: 1400px) {
-    .kpi-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
-
 @media (max-width: 1024px) {
-    .kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
+    /* Mostrar botón hamburguesa */
+    .hamburger-menu {
+        display: flex !important;
     }
     
-    .dashboard-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 992px) {
+    /* Sidebar oculto por defecto */
     .sidebar {
-        width: 80px;
+        transform: translateX(-100%);
+        width: 280px;
+        top: 0;
+        height: 100vh;
     }
     
-    .sidebar-header {
-        justify-content: center;
-        padding: 1rem;
+    .sidebar.open {
+        transform: translateX(0);
+        box-shadow: 5px 0 25px rgba(0, 0, 0, 0.5);
     }
     
-    .sidebar-brand,
-    .user-info span:not(.user-name),
-    .user-role,
-    .nav-link span {
-        display: none;
+    /* Mostrar todos los elementos cuando está abierto */
+    .sidebar.open .sidebar-brand,
+    .sidebar.open .user-info span:not(.user-name),
+    .sidebar.open .user-role,
+    .sidebar.open .nav-link span {
+        display: inline-block;
     }
     
-    .sidebar-user {
-        justify-content: center;
-        padding: 0 0.75rem 1rem 0.75rem;
+    .sidebar.open .sidebar-header {
+        justify-content: flex-start;
     }
     
-    .user-avatar {
-        width: 40px;
-        height: 40px;
+    .sidebar.open .sidebar-user {
+        justify-content: flex-start;
     }
     
-    .nav-link {
-        justify-content: center;
-        padding: 0.75rem;
+    .sidebar.open .nav-link {
+        justify-content: flex-start;
     }
     
-    .nav-link i {
-        margin: 0;
-        font-size: 1.2rem;
-    }
-    
-    .nav-item.active {
-        border-left: none;
-        border-radius: var(--radius-md);
-        background: rgba(193, 18, 31, 0.2);
-    }
-    
-    .main-content {
-        margin-left: 80px;
-    }
-}
-
-@media (max-width: 768px) {
+    /* Main content sin margen */
     .main-content {
         margin-left: 0;
         padding: 1rem;
+        padding-top: 70px;
     }
     
-    .kpi-grid {
-        grid-template-columns: 1fr;
-    }
-    
+    /* Top bar responsive */
     .top-bar {
         flex-direction: column;
         align-items: flex-start;
         gap: 1rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .page-title h1 {
+        font-size: 1.2rem;
+    }
+    
+    .page-title p {
+        font-size: 0.75rem;
     }
     
     .top-actions {
         width: 100%;
         justify-content: space-between;
+        flex-wrap: wrap;
+    }
+    
+    /* KPIs - 2 columnas en tablet */
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+    
+    .kpi-card {
+        padding: 1rem;
+    }
+    
+    .kpi-icon {
+        width: 45px;
+        height: 45px;
+        font-size: 1.3rem;
+    }
+    
+    .kpi-value {
+        font-size: 1.4rem;
+    }
+    
+    /* Dashboard grid - 1 columna */
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    /* Cards */
+    .card {
+        padding: 1rem;
     }
     
     .card-header {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    .card-header h3 {
+        font-size: 0.9rem;
+    }
+    
+    /* Listas - altura reducida */
+    .comunicados-list,
+    .solicitudes-list,
+    .proveedores-list,
+    .calendario-list,
+    .notificaciones-list {
+        max-height: 250px;
+    }
+    
+    /* Solicitudes responsive */
+    .solicitud-item {
         flex-direction: column;
         align-items: flex-start;
-        gap: 0.5rem;
     }
     
-    /* Sidebar colapsable en mobile */
-    .sidebar {
-        transform: translateX(-100%);
-        width: 260px;
+    .solicitud-meta {
+        text-align: left;
+        width: 100%;
     }
     
-    .sidebar.open {
-        transform: translateX(0);
+    /* Calendario responsive */
+    .evento-item {
+        flex-direction: column;
+        align-items: flex-start;
     }
     
-    /* Botón para abrir sidebar en mobile */
-    .menu-toggle {
+    .evento-fecha {
         display: flex;
-        position: fixed;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: auto;
+        width: 100%;
+        justify-content: flex-start;
+    }
+    
+    .evento-dia {
+        font-size: 1rem;
+    }
+    
+    /* Chart */
+    .chart-container {
+        height: 200px;
+    }
+    
+    /* Toast */
+    .toast-container {
+        top: auto;
         bottom: 20px;
         right: 20px;
-        width: 50px;
-        height: 50px;
-        background: var(--rojo-primario);
-        border-radius: var(--radius-full);
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        z-index: 1001;
-        box-shadow: var(--shadow-lg);
-        border: none;
-        color: white;
-        font-size: 1.2rem;
-        transition: var(--transition);
+        left: 20px;
     }
     
-    .menu-toggle:hover {
-        background: var(--rojo-oscuro);
-        transform: scale(1.05);
+    /* Feedback táctil */
+    .solicitud-item:active,
+    .comunicado-item:active,
+    .notificacion-item:active,
+    .proveedor-item:active {
+        transform: scale(0.98);
+        transition: transform 0.05s;
     }
-}
-
-/* Desktop siempre muestra sidebar */
-@media (min-width: 769px) {
-    .menu-toggle {
+    
+    /* Scroll suave */
+    .comunicados-list,
+    .solicitudes-list,
+    .proveedores-list,
+    .calendario-list,
+    .notificaciones-list {
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Overlay */
+    .sidebar-overlay {
         display: none;
     }
     
-    .sidebar {
-        transform: translateX(0) !important;
+    .sidebar-overlay.active {
+        display: block;
     }
 }
 
 /* =====================================================
-   BADGES Y UTILIDADES
+   ========== MÓVILES PEQUEÑOS (max 480px) ==========
+   ===================================================== */
+@media (max-width: 480px) {
+    .main-content {
+        padding: 0.75rem;
+        padding-top: 65px;
+    }
+    
+    /* KPIs - 1 columna en móvil */
+    .kpi-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+    
+    .kpi-card {
+        padding: 0.75rem;
+    }
+    
+    .kpi-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1.1rem;
+    }
+    
+    .kpi-value {
+        font-size: 1.2rem;
+    }
+    
+    .kpi-label {
+        font-size: 0.7rem;
+    }
+    
+    /* Card header */
+    .card-header h3 {
+        font-size: 0.85rem;
+    }
+    
+    .card-link {
+        font-size: 0.7rem;
+        white-space: normal;
+    }
+    
+    /* Botones */
+    .btn-secondary {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.75rem;
+    }
+    
+    .date-display {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.75rem;
+    }
+    
+    .date-display span {
+        display: none;
+    }
+    
+    /* Hamburguesa */
+    .hamburger-menu {
+        width: 38px;
+        height: 38px;
+        font-size: 1.1rem;
+        top: 12px;
+        left: 12px;
+    }
+    
+    .hamburger-menu.active {
+        left: 275px;
+    }
+    
+    /* Comunicados */
+    .comunicado-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .comunicado-fecha {
+        white-space: normal;
+    }
+    
+    .comunicado-preview {
+        margin-left: 0;
+    }
+    
+    /* Notificaciones */
+    .notificacion-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .notificacion-icon {
+        width: 28px;
+        height: 28px;
+        font-size: 0.8rem;
+    }
+}
+
+/* =====================================================
+   ========== ORIENTACIÓN LANDSCAPE ==========
+   ===================================================== */
+@media (max-width: 1024px) and (orientation: landscape) {
+    .sidebar {
+        overflow-y: auto;
+    }
+    
+    .main-content {
+        padding-top: 60px;
+    }
+    
+    .kpi-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .card {
+        max-height: 350px;
+        overflow-y: auto;
+    }
+    
+    .solicitud-item {
+        flex-direction: row;
+        align-items: center;
+    }
+    
+    .solicitud-meta {
+        text-align: right;
+        width: auto;
+    }
+    
+    .evento-item {
+        flex-direction: row;
+        align-items: center;
+    }
+    
+    .evento-fecha {
+        width: auto;
+        flex-direction: column;
+    }
+}
+
+/* =====================================================
+   ========== DESKTOP (min 1025px) ==========
+   ===================================================== */
+@media (min-width: 1025px) {
+    /* Sidebar siempre visible */
+    .sidebar {
+        transform: translateX(0) !important;
+        width: 280px;
+    }
+    
+    /* Main content con margen y separación */
+    .main-content {
+        margin-left: 300px;
+        padding: 1.5rem 2rem;
+    }
+    
+    /* Ocultar botón hamburguesa */
+    .hamburger-menu {
+        display: none !important;
+    }
+    
+    /* Ocultar overlay */
+    .sidebar-overlay {
+        display: none !important;
+    }
+    
+    /* Asegurar que el sidebar muestre todos los elementos */
+    .sidebar-brand,
+    .user-info span:not(.user-name),
+    .user-role,
+    .nav-link span {
+        display: inline-block !important;
+    }
+    
+    .sidebar-header {
+        justify-content: flex-start !important;
+        padding: 1.5rem 1.5rem 1rem 1.5rem !important;
+    }
+    
+    .sidebar-user {
+        justify-content: flex-start !important;
+        padding: 0 1.5rem 1.5rem 1.5rem !important;
+    }
+    
+    .nav-link {
+        justify-content: flex-start !important;
+        padding: 0.75rem 1rem !important;
+    }
+    
+    .nav-link i {
+        margin: 0 !important;
+        font-size: 1.1rem !important;
+    }
+    
+    .nav-item.active {
+        border-left: 3px solid var(--rojo-primario) !important;
+        border-radius: var(--radius-md) !important;
+    }
+    
+    /* KPIs - 3 columnas en desktop */
+    .kpi-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+    }
+    
+    /* Dashboard grid - 2 columnas */
+    .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+    }
+}
+
+/* =====================================================
+   ========== PANTALLAS GRANDES (min 1400px) ==========
+   ===================================================== */
+@media (min-width: 1400px) {
+    .main-content {
+        margin-left: 310px;
+        max-width: calc(100% - 310px);
+    }
+    
+    .kpi-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.8rem;
+    }
+    
+    .dashboard-grid {
+        gap: 1.8rem;
+    }
+}
+
+/* =====================================================
+   ========== PANTALLAS EXTRA GRANDES (min 1600px) ==========
+   ===================================================== */
+@media (min-width: 1600px) {
+    .main-content {
+        margin-left: 330px;
+        max-width: calc(100% - 330px);
+        padding: 2rem 2.5rem;
+    }
+    
+    .kpi-grid {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 2rem;
+    }
+    
+    .dashboard-grid {
+        gap: 2rem;
+    }
+}
+
+/* =====================================================
+   ========== MEJORAS PARA TOUCH ==========
+   ===================================================== */
+@media (max-width: 1024px) {
+    .btn-refresh-sm,
+    .card-link,
+    .notification-icon {
+        min-width: 44px;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+/* =====================================================
+   ========== BADGES Y UTILIDADES ==========
    ===================================================== */
 .badge {
     background: var(--rojo-primario);

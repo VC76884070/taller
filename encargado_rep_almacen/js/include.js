@@ -17,7 +17,7 @@ window.API_BASE_URL = API_BASE_URL;
 
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA ENCARGADO DE REPUESTOS
-// VERSIÓN CORREGIDA - Rutas correctas
+// VERSIÓN CORREGIDA CON RESPONSIVE
 // =====================================================
 
 // Configuración
@@ -72,11 +72,13 @@ async function includeSidebar() {
         sidebarContainer.innerHTML = html;
         
         inicializarSidebar();
+        ajustarSidebarResponsive();
         
     } catch (error) {
         console.error('❌ Error cargando sidebar:', error);
         crearSidebarRespaldo(sidebarContainer);
         inicializarSidebar();
+        ajustarSidebarResponsive();
     }
 }
 
@@ -154,6 +156,7 @@ function inicializarSidebar() {
         marcarItemActivo(currentPage);
         actualizarNombreUsuario();
         actualizarEnlacesSidebar();
+        mejorarNavegacionMovil();
         
         const items = document.querySelectorAll('.nav-item');
         console.log(`📋 Encontrados ${items.length} items en el sidebar`);
@@ -257,6 +260,69 @@ function actualizarNombreUsuario() {
     userNameSpan.textContent = user.nombre;
 }
 
+// =====================================================
+// FUNCIONES RESPONSIVE PARA EL SIDEBAR
+// =====================================================
+
+// Función para ajustar sidebar según el tamaño de pantalla
+function ajustarSidebarResponsive() {
+    const sidebar = document.querySelector('.sidebar');
+    const hamburgerMenu = document.getElementById('hamburgerMenu');
+    
+    if (!sidebar) return;
+    
+    if (window.innerWidth > 768) {
+        // En desktop/tablet, asegurar que sidebar esté visible
+        sidebar.classList.remove('open');
+        if (hamburgerMenu) hamburgerMenu.classList.remove('active');
+        document.body.classList.remove('sidebar-open');
+        
+        // En tablet (769-992px) mantener estilo compacto
+        if (window.innerWidth <= 992) {
+            sidebar.style.transform = '';
+        }
+    } else {
+        // En móvil, asegurar que sidebar esté cerrado inicialmente
+        sidebar.classList.remove('open');
+        if (hamburgerMenu) hamburgerMenu.classList.remove('active');
+        document.body.classList.remove('sidebar-open');
+    }
+}
+
+// Función para mejorar la navegación en móvil
+function mejorarNavegacionMovil() {
+    const navLinks = document.querySelectorAll('.nav-link');
+    
+    navLinks.forEach(link => {
+        // Remover event listener previo para evitar duplicados
+        link.removeEventListener('click', handleNavLinkClick);
+        link.addEventListener('click', handleNavLinkClick);
+    });
+}
+
+function handleNavLinkClick(e) {
+    // En móvil, cerrar sidebar después de hacer click
+    if (window.innerWidth <= 768) {
+        // Pequeño delay para que la navegación se complete
+        setTimeout(() => {
+            if (typeof window.closeSidebar === 'function') {
+                window.closeSidebar();
+            } else if (typeof closeSidebar === 'function') {
+                closeSidebar();
+            }
+        }, 150);
+    }
+}
+
+// Función para detectar si es dispositivo móvil
+function esDispositivoMovil() {
+    return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// =====================================================
+// FUNCIONES GLOBALES
+// =====================================================
+
 window.cerrarSesion = function() {
     if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
         localStorage.removeItem('furia_token');
@@ -270,4 +336,35 @@ window.recargarSidebar = function() {
     includeSidebar();
 };
 
-document.addEventListener('DOMContentLoaded', includeSidebar);
+// Escuchar cambios de orientación
+window.addEventListener('orientationchange', function() {
+    setTimeout(ajustarSidebarResponsive, 100);
+});
+
+// Escuchar cambios de tamaño de pantalla
+window.addEventListener('resize', function() {
+    ajustarSidebarResponsive();
+});
+
+// =====================================================
+// INICIALIZACIÓN
+// =====================================================
+
+// Inicializar cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    includeSidebar();
+});
+
+// También inicializar si el script se carga después del DOM
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', includeSidebar);
+} else {
+    includeSidebar();
+}
+
+// Exportar funciones para uso global
+window.ajustarSidebarResponsive = ajustarSidebarResponsive;
+window.mejorarNavegacionMovil = mejorarNavegacionMovil;
+window.esDispositivoMovil = esDispositivoMovil;
+
+console.log('✅ include.js cargado correctamente - Versión responsive');

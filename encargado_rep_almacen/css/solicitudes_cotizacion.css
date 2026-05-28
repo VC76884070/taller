@@ -1,6 +1,6 @@
 /* =====================================================
    SOLICITUDES_COTIZACION.CSS - ENCARGADO DE REPUESTOS
-   TEMA OSCURO - FURIA MOTOR (VERSIÓN MEJORADA)
+   TEMA OSCURO - FURIA MOTOR (VERSIÓN COMPLETA RESPONSIVE)
    ===================================================== */
 
 /* Filtros bar */
@@ -46,6 +46,60 @@
 
 .filtros-bar input::placeholder {
     color: var(--gris-texto);
+}
+
+/* Paginación info */
+.pagination-info {
+    background: var(--gris-oscuro);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    font-size: 0.8rem;
+    color: var(--gris-texto);
+    display: inline-block;
+}
+
+.pagination-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 2rem;
+    padding: 1rem;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+}
+
+.pagination-btn {
+    background: var(--gris-oscuro);
+    border: 1px solid var(--border-color);
+    color: var(--blanco);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background: var(--rojo-primario);
+    border-color: var(--rojo-primario);
+    transform: translateY(-2px);
+}
+
+.pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pagination-current {
+    color: var(--blanco);
+    font-weight: 600;
+    font-size: 0.9rem;
 }
 
 /* Solicitud Card - Animación mejorada */
@@ -152,6 +206,15 @@
     gap: 0.5rem;
 }
 
+.more-items {
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+    padding: 0.5rem;
+    text-align: center;
+    border-top: 1px solid var(--border-color);
+    margin-top: 0.5rem;
+}
+
 .item-row-solicitud {
     display: flex;
     justify-content: space-between;
@@ -174,6 +237,7 @@
     font-weight: 500;
     font-size: 0.9rem;
     color: var(--blanco);
+    word-break: break-word;
 }
 
 .item-cant {
@@ -184,18 +248,13 @@
     font-size: 0.9rem;
 }
 
-.item-detalle {
-    flex: 1;
-    font-size: 0.8rem;
-    color: var(--gris-texto);
-}
-
 /* Action buttons mejorados */
 .action-buttons {
     display: flex;
     gap: 0.75rem;
     justify-content: flex-end;
     margin-top: 1rem;
+    flex-wrap: wrap;
 }
 
 .action-btn {
@@ -367,6 +426,7 @@
     font-weight: 600;
     margin-bottom: 0.75rem;
     color: var(--blanco);
+    word-break: break-word;
 }
 
 .precio-item-desc small {
@@ -406,6 +466,16 @@
     outline: none;
     border-color: var(--verde-exito);
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.total-hint {
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+}
+
+.total-item {
+    font-weight: 700;
+    color: var(--verde-exito);
 }
 
 /* Formularios en modales */
@@ -459,6 +529,7 @@
     margin-top: 1.5rem;
     padding-top: 1rem;
     border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
 }
 
 .btn-secondary {
@@ -544,6 +615,7 @@
     font-size: 0.9rem;
     color: var(--blanco);
     line-height: 1.4;
+    word-break: break-word;
 }
 
 /* Status badges */
@@ -614,6 +686,13 @@
     display: none;
     justify-content: center;
     align-items: center;
+    flex-direction: column;
+}
+
+.loading-overlay p {
+    margin-top: 1rem;
+    color: var(--blanco);
+    font-size: 0.85rem;
 }
 
 .loading-spinner {
@@ -630,10 +709,17 @@
 }
 
 /* Toast notification mejorado */
-.toast-notification {
+.toast-container {
     position: fixed;
     bottom: 30px;
     right: 30px;
+    z-index: 20001;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.toast-notification {
     background: var(--bg-card);
     color: var(--blanco);
     padding: 1rem 1.5rem;
@@ -641,7 +727,6 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    z-index: 20001;
     animation: slideInRight 0.3s ease;
     border-left: 4px solid var(--rojo-primario);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
@@ -650,7 +735,6 @@
 
 .toast-notification.success {
     border-left-color: var(--verde-exito);
-    background: linear-gradient(135deg, var(--bg-card) 0%, #1a1a2e 100%);
 }
 
 .toast-notification.error {
@@ -672,8 +756,28 @@
     }
 }
 
-/* Responsive Design para modales y cards */
-@media (max-width: 768px) {
+/* =====================================================
+   RESPONSIVE DESIGN COMPLETO
+   ===================================================== */
+
+/* Tablet (max 1024px) */
+@media (max-width: 1024px) {
+    .main-content {
+        padding: 1rem;
+        padding-top: 70px;
+    }
+    
+    .top-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .top-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
     .filtros-bar {
         flex-direction: column;
         align-items: stretch;
@@ -681,6 +785,55 @@
     
     .filtros-bar input {
         max-width: none;
+    }
+    
+    .solicitud-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    /* Área táctil mínima 44px */
+    .action-btn,
+    .pagination-btn,
+    .btn-secondary,
+    .btn-cotizar,
+    .close-modal {
+        min-height: 44px;
+    }
+}
+
+/* Móvil (max 768px) */
+@media (max-width: 768px) {
+    .main-content {
+        padding: 0.75rem;
+        padding-top: 65px;
+    }
+    
+    .top-bar {
+        padding: 0.75rem;
+    }
+    
+    .page-title h1 {
+        font-size: 1.2rem;
+    }
+    
+    .page-title p {
+        font-size: 0.75rem;
+    }
+    
+    .filtros-bar {
+        padding: 0.75rem;
+        gap: 0.75rem;
+    }
+    
+    .filtros-bar select,
+    .filtros-bar input,
+    .filtros-bar button {
+        width: 100%;
+    }
+    
+    .solicitud-body {
+        padding: 1rem;
     }
     
     .orden-info {
@@ -698,16 +851,22 @@
         text-align: left;
     }
     
-    .solicitud-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
     .action-buttons {
         flex-direction: column;
     }
     
     .action-btn {
+        justify-content: center;
+        width: 100%;
+    }
+    
+    .pagination-controls {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .pagination-btn {
+        width: 100%;
         justify-content: center;
     }
     
@@ -725,8 +884,17 @@
         max-height: 90vh;
     }
     
+    .modal-header {
+        padding: 1rem;
+    }
+    
     .modal-header h3 {
-        font-size: 1.1rem;
+        font-size: 1rem;
+    }
+    
+    #modalCotizarBody,
+    #modalDetalleBody {
+        padding: 1rem;
     }
     
     .modal-actions {
@@ -736,12 +904,109 @@
     .btn-secondary,
     .btn-cotizar {
         justify-content: center;
+        width: 100%;
     }
     
-    .toast-notification {
+    .toast-container {
         bottom: 20px;
         right: 20px;
         left: 20px;
+    }
+    
+    .toast-notification {
+        max-width: calc(100% - 40px);
         padding: 0.85rem 1rem;
     }
+}
+
+/* Móvil pequeño (max 480px) */
+@media (max-width: 480px) {
+    .solicitud-header h3 {
+        font-size: 0.95rem;
+    }
+    
+    .items-list h4 {
+        font-size: 0.85rem;
+    }
+    
+    .item-desc {
+        font-size: 0.8rem;
+    }
+    
+    .status-badge {
+        font-size: 0.65rem;
+        padding: 0.25rem 0.75rem;
+    }
+    
+    .precio-cotizado-box .precio-valor {
+        font-size: 1rem;
+    }
+}
+
+/* Landscape mode en móviles */
+@media (max-width: 768px) and (orientation: landscape) {
+    .main-content {
+        padding-top: 60px;
+    }
+    
+    .solicitud-card {
+        margin-bottom: 1rem;
+    }
+    
+    .solicitud-body {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .modal-content {
+        max-height: 90vh;
+    }
+}
+
+/* Desktop (min 1025px) - Sidebar visible */
+@media (min-width: 1025px) {
+    .main-content {
+        margin-left: 300px;
+    }
+}
+
+/* Pantallas grandes (min 1400px) */
+@media (min-width: 1400px) {
+    .main-content {
+        margin-left: 310px;
+        padding: 2rem;
+    }
+    
+    .solicitudes-container {
+        max-width: 1400px;
+    }
+}
+
+/* Scroll suave para móvil */
+@media (max-width: 768px) {
+    .solicitud-body,
+    .modal-content,
+    .items-list {
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* Scrollbar personalizado */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--gris-medio);
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--rojo-primario);
 }

@@ -1,7 +1,7 @@
 /* =====================================================
    HISTORIAL.CSS - ENCARGADO DE REPUESTOS
    TEMA OSCURO - FURIA MOTOR
-   VERSIÓN COMPLETA Y CORREGIDA
+   VERSIÓN COMPLETA Y CORREGIDA CON RESPONSIVE
    ===================================================== */
 
 /* =====================================================
@@ -104,7 +104,7 @@
 }
 
 /* =====================================================
-   FILTROS BAR
+   FILTROS BAR - RESPONSIVO
    ===================================================== */
 .filtros-bar {
     display: flex;
@@ -214,7 +214,7 @@
 }
 
 /* =====================================================
-   BOTONES
+   BOTONES - ÁREA TÁCTIL MEJORADA
    ===================================================== */
 .btn-secondary {
     background: var(--gris-oscuro);
@@ -229,12 +229,17 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.85rem;
+    min-height: 44px;
 }
 
 .btn-secondary:hover {
     background: var(--gris-medio);
     border-color: var(--rojo-primario);
     color: var(--rojo-primario);
+}
+
+.btn-secondary:active {
+    transform: scale(0.97);
 }
 
 .btn-primary {
@@ -250,6 +255,7 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.85rem;
+    min-height: 44px;
 }
 
 .btn-primary:hover {
@@ -258,8 +264,12 @@
     box-shadow: 0 4px 12px rgba(193, 18, 31, 0.3);
 }
 
+.btn-primary:active {
+    transform: scale(0.97);
+}
+
 /* =====================================================
-   TABLA CONTENEDOR
+   TABLA CONTENEDOR - SCROLL HORIZONTAL
    ===================================================== */
 .table-container {
     background: var(--bg-card);
@@ -267,6 +277,7 @@
     border: 1px solid var(--border-color);
     overflow-x: auto;
     padding: 0;
+    -webkit-overflow-scrolling: touch;
 }
 
 .data-table {
@@ -308,11 +319,17 @@
     border-radius: var(--radius-sm);
     transition: var(--transition);
     color: var(--gris-texto);
+    min-width: 44px;
+    min-height: 44px;
 }
 
 .data-table .action-btn:hover {
     background: var(--gris-medio);
     color: var(--rojo-primario);
+}
+
+.data-table .action-btn:active {
+    transform: scale(0.95);
 }
 
 /* Empty row */
@@ -377,7 +394,7 @@
 }
 
 /* =====================================================
-   ESTADÍSTICAS GRID
+   ESTADÍSTICAS GRID - RESPONSIVO
    ===================================================== */
 .stats-grid {
     display: grid;
@@ -425,6 +442,10 @@
     border-radius: var(--radius-md);
     text-align: center;
     transition: var(--transition);
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .summary-item:hover {
@@ -446,6 +467,7 @@
     font-size: 1.5rem;
     font-weight: 700;
     color: var(--blanco);
+    word-break: break-word;
 }
 
 /* Top proveedores */
@@ -453,6 +475,9 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    max-height: 300px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .top-proveedor-item {
@@ -463,6 +488,7 @@
     background: var(--gris-oscuro);
     border-radius: var(--radius-md);
     transition: var(--transition);
+    min-height: 50px;
 }
 
 .top-proveedor-item:hover {
@@ -470,16 +496,22 @@
     transform: translateX(4px);
 }
 
+.top-proveedor-item:active {
+    transform: scale(0.98);
+}
+
 .top-proveedor-nombre {
     font-weight: 600;
     color: var(--blanco);
     font-size: 0.85rem;
+    word-break: break-word;
 }
 
 .top-proveedor-cantidad {
     color: var(--rojo-primario);
     font-weight: 600;
     font-size: 0.8rem;
+    white-space: nowrap;
 }
 
 /* Gráficos */
@@ -523,11 +555,6 @@
     box-shadow: var(--shadow-xl);
 }
 
-/* Modal pequeño */
-.modal-sm {
-    max-width: 450px;
-}
-
 /* Modal scrollbar */
 .modal-content::-webkit-scrollbar {
     width: 6px;
@@ -547,7 +574,6 @@
     background: var(--rojo-primario);
 }
 
-/* Animaciones de modales */
 @keyframes slideIn {
     from {
         transform: translateY(-50px);
@@ -587,11 +613,20 @@
     color: var(--gris-texto);
     transition: var(--transition);
     line-height: 1;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .close-modal:hover {
     color: var(--rojo-primario);
     transform: scale(1.1);
+}
+
+.close-modal:active {
+    transform: scale(0.95);
 }
 
 /* =====================================================
@@ -655,6 +690,7 @@
 .items-table {
     overflow-x: auto;
     margin-top: 0.5rem;
+    -webkit-overflow-scrolling: touch;
 }
 
 .items-table table {
@@ -720,6 +756,11 @@
     border-top: 1px solid var(--border-color);
 }
 
+.detalle-actions button {
+    min-height: 44px;
+    min-width: 100px;
+}
+
 /* =====================================================
    LOADING OVERLAY
    ===================================================== */
@@ -775,6 +816,7 @@
     border-left: 4px solid var(--rojo-primario);
     animation: toastSlide 0.3s ease;
     font-size: 0.85rem;
+    min-height: 44px;
 }
 
 .toast-notification.success {
@@ -823,10 +865,10 @@
 }
 
 /* =====================================================
-   RESPONSIVE DESIGN
+   ========== RESPONSIVE DESIGN MEJORADO ==========
    ===================================================== */
 
-/* Tablet (768px - 1024px) */
+/* Tablet (769px - 1024px) */
 @media (max-width: 1024px) {
     .stats-grid {
         grid-template-columns: 1fr;
@@ -845,6 +887,12 @@
     .detalle-items {
         grid-column: span 1;
     }
+    
+    /* Ajustes de padding para main content cuando sidebar está cerrado */
+    .main-content {
+        padding: 1rem;
+        padding-top: 70px;
+    }
 }
 
 /* Mobile (max 768px) */
@@ -859,6 +907,7 @@
         width: 100%;
         padding: 0.6rem;
         font-size: 0.8rem;
+        min-height: 44px;
     }
     
     .filtros-bar {
@@ -868,18 +917,22 @@
     
     .search-box {
         max-width: none;
+        min-height: 44px;
     }
     
     .filtros-bar select {
         width: 100%;
+        min-height: 44px;
     }
     
     .date-range {
         justify-content: space-between;
+        flex-wrap: wrap;
     }
     
     .date-range input {
         flex: 1;
+        min-height: 44px;
     }
     
     .stats-summary {
@@ -907,6 +960,13 @@
         padding: 0.4rem 0.5rem;
         font-size: 0.7rem;
     }
+    
+    /* Botones full width en móvil */
+    .filtros-bar .btn-secondary,
+    .filtros-bar .btn-primary {
+        width: 100%;
+        justify-content: center;
+    }
 }
 
 /* Mobile pequeño (max 480px) */
@@ -932,6 +992,14 @@
     .detalle-actions button {
         width: 100%;
         justify-content: center;
+    }
+    
+    .stats-card {
+        padding: 1rem;
+    }
+    
+    .summary-value {
+        font-size: 1.2rem;
     }
 }
 

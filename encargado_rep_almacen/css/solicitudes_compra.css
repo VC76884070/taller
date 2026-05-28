@@ -2,6 +2,7 @@
    SOLICITUDES_COMPRA.CSS - ENCARGADO DE REPUESTOS
    TEMA OSCURO - FURIA MOTOR
    VERSIÓN COMPLETA CON ESTILOS PARA COMPROBANTES
+   Y RESPONSIVE MEJORADO
    ===================================================== */
 
 :root {
@@ -47,7 +48,7 @@
 }
 
 /* =====================================================
-   ESTADÍSTICAS - TARJETAS
+   ESTADÍSTICAS - TARJETAS (RESPONSIVAS)
    ===================================================== */
 
 .stats-cards {
@@ -66,6 +67,7 @@
     gap: 1rem;
     border: 1px solid var(--border-color);
     transition: var(--transition);
+    min-height: 80px;
 }
 
 .stat-card:hover {
@@ -97,7 +99,7 @@
 }
 
 /* =====================================================
-   FILTROS BAR
+   FILTROS BAR - RESPONSIVO
    ===================================================== */
 
 .filtros-bar {
@@ -132,6 +134,7 @@
     color: var(--blanco);
     font-size: 0.8rem;
     cursor: pointer;
+    min-height: 40px;
 }
 
 .form-select-sm:focus {
@@ -153,6 +156,7 @@
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     padding: 0.5rem 0.75rem;
+    min-height: 40px;
 }
 
 .search-box i {
@@ -174,7 +178,7 @@
 }
 
 /* =====================================================
-   BOTONES
+   BOTONES - ÁREA TÁCTIL MEJORADA
    ===================================================== */
 
 .btn-outline {
@@ -189,11 +193,16 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.8rem;
+    min-height: 40px;
 }
 
 .btn-outline:hover {
     border-color: var(--rojo-primario);
     color: var(--rojo-primario);
+}
+
+.btn-outline:active {
+    transform: scale(0.97);
 }
 
 .btn-secondary {
@@ -208,10 +217,15 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.8rem;
+    min-height: 40px;
 }
 
 .btn-secondary:hover {
     background: var(--gris-claro);
+}
+
+.btn-secondary:active {
+    transform: scale(0.97);
 }
 
 .btn-primary {
@@ -226,10 +240,15 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.8rem;
+    min-height: 40px;
 }
 
 .btn-primary:hover {
     background: var(--rojo-oscuro);
+}
+
+.btn-primary:active {
+    transform: scale(0.97);
 }
 
 .btn-logout {
@@ -241,6 +260,8 @@
     padding: 0.5rem;
     border-radius: var(--radius-sm);
     transition: var(--transition);
+    min-width: 44px;
+    min-height: 44px;
 }
 
 .btn-logout:hover {
@@ -324,6 +345,7 @@
     font-weight: 600;
     color: var(--blanco);
     font-size: 0.85rem;
+    word-break: break-word;
 }
 
 /* =====================================================
@@ -364,6 +386,7 @@
     font-weight: 500;
     font-size: 0.85rem;
     color: var(--blanco);
+    word-break: break-word;
 }
 
 .item-cant {
@@ -401,6 +424,7 @@
     margin: 0.5rem 0 0 0;
     font-size: 0.8rem;
     color: var(--blanco);
+    word-break: break-word;
 }
 
 .precio-cotizado-box {
@@ -438,7 +462,7 @@
 }
 
 /* =====================================================
-   ACTION BUTTONS
+   ACTION BUTTONS - RESPONSIVOS
    ===================================================== */
 
 .action-buttons {
@@ -460,6 +484,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
+    min-height: 40px;
 }
 
 .action-btn.view {
@@ -469,6 +494,10 @@
 
 .action-btn.view:hover {
     background: var(--gris-claro);
+}
+
+.action-btn.view:active {
+    transform: scale(0.97);
 }
 
 .action-btn.buy {
@@ -481,6 +510,10 @@
     transform: translateY(-1px);
 }
 
+.action-btn.buy:active {
+    transform: scale(0.97);
+}
+
 .action-btn.deliver {
     background: var(--verde-exito);
     color: white;
@@ -489,6 +522,10 @@
 .action-btn.deliver:hover {
     background: #059669;
     transform: translateY(-1px);
+}
+
+.action-btn.deliver:active {
+    transform: scale(0.97);
 }
 
 /* =====================================================
@@ -519,6 +556,7 @@
     border-radius: var(--radius-sm);
     color: var(--blanco);
     font-size: 0.8rem;
+    min-height: 40px;
 }
 
 .form-input:focus {
@@ -555,6 +593,7 @@
     cursor: pointer;
     transition: all 0.3s ease;
     background: var(--gris-oscuro);
+    min-height: 100px;
 }
 
 .file-upload-area:hover {
@@ -581,6 +620,7 @@
     flex: 1;
     font-size: 0.8rem;
     color: var(--blanco);
+    word-break: break-word;
 }
 
 .btn-remove-comprobante {
@@ -590,6 +630,8 @@
     cursor: pointer;
     font-size: 1.1rem;
     padding: 0.25rem;
+    min-width: 44px;
+    min-height: 44px;
 }
 
 .btn-remove-comprobante:hover {
@@ -626,7 +668,7 @@
 }
 
 /* =====================================================
-   MODALES
+   MODALES - RESPONSIVOS
    ===================================================== */
 
 .modal {
@@ -712,6 +754,7 @@
     padding: 1.5rem;
     overflow-y: auto;
     flex: 1;
+    -webkit-overflow-scrolling: touch;
 }
 
 .modal-footer {
@@ -792,6 +835,7 @@
     box-shadow: var(--shadow-lg);
     font-size: 0.85rem;
     max-width: 350px;
+    min-height: 50px;
 }
 
 .toast-notification.success { border-left-color: var(--verde-exito); }
@@ -844,6 +888,10 @@
     margin-bottom: 1.5rem;
     flex-wrap: wrap;
     gap: 1rem;
+    background: var(--bg-card);
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
 }
 
 .page-title h1 {
@@ -880,28 +928,32 @@
     border-radius: var(--radius-md);
     font-size: 0.8rem;
     color: var(--gris-texto);
-}
-
-.btn-logout {
-    background: transparent;
-    border: none;
-    color: var(--gris-texto);
-    cursor: pointer;
-    font-size: 1.1rem;
-    padding: 0.5rem;
-    border-radius: var(--radius-md);
-    transition: var(--transition);
-}
-
-.btn-logout:hover {
-    color: var(--rojo-primario);
-    background: rgba(193, 18, 31, 0.1);
+    min-height: 40px;
 }
 
 /* =====================================================
-   RESPONSIVE
+   ========== RESPONSIVE DESIGN MEJORADO ==========
    ===================================================== */
 
+/* Tablet (max 1024px) */
+@media (max-width: 1024px) {
+    .main-content {
+        padding: 1rem;
+        padding-top: 70px;
+    }
+    
+    .top-bar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .top-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+
+/* Mobile (max 768px) */
 @media (max-width: 768px) {
     .stats-cards {
         grid-template-columns: repeat(2, 1fr);
@@ -955,13 +1007,9 @@
         width: 95%;
         margin: 1rem;
     }
-    
-    .top-bar {
-        flex-direction: column;
-        align-items: flex-start;
-    }
 }
 
+/* Mobile pequeño (max 480px) */
 @media (max-width: 480px) {
     .stats-cards {
         grid-template-columns: 1fr;
@@ -989,6 +1037,14 @@
     
     .modal-footer {
         padding: 0.75rem 1rem;
+    }
+    
+    .page-title h1 {
+        font-size: 1.2rem;
+    }
+    
+    .page-title p {
+        font-size: 0.7rem;
     }
 }
 

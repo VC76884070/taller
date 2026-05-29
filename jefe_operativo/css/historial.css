@@ -834,3 +834,317 @@ body {
         width: 95%;
     }
 }
+/* =====================================================
+   ========== RESPONSIVE ADICIONAL PARA HAMBURGUESA ==========
+   ===================================================== */
+
+/* Ajustes para cuando el sidebar está oculto en móvil/tablet */
+@media (max-width: 1024px) {
+    /* Main content ocupa todo el ancho */
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 1rem !important;
+    }
+    
+    .content {
+        padding: 1rem !important;
+    }
+    
+    /* Top bar responsivo */
+    .top-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .top-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .page-title h1 {
+        font-size: 1.2rem;
+    }
+    
+    .page-title p {
+        font-size: 0.75rem;
+    }
+}
+
+/* Móviles (max 768px) */
+@media (max-width: 768px) {
+    /* Panel de búsqueda */
+    .busqueda-grid {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+    
+    .busqueda-grid .form-group {
+        min-width: auto;
+        margin-bottom: 0;
+    }
+    
+    .busqueda-grid .form-group label {
+        margin-bottom: 0.25rem;
+        font-size: 0.75rem;
+    }
+    
+    .form-input, .form-select {
+        padding: 0.6rem 0.8rem;
+        font-size: 0.85rem;
+    }
+    
+    .btn-buscar, .btn-limpiar {
+        width: 100%;
+        justify-content: center;
+        padding: 0.6rem;
+        height: auto;
+    }
+    
+    /* Tarjeta de información del vehículo */
+    .vehiculo-info-card {
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .vehiculo-info-grid {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+    
+    .vehiculo-placa {
+        font-size: 1.1rem;
+    }
+    
+    /* Resumen de estadísticas */
+    .resumen-stats {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .stat-card {
+        padding: 0.75rem;
+        min-width: auto;
+    }
+    
+    .stat-number {
+        font-size: 1.4rem;
+    }
+    
+    /* Órdenes */
+    .orden-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: 0.8rem 1rem;
+    }
+    
+    .orden-codigo {
+        font-size: 0.85rem;
+    }
+    
+    .orden-card-body {
+        padding: 0.8rem 1rem;
+    }
+    
+    .orden-info-row {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .orden-card-footer {
+        padding: 0.6rem 1rem;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .btn-accion {
+        padding: 0.35rem 0.8rem;
+        font-size: 0.7rem;
+    }
+    
+    /* Modales */
+    .modal-content {
+        width: 95%;
+    }
+    
+    .modal-xl, .modal-lg {
+        width: 95%;
+    }
+    
+    .modal-header {
+        padding: 0.8rem 1rem;
+    }
+    
+    .modal-header h2 {
+        font-size: 0.9rem;
+    }
+    
+    .modal-body {
+        padding: 1rem;
+    }
+    
+    .modal-footer {
+        padding: 0.8rem 1rem;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .modal-footer button {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* Detalle secciones */
+    .detalle-seccion {
+        padding: 0.8rem;
+        margin-bottom: 1rem;
+    }
+    
+    .detalle-seccion h4 {
+        font-size: 0.85rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .detalle-grid {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+    
+    .detalle-descripcion {
+        padding: 0.75rem;
+        font-size: 0.8rem;
+    }
+    
+    /* Fotos grid */
+    .fotos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+        gap: 0.5rem;
+    }
+    
+    .foto-item img {
+        height: 80px;
+    }
+    
+    .foto-label {
+        font-size: 0.55rem;
+        padding: 0.3rem;
+    }
+    
+    /* Banner últimas órdenes */
+    .ultimas-ordenes-banner {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.5rem;
+        padding: 0.8rem 1rem;
+    }
+    
+    .ultimas-ordenes-banner small {
+        margin-left: 0;
+    }
+}
+
+/* Móviles pequeños (max 480px) */
+@media (max-width: 480px) {
+    .page-title h1 {
+        font-size: 1rem;
+    }
+    
+    .date-display span {
+        display: none;
+    }
+    
+    .date-display {
+        padding: 0.4rem 0.7rem;
+    }
+    
+    .hamburger-menu {
+        width: 38px;
+        height: 38px;
+        font-size: 1.1rem;
+        top: 12px;
+        left: 12px;
+    }
+    
+    .hamburger-menu.active {
+        left: 275px;
+    }
+    
+    .notification-icon {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .vehiculo-info-value {
+        font-size: 0.85rem;
+    }
+    
+    .detalle-value {
+        font-size: 0.8rem;
+    }
+    
+    .fotos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(75px, 1fr));
+    }
+    
+    .foto-item img {
+        height: 65px;
+    }
+}
+
+/* Orientación landscape */
+@media (max-width: 1024px) and (orientation: landscape) {
+    .main-content {
+        padding-top: 70px;
+    }
+    
+    .busqueda-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem;
+    }
+    
+    .busqueda-grid .form-group {
+        min-width: auto;
+    }
+    
+    .btn-buscar, .btn-limpiar {
+        grid-column: span 2;
+    }
+    
+    .orden-card-header {
+        flex-direction: row;
+        align-items: center;
+    }
+    
+    .orden-info-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+}
+
+/* Mejoras para touch */
+@media (max-width: 1024px) {
+    .btn-buscar,
+    .btn-limpiar,
+    .btn-accion,
+    .modal-close,
+    .btn-secondary {
+        min-height: 44px;
+    }
+    
+    .ordenes-lista {
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .modal-body {
+        -webkit-overflow-scrolling: touch;
+    }
+}

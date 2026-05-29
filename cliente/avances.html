@@ -3,44 +3,45 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Avances de Reparación | FURIA MOTOR</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="css/misvehiculos.css">
     <link rel="stylesheet" href="css/avances.css">
-    <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
+    
+    <!-- ========== CONFIGURACIÓN PWA ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TORQUE">
     
-    <!-- ICONO PARA LA PESTAÑA DEL NAVEGADOR -->
     <link rel="icon" type="image/png" href="/icono.png">
     <link rel="shortcut icon" type="image/png" href="/icono.png">
-    
-    <!-- ICONO PARA IPHONE / IPAD (pantalla de inicio) -->
     <link rel="apple-touch-icon" href="/icono.png">
-    
-    <!-- ICONO PARA ANDROID (chrome) -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
-    <!-- ===================================================== -->
 </head>
 
 <body>
+    <!-- Botón hamburguesa para móvil/tablet -->
+    <button class="hamburger-menu" id="hamburgerMenu" aria-label="Menú">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- Overlay para cerrar sidebar -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <div class="app">
         <div id="sidebar-container"></div>
 
         <main class="main-content">
             <header class="top-bar">
                 <div class="page-title">
-                    <h1><i class="fas fa-chart-line"></i> Avances de Reparación</h1>
+                    <h1><i class="fas fa-chart-line" style="color: var(--rojo-primario); margin-right: 0.5rem;"></i> Avances de Reparación</h1>
                     <p>Sigue el progreso de tu vehículo paso a paso</p>
                 </div>
                 <div class="top-actions">
@@ -166,6 +167,83 @@
 
     <script src="js/include.js"></script>
     <script src="js/avances.js"></script>
+    
+    <script>
+        // =====================================================
+        // FUNCIONES RESPONSIVE PARA SIDEBAR (CLIENTE)
+        // =====================================================
+        let sidebarOpen = false;
+        
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+            
+            if (!sidebar) return;
+            
+            sidebarOpen = !sidebarOpen;
+            
+            if (sidebarOpen) {
+                sidebar.classList.add('open');
+                if (overlay) overlay.classList.add('active');
+                if (hamburger) hamburger.classList.add('active');
+                body.style.overflow = 'hidden';
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-times';
+            } else {
+                closeSidebar();
+            }
+        }
+        
+        function closeSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+            
+            if (sidebar) {
+                sidebar.classList.remove('open');
+                if (overlay) overlay.classList.remove('active');
+                if (hamburger) hamburger.classList.remove('active');
+                body.style.overflow = '';
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-bars';
+            }
+            sidebarOpen = false;
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const hamburgerBtn = document.getElementById('hamburgerMenu');
+            if (hamburgerBtn) {
+                hamburgerBtn.addEventListener('click', toggleSidebar);
+            }
+            
+            const overlay = document.getElementById('sidebarOverlay');
+            if (overlay) {
+                overlay.addEventListener('click', closeSidebar);
+            }
+            
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 1024 && sidebarOpen) {
+                    closeSidebar();
+                }
+            });
+            
+            document.addEventListener('click', function(e) {
+                if (window.innerWidth <= 1024 && sidebarOpen) {
+                    const sidebar = document.querySelector('.sidebar');
+                    const hamburger = document.getElementById('hamburgerMenu');
+                    if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
+                        closeSidebar();
+                    }
+                }
+            });
+        });
+        
+        window.toggleSidebar = toggleSidebar;
+        window.closeSidebar = closeSidebar;
+    </script>
 </body>
 
 </html>

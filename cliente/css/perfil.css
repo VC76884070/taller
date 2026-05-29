@@ -1,7 +1,7 @@
 /* =====================================================
    PERFIL-CLIENTE.CSS - CLIENTE
    TEMA OSCURO - FURIA MOTOR
-   VERSIÓN CON MAPA GOOGLE MAPS
+   VERSIÓN COMPLETA CON HAMBURGUESA Y RESPONSIVE
    ===================================================== */
 
 /* =====================================================
@@ -1104,7 +1104,7 @@ input:checked + .slider:before {
 }
 
 /* =====================================================
-   RESPONSIVE
+   RESPONSIVE NORMAL
    ===================================================== */
 
 @media (max-width: 1024px) {
@@ -1228,5 +1228,106 @@ input:checked + .slider:before {
     .data-table td {
         padding: 0.5rem;
         font-size: 0.7rem;
+    }
+}
+
+/* =====================================================
+   RESPONSIVE ADICIONAL PARA HAMBURGUESA
+   ===================================================== */
+
+/* Ajustes para cuando el sidebar está oculto en móvil */
+@media (max-width: 1024px) {
+    /* Main content ocupa todo el ancho */
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 1rem !important;
+    }
+    
+    /* Top bar ajustado */
+    .top-bar {
+        padding: 1rem !important;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .top-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+
+/* Móviles pequeños (max 480px) - ajustes hamburguesa */
+@media (max-width: 480px) {
+    .page-title h1 {
+        font-size: 1.1rem;
+    }
+    
+    .page-title p {
+        font-size: 0.7rem;
+    }
+    
+    .date-display span {
+        display: none;
+    }
+    
+    .date-display {
+        padding: 0.4rem 0.7rem;
+    }
+    
+    .hamburger-menu {
+        width: 38px;
+        height: 38px;
+        font-size: 1.1rem;
+        top: 12px;
+        left: 12px;
+    }
+    
+    .hamburger-menu.active {
+        left: 275px;
+    }
+    
+    .perfil-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .tab-btn-perfil {
+        white-space: nowrap;
+    }
+    
+    .tab-btn-perfil span {
+        display: inline;
+        font-size: 0.7rem;
+    }
+}
+
+/* Orientación landscape */
+@media (max-width: 1024px) and (orientation: landscape) {
+    .perfil-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .perfil-tabs {
+        flex-wrap: wrap;
+    }
+    
+    .sesion-item,
+    .vehiculo-item,
+    .notificacion-item {
+        flex-direction: row;
+        text-align: left;
+    }
+    
+    .sesion-info,
+    .notificacion-info {
+        text-align: left;
+    }
+    
+    .sesion-dispositivo {
+        justify-content: flex-start;
     }
 }

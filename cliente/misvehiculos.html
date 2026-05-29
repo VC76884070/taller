@@ -3,15 +3,14 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Mis Vehículos | FURIA MOTOR</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="css/misvehiculos.css">
+    
     <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
@@ -33,6 +32,14 @@
 </head>
 
 <body>
+    <!-- Botón hamburguesa para móvil -->
+    <button class="hamburger-menu" id="hamburgerMenu" aria-label="Menú">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- Overlay para cerrar sidebar -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <div class="app">
         <div id="sidebar-container"></div>
 
@@ -47,7 +54,6 @@
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
                     </div>
-                    <!-- Botón de logout eliminado porque ya está en el sidebar -->
                 </div>
             </header>
 
@@ -106,8 +112,7 @@
                         <div class="content-header">
                             <div class="search-box">
                                 <i class="fas fa-search"></i>
-                                <input type="text" id="searchVehiculo"
-                                    placeholder="Buscar por placa, marca o modelo...">
+                                <input type="text" id="searchVehiculo" placeholder="Buscar por placa, marca o modelo...">
                             </div>
                             <button class="btn-filter" id="filterBtn">
                                 <i class="fas fa-filter"></i>
@@ -178,6 +183,141 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/include.js"></script>
     <script src="js/misvehiculos.js"></script>
+
+    <script>
+        // =====================================================
+        // FUNCIONES RESPONSIVE PARA MÓVIL (HAMBURGUESA)
+        // =====================================================
+        
+        let sidebarOpen = false;
+        
+        // Función para toggle sidebar en móvil
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+            
+            if (!sidebar) return;
+            
+            sidebarOpen = !sidebarOpen;
+            
+            if (sidebarOpen) {
+                sidebar.classList.add('open');
+                if (overlay) overlay.classList.add('active');
+                if (hamburger) hamburger.classList.add('active');
+                body.classList.add('sidebar-open');
+                
+                // Cambiar icono del hamburguesa
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-times';
+            } else {
+                closeSidebar();
+            }
+        }
+        
+        // Función para cerrar sidebar
+        function closeSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+            
+            if (sidebar) {
+                sidebar.classList.remove('open');
+                if (overlay) overlay.classList.remove('active');
+                if (hamburger) hamburger.classList.remove('active');
+                body.classList.remove('sidebar-open');
+                
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-bars';
+            }
+            
+            sidebarOpen = false;
+        }
+        
+        // Función para mostrar toast temporal (si no existe en misvehiculos.js)
+        function mostrarToast(mensaje, tipo = 'info') {
+            let container = document.querySelector('.toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'toast-container';
+                document.body.appendChild(container);
+            }
+            
+            const toast = document.createElement('div');
+            toast.className = `toast-notification ${tipo}`;
+            const icon = tipo === 'success' ? 'fa-check-circle' : tipo === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+            toast.innerHTML = `<i class="fas ${icon}"></i> ${mensaje}`;
+            container.appendChild(toast);
+            
+            setTimeout(() => toast.remove(), 3000);
+        }
+        
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Botón hamburguesa
+            const hamburgerBtn = document.getElementById('hamburgerMenu');
+            if (hamburgerBtn) {
+                hamburgerBtn.addEventListener('click', toggleSidebar);
+            }
+            
+            // Overlay
+            const overlay = document.getElementById('sidebarOverlay');
+            if (overlay) {
+                overlay.addEventListener('click', closeSidebar);
+            }
+            
+            // Cerrar sidebar al redimensionar a desktop
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 1024 && sidebarOpen) {
+                    closeSidebar();
+                }
+            });
+            
+            // Cerrar sidebar al hacer click en enlaces (móvil)
+            document.addEventListener('click', function(e) {
+                if (window.innerWidth <= 1024 && sidebarOpen) {
+                    const sidebar = document.querySelector('.sidebar');
+                    const hamburger = document.getElementById('hamburgerMenu');
+                    
+                    // Si el click no fue en el sidebar ni en el botón hamburguesa
+                    if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
+                        closeSidebar();
+                    }
+                }
+            });
+            
+            // Prevenir scroll del body cuando sidebar está abierto
+            document.addEventListener('touchmove', function(e) {
+                if (window.innerWidth <= 1024 && sidebarOpen) {
+                    const sidebar = document.querySelector('.sidebar');
+                    if (sidebar && !sidebar.contains(e.target)) {
+                        e.preventDefault();
+                    }
+                }
+            });
+            
+            // Botón de filtro (toggle simple)
+            const filterBtn = document.getElementById('filterBtn');
+            if (filterBtn) {
+                filterBtn.addEventListener('click', function() {
+                    const searchInput = document.getElementById('searchVehiculo');
+                    if (searchInput) {
+                        searchInput.focus();
+                        mostrarToast('Escribe para filtrar vehículos', 'info');
+                    }
+                });
+            }
+        });
+        
+        // Exponer funciones globalmente
+        window.toggleSidebar = toggleSidebar;
+        window.closeSidebar = closeSidebar;
+        window.mostrarToast = mostrarToast;
+        
+        console.log('✅ misvehiculos.html - Funciones responsive cargadas');
+    </script>
 </body>
 
 </html>

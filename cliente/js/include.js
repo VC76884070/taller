@@ -1,36 +1,60 @@
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
-// =====================================================
-const API_BASE_URL = (() => {
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
-    }
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
-})();
-
-// =====================================================
-// INCLUDE.JS - CLIENTE (CORREGIDO)
+// INCLUDE.JS - CLIENTE (VERSIÓN CORREGIDA)
+// CON RESALTADO DE PESTAÑAS: Mis Reservas e Historial SEPARADOS
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
+// =====================================================
+// CONFIGURACIÓN DE API
+// =====================================================
+window.API_BASE_URL = (() => {
+    if (window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.includes('192.168.')) {
+        console.log('📡 [CLIENTE] Modo DESARROLLO');
+        return 'http://localhost:5000';
+    }
+    console.log('📡 [CLIENTE] Modo PRODUCCIÓN');
+    return '';
+})();
+
+console.log('🌐 [CLIENTE] API_BASE_URL:', window.API_BASE_URL);
+
+// =====================================================
+// FORZAR ROL CLIENTE - SOBREESCRIBIR CUALQUIER OTRA CONFIGURACIÓN
+// =====================================================
+localStorage.setItem('furia_selected_role', 'cliente');
+sessionStorage.setItem('current_role_mode', 'cliente');
+
+// =====================================================
+// CONFIGURACIÓN DEL CLIENTE
+// =====================================================
 const CONFIG = {
-    sidebarPath: 'components/sidebar.html',
-    logoPath: '../../img/logoblanco.jpeg',
+    sidebarPath: '/cliente/components/sidebar.html',
+    logoPath: '/img/logoblanco.jpeg',
     defaultUserName: 'Cliente',
     userRole: 'Cliente',
-    API_URL: API_BASE_URL + '/api/cliente'
+    API_URL: window.API_BASE_URL + '/api/cliente'
 };
 
+// MAPEO DE PÁGINAS - Incluye TODAS las páginas del cliente
 const PAGE_FILES = {
     'misvehiculos': '/cliente/misvehiculos.html',
     'cotizaciones': '/cliente/cotizaciones.html',
     'avances': '/cliente/avances.html',
+    'misreservas': '/cliente/misreservas.html',
     'historial': '/cliente/historial.html',
     'perfil': '/cliente/perfil.html'
+};
+
+// MAPEO PARA EL RESALTADO - data-page debe coincidir con el valor en sidebar.html
+const PAGE_MAPPING = {
+    'misvehiculos': 'misvehiculos',
+    'cotizaciones': 'cotizaciones',
+    'avances': 'avances',
+    'misreservas': 'misreservas',
+    'historial': 'historial',
+    'perfil': 'perfil'
 };
 
 // =====================================================
@@ -40,7 +64,6 @@ const PAGE_FILES = {
 function getAuthHeaders() {
     let token = localStorage.getItem('furia_token');
     if (!token) token = localStorage.getItem('token');
-    
     return {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -52,63 +75,36 @@ async function verificarAutenticacion() {
     if (!token) token = localStorage.getItem('token');
     
     if (!token) {
-        console.log('❌ No hay token');
-        window.location.href = API_BASE_URL + '/';
+        console.log('❌ [CLIENTE] No hay token');
+        window.location.href = window.API_BASE_URL + '/';
         return false;
     }
     
-    try {
-        const response = await fetch(`${CONFIG.API_URL}/perfil`, {
-            headers: getAuthHeaders()
-        });
-        
-        if (response.status === 401) {
-            console.log('❌ Token inválido o expirado');
-            localStorage.clear();
-            window.location.href = API_BASE_URL + '/';
-            return false;
-        }
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.usuario) {
-            console.log('✅ Usuario autenticado:', data.usuario.nombre);
-            return true;
-        }
-        
-        return false;
-    } catch (error) {
-        console.error('Error verificando autenticación:', error);
-        window.location.href = API_BASE_URL + '/';
-        return false;
-    }
+    console.log('✅ [CLIENTE] Verificación exitosa');
+    return true;
 }
 
 // =====================================================
-// FUNCIONES DEL SIDEBAR
+// FUNCIÓN PRINCIPAL PARA CARGAR EL SIDEBAR
 // =====================================================
-
 async function includeSidebar() {
     const sidebarContainer = document.getElementById('sidebar-container');
     
     if (!sidebarContainer) {
-        console.warn('⚠️ No se encontró el contenedor del sidebar');
+        console.warn('⚠️ [CLIENTE] No se encontró el contenedor del sidebar');
         return;
     }
     
-    // Primero verificar autenticación
     const autenticado = await verificarAutenticacion();
     if (!autenticado) return;
     
     mostrarLoader(sidebarContainer);
     
+    const sidebarUrl = CONFIG.sidebarPath;
+    console.log(`🔄 [CLIENTE] Cargando sidebar desde: ${sidebarUrl}`);
+    
     try {
-        // Intentar cargar el sidebar desde el archivo
-        const response = await fetch(CONFIG.sidebarPath);
+        const response = await fetch(sidebarUrl);
         
         if (!response.ok) {
             throw new Error(`Error HTTP ${response.status}`);
@@ -116,20 +112,18 @@ async function includeSidebar() {
         
         let html = await response.text();
         
-        // Reemplazar enlaces relativos por absolutos
-        html = html.replace(/href="([^"]+)"/g, (match, href) => {
-            if (href.startsWith('../') || href.startsWith('./') || !href.startsWith('/')) {
-                return `href="/cliente/${href.replace(/^\.\.\/|^\.\//, '')}"`;
-            }
-            return match;
-        });
+        // CORREGIR ENLACES RELATIVOS
+        html = html.replace(/href="\.\.\//g, 'href="/cliente/');
+        html = html.replace(/href="\.\//g, 'href="/cliente/');
+        html = html.replace(/src="\.\.\//g, 'src="/cliente/');
         
         sidebarContainer.innerHTML = html;
+        console.log('✅ [CLIENTE] Sidebar cargado correctamente');
         
         inicializarSidebar();
         
     } catch (error) {
-        console.error('❌ Error cargando sidebar:', error);
+        console.error('❌ [CLIENTE] Error cargando sidebar:', error);
         crearSidebarRespaldo(sidebarContainer);
         inicializarSidebar();
     }
@@ -146,8 +140,11 @@ function mostrarLoader(container) {
     `;
 }
 
+// =====================================================
+// SIDEBAR DE RESPALDO (FALLBACK)
+// =====================================================
 function crearSidebarRespaldo(container) {
-    const user = obtenerUsuarioActual();
+    const user = obtenerUsuarioActualSync();
     const currentPage = obtenerPaginaActual();
     
     container.innerHTML = `
@@ -163,16 +160,17 @@ function crearSidebarRespaldo(container) {
                 </div>
                 <div class="user-info">
                     <span class="user-name" id="userName">${user.nombre}</span>
-                    <span class="user-role">${CONFIG.userRole}</span>
+                    <span class="user-role">Cliente</span>
                 </div>
             </div>
             <nav class="sidebar-nav">
                 <ul>
-                    ${crearMenuItem('misvehiculos', 'Mis Vehículos', 'car', currentPage)}
-                    ${crearMenuItem('cotizaciones', 'Informes de Cotización', 'file-invoice-dollar', currentPage)}
-                    ${crearMenuItem('avances', 'Avances de Reparación', 'chart-line', currentPage)}
-                    ${crearMenuItem('historial', 'Historial', 'history', currentPage)}
-                    ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage)}
+                    ${crearMenuItemRespaldo('misvehiculos', 'Mis Vehículos', 'car', currentPage)}
+                    ${crearMenuItemRespaldo('cotizaciones', 'Informes de Cotización', 'file-invoice-dollar', currentPage)}
+                    ${crearMenuItemRespaldo('avances', 'Avances de Reparación', 'chart-line', currentPage)}
+                    ${crearMenuItemRespaldo('misreservas', 'Mis Reservas', 'calendar-check', currentPage)}
+                    ${crearMenuItemRespaldo('historial', 'Historial', 'history', currentPage)}
+                    ${crearMenuItemRespaldo('perfil', 'Perfil', 'user-circle', currentPage)}
                 </ul>
                 <ul class="sidebar-bottom">
                     <li class="nav-item">
@@ -187,11 +185,10 @@ function crearSidebarRespaldo(container) {
     `;
 }
 
-function crearMenuItem(page, label, icon, currentPage) {
+function crearMenuItemRespaldo(page, label, icon, currentPage) {
     const isActive = currentPage === page ? 'active' : '';
     const href = PAGE_FILES[page] || `/cliente/${page}.html`;
     
-    // Prevenir navegación por defecto y manejar clics
     return `
         <li class="nav-item ${isActive}" data-page="${page}">
             <a href="${href}" class="nav-link" onclick="navegarPagina(event, '${page}')">
@@ -202,26 +199,32 @@ function crearMenuItem(page, label, icon, currentPage) {
     `;
 }
 
-// Función global para navegación
+// =====================================================
+// NAVEGACIÓN CON RESALTADO
+// =====================================================
 window.navegarPagina = function(event, page) {
     event.preventDefault();
     
-    const href = PAGE_FILES[page] || `/cliente/${page}.html`;
-    console.log(`🔗 Navegando a: ${href}`);
+    // Forzar rol cliente
+    localStorage.setItem('furia_selected_role', 'cliente');
     
-    // Verificar autenticación antes de navegar
-    const token = localStorage.getItem('furia_token') || localStorage.getItem('token');
-    if (!token) {
-        window.location.href = API_BASE_URL + '/';
-        return;
+    const href = PAGE_FILES[page];
+    if (href) {
+        console.log(`🔗 [CLIENTE] Navegando a: ${href}`);
+        window.location.href = href;
+    } else {
+        console.error(`❌ [CLIENTE] Página no encontrada: ${page}`);
     }
-    
-    window.location.href = href;
 };
 
+// =====================================================
+// INICIALIZAR SIDEBAR - RESALTADO DE PESTAÑA ACTIVA
+// =====================================================
 function inicializarSidebar() {
     setTimeout(() => {
         const currentPage = obtenerPaginaActual();
+        console.log(`📍 [CLIENTE] Página actual detectada: ${currentPage}`);
+        
         marcarItemActivo(currentPage);
         actualizarNombreUsuario();
         
@@ -230,53 +233,84 @@ function inicializarSidebar() {
             link.addEventListener('click', (e) => {
                 const href = link.getAttribute('href');
                 if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
-                    // Verificar autenticación
-                    const token = localStorage.getItem('furia_token') || localStorage.getItem('token');
+                    const token = localStorage.getItem('furia_token');
                     if (!token) {
                         e.preventDefault();
-                        window.location.href = API_BASE_URL + '/';
+                        window.location.href = window.API_BASE_URL + '/';
                     }
                 }
             });
         });
+        
+        console.log(`✅ [CLIENTE] Sidebar inicializado - Pestaña activa: ${currentPage}`);
     }, 100);
 }
 
+// =====================================================
+// OBTENER PÁGINA ACTUAL DESDE LA URL
+// =====================================================
 function obtenerPaginaActual() {
     const path = window.location.pathname;
     const filename = path.split('/').pop() || 'misvehiculos.html';
-    const pageName = filename.replace('.html', '');
+    let pageName = filename.replace('.html', '');
     
-    // Mapeo de nombres de archivo a páginas
-    const pageMapping = {
-        'misvehiculos': 'misvehiculos',
-        'cotizaciones': 'cotizaciones',
-        'avances': 'avances',
-        'historial': 'historial',
-        'perfil': 'perfil'
-    };
+    // Mapeo especial para ciertos nombres de archivo
+    if (pageName === 'misreservas') return 'misreservas';
+    if (pageName === 'historial') return 'historial';
+    if (pageName === 'misvehiculos') return 'misvehiculos';
+    if (pageName === 'cotizaciones') return 'cotizaciones';
+    if (pageName === 'avances') return 'avances';
+    if (pageName === 'perfil') return 'perfil';
     
-    return pageMapping[pageName] || 'misvehiculos';
+    // Si no coincide con ninguno, devolver el nombre original
+    const mappedPage = PAGE_MAPPING[pageName];
+    return mappedPage || 'misvehiculos';
 }
 
+// =====================================================
+// MARCAR ITEM ACTIVO EN EL MENÚ
+// =====================================================
 function marcarItemActivo(currentPage) {
+    // Remover clase active de todos los items
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
         const link = item.querySelector('.nav-link');
         if (link) link.classList.remove('active');
     });
     
+    // Buscar y activar el item correspondiente
     const activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
     if (activeItem) {
         activeItem.classList.add('active');
         const activeLink = activeItem.querySelector('.nav-link');
         if (activeLink) activeLink.classList.add('active');
+        console.log(`✅ [CLIENTE] Item activado: ${currentPage}`);
+    } else {
+        console.log(`⚠️ [CLIENTE] No se encontró item para: ${currentPage}`);
+        
+        // Si estamos en historial.html pero no encuentra 'historial', buscar alternativas
+        if (window.location.pathname.includes('historial')) {
+            const fallbackItem = document.querySelector('.nav-item[data-page="historial"]');
+            if (fallbackItem) {
+                fallbackItem.classList.add('active');
+                console.log(`✅ [CLIENTE] Fallback activado: historial`);
+            }
+        }
+        if (window.location.pathname.includes('misreservas')) {
+            const fallbackItem = document.querySelector('.nav-item[data-page="misreservas"]');
+            if (fallbackItem) {
+                fallbackItem.classList.add('active');
+                console.log(`✅ [CLIENTE] Fallback activado: misreservas`);
+            }
+        }
     }
 }
 
-async function obtenerUsuarioActual() {
+// =====================================================
+// OBTENER USUARIO ACTUAL
+// =====================================================
+function obtenerUsuarioActualSync() {
     try {
-        // Intentar obtener del localStorage primero
         let userStr = localStorage.getItem('furia_user');
         if (userStr) {
             const user = JSON.parse(userStr);
@@ -284,25 +318,23 @@ async function obtenerUsuarioActual() {
                 return { nombre: user.nombre, rol: 'cliente' };
             }
         }
-        
-        // Si no hay, intentar desde la API
-        const token = localStorage.getItem('furia_token') || localStorage.getItem('token');
-        if (token) {
-            const response = await fetch(`${CONFIG.API_URL}/perfil`, {
-                headers: getAuthHeaders()
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success && data.usuario) {
-                    return { nombre: data.usuario.nombre, rol: 'cliente' };
-                }
-            }
-        }
-        
         return { nombre: CONFIG.defaultUserName, rol: 'cliente' };
     } catch (error) {
-        console.error('Error obteniendo usuario:', error);
+        return { nombre: CONFIG.defaultUserName, rol: 'cliente' };
+    }
+}
+
+async function obtenerUsuarioActual() {
+    try {
+        let userStr = localStorage.getItem('furia_user');
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            if (user.nombre) {
+                return { nombre: user.nombre, rol: 'cliente' };
+            }
+        }
+        return { nombre: CONFIG.defaultUserName, rol: 'cliente' };
+    } catch (error) {
         return { nombre: CONFIG.defaultUserName, rol: 'cliente' };
     }
 }
@@ -319,37 +351,29 @@ function actualizarNombreUsuario() {
 // =====================================================
 // LOGOUT
 // =====================================================
-
 window.logout = function() {
     if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
-        console.log('🚪 Cerrando sesión...');
-        localStorage.removeItem('furia_token');
-        localStorage.removeItem('furia_user');
-        localStorage.removeItem('furia_selected_role');
-        localStorage.removeItem('furia_selected_role_user');
-        localStorage.removeItem('furia_remembered');
-        localStorage.removeItem('furia_remembered_type');
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        
-        window.location.href = API_BASE_URL + '/';
+        console.log('🚪 [CLIENTE] Cerrando sesión...');
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = window.API_BASE_URL + '/';
     }
 };
 
 // =====================================================
-// INICIALIZACIÓN
+// INICIALIZACIÓN PRINCIPAL
 // =====================================================
-
-// Verificar autenticación al cargar la página
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 Inicializando include.js');
+    console.log('🚀 [CLIENTE] Inicializando include.js');
+    console.log('📍 Path actual:', window.location.pathname);
+    console.log('📍 Sidebar a cargar:', CONFIG.sidebarPath);
     
-    // Verificar autenticación
-    const autenticado = await verificarAutenticacion();
-    if (!autenticado) return;
-    
-    // Cargar sidebar
     await includeSidebar();
     
-    console.log('✅ include.js inicializado correctamente');
+    console.log('✅ [CLIENTE] include.js inicializado correctamente');
 });
+
+// Exponer funciones globales
+window.getAuthHeaders = getAuthHeaders;
+window.logout = window.logout;
+window.obtenerPaginaActual = obtenerPaginaActual;

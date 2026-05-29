@@ -1,18 +1,15 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Historial | Cliente - FURIA MOTOR</title>
 
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- Google Fonts -->
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -20,37 +17,64 @@
     <!-- Estilos -->
     <link rel="stylesheet" href="css/misvehiculos.css">
     <link rel="stylesheet" href="css/historial.css">
-    <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
+    
+    <!-- ========== CONFIGURACIÓN PWA ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TORQUE">
     
-    <!-- ICONO PARA LA PESTAÑA DEL NAVEGADOR -->
     <link rel="icon" type="image/png" href="/icono.png">
     <link rel="shortcut icon" type="image/png" href="/icono.png">
-    
-    <!-- ICONO PARA IPHONE / IPAD (pantalla de inicio) -->
     <link rel="apple-touch-icon" href="/icono.png">
-    
-    <!-- ICONO PARA ANDROID (chrome) -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
+    
     <!-- ===================================================== -->
+    <!-- SCRIPT CRÍTICO: FORZAR ROL CLIENTE ANTES QUE NADA -->
+    <!-- ===================================================== -->
+    <script>
+        // ESTE SCRIPT SE EJECUTA INMEDIATAMENTE, ANTES DE CARGAR EL DOM
+        (function() {
+            console.log('🔴 [CRÍTICO] Forzando rol CLIENTE en historial.html');
+            
+            // 1. Forzar rol en localStorage
+            localStorage.setItem('furia_selected_role', 'cliente');
+            localStorage.setItem('furia_selected_role_user', '');
+            
+            // 2. Limpiar cualquier bandera de redirección pendiente
+            sessionStorage.removeItem('pending_role_redirect');
+            sessionStorage.removeItem('redirect_attempted');
+            
+            // 3. Marcar que estamos en modo cliente
+            sessionStorage.setItem('force_cliente_mode', 'true');
+            sessionStorage.setItem('current_role_mode', 'cliente');
+            
+            // 4. Verificar y mostrar el rol actual
+            console.log('📌 Rol forzado en localStorage:', localStorage.getItem('furia_selected_role'));
+            
+            // 5. Prevenir cualquier redirección automática
+            window.__isForcingCliente = true;
+        })();
+    </script>
 </head>
-
 <body>
+    <!-- Botón hamburguesa para móvil/tablet -->
+    <button class="hamburger-menu" id="hamburgerMenu" aria-label="Menú">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- Overlay para cerrar sidebar -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <div class="app">
-        <!-- Sidebar container -->
         <div id="sidebar-container"></div>
 
-        <!-- Main Content -->
         <main class="main-content">
-            <!-- Top Bar -->
             <div class="top-bar">
                 <div class="page-title">
-                    <h1>Historial de Servicios</h1>
+                    <h1><i class="fas fa-history" style="color: var(--rojo-primario); margin-right: 0.5rem;"></i> Historial de Servicios</h1>
                     <p>Consulta el historial completo de reparaciones de tus vehículos</p>
                 </div>
                 <div class="top-actions">
@@ -61,7 +85,7 @@
                 </div>
             </div>
 
-            <!-- Pestañas de historial MEJORADAS -->
+            <!-- Pestañas de historial -->
             <div class="historial-tabs">
                 <button class="tab-btn-historial active" data-tab="vehiculos">
                     <i class="fas fa-car"></i>
@@ -140,9 +164,7 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="pagination" id="paginationServicios">
-                    <!-- Paginación dinámica -->
-                </div>
+                <div class="pagination" id="paginationServicios"></div>
             </div>
 
             <!-- Tab Estadísticas -->
@@ -214,14 +236,11 @@
         </main>
     </div>
 
-    <!-- Modal de detalle de servicio MEJORADO -->
+    <!-- Modal de detalle de servicio -->
     <div id="modalDetalleServicio" class="modal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h3>
-                    <i class="fas fa-clipboard-list"></i>
-                    Detalle del Servicio
-                </h3>
+                <h3><i class="fas fa-clipboard-list"></i> Detalle del Servicio</h3>
                 <button class="close-modal" onclick="cerrarModal('modalDetalleServicio')">
                     <i class="fas fa-times"></i>
                 </button>
@@ -243,14 +262,11 @@
         </div>
     </div>
 
-    <!-- Modal de documentos MEJORADO -->
+    <!-- Modal de documentos -->
     <div id="modalDocumento" class="modal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h3 id="modalDocumentoTitulo">
-                    <i class="fas fa-file-alt"></i>
-                    Documento
-                </h3>
+                <h3 id="modalDocumentoTitulo"><i class="fas fa-file-alt"></i> Documento</h3>
                 <button class="close-modal" onclick="cerrarModal('modalDocumento')">
                     <i class="fas fa-times"></i>
                 </button>
@@ -265,10 +281,10 @@
                 <button class="btn-secondary" onclick="cerrarModal('modalDocumento')">
                     <i class="fas fa-times"></i> Cerrar
                 </button>
-                <button class="btn-primary" id="btnImprimirDocumento" onclick="imprimirDocumento()">
+                <button class="btn-primary" onclick="imprimirDocumento()">
                     <i class="fas fa-print"></i> Imprimir
                 </button>
-                <button class="btn-primary" id="btnDescargarDocumento" onclick="descargarDocumento()">
+                <button class="btn-primary" onclick="descargarDocumento()">
                     <i class="fas fa-download"></i> Descargar PDF
                 </button>
             </div>
@@ -278,11 +294,90 @@
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
+        <p>Cargando...</p>
     </div>
 
-    <!-- Scripts -->
+    <!-- ===================================================== -->
+    <!-- SCRIPTS - EL ORDEN ES IMPORTANTE -->
+    <!-- ===================================================== -->
     <script src="js/include.js"></script>
     <script src="js/historial.js"></script>
-</body>
 
+    <script>
+        // =====================================================
+        // FUNCIONES RESPONSIVE PARA SIDEBAR
+        // =====================================================
+        let sidebarOpen = false;
+        
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+            
+            if (!sidebar) return;
+            
+            sidebarOpen = !sidebarOpen;
+            
+            if (sidebarOpen) {
+                sidebar.classList.add('open');
+                if (overlay) overlay.classList.add('active');
+                if (hamburger) hamburger.classList.add('active');
+                body.style.overflow = 'hidden';
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-times';
+            } else {
+                closeSidebar();
+            }
+        }
+        
+        function closeSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+            
+            if (sidebar) {
+                sidebar.classList.remove('open');
+                if (overlay) overlay.classList.remove('active');
+                if (hamburger) hamburger.classList.remove('active');
+                body.style.overflow = '';
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-bars';
+            }
+            sidebarOpen = false;
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const hamburgerBtn = document.getElementById('hamburgerMenu');
+            if (hamburgerBtn) {
+                hamburgerBtn.addEventListener('click', toggleSidebar);
+            }
+            
+            const overlay = document.getElementById('sidebarOverlay');
+            if (overlay) {
+                overlay.addEventListener('click', closeSidebar);
+            }
+            
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 1024 && sidebarOpen) {
+                    closeSidebar();
+                }
+            });
+            
+            document.addEventListener('click', function(e) {
+                if (window.innerWidth <= 1024 && sidebarOpen) {
+                    const sidebar = document.querySelector('.sidebar');
+                    const hamburger = document.getElementById('hamburgerMenu');
+                    if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
+                        closeSidebar();
+                    }
+                }
+            });
+        });
+        
+        window.toggleSidebar = toggleSidebar;
+        window.closeSidebar = closeSidebar;
+    </script>
+</body>
 </html>

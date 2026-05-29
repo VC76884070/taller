@@ -3,41 +3,42 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Jefe Operativo - Dashboard | FURIA MOTOR</title>
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- FullCalendar CSS -->
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/jefe_operativo/css/dashboard.css">
-    <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
+    
+    <!-- ========== CONFIGURACIÓN PWA ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TORQUE">
     
-    <!-- ICONO PARA LA PESTAÑA DEL NAVEGADOR -->
     <link rel="icon" type="image/png" href="/icono.png">
     <link rel="shortcut icon" type="image/png" href="/icono.png">
-    
-    <!-- ICONO PARA IPHONE / IPAD (pantalla de inicio) -->
     <link rel="apple-touch-icon" href="/icono.png">
-    
-    <!-- ICONO PARA ANDROID (chrome) -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
-    <!-- ===================================================== -->
 </head>
 
 <body>
+    <!-- Botón hamburguesa para móvil/tablet -->
+    <button class="hamburger-menu" id="hamburgerMenu" aria-label="Menú">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- Overlay para cerrar sidebar -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <div class="app">
         <div id="sidebar-container"></div>
 
@@ -97,19 +98,27 @@
                             </span>
                         </div>
                     </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Entregas hoy</span>
+                            <i class="fas fa-truck kpi-icon-small"></i>
+                        </div>
+                        <div class="kpi-value" id="entregasHoy">0</div>
+                        <div class="kpi-footer">
+                            <span class="kpi-trend"><i class="fas fa-calendar-check"></i> Programadas</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Grid de dos columnas -->
                 <div class="dashboard-grid">
-                    <!-- Columna Izquierda -->
                     <div class="left-column">
-                        <!-- Calendario Mensual con Días Pintados -->
                         <div class="card calendario-card">
                             <div class="card-header">
                                 <h3><i class="fas fa-calendar-alt"></i> Calendario de Reparaciones</h3>
                                 <div class="calendario-leyenda">
-                                    <span class="leyenda-item"><span class="color-reparacion"></span> En
-                                        reparación</span>
+                                    <span class="leyenda-item"><span class="color-reparacion"></span> En reparación</span>
                                     <span class="leyenda-item"><span class="color-entrega"></span> Entrega</span>
                                     <span class="leyenda-item"><span class="color-atrasado"></span> Atrasado</span>
                                 </div>
@@ -120,9 +129,7 @@
                         </div>
                     </div>
 
-                    <!-- Columna Derecha -->
                     <div class="right-column">
-                        <!-- Próximas Entregas -->
                         <div class="card">
                             <div class="card-header">
                                 <h3><i class="fas fa-clock"></i> Próximas Entregas</h3>
@@ -133,7 +140,6 @@
                             </div>
                         </div>
 
-                        <!-- Vehículos en Taller -->
                         <div class="card">
                             <div class="card-header">
                                 <h3><i class="fas fa-car"></i> Vehículos en Taller</h3>
@@ -149,8 +155,7 @@
         </main>
     </div>
 
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" style="display: none;">
+    <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
     </div>
 
@@ -158,6 +163,85 @@
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/es.min.js"></script>
     <script src="/jefe_operativo/js/include.js"></script>
     <script src="/jefe_operativo/js/dashboard.js"></script>
+
+    <script>
+        let sidebarOpen = false;
+        
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+            
+            if (!sidebar) return;
+            
+            sidebarOpen = !sidebarOpen;
+            
+            if (sidebarOpen) {
+                sidebar.classList.add('open');
+                if (overlay) overlay.classList.add('active');
+                if (hamburger) hamburger.classList.add('active');
+                body.classList.add('sidebar-open');
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-times';
+            } else {
+                closeSidebar();
+            }
+        }
+        
+        function closeSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+            
+            if (sidebar) {
+                sidebar.classList.remove('open');
+                if (overlay) overlay.classList.remove('active');
+                if (hamburger) hamburger.classList.remove('active');
+                body.classList.remove('sidebar-open');
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-bars';
+            }
+            sidebarOpen = false;
+        }
+        
+        function updateCurrentDate() {
+            const dateElement = document.getElementById('currentDate');
+            if (dateElement) {
+                const now = new Date();
+                const options = { year: 'numeric', month: 'long', day: 'numeric' };
+                dateElement.textContent = now.toLocaleDateString('es-ES', options);
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            updateCurrentDate();
+            
+            const hamburgerBtn = document.getElementById('hamburgerMenu');
+            if (hamburgerBtn) hamburgerBtn.addEventListener('click', toggleSidebar);
+            
+            const overlay = document.getElementById('sidebarOverlay');
+            if (overlay) overlay.addEventListener('click', closeSidebar);
+            
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 1024 && sidebarOpen) closeSidebar();
+            });
+            
+            document.addEventListener('click', function(e) {
+                if (window.innerWidth <= 1024 && sidebarOpen) {
+                    const sidebar = document.querySelector('.sidebar');
+                    const hamburger = document.getElementById('hamburgerMenu');
+                    if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
+                        closeSidebar();
+                    }
+                }
+            });
+        });
+        
+        window.toggleSidebar = toggleSidebar;
+        window.closeSidebar = closeSidebar;
+    </script>
 </body>
 
 </html>

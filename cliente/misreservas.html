@@ -3,109 +3,52 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Mis Reservas | FURIA MOTOR</title>
 
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <!-- Google Fonts -->
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
 
-    <!-- FullCalendar CSS (versión estable) -->
+    <!-- FullCalendar CSS -->
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
 
-    <!-- Tu CSS -->
+    <!-- Tu CSS Principal (debe contener las reglas del sidebar responsive) -->
+    <link rel="stylesheet" href="/cliente/css/dashboard.css">
     <link rel="stylesheet" href="/cliente/css/misreservas.css">
-    <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
+    
+    <!-- ========== CONFIGURACIÓN PWA ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TORQUE">
     
-    <!-- ICONO PARA LA PESTAÑA DEL NAVEGADOR -->
     <link rel="icon" type="image/png" href="/icono.png">
     <link rel="shortcut icon" type="image/png" href="/icono.png">
-    
-    <!-- ICONO PARA IPHONE / IPAD (pantalla de inicio) -->
     <link rel="apple-touch-icon" href="/icono.png">
-    
-    <!-- ICONO PARA ANDROID (chrome) -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
-    <!-- ===================================================== -->
-
-    <style>
-        /* Estilos adicionales para asegurar que el calendario se vea bien */
-        .fc {
-            background: var(--bg-card);
-            color: var(--blanco);
-            border-radius: var(--radius-lg);
-            padding: 1rem;
-        }
-
-        .fc-toolbar-title {
-            color: var(--blanco);
-        }
-
-        .fc-button-primary {
-            background-color: var(--rojo-primario) !important;
-            border-color: var(--rojo-primario) !important;
-        }
-
-        .fc-button-primary:hover {
-            background-color: var(--rojo-oscuro) !important;
-        }
-
-        .fc-daygrid-day {
-            background: var(--bg-card);
-        }
-
-        .fc-daygrid-day-number {
-            color: var(--blanco);
-        }
-
-        .fc-day-today {
-            background: rgba(193, 18, 31, 0.2) !important;
-        }
-
-        .fc-day-other {
-            background: var(--bg-secondary);
-        }
-
-        .fc-event {
-            cursor: pointer;
-            border-radius: 6px;
-        }
-
-        .fc-event-confirmada {
-            background-color: #10B981 !important;
-            border-color: #10B981 !important;
-        }
-
-        .fc-event-pendiente {
-            background-color: #F59E0B !important;
-            border-color: #F59E0B !important;
-        }
-
-        .fc-event-cancelada {
-            background-color: #6B7280 !important;
-            border-color: #6B7280 !important;
-        }
-    </style>
 </head>
 
 <body>
+    <!-- Botón hamburguesa para móvil/tablet -->
+    <button class="hamburger-menu" id="hamburgerMenu" aria-label="Menú">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- Overlay para cerrar sidebar -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <div class="app">
         <div id="sidebar-container"></div>
 
         <main class="main-content">
             <header class="top-bar">
                 <div class="page-title">
-                    <h1><i class="fas fa-calendar-check"></i> Mis Reservas</h1>
+                    <h1><i class="fas fa-calendar-check" style="color: var(--rojo-primario); margin-right: 0.5rem;"></i> Mis Reservas</h1>
                     <p>Gestiona tus citas en el taller</p>
                 </div>
                 <div class="top-actions">
@@ -113,9 +56,6 @@
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
                     </div>
-                    <button class="btn-logout" onclick="cerrarSesion()">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </button>
                 </div>
             </header>
 
@@ -173,25 +113,21 @@
                     </div>
 
                     <form id="formNuevaSolicitud" class="solicitud-form">
-                        <!-- Selección de vehículo -->
                         <div class="form-group">
                             <label for="vehiculoSelect"><i class="fas fa-car"></i> Selecciona tu vehículo *</label>
                             <select id="vehiculoSelect" required>
                                 <option value="">-- Selecciona un vehículo --</option>
                             </select>
-                            <small class="form-hint">Si no ves tu vehículo, regístrate primero en "Mis
-                                Vehículos"</small>
+                            <small class="form-hint">Si no ves tu vehículo, regístrate primero en "Mis Vehículos"</small>
                         </div>
 
-                        <!-- Fecha deseada -->
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="fechaDeseada"><i class="fas fa-calendar-day"></i> Fecha preferida *</label>
                                 <input type="date" id="fechaDeseada" required>
                             </div>
                             <div class="form-group">
-                                <label for="horaDeseada"><i class="fas fa-clock"></i> Horario preferido
-                                    (opcional)</label>
+                                <label for="horaDeseada"><i class="fas fa-clock"></i> Horario preferido (opcional)</label>
                                 <select id="horaDeseada">
                                     <option value="">-- Cualquier horario --</option>
                                     <option value="08:00">08:00 - 09:00</option>
@@ -209,23 +145,18 @@
                             </div>
                         </div>
 
-                        <!-- Descripción del problema -->
                         <div class="form-group">
-                            <label for="descripcionProblema"><i class="fas fa-stethoscope"></i> Descripción del problema
-                                *</label>
+                            <label for="descripcionProblema"><i class="fas fa-stethoscope"></i> Descripción del problema *</label>
                             <textarea id="descripcionProblema" rows="4" required
                                 placeholder="Ej: El motor hace un ruido extraño, la dirección vibra, el aire acondicionado no enfría..."></textarea>
                         </div>
 
-                        <!-- Comentarios adicionales -->
                         <div class="form-group">
-                            <label for="mensajeAdicional"><i class="fas fa-comment-dots"></i> Comentarios adicionales
-                                para el taller</label>
+                            <label for="mensajeAdicional"><i class="fas fa-comment-dots"></i> Comentarios adicionales para el taller</label>
                             <textarea id="mensajeAdicional" rows="2"
                                 placeholder="Ej: Solo puedo venir después de las 3pm, traeré el vehículo yo mismo, etc..."></textarea>
                         </div>
 
-                        <!-- Botones -->
                         <div class="form-actions">
                             <button type="button" class="btn-secondary" onclick="limpiarFormulario()">
                                 <i class="fas fa-eraser"></i> Limpiar
@@ -247,9 +178,7 @@
                 <h3><i class="fas fa-calendar-week"></i> Selecciona un horario</h3>
                 <button class="modal-close" onclick="cerrarModalHorarios()">&times;</button>
             </div>
-            <div class="modal-body" id="modalHorariosBody">
-                <!-- Lista de horarios se llenará dinámicamente -->
-            </div>
+            <div class="modal-body" id="modalHorariosBody"></div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModalHorarios()">Cancelar</button>
                 <button class="btn-danger" id="btnRechazarHorarios">
@@ -287,9 +216,7 @@
                 <h3><i class="fas fa-info-circle"></i> Detalle de solicitud</h3>
                 <button class="modal-close" onclick="cerrarModalDetalle()">&times;</button>
             </div>
-            <div class="modal-body" id="modalDetalleBody">
-                <!-- Contenido dinámico -->
-            </div>
+            <div class="modal-body" id="modalDetalleBody"></div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModalDetalle()">Cerrar</button>
             </div>
@@ -298,32 +225,93 @@
 
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
+        <p>Cargando...</p>
     </div>
 
     <!-- ===================================================== -->
-    <!-- SCRIPTS - EL ORDEN ES IMPORTANTE -->
+    <!-- SCRIPTS -->
     <!-- ===================================================== -->
-
-    <!-- 1. FullCalendar (versión 5.11.3 que es más estable) -->
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/es.min.js"></script>
-
-    <!-- 2. SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-    <!-- 3. Tu include.js (sidebar) -->
-    <script src="/js/include.js"></script>
-
-    <!-- 4. Tu misreservas.js -->
-    <script src="/cliente/js/misreservas.js"></script>
+    <script src="js/include.js"></script>
+    <script src="js/misreservas.js"></script>
 
     <script>
-        // Función global de cierre de sesión
-        function cerrarSesion() {
-            localStorage.removeItem('furia_token');
-            localStorage.removeItem('furia_user');
-            window.location.href = '/';
+        // =====================================================
+        // FUNCIONES RESPONSIVE PARA SIDEBAR
+        // =====================================================
+        let sidebarOpen = false;
+        
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+            
+            if (!sidebar) return;
+            
+            sidebarOpen = !sidebarOpen;
+            
+            if (sidebarOpen) {
+                sidebar.classList.add('open');
+                if (overlay) overlay.classList.add('active');
+                if (hamburger) hamburger.classList.add('active');
+                body.style.overflow = 'hidden';
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-times';
+            } else {
+                closeSidebar();
+            }
         }
+        
+        function closeSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+            
+            if (sidebar) {
+                sidebar.classList.remove('open');
+                if (overlay) overlay.classList.remove('active');
+                if (hamburger) hamburger.classList.remove('active');
+                body.style.overflow = '';
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-bars';
+            }
+            sidebarOpen = false;
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const hamburgerBtn = document.getElementById('hamburgerMenu');
+            if (hamburgerBtn) {
+                hamburgerBtn.addEventListener('click', toggleSidebar);
+            }
+            
+            const overlay = document.getElementById('sidebarOverlay');
+            if (overlay) {
+                overlay.addEventListener('click', closeSidebar);
+            }
+            
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 1024 && sidebarOpen) {
+                    closeSidebar();
+                }
+            });
+            
+            document.addEventListener('click', function(e) {
+                if (window.innerWidth <= 1024 && sidebarOpen) {
+                    const sidebar = document.querySelector('.sidebar');
+                    const hamburger = document.getElementById('hamburgerMenu');
+                    if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
+                        closeSidebar();
+                    }
+                }
+            });
+        });
+        
+        window.toggleSidebar = toggleSidebar;
+        window.closeSidebar = closeSidebar;
     </script>
 </body>
 

@@ -1,6 +1,7 @@
 /* =====================================================
    DASHBOARD JEFE OPERATIVO - ESTILOS OSCUROS MODERNOS
    BASADO EN LA PALETA FURIA MOTOR
+   VERSIÓN COMPLETA CON HAMBURGUESA (SIN REDUCCIÓN A ICONOS)
    ===================================================== */
 
 :root {
@@ -56,23 +57,107 @@ body {
     font-family: 'Plus Jakarta Sans', sans-serif;
     background: var(--bg-primary);
     color: var(--blanco);
+    overflow-x: hidden;
 }
 
-/* LAYOUT */
+body.sidebar-open {
+    overflow: hidden;
+}
+
+/* =====================================================
+   BOTÓN HAMBURGUESA
+   ===================================================== */
+.hamburger-menu {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    width: 45px;
+    height: 45px;
+    background: var(--rojo-primario);
+    border: none;
+    border-radius: var(--radius-md);
+    color: white;
+    font-size: 1.3rem;
+    cursor: pointer;
+    z-index: 1002;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-lg);
+    transition: var(--transition);
+}
+
+.hamburger-menu:hover {
+    background: var(--rojo-oscuro);
+    transform: scale(1.05);
+}
+
+.hamburger-menu.active {
+    background: var(--rojo-oscuro);
+    left: 275px;
+}
+
+/* =====================================================
+   OVERLAY PARA CERRAR SIDEBAR
+   ===================================================== */
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 998;
+    display: none;
+    transition: var(--transition);
+}
+
+.sidebar-overlay.active {
+    display: block;
+}
+
+/* =====================================================
+   LAYOUT PRINCIPAL
+   ===================================================== */
 .app {
     display: flex;
     min-height: 100vh;
 }
 
-/* SIDEBAR */
+/* =====================================================
+   SIDEBAR
+   ===================================================== */
 .sidebar {
     width: 280px;
     background: var(--negro-sidebar);
     position: fixed;
+    left: 0;
+    top: 0;
     height: 100vh;
     overflow-y: auto;
     border-right: 1px solid var(--border-color);
-    z-index: 100;
+    z-index: 1000;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateX(0);
+}
+
+/* Scrollbar sidebar */
+.sidebar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: var(--gris-medio);
+    border-radius: var(--radius-full);
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: var(--rojo-primario);
 }
 
 .sidebar-header {
@@ -87,6 +172,7 @@ body {
     width: 40px;
     height: 40px;
     border-radius: var(--radius-sm);
+    object-fit: cover;
 }
 
 .sidebar-brand {
@@ -112,6 +198,7 @@ body {
     align-items: center;
     justify-content: center;
     font-size: 1.5rem;
+    color: var(--blanco);
 }
 
 .user-info {
@@ -121,6 +208,7 @@ body {
 .user-name {
     font-weight: 600;
     display: block;
+    color: var(--blanco);
 }
 
 .user-role {
@@ -131,6 +219,10 @@ body {
 .sidebar-nav {
     flex: 1;
     padding: 1.5rem 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: calc(100% - 140px);
 }
 
 .sidebar-nav ul {
@@ -162,13 +254,25 @@ body {
     border-left: 3px solid var(--rojo-primario);
 }
 
-/* MAIN CONTENT */
+.sidebar-bottom {
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.5rem;
+    margin-top: auto;
+}
+
+/* =====================================================
+   MAIN CONTENT
+   ===================================================== */
 .main-content {
     flex: 1;
     margin-left: 280px;
     min-height: 100vh;
+    transition: var(--transition);
 }
 
+/* =====================================================
+   TOP BAR
+   ===================================================== */
 .top-bar {
     background: var(--bg-secondary);
     padding: 1rem 2rem;
@@ -179,6 +283,8 @@ body {
     position: sticky;
     top: 0;
     z-index: 99;
+    flex-wrap: wrap;
+    gap: 1rem;
 }
 
 .page-title h1 {
@@ -203,6 +309,11 @@ body {
     cursor: pointer;
     font-size: 1.2rem;
     color: var(--gris-texto);
+    transition: var(--transition);
+}
+
+.notification-icon:hover {
+    color: var(--rojo-primario);
 }
 
 .notification-badge {
@@ -230,7 +341,9 @@ body {
     padding: 2rem;
 }
 
-/* KPI CARDS */
+/* =====================================================
+   KPI CARDS
+   ===================================================== */
 .kpi-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -273,6 +386,7 @@ body {
     font-size: 2.2rem;
     font-weight: 700;
     margin-bottom: 0.5rem;
+    word-break: break-word;
 }
 
 .kpi-footer {
@@ -284,131 +398,49 @@ body {
     color: var(--rojo-acento);
 }
 
-/* ENTREGAS CARD - VEHÍCULOS QUE FALTAN POR ARREGLAR */
-.entregas-card {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    padding: 1.5rem;
-    margin-bottom: 2rem;
-    border: 1px solid var(--border-color);
-}
-
-.entregas-grid {
+/* =====================================================
+   DASHBOARD GRID
+   ===================================================== */
+.dashboard-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 1rem;
-    margin-top: 1rem;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
 }
 
-.entrega-item {
-    background: var(--gris-oscuro);
-    border-radius: var(--radius-md);
-    padding: 1rem;
+.left-column,
+.right-column {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-left: 3px solid var(--gris-medio);
-    transition: var(--transition);
-    cursor: pointer;
+    flex-direction: column;
+    gap: 1.5rem;
 }
 
-.entrega-item:hover {
-    transform: translateX(4px);
-    background: var(--gris-medio);
-}
-
-.entrega-item.urgente {
-    border-left-color: var(--rojo-acento);
-    background: rgba(255, 77, 77, 0.1);
-}
-
-.entrega-item.hoy {
-    border-left-color: var(--naranja-urgencia);
-    background: rgba(255, 107, 53, 0.1);
-}
-
-.entrega-item.pronto {
-    border-left-color: var(--ambar-alerta);
-}
-
-.entrega-info {
-    flex: 1;
-}
-
-.entrega-placa {
-    font-weight: 700;
-    font-size: 1rem;
-    margin-bottom: 0.25rem;
-}
-
-.entrega-vehiculo {
-    font-size: 0.85rem;
-    color: var(--gris-texto);
-    margin-bottom: 0.25rem;
-}
-
-.entrega-cliente {
-    font-size: 0.8rem;
-    color: var(--gris-texto);
-}
-
-.entrega-dias {
-    text-align: right;
-    min-width: 80px;
-}
-
-.dias-badge {
-    display: inline-block;
-    padding: 0.25rem 0.75rem;
-    border-radius: var(--radius-full);
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.dias-badge.urgente {
-    background: var(--rojo-primario);
-    color: var(--blanco);
-}
-
-.dias-badge.hoy {
-    background: var(--naranja-urgencia);
-    color: var(--blanco);
-}
-
-.dias-badge.pronto {
-    background: var(--ambar-alerta);
-    color: var(--negro);
-}
-
-.dias-badge.normal {
-    background: var(--gris-medio);
-    color: var(--gris-texto);
-}
-
-.entrega-fecha {
-    font-size: 0.7rem;
-    color: var(--gris-texto);
-    margin-top: 0.25rem;
-}
-
-/* VEHÍCULOS EN TALLER */
-.vehiculos-card {
+/* =====================================================
+   CARDS
+   ===================================================== */
+.card {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
-    padding: 1.5rem;
     border: 1px solid var(--border-color);
+    overflow: hidden;
 }
 
 .card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--gris-oscuro);
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .card-header h3 {
     font-size: 1rem;
     font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .badge-info {
@@ -419,226 +451,9 @@ body {
     color: var(--gris-texto);
 }
 
-.vehiculos-list {
-    max-height: 400px;
-    overflow-y: auto;
-}
-
-.vehiculo-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem;
-    border-bottom: 1px solid var(--border-color);
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.vehiculo-item:hover {
-    background: var(--gris-oscuro);
-}
-
-.vehiculo-placa {
-    font-weight: 600;
-    font-size: 0.9rem;
-}
-
-.vehiculo-info {
-    flex: 1;
-    margin-left: 1rem;
-}
-
-.vehiculo-modelo {
-    font-size: 0.8rem;
-    color: var(--gris-texto);
-}
-
-.vehiculo-estado {
-    font-size: 0.7rem;
-    padding: 0.2rem 0.5rem;
-    border-radius: var(--radius-full);
-}
-
-.estado-EnRecepcion { background: #FF9800; color: var(--negro); }
-.estado-EnDiagnostico { background: #2196F3; color: var(--blanco); }
-.estado-EnProceso { background: #4CAF50; color: var(--blanco); }
-.estado-EnPausa { background: #9E9E9E; color: var(--blanco); }
-
-/* CHARTS */
-.charts-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-}
-
-.chart-card {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    padding: 1.5rem;
-    border: 1px solid var(--border-color);
-}
-
-.chart-header {
-    margin-bottom: 1.5rem;
-}
-
-.chart-header h3 {
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-.chart-subtitle {
-    font-size: 0.8rem;
-    color: var(--gris-texto);
-}
-
-.chart-container {
-    height: 250px;
-    position: relative;
-}
-
-/* TABLA */
-.table-card {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    padding: 1.5rem;
-    border: 1px solid var(--border-color);
-}
-
-.table-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-}
-
-.table-header h3 {
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-.btn-outline {
-    background: transparent;
-    border: 1px solid var(--rojo-primario);
-    color: var(--rojo-primario);
-    padding: 0.5rem 1rem;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: var(--transition);
-}
-
-.btn-outline:hover {
-    background: var(--rojo-primario);
-    color: var(--blanco);
-}
-
-.table-responsive {
-    overflow-x: auto;
-}
-
-.data-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.data-table th {
-    text-align: left;
-    padding: 1rem 0.75rem;
-    color: var(--gris-texto);
-    font-weight: 500;
-    font-size: 0.85rem;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.data-table td {
-    padding: 1rem 0.75rem;
-    border-bottom: 1px solid var(--border-color);
-    color: var(--blanco);
-}
-
-.plate-badge {
-    background: var(--gris-oscuro);
-    padding: 0.3rem 0.8rem;
-    border-radius: var(--radius-full);
-    font-weight: 600;
-    font-size: 0.85rem;
-}
-
-.status-badge {
-    padding: 0.3rem 0.8rem;
-    border-radius: var(--radius-full);
-    font-size: 0.75rem;
-    font-weight: 500;
-}
-
-.status-badge.success {
-    background: rgba(16, 185, 129, 0.15);
-    color: var(--verde-exito);
-}
-
-.status-badge.warning {
-    background: rgba(245, 158, 11, 0.15);
-    color: var(--ambar-alerta);
-}
-
-.action-btn {
-    background: none;
-    border: none;
-    color: var(--gris-texto);
-    cursor: pointer;
-    padding: 0.25rem;
-    transition: var(--transition);
-}
-
-.action-btn:hover {
-    color: var(--rojo-primario);
-}
-
-/* LOADING */
-.loading-skeleton {
-    text-align: center;
-    padding: 2rem;
-    color: var(--gris-texto);
-}
-
-/* RESPONSIVE */
-@media (max-width: 1200px) {
-    .kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
-    .charts-row {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 768px) {
-    .sidebar {
-        transform: translateX(-100%);
-        transition: transform 0.3s ease;
-    }
-    
-    .main-content {
-        margin-left: 0;
-    }
-    
-    .kpi-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .entregas-grid {
-        grid-template-columns: 1fr;
-    }
-}
-/* Estilos para el calendario */
-.calendario-card {
-    margin-bottom: 1.5rem;
-}
-
+/* =====================================================
+   CALENDARIO
+   ===================================================== */
 .calendario-wrapper {
     min-height: 400px;
     background: var(--bg-card);
@@ -646,60 +461,9 @@ body {
     padding: 1rem;
 }
 
-/* Días del calendario */
-.fc-daygrid-day {
-    transition: background 0.2s;
-}
-
-.reparacion-dia {
-    background-color: rgba(33, 150, 243, 0.15) !important;
-    position: relative;
-}
-
-.entrega-dia {
-    background-color: rgba(76, 175, 80, 0.15) !important;
-    position: relative;
-}
-
-.atrasado-dia {
-    background-color: rgba(244, 67, 54, 0.2) !important;
-    position: relative;
-}
-
-/* Tooltips personalizados */
-[data-tooltip] {
-    position: relative;
-    cursor: help;
-}
-
-[data-tooltip]:before {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #1a1a1a;
-    color: white;
-    padding: 8px 12px;
-    border-radius: 8px;
-    font-size: 12px;
-    white-space: pre;
-    z-index: 1000;
-    display: none;
-    pointer-events: none;
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-}
-
-[data-tooltip]:hover:before {
-    display: block;
-}
-
-/* Leyenda del calendario */
 .calendario-leyenda {
     display: flex;
     gap: 1rem;
-    margin-left: auto;
 }
 
 .leyenda-item {
@@ -731,74 +495,66 @@ body {
     border-radius: 2px;
 }
 
-/* Dashboard grid */
-.dashboard-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
+/* FullCalendar personalización */
+.fc {
+    background: transparent;
 }
 
-.left-column,
-.right-column {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
+.fc-theme-standard .fc-scrollgrid {
+    border-color: var(--border-color);
 }
 
-.card {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--border-color);
-    overflow: hidden;
-}
-
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border-color);
+.fc th {
     background: var(--gris-oscuro);
+    color: var(--blanco);
+    border-color: var(--border-color);
+    padding: 10px;
 }
 
-.card-header h3 {
-    font-size: 1rem;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+.fc td {
+    border-color: var(--border-color);
 }
 
-.badge-info {
-    background: var(--gris-medio);
-    padding: 0.25rem 0.75rem;
-    border-radius: var(--radius-full);
-    font-size: 0.75rem;
+.fc-daygrid-day-number {
     color: var(--gris-texto);
 }
 
-/* Entregas list */
-.entregas-list {
+.fc-daygrid-day.fc-day-today {
+    background: rgba(193, 18, 31, 0.1);
+}
+
+.fc-daygrid-day.fc-day-today .fc-daygrid-day-number {
+    color: var(--rojo-primario);
+}
+
+/* =====================================================
+   LISTAS
+   ===================================================== */
+.entregas-list,
+.vehiculos-taller-list {
     padding: 0.5rem;
-    max-height: 300px;
+    max-height: 350px;
     overflow-y: auto;
 }
 
-.entrega-item {
+.entrega-item,
+.vehiculo-taller-item {
     display: flex;
     align-items: center;
     gap: 1rem;
     padding: 0.75rem;
     border-bottom: 1px solid var(--border-color);
-    cursor: pointer;
     transition: var(--transition);
+    flex-wrap: wrap;
 }
 
-.entrega-item:hover {
+.entrega-item:hover,
+.vehiculo-taller-item:hover {
     background: var(--gris-oscuro);
 }
 
-.entrega-icon {
+.entrega-icon,
+.vehiculo-taller-icon {
     width: 40px;
     height: 40px;
     background: rgba(193, 18, 31, 0.1);
@@ -807,18 +563,24 @@ body {
     align-items: center;
     justify-content: center;
     color: var(--rojo-primario);
+    flex-shrink: 0;
 }
 
-.entrega-content {
+.entrega-content,
+.vehiculo-taller-info {
     flex: 1;
 }
 
-.entrega-content h4 {
+.entrega-content h4,
+.vehiculo-taller-placa {
+    font-weight: 600;
     font-size: 0.9rem;
     margin-bottom: 0.25rem;
+    color: var(--blanco);
 }
 
-.entrega-content .placa {
+.entrega-content .placa,
+.vehiculo-taller-modelo {
     font-size: 0.7rem;
     color: var(--gris-texto);
 }
@@ -832,69 +594,6 @@ body {
     font-size: 0.85rem;
     font-weight: 600;
     color: var(--verde-exito);
-}
-
-.entrega-status .status-badge {
-    padding: 0.2rem 0.6rem;
-    border-radius: var(--radius-full);
-    font-size: 0.7rem;
-}
-
-.status-badge.aprobada {
-    background: rgba(16, 185, 129, 0.15);
-    color: var(--verde-exito);
-}
-
-.status-badge.pendiente {
-    background: rgba(245, 158, 11, 0.15);
-    color: var(--ambar-alerta);
-}
-
-/* Vehículos en taller */
-.vehiculos-taller-list {
-    padding: 0.5rem;
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.vehiculo-taller-item {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.75rem;
-    border-bottom: 1px solid var(--border-color);
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.vehiculo-taller-item:hover {
-    background: var(--gris-oscuro);
-}
-
-.vehiculo-taller-icon {
-    width: 40px;
-    height: 40px;
-    background: rgba(193, 18, 31, 0.1);
-    border-radius: var(--radius-full);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--rojo-primario);
-}
-
-.vehiculo-taller-info {
-    flex: 1;
-}
-
-.vehiculo-taller-placa {
-    font-weight: 600;
-    font-size: 0.9rem;
-    font-family: monospace;
-}
-
-.vehiculo-taller-modelo {
-    font-size: 0.75rem;
-    color: var(--gris-texto);
 }
 
 .vehiculo-taller-estado {
@@ -920,6 +619,25 @@ body {
     color: #ff9800;
 }
 
+.entrega-status .status-badge {
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-full);
+    font-size: 0.7rem;
+}
+
+.status-badge.aprobada {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--verde-exito);
+}
+
+.status-badge.pendiente {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--ambar-alerta);
+}
+
+/* =====================================================
+   EMPTY STATE
+   ===================================================== */
 .empty-state {
     text-align: center;
     padding: 2rem;
@@ -932,40 +650,286 @@ body {
     opacity: 0.5;
 }
 
-@media (max-width: 992px) {
+/* =====================================================
+   LOADING
+   ===================================================== */
+.loading-skeleton {
+    text-align: center;
+    padding: 2rem;
+    color: var(--gris-texto);
+}
+
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid var(--gris-medio);
+    border-top-color: var(--rojo-primario);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* =====================================================
+   SCROLLBAR
+   ===================================================== */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--gris-medio);
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--rojo-primario);
+}
+
+/* =====================================================
+   ========== RESPONSIVE ==========
+   ===================================================== */
+
+/* MÓVILES Y TABLETS (max 1024px) - Sidebar oculto con hamburguesa */
+@media (max-width: 1024px) {
+    /* Mostrar botón hamburguesa */
+    .hamburger-menu {
+        display: flex !important;
+    }
+    
+    /* Sidebar oculto por defecto */
+    .sidebar {
+        transform: translateX(-100%);
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 280px;
+        height: 100vh;
+        z-index: 1000;
+    }
+    
+    /* Sidebar abierto */
+    .sidebar.open {
+        transform: translateX(0);
+        box-shadow: 5px 0 25px rgba(0, 0, 0, 0.5);
+    }
+    
+    /* Asegurar que todos los elementos se muestren cuando está abierto */
+    .sidebar.open .sidebar-brand,
+    .sidebar.open .user-info,
+    .sidebar.open .nav-link span {
+        display: block;
+    }
+    
+    .sidebar.open .sidebar-header {
+        justify-content: flex-start;
+    }
+    
+    .sidebar.open .sidebar-user {
+        justify-content: flex-start;
+    }
+    
+    .sidebar.open .nav-link {
+        justify-content: flex-start;
+    }
+    
+    /* Main content ocupa todo el ancho */
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Ajustes del top bar */
+    .top-bar {
+        padding: 1rem;
+    }
+    
+    .content {
+        padding: 1rem;
+    }
+    
+    /* KPIs - 2 columnas */
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+    
+    /* Dashboard grid - 1 columna */
     .dashboard-grid {
         grid-template-columns: 1fr;
+        gap: 1rem;
     }
 }
-.refresh-btn {
-    background: #4CAF50;
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
-    margin-right: 10px;
-    transition: all 0.3s;
+
+/* MÓVILES (max 768px) */
+@media (max-width: 768px) {
+    .top-bar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .top-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .page-title h1 {
+        font-size: 1.2rem;
+    }
+    
+    .page-title p {
+        font-size: 0.75rem;
+    }
+    
+    /* KPIs - 1 columna */
+    .kpi-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .kpi-card {
+        padding: 1rem;
+    }
+    
+    .kpi-value {
+        font-size: 1.6rem;
+    }
+    
+    .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .calendario-leyenda {
+        flex-wrap: wrap;
+    }
+    
+    /* Items de lista en columna */
+    .entrega-item,
+    .vehiculo-taller-item {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .entrega-content,
+    .vehiculo-taller-info {
+        text-align: center;
+    }
+    
+    /* Calendario con scroll horizontal */
+    .calendario-wrapper {
+        padding: 0.5rem;
+        overflow-x: auto;
+    }
+    
+    .fc {
+        min-width: 600px;
+    }
 }
 
-.refresh-btn:hover {
-    background: #45a049;
-    transform: translateY(-2px);
+/* MÓVILES PEQUEÑOS (max 480px) */
+@media (max-width: 480px) {
+    .content {
+        padding: 0.75rem;
+    }
+    
+    .hamburger-menu {
+        width: 38px;
+        height: 38px;
+        font-size: 1.1rem;
+        top: 12px;
+        left: 12px;
+    }
+    
+    .hamburger-menu.active {
+        left: 275px;
+    }
+    
+    .date-display span {
+        display: none;
+    }
+    
+    .date-display {
+        padding: 0.4rem 0.7rem;
+    }
+    
+    .notification-icon {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
 }
 
-.refresh-btn:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-    transform: none;
+/* DESKTOP (min 1025px) - Sidebar siempre visible */
+@media (min-width: 1025px) {
+    /* Sidebar siempre visible */
+    .sidebar {
+        transform: translateX(0) !important;
+        position: fixed;
+    }
+    
+    /* Ocultar elementos de móvil */
+    .hamburger-menu {
+        display: none !important;
+    }
+    
+    .sidebar-overlay {
+        display: none !important;
+    }
+    
+    /* Main content con margen para sidebar */
+    .main-content {
+        margin-left: 280px;
+    }
 }
 
-/* Asegurar que los items no sean clickeables */
-.entrega-item, .vehiculo-taller-item {
-    cursor: default !important;
-}
-
-.action-btn {
-    cursor: default !important;
-    opacity: 0.6;
+/* ORIENTACIÓN LANDSCAPE */
+@media (max-width: 1024px) and (orientation: landscape) {
+    .sidebar {
+        overflow-y: auto;
+    }
+    
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .entrega-item,
+    .vehiculo-taller-item {
+        flex-direction: row;
+        text-align: left;
+    }
+    
+    .entrega-content,
+    .vehiculo-taller-info {
+        text-align: left;
+    }
 }

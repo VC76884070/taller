@@ -1,6 +1,7 @@
 /* =====================================================
    CONTROL_CALIDAD.CSS - CONTROL DE CALIDAD
    TEMA OSCURO - FURIA MOTOR
+   VERSIÓN COMPLETA CON HAMBURGUESA Y RESPONSIVE
    ===================================================== */
 
 /* Variables globales */
@@ -29,6 +30,26 @@
     --bg-secondary: #121214;
     --bg-card: #1C1C1E;
     --border-color: #2C2C2E;
+}
+
+/* =====================================================
+   ESTILOS GENERALES
+   ===================================================== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background: var(--bg-primary);
+    color: var(--blanco);
+    overflow-x: hidden;
+}
+
+body.sidebar-open {
+    overflow: hidden;
 }
 
 /* =====================================================
@@ -250,22 +271,6 @@
 
 .btn-secondary:hover {
     background: var(--gris-claro);
-}
-
-.btn-logout {
-    background: transparent;
-    border: none;
-    color: var(--gris-texto);
-    cursor: pointer;
-    font-size: 1.1rem;
-    padding: 0.5rem;
-    border-radius: var(--radius-md);
-    transition: var(--transition);
-}
-
-.btn-logout:hover {
-    color: var(--rojo-primario);
-    background: rgba(193, 18, 31, 0.1);
 }
 
 /* =====================================================
@@ -772,31 +777,38 @@
 /* =====================================================
    LOADING OVERLAY
    ===================================================== */
-#loadingOverlay {
+.loading-overlay {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
     z-index: 9999;
     display: none;
     justify-content: center;
     align-items: center;
+    flex-direction: column;
 }
 
-#loadingOverlay > div {
-    background: var(--bg-card);
-    padding: 1.5rem 2rem;
-    border-radius: var(--radius-lg);
-    text-align: center;
-    border: 1px solid var(--border-color);
+.loading-overlay .loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid var(--gris-medio);
+    border-top-color: var(--rojo-primario);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
 }
 
-#loadingOverlay i {
-    font-size: 2rem;
-    color: var(--rojo-primario);
-    margin-bottom: 0.5rem;
+.loading-overlay p {
+    margin-top: 1rem;
+    color: var(--blanco);
+    font-size: 0.85rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 
 /* =====================================================
@@ -831,64 +843,74 @@
 }
 
 /* =====================================================
-   RESPONSIVE
+   SCROLLBAR GENERAL
    ===================================================== */
-@media (max-width: 768px) {
-    .filters-bar {
-        flex-direction: column;
-        align-items: stretch;
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--gris-medio);
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--rojo-primario);
+}
+
+/* =====================================================
+   ========== RESPONSIVE ADICIONAL PARA HAMBURGUESA ==========
+   ===================================================== */
+
+/* Ajustes para cuando el sidebar está oculto en móvil/tablet */
+@media (max-width: 1024px) {
+    /* Main content ocupa todo el ancho */
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 1rem !important;
     }
     
-    .filter-group {
-        min-width: auto;
+    .content {
+        padding: 1rem !important;
     }
     
-    .search-box {
-        min-width: auto;
-    }
-    
-    .orden-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .orden-footer {
-        justify-content: center;
-    }
-    
-    .action-btn {
-        flex: 1;
-        justify-content: center;
-    }
-    
-    .detalle-row {
-        flex-direction: column;
-    }
-    
-    .detalle-label {
-        width: auto;
-        margin-bottom: 0.25rem;
-    }
-    
-    .modal-md,
-    .modal-lg {
-        width: 95%;
-        margin: 1rem;
-    }
-    
+    /* Top bar responsivo */
     .top-bar {
         flex-direction: column;
         align-items: flex-start;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
     }
     
-    .stats-cards {
-        grid-template-columns: repeat(2, 1fr);
+    .top-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    
+    .page-title h1 {
+        font-size: 1.2rem;
+    }
+    
+    .page-title p {
+        font-size: 0.75rem;
     }
 }
 
-@media (max-width: 480px) {
+/* Móviles (max 768px) */
+@media (max-width: 768px) {
+    /* Tabs responsivos */
     .tabs {
         flex-wrap: wrap;
+        gap: 0.5rem;
+        border-bottom: none;
     }
     
     .tab-btn {
@@ -896,14 +918,257 @@
         justify-content: center;
         padding: 0.6rem 0.8rem;
         font-size: 0.75rem;
+        border-radius: var(--radius-md);
+    }
+    
+    .tab-btn.active {
+        background: rgba(193, 18, 31, 0.15);
+        border-bottom: none;
+    }
+    
+    /* Filtros bar */
+    .filters-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+        padding: 1rem;
+    }
+    
+    .filter-group {
+        min-width: auto;
+        width: 100%;
+    }
+    
+    .form-select-sm {
+        width: 100%;
+        padding: 0.6rem;
+    }
+    
+    .search-box {
+        min-width: auto;
+        width: 100%;
+    }
+    
+    .btn-outline {
+        width: 100%;
+        justify-content: center;
+        padding: 0.6rem;
+    }
+    
+    /* Tarjetas de órdenes */
+    .orden-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: 0.8rem 1rem;
+    }
+    
+    .orden-codigo {
+        font-size: 0.85rem;
+    }
+    
+    .orden-vehiculo, .orden-cliente {
+        font-size: 0.7rem;
+        margin-left: 0;
+    }
+    
+    .orden-body {
+        padding: 0.8rem 1rem;
+    }
+    
+    .detalle-row {
+        flex-direction: column;
+        margin-bottom: 0.75rem;
+    }
+    
+    .detalle-label {
+        width: auto;
+        margin-bottom: 0.25rem;
+        font-size: 0.7rem;
+    }
+    
+    .detalle-value {
+        font-size: 0.8rem;
+    }
+    
+    .orden-footer {
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.8rem 1rem;
+    }
+    
+    .action-btn {
+        width: 100%;
+        justify-content: center;
+        padding: 0.6rem;
+    }
+    
+    /* Modales */
+    .modal-content {
+        width: 95%;
+        margin: 1rem;
+    }
+    
+    .modal-md, .modal-lg {
+        width: 95%;
+    }
+    
+    .modal-header {
+        padding: 0.8rem 1rem;
+    }
+    
+    .modal-header h2 {
+        font-size: 0.9rem;
+    }
+    
+    .modal-body {
+        padding: 1rem;
+    }
+    
+    .modal-footer {
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.8rem 1rem;
+    }
+    
+    .modal-footer button {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* Fotos grid */
+    .fotos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: 0.5rem;
+    }
+    
+    .foto-item img {
+        height: 70px;
+    }
+    
+    /* Empty state */
+    .empty-state {
+        padding: 2rem;
+    }
+    
+    .empty-state i {
+        font-size: 2rem;
+    }
+    
+    .empty-state p {
+        font-size: 0.85rem;
+    }
+}
+
+/* Móviles pequeños (max 480px) */
+@media (max-width: 480px) {
+    .page-title h1 {
+        font-size: 1rem;
+    }
+    
+    .page-title p {
+        display: none;
+    }
+    
+    .date-display span {
+        display: none;
+    }
+    
+    .date-display {
+        padding: 0.4rem 0.7rem;
+    }
+    
+    .hamburger-menu {
+        width: 38px;
+        height: 38px;
+        font-size: 1.1rem;
+        top: 12px;
+        left: 12px;
+    }
+    
+    .hamburger-menu.active {
+        left: 275px;
+    }
+    
+    .tab-badge {
+        font-size: 0.6rem;
+        padding: 0.1rem 0.35rem;
+    }
+    
+    .orden-codigo {
+        font-size: 0.75rem;
+    }
+    
+    .status-badge {
+        font-size: 0.6rem;
+        padding: 0.2rem 0.5rem;
     }
     
     .fotos-grid {
-        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
     }
     
-    .stats-cards {
-        grid-template-columns: 1fr;
+    .foto-item img {
+        height: 60px;
+    }
+}
+
+/* Orientación landscape */
+@media (max-width: 1024px) and (orientation: landscape) {
+    .main-content {
+        padding-top: 70px;
+    }
+    
+    .filters-bar {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+    
+    .filter-group {
+        flex: 1;
+        min-width: 150px;
+    }
+    
+    .search-box {
+        flex: 2;
+    }
+    
+    .btn-outline {
+        width: auto;
+    }
+    
+    .orden-header {
+        flex-direction: row;
+        align-items: center;
+    }
+    
+    .orden-footer {
+        flex-direction: row;
+    }
+    
+    .action-btn {
+        width: auto;
+    }
+}
+
+/* Mejoras para touch */
+@media (max-width: 1024px) {
+    .tab-btn,
+    .btn-outline,
+    .action-btn,
+    .modal-close,
+    .btn-secondary,
+    .btn-primary,
+    .btn-warning {
+        min-height: 44px;
+    }
+    
+    .ordenes-container {
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .modal-body {
+        -webkit-overflow-scrolling: touch;
     }
 }
 

@@ -1,6 +1,7 @@
 /* =====================================================
    PERFIL - ESTILOS OSCUROS MODERNOS
    BASADO EN LA PALETA FURIA MOTOR
+   VERSIÓN CORREGIDA CON RESPONSIVE COMPLETO
    ===================================================== */
 
 /* =====================================================
@@ -157,6 +158,7 @@
     color: var(--blanco);
     margin-bottom: 0.5rem;
     letter-spacing: -0.02em;
+    word-break: break-word;
 }
 
 .user-role-badge {
@@ -207,10 +209,12 @@
     justify-content: center;
     color: var(--rojo-primario);
     font-size: 1.1rem;
+    flex-shrink: 0;
 }
 
 .info-content {
     flex: 1;
+    min-width: 0;
 }
 
 .info-label {
@@ -226,6 +230,7 @@
     font-size: 0.95rem;
     font-weight: 600;
     color: var(--blanco);
+    word-break: break-word;
 }
 
 .info-edit {
@@ -241,6 +246,7 @@
     justify-content: center;
     transition: all 0.2s ease;
     opacity: 0;
+    flex-shrink: 0;
 }
 
 .info-item:hover .info-edit {
@@ -262,6 +268,7 @@
     display: flex;
     justify-content: center;
     gap: 1rem;
+    flex-wrap: wrap;
 }
 
 .btn-change-password {
@@ -360,6 +367,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .modal-header h2 {
@@ -394,6 +403,7 @@
     display: flex;
     justify-content: flex-end;
     gap: 0.75rem;
+    flex-wrap: wrap;
 }
 
 /* Formulario de contraseña */
@@ -519,13 +529,54 @@
 }
 
 /* =====================================================
+   LOADING OVERLAY
+   ===================================================== */
+.loading-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 10000;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+
+.loading-overlay.show {
+    display: flex;
+}
+
+.loading-overlay p {
+    margin-top: 1rem;
+    color: var(--blanco);
+    font-size: 0.85rem;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid var(--gris-medio);
+    border-top-color: var(--rojo-primario);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* =====================================================
    NOTIFICACIONES TOAST
    ===================================================== */
 .toast-container {
     position: fixed;
     top: 20px;
     right: 20px;
-    z-index: 9999;
+    z-index: 10001;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -562,12 +613,9 @@
     to { transform: translateX(0); opacity: 1; }
 }
 
-@keyframes slideOut {
-    from { transform: translateX(0); opacity: 1; }
-    to { transform: translateX(100%); opacity: 0; }
-}
-
-/* Scrollbar */
+/* =====================================================
+   SCROLLBAR
+   ===================================================== */
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -588,9 +636,43 @@
 }
 
 /* =====================================================
-   RESPONSIVE
+   ========== RESPONSIVE ==========
    ===================================================== */
+
+/* Tablet (max 1024px) */
+@media (max-width: 1024px) {
+    .main-content {
+        padding-top: 70px;
+    }
+    
+    .perfil-container {
+        max-width: 90%;
+    }
+    
+    /* Área táctil mínima 44px */
+    .info-edit,
+    .btn-change-password,
+    .btn-save-changes,
+    .modal-close,
+    .btn-secondary,
+    .btn-primary,
+    .password-toggle {
+        min-height: 44px;
+        min-width: 44px;
+    }
+}
+
+/* Móvil (max 768px) */
 @media (max-width: 768px) {
+    .main-content {
+        padding: 1rem;
+        padding-top: 65px;
+    }
+    
+    .perfil-container {
+        max-width: 100%;
+    }
+    
     .perfil-body {
         padding: 0 1rem 1.5rem 1rem;
     }
@@ -606,6 +688,7 @@
     
     .info-grid {
         grid-template-columns: 1fr;
+        gap: 0.75rem;
     }
     
     .info-item {
@@ -633,8 +716,21 @@
     .modal-footer button {
         width: 100%;
     }
+    
+    .modal-content {
+        width: 95%;
+        margin: 0 auto;
+    }
+    
+    .toast-notification {
+        min-width: auto;
+        max-width: calc(100% - 40px);
+        left: 20px;
+        right: 20px;
+    }
 }
 
+/* Móvil pequeño (max 480px) */
 @media (max-width: 480px) {
     .perfil-header {
         height: 80px;
@@ -649,8 +745,61 @@
         height: 80px;
     }
     
+    .avatar-placeholder i {
+        font-size: 2rem;
+    }
+    
     .user-role-badge {
         font-size: 0.75rem;
         padding: 0.3rem 1rem;
+    }
+    
+    .user-name {
+        font-size: 1.2rem;
+    }
+    
+    .info-icon {
+        width: 32px;
+        height: 32px;
+    }
+    
+    .info-icon i {
+        font-size: 0.9rem;
+    }
+    
+    .info-value {
+        font-size: 0.85rem;
+    }
+}
+
+/* Landscape mode en móviles */
+@media (max-width: 768px) and (orientation: landscape) {
+    .main-content {
+        padding-top: 60px;
+    }
+    
+    .perfil-body {
+        padding: 0 1rem 1rem 1rem;
+    }
+    
+    .info-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .perfil-actions {
+        flex-direction: row;
+    }
+    
+    .btn-change-password,
+    .btn-save-changes {
+        width: auto;
+    }
+}
+
+/* Scroll suave en móvil */
+@media (max-width: 768px) {
+    .modal-body,
+    .password-requirements {
+        -webkit-overflow-scrolling: touch;
     }
 }

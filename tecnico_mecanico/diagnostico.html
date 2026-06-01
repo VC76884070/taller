@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Técnico - Diagnóstico Técnico | FURIA MOTOR</title>
 
     <!-- Fonts & Icons -->
@@ -12,6 +12,7 @@
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/diagnostico.css">
+    
     <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
@@ -33,6 +34,14 @@
 </head>
 
 <body>
+    <!-- Botón hamburguesa para móvil/tablet -->
+    <button class="hamburger-menu" id="hamburgerMenu" aria-label="Menú">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- Overlay para cerrar sidebar -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <div class="app">
         <!-- SIDEBAR -->
         <div id="sidebar-container"></div>
@@ -51,10 +60,7 @@
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
                     </div>
-                    <button class="btn-logout" onclick="cerrarSesion()">
-                        <i class="fas fa-sign-out-alt"></i>
-                        Cerrar Sesión
-                    </button>
+                    <!-- 🔴 BOTÓN DE LOGOUT ELIMINADO - Está en el sidebar -->
                 </div>
             </header>
 
@@ -269,6 +275,108 @@
 
     <script src="js/include.js"></script>
     <script src="js/diagnostico.js"></script>
+
+    <script>
+        // =====================================================
+        // FUNCIONES RESPONSIVE PARA MÓVIL (HAMBURGUESA)
+        // =====================================================
+        
+        let sidebarOpen = false;
+        
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+            
+            if (!sidebar) return;
+            
+            sidebarOpen = !sidebarOpen;
+            
+            if (sidebarOpen) {
+                sidebar.classList.add('open');
+                if (overlay) overlay.classList.add('active');
+                if (hamburger) hamburger.classList.add('active');
+                body.classList.add('sidebar-open');
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-times';
+            } else {
+                closeSidebar();
+            }
+        }
+        
+        function closeSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+            
+            if (sidebar) {
+                sidebar.classList.remove('open');
+                if (overlay) overlay.classList.remove('active');
+                if (hamburger) hamburger.classList.remove('active');
+                body.classList.remove('sidebar-open');
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-bars';
+            }
+            sidebarOpen = false;
+        }
+        
+        function updateCurrentDate() {
+            const dateElement = document.getElementById('currentDate');
+            if (dateElement) {
+                const now = new Date();
+                const options = { year: 'numeric', month: 'long', day: 'numeric' };
+                dateElement.textContent = now.toLocaleDateString('es-ES', options);
+            }
+        }
+        
+        // Función global de logout (por si acaso, aunque está en el sidebar)
+        function cerrarSesion() {
+            if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
+                localStorage.removeItem('furia_token');
+                localStorage.removeItem('furia_user');
+                window.location.href = '/';
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            updateCurrentDate();
+            
+            const hamburgerBtn = document.getElementById('hamburgerMenu');
+            if (hamburgerBtn) hamburgerBtn.addEventListener('click', toggleSidebar);
+            
+            const overlay = document.getElementById('sidebarOverlay');
+            if (overlay) overlay.addEventListener('click', closeSidebar);
+            
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 1024 && sidebarOpen) closeSidebar();
+            });
+            
+            document.addEventListener('click', function(e) {
+                if (window.innerWidth <= 1024 && sidebarOpen) {
+                    const sidebar = document.querySelector('.sidebar');
+                    const hamburger = document.getElementById('hamburgerMenu');
+                    if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
+                        closeSidebar();
+                    }
+                }
+            });
+            
+            document.addEventListener('touchmove', function(e) {
+                if (window.innerWidth <= 1024 && sidebarOpen) {
+                    const sidebar = document.querySelector('.sidebar');
+                    if (sidebar && !sidebar.contains(e.target)) e.preventDefault();
+                }
+            });
+        });
+        
+        window.toggleSidebar = toggleSidebar;
+        window.closeSidebar = closeSidebar;
+        window.cerrarSesion = cerrarSesion;
+        
+        console.log('✅ diagnostico.html (Técnico Mecánico) - Funciones responsive cargadas');
+    </script>
 </body>
 
 </html>

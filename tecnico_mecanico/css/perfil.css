@@ -1,6 +1,7 @@
 /* =====================================================
    PERFIL - TÉCNICO MECÁNICO
    FURIA MOTOR COMPANY SRL
+   VERSIÓN COMPLETA CON RESPONSIVE Y SIDEBAR
    ===================================================== */
 
 * {
@@ -49,10 +50,73 @@ body {
     min-height: 100vh;
 }
 
+/* =====================================================
+   BOTÓN HAMBURGUESA - ESTILOS
+   ===================================================== */
+
+.hamburger-menu {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    width: 45px;
+    height: 45px;
+    background: var(--rojo-primario);
+    border: none;
+    border-radius: var(--radius-md);
+    color: white;
+    font-size: 1.3rem;
+    cursor: pointer;
+    z-index: 1002;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-lg);
+    transition: var(--transition);
+}
+
+.hamburger-menu:hover {
+    background: var(--rojo-oscuro);
+    transform: scale(1.05);
+}
+
+.hamburger-menu.active {
+    background: var(--rojo-oscuro);
+    left: 275px;
+}
+
+/* Overlay para cerrar sidebar */
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 998;
+    display: none;
+    transition: var(--transition);
+}
+
+.sidebar-overlay.active {
+    display: block;
+}
+
+/* Ajuste para body cuando sidebar está abierto */
+body.sidebar-open {
+    overflow: hidden;
+}
+
+/* =====================================================
+   ESTILOS BASE PARA SIDEBAR
+   ===================================================== */
+
+/* Ajustes para el main content cuando sidebar está presente */
 .main-content {
     flex: 1;
     margin-left: 280px;
     min-height: 100vh;
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Top Bar */
@@ -629,12 +693,97 @@ body {
     background: var(--rojo-primario);
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    .main-content {
-        margin-left: 0;
+/* Skeleton Loading */
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: 4px;
+    color: transparent !important;
+    display: inline-block;
+    min-width: 50px;
+}
+
+@keyframes skeleton-loading {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* Optimizaciones de rendimiento */
+.profile-card, .profile-form-container {
+    will-change: transform;
+}
+
+img {
+    loading: lazy;
+}
+
+/* =====================================================
+   ========== RESPONSIVE ==========
+   ===================================================== */
+
+/* Tablet y móvil (max 1024px) - Sidebar con hamburguesa */
+@media (max-width: 1024px) {
+    /* Mostrar botón hamburguesa */
+    .hamburger-menu {
+        display: flex !important;
     }
     
+    /* Sidebar oculto por defecto */
+    .sidebar {
+        transform: translateX(-100%);
+        width: 280px;
+        top: 0;
+        height: 100vh;
+        position: fixed;
+    }
+    
+    .sidebar.open {
+        transform: translateX(0);
+        box-shadow: 5px 0 25px rgba(0, 0, 0, 0.5);
+    }
+    
+    /* Main content sin margen cuando sidebar está oculto */
+    .main-content {
+        margin-left: 0;
+        padding-top: 70px;
+    }
+    
+    /* Área táctil mínima 44px para todos los elementos clickeables */
+    .btn-logout,
+    .btn-primary,
+    .btn-secondary,
+    .tab-btn,
+    .modal-close,
+    .avatar-container {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    /* Feedback táctil al tocar */
+    .stat-item:active,
+    .btn-logout:active,
+    .btn-primary:active,
+    .btn-secondary:active,
+    .tab-btn:active {
+        transform: scale(0.98);
+        transition: transform 0.05s;
+    }
+    
+    /* Mejorar área táctil de inputs */
+    input,
+    select,
+    textarea {
+        min-height: 44px;
+    }
+}
+
+/* Mobile (max 768px) */
+@media (max-width: 768px) {
     .top-bar {
         padding: 1rem;
         flex-direction: column;
@@ -675,8 +824,18 @@ body {
         flex-direction: column;
         gap: 0.3rem;
     }
+    
+    .modal-footer {
+        flex-direction: column;
+    }
+    
+    .modal-footer button {
+        width: 100%;
+        justify-content: center;
+    }
 }
 
+/* Mobile pequeño (max 480px) */
 @media (max-width: 480px) {
     .page-title h1 {
         font-size: 1.1rem;
@@ -702,31 +861,26 @@ body {
         padding: 0.8rem;
     }
 }
-/* Skeleton Loading */
-.skeleton {
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-    background-size: 200% 100%;
-    animation: skeleton-loading 1.5s infinite;
-    border-radius: 4px;
-    color: transparent !important;
-    display: inline-block;
-    min-width: 50px;
-}
 
-@keyframes skeleton-loading {
-    0% {
-        background-position: 200% 0;
+/* Desktop (min 1025px) - Sidebar siempre visible */
+@media (min-width: 1025px) {
+    .main-content {
+        margin-left: 300px;
     }
-    100% {
-        background-position: -200% 0;
+    
+    /* Ocultar botón hamburguesa en desktop */
+    .hamburger-menu {
+        display: none !important;
+    }
+    
+    /* Ocultar overlay en desktop */
+    .sidebar-overlay {
+        display: none !important;
     }
 }
 
-/* Optimizaciones de rendimiento */
-.profile-card, .profile-form-container {
-    will-change: transform;
-}
-
-img {
-    loading: lazy;
+/* Selección de texto */
+::selection {
+    background: var(--rojo-primario);
+    color: var(--blanco);
 }

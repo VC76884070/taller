@@ -1,6 +1,7 @@
 /* =====================================================
    RECEPCIÓN DE VEHÍCULO - ESTILOS OSCUROS MODERNOS
    PALETA: Rojo como acento, fondo oscuro elegante
+   VERSIÓN COMPLETA CON RESPONSIVE Y SIDEBAR
    ===================================================== */
 
 /* =====================================================
@@ -56,11 +57,42 @@
 body {
     background: var(--bg-primary);
     color: var(--blanco);
+    font-family: 'Plus Jakarta Sans', sans-serif;
 }
 
 /* =====================================================
-   LAYOUT PRINCIPAL
+   LAYOUT PRINCIPAL Y SIDEBAR
    ===================================================== */
+
+/* Ajustes para el main content cuando sidebar está presente */
+.main-content {
+    margin-left: 280px;
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Overlay para cerrar sidebar */
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 998;
+    display: none;
+    transition: var(--transition);
+}
+
+.sidebar-overlay.active {
+    display: block;
+}
+
+/* Ajuste para body cuando sidebar está abierto */
+body.sidebar-open {
+    overflow: hidden;
+}
+
 .recepcion-form {
     display: flex;
     flex-direction: column;
@@ -1689,11 +1721,12 @@ body {
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
     padding: 1rem 2rem;
+    margin-bottom: 1rem;
 }
 
 .page-title h1 {
     color: var(--blanco);
-    font-size: 1.8rem;
+    font-size: 1.5rem;
 }
 
 .page-title p {
@@ -1751,6 +1784,7 @@ body {
 
 ::-webkit-scrollbar-track {
     background: var(--gris-oscuro);
+    border-radius: var(--radius-full);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -1775,8 +1809,73 @@ body {
 }
 
 /* =====================================================
-   RESPONSIVE
+   ========== RESPONSIVE ==========
    ===================================================== */
+
+/* Tablet y móvil (max 1024px) - Sidebar con hamburguesa */
+@media (max-width: 1024px) {
+    /* Main content sin margen cuando sidebar está oculto */
+    .main-content {
+        margin-left: 0;
+        padding: 1rem;
+        padding-top: 70px;
+    }
+    
+    /* Área táctil mínima 44px para todos los elementos clickeables */
+    .btn-crear-sesion,
+    .btn-unirse-codigo,
+    .btn-guardar-seccion,
+    .btn-limpiar,
+    .btn-cancelar-sesion,
+    .btn-finalizar,
+    .btn-copy,
+    .btn-refresh,
+    .btn-pagina,
+    .btn-secondary,
+    .btn-primary,
+    .btn-danger,
+    .btn-ver-detalle,
+    .btn-editar-recepcion,
+    .btn-eliminar-recepcion,
+    .btn-audio,
+    .btn-eliminar-audio,
+    .btn-transcribir,
+    .modal-close,
+    .tab-btn,
+    .action-btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    /* Feedback táctil al tocar */
+    .form-card:active,
+    .btn-crear-sesion:active,
+    .btn-unirse-codigo:active,
+    .btn-guardar-seccion:active,
+    .btn-cancelar-sesion:active,
+    .btn-finalizar:active,
+    .recepcion-card:active,
+    .sesion-item:active {
+        transform: scale(0.98);
+        transition: transform 0.05s;
+    }
+    
+    /* Scroll suave en listas */
+    .sesiones-list,
+    .colaboradores-list,
+    .recepciones-list {
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Mejorar área táctil de inputs y selects */
+    input,
+    select,
+    textarea {
+        min-height: 44px;
+    }
+}
+
+/* Mobile (max 768px) */
 @media (max-width: 768px) {
     .form-row {
         grid-template-columns: 1fr;
@@ -1852,6 +1951,7 @@ body {
     }
 }
 
+/* Mobile pequeño (max 480px) */
 @media (max-width: 480px) {
     .photo-grid {
         grid-template-columns: 1fr;
@@ -1876,77 +1976,13 @@ body {
     }
 }
 
-/* Badge para modo edición */
-.modo-edicion-badge {
-    background: #FFB347;
-    color: white;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin-left: 12px;
+/* Desktop (min 1025px) - Sidebar siempre visible */
+@media (min-width: 1025px) {
+    .main-content {
+        margin-left: 300px;
+    }
 }
 
-/* Botón peligro (eliminar) */
-.btn-danger {
-    background: #dc3545;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 500;
-}
-
-.btn-danger:hover {
-    background: #c82333;
-}
-
-/* Modal de imagen ampliada */
-.modal-imagen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.9);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-}
-
-.modal-imagen-content {
-    max-width: 90vw;
-    max-height: 90vh;
-    position: relative;
-}
-
-.modal-imagen-content img {
-    max-width: 100%;
-    max-height: 85vh;
-    object-fit: contain;
-    border-radius: 8px;
-}
-
-.modal-imagen-close {
-    position: absolute;
-    top: -40px;
-    right: 0;
-    background: none;
-    border: none;
-    color: white;
-    font-size: 30px;
-    cursor: pointer;
-}
-
-.modal-imagen-content p {
-    text-align: center;
-    color: white;
-    margin-top: 10px;
-}
 /* Estilo para mostrar el código de forma segura */
 .sesion-codigo {
     font-family: monospace;
@@ -1962,4 +1998,10 @@ body {
 .sesion-codigo i {
     font-size: 0.7rem;
     color: var(--verde-exito);
+}
+
+/* Selección de texto */
+::selection {
+    background: var(--rojo-primario);
+    color: var(--blanco);
 }

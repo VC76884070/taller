@@ -1,6 +1,6 @@
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA TÉCNICO MECÁNICO
-// VERSIÓN CORREGIDA CON URL DINÁMICA Y RESALTADO DE MENÚ
+// VERSIÓN CORREGIDA - CON ESTILOS MODIFICADOS
 // =====================================================
 
 // =====================================================
@@ -28,6 +28,15 @@ const CONFIG = {
     userRole: 'Técnico Mecánico'
 };
 
+// Mapeo de páginas
+const PAGE_FILES = {
+    'misvehiculos': 'misvehiculos.html',
+    'diagnostico': 'diagnostico.html',
+    'avance': 'avance.html',
+    'historial': 'historial.html',
+    'perfil': 'perfil.html'
+};
+
 // =====================================================
 // FUNCIÓN PARA OBTENER USUARIO ACTUAL
 // =====================================================
@@ -37,11 +46,9 @@ function obtenerUsuarioActual() {
         if (userStr) {
             const user = JSON.parse(userStr);
             
-            // Normalizar roles
             let roles = user.roles || [];
             if (typeof roles === 'string') roles = [roles];
             
-            // Verificar si tiene rol de técnico
             const tieneRolTecnico = roles.some(r => {
                 const rolLower = String(r).toLowerCase();
                 return rolLower === 'tecnico' || rolLower === 'tecnico_mecanico';
@@ -50,7 +57,6 @@ function obtenerUsuarioActual() {
             console.log('🔍 Include.js - Usuario:', user.nombre);
             console.log('🔍 Include.js - Roles:', roles);
             
-            // Si no tiene rol técnico pero está en página de técnico, redirigir
             if (!tieneRolTecnico && !window.location.pathname.includes('login')) {
                 console.warn('⚠️ Usuario no tiene rol técnico, redirigiendo');
                 
@@ -87,10 +93,6 @@ function obtenerUsuarioActual() {
 // FUNCIÓN PARA ELIMINAR CUALQUIER BOTÓN DE CERRAR SESIÓN ADICIONAL
 // =====================================================
 function eliminarBotonesCerrarSesionAdicionales() {
-    // Eliminar cualquier botón de cerrar sesión que no sea del sidebar
-    // Busca elementos por diferentes selectores comunes
-    
-    // 1. Buscar elementos en el header superior derecho
     const headerTop = document.querySelector('header') || document.querySelector('.top-header') || document.querySelector('.navbar');
     if (headerTop) {
         const logoutButtons = headerTop.querySelectorAll('a[onclick*="logout"], a[onclick*="cerrarSesion"], button[onclick*="logout"], button[onclick*="cerrarSesion"]');
@@ -102,7 +104,6 @@ function eliminarBotonesCerrarSesionAdicionales() {
         });
     }
     
-    // 2. Buscar en todo el documento elementos comunes de logout
     const selectors = [
         '.logout-btn', 
         '.btn-logout', 
@@ -115,19 +116,15 @@ function eliminarBotonesCerrarSesionAdicionales() {
         try {
             const elements = document.querySelectorAll(selector);
             elements.forEach(el => {
-                // Verificar que NO sea el que está dentro del sidebar
                 const isInSidebar = el.closest('.sidebar');
                 if (!isInSidebar && el.parentNode) {
                     console.log('🗑️ Eliminando botón adicional:', el);
                     el.parentNode.removeChild(el);
                 }
             });
-        } catch(e) {
-            // Ignorar errores de selectores complejos
-        }
+        } catch(e) {}
     });
     
-    // 3. Buscar por texto específico (solución más robusta)
     const allElements = document.querySelectorAll('a, button');
     allElements.forEach(el => {
         const text = el.textContent || el.innerText;
@@ -135,7 +132,6 @@ function eliminarBotonesCerrarSesionAdicionales() {
             const isInSidebar = el.closest('.sidebar');
             const isInSidebarBottom = el.closest('.sidebar-bottom');
             
-            // Si no está en el sidebar, eliminarlo
             if (!isInSidebar && !isInSidebarBottom && el.parentNode) {
                 console.log('🗑️ Eliminando botón por texto:', el);
                 el.parentNode.removeChild(el);
@@ -155,7 +151,6 @@ async function includeSidebar() {
         return;
     }
     
-    // Verificar autenticación antes de cargar sidebar
     const user = obtenerUsuarioActual();
     if (!user.tieneAcceso) return;
     
@@ -181,7 +176,6 @@ async function includeSidebar() {
         
         inicializarSidebar();
         
-        // Eliminar botones adicionales después de cargar el sidebar
         setTimeout(() => {
             eliminarBotonesCerrarSesionAdicionales();
         }, 150);
@@ -270,20 +264,11 @@ function crearSidebarRespaldo(container) {
 // =====================================================
 function crearMenuItem(page, label, icon, currentPage) {
     const isActive = currentPage === page ? 'active' : '';
-    
-    const pageToFile = {
-        'misvehiculos': 'misvehiculos.html',
-        'diagnostico': 'diagnostico.html',
-        'avance': 'avance.html',
-        'historial': 'historial.html',
-        'perfil': 'perfil.html'
-    };
-    
-    const href = pageToFile[page] || `${page}.html`;
+    const href = PAGE_FILES[page] || `${page}.html`;
     
     return `
         <li class="nav-item ${isActive}" data-page="${page}">
-            <a href="${href}" class="nav-link">
+            <a href="${href}" class="nav-link" onclick="navegarPagina(event, '${page}')">
                 <i class="fas fa-${icon}"></i>
                 <span>${label}</span>
             </a>
@@ -291,25 +276,23 @@ function crearMenuItem(page, label, icon, currentPage) {
     `;
 }
 
+window.navegarPagina = function(event, page) {
+    event.preventDefault();
+    window.location.href = PAGE_FILES[page] || `${page}.html`;
+};
+
 // =====================================================
 // INICIALIZAR SIDEBAR
 // =====================================================
 function inicializarSidebar() {
-    // Esperar a que el sidebar esté en el DOM
     setTimeout(() => {
         const currentPage = obtenerPaginaActual();
         console.log('📍 Página actual:', currentPage);
         
-        // Marcar item activo
         marcarItemActivo(currentPage);
-        
-        // Actualizar nombre del usuario
         actualizarNombreUsuario();
-        
-        // Corregir el onclick del botón cerrar sesión
         corregirBotonCerrarSesion();
         
-        // Mostrar indicador de múltiples roles
         const user = obtenerUsuarioActual();
         if (user.roles && user.roles.length > 1) {
             mostrarIndicadorMultiplesRoles();
@@ -320,60 +303,27 @@ function inicializarSidebar() {
 }
 
 // =====================================================
-// MARCAR ITEM ACTIVO - CORREGIDO
+// MARCAR ITEM ACTIVO
 // =====================================================
 function marcarItemActivo(currentPage) {
-    // Buscar todos los items del menú
-    const navItems = document.querySelectorAll('.nav-item');
-    console.log('🔍 Items encontrados en el menú:', navItems.length);
-    
-    // Remover clase active de todos
-    navItems.forEach(item => {
-        item.classList.remove('active');
-    });
-    
-    // Buscar el item que coincide con la página actual
-    let found = false;
-    navItems.forEach(item => {
-        const page = item.getAttribute('data-page');
-        console.log(`📄 Comparando: data-page="${page}" con currentPage="${currentPage}"`);
-        if (page === currentPage) {
-            item.classList.add('active');
-            console.log(`✅ Activado: ${currentPage}`);
-            found = true;
-        }
-    });
-    
-    // Si no se encontró por data-page, intentar por href
-    if (!found) {
-        const currentPath = window.location.pathname;
-        console.log('🔍 Buscando por href, path actual:', currentPath);
-        navItems.forEach(item => {
-            const link = item.querySelector('a');
-            if (link) {
-                const href = link.getAttribute('href');
-                if (href && currentPath.includes(href.replace('.html', ''))) {
-                    item.classList.add('active');
-                    console.log(`✅ Activado por href: ${href}`);
-                    found = true;
-                }
-            }
+    setTimeout(() => {
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
         });
-    }
-    
-    if (!found) {
-        console.warn('⚠️ No se encontró el item del menú para:', currentPage);
-    }
+        
+        const activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
+        if (activeItem) {
+            activeItem.classList.add('active');
+            console.log(`✅ Item activo: ${currentPage}`);
+        }
+    }, 50);
 }
 
 // =====================================================
-// FORZAR RESALTADO DEL MENÚ DESPUÉS DE CARGA COMPLETA
+// FORZAR RESALTADO DEL MENÚ
 // =====================================================
 function forzarResaltadoMenu() {
     const currentPage = obtenerPaginaActual();
-    console.log('🔄 Forzando resaltado para:', currentPage);
-    
-    // Intentar cada 300ms hasta que el sidebar esté cargado
     let intentos = 0;
     const maxIntentos = 15;
     
@@ -382,66 +332,35 @@ function forzarResaltadoMenu() {
         const navItems = document.querySelectorAll('.nav-item');
         
         if (navItems.length > 0) {
-            // Encontramos el sidebar
             navItems.forEach(item => item.classList.remove('active'));
             
-            // Buscar por data-page
             let activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
             if (activeItem) {
                 activeItem.classList.add('active');
-                console.log(`✅ Menú resaltado: ${currentPage} (por data-page)`);
+                console.log(`✅ Menú resaltado: ${currentPage}`);
                 clearInterval(intervalo);
                 return;
-            }
-            
-            // Si no encuentra por data-page, intentar por href
-            const currentPath = window.location.pathname;
-            for (const item of navItems) {
-                const link = item.querySelector('a');
-                if (link && link.getAttribute('href')) {
-                    const href = link.getAttribute('href');
-                    if (currentPath.includes(href.replace('.html', ''))) {
-                        item.classList.add('active');
-                        console.log(`✅ Menú resaltado por href: ${href}`);
-                        clearInterval(intervalo);
-                        return;
-                    }
-                }
             }
         }
         
         if (intentos >= maxIntentos) {
-            console.warn('⚠️ No se pudo resaltar el menú después de', maxIntentos, 'intentos');
+            console.warn('⚠️ No se pudo resaltar el menú');
             clearInterval(intervalo);
         }
     }, 300);
 }
 
 // =====================================================
-// CORREGIR BOTÓN CERRAR SESIÓN EN EL SIDEBAR
+// CORREGIR BOTÓN CERRAR SESIÓN
 // =====================================================
 function corregirBotonCerrarSesion() {
-    // Buscar el botón de cerrar sesión dentro del sidebar
     const sidebarLogoutBtn = document.querySelector('.sidebar-bottom a[onclick="logout()"], .sidebar-bottom a[onclick*="cerrarSesion"]');
     
     if (sidebarLogoutBtn) {
-        // Cambiar el onclick para que use la función correcta
         sidebarLogoutBtn.removeAttribute('onclick');
         sidebarLogoutBtn.setAttribute('onclick', 'cerrarSesion()');
         console.log('✅ Botón de cerrar sesión del sidebar corregido');
     }
-    
-    // También buscar cualquier otro botón en el sidebar
-    const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
-    sidebarLinks.forEach(link => {
-        const text = link.textContent || link.innerText;
-        if (text && text.includes('Cerrar Sesión')) {
-            if (!link.hasAttribute('onclick') || link.getAttribute('onclick') !== 'cerrarSesion()') {
-                link.removeAttribute('onclick');
-                link.setAttribute('onclick', 'cerrarSesion()');
-            }
-        }
-    });
 }
 
 // =====================================================
@@ -450,8 +369,6 @@ function corregirBotonCerrarSesion() {
 function mostrarIndicadorMultiplesRoles() {
     const userInfo = document.querySelector('.user-info');
     if (!userInfo) return;
-    
-    // Evitar duplicados
     if (userInfo.querySelector('.multi-role-badge')) return;
     
     const user = obtenerUsuarioActual();
@@ -546,39 +463,32 @@ function obtenerPaginaActual() {
     const filename = path.split('/').pop() || 'misvehiculos.html';
     let pageName = filename.replace('.html', '');
     
-    // Normalizar nombres
-    const pageMap = {
+    const pageMapping = {
         'misvehiculos': 'misvehiculos',
         'diagnostico': 'diagnostico',
         'avance': 'avance',
         'historial': 'historial',
-        'perfil': 'perfil',
-        'dashboard': 'misvehiculos' // fallback
+        'perfil': 'perfil'
     };
     
-    const validPages = ['misvehiculos', 'diagnostico', 'avance', 'historial', 'perfil'];
-    
-    if (validPages.includes(pageName)) {
-        return pageName;
-    }
-    
-    // Si no está en la lista, intentar mapear
-    return pageMap[pageName] || 'misvehiculos';
+    return pageMapping[pageName] || 'misvehiculos';
 }
 
 // =====================================================
 // ACTUALIZAR NOMBRE DE USUARIO
 // =====================================================
 function actualizarNombreUsuario() {
-    const userNameSpan = document.getElementById('userName');
-    if (!userNameSpan) return;
-    
-    const user = obtenerUsuarioActual();
-    userNameSpan.textContent = user.nombre;
+    setTimeout(() => {
+        const userNameSpan = document.getElementById('userName');
+        if (!userNameSpan) return;
+        
+        const user = obtenerUsuarioActual();
+        userNameSpan.textContent = user.nombre;
+    }, 100);
 }
 
 // =====================================================
-// CIERRE DE SESIÓN (CORREGIDO)
+// CIERRE DE SESIÓN
 // =====================================================
 window.cerrarSesion = function() {
     if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
@@ -652,7 +562,7 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
 }
 
 // =====================================================
-// AGREGAR ESTILOS
+// AGREGAR ESTILOS - VERSIÓN CORREGIDA (SIN REDUCCIÓN A 80px)
 // =====================================================
 function agregarEstilosSidebar() {
     if (document.getElementById('sidebar-adicional-styles')) return;
@@ -668,31 +578,241 @@ function agregarEstilosSidebar() {
             from { transform: translateX(0); opacity: 1; }
             to { transform: translateX(100%); opacity: 0; }
         }
-        .sidebar { background: #121212; color: #FFFFFF; width: 280px; height: 100vh; position: fixed; left: 0; top: 0; overflow-y: auto; z-index: 1000; }
-        .sidebar-header { padding: 1.5rem; display: flex; align-items: center; gap: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .sidebar-logo { width: 40px; height: 40px; object-fit: contain; }
-        .sidebar-brand { font-size: 1.2rem; font-weight: 700; color: #E53935; }
-        .sidebar-user { padding: 1.5rem; display: flex; align-items: center; gap: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .user-avatar { width: 48px; height: 48px; background: #E53935; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
-        .user-info { flex: 1; }
-        .user-name { display: block; font-weight: 600; font-size: 1rem; margin-bottom: 0.25rem; color: #FFFFFF; }
-        .user-role { display: block; font-size: 0.8rem; color: #9E9E9E; }
-        .sidebar-nav { padding: 1rem 0; display: flex; flex-direction: column; height: calc(100vh - 180px); }
-        .sidebar-nav ul { list-style: none; padding: 0; margin: 0; }
-        .sidebar-nav ul:first-child { flex: 1; }
-        .nav-item { margin: 0.25rem 0; }
-        .nav-link { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1.5rem; color: #9E9E9E; text-decoration: none; transition: all 0.3s ease; border-left: 4px solid transparent; }
-        .nav-link i { width: 20px; font-size: 1.1rem; }
-        .nav-link:hover { background: rgba(229, 57, 53, 0.1); color: #FFFFFF; }
-        .nav-item.active .nav-link { background: rgba(229, 57, 53, 0.15); color: #FFFFFF; border-left-color: #E53935; }
-        .sidebar-bottom { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem; }
-        .multi-role-badge { font-size: 0.65rem; background: rgba(229, 57, 53, 0.2); padding: 0.2rem 0.5rem; border-radius: 12px; margin-top: 0.25rem; cursor: pointer; text-align: center; }
-        @media (max-width: 992px) { .sidebar { width: 80px; } .sidebar-brand, .user-info, .nav-link span:not(.badge) { display: none; } .nav-link { justify-content: center; padding: 0.75rem; } .nav-link i { margin: 0; font-size: 1.3rem; } }
-        .roles-switch { margin-top: 0.5rem; font-size: 0.7rem; background: rgba(229, 57, 53, 0.15); padding: 0.25rem 0.5rem; border-radius: 6px; cursor: pointer; text-align: center; }
-        .roles-switch:hover { background: rgba(229, 57, 53, 0.3); }
-        .badge { background: #E53935; color: white; border-radius: 10px; padding: 0.15rem 0.5rem; font-size: 0.7rem; margin-left: auto; }
+        
+        /* ESTILOS DEL SIDEBAR - VERSIÓN CORREGIDA */
+        .sidebar {
+            background: #121212;
+            color: #FFFFFF;
+            width: 280px;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateX(0);
+        }
+        
+        .sidebar-header {
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .sidebar-logo {
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+        }
+        
+        .sidebar-brand {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #E53935;
+        }
+        
+        .sidebar-user {
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .user-avatar {
+            width: 48px;
+            height: 48px;
+            background: #E53935;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+        
+        .user-info {
+            flex: 1;
+        }
+        
+        .user-name {
+            display: block;
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 0.25rem;
+            color: #FFFFFF;
+        }
+        
+        .user-role {
+            display: block;
+            font-size: 0.8rem;
+            color: #9E9E9E;
+        }
+        
+        .sidebar-nav {
+            padding: 1rem 0;
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 180px);
+        }
+        
+        .sidebar-nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .sidebar-nav ul:first-child {
+            flex: 1;
+        }
+        
+        .nav-item {
+            margin: 0.25rem 0;
+        }
+        
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1.5rem;
+            color: #9E9E9E;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+        
+        .nav-link i {
+            width: 20px;
+            font-size: 1.1rem;
+        }
+        
+        .nav-link:hover {
+            background: rgba(229, 57, 53, 0.1);
+            color: #FFFFFF;
+        }
+        
+        .nav-item.active .nav-link {
+            background: rgba(229, 57, 53, 0.15);
+            color: #FFFFFF;
+            border-left-color: #E53935;
+        }
+        
+        .sidebar-bottom {
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 1rem;
+        }
+        
+        .multi-role-badge {
+            font-size: 0.65rem;
+            background: rgba(229, 57, 53, 0.2);
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            margin-top: 0.25rem;
+            cursor: pointer;
+            text-align: center;
+        }
+        
+        .roles-switch {
+            margin-top: 0.5rem;
+            font-size: 0.7rem;
+            background: rgba(229, 57, 53, 0.15);
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: center;
+        }
+        
+        .roles-switch:hover {
+            background: rgba(229, 57, 53, 0.3);
+        }
+        
+        .badge {
+            background: #E53935;
+            color: white;
+            border-radius: 10px;
+            padding: 0.15rem 0.5rem;
+            font-size: 0.7rem;
+            margin-left: auto;
+        }
+        
+        /* =====================================================
+           RESPONSIVE - SIDEBAR CON HAMBURGUESA (SIN REDUCCIÓN A 80px)
+           ===================================================== */
+        
+        /* MÓVILES Y TABLETS (max 1024px) - Sidebar oculto con hamburguesa */
+        @media (max-width: 1024px) {
+            .hamburger-menu {
+                display: flex !important;
+            }
+            
+            .sidebar {
+                transform: translateX(-100%);
+                width: 280px;
+            }
+            
+            .sidebar.open {
+                transform: translateX(0);
+                box-shadow: 5px 0 25px rgba(0, 0, 0, 0.5);
+            }
+            
+            /* Mostrar todos los elementos cuando está abierto */
+            .sidebar.open .sidebar-brand,
+            .sidebar.open .user-info,
+            .sidebar.open .nav-link span {
+                display: block !important;
+            }
+            
+            .sidebar.open .sidebar-header {
+                justify-content: flex-start;
+            }
+            
+            .sidebar.open .sidebar-user {
+                justify-content: flex-start;
+            }
+            
+            .sidebar.open .nav-link {
+                justify-content: flex-start;
+            }
+        }
+        
+        /* DESKTOP (min 1025px) - Sidebar siempre visible */
+        @media (min-width: 1025px) {
+            .sidebar {
+                transform: translateX(0) !important;
+            }
+            
+            .hamburger-menu {
+                display: none !important;
+            }
+            
+            .sidebar-overlay {
+                display: none !important;
+            }
+        }
     `;
     document.head.appendChild(style);
+}
+
+// =====================================================
+// FUNCIONES RESPONSIVE
+// =====================================================
+function ajustarSidebarResponsive() {
+    const sidebar = document.querySelector('.sidebar');
+    const hamburgerMenu = document.getElementById('hamburgerMenu');
+    
+    if (!sidebar) return;
+    
+    if (window.innerWidth > 1024) {
+        sidebar.classList.remove('open');
+        if (hamburgerMenu) hamburgerMenu.classList.remove('active');
+        document.body.classList.remove('sidebar-open');
+    } else {
+        sidebar.classList.remove('open');
+        if (hamburgerMenu) hamburgerMenu.classList.remove('active');
+        document.body.classList.remove('sidebar-open');
+    }
 }
 
 // =====================================================
@@ -701,14 +821,13 @@ function agregarEstilosSidebar() {
 document.addEventListener('DOMContentLoaded', () => {
     agregarEstilosSidebar();
     includeSidebar();
+    ajustarSidebarResponsive();
     
-    // También agregar un observer para detectar y eliminar botones adicionales dinámicamente
     const observer = new MutationObserver(function(mutations) {
         mutations.forEach(function(mutation) {
             if (mutation.addedNodes.length) {
                 setTimeout(() => {
                     eliminarBotonesCerrarSesionAdicionales();
-                    // Forzar resaltado del menú cuando se agreguen nuevos nodos
                     forzarResaltadoMenu();
                 }, 100);
             }
@@ -717,8 +836,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     observer.observe(document.body, { childList: true, subtree: true });
     
-    // Forzar resaltado después de que todo cargue
     setTimeout(() => {
         forzarResaltadoMenu();
     }, 500);
 });
+
+window.addEventListener('resize', () => ajustarSidebarResponsive());
+window.ajustarSidebarResponsive = ajustarSidebarResponsive;

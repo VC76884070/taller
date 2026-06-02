@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
     <title>Jefe de Taller - Dashboard Técnico | FURIA MOTOR</title>
 
     <!-- Fonts & Icons -->
@@ -12,11 +12,13 @@
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <!-- FullCalendar CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+    <!-- Flatpickr CSS (alternativa a FullCalendar) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/dashboard.css">
+    
     <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
@@ -38,6 +40,14 @@
 </head>
 
 <body>
+    <!-- ========== BOTÓN HAMBURGUESA PARA MÓVIL/TABLET ========== -->
+    <button class="hamburger-menu" id="hamburgerMenu" aria-label="Menú">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- ========== OVERLAY PARA CERRAR SIDEBAR ========== -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <div class="app">
         <!-- SIDEBAR -->
         <div id="sidebar-container"></div>
@@ -80,19 +90,23 @@
                             </div>
                         </div>
 
-                        <!-- Calendario Mensual con Días Pintados -->
+                        <!-- Calendario con Flatpickr -->
                         <div class="card calendario-card">
                             <div class="card-header">
                                 <h3><i class="fas fa-calendar-alt"></i> Calendario de Reparaciones</h3>
                                 <div class="calendario-leyenda">
-                                    <span class="leyenda-item"><span class="color-reparacion"></span> En
-                                        reparación</span>
+                                    <span class="leyenda-item"><span class="color-reparacion"></span> En reparación</span>
                                     <span class="leyenda-item"><span class="color-entrega"></span> Entrega</span>
                                     <span class="leyenda-item"><span class="color-atrasado"></span> Atrasado</span>
                                 </div>
                             </div>
                             <div class="calendario-wrapper">
-                                <div id="calendarioJefe"></div>
+                                <input type="text" id="calendarioFlatpickr" class="calendario-input" placeholder="Calendario de reparaciones">
+                            </div>
+                            <!-- Contenedor para información del día seleccionado -->
+                            <div id="infoDiaSeleccionado" class="info-dia-container" style="display: none; margin-top: 1rem;">
+                                <h4><i class="fas fa-info-circle"></i> Órdenes en este día</h4>
+                                <div id="ordenesDelDia" class="ordenes-dia-lista"></div>
                             </div>
                         </div>
                     </div>
@@ -141,10 +155,87 @@
         <div class="loading-spinner"></div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/es.min.js"></script>
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
     <script src="js/include.js"></script>
     <script src="js/dashboard.js"></script>
+    
+    <!-- ========== SCRIPT RESPONSIVE PARA SIDEBAR ========== -->
+    <script>
+        let sidebarOpen = false;
+        
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+            
+            if (!sidebar) return;
+            
+            sidebarOpen = !sidebarOpen;
+            
+            if (sidebarOpen) {
+                sidebar.classList.add('open');
+                if (overlay) overlay.classList.add('active');
+                if (hamburger) hamburger.classList.add('active');
+                body.style.overflow = 'hidden';
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-times';
+            } else {
+                closeSidebar();
+            }
+        }
+        
+        function closeSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+            
+            if (sidebar) {
+                sidebar.classList.remove('open');
+                if (overlay) overlay.classList.remove('active');
+                if (hamburger) hamburger.classList.remove('active');
+                body.style.overflow = '';
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-bars';
+            }
+            sidebarOpen = false;
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const hamburgerBtn = document.getElementById('hamburgerMenu');
+            if (hamburgerBtn) hamburgerBtn.addEventListener('click', toggleSidebar);
+            
+            const overlay = document.getElementById('sidebarOverlay');
+            if (overlay) overlay.addEventListener('click', closeSidebar);
+            
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 1024 && sidebarOpen) closeSidebar();
+            });
+            
+            document.addEventListener('click', function(e) {
+                if (window.innerWidth <= 1024 && sidebarOpen) {
+                    const sidebar = document.querySelector('.sidebar');
+                    const hamburger = document.getElementById('hamburgerMenu');
+                    if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
+                        closeSidebar();
+                    }
+                }
+            });
+            
+            document.addEventListener('touchmove', function(e) {
+                if (window.innerWidth <= 1024 && sidebarOpen) {
+                    const sidebar = document.querySelector('.sidebar');
+                    if (sidebar && !sidebar.contains(e.target)) e.preventDefault();
+                }
+            });
+        });
+        
+        window.toggleSidebar = toggleSidebar;
+        window.closeSidebar = closeSidebar;
+    </script>
 </body>
 
 </html>

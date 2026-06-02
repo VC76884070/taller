@@ -1,6 +1,6 @@
 // =====================================================
-// DASHBOARD JEFE DE TALLER - CON FLATPICKR
-// VERSIÓN CORREGIDA - DÍAS PINTADOS FUNCIONAL
+// DASHBOARD JEFE DE TALLER - VERSIÓN COMPLETA
+// CON TODOS LOS ENDPOINTS Y MODAL DE COMUNICADOS
 // =====================================================
 
 if (typeof window.API_BASE_URL === 'undefined') {
@@ -15,26 +15,25 @@ if (typeof window.API_BASE_URL === 'undefined') {
     })();
 }
 
-const API_URL = window.API_BASE_URL + '/api';
-let flatpickrInstance = null;
+const API_URL = window.API_BASE_URL + '/api/jefe-taller';
+let calendar = null;
 let ordenesActivas = [];
 let currentUser = null;
-let refreshInterval = null;
+let comunicadosActuales = [];
 
 // =====================================================
 // INICIALIZACIÓN
 // =====================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 Inicializando dashboard Jefe Taller con Flatpickr');
+    console.log('🚀 Inicializando dashboard Jefe Taller');
     
     const autenticado = await checkAuth();
     if (!autenticado) return;
     
     await cargarDatosIniciales();
-    initFlatpickr();
+    initFullCalendar();
     setupEventListeners();
-    iniciarPolling();
 });
 
 async function checkAuth() {
@@ -71,84 +70,91 @@ function getHeaders() {
 }
 
 function setupEventListeners() {
-    const refreshBtn = document.getElementById('refreshBtn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', () => cargarDatosIniciales());
-    }
-}
-
-function iniciarPolling() {
-    if (refreshInterval) clearInterval(refreshInterval);
-    refreshInterval = setInterval(() => {
-        cargarDatosSilencioso();
-    }, 30000);
-}
-
-async function cargarDatosSilencioso() {
-    try {
-        const response = await fetch(`${API_URL}/jefe-taller/ordenes-activas`, {
-            headers: getHeaders()
-        });
-        const data = await response.json();
-        if (data.success && data.ordenes) {
-            ordenesActivas = data.ordenes;
-            if (flatpickrInstance) {
-                pintarDiasCalendario();
-            }
-        }
-    } catch (error) {
-        console.error('Error en polling:', error);
+    // Click en campanita para abrir modal de comunicados
+    const notificationIcon = document.querySelector('.notification-icon');
+    if (notificationIcon) {
+        notificationIcon.addEventListener('click', abrirModalComunicados);
     }
 }
 
 // =====================================================
-// CARGAR DATOS INICIALES
+// CARGAR DATOS CON NUEVOS ENDPOINTS
 // =====================================================
 
 async function cargarDatosIniciales() {
     mostrarLoading(true);
     try {
-        const token = localStorage.getItem('furia_token');
+        console.log('🔄 Cargando datos...');
         
-        console.log('🔄 Cargando datos del dashboard...');
-        
-        const [bahiasRes, diagnosticosRes, cotizacionesRes, ordenesRes] = await Promise.all([
-            fetch(`${API_URL}/jefe-taller/bahias-estado`, { headers: getHeaders() }),
-            fetch(`${API_URL}/jefe-taller/diagnosticos-pendientes`, { headers: getHeaders() }),
-            fetch(`${API_URL}/jefe-taller/cotizaciones-enviadas-dashboard`, { headers: getHeaders() }),
-            fetch(`${API_URL}/jefe-taller/ordenes-activas`, { headers: getHeaders() })
+        const [ordenesRes, bahiasRes, diagnosticosRes, cotizacionesRes, comunicadosRes] = await Promise.all([
+            fetch(`${API_URL}/mis-ordenes-activas`, { headers: getHeaders() }),
+            fetch(`${API_URL}/mis-bahias-estado`, { headers: getHeaders() }),
+            fetch(`${API_URL}/mis-diagnosticos`, { headers: getHeaders() }),
+            fetch(`${API_URL}/mis-cotizaciones`, { headers: getHeaders() }),
+            fetch(`${API_URL}/mis-comunicados`, { headers: getHeaders() })
         ]);
         
-        const bahias = bahiasRes.ok ? await bahiasRes.json() : null;
-        const diagnosticos = diagnosticosRes.ok ? await diagnosticosRes.json() : null;
-        const cotizaciones = cotizacionesRes.ok ? await cotizacionesRes.json() : null;
-        const ordenes = ordenesRes.ok ? await ordenesRes.json() : null;
+        const ordenes = await ordenesRes.json();
+        const bahias = await bahiasRes.json();
+        const diagnosticos = await diagnosticosRes.json();
+        const cotizaciones = await cotizacionesRes.json();
+        const comunicados = await comunicadosRes.json();
         
-        if (ordenes && ordenes.success && ordenes.ordenes) {
+        if (ordenes.success && ordenes.ordenes) {
             ordenesActivas = ordenes.ordenes;
             console.log(`📊 Órdenes activas cargadas: ${ordenesActivas.length}`);
             
-            // Debug: mostrar las primeras órdenes con sus fechas
-            if (ordenesActivas.length > 0) {
-                console.log('📋 Primeras órdenes:');
-                ordenesActivas.slice(0, 3).forEach((orden, idx) => {
-                    console.log(`  ${idx+1}. ID: ${orden.id_orden}, Placa: ${orden.vehiculo?.placa}, Ingreso: ${orden.fecha_ingreso}, Días: ${orden.dias_estimados_reparacion}`);
-                });
+            ordenesActivas.forEach(orden => {
+                console.log(`📝 Orden ${orden.id_orden}: ingreso=${orden.fecha_ingreso}, dias=${orden.dias_estimados_reparacion}, placa=${orden.vehiculo?.placa}`);
+            });
+        }
+        
+        // Actualizar badge de notificaciones
+        if (comunicados.success && comunicados.comunicados) {
+            const badge = document.getElementById('notificacionesBadge');
+            if (badge) {
+                const cantidad = comunicados.comunicados.length;
+                badge.textContent = cantidad;
+                badge.style.display = cantidad > 0 ? 'inline-block' : 'none';
             }
         }
         
-        console.log('📊 Datos recibidos:');
-        console.log('- Bahías:', bahias?.bahias?.length || 0);
-        console.log('- Diagnósticos:', diagnosticos?.diagnosticos?.length || 0);
-        console.log('- Cotizaciones:', cotizaciones?.cotizaciones?.length || 0);
-        console.log('- Órdenes activas:', ordenesActivas.length);
+        // Actualizar UI
+        if (bahias.success && bahias.bahias) {
+            renderizarBahias(bahias.bahias);
+        } else {
+            renderizarVacio('bahiasGrid', 'No hay información de bahías');
+        }
         
-        actualizarUI(bahias, diagnosticos, cotizaciones, ordenesActivas);
+        if (diagnosticos.success && diagnosticos.diagnosticos && diagnosticos.diagnosticos.length > 0) {
+            renderizarDiagnosticos(diagnosticos.diagnosticos);
+            const pendientesCount = document.getElementById('pendientesCount');
+            if (pendientesCount) pendientesCount.textContent = diagnosticos.diagnosticos.length;
+        } else {
+            renderizarVacio('diagnosticosList', 'No hay diagnósticos pendientes');
+            const pendientesCount = document.getElementById('pendientesCount');
+            if (pendientesCount) pendientesCount.textContent = '0';
+        }
         
-        if (flatpickrInstance) {
-            setTimeout(() => {
-                pintarDiasCalendario();
-            }, 200);
+        if (cotizaciones.success && cotizaciones.cotizaciones && cotizaciones.cotizaciones.length > 0) {
+            renderizarEntregas(cotizaciones.cotizaciones);
+        } else {
+            renderizarVacio('entregasList', 'No hay cotizaciones pendientes');
+        }
+        
+        if (ordenesActivas.length > 0) {
+            renderizarVehiculosTaller(ordenesActivas);
+            const vehiculosCount = document.getElementById('vehiculosTallerCount');
+            if (vehiculosCount) vehiculosCount.textContent = ordenesActivas.length;
+        } else {
+            renderizarVacio('vehiculosTallerList', 'No hay vehículos en taller');
+            const vehiculosCount = document.getElementById('vehiculosTallerCount');
+            if (vehiculosCount) vehiculosCount.textContent = '0';
+        }
+        
+        // Refrescar calendario si ya está inicializado
+        if (calendar) {
+            calendar.refetchEvents();
         }
         
     } catch (error) {
@@ -156,40 +162,6 @@ async function cargarDatosIniciales() {
         mostrarNotificacion('Error al cargar datos del servidor', 'error');
     } finally {
         mostrarLoading(false);
-    }
-}
-
-function actualizarUI(bahias, diagnosticos, cotizaciones, ordenes) {
-    if (bahias && bahias.bahias && bahias.bahias.length > 0) {
-        renderizarBahias(bahias.bahias);
-    } else {
-        renderizarVacio('bahiasGrid', 'No hay información de bahías');
-    }
-    
-    if (diagnosticos && diagnosticos.diagnosticos && diagnosticos.diagnosticos.length > 0) {
-        renderizarDiagnosticos(diagnosticos.diagnosticos);
-        const pendientesCount = document.getElementById('pendientesCount');
-        if (pendientesCount) pendientesCount.textContent = diagnosticos.diagnosticos.length;
-    } else {
-        renderizarVacio('diagnosticosList', 'No hay diagnósticos pendientes');
-        const pendientesCount = document.getElementById('pendientesCount');
-        if (pendientesCount) pendientesCount.textContent = '0';
-    }
-    
-    if (cotizaciones && cotizaciones.cotizaciones && cotizaciones.cotizaciones.length > 0) {
-        renderizarEntregas(cotizaciones.cotizaciones);
-    } else {
-        renderizarVacio('entregasList', 'No hay cotizaciones enviadas');
-    }
-    
-    if (ordenes && ordenes.length > 0) {
-        renderizarVehiculosTaller(ordenes);
-        const vehiculosCount = document.getElementById('vehiculosTallerCount');
-        if (vehiculosCount) vehiculosCount.textContent = ordenes.length;
-    } else {
-        renderizarVacio('vehiculosTallerList', 'No hay vehículos en taller');
-        const vehiculosCount = document.getElementById('vehiculosTallerCount');
-        if (vehiculosCount) vehiculosCount.textContent = '0';
     }
 }
 
@@ -201,231 +173,129 @@ function renderizarVacio(containerId, mensaje) {
 }
 
 // =====================================================
-// FLATPICKR - CALENDARIO CON DÍAS PINTADOS (VERSIÓN CORREGIDA)
+// FULLCALENDAR - CALENDARIO CON RANGOS DE FECHAS
 // =====================================================
 
-function initFlatpickr() {
-    const calendarInput = document.getElementById('calendarioFlatpickr');
-    if (!calendarInput) {
-        console.error('❌ No se encontró el elemento calendarioFlatpickr');
-        setTimeout(() => initFlatpickr(), 500);
+function initFullCalendar() {
+    const container = document.getElementById('fullcalendar-container');
+    if (!container) {
+        console.error('❌ No se encontró el contenedor');
+        setTimeout(() => initFullCalendar(), 500);
         return;
     }
     
-    if (typeof flatpickr === 'undefined') {
-        console.error('❌ Flatpickr no está cargado');
+    if (typeof FullCalendar === 'undefined') {
+        console.error('❌ FullCalendar no está cargado');
+        setTimeout(() => initFullCalendar(), 500);
         return;
     }
     
-    console.log('✅ Inicializando Flatpickr...');
+    console.log('✅ Inicializando FullCalendar...');
     
-    flatpickrInstance = flatpickr(calendarInput, {
+    calendar = new FullCalendar.Calendar(container, {
         locale: 'es',
-        dateFormat: 'Y-m-d',
-        inline: true,
-        defaultDate: new Date(),
-        onChange: function(selectedDates, dateStr) {
-            mostrarOrdenesDelDia(dateStr);
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth'
         },
-        onReady: function() {
-            console.log('📅 Flatpickr listo, pintando días...');
-            setTimeout(() => {
-                pintarDiasCalendario();
-            }, 100);
-        },
-        onMonthChange: function() {
-            console.log('📅 Mes cambiado, repintando días...');
-            setTimeout(() => pintarDiasCalendario(), 200);
-        }
-    });
-    
-    console.log('✅ Flatpickr inicializado');
-}
-
-function pintarDiasCalendario() {
-    if (!flatpickrInstance) {
-        console.log('❌ Flatpickr no inicializado');
-        return;
-    }
-    
-    if (!ordenesActivas.length) {
-        console.log('📭 No hay órdenes activas para pintar');
-        return;
-    }
-    
-    console.log(`🎨 Pintando ${ordenesActivas.length} órdenes en el calendario...`);
-    
-    const days = document.querySelectorAll('.flatpickr-day');
-    if (days.length === 0) {
-        console.log('⚠️ No se encontraron días en el calendario');
-        setTimeout(() => pintarDiasCalendario(), 100);
-        return;
-    }
-    
-    // Limpiar clases anteriores
-    days.forEach(day => {
-        day.classList.remove('reparacion-dia', 'entrega-dia', 'atrasado-dia');
-        day.removeAttribute('title');
-        day.style.background = '';
-        day.style.borderBottom = '';
-    });
-    
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    
-    let totalPintados = 0;
-    let errores = [];
-    
-    ordenesActivas.forEach(orden => {
-        if (!orden.fecha_ingreso) {
-            console.log(`⚠️ Orden ${orden.id_orden} no tiene fecha_ingreso`);
-            return;
-        }
+        height: 'auto',
+        weekends: true,
+        nowIndicator: true,
         
-        // Parsear fecha de ingreso
-        let fechaIngreso = new Date(orden.fecha_ingreso);
-        if (isNaN(fechaIngreso.getTime())) {
-            console.log(`⚠️ Fecha ingreso inválida: ${orden.fecha_ingreso}`);
-            return;
-        }
-        fechaIngreso.setHours(0, 0, 0, 0);
-        
-        // Calcular fecha de finalización
-        let fechaFin;
-        if (orden.fecha_estimada_finalizacion) {
-            fechaFin = new Date(orden.fecha_estimada_finalizacion);
-            fechaFin.setHours(0, 0, 0, 0);
-        } else if (orden.dias_estimados_reparacion) {
-            fechaFin = new Date(fechaIngreso);
-            fechaFin.setDate(fechaIngreso.getDate() + orden.dias_estimados_reparacion);
-            fechaFin.setHours(0, 0, 0, 0);
-        } else {
-            console.log(`⚠️ Orden ${orden.id_orden} no tiene fecha fin estimada`);
-            return;
-        }
-        
-        if (isNaN(fechaFin.getTime())) {
-            console.log(`⚠️ Fecha fin inválida para orden ${orden.id_orden}`);
-            return;
-        }
-        
-        const placa = orden.vehiculo?.placa || orden.codigo_unico || 'Vehículo';
-        const modelo = orden.vehiculo?.modelo || '';
-        
-        console.log(`📅 Orden: ${placa} | Ingreso: ${fechaIngreso.toLocaleDateString()} | Entrega: ${fechaFin.toLocaleDateString()} | Días: ${orden.dias_estimados_reparacion || '?'}`);
-        
-        // Generar array de fechas en el rango
-        const fechas = [];
-        let current = new Date(fechaIngreso);
-        
-        while (current <= fechaFin) {
-            fechas.push(new Date(current));
-            current.setDate(current.getDate() + 1);
-        }
-        
-        console.log(`   → Pintando ${fechas.length} días (desde ${fechas[0].toLocaleDateString()} hasta ${fechas[fechas.length-1].toLocaleDateString()})`);
-        
-        // Pintar cada día
-        fechas.forEach(fecha => {
-            const dayElement = findDayElement(fecha);
+        events: function(fetchInfo, successCallback, failureCallback) {
+            console.log('📅 Generando eventos...');
             
-            if (dayElement) {
-                totalPintados++;
-                const esUltimoDia = fecha.getTime() === fechaFin.getTime();
-                const estaAtrasado = fechaFin < hoy && esUltimoDia;
-                
-                if (esUltimoDia) {
-                    if (estaAtrasado) {
-                        dayElement.classList.add('atrasado-dia');
-                        dayElement.setAttribute('title', `⚠️ ATRASADO: ${placa}\nEntrega: ${fechaFin.toLocaleDateString()}`);
-                        dayElement.style.background = 'rgba(239, 68, 68, 0.25)';
-                        dayElement.style.borderBottom = '3px solid #EF4444';
-                    } else {
-                        dayElement.classList.add('entrega-dia');
-                        dayElement.setAttribute('title', `🚗 ENTREGA: ${placa}\n📅 ${orden.dias_estimados_reparacion || '?'} días`);
-                        dayElement.style.background = 'rgba(139, 92, 246, 0.25)';
-                        dayElement.style.borderBottom = '3px solid #8B5CF6';
-                    }
-                } else {
-                    dayElement.classList.add('reparacion-dia');
-                    let tooltip = `🔧 REPARACIÓN: ${placa} ${modelo}`;
-                    if (fecha.getTime() === fechaIngreso.getTime()) {
-                        tooltip = `📅 INGRESO: ${placa}`;
-                        dayElement.style.background = 'rgba(245, 158, 11, 0.35)';
-                    } else {
-                        dayElement.style.background = 'rgba(245, 158, 11, 0.25)';
-                    }
-                    dayElement.setAttribute('title', tooltip);
-                    dayElement.style.borderBottom = '1px solid rgba(245, 158, 11, 0.3)';
-                }
-            } else {
-                errores.push(fecha.toLocaleDateString());
+            if (!ordenesActivas.length) {
+                console.log('📭 No hay órdenes activas');
+                successCallback([]);
+                return;
             }
-        });
+            
+            const events = [];
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+            
+            ordenesActivas.forEach(orden => {
+                if (!orden.fecha_ingreso) return;
+                
+                let fechaInicio = new Date(orden.fecha_ingreso);
+                if (isNaN(fechaInicio.getTime())) return;
+                fechaInicio.setHours(0, 0, 0, 0);
+                
+                let fechaFin;
+                if (orden.dias_estimados_reparacion && orden.dias_estimados_reparacion > 0) {
+                    fechaFin = new Date(fechaInicio);
+                    fechaFin.setDate(fechaInicio.getDate() + orden.dias_estimados_reparacion);
+                } else if (orden.fecha_estimada_finalizacion) {
+                    fechaFin = new Date(orden.fecha_estimada_finalizacion);
+                } else {
+                    return;
+                }
+                fechaFin.setHours(0, 0, 0, 0);
+                
+                const placa = orden.vehiculo?.placa || orden.codigo_unico || 'Vehículo';
+                const estaAtrasado = fechaFin < hoy;
+                
+                console.log(`📅 Evento: ${placa} | ${fechaInicio.toLocaleDateString()} - ${fechaFin.toLocaleDateString()}`);
+                
+                // Evento de reparación (rango completo)
+                events.push({
+                    id: `reparacion-${orden.id_orden}`,
+                    title: `🔧 ${placa}`,
+                    start: fechaInicio,
+                    end: new Date(fechaFin.getTime() + 24 * 60 * 60 * 1000),
+                    allDay: true,
+                    backgroundColor: estaAtrasado ? '#EF4444' : '#F59E0B',
+                    borderColor: estaAtrasado ? '#EF4444' : '#F59E0B',
+                    textColor: 'white'
+                });
+                
+                // Evento de entrega
+                events.push({
+                    id: `entrega-${orden.id_orden}`,
+                    title: `🚗 ENTREGA: ${placa}`,
+                    start: fechaFin,
+                    allDay: true,
+                    backgroundColor: estaAtrasado ? '#DC2626' : '#8B5CF6',
+                    borderColor: estaAtrasado ? '#DC2626' : '#8B5CF6',
+                    textColor: 'white'
+                });
+            });
+            
+            console.log(`✅ ${events.length} eventos generados`);
+            successCallback(events);
+        },
+        
+        eventClick: function(info) {
+            console.log('Evento clickeado:', info.event.title);
+            const ordenId = info.event.id.split('-')[1];
+            if (ordenId) {
+                mostrarOrdenesDelDiaPorId(parseInt(ordenId));
+                window.verOrdenTrabajo(parseInt(ordenId));
+            }
+        },
+        
+        dateClick: function(info) {
+            console.log('Fecha clickeada:', info.dateStr);
+            mostrarOrdenesDelDia(info.dateStr);
+        }
     });
     
-    console.log(`✅ Días pintados: ${totalPintados}`);
-    if (errores.length > 0) {
-        console.log(`⚠️ No se encontraron ${errores.length} días:`, errores.slice(0, 5));
-    }
+    calendar.render();
+    console.log('✅ FullCalendar inicializado');
 }
 
-function formatDateForFlatpickr(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
-
-function findDayElement(date) {
-    const fecha = date instanceof Date ? date : new Date(date);
-    if (isNaN(fecha.getTime())) return null;
-    
-    const diaNumero = fecha.getDate();
-    const mesIndex = fecha.getMonth();
-    const anio = fecha.getFullYear();
-    
-    const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
-                   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-    const nombreMes = meses[mesIndex];
-    
-    const selectors = [
-        `.flatpickr-day[aria-label="${diaNumero} de ${nombreMes} de ${anio}"]`,
-        `.flatpickr-day[aria-label="${diaNumero} de ${nombreMes}"]`,
-        `.flatpickr-day[data-date="${anio}-${String(mesIndex+1).padStart(2,'0')}-${String(diaNumero).padStart(2,'0')}"]`
-    ];
-    
-    for (let selector of selectors) {
-        const element = document.querySelector(selector);
-        if (element && element.classList && element.classList.contains('flatpickr-day') && !element.classList.contains('flatpickr-disabled')) {
-            return element;
-        }
-    }
-    
-    const allDays = document.querySelectorAll('.flatpickr-day:not(.flatpickr-disabled)');
-    for (let day of allDays) {
-        const dayText = day.textContent.trim();
-        if (dayText === String(diaNumero)) {
-            if (!day.classList.contains('prevMonthDay') && !day.classList.contains('nextMonthDay')) {
-                return day;
-            }
-        }
-    }
-    
-    return null;
-}
-
-function mostrarOrdenesDelDia(dateStr) {
+function mostrarOrdenesDelDia(fechaStr) {
     const container = document.getElementById('infoDiaSeleccionado');
     const ordenesContainer = document.getElementById('ordenesDelDia');
     
     if (!container || !ordenesContainer) return;
     
-    const fechaSeleccionada = new Date(dateStr);
+    const fechaSeleccionada = new Date(fechaStr);
     if (isNaN(fechaSeleccionada.getTime())) return;
     fechaSeleccionada.setHours(0, 0, 0, 0);
-    
-    console.log(`🔍 Buscando órdenes para ${fechaSeleccionada.toLocaleDateString()}`);
     
     const ordenesEnDia = ordenesActivas.filter(orden => {
         if (!orden.fecha_ingreso) return false;
@@ -435,11 +305,11 @@ function mostrarOrdenesDelDia(dateStr) {
         fechaIngreso.setHours(0, 0, 0, 0);
         
         let fechaFin;
-        if (orden.fecha_estimada_finalizacion) {
-            fechaFin = new Date(orden.fecha_estimada_finalizacion);
-        } else if (orden.dias_estimados_reparacion) {
+        if (orden.dias_estimados_reparacion && orden.dias_estimados_reparacion > 0) {
             fechaFin = new Date(fechaIngreso);
             fechaFin.setDate(fechaIngreso.getDate() + orden.dias_estimados_reparacion);
+        } else if (orden.fecha_estimada_finalizacion) {
+            fechaFin = new Date(orden.fecha_estimada_finalizacion);
         } else {
             return false;
         }
@@ -447,8 +317,6 @@ function mostrarOrdenesDelDia(dateStr) {
         
         return fechaSeleccionada >= fechaIngreso && fechaSeleccionada <= fechaFin;
     });
-    
-    console.log(`📋 Encontradas ${ordenesEnDia.length} órdenes para esta fecha`);
     
     if (ordenesEnDia.length === 0) {
         container.style.display = 'none';
@@ -466,11 +334,11 @@ function mostrarOrdenesDelDia(dateStr) {
         fechaIngreso.setHours(0, 0, 0, 0);
         
         let fechaFin;
-        if (orden.fecha_estimada_finalizacion) {
-            fechaFin = new Date(orden.fecha_estimada_finalizacion);
-        } else if (orden.dias_estimados_reparacion) {
+        if (orden.dias_estimados_reparacion && orden.dias_estimados_reparacion > 0) {
             fechaFin = new Date(fechaIngreso);
             fechaFin.setDate(fechaIngreso.getDate() + orden.dias_estimados_reparacion);
+        } else if (orden.fecha_estimada_finalizacion) {
+            fechaFin = new Date(orden.fecha_estimada_finalizacion);
         }
         if (fechaFin) fechaFin.setHours(0, 0, 0, 0);
         
@@ -503,6 +371,31 @@ function mostrarOrdenesDelDia(dateStr) {
             </div>
         `;
     }).join('');
+}
+
+function mostrarOrdenesDelDiaPorId(ordenId) {
+    const container = document.getElementById('infoDiaSeleccionado');
+    const ordenesContainer = document.getElementById('ordenesDelDia');
+    
+    if (!container || !ordenesContainer) return;
+    
+    const orden = ordenesActivas.find(o => (o.id_orden || o.id) === ordenId);
+    if (!orden) return;
+    
+    container.style.display = 'block';
+    
+    const placa = orden.vehiculo?.placa || orden.codigo_unico || 'Vehículo';
+    const marca = orden.vehiculo?.marca || '';
+    const modelo = orden.vehiculo?.modelo || '';
+    
+    ordenesContainer.innerHTML = `
+        <div class="orden-dia-item entrega" onclick="window.verOrdenTrabajo(${ordenId})">
+            <div class="orden-dia-placa">
+                <strong>${escapeHtml(placa)}</strong> - ${escapeHtml(marca)} ${escapeHtml(modelo)}
+            </div>
+            <div class="orden-dia-estado entrega">🚗 VER ORDEN</div>
+        </div>
+    `;
 }
 
 // =====================================================
@@ -663,6 +556,154 @@ function renderizarVehiculosTaller(ordenes) {
 }
 
 // =====================================================
+// MODAL DE COMUNICADOS
+// =====================================================
+
+async function abrirModalComunicados() {
+    const modal = document.getElementById('modalComunicados');
+    if (!modal) return;
+    
+    modal.classList.add('active');
+    await cargarComunicados();
+}
+
+function cerrarModalComunicados() {
+    const modal = document.getElementById('modalComunicados');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+async function cargarComunicados() {
+    const listaContainer = document.getElementById('listaComunicados');
+    if (!listaContainer) return;
+    
+    listaContainer.innerHTML = `
+        <div class="sin-comunicados">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Cargando comunicados...</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch(`${API_URL}/mis-comunicados`, {
+            headers: getHeaders()
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.comunicados && data.comunicados.length > 0) {
+            comunicadosActuales = data.comunicados;
+            renderizarListaComunicados();
+        } else {
+            listaContainer.innerHTML = `
+                <div class="sin-comunicados">
+                    <i class="fas fa-inbox"></i>
+                    <p>No hay comunicados nuevos</p>
+                </div>
+            `;
+        }
+        
+    } catch (error) {
+        console.error('Error cargando comunicados:', error);
+        listaContainer.innerHTML = `
+            <div class="sin-comunicados">
+                <i class="fas fa-exclamation-circle"></i>
+                <p>Error al cargar comunicados</p>
+            </div>
+        `;
+    }
+}
+
+function renderizarListaComunicados() {
+    const listaContainer = document.getElementById('listaComunicados');
+    if (!listaContainer) return;
+    
+    if (comunicadosActuales.length === 0) {
+        listaContainer.innerHTML = `
+            <div class="sin-comunicados">
+                <i class="fas fa-inbox"></i>
+                <p>No hay comunicados nuevos</p>
+            </div>
+        `;
+        return;
+    }
+    
+    listaContainer.innerHTML = comunicadosActuales.map(com => `
+        <div class="comunicado-item prioridad-${com.prioridad}" onclick="verDetalleComunicado(${com.id})">
+            <div class="comunicado-header">
+                <h4 class="comunicado-titulo">${escapeHtml(com.titulo)}</h4>
+                <span class="comunicado-fecha">
+                    <i class="far fa-calendar-alt"></i>
+                    ${formatearFechaComunicado(com.fecha_creacion)}
+                </span>
+            </div>
+            <div class="comunicado-contenido">
+                ${escapeHtml(stripHtml(com.contenido))}
+            </div>
+            <div class="comunicado-prioridad">
+                <span class="prioridad-badge ${com.prioridad}">
+                    ${com.prioridad === 'alta' ? '⚠️ Alta' : com.prioridad === 'media' ? '📌 Media' : 'ℹ️ Normal'}
+                </span>
+            </div>
+        </div>
+    `).join('');
+}
+
+function verDetalleComunicado(id) {
+    const comunicado = comunicadosActuales.find(c => c.id === id);
+    if (!comunicado) return;
+    
+    const modalBody = document.getElementById('modalBodyComunicados');
+    if (!modalBody) return;
+    
+    modalBody.innerHTML = `
+        <button class="volver-btn" onclick="cargarComunicados()">
+            <i class="fas fa-arrow-left"></i> Volver
+        </button>
+        <div class="comunicado-detalle">
+            <div class="comunicado-detalle-titulo">${escapeHtml(comunicado.titulo)}</div>
+            <div class="comunicado-detalle-fecha">
+                <i class="far fa-calendar-alt"></i>
+                ${formatearFechaComunicado(comunicado.fecha_creacion)}
+                <span class="prioridad-badge ${comunicado.prioridad}" style="margin-left: 0.5rem;">
+                    ${comunicado.prioridad === 'alta' ? '⚠️ Alta' : comunicado.prioridad === 'media' ? '📌 Media' : 'ℹ️ Normal'}
+                </span>
+            </div>
+            <div class="comunicado-detalle-contenido">
+                ${comunicado.contenido}
+            </div>
+        </div>
+    `;
+}
+
+function formatearFechaComunicado(fechaISO) {
+    if (!fechaISO) return '-';
+    const fecha = new Date(fechaISO);
+    const hoy = new Date();
+    const ayer = new Date(hoy);
+    ayer.setDate(ayer.getDate() - 1);
+    
+    if (fecha.toDateString() === hoy.toDateString()) {
+        return `Hoy, ${fecha.getHours().toString().padStart(2, '0')}:${fecha.getMinutes().toString().padStart(2, '0')}`;
+    } else if (fecha.toDateString() === ayer.toDateString()) {
+        return `Ayer, ${fecha.getHours().toString().padStart(2, '0')}:${fecha.getMinutes().toString().padStart(2, '0')}`;
+    } else {
+        return fecha.toLocaleDateString('es-ES', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+    }
+}
+
+function stripHtml(html) {
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    return temp.textContent || temp.innerText || '';
+}
+
+// =====================================================
 // FUNCIONES DE UTILIDAD
 // =====================================================
 
@@ -690,16 +731,42 @@ function mostrarLoading(mostrar) {
 }
 
 function mostrarNotificacion(mensaje, tipo = 'info') {
+    let toastContainer = document.querySelector('.toast-container');
+    
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container';
+        document.body.appendChild(toastContainer);
+    }
+    
     const toast = document.createElement('div');
     toast.className = `toast-notification ${tipo}`;
-    const icon = tipo === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
-    toast.innerHTML = `<span><i class="fas ${icon}"></i> ${escapeHtml(mensaje)}</span>`;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+    const iconos = {
+        success: 'fa-check-circle',
+        error: 'fa-exclamation-circle',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
+    };
+    
+    toast.innerHTML = `
+        <i class="fas ${iconos[tipo] || iconos.info}"></i>
+        <span>${escapeHtml(mensaje)}</span>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => {
+            if (toastContainer.contains(toast)) {
+                toastContainer.removeChild(toast);
+            }
+        }, 300);
+    }, 3000);
 }
 
 // =====================================================
-// FUNCIONES GLOBALES (para onclick)
+// FUNCIONES GLOBALES
 // =====================================================
 
 window.verDetalleBahia = (numero) => {
@@ -723,6 +790,9 @@ window.verOrdenTrabajo = (id) => {
         window.location.href = window.API_BASE_URL + `/jefe_taller/orden_trabajo.html?id=${id}`;
     }
 };
+
+window.verDetalleComunicado = verDetalleComunicado;
+window.cerrarModalComunicados = cerrarModalComunicados;
 
 window.logout = () => {
     localStorage.clear();

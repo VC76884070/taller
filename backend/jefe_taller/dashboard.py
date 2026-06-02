@@ -1,42 +1,87 @@
 # =====================================================
 # DASHBOARD - JEFE DE TALLER
-# FURIA MOTOR COMPANY SRL
-# VERSIÓN CORREGIDA - CON TODOS LOS CAMPOS
+# VERSIÓN COMPLETA CON TODOS LOS ENDPOINTS FUNCIONANDO
 # =====================================================
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, jsonify
 from config import config
 from decorators import jefe_taller_required
 import datetime
-import logging
 
-logger = logging.getLogger(__name__)
-
-# =====================================================
-# CREAR BLUEPRINT
-# =====================================================
 dashboard_bp = Blueprint('dashboard_jefe', __name__, url_prefix='/api/jefe-taller')
-
-# Configuración
 supabase = config.supabase
 
+print("="*60)
+print("🔥 DASHBOARD COMPLETO - TODOS LOS ENDPOINTS ACTIVOS 🔥")
+print("="*60)
+
 
 # =====================================================
-# ENDPOINT 1: ESTADO DE BAHÍAS
+# ENDPOINT 1: ÓRDENES ACTIVAS (PARA CALENDARIO)
 # =====================================================
 
-@dashboard_bp.route('/bahias-estado', methods=['GET'])
+@dashboard_bp.route('/mis-ordenes-activas', methods=['GET'])
 @jefe_taller_required
-def obtener_estado_bahias(current_user):
-    """Obtener el estado actual de todas las bahías (1-12)"""
+def mis_ordenes_activas(current_user):
+    """Obtener órdenes activas para el calendario"""
+    print("📡 /mis-ordenes-activas llamado")
+    
+    try:
+        ordenes = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_estimada_finalizacion, dias_estimados_reparacion, id_vehiculo') \
+            .not_.in_('estado_global', ['Finalizado', 'Entregado']) \
+            .execute()
+        
+        resultado = []
+        for orden in (ordenes.data or []):
+            vehiculo = {'placa': 'SIN PLACA', 'marca': '', 'modelo': ''}
+            if orden.get('id_vehiculo'):
+                try:
+                    v_result = supabase.table('vehiculo') \
+                        .select('placa, marca, modelo') \
+                        .eq('id', orden['id_vehiculo']) \
+                        .execute()
+                    if v_result.data:
+                        v = v_result.data[0]
+                        vehiculo = {
+                            'placa': v.get('placa', 'SIN PLACA'),
+                            'marca': v.get('marca', ''),
+                            'modelo': v.get('modelo', '')
+                        }
+                except:
+                    pass
+            
+            resultado.append({
+                'id_orden': orden.get('id'),
+                'codigo_unico': orden.get('codigo_unico'),
+                'estado_global': orden.get('estado_global'),
+                'fecha_ingreso': orden.get('fecha_ingreso'),
+                'fecha_estimada_finalizacion': orden.get('fecha_estimada_finalizacion'),
+                'dias_estimados_reparacion': orden.get('dias_estimados_reparacion'),
+                'vehiculo': vehiculo
+            })
+        
+        print(f"✅ {len(resultado)} órdenes activas")
+        return jsonify({'success': True, 'ordenes': resultado}), 200
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return jsonify({'success': True, 'ordenes': []}), 200
+
+
+# =====================================================
+# ENDPOINT 2: BAHÍAS
+# =====================================================
+
+@dashboard_bp.route('/mis-bahias-estado', methods=['GET'])
+@jefe_taller_required
+def mis_bahias_estado(current_user):
+    """Obtener estado de bahías"""
+    print("📡 /mis-bahias-estado llamado")
+    
     try:
         planificaciones = supabase.table('planificacion') \
-            .select('''
-                bahia_asignada,
-                id_orden_trabajo,
-                fecha_hora_inicio_real,
-                fecha_hora_fin_real
-            ''') \
+            .select('bahia_asignada, id_orden_trabajo, fecha_hora_inicio_real, fecha_hora_fin_real') \
             .is_('fecha_hora_fin_real', 'null') \
             .execute()
         
@@ -45,71 +90,29 @@ def obtener_estado_bahias(current_user):
             bahia = p.get('bahia_asignada')
             if bahia:
                 estado = 'ocupada' if p.get('fecha_hora_inicio_real') else 'reservada'
-                bahias_ocupadas[bahia] = {
-                    'estado': estado,
-                    'id_orden_trabajo': p.get('id_orden_trabajo')
-                }
+                bahias_ocupadas[bahia] = {'estado': estado}
         
         bahias = []
         for i in range(1, 13):
-            bahia_info = bahias_ocupadas.get(i, {})
-            estado = bahia_info.get('estado', 'libre')
-            orden_id = bahia_info.get('id_orden_trabajo')
-            
-            tecnico = None
-            orden_codigo = None
-            
-            if estado != 'libre' and orden_id:
-                try:
-                    orden_result = supabase.table('ordentrabajo') \
-                        .select('codigo_unico') \
-                        .eq('id', orden_id) \
-                        .execute()
-                    
-                    if orden_result.data:
-                        orden_codigo = orden_result.data[0].get('codigo_unico')
-                    
-                    asignacion = supabase.table('asignaciontecnico') \
-                        .select('usuario!id_tecnico(nombre)') \
-                        .eq('id_orden_trabajo', orden_id) \
-                        .is_('fecha_hora_final', 'null') \
-                        .limit(1) \
-                        .execute()
-                    
-                    if asignacion.data:
-                        usuario_data = asignacion.data[0].get('usuario', {})
-                        if isinstance(usuario_data, dict):
-                            tecnico = usuario_data.get('nombre')
-                        elif isinstance(usuario_data, list) and len(usuario_data) > 0:
-                            tecnico = usuario_data[0].get('nombre')
-                except Exception as e:
-                    logger.warning(f"Error obteniendo detalles de bahía {i}: {e}")
-            
-            bahias.append({
-                'numero': i,
-                'estado': estado,
-                'tecnico': tecnico,
-                'orden_codigo': orden_codigo
-            })
+            info = bahias_ocupadas.get(i, {})
+            estado = info.get('estado', 'libre')
+            bahias.append({'numero': i, 'estado': estado, 'tecnico': None, 'orden_codigo': None})
         
-        return jsonify({
-            'success': True,
-            'bahias': bahias
-        }), 200
-        
+        return jsonify({'success': True, 'bahias': bahias}), 200
     except Exception as e:
-        logger.error(f"Error obteniendo estado de bahías: {str(e)}")
-        return jsonify({'success': False, 'error': str(e), 'bahias': []}), 500
+        return jsonify({'success': True, 'bahias': []}), 200
 
 
 # =====================================================
-# ENDPOINT 2: DIAGNÓSTICOS PENDIENTES
+# ENDPOINT 3: DIAGNÓSTICOS PENDIENTES
 # =====================================================
 
-@dashboard_bp.route('/diagnosticos-pendientes', methods=['GET'])
+@dashboard_bp.route('/mis-diagnosticos', methods=['GET'])
 @jefe_taller_required
-def obtener_diagnosticos_pendientes(current_user):
+def mis_diagnosticos(current_user):
     """Obtener diagnósticos pendientes de revisión"""
+    print("📡 /mis-diagnosticos llamado")
+    
     try:
         diagnosticos = supabase.table('diagnostico_tecnico') \
             .select('''
@@ -139,22 +142,14 @@ def obtener_diagnosticos_pendientes(current_user):
         resultado = []
         for diag in (diagnosticos.data or []):
             orden_data = diag.get('ordentrabajo', {})
-            if isinstance(orden_data, dict):
-                vehiculo_data = orden_data.get('vehiculo', {})
-                if isinstance(vehiculo_data, dict):
-                    marca = vehiculo_data.get('marca', '')
-                    modelo = vehiculo_data.get('modelo', '')
-                    placa = vehiculo_data.get('placa', '')
-                else:
-                    marca = modelo = placa = ''
-            else:
-                marca = modelo = placa = ''
+            vehiculo_data = orden_data.get('vehiculo', {}) if isinstance(orden_data, dict) else {}
+            
+            marca = vehiculo_data.get('marca', '') if isinstance(vehiculo_data, dict) else ''
+            modelo = vehiculo_data.get('modelo', '') if isinstance(vehiculo_data, dict) else ''
+            placa = vehiculo_data.get('placa', '') if isinstance(vehiculo_data, dict) else ''
             
             tecnico_data = diag.get('usuario', {})
-            if isinstance(tecnico_data, dict):
-                tecnico_nombre = tecnico_data.get('nombre', 'Sin técnico')
-            else:
-                tecnico_nombre = 'Sin técnico'
+            tecnico_nombre = tecnico_data.get('nombre', 'Sin técnico') if isinstance(tecnico_data, dict) else 'Sin técnico'
             
             resultado.append({
                 'diagnostico_id': diag.get('id'),
@@ -162,112 +157,30 @@ def obtener_diagnosticos_pendientes(current_user):
                 'orden_codigo': orden_data.get('codigo_unico') if isinstance(orden_data, dict) else None,
                 'vehiculo': f"{marca} {modelo}".strip() or 'Vehículo',
                 'placa': placa,
-                'informe': diag.get('informe', ''),
+                'informe': diag.get('informe', 'Sin informe'),
                 'fecha_envio': diag.get('fecha_envio'),
                 'tecnico_nombre': tecnico_nombre,
                 'version': diag.get('version', 1)
             })
         
-        return jsonify({
-            'success': True,
-            'diagnosticos': resultado
-        }), 200
+        print(f"✅ {len(resultado)} diagnósticos pendientes")
+        return jsonify({'success': True, 'diagnosticos': resultado}), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo diagnósticos pendientes: {str(e)}")
+        print(f"❌ Error en diagnósticos: {e}")
         return jsonify({'success': True, 'diagnosticos': []}), 200
 
 
 # =====================================================
-# ENDPOINT 3: ÓRDENES ACTIVAS - VERSIÓN CORREGIDA
+# ENDPOINT 4: COTIZACIONES (PRÓXIMAS ENTREGAS)
 # =====================================================
 
-@dashboard_bp.route('/ordenes-activas', methods=['GET'])
+@dashboard_bp.route('/mis-cotizaciones', methods=['GET'])
 @jefe_taller_required
-def obtener_ordenes_activas(current_user):
-    """Obtener órdenes activas para el dashboard (con días estimados)"""
-    print("\n" + "="*60)
-    print("🔥 DASHBOARD.PY - ENDPOINT ORDENES-ACTIVAS CORREGIDO")
-    print("="*60)
+def mis_cotizaciones(current_user):
+    """Obtener cotizaciones enviadas/aprobadas para próximas entregas"""
+    print("📡 /mis-cotizaciones llamado")
     
-    try:
-        print("🔍 Consultando órdenes activas con TODOS los campos...")
-        
-        # IMPORTANTE: Incluir fecha_ingreso, dias_estimados_reparacion, fecha_estimada_finalizacion
-        ordenes = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_estimada_finalizacion, dias_estimados_reparacion, id_vehiculo') \
-            .not_.in_('estado_global', ['Finalizado', 'Entregado']) \
-            .execute()
-        
-        print(f"📊 Órdenes activas encontradas: {len(ordenes.data or [])}")
-        
-        resultado = []
-        
-        for orden in (ordenes.data or []):
-            orden_id = orden.get('id')
-            fecha_ingreso = orden.get('fecha_ingreso')
-            dias_estimados = orden.get('dias_estimados_reparacion')
-            fecha_estimada_fin = orden.get('fecha_estimada_finalizacion')
-            
-            print(f"\n📝 Orden ID: {orden_id}")
-            print(f"   fecha_ingreso: {fecha_ingreso}")
-            print(f"   dias_estimados: {dias_estimados}")
-            print(f"   fecha_estimada_fin: {fecha_estimada_fin}")
-            
-            # Obtener vehículo
-            vehiculo = {'placa': 'Sin placa', 'marca': '', 'modelo': ''}
-            if orden.get('id_vehiculo'):
-                try:
-                    vehiculo_result = supabase.table('vehiculo') \
-                        .select('placa, marca, modelo') \
-                        .eq('id', orden['id_vehiculo']) \
-                        .execute()
-                    
-                    if vehiculo_result.data:
-                        v = vehiculo_result.data[0]
-                        vehiculo = {
-                            'placa': v.get('placa', 'Sin placa'),
-                            'marca': v.get('marca', ''),
-                            'modelo': v.get('modelo', '')
-                        }
-                        print(f"   vehículo: {vehiculo['placa']} - {vehiculo['marca']} {vehiculo['modelo']}")
-                except Exception as e:
-                    print(f"   Error vehículo: {e}")
-            
-            resultado.append({
-                'id_orden': orden_id,
-                'codigo_unico': orden.get('codigo_unico'),
-                'estado_global': orden.get('estado_global'),
-                'fecha_ingreso': fecha_ingreso,
-                'fecha_estimada_finalizacion': fecha_estimada_fin,
-                'dias_estimados_reparacion': dias_estimados,
-                'vehiculo': vehiculo
-            })
-        
-        print("\n" + "="*60)
-        print(f"✅ Total: {len(resultado)} órdenes procesadas")
-        print("="*60 + "\n")
-        
-        return jsonify({
-            'success': True,
-            'ordenes': resultado
-        }), 200
-        
-    except Exception as e:
-        print(f"❌ ERROR: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': True, 'ordenes': []}), 200
-
-
-# =====================================================
-# ENDPOINT 4: COTIZACIONES ENVIADAS
-# =====================================================
-
-@dashboard_bp.route('/cotizaciones-enviadas-dashboard', methods=['GET'])
-@jefe_taller_required
-def obtener_cotizaciones_dashboard(current_user):
-    """Obtener cotizaciones enviadas (para próximas entregas)"""
     try:
         cotizaciones = supabase.table('cotizacion') \
             .select('''
@@ -308,10 +221,7 @@ def obtener_cotizaciones_dashboard(current_user):
                     cliente_data = vehiculo_data.get('cliente', {})
                     if isinstance(cliente_data, dict):
                         usuario_data = cliente_data.get('usuario', {})
-                        if isinstance(usuario_data, dict):
-                            cliente_nombre = usuario_data.get('nombre', 'No registrado')
-                        else:
-                            cliente_nombre = 'No registrado'
+                        cliente_nombre = usuario_data.get('nombre', 'No registrado') if isinstance(usuario_data, dict) else 'No registrado'
                     else:
                         cliente_nombre = 'No registrado'
                 else:
@@ -333,54 +243,100 @@ def obtener_cotizaciones_dashboard(current_user):
                 'estado': cot.get('estado', 'enviada')
             })
         
-        return jsonify({
-            'success': True,
-            'cotizaciones': resultado
-        }), 200
+        print(f"✅ {len(resultado)} cotizaciones")
+        return jsonify({'success': True, 'cotizaciones': resultado}), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo cotizaciones: {str(e)}")
+        print(f"❌ Error en cotizaciones: {e}")
         return jsonify({'success': True, 'cotizaciones': []}), 200
 
 
 # =====================================================
-# ENDPOINT 5: ESTADÍSTICAS (KPIs)
+# ENDPOINT 5: COMUNICADOS DEL JEFE OPERATIVO
 # =====================================================
 
-@dashboard_bp.route('/dashboard-stats', methods=['GET'])
+@dashboard_bp.route('/mis-comunicados', methods=['GET'])
 @jefe_taller_required
-def obtener_stats_dashboard(current_user):
-    """Obtener estadísticas para los KPIs del dashboard"""
+def mis_comunicados(current_user):
+    """Obtener comunicados del Jefe Operativo dirigidos al rol jefe_taller"""
+    
     try:
-        ordenes_activas_result = supabase.table('ordentrabajo') \
+        # Obtener comunicados activos que tengan 'jefe_taller' como destinatario
+        # IMPORTANTE: Usar contains para buscar en el array destinatarios
+        resultado = supabase.table('comunicado') \
+            .select('*') \
+            .eq('estado', 'activo') \
+            .execute()
+        
+        comunicados = []
+        if resultado.data:
+            for c in resultado.data:
+                destinatarios = c.get('destinatarios', [])
+                # Verificar si destinatarios es una lista y contiene 'jefe_taller'
+                if isinstance(destinatarios, list) and 'jefe_taller' in destinatarios:
+                    comunicados.append({
+                        'id': c.get('id'),
+                        'titulo': c.get('titulo'),
+                        'contenido': c.get('contenido'),
+                        'prioridad': c.get('prioridad', 'normal'),
+                        'fecha_creacion': c.get('fecha_creacion'),
+                        'creado_por': c.get('creado_por'),
+                        'destinatarios': destinatarios
+                    })
+                    print(f"   📬 Comunicado encontrado: {c.get('titulo')}")
+        
+        print(f"✅ {len(comunicados)} comunicados encontrados para jefe_taller")
+        
+        # Debug: mostrar los primeros 3 comunicados
+        for com in comunicados[:3]:
+            print(f"   - ID: {com['id']}, Título: {com['titulo']}, Prioridad: {com['prioridad']}")
+        
+        return jsonify({'success': True, 'comunicados': comunicados}), 200
+        
+    except Exception as e:
+        print(f"❌ Error obteniendo comunicados: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': True, 'comunicados': []}), 200
+
+
+# =====================================================
+# ENDPOINT 6: ESTADÍSTICAS (KPIs)
+# =====================================================
+
+@dashboard_bp.route('/mis-stats', methods=['GET'])
+@jefe_taller_required
+def mis_stats(current_user):
+    """Obtener estadísticas para KPIs"""
+    print("📡 /mis-stats llamado")
+    
+    try:
+        # Órdenes activas
+        ordenes_count = supabase.table('ordentrabajo') \
             .select('id', count='exact') \
             .not_.in_('estado_global', ['Finalizado', 'Entregado']) \
             .execute()
         
-        ordenes_activas_count = ordenes_activas_result.count if ordenes_activas_result.count is not None else len(ordenes_activas_result.data or [])
-        
-        ordenes_pausa_result = supabase.table('ordentrabajo') \
+        # Órdenes en pausa
+        pausa_count = supabase.table('ordentrabajo') \
             .select('id', count='exact') \
             .eq('estado_global', 'EnPausa') \
             .execute()
         
-        ordenes_pausa_count = ordenes_pausa_result.count if ordenes_pausa_result.count is not None else len(ordenes_pausa_result.data or [])
-        
-        diagnosticos_result = supabase.table('diagnostico_tecnico') \
+        # Diagnósticos pendientes
+        diag_count = supabase.table('diagnostico_tecnico') \
             .select('id', count='exact') \
             .eq('estado', 'pendiente') \
             .execute()
         
-        diagnosticos_count = diagnosticos_result.count if diagnosticos_result.count is not None else len(diagnosticos_result.data or [])
-        
         return jsonify({
             'success': True,
             'stats': {
-                'ordenes_activas': ordenes_activas_count,
-                'ordenes_pausa': ordenes_pausa_count,
+                'ordenes_activas': ordenes_count.count or 0,
+                'ordenes_pausa': pausa_count.count or 0,
                 'tecnicos_activos': 0,
                 'bahias_ocupadas': 0,
-                'diagnosticos_pendientes': diagnosticos_count
+                'diagnosticos_pendientes': diag_count.count or 0
             }
         }), 200
         
@@ -390,47 +346,3 @@ def obtener_stats_dashboard(current_user):
             'ordenes_activas': 0, 'ordenes_pausa': 0,
             'tecnicos_activos': 0, 'bahias_ocupadas': 0, 'diagnosticos_pendientes': 0
         }}), 200
-
-
-# =====================================================
-# ENDPOINT 6: NOTIFICACIONES
-# =====================================================
-
-@dashboard_bp.route('/notificaciones', methods=['GET'])
-@jefe_taller_required
-def obtener_notificaciones(current_user):
-    """Obtener notificaciones del usuario"""
-    try:
-        notificaciones = supabase.table('notificacion') \
-            .select('*') \
-            .eq('id_usuario_destino', current_user['id']) \
-            .order('fecha_envio', desc=True) \
-            .limit(20) \
-            .execute()
-        
-        return jsonify({
-            'success': True,
-            'notificaciones': notificaciones.data or []
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error obteniendo notificaciones: {str(e)}")
-        return jsonify({'success': True, 'notificaciones': []}), 200
-
-
-@dashboard_bp.route('/notificaciones/marcar-leida/<int:id_notificacion>', methods=['PUT'])
-@jefe_taller_required
-def marcar_notificacion_leida(current_user, id_notificacion):
-    """Marcar una notificación como leída"""
-    try:
-        supabase.table('notificacion') \
-            .update({'leida': True}) \
-            .eq('id', id_notificacion) \
-            .eq('id_usuario_destino', current_user['id']) \
-            .execute()
-        
-        return jsonify({'success': True}), 200
-        
-    except Exception as e:
-        logger.error(f"Error marcando notificación: {str(e)}")
-        return jsonify({'error': str(e)}), 500

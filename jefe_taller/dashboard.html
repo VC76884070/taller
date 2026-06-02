@@ -8,63 +8,48 @@
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
 
-    <!-- Flatpickr CSS (alternativa a FullCalendar) -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
-
+    <!-- FULLCALENDAR CSS - VERSIÓN 5 (MÁS ESTABLE) -->
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css' rel='stylesheet' />
+    
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/dashboard.css">
     
-    <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
+    <!-- ========== CONFIGURACIÓN PWA ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TORQUE">
     
-    <!-- ICONO PARA LA PESTAÑA DEL NAVEGADOR -->
     <link rel="icon" type="image/png" href="/icono.png">
     <link rel="shortcut icon" type="image/png" href="/icono.png">
-    
-    <!-- ICONO PARA IPHONE / IPAD (pantalla de inicio) -->
     <link rel="apple-touch-icon" href="/icono.png">
-    
-    <!-- ICONO PARA ANDROID (chrome) -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
-    <!-- ===================================================== -->
 </head>
 
 <body>
-    <!-- ========== BOTÓN HAMBURGUESA PARA MÓVIL/TABLET ========== -->
     <button class="hamburger-menu" id="hamburgerMenu" aria-label="Menú">
         <i class="fas fa-bars"></i>
     </button>
 
-    <!-- ========== OVERLAY PARA CERRAR SIDEBAR ========== -->
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <div class="app">
-        <!-- SIDEBAR -->
         <div id="sidebar-container"></div>
 
-        <!-- MAIN CONTENT -->
         <main class="main-content">
-            <!-- Top Bar -->
             <header class="top-bar">
                 <div class="page-title">
                     <h1>Dashboard Técnico</h1>
                     <p>Panel de control operativo del taller</p>
                 </div>
-
                 <div class="top-actions">
                     <div class="notification-icon">
                         <i class="fas fa-bell"></i>
-                        <span class="notification-badge">5</span>
+                        <span class="notification-badge" id="notificacionesBadge">0</span>
                     </div>
                     <div class="date-display">
                         <i class="far fa-calendar-alt"></i>
@@ -73,24 +58,19 @@
                 </div>
             </header>
 
-            <!-- CONTENT -->
             <div class="content">
-                <!-- Grid de dos columnas -->
                 <div class="dashboard-grid">
-                    <!-- Columna Izquierda -->
                     <div class="left-column">
-                        <!-- Vista de Bahías -->
+                        <!-- Estado de Bahías -->
                         <div class="card">
                             <div class="card-header">
                                 <h3><i class="fas fa-warehouse"></i> Estado de Bahías</h3>
                                 <span class="badge-info">12 bahías disponibles</span>
                             </div>
-                            <div class="bahias-grid" id="bahiasGrid">
-                                <!-- Se llena dinámicamente -->
-                            </div>
+                            <div class="bahias-grid" id="bahiasGrid"></div>
                         </div>
 
-                        <!-- Calendario con Flatpickr -->
+                        <!-- Calendario con FullCalendar -->
                         <div class="card calendario-card">
                             <div class="card-header">
                                 <h3><i class="fas fa-calendar-alt"></i> Calendario de Reparaciones</h3>
@@ -100,10 +80,7 @@
                                     <span class="leyenda-item"><span class="color-atrasado"></span> Atrasado</span>
                                 </div>
                             </div>
-                            <div class="calendario-wrapper">
-                                <input type="text" id="calendarioFlatpickr" class="calendario-input" placeholder="Calendario de reparaciones">
-                            </div>
-                            <!-- Contenedor para información del día seleccionado -->
+                            <div id="fullcalendar-container"></div>
                             <div id="infoDiaSeleccionado" class="info-dia-container" style="display: none; margin-top: 1rem;">
                                 <h4><i class="fas fa-info-circle"></i> Órdenes en este día</h4>
                                 <div id="ordenesDelDia" class="ordenes-dia-lista"></div>
@@ -111,38 +88,28 @@
                         </div>
                     </div>
 
-                    <!-- Columna Derecha -->
                     <div class="right-column">
-                        <!-- Diagnósticos Pendientes -->
                         <div class="card">
                             <div class="card-header">
                                 <h3><i class="fas fa-stethoscope"></i> Diagnósticos Pendientes</h3>
                                 <span class="badge-warning" id="pendientesCount">0</span>
                             </div>
-                            <div class="diagnosticos-list" id="diagnosticosList">
-                                <!-- Se llena dinámicamente -->
-                            </div>
+                            <div class="diagnosticos-list" id="diagnosticosList"></div>
                         </div>
 
-                        <!-- Próximas Entregas -->
                         <div class="card">
                             <div class="card-header">
                                 <h3><i class="fas fa-clock"></i> Próximas Entregas</h3>
                             </div>
-                            <div class="entregas-list" id="entregasList">
-                                <!-- Se llena dinámicamente -->
-                            </div>
+                            <div class="entregas-list" id="entregasList"></div>
                         </div>
 
-                        <!-- Vehículos en Taller -->
                         <div class="card">
                             <div class="card-header">
                                 <h3><i class="fas fa-car"></i> Vehículos en Taller</h3>
                                 <span class="badge-info" id="vehiculosTallerCount">0</span>
                             </div>
-                            <div class="vehiculos-taller-list" id="vehiculosTallerList">
-                                <!-- Se llena dinámicamente -->
-                            </div>
+                            <div class="vehiculos-taller-list" id="vehiculosTallerList"></div>
                         </div>
                     </div>
                 </div>
@@ -150,18 +117,37 @@
         </main>
     </div>
 
-    <!-- Loading Overlay -->
     <div id="loadingOverlay" style="display: none;">
         <div class="loading-spinner"></div>
     </div>
 
-    <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+    <!-- MODAL DE COMUNICADOS / NOTIFICACIONES -->
+    <div id="modalComunicados" class="modal-comunicados">
+        <div class="modal-contenido">
+            <div class="modal-header">
+                <h3><i class="fas fa-bullhorn"></i> Comunicados del Jefe Operativo</h3>
+                <button class="modal-close" onclick="cerrarModalComunicados()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="modalBodyComunicados">
+                <div class="lista-comunicados" id="listaComunicados">
+                    <div class="sin-comunicados">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Cargando comunicados...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FULLCALENDAR JS - VERSIÓN 5 -->
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js'></script>
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/es.js'></script>
+    
     <script src="js/include.js"></script>
     <script src="js/dashboard.js"></script>
     
-    <!-- ========== SCRIPT RESPONSIVE PARA SIDEBAR ========== -->
     <script>
         let sidebarOpen = false;
         
@@ -170,11 +156,8 @@
             const overlay = document.getElementById('sidebarOverlay');
             const hamburger = document.getElementById('hamburgerMenu');
             const body = document.body;
-            
             if (!sidebar) return;
-            
             sidebarOpen = !sidebarOpen;
-            
             if (sidebarOpen) {
                 sidebar.classList.add('open');
                 if (overlay) overlay.classList.add('active');
@@ -192,7 +175,6 @@
             const overlay = document.getElementById('sidebarOverlay');
             const hamburger = document.getElementById('hamburgerMenu');
             const body = document.body;
-            
             if (sidebar) {
                 sidebar.classList.remove('open');
                 if (overlay) overlay.classList.remove('active');
@@ -207,14 +189,11 @@
         document.addEventListener('DOMContentLoaded', function() {
             const hamburgerBtn = document.getElementById('hamburgerMenu');
             if (hamburgerBtn) hamburgerBtn.addEventListener('click', toggleSidebar);
-            
             const overlay = document.getElementById('sidebarOverlay');
             if (overlay) overlay.addEventListener('click', closeSidebar);
-            
             window.addEventListener('resize', function() {
                 if (window.innerWidth > 1024 && sidebarOpen) closeSidebar();
             });
-            
             document.addEventListener('click', function(e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
@@ -224,7 +203,6 @@
                     }
                 }
             });
-            
             document.addEventListener('touchmove', function(e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');

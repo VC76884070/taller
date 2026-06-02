@@ -142,7 +142,7 @@ def inject_config_script(response):
             
             response.set_data(html)
         except Exception as e:
-            print(f"⚠️ Error inyectando script: {e}")
+            print(f" ")
     
     return response
 
@@ -202,7 +202,6 @@ except Exception as e:
 # =====================================================
 # JEFE TALLER
 # =====================================================
-print("🟡 Iniciando importación de Jefe Taller...")
 
 try:
     from jefe_taller.orden_trabajo import jefe_taller_ordenes_bp

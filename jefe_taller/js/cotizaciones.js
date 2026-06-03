@@ -562,8 +562,6 @@ function renderSolicitudesRepuestosTecnico() {
                 estadoTexto = s.estado || 'Desconocido';
         }
         
-        // Botón de carrito (Gestionar Compra) - abre el mismo modal que el botón "Nueva Solicitud de Compra Directa"
-        // pero PRE-CARGADO con los items del técnico
         let accionesHtml = '';
         if (s.estado === 'pendiente' || s.estado === 'en_proceso') {
             accionesHtml = `
@@ -577,20 +575,14 @@ function renderSolicitudesRepuestosTecnico() {
         
         return `
             <tr>
-                <td>${s.id}</td>
-                <td><strong>${escapeHtml(s.orden_codigo)}</strong><br><small class="text-muted">${escapeHtml(s.orden_estado)}</small></td>
-                <td>${escapeHtml(s.vehiculo)}</td>
-                <td>
-                    <strong>${escapeHtml(s.tecnico_nombre)}</strong>
-                    ${s.tecnico_contacto ? `<br><small class="text-muted">📞 ${escapeHtml(s.tecnico_contacto)}</small>` : ''}
-                </td>
-                <td style="max-width: 250px;">
-                    ${itemsHtml}
-                    ${s.observaciones ? `<div class="text-muted" style="font-size: 0.65rem; margin-top: 0.25rem;"><i class="fas fa-comment"></i> ${escapeHtml(s.observaciones.substring(0, 50))}${s.observaciones.length > 50 ? '...' : ''}</div>` : ''}
-                </td>
-                <td><span class="status-badge ${estadoClass}"><i class="fas ${estadoIcon}"></i> ${estadoTexto}</span></td>
-                <td>${formatDate(s.fecha_solicitud)}</td>
-                <td class="action-buttons">${accionesHtml}</td>
+                <td data-label="ID">${s.id}</td>
+                <td data-label="Orden"><strong>${escapeHtml(s.orden_codigo)}</strong><br><small class="text-muted">${escapeHtml(s.orden_estado)}</small></td>
+                <td data-label="Vehículo">${escapeHtml(s.vehiculo)}</div></td>
+                <td data-label="Técnico"><strong>${escapeHtml(s.tecnico_nombre)}</strong>${s.tecnico_contacto ? `<br><small class="text-muted">📞 ${escapeHtml(s.tecnico_contacto)}</small>` : ''}</td>
+                <td data-label="Repuestos" style="max-width: 250px;">${itemsHtml}${s.observaciones ? `<div class="text-muted" style="font-size: 0.65rem; margin-top: 0.25rem;"><i class="fas fa-comment"></i> ${escapeHtml(s.observaciones.substring(0, 50))}${s.observaciones.length > 50 ? '...' : ''}</div>` : ''}</td>
+                <td data-label="Estado"><span class="status-badge ${estadoClass}"><i class="fas ${estadoIcon}"></i> ${estadoTexto}</span></td>
+                <td data-label="Fecha">${formatDate(s.fecha_solicitud)}</div></td>
+                <td data-label="Acciones" class="action-buttons">${accionesHtml}</td>
             </tr>
         `;
     }).join('');

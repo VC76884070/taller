@@ -1636,3 +1636,229 @@
         min-width: 800px;
     }
 }
+/* =====================================================
+   CORRECCIONES RESPONSIVE - DIAGNÓSTICOS
+   PARA PANTALLAS PEQUEÑAS (móvil y tablet)
+   ===================================================== */
+
+/* Contenedor de resultados - scroll horizontal en móvil */
+#resultadosContainer {
+    width: 100%;
+    overflow-x: auto;
+}
+
+/* Tarjeta de diagnóstico en móvil */
+.diagnostico-card-mobile {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    margin-bottom: 1rem;
+    overflow: hidden;
+    transition: var(--transition);
+}
+
+.diagnostico-card-mobile:hover {
+    border-color: var(--rojo-primario);
+}
+
+.diagnostico-card-mobile .card-header {
+    padding: 1rem;
+    background: var(--gris-oscuro);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.diagnostico-card-mobile .card-codigo {
+    font-family: monospace;
+    font-weight: 700;
+    color: var(--rojo-primario);
+    font-size: 0.85rem;
+}
+
+.diagnostico-card-mobile .card-estado {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: var(--radius-full);
+}
+
+.diagnostico-card-mobile .card-body {
+    padding: 1rem;
+}
+
+.diagnostico-card-mobile .card-row {
+    display: flex;
+    margin-bottom: 0.75rem;
+    font-size: 0.8rem;
+}
+
+.diagnostico-card-mobile .card-label {
+    width: 100px;
+    color: var(--gris-texto);
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.diagnostico-card-mobile .card-value {
+    flex: 1;
+    color: var(--blanco);
+    word-break: break-word;
+}
+
+.diagnostico-card-mobile .card-footer {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    background: var(--gris-oscuro);
+}
+
+.diagnostico-card-mobile .action-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem 0.8rem;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+    color: var(--gris-texto);
+    font-size: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.diagnostico-card-mobile .action-btn:hover {
+    background: var(--gris-medio);
+    color: var(--rojo-primario);
+}
+
+/* =====================================================
+   MEJORAS RESPONSIVE EXISTENTES (SOBREESCRIBIR)
+   ===================================================== */
+
+/* Asegurar que la tabla tenga scroll horizontal en móvil */
+@media (max-width: 992px) {
+    .diagnosticos-table {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .table-header,
+    .diagnostico-row {
+        min-width: 700px;
+    }
+    
+    /* Tarjetas para móvil muy pequeño */
+    @media (max-width: 480px) {
+        .diagnostico-row .action-buttons {
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        
+        .action-btn {
+            padding: 0.4rem 0.6rem;
+        }
+    }
+}
+
+/* Ajustes de padding en móvil */
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+    }
+    
+    .stat-card {
+        padding: 0.8rem;
+    }
+    
+    .stat-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1.2rem;
+    }
+    
+    .stat-info h3 {
+        font-size: 1.2rem;
+    }
+    
+    .stat-info p {
+        font-size: 0.7rem;
+    }
+    
+    .filtros-panel {
+        padding: 1rem;
+    }
+    
+    .filtros-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .btn-buscar, .btn-limpiar {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* Contenedor de resultados */
+    #resultadosContainer {
+        overflow-x: auto;
+    }
+}
+
+/* Móvil muy pequeño (max 480px) */
+@media (max-width: 480px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .diagnostico-container {
+        padding: 0.5rem;
+    }
+    
+    .stat-card {
+        padding: 0.6rem;
+    }
+    
+    .form-input, .form-select {
+        padding: 0.6rem 0.8rem;
+        font-size: 0.8rem;
+    }
+    
+    .modal-xl, .modal-lg, .modal-md {
+        width: 95%;
+        margin: 0.5rem;
+    }
+    
+    .modal-body {
+        padding: 1rem;
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+    
+    .diagnostico-row {
+        padding: 0.6rem;
+    }
+    
+    .diagnostico-row .codigo,
+    .diagnostico-row .tecnico span,
+    .diagnostico-row .vehiculo {
+        font-size: 0.75rem;
+    }
+    
+    .estado-badge {
+        font-size: 0.6rem;
+        padding: 0.2rem 0.5rem;
+    }
+    
+    .action-btn {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.7rem;
+    }
+}

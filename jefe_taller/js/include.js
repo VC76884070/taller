@@ -1,12 +1,11 @@
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA JEFE DE TALLER
-// VERSIÓN CON VARIABLE GLOBAL PARA COMPARTIR CON OTROS SCRIPTS
+// VERSIÓN CORREGIDA - CARGA CORRECTAMENTE EL SIDEBAR
 // =====================================================
 
 // =====================================================
 // CONFIGURACIÓN DE API - VARIABLE GLOBAL
 // =====================================================
-// Declarar como variable global accesible desde cualquier script
 window.API_BASE_URL = (() => {
     if (window.location.hostname === 'localhost' || 
         window.location.hostname === '127.0.0.1' ||
@@ -18,13 +17,12 @@ window.API_BASE_URL = (() => {
     return '';
 })();
 
-// Crear constante local para usar dentro de este archivo
 const API_BASE_URL = window.API_BASE_URL;
 
-// Configuración
+// Configuración del sidebar
 const CONFIG = {
-    sidebarPath: `${API_BASE_URL}/jefe_taller/components/sidebar.html`,
-    logoPath: `${API_BASE_URL}/img/logoblanco.jpeg`,
+    sidebarPath: `/jefe_taller/components/sidebar.html`,
+    logoPath: `/img/logoblanco.jpeg`,
     defaultUserName: 'Carlos Rodríguez',
     userRole: 'Jefe de Taller'
 };
@@ -52,15 +50,24 @@ async function includeSidebar() {
         }
         
         const html = await response.text();
+        
+        // Insertar el HTML en el contenedor
         sidebarContainer.innerHTML = html;
         console.log('✅ Sidebar cargado correctamente');
         
-        inicializarSidebar();
+        // Pequeño delay para asegurar que el DOM se actualice
+        setTimeout(() => {
+            inicializarSidebar();
+            configurarSidebarResponsive();
+        }, 50);
         
     } catch (error) {
         console.error('❌ Error cargando sidebar:', error);
         crearSidebarRespaldo(sidebarContainer);
-        inicializarSidebar();
+        setTimeout(() => {
+            inicializarSidebar();
+            configurarSidebarResponsive();
+        }, 50);
     }
 }
 
@@ -82,7 +89,7 @@ function crearSidebarRespaldo(container) {
     container.innerHTML = `
         <aside class="sidebar">
             <div class="sidebar-header">
-                <img src="${CONFIG.logoPath}" alt="FURIA MOTOR" class="sidebar-logo">
+                <img src="${CONFIG.logoPath}" alt="FURIA MOTOR" class="sidebar-logo" onerror="this.style.display='none'">
                 <span class="sidebar-brand">FURIA MOTOR</span>
             </div>
             <div class="sidebar-user">
@@ -90,19 +97,23 @@ function crearSidebarRespaldo(container) {
                     <i class="fas fa-user-cog"></i>
                 </div>
                 <div class="user-info">
-                    <span class="user-name" id="userName">${user.nombre}</span>
+                    <span class="user-name" id="userName">${escapeHtml(user.nombre)}</span>
                     <span class="user-role">${CONFIG.userRole}</span>
                 </div>
             </div>
             <nav class="sidebar-nav">
                 <ul>
-                    ${crearMenuItem('dashboard', 'Dashboard Técnico', 'chart-line', currentPage, '')}
-                    ${crearMenuItem('orden_trabajo', 'Órdenes de Trabajo', 'clipboard-list', currentPage, '')}
-                    ${crearMenuItem('calendario_bahias', 'Calendario y Bahías', 'calendar-alt', currentPage, '')}
-                    ${crearMenuItem('reservas_solicitudes', 'Reservas y Solicitudes', 'calendar-check', currentPage, '')}
-                    ${crearMenuItem('historial_vehiculos', 'Historial', 'history', currentPage, '')}
-                    ${crearMenuItem('admin_roles', 'Administrar Roles', 'users-cog', currentPage, '')}
-                    ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage, '')}
+                    ${crearMenuItem('dashboard', 'Dashboard Técnico', 'chart-line', currentPage)}
+                    ${crearMenuItem('orden_trabajo', 'Órdenes de Trabajo', 'clipboard-list', currentPage)}
+                    ${crearMenuItem('calendario_bahias', 'Calendario y Bahías', 'calendar-alt', currentPage)}
+                    ${crearMenuItem('diagnostico', 'Diagnósticos', 'stethoscope', currentPage)}
+                    ${crearMenuItem('cotizaciones', 'Cotizaciones', 'file-invoice-dollar', currentPage)}
+                    ${crearMenuItem('control_calidad', 'Control de Calidad', 'check-double', currentPage)}
+                    ${crearMenuItem('gestion_avances', 'Gestión de Avances', 'tasks', currentPage)}
+                    ${crearMenuItem('reservas_solicitudes', 'Reservas y Solicitudes', 'calendar-check', currentPage)}
+                    ${crearMenuItem('admin_roles', 'Administrar Roles', 'user-shield', currentPage)}
+                    ${crearMenuItem('historial_vehiculos', 'Historial', 'history', currentPage)}
+                    ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage)}
                 </ul>
                 <ul class="sidebar-bottom">
                     <li class="nav-item">
@@ -117,57 +128,25 @@ function crearSidebarRespaldo(container) {
     `;
 }
 
-function crearMenuItem(page, label, icon, currentPage, badge) {
+function crearMenuItem(page, label, icon, currentPage) {
     const isActive = currentPage === page ? 'active' : '';
-    const badgeHtml = badge ? `<span class="badge">${badge}</span>` : '';
-    
     return `
         <li class="nav-item ${isActive}" data-page="${page}">
             <a href="${page}.html" class="nav-link">
                 <i class="fas fa-${icon}"></i>
                 <span>${label}</span>
-                ${badgeHtml}
             </a>
         </li>
     `;
 }
 
 function inicializarSidebar() {
-    setTimeout(() => {
-        const currentPage = obtenerPaginaActual();
-        console.log('📄 Página actual:', currentPage);
-        marcarItemActivo(currentPage);
-        actualizarNombreUsuario();
-        cargarNotificaciones();
-    }, 100);
-}
-
-function obtenerPaginaActual() {
-    const path = window.location.pathname;
-    const filename = path.split('/').pop() || 'dashboard.html';
-    let pageName = filename.replace('.html', '');
+    // Marcar el elemento activo basado en la página actual
+    const currentPage = obtenerPaginaActual();
+    console.log('📄 Página actual:', currentPage);
     
-    const pageMapping = {
-        'dashboard': 'dashboard',
-        'orden_trabajo': 'orden_trabajo',
-        'calendario_bahias': 'calendario_bahias',
-        'diagnostico': 'diagnosticos',
-        'cotizaciones': 'cotizaciones',
-        'control_calidad': 'control_calidad',
-        'gestion_avances': 'gestion_avances',
-        'historial_vehiculos': 'historial_vehiculos',
-        'perfil': 'perfil',
-        'admin_roles': 'admin_roles',
-        'reservas_solicitudes': 'reservas_solicitudes'
-    };
-    
-    return pageMapping[pageName] || pageName;
-}
-
-function marcarItemActivo(currentPage) {
+    // Marcar el item activo en el sidebar
     const items = document.querySelectorAll('.nav-item');
-    console.log('🔍 Items encontrados:', items.length);
-    
     items.forEach(item => {
         item.classList.remove('active');
         const itemPage = item.getAttribute('data-page');
@@ -176,6 +155,91 @@ function marcarItemActivo(currentPage) {
             console.log('✅ Activado:', itemPage);
         }
     });
+    
+    // Actualizar nombre de usuario
+    actualizarNombreUsuario();
+    
+    // Cargar notificaciones
+    cargarNotificaciones();
+    
+    // Asegurar que el sidebar sea visible en desktop
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar && window.innerWidth > 1024) {
+        sidebar.style.transform = 'translateX(0)';
+    }
+}
+
+function configurarSidebarResponsive() {
+    // Configurar botón hamburguesa y overlay si existen en la página
+    const hamburgerBtn = document.getElementById('hamburgerMenu');
+    const overlay = document.getElementById('sidebarOverlay');
+    const sidebar = document.querySelector('.sidebar');
+    
+    if (hamburgerBtn && sidebar) {
+        // Remover event listeners previos para evitar duplicados
+        const newHamburger = hamburgerBtn.cloneNode(true);
+        hamburgerBtn.parentNode.replaceChild(newHamburger, hamburgerBtn);
+        
+        newHamburger.addEventListener('click', function(e) {
+            e.preventDefault();
+            toggleSidebar();
+        });
+    }
+    
+    if (overlay && sidebar) {
+        const newOverlay = overlay.cloneNode(true);
+        overlay.parentNode.replaceChild(newOverlay, overlay);
+        
+        newOverlay.addEventListener('click', function() {
+            closeSidebar();
+        });
+    }
+}
+
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const hamburger = document.getElementById('hamburgerMenu');
+    const body = document.body;
+    
+    if (!sidebar) return;
+    
+    const isOpen = sidebar.classList.contains('open');
+    
+    if (isOpen) {
+        closeSidebar();
+    } else {
+        sidebar.classList.add('open');
+        if (overlay) overlay.classList.add('active');
+        if (hamburger) hamburger.classList.add('active');
+        body.classList.add('sidebar-open');
+        
+        const icon = hamburger?.querySelector('i');
+        if (icon) icon.className = 'fas fa-times';
+    }
+}
+
+function closeSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const hamburger = document.getElementById('hamburgerMenu');
+    const body = document.body;
+    
+    if (sidebar) {
+        sidebar.classList.remove('open');
+        if (overlay) overlay.classList.remove('active');
+        if (hamburger) hamburger.classList.remove('active');
+        body.classList.remove('sidebar-open');
+        
+        const icon = hamburger?.querySelector('i');
+        if (icon) icon.className = 'fas fa-bars';
+    }
+}
+
+function obtenerPaginaActual() {
+    const path = window.location.pathname;
+    const filename = path.split('/').pop() || 'dashboard.html';
+    return filename.replace('.html', '');
 }
 
 function obtenerUsuarioActual() {
@@ -185,13 +249,14 @@ function obtenerUsuarioActual() {
             const user = JSON.parse(userStr);
             return {
                 nombre: user.nombre || CONFIG.defaultUserName,
+                email: user.email || '',
                 rol: user.rol || 'jefe_taller'
             };
         }
     } catch (error) {
         console.error('Error obteniendo usuario:', error);
     }
-    return { nombre: CONFIG.defaultUserName };
+    return { nombre: CONFIG.defaultUserName, email: '', rol: 'jefe_taller' };
 }
 
 function actualizarNombreUsuario() {
@@ -207,12 +272,14 @@ function actualizarNombreUsuario() {
 // =====================================================
 
 let notificaciones = [];
-let notificacionesInterval = null;
 
 async function cargarNotificaciones() {
     try {
-        const response = await fetch(`${window.API_BASE_URL}/api/jefe-taller/notificaciones`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+        const token = localStorage.getItem('furia_token');
+        if (!token) return;
+        
+        const response = await fetch(`${API_BASE_URL}/api/jefe-taller/notificaciones`, {
+            headers: { 'Authorization': `Bearer ${token}` }
         });
         
         const data = await response.json();
@@ -223,10 +290,10 @@ async function cargarNotificaciones() {
         }
     } catch (error) {
         console.error('Error cargando notificaciones:', error);
+        // Datos de ejemplo para desarrollo
         notificaciones = [
             { id: 1, leida: false, mensaje: 'Nuevo diagnóstico pendiente de revisión', tipo: 'diagnostico' },
-            { id: 2, leida: false, mensaje: 'Orden OT-250401-001 completada por técnico', tipo: 'orden' },
-            { id: 3, leida: true, mensaje: 'Bahía 3 liberada', tipo: 'bahia' }
+            { id: 2, leida: false, mensaje: 'Orden OT-250401-001 completada por técnico', tipo: 'orden' }
         ];
         actualizarBadgeNotificaciones();
     }
@@ -238,12 +305,7 @@ function actualizarBadgeNotificaciones() {
     
     const noLeidas = notificaciones.filter(n => !n.leida).length;
     badge.textContent = noLeidas;
-    
-    if (noLeidas > 0) {
-        badge.style.display = 'flex';
-    } else {
-        badge.style.display = 'none';
-    }
+    badge.style.display = noLeidas > 0 ? 'flex' : 'none';
 }
 
 function mostrarNotificaciones() {
@@ -255,16 +317,11 @@ function mostrarNotificaciones() {
     }
     
     noLeidas.forEach(notif => {
-        let mensaje = notif.mensaje;
         let tipo = 'info';
+        if (notif.tipo === 'diagnostico') tipo = 'warning';
+        if (notif.tipo === 'orden') tipo = 'success';
         
-        if (notif.tipo === 'diagnostico') {
-            tipo = 'warning';
-        } else if (notif.tipo === 'orden') {
-            tipo = 'success';
-        }
-        
-        mostrarNotificacionToast(mensaje, tipo);
+        mostrarNotificacionToast(notif.mensaje, tipo);
         notif.leida = true;
     });
     
@@ -290,8 +347,11 @@ function mostrarNotificacionToast(mensaje, tipo = 'info') {
     
     setTimeout(() => {
         if (toast && document.body.contains(toast)) {
-            toast.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => { if (document.body.contains(toast)) document.body.removeChild(toast); }, 300);
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+                if (document.body.contains(toast)) document.body.removeChild(toast);
+            }, 300);
         }
     }, 4000);
 }
@@ -303,7 +363,27 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Configurar evento de notificaciones
+// =====================================================
+// CIERRE DE SESIÓN
+// =====================================================
+
+window.cerrarSesion = function() {
+    if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
+        localStorage.removeItem('furia_token');
+        localStorage.removeItem('furia_user');
+        window.location.href = `${API_BASE_URL}/`;
+    }
+};
+
+// =====================================================
+// INICIALIZACIÓN
+// =====================================================
+
+// Función global para toggle sidebar (para usar desde HTML)
+window.toggleSidebarGlobal = toggleSidebar;
+window.closeSidebarGlobal = closeSidebar;
+
+// Configurar evento de notificaciones después de cargar el DOM
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         const notifIcon = document.querySelector('.notification-icon');
@@ -311,16 +391,48 @@ document.addEventListener('DOMContentLoaded', () => {
             notifIcon.addEventListener('click', mostrarNotificaciones);
         }
     }, 500);
+    
+    // Configurar evento para cerrar sidebar al hacer click fuera
+    document.addEventListener('click', function(e) {
+        if (window.innerWidth <= 1024) {
+            const sidebar = document.querySelector('.sidebar');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            if (sidebar?.classList.contains('open') && 
+                !sidebar.contains(e.target) && 
+                hamburger && !hamburger.contains(e.target)) {
+                closeSidebar();
+            }
+        }
+    });
+    
+    // Prevenir scroll del body cuando sidebar está abierto
+    document.addEventListener('touchmove', function(e) {
+        if (window.innerWidth <= 1024) {
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar?.classList.contains('open') && !sidebar.contains(e.target)) {
+                e.preventDefault();
+            }
+        }
+    });
+    
+    // Cerrar sidebar al redimensionar a desktop
+    window.addEventListener('resize', function() {
+        if (window.innerWidth > 1024) {
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar?.classList.contains('open')) {
+                closeSidebar();
+            }
+        }
+    });
 });
 
-// Cerrar sesión
-window.cerrarSesion = function() {
-    if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
-        localStorage.removeItem('furia_token');
-        localStorage.removeItem('furia_user');
-        window.location.href = `${window.API_BASE_URL}/`;
-    }
-};
+// Inicializar el sidebar cuando el DOM esté listo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', includeSidebar);
+} else {
+    includeSidebar();
+}
 
-// Inicializar
-document.addEventListener('DOMContentLoaded', includeSidebar);
+console.log('✅ include.js cargado correctamente - Versión corregida');

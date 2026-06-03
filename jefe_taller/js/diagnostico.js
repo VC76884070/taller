@@ -1,14 +1,12 @@
 // =====================================================
 // DIAGNOSTICO.JS - JEFE DE TALLER
-// Gestión de diagnósticos técnicos - SOLO ÚLTIMOS 5 POR ESTADO
-// VERSIÓN CORREGIDA - USA VARIABLE GLOBAL DE INCLUDE.JS
+// Gestión de diagnósticos técnicos - RESPONSIVE
+// VERSIÓN CORREGIDA - CON TARJETAS EN MÓVIL
 // =====================================================
 
 // =====================================================
 // CONFIGURACIÓN DE API - USA VARIABLE GLOBAL
 // =====================================================
-// La variable API_BASE_URL ya está declarada en include.js como window.API_BASE_URL
-// Si por alguna razón no existe (página cargada sola), la creamos
 if (typeof window.API_BASE_URL === 'undefined') {
     window.API_BASE_URL = (() => {
         if (window.location.hostname === 'localhost' || 
@@ -58,6 +56,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     initPage();
     initEventListeners();
     await loadAllData();
+    
+    // Escuchar cambios de tamaño para cambiar entre tabla y tarjetas
+    window.addEventListener('resize', () => {
+        if (window.currentDiagnosticosFiltrados) {
+            renderDiagnosticos(window.currentDiagnosticosFiltrados);
+        }
+    });
 });
 
 async function checkAuth() {
@@ -126,19 +131,14 @@ function initEventListeners() {
     const btnLimpiar = document.getElementById('btnLimpiar');
     const refreshBtn = document.getElementById('refreshBtn');
     
-    if (filterEstado) filterEstado.addEventListener('change', () => {
-        aplicarFiltros();
-    });
-    
+    if (filterEstado) filterEstado.addEventListener('change', () => aplicarFiltros());
     if (searchInput) searchInput.addEventListener('input', aplicarFiltros);
     if (fechaDesde) fechaDesde.addEventListener('change', aplicarFiltros);
     if (fechaHasta) fechaHasta.addEventListener('change', aplicarFiltros);
     
     if (btnBuscar) btnBuscar.addEventListener('click', () => aplicarFiltros());
     if (btnLimpiar) btnLimpiar.addEventListener('click', limpiarFiltros);
-    if (refreshBtn) refreshBtn.addEventListener('click', () => {
-        loadAllData();
-    });
+    if (refreshBtn) refreshBtn.addEventListener('click', () => loadAllData());
     
     // Grabación de audio
     const startRecordBtn = document.getElementById('startRecordBtn');
@@ -205,7 +205,6 @@ async function loadDiagnosticos() {
         const data = await response.json();
         
         if (data.success) {
-            // Organizar diagnósticos por estado
             currentDiagnosticos = {
                 pendiente: [],
                 aprobado: [],
@@ -219,7 +218,7 @@ async function loadDiagnosticos() {
                 }
             }
             
-            console.log('✅ Diagnósticos cargados (últimos 5 por estado):');
+            console.log('✅ Diagnósticos cargados:');
             console.log(`   - Pendientes: ${currentDiagnosticos.pendiente.length}`);
             console.log(`   - Aprobados: ${currentDiagnosticos.aprobado.length}`);
             console.log(`   - Rechazados: ${currentDiagnosticos.rechazado.length}`);
@@ -248,7 +247,6 @@ async function loadStats() {
         if (data.success) {
             currentStats = data.stats;
             
-            // Actualizar UI
             const pendientesElem = document.getElementById('pendientesCount');
             const aprobadosElem = document.getElementById('aprobadosCount');
             const rechazadosElem = document.getElementById('rechazadosCount');
@@ -275,6 +273,8 @@ let currentFilters = {
     fechaHasta: ''
 };
 
+let currentDiagnosticosFiltrados = [];
+
 function aplicarFiltros() {
     currentFilters.estado = document.getElementById('filterEstado')?.value || 'todos';
     currentFilters.search = document.getElementById('searchInput')?.value.toLowerCase() || '';
@@ -284,7 +284,6 @@ function aplicarFiltros() {
     let diagnosticosFiltrados = [];
     
     if (currentFilters.estado === 'todos') {
-        // Mostrar todos los estados
         diagnosticosFiltrados = [
             ...currentDiagnosticos.pendiente,
             ...currentDiagnosticos.aprobado,
@@ -295,7 +294,6 @@ function aplicarFiltros() {
         diagnosticosFiltrados = [...(currentDiagnosticos[currentFilters.estado] || [])];
     }
     
-    // Aplicar búsqueda
     if (currentFilters.search) {
         diagnosticosFiltrados = diagnosticosFiltrados.filter(d => 
             (d.codigo_unico || '').toLowerCase().includes(currentFilters.search) ||
@@ -306,7 +304,6 @@ function aplicarFiltros() {
         );
     }
     
-    // Aplicar filtros de fecha
     if (currentFilters.fechaDesde) {
         const desde = new Date(currentFilters.fechaDesde);
         desde.setHours(0, 0, 0, 0);
@@ -325,6 +322,7 @@ function aplicarFiltros() {
         });
     }
     
+    currentDiagnosticosFiltrados = diagnosticosFiltrados;
     renderDiagnosticos(diagnosticosFiltrados);
 }
 
@@ -343,7 +341,7 @@ function limpiarFiltros() {
 }
 
 // =====================================================
-// RENDERIZADO DE DIAGNÓSTICOS - SOLO ÚLTIMOS 5
+// RENDERIZADO DE DIAGNÓSTICOS - RESPONSIVE
 // =====================================================
 
 function renderDiagnosticos(diagnosticos) {
@@ -360,6 +358,9 @@ function renderDiagnosticos(diagnosticos) {
         return;
     }
     
+    // Detectar si es móvil (pantalla pequeña)
+    const esMovil = window.innerWidth <= 768;
+    
     // Agrupar por estado
     const pendientes = diagnosticos.filter(d => d.estado === 'pendiente');
     const aprobados = diagnosticos.filter(d => d.estado === 'aprobado');
@@ -368,36 +369,26 @@ function renderDiagnosticos(diagnosticos) {
     
     let html = '';
     
-    // Pendientes
     if (pendientes.length > 0) {
-        html += renderSeccion(pendientes, 'pendientes', true);
-    } else if (currentStats.pendiente > 0) {
-        html += renderSeccionVacia('pendientes', currentStats.pendiente);
+        html += renderSeccion(pendientes, 'pendientes', true, esMovil);
     }
     
-    // Aprobados - SOLO ÚLTIMOS 5
     if (aprobados.length > 0) {
-        html += renderSeccion(aprobados, 'aprobados', false);
-    } else if (currentStats.aprobado > 0) {
-        html += renderSeccionVacia('aprobados', currentStats.aprobado);
+        html += renderSeccion(aprobados, 'aprobados', false, esMovil);
     }
     
-    // Rechazados - SOLO ÚLTIMOS 5
     if (rechazados.length > 0) {
-        html += renderSeccion(rechazados, 'rechazados', false);
-    } else if (currentStats.rechazado > 0) {
-        html += renderSeccionVacia('rechazados', currentStats.rechazado);
+        html += renderSeccion(rechazados, 'rechazados', false, esMovil);
     }
     
-    // Borradores
     if (borradores.length > 0) {
-        html += renderSeccion(borradores, 'borradores', false);
+        html += renderSeccion(borradores, 'borradores', false, esMovil);
     }
     
     container.innerHTML = html;
 }
 
-function renderSeccion(diagnosticos, estado, showActions) {
+function renderSeccion(diagnosticos, estado, showActions, esMovil) {
     const titulos = {
         'pendientes': { icono: 'fa-clock', texto: 'Pendientes de Revisión', color: '#F59E0B' },
         'aprobados': { icono: 'fa-check-circle', texto: 'Últimos Aprobados', color: '#10B981' },
@@ -406,53 +397,95 @@ function renderSeccion(diagnosticos, estado, showActions) {
     };
     
     const titulo = titulos[estado] || { icono: 'fa-file', texto: estado, color: '#6B7280' };
-    const totalEstado = currentStats[estado.slice(0, -1)] || diagnosticos.length;
-    const mostrados = diagnosticos.length;
     
-    return `
-        <div class="seccion-diagnosticos">
-            <div class="seccion-header ${estado}">
-                <h3><i class="fas ${titulo.icono}"></i> ${titulo.texto}</h3>
-                <div class="seccion-info">
-                    <span class="seccion-badge">Mostrando ${mostrados} de ${totalEstado}</span>
+    if (esMovil) {
+        // Modo tarjetas para móvil
+        return `
+            <div class="seccion-diagnosticos-mobile" style="margin-bottom: 1.5rem;">
+                <div class="seccion-header ${estado}" style="padding: 0.75rem 1rem; background: var(--gris-oscuro); border-radius: var(--radius-lg) var(--radius-lg) 0 0; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas ${titulo.icono}" style="color: ${titulo.color}"></i> ${titulo.texto}
+                    </h3>
+                </div>
+                <div class="diagnosticos-cards" style="padding: 0.75rem; background: var(--bg-card); border-radius: 0 0 var(--radius-lg) var(--radius-lg); border: 1px solid var(--border-color); border-top: none;">
+                    ${diagnosticos.map(d => renderDiagnosticoCard(d, showActions && d.estado === 'pendiente')).join('')}
                 </div>
             </div>
-            <div class="diagnosticos-table">
-                <div class="table-header">
-                    <span>Código Orden</span>
-                    <span>Técnico</span>
-                    <span>Vehículo</span>
-                    <span>Servicios</span>
-                    <span>Fecha</span>
-                    <span>Estado</span>
-                    <span>Acciones</span>
+        `;
+    } else {
+        // Modo tabla para desktop
+        return `
+            <div class="seccion-diagnosticos" style="margin-bottom: 1.5rem;">
+                <div class="seccion-header ${estado}" style="padding: 0.75rem 1rem; background: var(--gris-oscuro); border-radius: var(--radius-lg) var(--radius-lg) 0 0; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas ${titulo.icono}" style="color: ${titulo.color}"></i> ${titulo.texto}
+                    </h3>
+                    <span class="seccion-badge" style="font-size: 0.7rem; padding: 0.2rem 0.6rem; background: var(--gris-medio); border-radius: var(--radius-full);">${diagnosticos.length} registros</span>
                 </div>
-                ${diagnosticos.map(d => renderDiagnosticoRow(d, showActions && d.estado === 'pendiente')).join('')}
+                <div style="overflow-x: auto; border: 1px solid var(--border-color); border-top: none; border-radius: 0 0 var(--radius-lg) var(--radius-lg); background: var(--bg-card);">
+                    <table style="width: 100%; border-collapse: collapse; min-width: 700px;">
+                        <thead style="background: var(--gris-oscuro);">
+                            <tr>
+                                <th style="padding: 0.75rem; text-align: left; font-size: 0.7rem; color: var(--gris-texto);">Código</th>
+                                <th style="padding: 0.75rem; text-align: left; font-size: 0.7rem; color: var(--gris-texto);">Técnico</th>
+                                <th style="padding: 0.75rem; text-align: left; font-size: 0.7rem; color: var(--gris-texto);">Vehículo</th>
+                                <th style="padding: 0.75rem; text-align: left; font-size: 0.7rem; color: var(--gris-texto);">Servicios</th>
+                                <th style="padding: 0.75rem; text-align: left; font-size: 0.7rem; color: var(--gris-texto);">Fecha</th>
+                                <th style="padding: 0.75rem; text-align: left; font-size: 0.7rem; color: var(--gris-texto);">Estado</th>
+                                <th style="padding: 0.75rem; text-align: left; font-size: 0.7rem; color: var(--gris-texto);">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${diagnosticos.map(d => renderDiagnosticoRow(d, showActions && d.estado === 'pendiente')).join('')}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
-    `;
+        `;
+    }
 }
 
-function renderSeccionVacia(estado, total) {
-    const titulos = {
-        'pendientes': { icono: 'fa-clock', texto: 'Pendientes de Revisión', color: '#F59E0B' },
-        'aprobados': { icono: 'fa-check-circle', texto: 'Aprobados', color: '#10B981' },
-        'rechazados': { icono: 'fa-times-circle', texto: 'Rechazados', color: '#EF4444' }
-    };
-    
-    const titulo = titulos[estado] || { icono: 'fa-file', texto: estado, color: '#6B7280' };
+function renderDiagnosticoCard(d, showActions) {
+    const serviciosCount = d.servicios?.length || 0;
     
     return `
-        <div class="seccion-diagnosticos">
-            <div class="seccion-header ${estado}">
-                <h3><i class="fas ${titulo.icono}"></i> ${titulo.texto}</h3>
-                <div class="seccion-info">
-                    <span class="seccion-badge">${total} en total</span>
+        <div class="diagnostico-card" data-id="${d.diagnostico_id}" style="background: var(--gris-oscuro); border-radius: var(--radius-md); padding: 0.75rem; margin-bottom: 0.75rem; border: 1px solid var(--border-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                <span style="font-weight: 700; font-family: monospace; color: var(--rojo-primario);">${escapeHtml(d.codigo_unico || 'N/A')}</span>
+                <span class="estado-badge ${d.estado}" style="font-size: 0.65rem; padding: 0.2rem 0.5rem; border-radius: var(--radius-full);">
+                    <i class="fas ${getEstadoIcon(d.estado)}"></i> ${getEstadoTexto(d.estado)}
+                </span>
+            </div>
+            <div style="margin-bottom: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                    <i class="fas fa-user" style="width: 20px; color: var(--gris-texto);"></i>
+                    <span style="color: var(--blanco);">${escapeHtml(d.tecnico_nombre || 'Sin asignar')}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                    <i class="fas fa-car" style="width: 20px; color: var(--gris-texto);"></i>
+                    <span style="color: var(--blanco);">${escapeHtml(d.placa || 'N/A')} - ${escapeHtml(d.marca || '')} ${escapeHtml(d.modelo || '')}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                    <i class="fas fa-tools" style="width: 20px; color: var(--gris-texto);"></i>
+                    <span style="color: var(--blanco);"><i class="fas fa-wrench"></i> ${serviciosCount} servicio${serviciosCount !== 1 ? 's' : ''}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-calendar" style="width: 20px; color: var(--gris-texto);"></i>
+                    <span style="color: var(--gris-texto);">${formatDate(d.fecha_envio)}</span>
                 </div>
             </div>
-            <div class="empty-state-mini">
-                <i class="fas fa-info-circle"></i>
-                <p>Mostrando solo los últimos 5 registros. Usa el filtro de estado para ver más.</p>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+                <button class="action-btn view" onclick="verDiagnostico(${d.diagnostico_id})" style="background: transparent; border: none; cursor: pointer; padding: 0.3rem 0.6rem; border-radius: var(--radius-sm); color: var(--gris-texto);">
+                    <i class="fas fa-eye"></i> Ver
+                </button>
+                ${showActions ? `
+                    <button class="action-btn approve" onclick="aprobarDiagnostico(${d.diagnostico_id})" style="background: transparent; border: none; cursor: pointer; padding: 0.3rem 0.6rem; border-radius: var(--radius-sm); color: #10B981;">
+                        <i class="fas fa-check-circle"></i> Aprobar
+                    </button>
+                    <button class="action-btn reject" onclick="abrirModalObservacion(${d.diagnostico_id})" style="background: transparent; border: none; cursor: pointer; padding: 0.3rem 0.6rem; border-radius: var(--radius-sm); color: #EF4444;">
+                        <i class="fas fa-times-circle"></i> Rechazar
+                    </button>
+                ` : ''}
             </div>
         </div>
     `;
@@ -460,40 +493,35 @@ function renderSeccionVacia(estado, total) {
 
 function renderDiagnosticoRow(d, showActions) {
     const serviciosCount = d.servicios?.length || 0;
-    const tieneServicios = serviciosCount > 0;
     
     return `
-        <div class="diagnostico-row" data-id="${d.diagnostico_id}">
-            <span class="codigo">${escapeHtml(d.codigo_unico || 'N/A')}</span>
-            <div class="tecnico">
-                <div class="tecnico-avatar">
-                    <i class="fas fa-user"></i>
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.75rem;"><span class="codigo" style="font-family: monospace; color: var(--rojo-primario);">${escapeHtml(d.codigo_unico || 'N/A')}</span></td>
+            <td style="padding: 0.75rem;"><span style="color: var(--blanco);">${escapeHtml(d.tecnico_nombre || 'Sin asignar')}</span></td>
+            <td style="padding: 0.75rem;"><span style="color: var(--blanco);">${escapeHtml(d.placa || 'N/A')}</span></td>
+            <td style="padding: 0.75rem;"><span class="servicios-count" style="font-size: 0.75rem;"><i class="fas fa-wrench"></i> ${serviciosCount}</span></td>
+            <td style="padding: 0.75rem;"><span class="fecha" style="font-size: 0.7rem; color: var(--gris-texto);">${formatDate(d.fecha_envio)}</span></td>
+            <td style="padding: 0.75rem;">
+                <span class="estado-badge ${d.estado}" style="font-size: 0.65rem; padding: 0.2rem 0.5rem; border-radius: var(--radius-full);">
+                    <i class="fas ${getEstadoIcon(d.estado)}"></i> ${getEstadoTexto(d.estado)}
+                </span>
+            </td>
+            <td style="padding: 0.75rem;">
+                <div class="action-buttons" style="display: flex; gap: 0.5rem;">
+                    <button class="action-btn view" onclick="verDiagnostico(${d.diagnostico_id})" style="background: transparent; border: none; cursor: pointer; padding: 0.3rem; border-radius: var(--radius-sm); color: var(--gris-texto);">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    ${showActions ? `
+                        <button class="action-btn approve" onclick="aprobarDiagnostico(${d.diagnostico_id})" style="background: transparent; border: none; cursor: pointer; padding: 0.3rem; border-radius: var(--radius-sm); color: #10B981;">
+                            <i class="fas fa-check-circle"></i>
+                        </button>
+                        <button class="action-btn reject" onclick="abrirModalObservacion(${d.diagnostico_id})" style="background: transparent; border: none; cursor: pointer; padding: 0.3rem; border-radius: var(--radius-sm); color: #EF4444;">
+                            <i class="fas fa-times-circle"></i>
+                        </button>
+                    ` : ''}
                 </div>
-                <span>${escapeHtml(d.tecnico_nombre || 'Sin asignar')}</span>
-            </div>
-            <span class="vehiculo">${escapeHtml(d.placa || 'N/A')} - ${escapeHtml(d.marca || '')} ${escapeHtml(d.modelo || '')}</span>
-            <span class="servicios-count ${tieneServicios ? 'tiene' : ''}">
-                <i class="fas fa-wrench"></i> ${serviciosCount} servicio${serviciosCount !== 1 ? 's' : ''}
-            </span>
-            <span class="fecha">${formatDate(d.fecha_envio)}</span>
-            <span class="estado-badge ${d.estado}">
-                <i class="fas ${getEstadoIcon(d.estado)}"></i>
-                ${getEstadoTexto(d.estado)}
-            </span>
-            <div class="action-buttons">
-                <button class="action-btn view" onclick="verDiagnostico(${d.diagnostico_id})" title="Ver detalle">
-                    <i class="fas fa-eye"></i>
-                </button>
-                ${showActions ? `
-                    <button class="action-btn approve" onclick="aprobarDiagnostico(${d.diagnostico_id})" title="Aprobar">
-                        <i class="fas fa-check-circle"></i>
-                    </button>
-                    <button class="action-btn reject" onclick="abrirModalObservacion(${d.diagnostico_id})" title="Rechazar">
-                        <i class="fas fa-times-circle"></i>
-                    </button>
-                ` : ''}
-            </div>
-        </div>
+            </td>
+        </tr>
     `;
 }
 
@@ -555,134 +583,49 @@ function mostrarModalDiagnostico(diagnostico) {
     const observaciones = diagnostico.observaciones || [];
     
     modalBody.innerHTML = `
-        <div class="diagnostico-detalle-modern">
+        <div class="diagnostico-detalle-modern" style="padding: 1rem;">
             <!-- Header -->
-            <div class="diagnostico-header-modern">
-                <h2><i class="fas fa-stethoscope"></i> Diagnóstico Técnico</h2>
-                <div class="codigo-orden">
-                    <i class="fas fa-hashtag"></i> Orden: ${escapeHtml(diagnostico.codigo_unico || 'N/A')}
-                </div>
-                <div class="vehiculo-info-modern">
-                    <div class="info-item"><i class="fas fa-car"></i> ${escapeHtml(diagnostico.placa || 'N/A')}</div>
-                    <div class="info-item"><i class="fas fa-tag"></i> ${escapeHtml(diagnostico.marca || '')} ${escapeHtml(diagnostico.modelo || '')}</div>
-                    <div class="info-item"><i class="fas fa-user"></i> Técnico: ${escapeHtml(diagnostico.tecnico_nombre || 'N/A')}</div>
-                    <div class="info-item"><i class="fas fa-calendar"></i> ${formatDate(diagnostico.fecha_envio)}</div>
+            <div style="background: linear-gradient(135deg, var(--rojo-primario), var(--rojo-oscuro)); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1rem;">
+                <h2 style="font-size: 1.2rem; margin-bottom: 0.5rem;"><i class="fas fa-stethoscope"></i> Diagnóstico Técnico</h2>
+                <div style="font-family: monospace; margin-bottom: 0.5rem;">Orden: ${escapeHtml(diagnostico.codigo_unico || 'N/A')}</div>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <div><i class="fas fa-car"></i> ${escapeHtml(diagnostico.placa || 'N/A')}</div>
+                    <div><i class="fas fa-tag"></i> ${escapeHtml(diagnostico.marca || '')} ${escapeHtml(diagnostico.modelo || '')}</div>
+                    <div><i class="fas fa-user"></i> Técnico: ${escapeHtml(diagnostico.tecnico_nombre || 'N/A')}</div>
                 </div>
             </div>
             
-            <!-- Tabs -->
-            <div class="diagnostico-tabs">
-                <button class="tab-btn active" data-tab="info">📋 Información</button>
-                <button class="tab-btn" data-tab="servicios">🔧 Servicios (${servicios.length})</button>
-                ${solicitudes.length > 0 ? `<button class="tab-btn" data-tab="repuestos">🛒 Repuestos (${solicitudes.length})</button>` : ''}
-                ${fotos.length > 0 ? `<button class="tab-btn" data-tab="fotos">📸 Fotos (${fotos.length})</button>` : ''}
-                ${observaciones.length > 0 ? `<button class="tab-btn" data-tab="observaciones">💬 Observaciones (${observaciones.length})</button>` : ''}
+            <!-- Información -->
+            <div style="background: var(--gris-oscuro); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1rem;">
+                <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-file-alt"></i> Informe del Técnico</h4>
+                <p style="color: var(--gris-texto);">${escapeHtml(diagnostico.informe || 'Sin informe')}</p>
+                ${diagnostico.url_grabacion_informe ? `<audio controls src="${diagnostico.url_grabacion_informe}" style="width: 100%; margin-top: 0.5rem;"></audio>` : ''}
             </div>
             
-            <!-- Tab: Información -->
-            <div class="tab-content active" id="tab-info">
-                <div class="info-grid-modern">
-                    <div class="info-card">
-                        <div class="info-card-header"><i class="fas fa-file-alt"></i><h4>Informe del Técnico</h4></div>
-                        <div class="info-card-content"><p>${escapeHtml(diagnostico.informe || 'Sin informe')}</p></div>
-                        ${diagnostico.url_grabacion_informe ? `
-                            <div style="margin-top: 1rem;">
-                                <label>🎙️ Grabación:</label>
-                                <audio controls src="${diagnostico.url_grabacion_informe}" style="width: 100%; margin-top: 0.5rem;"></audio>
-                            </div>
-                        ` : ''}
+            <!-- Servicios -->
+            <div style="background: var(--gris-oscuro); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1rem;">
+                <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-tools"></i> Servicios (${servicios.length})</h4>
+                ${servicios.length > 0 ? servicios.map(s => `
+                    <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);">
+                        <strong>${escapeHtml(s.descripcion)}</strong>
+                        ${s.precio_estimado ? `<span style="float: right;">Bs. ${s.precio_estimado}</span>` : ''}
                     </div>
-                    <div class="info-card">
-                        <div class="info-card-header"><i class="fas fa-info-circle"></i><h4>Detalles</h4></div>
-                        <div class="info-card-content">
-                            <p><strong>Versión:</strong> ${diagnostico.version || 1}</p>
-                            <p><strong>Estado:</strong> <span class="estado-badge ${diagnostico.estado}">${getEstadoTexto(diagnostico.estado)}</span></p>
-                        </div>
-                    </div>
-                </div>
+                `).join('') : '<p class="text-muted">No hay servicios registrados</p>'}
             </div>
             
-            <!-- Tab: Servicios -->
-            <div class="tab-content" id="tab-servicios">
-                ${servicios.length > 0 ? `
-                    <div class="servicios-list-modern">
-                        ${servicios.map(s => `
-                            <div class="servicio-card-modern">
-                                <div class="servicio-nombre"><i class="fas fa-wrench"></i> ${escapeHtml(s.descripcion)}</div>
-                                <div class="servicio-precios">
-                                    ${s.precio_estimado ? `<span>Estimado: Bs. ${s.precio_estimado}</span>` : ''}
-                                    ${s.precio_final ? `<span>Final: Bs. ${s.precio_final}</span>` : ''}
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : '<div class="empty-state"><p>No hay servicios registrados</p></div>'}
-            </div>
-            
-            <!-- Tab: Repuestos -->
-            ${solicitudes.length > 0 ? `
-                <div class="tab-content" id="tab-repuestos">
-                    <div class="solicitudes-list-modern">
-                        ${solicitudes.map(s => `
-                            <div class="solicitud-card">
-                                <div class="solicitud-info">
-                                    <h4>${escapeHtml(s.descripcion_pieza)}</h4>
-                                    <p>Cantidad: ${s.cantidad}</p>
-                                </div>
-                                <div class="solicitud-estado-badge ${s.estado}">${s.estado}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            ` : ''}
-            
-            <!-- Tab: Fotos -->
+            <!-- Fotos -->
             ${fotos.length > 0 ? `
-                <div class="tab-content" id="tab-fotos">
-                    <div class="fotos-grid-modern">
+                <div style="background: var(--gris-oscuro); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1rem;">
+                    <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-camera"></i> Fotos (${fotos.length})</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem;">
                         ${fotos.map(f => `
-                            <div class="foto-card" onclick="verImagenAmpliada('${f.url_foto}')">
-                                <img src="${f.url_foto}" alt="Foto diagnóstico">
-                                <div class="foto-card-info">${escapeHtml(f.descripcion_tecnico || 'Sin descripción')}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            ` : ''}
-            
-            <!-- Tab: Observaciones -->
-            ${observaciones.length > 0 ? `
-                <div class="tab-content" id="tab-observaciones">
-                    <div class="observaciones-list-modern">
-                        ${observaciones.map(obs => `
-                            <div class="observacion-card">
-                                <div class="observacion-header">
-                                    <div class="observacion-autor"><i class="fas fa-user-tie"></i> <strong>${escapeHtml(obs.jefe_taller_nombre || 'Jefe Taller')}</strong></div>
-                                    <div class="observacion-fecha"><i class="far fa-clock"></i> ${formatDate(obs.fecha_hora)}</div>
-                                </div>
-                                <div class="observacion-texto">${escapeHtml(obs.observacion)}</div>
-                                ${obs.url_grabacion ? `<div class="observacion-audio"><audio controls src="${obs.url_grabacion}"></audio></div>` : ''}
-                            </div>
+                            <img src="${f.url_foto}" style="width: 100%; height: 80px; object-fit: cover; border-radius: var(--radius-sm); cursor: pointer;" onclick="verImagenAmpliada('${f.url_foto}')">
                         `).join('')}
                     </div>
                 </div>
             ` : ''}
         </div>
     `;
-    
-    // Inicializar tabs
-    const tabs = modalBody.querySelectorAll('.tab-btn');
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            tabs.forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            const tabId = tab.getAttribute('data-tab');
-            const contents = modalBody.querySelectorAll('.tab-content');
-            contents.forEach(c => c.classList.remove('active'));
-            const target = modalBody.querySelector(`#tab-${tabId}`);
-            if (target) target.classList.add('active');
-        });
-    });
 }
 
 window.cerrarModalDiagnostico = function() {
@@ -1026,7 +969,10 @@ function logout() {
     window.location.href = window.API_BASE_URL + '/';
 }
 
-// Exponer funciones globales
+// =====================================================
+// EXPORTAR FUNCIONES GLOBALES
+// =====================================================
+
 window.verDiagnostico = verDiagnostico;
 window.cerrarModalDiagnostico = cerrarModalDiagnostico;
 window.aprobarDiagnostico = aprobarDiagnostico;
@@ -1053,4 +999,4 @@ window.onclick = (event) => {
     }
 };
 
-console.log('✅ diagnostico.js cargado correctamente - Solo últimos 5 por estado');
+console.log('✅ diagnostico.js cargado correctamente - Versión responsive con tarjetas en móvil');

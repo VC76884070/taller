@@ -8,7 +8,9 @@
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
 
     <!-- Quill.js para editor de texto enriquecido -->
     <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
@@ -17,14 +19,14 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/jefe_operativo/css/dashboard.css">
     <link rel="stylesheet" href="/jefe_operativo/css/comunicados.css">
-    
+
     <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TORQUE">
-    
+
     <link rel="icon" type="image/png" href="/icono.png">
     <link rel="shortcut icon" type="image/png" href="/icono.png">
     <link rel="apple-touch-icon" href="/icono.png">
@@ -55,10 +57,6 @@
                 </div>
 
                 <div class="top-actions">
-                    <div class="notification-icon">
-                        <i class="fas fa-bell"></i>
-                        <span class="notification-badge" id="notificacionesCount">0</span>
-                    </div>
 
                     <div class="date-display">
                         <i class="far fa-calendar-alt"></i>
@@ -126,7 +124,8 @@
                                                 Técnicos
                                             </label>
                                             <label class="checkbox-label">
-                                                <input type="checkbox" class="dest-rol" value="encargado_repuestos" checked>
+                                                <input type="checkbox" class="dest-rol" value="encargado_repuestos"
+                                                    checked>
                                                 <span class="checkbox-custom"></span>
                                                 Encargado Repuestos
                                             </label>
@@ -218,19 +217,19 @@
         // =====================================================
         // FUNCIONES RESPONSIVE PARA MÓVIL (HAMBURGUESA)
         // =====================================================
-        
+
         let sidebarOpen = false;
-        
+
         function toggleSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             const hamburger = document.getElementById('hamburgerMenu');
             const body = document.body;
-            
+
             if (!sidebar) return;
-            
+
             sidebarOpen = !sidebarOpen;
-            
+
             if (sidebarOpen) {
                 sidebar.classList.add('open');
                 if (overlay) overlay.classList.add('active');
@@ -242,13 +241,13 @@
                 closeSidebar();
             }
         }
-        
+
         function closeSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             const hamburger = document.getElementById('hamburgerMenu');
             const body = document.body;
-            
+
             if (sidebar) {
                 sidebar.classList.remove('open');
                 if (overlay) overlay.classList.remove('active');
@@ -259,7 +258,7 @@
             }
             sidebarOpen = false;
         }
-        
+
         function updateCurrentDate() {
             const dateElement = document.getElementById('currentDate');
             if (dateElement) {
@@ -268,21 +267,21 @@
                 dateElement.textContent = now.toLocaleDateString('es-ES', options);
             }
         }
-        
-        document.addEventListener('DOMContentLoaded', function() {
+
+        document.addEventListener('DOMContentLoaded', function () {
             updateCurrentDate();
-            
+
             const hamburgerBtn = document.getElementById('hamburgerMenu');
             if (hamburgerBtn) hamburgerBtn.addEventListener('click', toggleSidebar);
-            
+
             const overlay = document.getElementById('sidebarOverlay');
             if (overlay) overlay.addEventListener('click', closeSidebar);
-            
-            window.addEventListener('resize', function() {
+
+            window.addEventListener('resize', function () {
                 if (window.innerWidth > 1024 && sidebarOpen) closeSidebar();
             });
-            
-            document.addEventListener('click', function(e) {
+
+            document.addEventListener('click', function (e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
                     const hamburger = document.getElementById('hamburgerMenu');
@@ -291,18 +290,18 @@
                     }
                 }
             });
-            
-            document.addEventListener('touchmove', function(e) {
+
+            document.addEventListener('touchmove', function (e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
                     if (sidebar && !sidebar.contains(e.target)) e.preventDefault();
                 }
             });
         });
-        
+
         window.toggleSidebar = toggleSidebar;
         window.closeSidebar = closeSidebar;
-        
+
         console.log('✅ comunicados.html - Funciones responsive cargadas');
     </script>
 </body>

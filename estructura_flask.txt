@@ -1,0 +1,208 @@
+================================================================================
+📊 ESTRUCTURA DEL PROYECTO FLASK
+================================================================================
+📅 Generado: 2026-06-04 17:35:38
+📍 Ruta: D:\ESCRITORIO\DOCUMENTOS PROYECTO\PROYECTO
+🐍 Framework: Flask
+================================================================================
+
+📁 PROYECTO/
+├── 📁 backend/
+│   ├── 📁 cliente/
+│   │   ├── 🐍 avances.py
+│   │   ├── 🐍 cotizaciones.py
+│   │   ├── 🐍 historial.py
+│   │   ├── 🐍 misreservas.py
+│   │   ├── 🐍 misvehiculos.py
+│   │   └── 🐍 perfil.py
+│   ├── 📁 encargado_rep_almacen/
+│   │   ├── 🐍 dashboard.py
+│   │   ├── 🐍 historial.py
+│   │   ├── 🐍 perfil.py
+│   │   ├── 🐍 proveedores.py
+│   │   ├── 🐍 solicitudes_compra.py
+│   │   └── 🐍 solicitudes_cotizacion.py
+│   ├── 📁 jefe_operativo/
+│   │   ├── 🐍 comunicados.py
+│   │   ├── 🐍 control_calidad.py
+│   │   ├── 🐍 dashboard.py
+│   │   ├── 🐍 dashboard_jefe_operativo.py
+│   │   ├── 🐍 historial.py
+│   │   ├── 🐍 perfil.py
+│   │   └── 🐍 recepcion.py
+│   ├── 📁 jefe_taller/
+│   │   ├── 🐍 admin_roles.py
+│   │   ├── 🐍 calendario_bahias.py
+│   │   ├── 🐍 control_calidad.py
+│   │   ├── 🐍 cotizaciones.py
+│   │   ├── 🐍 dashboard.py
+│   │   ├── 🐍 diagnostico.py
+│   │   ├── 🐍 gestion_avances.py
+│   │   ├── 🐍 historial_vehiculos.py
+│   │   ├── 🐍 orden_trabajo.py
+│   │   ├── 🐍 perfil.py
+│   │   └── 🐍 reservas_solicitudes.py
+│   ├── 📁 tecnico_mecanico/
+│   │   ├── 🐍 avance.py
+│   │   ├── 🐍 diagnostico.py
+│   │   ├── 🐍 historial.py
+│   │   ├── 🐍 misvehiculos.py
+│   │   └── 🐍 perfil.py
+│   ├── 🚀 app.py
+│   ├── 🐍 config.py
+│   ├── 🐍 decorators.py
+│   ├── 🐍 login.py
+│   ├── 📦 requirements.txt
+│   └── 🐍 test_supabase.py
+├── 📁 cliente/
+│   ├── 📁 components/
+│   │   └── 🌐 sidebar.html
+│   ├── 📁 css/
+│   │   ├── 🎨 avances.css
+│   │   ├── 🎨 cotizaciones.css
+│   │   ├── 🎨 historial.css
+│   │   ├── 🎨 misreservas.css
+│   │   ├── 🎨 misvehiculos.css
+│   │   └── 🎨 perfil.css
+│   ├── 📁 js/
+│   │   ├── 📜 avances.js
+│   │   ├── 📜 cotizaciones.js
+│   │   ├── 📜 historial.js
+│   │   ├── 📜 include.js
+│   │   ├── 📜 misreservas.js
+│   │   ├── 📜 misvehiculos.js
+│   │   └── 📜 perfil.js
+│   ├── 🌐 avances.html
+│   ├── 🌐 cotizaciones.html
+│   ├── 🌐 historial.html
+│   ├── 🌐 misreservas.html
+│   ├── 🌐 misvehiculos.html
+│   └── 🌐 perfil.html
+├── 📁 encargado_rep_almacen/
+│   ├── 📁 components/
+│   │   └── 🌐 sidebar.html
+│   ├── 📁 css/
+│   │   ├── 🎨 dashboard.css
+│   │   ├── 🎨 historial.css
+│   │   ├── 🎨 perfil.css
+│   │   ├── 🎨 proveedores.css
+│   │   ├── 🎨 solicitudes_compra.css
+│   │   └── 🎨 solicitudes_cotizacion.css
+│   ├── 📁 js/
+│   │   ├── 📜 dashboard.js
+│   │   ├── 📜 historial.js
+│   │   ├── 📜 include.js
+│   │   ├── 📜 perfil.js
+│   │   ├── 📜 proveedores.js
+│   │   ├── 📜 solicitudes_compra.js
+│   │   └── 📜 solicitudes_cotizacion.js
+│   ├── 🌐 dashboard.html
+│   ├── 🌐 historial.html
+│   ├── 🌐 perfil.html
+│   ├── 🌐 proveedores.html
+│   ├── 🌐 solicitudes_compra.html
+│   └── 🌐 solicitudes_cotizacion.html
+├── 📁 img/
+│   ├── 📄 logoblanco.jpeg
+│   └── 📄 logonegro.jpeg
+├── 📁 jefe_operativo/
+│   ├── 📁 components/
+│   │   └── 🌐 sidebar.html
+│   ├── 📁 css/
+│   │   ├── 🎨 comunicados.css
+│   │   ├── 🎨 control_calidad.css
+│   │   ├── 🎨 dashboard.css
+│   │   ├── 🎨 historial.css
+│   │   ├── 🎨 perfil.css
+│   │   └── 🎨 recepcion.css
+│   ├── 📁 js/
+│   │   ├── 📜 comunicados.js
+│   │   ├── 📜 control_calidad.js
+│   │   ├── 📜 dashboard.js
+│   │   ├── 📜 historial.js
+│   │   ├── 📜 include.js
+│   │   ├── 📜 perfil.js
+│   │   └── 📜 recepcion.js
+│   ├── 🌐 comunicados.html
+│   ├── 🌐 control_calidad.html
+│   ├── 🌐 dashboard.html
+│   ├── 🌐 historial.html
+│   ├── 🌐 perfil.html
+│   └── 🌐 recepcion.html
+├── 📁 jefe_taller/
+│   ├── 📁 components/
+│   │   └── 🌐 sidebar.html
+│   ├── 📁 css/
+│   │   ├── 🎨 admin_roles.css
+│   │   ├── 🎨 calendario_bahias.css
+│   │   ├── 🎨 control_calidad.css
+│   │   ├── 🎨 cotizaciones.css
+│   │   ├── 🎨 dashboard.css
+│   │   ├── 🎨 diagnostico.css
+│   │   ├── 🎨 gestion_avances.css
+│   │   ├── 🎨 historial_vehiculos.css
+│   │   ├── 🎨 orden_trabajo.css
+│   │   ├── 🎨 perfil.css
+│   │   └── 🎨 reservas_solicitudes.css
+│   ├── 📁 js/
+│   │   ├── 📜 admin_roles.js
+│   │   ├── 📜 calendario_bahias.js
+│   │   ├── 📜 control_calidad.js
+│   │   ├── 📜 cotizaciones.js
+│   │   ├── 📜 dashboard.js
+│   │   ├── 📜 diagnostico.js
+│   │   ├── 📜 gestion_avances.js
+│   │   ├── 📜 historial_vehiculos.js
+│   │   ├── 📜 include.js
+│   │   ├── 📜 orden_trabajo.js
+│   │   ├── 📜 perfil.js
+│   │   └── 📜 reservas_solicitudes.js
+│   ├── 🌐 admin_roles.html
+│   ├── 🌐 calendario_bahias.html
+│   ├── 🌐 control_calidad.html
+│   ├── 🌐 cotizaciones.html
+│   ├── 🌐 dashboard.html
+│   ├── 🌐 diagnostico.html
+│   ├── 🌐 gestion_avances.html
+│   ├── 🌐 historial_vehiculos.html
+│   ├── 🌐 orden_trabajo.html
+│   ├── 🌐 perfil.html
+│   └── 🌐 reservas_solicitudes.html
+├── 📁 login/
+│   ├── 📁 css/
+│   │   └── 🎨 style.css
+│   ├── 📁 js/
+│   │   └── 📜 login.js
+│   ├── 🌐 index.html
+│   ├── 🌐 recuperar-contrasena.html
+│   └── 🌐 registro-personal.html
+├── 📁 tecnico_mecanico/
+│   ├── 📁 components/
+│   │   └── 🌐 sidebar.html
+│   ├── 📁 css/
+│   │   ├── 🎨 avance.css
+│   │   ├── 🎨 diagnostico.css
+│   │   ├── 🎨 historial.css
+│   │   ├── 🎨 misvehiculos.css
+│   │   └── 🎨 perfil.css
+│   ├── 📁 js/
+│   │   ├── 📜 avance.js
+│   │   ├── 📜 diagnostico.js
+│   │   ├── 📜 historial.js
+│   │   ├── 📜 include.js
+│   │   ├── 📜 misvehiculos.js
+│   │   └── 📜 perfil.js
+│   ├── 🌐 avance.html
+│   ├── 🌐 diagnostico.html
+│   ├── 🌐 historial.html
+│   ├── 🌐 misvehiculos.html
+│   └── 🌐 perfil.html
+├── 🙈 .gitignore
+├── 📄 estructura_completa.txt
+├── 🐍 generar_estructura_flask.py
+├── 📄 icono.png
+├── 📦 manifest.json
+├── 📄 Procfile
+├── 📦 railway.json
+├── 📄 runtime.txt
+└── 📜 sw.js

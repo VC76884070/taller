@@ -1,0 +1,637 @@
+estructura_completa
+"========================================\n📊 TABLA: AGENDACLIENTE\n========================================\n\nCOLUMNAS:\n----------\n  • fecha_solicitud (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • fecha_agendada (timestamp) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('agendacliente_id_seq'::regclass)
+  • descripcion_problema (text)
+  • estado (varchar) → DEFAULT: 'Pendiente'::character varying
+  • id_cliente (int4) [NOT NULL]
+
+RELACIONES:\n-----------\n  • id_cliente → cliente(id)
+"
+"========================================\n📊 TABLA: ASIGNACIONTECNICO\n========================================\n\nCOLUMNAS:\n----------\n  • fecha_hora_final (timestamp)
+  • tipo_asignacion (varchar) → DEFAULT: 'diagnostico'::character varying
+  • fecha_hora_inicio (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • id_tecnico (int4) [NOT NULL]
+  • id_orden_trabajo (int4) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('asignaciontecnico_id_seq'::regclass)
+  • fecha_hora_final_estimada (timestamp)
+
+RELACIONES:\n-----------\n  • id_orden_trabajo → ordentrabajo(id)
+  • id_tecnico → usuario(id)
+"
+"========================================\n📊 TABLA: AVANCE_TRABAJO\n========================================\n\nCOLUMNAS:\n----------\n  • fotos (jsonb)
+  • estado (varchar) → DEFAULT: 'pendiente'::character varying
+  • fecha_creacion (timestamp) → DEFAULT: now()
+  • descripcion (text)
+  • titulo (varchar) [NOT NULL]
+  • id_tecnico (int4) [NOT NULL]
+  • id_orden_trabajo (int4) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('avance_trabajo_id_seq'::regclass)
+  • aprobado_por (int4)
+  • fecha_aprobacion (timestamp)
+  • comentario_revision (text)
+
+RELACIONES:\n-----------\n  • aprobado_por → usuario(id)
+  • id_orden_trabajo → ordentrabajo(id)
+  • id_tecnico → usuario(id)
+"
+"========================================\n📊 TABLA: AVANCETRABAJO\n========================================\n\nCOLUMNAS:\n----------\n  • id (int4) [NOT NULL] → DEFAULT: nextval('avancetrabajo_id_seq'::regclass)
+  • tipo_avance (varchar)
+  • descripcion (text)
+  • fecha_hora (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • id_tecnico (int4) [NOT NULL]
+  • estado_asociado (varchar)
+  • id_orden_trabajo (int4) [NOT NULL]
+
+RELACIONES:\n-----------\n  • id_orden_trabajo → ordentrabajo(id)
+  • id_tecnico → usuario(id)
+"
+"========================================\n📊 TABLA: CARRITOHERRAMIENTAS\n========================================\n\nCOLUMNAS:\n----------\n  • id (int4) [NOT NULL] → DEFAULT: nextval('carritoherramientas_id_seq'::regclass)
+  • id_tecnico (int4) [NOT NULL]
+  • nombre (varchar) [NOT NULL]
+  • codigo (varchar) [NOT NULL]
+  • estado (varchar)
+
+RELACIONES:\n-----------\n  • id_tecnico → usuario(id)
+"
+"========================================\n📊 TABLA: CLIENTE\n========================================\n\nCOLUMNAS:\n----------\n  • id_usuario (int4)
+  • ubicacion_confirmada (bool) → DEFAULT: false
+  • longitud (numeric)
+  • latitud (numeric)
+  • email (varchar)
+  • numero_documento (varchar)
+  • tipo_documento (varchar)
+  • id (int4) [NOT NULL] → DEFAULT: nextval('cliente_id_seq'::regclass)
+
+RELACIONES:\n-----------\n  • id_usuario → usuario(id)
+"
+"========================================\n📊 TABLA: CODIGOVERIFICACION\n========================================\n\nCOLUMNAS:\n----------\n  • email (varchar) [NOT NULL]
+  • tipo (varchar) [NOT NULL]
+  • expira (timestamp) [NOT NULL]
+  • usado (bool) → DEFAULT: false
+  • fecha_creacion (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • datos_extra (jsonb)
+  • id (int4) [NOT NULL] → DEFAULT: nextval('codigoverificacion_id_seq'::regclass)
+  • codigo (varchar) [NOT NULL]
+
+RELACIONES:\n-----------\n  (Sin relaciones)
+"
+"========================================\n📊 TABLA: COMPRADETALLE\n========================================\n\nCOLUMNAS:\n----------\n  • id (int4) [NOT NULL] → DEFAULT: nextval('compradetalle_id_seq'::regclass)
+  • url_foto_repuesto (text)
+  • precio_compra (numeric) [NOT NULL]
+  • cantidad (int4) [NOT NULL]
+  • id_repuesto (int4) [NOT NULL]
+  • id_compra (int4) [NOT NULL]
+
+RELACIONES:\n-----------\n  • id_compra → comprarepuesto(id)
+  • id_repuesto → repuesto(id)
+"
+"========================================\n📊 TABLA: COMPRAREPUESTO\n========================================\n\nCOLUMNAS:\n----------\n  • id (int4) [NOT NULL] → DEFAULT: nextval('comprarepuesto_id_seq'::regclass)
+  • id_proveedor (int4) [NOT NULL]
+  • url_foto_comprobante (text)
+  • total (numeric)
+  • fecha_compra (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • id_encargado_repuestos (int4) [NOT NULL]
+
+RELACIONES:\n-----------\n  • id_encargado_repuestos → usuario(id)
+  • id_proveedor → proveedor(id)
+"
+"========================================\n📊 TABLA: COMUNICADO\n========================================\n\nCOLUMNAS:\n----------\n  • titulo (varchar) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('comunicado_id_seq'::regclass)
+  • creado_por (int4)
+  • fecha_actualizacion (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • fecha_creacion (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • destinatarios (jsonb) → DEFAULT: '[]'::jsonb
+  • estado (varchar) → DEFAULT: 'activo'::character varying
+  • prioridad (varchar) → DEFAULT: 'normal'::character varying
+  • contenido (text) [NOT NULL]
+
+RELACIONES:\n-----------\n  • creado_por → usuario(id)
+"
+"========================================\n📊 TABLA: CONFIGURACION_TALLER\n========================================\n\nCOLUMNAS:\n----------\n  • id (int4) [NOT NULL] → DEFAULT: nextval('configuracion_taller_id_seq'::regclass)
+  • actualizado_en (timestamp) → DEFAULT: now()
+  • valor (text)
+  • clave (varchar) [NOT NULL]
+
+RELACIONES:\n-----------\n  (Sin relaciones)
+"
+"========================================\n📊 TABLA: CONTROLCARRITO\n========================================\n\nCOLUMNAS:\n----------\n  • observacion (text)
+  • id_carritoherramienta (int4) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('controlcarrito_id_seq'::regclass)
+  • fecha_control (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • estado_encontrado (varchar)
+  • url_evidencia (text)
+
+RELACIONES:\n-----------\n  • id_carritoherramienta → carritoherramientas(id)
+"
+"========================================\n📊 TABLA: COTIZACION\n========================================\n\nCOLUMNAS:\n----------\n  • motivo_rechazo (text)
+  • fecha_rechazo (timestamp)
+  • comentarios_rechazo (text)
+  • cambios_solicitados (jsonb)
+  • comentario_cambios (text)
+  • fecha_solicitud_cambios (timestamp)
+  • total (numeric) → DEFAULT: 0
+  • id (int4) [NOT NULL] → DEFAULT: nextval('cotizacion_id_seq'::regclass)
+  • id_orden_trabajo (int4) [NOT NULL]
+  • fecha_generacion (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • estado (varchar) → DEFAULT: 'Enviada'::character varying
+  • contenido_html (text)
+  • servicios_json (jsonb)
+  • firma_base64 (text)
+  • notas (text)
+  • id_jefe_taller (int4)
+  • fecha_actualizacion (timestamp)
+  • fecha_envio (timestamp)
+  • archivo_base64 (text)
+  • nombre_archivo (varchar)
+  • fecha_creacion (timestamp) → DEFAULT: now()
+  • comentarios_cliente (text)
+  • fecha_ultima_modificacion (timestamp)
+  • puede_editar (bool) → DEFAULT: true
+  • ventana_edicion_horas (int4) → DEFAULT: 1
+  • historial_aprobaciones (jsonb) → DEFAULT: '[]'::jsonb
+  • trabajo_iniciado (bool) → DEFAULT: false
+
+RELACIONES:\n-----------\n  • id_jefe_taller → usuario(id)
+  • id_orden_trabajo → ordentrabajo(id)
+"
+"========================================\n📊 TABLA: COTIZACION_SERVICIO\n========================================\n\nCOLUMNAS:\n----------\n  • fecha_aprobacion (timestamp)
+  • id (int4) [NOT NULL] → DEFAULT: nextval('cotizacion_servicio_id_seq'::regclass)
+  • id_cotizacion (int4) [NOT NULL]
+  • id_servicio (int4) [NOT NULL]
+  • precio_final (numeric) [NOT NULL]
+  • aprobado_por_cliente (bool) → DEFAULT: false
+
+RELACIONES:\n-----------\n  • id_cotizacion → cotizacion(id)
+  • id_servicio → servicio_tecnico(id)
+"
+"========================================\n📊 TABLA: COTIZACION_TEMPORAL\n========================================\n\nCOLUMNAS:\n----------\n  • fecha_creacion (timestamp) → DEFAULT: now()
+  • fecha_actualizacion (timestamp) → DEFAULT: now()
+  • id (int4) [NOT NULL] → DEFAULT: nextval('cotizacion_temporal_id_seq'::regclass)
+  • id_orden_trabajo (int4) [NOT NULL]
+  • id_jefe_taller (int4) [NOT NULL]
+  • servicios (jsonb)
+
+RELACIONES:\n-----------\n  • id_jefe_taller → usuario(id)
+  • id_orden_trabajo → ordentrabajo(id)
+"
+"========================================\n📊 TABLA: COTIZACIONDETALLE\n========================================\n\nCOLUMNAS:\n----------\n  • precio (numeric) [NOT NULL]
+  • aprobado_por_cliente (bool) → DEFAULT: false
+  • id (int4) [NOT NULL] → DEFAULT: nextval('cotizaciondetalle_id_seq'::regclass)
+  • id_cotizacion (int4) [NOT NULL]
+  • id_servicio (int4)
+  • servicio_descripcion (text)
+
+RELACIONES:\n-----------\n  • id_cotizacion → cotizacion(id)
+  • id_servicio → servicio(id)
+"
+"========================================\n📊 TABLA: DIAGNOSTICO_TECNICO\n========================================\n\nCOLUMNAS:\n----------\n  • version (int4) → DEFAULT: 1
+  • informe (text)
+  • url_grabacion_informe (text)
+  • max_fotos (int4) → DEFAULT: 2
+  • estado (varchar)
+  • transcripcion_informe (text)
+  • fecha_modificacion (timestamp) → DEFAULT: now()
+  • es_borrador (bool) → DEFAULT: true
+  • id (int4) [NOT NULL] → DEFAULT: nextval('diagnostico_tecnico_id_seq'::regclass)
+  • id_orden_trabajo (int4) [NOT NULL]
+  • fecha_envio (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • id_tecnico (int4) [NOT NULL]
+
+RELACIONES:\n-----------\n  • id_orden_trabajo → ordentrabajo(id)
+  • id_tecnico → usuario(id)
+"
+"========================================\n📊 TABLA: DIAGNOSTIGOINICIAL\n========================================\n\nCOLUMNAS:\n----------\n  • url_grabacion (text)
+  • id (int4) [NOT NULL] → DEFAULT: nextval('diagnostigoinicial_id_seq'::regclass)
+  • id_orden_trabajo (int4) [NOT NULL]
+  • id_jefe_taller (int4) [NOT NULL]
+  • diagnostigo (text) [NOT NULL]
+  • fecha_hora (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+
+RELACIONES:\n-----------\n  • id_jefe_taller → usuario(id)
+  • id_orden_trabajo → ordentrabajo(id)
+"
+"========================================\n📊 TABLA: FILTRO_HERRAMIENTA\n========================================\n\nCOLUMNAS:\n----------\n  • id (int4) [NOT NULL] → DEFAULT: nextval('filtro_herramienta_id_seq'::regclass)
+  • nombre_filtro (varchar) [NOT NULL]
+  • descripcion (text)
+
+RELACIONES:\n-----------\n  (Sin relaciones)
+"
+"========================================\n📊 TABLA: FOTO_AVANCE\n========================================\n\nCOLUMNAS:\n----------\n  • descripcion_tecnico (varchar)
+  • url_foto (text) [NOT NULL]
+  • fecha_subida (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • id_avance (int4) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('foto_avance_id_seq'::regclass)
+
+RELACIONES:\n-----------\n  • id_avance → avancetrabajo(id)
+"
+"========================================\n📊 TABLA: FOTO_DIAGNOSTICO\n========================================\n\nCOLUMNAS:\n----------\n  • id_diagnostico_tecnico (int4) [NOT NULL]
+  • public_id (text)
+  • descripcion_tecnico (varchar)
+  • url_foto (text) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('foto_diagnostico_id_seq'::regclass)
+
+RELACIONES:\n-----------\n  • id_diagnostico_tecnico → diagnostico_tecnico(id)
+"
+"========================================\n📊 TABLA: HERRAMIENTA\n========================================\n\nCOLUMNAS:\n----------\n  • id (int4) [NOT NULL] → DEFAULT: nextval('herramienta_id_seq'::regclass)
+  • tipo (varchar)
+  • descripcion (varchar)
+  • nombre (varchar) [NOT NULL]
+  • marca (varchar)
+  • id_carritoherramienta (int4) [NOT NULL]
+
+RELACIONES:\n-----------\n  • id_carritoherramienta → carritoherramientas(id)
+"
+"========================================\n📊 TABLA: INSTRUCCIONES_TECNICO_HISTORIAL\n========================================\n\nCOLUMNAS:\n----------\n  • fecha_leida (timestamp)
+  • id_orden_trabajo (int4) [NOT NULL]
+  • id_jefe_taller (int4) [NOT NULL]
+  • instrucciones (text) [NOT NULL]
+  • fecha_envio (timestamp) → DEFAULT: now()
+  • leida (bool) → DEFAULT: false
+  • id (int4) [NOT NULL] → DEFAULT: nextval('instrucciones_tecnico_historial_id_seq'::regclass)
+
+RELACIONES:\n-----------\n  • id_jefe_taller → usuario(id)
+  • id_orden_trabajo → ordentrabajo(id)
+"
+"========================================\n📊 TABLA: NOTIFICACION\n========================================\n\nCOLUMNAS:\n----------\n  • leida (bool) → DEFAULT: false
+  • id_usuario_destino (int4) [NOT NULL]
+  • id_referencia (int4)
+  • tipo (varchar)
+  • mensaje (text)
+  • fecha_envio (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • id (int4) [NOT NULL] → DEFAULT: nextval('notificacion_id_seq'::regclass)
+
+RELACIONES:\n-----------\n  • id_usuario_destino → usuario(id)
+"
+"========================================\n📊 TABLA: NOTIFICACIONADMIN\n========================================\n\nCOLUMNAS:\n----------\n  • leida (bool) → DEFAULT: false
+  • id (int4) [NOT NULL] → DEFAULT: nextval('notificacionadmin_id_seq'::regclass)
+  • id_admin_general (int4) [NOT NULL]
+  • tipo (varchar) [NOT NULL]
+  • titulo (varchar) [NOT NULL]
+  • mensaje (text)
+  • fecha_creacion (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+
+RELACIONES:\n-----------\n  • id_admin_general → usuario(id)
+"
+"========================================\n📊 TABLA: OBSERVACIONDIAGNOSTICO\n========================================\n\nCOLUMNAS:\n----------\n  • url_grabacion_observacion (text)
+  • id (int4) [NOT NULL] → DEFAULT: nextval('observaciondiagnostico_id_seq'::regclass)
+  • id_diagnostico_tecnico (int4) [NOT NULL]
+  • id_jefe_taller (int4) [NOT NULL]
+  • observacion (text) [NOT NULL]
+  • transcripcion_obs (text)
+  • fecha_hora (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • version_diagnostico (int4) → DEFAULT: 1
+
+RELACIONES:\n-----------\n  • id_diagnostico_tecnico → diagnostico_tecnico(id)
+  • id_jefe_taller → usuario(id)
+"
+"========================================\n📊 TABLA: ORDENTRABAJO\n========================================\n\nCOLUMNAS:\n----------\n  • instrucciones_tecnico (text)
+  • id_jefe_operativo_2 (int4)
+  • fecha_fin_armado (timestamp)
+  • fecha_inicio_armado (timestamp)
+  • fecha_instrucciones (timestamp)
+  • id_jefe_taller_instrucciones (int4)
+  • id (int4) [NOT NULL] → DEFAULT: nextval('ordentrabajo_id_seq'::regclass)
+  • codigo_unico (varchar) [NOT NULL]
+  • dias_estimados_reparacion (int4)
+  • fecha_estimada_finalizacion (timestamp)
+  • fecha_cotizacion_rechazada (timestamp)
+  • fecha_cotizacion_aceptada (timestamp)
+  • total_diagnostico (numeric) → DEFAULT: 200.00
+  • id_vehiculo (int4) [NOT NULL]
+  • id_jefe_operativo (int4) [NOT NULL]
+  • fecha_ingreso (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • fecha_salida (timestamp)
+  • estado_global (varchar) → DEFAULT: 'EnRecepcion'::character varying
+  • instrucciones_armado (text)
+
+RELACIONES:\n-----------\n  • id_jefe_operativo_2 → usuario(id)
+  • id_jefe_operativo → usuario(id)
+  • id_jefe_taller_instrucciones → usuario(id)
+  • id_vehiculo → vehiculo(id)
+"
+"========================================\n📊 TABLA: PLANIFICACION\n========================================\n\nCOLUMNAS:\n----------\n  • fecha_hora_inicio_estimado (timestamp)
+  • horas_estimadas (numeric)
+  • fecha_hora_inicio_real (timestamp)
+  • fecha_hora_fin_real (timestamp)
+  • id_orden_trabajo (int4) [NOT NULL]
+  • bahia_asignada (int4)
+  • id (int4) [NOT NULL] → DEFAULT: nextval('planificacion_id_seq'::regclass)
+  • fecha_hora_fin_estimado (timestamp)
+
+RELACIONES:\n-----------\n  • id_orden_trabajo → ordentrabajo(id)
+"
+"========================================\n📊 TABLA: PROVEEDOR\n========================================\n\nCOLUMNAS:\n----------\n  • updated_at (timestamp) → DEFAULT: now()
+  • id (int4) [NOT NULL] → DEFAULT: nextval('proveedor_id_seq'::regclass)
+  • id_filtro (int4)
+  • nombre (varchar) [NOT NULL]
+  • telefono (varchar)
+  • ubicacion_gps (varchar)
+  • propietario (varchar)
+  • created_at (timestamp) → DEFAULT: now()
+
+RELACIONES:\n-----------\n  • id_filtro → filtro_herramienta(id)
+"
+"========================================\n📊 TABLA: RECEPCION\n========================================\n\nCOLUMNAS:\n----------\n  • url_grabacion_problema (text)
+  • transcripcion_problema (text)
+  • url_foto_tablero (text)
+  • url_foto_inferior (text)
+  • url_foto_superior (text)
+  • url_foto_trasera (text)
+  • url_foto_frontal (text)
+  • url_lateral_derecha (text)
+  • url_lateral_izquierda (text)
+  • id_orden_trabajo (int4) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('recepcion_id_seq'::regclass)
+
+RELACIONES:\n-----------\n  • id_orden_trabajo → ordentrabajo(id)
+"
+"========================================\n📊 TABLA: RENDICIONDIARIA\n========================================\n\nCOLUMNAS:\n----------\n  • id (int4) [NOT NULL] → DEFAULT: nextval('rendiciondiaria_id_seq'::regclass)
+  • id_encargado_repuestos (int4) [NOT NULL]
+  • id_jefe_operativo (int4) [NOT NULL]
+  • fecha (date) → DEFAULT: CURRENT_DATE
+  • monto_total (numeric)
+  • observaciones (text)
+
+RELACIONES:\n-----------\n  • id_encargado_repuestos → usuario(id)
+  • id_jefe_operativo → usuario(id)
+"
+"========================================\n📊 TABLA: RENDICIONSEMANAL\n========================================\n\nCOLUMNAS:\n----------\n  • fecha_inicio (date) [NOT NULL]
+  • fecha_fin (date) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('rendicionsemanal_id_seq'::regclass)
+  • id_admin_general (int4) [NOT NULL]
+  • id_jefe_operativo (int4) [NOT NULL]
+  • observaciones (text)
+  • monto_total (numeric)
+
+RELACIONES:\n-----------\n  • id_admin_general → usuario(id)
+  • id_jefe_operativo → usuario(id)
+"
+"========================================\n📊 TABLA: REPUESTO\n========================================\n\nCOLUMNAS:\n----------\n  • id (int4) [NOT NULL] → DEFAULT: nextval('repuesto_id_seq'::regclass)
+  • precio_unitario (numeric)
+  • cantidad_stock (int4) → DEFAULT: 0
+  • descripcion (text)
+  • nombre (varchar) [NOT NULL]
+  • codigo (varchar) [NOT NULL]
+
+RELACIONES:\n-----------\n  (Sin relaciones)
+"
+"========================================\n📊 TABLA: ROL\n========================================\n\nCOLUMNAS:\n----------\n  • nombre_rol (varchar) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('rol_id_seq'::regclass)
+  • descripcion (text)
+
+RELACIONES:\n-----------\n  (Sin relaciones)
+"
+"========================================\n📊 TABLA: SEGUIMIENTOORDEN\n========================================\n\nCOLUMNAS:\n----------\n  • estado (varchar)
+  • motivo_pausa (text)
+  • notificaciones_enviadas (int4) → DEFAULT: 0
+  • fecha_hora_cambio (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • id (int4) [NOT NULL] → DEFAULT: nextval('seguimientoorden_id_seq'::regclass)
+  • id_orden_trabajo (int4) [NOT NULL]
+
+RELACIONES:\n-----------\n  • id_orden_trabajo → ordentrabajo(id)
+"
+"========================================\n📊 TABLA: SERVICIO\n========================================\n\nCOLUMNAS:\n----------\n  • precio_final (numeric)
+  • precio_estimado (numeric)
+  • descripcion (text) [NOT NULL]
+  • id_diagnostico_tecnico (int4)
+  • id (int4) [NOT NULL] → DEFAULT: nextval('servicio_id_seq'::regclass)
+
+RELACIONES:\n-----------\n  • id_diagnostico_tecnico → diagnostico_tecnico(id)
+"
+"========================================\n📊 TABLA: SERVICIO_PRECIO\n========================================\n\nCOLUMNAS:\n----------\n  • precio_final (numeric)
+  • aprobado_en (timestamp)
+  • id (int4) [NOT NULL] → DEFAULT: nextval('servicio_precio_id_seq'::regclass)
+  • aprobado_por_jefe_operativo (bool) → DEFAULT: false
+  • id_servicio (int4) [NOT NULL]
+  • id_jefe_taller (int4)
+  • precio_estimado (numeric)
+
+RELACIONES:\n-----------\n  • id_jefe_taller → usuario(id)
+  • id_servicio → servicio_tecnico(id)
+"
+"========================================\n📊 TABLA: SERVICIO_TECNICO\n========================================\n\nCOLUMNAS:\n----------\n  • descripcion (text) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('servicio_tecnico_id_seq'::regclass)
+  • id_diagnostico_tecnico (int4) [NOT NULL]
+  • orden (int4) → DEFAULT: 0
+  • creado_en (timestamp) → DEFAULT: now()
+
+RELACIONES:\n-----------\n  • id_diagnostico_tecnico → diagnostico_tecnico(id)
+"
+"========================================\n📊 TABLA: SOLICITUD_COMPRA\n========================================\n\nCOLUMNAS:\n----------\n  • estado (varchar) → DEFAULT: 'pendiente'::character varying
+  • notas_compra (text)
+  • fecha_entrega (timestamp)
+  • fecha_compra (timestamp)
+  • id_solicitud_cotizacion (int4)
+  • id_jefe_taller (int4) [NOT NULL]
+  • proveedor_nombre (varchar)
+  • numero_factura (varchar)
+  • comprobante_url (text)
+  • items (jsonb)
+  • fecha_respuesta (timestamp)
+  • fecha_solicitud (timestamp) → DEFAULT: now()
+  • id_encargado_repuestos (int4)
+  • descripcion_pieza (text) [NOT NULL]
+  • cantidad (int4) → DEFAULT: 1
+  • precio_cotizado (numeric)
+  • proveedor_info (text)
+  • respuesta_encargado (text)
+  • mensaje_jefe_taller (text)
+  • notas_entrega (text)
+  • id (int4) [NOT NULL] → DEFAULT: nextval('solicitud_compra_id_seq'::regclass)
+  • id_orden_trabajo (int4) [NOT NULL]
+
+RELACIONES:\n-----------\n  • id_encargado_repuestos → usuario(id)
+  • id_jefe_taller → usuario(id)
+  • id_orden_trabajo → ordentrabajo(id)
+  • id_solicitud_cotizacion → solicitud_cotizacion_repuesto(id)
+"
+"========================================\n📊 TABLA: SOLICITUD_COTIZACION_REPUESTO\n========================================\n\nCOLUMNAS:\n----------\n  • id (int4) [NOT NULL] → DEFAULT: nextval('solicitud_cotizacion_repuesto_id_seq'::regclass)
+  • id_orden_trabajo (int4) [NOT NULL]
+  • id_servicio (int4)
+  • id_jefe_taller (int4) [NOT NULL]
+  • id_encargado_repuestos (int4)
+  • descripcion_pieza (text) [NOT NULL]
+  • cantidad (int4) → DEFAULT: 1
+  • estado (varchar) → DEFAULT: 'pendiente'::character varying
+  • precio_cotizado (numeric)
+  • proveedor_info (text)
+  • fecha_solicitud (timestamp) → DEFAULT: now()
+  • fecha_respuesta (timestamp)
+  • observacion_jefe_taller (text)
+  • respuesta_encargado (text)
+  • items (jsonb)
+
+RELACIONES:\n-----------\n  • id_encargado_repuestos → usuario(id)
+  • id_jefe_taller → usuario(id)
+  • id_orden_trabajo → ordentrabajo(id)
+"
+"========================================\n📊 TABLA: SOLICITUD_REPUESTOS\n========================================\n\nCOLUMNAS:\n----------\n  • id_orden_trabajo (int4) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('solicitud_repuestos_id_seq'::regclass)
+  • id_tecnico (int4) [NOT NULL]
+  • items (jsonb)
+  • motivo (text)
+  • estado (varchar) → DEFAULT: 'pendiente'::character varying
+  • fecha_solicitud (timestamp) → DEFAULT: now()
+  • fecha_respuesta (timestamp)
+  • respuesta_jefe_taller (text)
+
+RELACIONES:\n-----------\n  • id_orden_trabajo → ordentrabajo(id)
+  • id_tecnico → usuario(id)
+"
+"========================================\n📊 TABLA: SOLICITUD_REPUESTOS_TECNICO\n========================================\n\nCOLUMNAS:\n----------\n  • id (int4) [NOT NULL] → DEFAULT: nextval('solicitud_repuestos_tecnico_id_seq'::regclass)
+  • observaciones (text)
+  • fecha_solicitud (timestamp) → DEFAULT: now()
+  • fecha_respuesta (timestamp)
+  • respondido_por (int4)
+  • respuesta (text)
+  • fecha_entrega (timestamp)
+  • estado (varchar) → DEFAULT: 'pendiente'::character varying
+  • items (jsonb) [NOT NULL]
+  • id_tecnico (int4) [NOT NULL]
+  • id_orden_trabajo (int4) [NOT NULL]
+
+RELACIONES:\n-----------\n  • id_orden_trabajo → ordentrabajo(id)
+  • id_tecnico → usuario(id)
+  • respondido_por → usuario(id)
+"
+"========================================\n📊 TABLA: SOLICITUD_RESERVA_CLIENTE\n========================================\n\nCOLUMNAS:\n----------\n  • respuesta_comentario (text)
+  • id (int4) [NOT NULL] → DEFAULT: nextval('solicitud_reserva_cliente_id_seq'::regclass)
+  • descripcion_problema (text) [NOT NULL]
+  • fecha_agendada (timestamp)
+  • hora_deseada (varchar)
+  • fecha_deseada (date) [NOT NULL]
+  • fecha_solicitud (timestamp) → DEFAULT: now()
+  • id_vehiculo (int4)
+  • estado (varchar) → DEFAULT: 'pendiente'::character varying
+  • id_cliente (int4) [NOT NULL]
+  • es_manual (bool) → DEFAULT: false
+  • created_at (timestamp) → DEFAULT: now()
+  • horarios_propuestos (jsonb)
+  • horario_seleccionado (timestamp)
+  • respuesta_cliente (text)
+  • fecha_respuesta_cliente (timestamp)
+  • mensaje_adicional (text)
+
+RELACIONES:\n-----------\n  • id_cliente → usuario(id)
+  • id_vehiculo → vehiculo(id)
+"
+"========================================\n📊 TABLA: SOLICITUDREGISTROPERSONAL\n========================================\n\nCOLUMNAS:\n----------\n  • email (varchar) [NOT NULL]
+  • nombre (varchar) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('solicitudregistropersonal_id_seq'::regclass)
+  • estado (varchar) → DEFAULT: 'pendiente'::character varying
+  • contrasenia_temporal (varchar)
+  • telefono (varchar)
+  • token_aprobacion (varchar)
+  • observacion_admin (text)
+  • id_admin_responde (int4)
+  • fecha_respuesta (timestamp)
+  • fecha_solicitud (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • direccion (text)
+  • id_rol_solicitado (int4) [NOT NULL]
+  • numero_documento (varchar) [NOT NULL]
+
+RELACIONES:\n-----------\n  • id_admin_responde → usuario(id)
+  • id_rol_solicitado → rol(id)
+"
+"========================================\n📊 TABLA: TRANSACCIONFINANCIERA\n========================================\n\nCOLUMNAS:\n----------\n  • monto (numeric) [NOT NULL]
+  • fecha_hora (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • descripcion (text)
+  • tipo (varchar) [NOT NULL]
+  • id_usuario_registra (int4) [NOT NULL]
+  • id_compra (int4)
+  • id_orden_trabajo (int4)
+  • id (int4) [NOT NULL] → DEFAULT: nextval('transaccionfinanciera_id_seq'::regclass)
+
+RELACIONES:\n-----------\n  • id_compra → comprarepuesto(id)
+  • id_orden_trabajo → ordentrabajo(id)
+  • id_usuario_registra → usuario(id)
+"
+"========================================\n📊 TABLA: USOREPUESTO\n========================================\n\nCOLUMNAS:\n----------\n  • id_repuesto (int4) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('usorepuesto_id_seq'::regclass)
+  • id_orden_trabajo (int4) [NOT NULL]
+  • fecha_uso (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • cantidad (int4) [NOT NULL]
+
+RELACIONES:\n-----------\n  • id_orden_trabajo → ordentrabajo(id)
+  • id_repuesto → repuesto(id)
+"
+"========================================\n📊 TABLA: USUARIO\n========================================\n\nCOLUMNAS:\n----------\n  • nombre (varchar) [NOT NULL]
+  • rol_principal (int4)
+  • avatar_url (text)
+  • email (varchar)
+  • fecha_registro (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+  • numero_documento (varchar)
+  • contrasenia (varchar) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('usuario_id_seq'::regclass)
+  • ubicacion (varchar)
+  • contacto (varchar)
+
+RELACIONES:\n-----------\n  • rol_principal → rol(id)
+"
+"========================================\n📊 TABLA: USUARIO_ROL\n========================================\n\nCOLUMNAS:\n----------\n  • asignado_por (int4)
+  • id_rol (int4) [NOT NULL]
+  • id_usuario (int4) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('usuario_rol_id_seq'::regclass)
+  • fecha_asignacion (timestamp) → DEFAULT: CURRENT_TIMESTAMP
+
+RELACIONES:\n-----------\n  • asignado_por → usuario(id)
+  • id_rol → rol(id)
+  • id_usuario → usuario(id)
+"
+"========================================\n📊 TABLA: VEHICULO\n========================================\n\nCOLUMNAS:\n----------\n  • marca (varchar)
+  • id_cliente (int4) [NOT NULL]
+  • placa (varchar) [NOT NULL]
+  • id (int4) [NOT NULL] → DEFAULT: nextval('vehiculo_id_seq'::regclass)
+  • modelo (varchar)
+  • anio (int4)
+  • kilometraje (int4)
+
+RELACIONES:\n-----------\n  • id_cliente → cliente(id)
+"
+
+
+-- =====================================================
+-- TABLA PARA SESIONES COLABORATIVAS PERSISTENTES
+-- =====================================================
+CREATE TABLE IF NOT EXISTS sesion_colaborativa (
+    codigo TEXT PRIMARY KEY,
+    creador_id INTEGER NOT NULL,
+    creador_nombre TEXT NOT NULL,
+    colaboradores_ids INTEGER[] DEFAULT '{}',
+    colaboradores_nombres TEXT[] DEFAULT '{}',
+    datos JSONB DEFAULT '{
+        "cliente": {"nombre": "", "telefono": "", "ubicacion": "", "latitud": null, "longitud": null},
+        "vehiculo": {"placa": "", "marca": "", "modelo": "", "anio": null, "kilometraje": null},
+        "fotos": {
+            "url_lateral_izquierda": null,
+            "url_lateral_derecha": null,
+            "url_foto_frontal": null,
+            "url_foto_trasera": null,
+            "url_foto_superior": null,
+            "url_foto_inferior": null,
+            "url_foto_tablero": null
+        },
+        "descripcion": {"texto": "", "audio_url": null}
+    }'::JSONB,
+    secciones_completadas JSONB DEFAULT '{
+        "cliente": false,
+        "vehiculo": false,
+        "fotos": false,
+        "descripcion": false
+    }'::JSONB,
+    secciones_editando JSONB DEFAULT '{}'::JSONB,
+    estado VARCHAR(20) DEFAULT 'activa',
+    fecha_creacion TIMESTAMP DEFAULT NOW(),
+    ultima_actividad TIMESTAMP DEFAULT NOW()
+);
+
+-- Índices para mejorar performance
+CREATE INDEX IF NOT EXISTS idx_sesion_estado ON sesion_colaborativa(estado);
+CREATE INDEX IF NOT EXISTS idx_sesion_ultima_actividad ON sesion_colaborativa(ultima_actividad);
+CREATE INDEX IF NOT EXISTS idx_sesion_colaboradores ON sesion_colaborativa USING GIN(colaboradores_ids);
+
+-- Comentarios para documentación
+COMMENT ON TABLE sesion_colaborativa IS 'Sesiones colaborativas para recepción de vehículos';
+COMMENT ON COLUMN sesion_colaborativa.datos IS 'Datos de cliente, vehículo, fotos y descripción';
+COMMENT ON COLUMN sesion_colaborativa.secciones_completadas IS 'Estado de completado de cada sección';

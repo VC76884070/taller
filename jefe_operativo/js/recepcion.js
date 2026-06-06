@@ -16,7 +16,7 @@ if (typeof window.API_BASE_URL === 'undefined') {
 
 // =====================================================
 // RECEPCION.JS - JEFE OPERATIVO
-// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
+// VERSIÓN CORREGIDA CON PERSISTENCIA Y GOOGLE MAPS
 // =====================================================
 
 // Configuración
@@ -33,6 +33,7 @@ let codigoSesion = null;
 let pollingInterval = null;
 let sesionesPolling = null;
 let userInfo = null;
+let keepAliveInterval = null;
 
 // Control de edición
 let camposEnEdicion = {
@@ -66,6 +67,12 @@ let recepcionSeleccionada = null;
 let modoEdicionRecepcion = false;
 let recepcionEditandoId = null;
 
+// Variables para Google Maps
+let mapCliente = null;
+let markerCliente = null;
+let autocompleteUbicacion = null;
+let googleMapsCargado = false;
+
 // Elementos DOM
 const sesionesActivasPanel = document.getElementById('sesionesActivasPanel');
 const sesionesList = document.getElementById('sesionesList');
@@ -96,6 +103,12 @@ const codigoOrdenModal = document.getElementById('codigoOrdenModal');
 const currentDateSpan = document.getElementById('currentDate');
 const notificacionesCount = document.getElementById('notificacionesCount');
 
+// Elementos de ubicación
+const clienteUbicacionInput = document.getElementById('clienteUbicacion');
+const clienteLatitudInput = document.getElementById('clienteLatitud');
+const clienteLongitudInput = document.getElementById('clienteLongitud');
+const mapUbicacionDiv = document.getElementById('mapUbicacion');
+
 // Configuración de las 7 fotos requeridas
 const FOTOS_CONFIG = [
     { id: 'fotoLateralIzq', nombre: 'lateral_izquierdo', label: 'Lateral Izquierdo', icono: 'fa-car-side', campo: 'url_lateral_izquierda' },
@@ -106,6 +119,183 @@ const FOTOS_CONFIG = [
     { id: 'fotoInferior', nombre: 'inferior', label: 'Inferior', icono: 'fa-arrow-down', campo: 'url_foto_inferior' },
     { id: 'fotoTablero', nombre: 'tablero', label: 'Tablero', icono: 'fa-tachometer-alt', campo: 'url_foto_tablero' }
 ];
+
+// =====================================================
+// GOOGLE MAPS - UBICACIÓN
+// =====================================================
+
+function initGoogleMaps() {
+    if (!clienteUbicacionInput || !mapUbicacionDiv) {
+        console.log('📍 Elementos de mapa no encontrados');
+        return;
+    }
+    
+    if (googleMapsCargado) return;
+    
+    // Coordenadas por defecto (Cochabamba, Bolivia - ajusta a tu ciudad)
+    const defaultLocation = { lat: -17.3895, lng: -66.1568 };
+    
+    try {
+        // Inicializar mapa
+        mapCliente = new google.maps.Map(mapUbicacionDiv, {
+            center: defaultLocation,
+            zoom: 13,
+            mapTypeControl: true,
+            streetViewControl: false,
+            fullscreenControl: true,
+            zoomControl: true
+        });
+        
+        // Crear marcador arrastrable
+        markerCliente = new google.maps.Marker({
+            map: mapCliente,
+            draggable: true,
+            animation: google.maps.Animation.DROP,
+            title: 'Ubicación del cliente'
+        });
+        
+        // Autocompletado de direcciones
+        autocompleteUbicacion = new google.maps.places.Autocomplete(clienteUbicacionInput, {
+            componentRestrictions: { country: 'bo' },
+            fields: ['formatted_address', 'geometry', 'place_id']
+        });
+        
+        autocompleteUbicacion.bindTo('bounds', mapCliente);
+        
+        // Cuando se selecciona un lugar del autocompletado
+        autocompleteUbicacion.addListener('place_changed', () => {
+            const place = autocompleteUbicacion.getPlace();
+            if (!place.geometry) {
+                mostrarNotificacion('No se pudo obtener la ubicación', 'warning');
+                return;
+            }
+            
+            const location = place.geometry.location;
+            mapCliente.setCenter(location);
+            mapCliente.setZoom(15);
+            markerCliente.setPosition(location);
+            
+            if (clienteLatitudInput) clienteLatitudInput.value = location.lat();
+            if (clienteLongitudInput) clienteLongitudInput.value = location.lng();
+            
+            if (place.formatted_address) {
+                clienteUbicacionInput.value = place.formatted_address;
+            }
+        });
+        
+        // Cuando se arrastra el marcador
+        markerCliente.addListener('dragend', () => {
+            const position = markerCliente.getPosition();
+            const lat = position.lat();
+            const lng = position.lng();
+            
+            if (clienteLatitudInput) clienteLatitudInput.value = lat;
+            if (clienteLongitudInput) clienteLongitudInput.value = lng;
+            
+            const geocoder = new google.maps.Geocoder();
+            geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+                if (status === 'OK' && results[0]) {
+                    clienteUbicacionInput.value = results[0].formatted_address;
+                }
+            });
+        });
+        
+        // Click en el mapa para mover el marcador
+        mapCliente.addListener('click', (e) => {
+            const lat = e.latLng.lat();
+            const lng = e.latLng.lng();
+            
+            markerCliente.setPosition({ lat, lng });
+            if (clienteLatitudInput) clienteLatitudInput.value = lat;
+            if (clienteLongitudInput) clienteLongitudInput.value = lng;
+            
+            const geocoder = new google.maps.Geocoder();
+            geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+                if (status === 'OK' && results[0]) {
+                    clienteUbicacionInput.value = results[0].formatted_address;
+                }
+            });
+        });
+        
+        googleMapsCargado = true;
+        console.log('✅ Google Maps inicializado correctamente');
+        
+        // Cargar ubicación existente si hay
+        cargarUbicacionExistente();
+        
+    } catch (error) {
+        console.error('Error inicializando Google Maps:', error);
+    }
+}
+
+function cargarUbicacionExistente() {
+    if (!googleMapsCargado || !mapCliente || !markerCliente) return;
+    
+    const ubicacion = clienteUbicacionInput?.value;
+    const lat = clienteLatitudInput?.value;
+    const lng = clienteLongitudInput?.value;
+    
+    if (lat && lng && lat !== 'undefined' && lng !== 'undefined') {
+        const position = { lat: parseFloat(lat), lng: parseFloat(lng) };
+        mapCliente.setCenter(position);
+        markerCliente.setPosition(position);
+    } else if (ubicacion && ubicacion !== '') {
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ address: ubicacion }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+                const location = results[0].geometry.location;
+                mapCliente.setCenter(location);
+                markerCliente.setPosition(location);
+                if (clienteLatitudInput) clienteLatitudInput.value = location.lat();
+                if (clienteLongitudInput) clienteLongitudInput.value = location.lng();
+            }
+        });
+    }
+}
+
+function cargarGoogleMaps() {
+    const apiKey = 'TU_API_KEY_AQUI'; // Reemplaza con tu API Key de Google
+    
+    if (typeof google !== 'undefined') {
+        initGoogleMaps();
+        return;
+    }
+    
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMaps`;
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => console.error('Error cargando Google Maps');
+    document.head.appendChild(script);
+}
+
+// =====================================================
+// KEEP-ALIVE PARA MANTENER SESIÓN ACTIVA
+// =====================================================
+
+function iniciarKeepAlive() {
+    if (keepAliveInterval) clearInterval(keepAliveInterval);
+    
+    keepAliveInterval = setInterval(async () => {
+        if (codigoSesion) {
+            try {
+                await fetch(`${API_URL}/jefe-operativo/ping-sesion/${codigoSesion}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+                });
+                console.log('💓 Keep-alive enviado para sesión:', codigoSesion);
+            } catch (error) {
+                console.log('Keep-alive error:', error);
+            }
+        }
+    }, 30000);
+}
+
+function detenerKeepAlive() {
+    if (keepAliveInterval) {
+        clearInterval(keepAliveInterval);
+        keepAliveInterval = null;
+    }
+}
 
 // =====================================================
 // INICIALIZACIÓN
@@ -143,6 +333,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupInputTracking();
     setupUnirsePorCodigo();
     
+    // Cargar Google Maps si existe el contenedor
+    if (mapUbicacionDiv) {
+        cargarGoogleMaps();
+    }
+    
     await recuperarSesionActiva();
     
     iniciarPollingSesiones();
@@ -150,7 +345,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // =====================================================
-// CHECK AUTH - CORREGIDO PARA USAR roles ARRAY
+// CHECK AUTH
 // =====================================================
 async function checkAuth() {
     const token = localStorage.getItem('furia_token');
@@ -169,11 +364,8 @@ async function checkAuth() {
         userInfo = JSON.parse(userInfoRaw || '{}');
         console.log('userInfo parseado:', userInfo);
         
-        // Verificar si el token es válido con el backend
         const verifyResponse = await fetch(`${window.API_BASE_URL}/api/verify-token`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (!verifyResponse.ok) {
@@ -186,14 +378,11 @@ async function checkAuth() {
         const verifyData = await verifyResponse.json();
         console.log('Verificación backend:', verifyData);
         
-        // Actualizar userInfo con datos del backend
         if (verifyData.user) {
             userInfo = verifyData.user;
             localStorage.setItem('furia_user', JSON.stringify(userInfo));
         }
         
-        // IMPORTANTE: Verificar por roles (array) 
-        // El login devuelve user.roles = ['jefe_taller', 'jefe_operativo']
         const tieneRolJefeOperativo = 
             (userInfo.roles && userInfo.roles.includes('jefe_operativo')) ||
             userInfo.rol === 'jefe_operativo';
@@ -203,7 +392,6 @@ async function checkAuth() {
         
         if (!tieneRolJefeOperativo) {
             console.error('No tiene rol jefe_operativo');
-            // Si no es jefe_operativo pero es jefe_taller, ir a dashboard de taller
             if (userInfo.roles && userInfo.roles.includes('jefe_taller')) {
                 window.location.href = `${window.API_BASE_URL}/jefe_taller/dashboard.html`;
             } else {
@@ -283,7 +471,7 @@ async function recuperarSesionActiva() {
 }
 
 // =====================================================
-// UNIRSE POR CÓDIGO (SEGURIDAD MEJORADA)
+// UNIRSE POR CÓDIGO
 // =====================================================
 function setupUnirsePorCodigo() {
     const btnUnirse = document.getElementById('btnUnirsePorCodigo');
@@ -654,6 +842,7 @@ function activarSesion() {
     
     cargarDatosSesion();
     iniciarPolling();
+    iniciarKeepAlive();
 }
 
 async function cargarDatosSesion() {
@@ -702,11 +891,13 @@ function actualizarUIconDatos() {
     const seccionesEditando = sesionActual.secciones_editando || {};
     const usuarioId = userInfo.id;
     
-    // Cliente
+    // Cliente (incluyendo coordenadas)
     if (!camposEnEdicion.cliente) {
         const clienteNombre = document.getElementById('clienteNombre');
         const clienteTelefono = document.getElementById('clienteTelefono');
         const clienteUbicacion = document.getElementById('clienteUbicacion');
+        const clienteLatitud = document.getElementById('clienteLatitud');
+        const clienteLongitud = document.getElementById('clienteLongitud');
         
         if (clienteNombre && datos.cliente && document.activeElement !== clienteNombre) {
             if (clienteNombre.value !== datos.cliente.nombre) clienteNombre.value = datos.cliente.nombre || '';
@@ -716,6 +907,17 @@ function actualizarUIconDatos() {
         }
         if (clienteUbicacion && datos.cliente && document.activeElement !== clienteUbicacion) {
             if (clienteUbicacion.value !== datos.cliente.ubicacion) clienteUbicacion.value = datos.cliente.ubicacion || '';
+        }
+        if (clienteLatitud && datos.cliente && datos.cliente.latitud) {
+            clienteLatitud.value = datos.cliente.latitud;
+        }
+        if (clienteLongitud && datos.cliente && datos.cliente.longitud) {
+            clienteLongitud.value = datos.cliente.longitud;
+        }
+        
+        // Actualizar mapa si está cargado
+        if (googleMapsCargado && datos.cliente) {
+            cargarUbicacionExistente();
         }
     }
     
@@ -973,7 +1175,7 @@ function verificarSeccionesCompletadas() {
 }
 
 // =====================================================
-// GUARDAR SECCIÓN
+// GUARDAR SECCIÓN (con coordenadas)
 // =====================================================
 async function guardarSeccion(seccion) {
     if (!codigoSesion) return;
@@ -985,7 +1187,9 @@ async function guardarSeccion(seccion) {
             datos = {
                 nombre: document.getElementById('clienteNombre')?.value || '',
                 telefono: document.getElementById('clienteTelefono')?.value || '',
-                ubicacion: document.getElementById('clienteUbicacion')?.value || ''
+                ubicacion: document.getElementById('clienteUbicacion')?.value || '',
+                latitud: document.getElementById('clienteLatitud')?.value || null,
+                longitud: document.getElementById('clienteLongitud')?.value || null
             };
             break;
         case 'vehiculo':
@@ -1400,6 +1604,7 @@ function mostrarConfirmacionCancelar() {
 
 function limpiarSesionCompleta() {
     detenerPolling();
+    detenerKeepAlive();
     codigoSesion = null;
     sesionActual = null;
     transcripcionManual = false;
@@ -1441,6 +1646,16 @@ function limpiarFormularioCompleto() {
     if (audioStatus) audioStatus.textContent = '';
     if (btnTranscribirAudio) btnTranscribirAudio.style.display = 'none';
     if (btnEliminarAudio) btnEliminarAudio.style.display = 'none';
+    
+    // Limpiar coordenadas
+    if (clienteLatitudInput) clienteLatitudInput.value = '';
+    if (clienteLongitudInput) clienteLongitudInput.value = '';
+    
+    // Limpiar mapa
+    if (googleMapsCargado && markerCliente) {
+        markerCliente.setMap(null);
+        markerCliente = null;
+    }
 }
 
 // =====================================================
@@ -1613,7 +1828,9 @@ function obtenerDatosFormulario() {
         cliente: {
             nombre: document.getElementById('clienteNombre')?.value || '',
             telefono: document.getElementById('clienteTelefono')?.value || '',
-            ubicacion: document.getElementById('clienteUbicacion')?.value || ''
+            ubicacion: document.getElementById('clienteUbicacion')?.value || '',
+            latitud: document.getElementById('clienteLatitud')?.value || null,
+            longitud: document.getElementById('clienteLongitud')?.value || null
         },
         vehiculo: {
             placa: document.getElementById('vehiculoPlaca')?.value.toUpperCase() || '',
@@ -1667,6 +1884,7 @@ function mostrarCodigoGenerado(codigo, datos) {
         resumenDatosDiv.innerHTML = `
             <div class="resumen-item"><span class="resumen-label">Cliente:</span><span class="resumen-value">${escapeHtml(datos.cliente?.nombre || '')}</span></div>
             <div class="resumen-item"><span class="resumen-label">Vehículo:</span><span class="resumen-value">${escapeHtml(datos.vehiculo?.marca || '')} ${escapeHtml(datos.vehiculo?.modelo || '')} (${escapeHtml(datos.vehiculo?.placa || '')})</span></div>
+            <div class="resumen-item"><span class="resumen-label">Ubicación:</span><span class="resumen-value">${escapeHtml(datos.cliente?.ubicacion || 'No especificada')}</span></div>
             <div class="resumen-item"><span class="resumen-label">Fecha:</span><span class="resumen-value">${new Date().toLocaleDateString()}</span></div>
         `;
     }
@@ -1713,6 +1931,7 @@ function detenerPolling() {
 
 window.logout = () => {
     detenerPolling();
+    detenerKeepAlive();
     if (sesionesPolling) clearInterval(sesionesPolling);
     localStorage.removeItem('furia_token');
     localStorage.removeItem('furia_user');
@@ -1723,7 +1942,7 @@ window.logout = () => {
 };
 
 // =====================================================
-// PANEL DE RECEPCIONES GUARDADAS
+// PANEL DE RECEPCIONES GUARDADAS (código existente)
 // =====================================================
 function initRecepcionesPanel() {
     cargarRecepciones();
@@ -1939,6 +2158,7 @@ function cargarDatosParaEdicion(detalle) {
     if (clienteNombre) clienteNombre.value = detalle.cliente_nombre || '';
     if (clienteTelefono) clienteTelefono.value = detalle.cliente_telefono || '';
     if (clienteUbicacion) clienteUbicacion.value = detalle.cliente_ubicacion || '';
+    
     const vehiculoPlaca = document.getElementById('vehiculoPlaca');
     const vehiculoMarca = document.getElementById('vehiculoMarca');
     const vehiculoModelo = document.getElementById('vehiculoModelo');
@@ -1950,6 +2170,7 @@ function cargarDatosParaEdicion(detalle) {
     if (vehiculoAnio) vehiculoAnio.value = detalle.anio || '';
     if (vehiculoKilometraje) vehiculoKilometraje.value = detalle.kilometraje || '';
     if (descripcionProblema) descripcionProblema.value = detalle.transcripcion_problema || '';
+    
     if (detalle.fotos) {
         for (const [campo, url] of Object.entries(detalle.fotos)) {
             if (url && url !== 'null' && url !== 'None') {
@@ -1973,7 +2194,13 @@ async function guardarCambiosRecepcion() {
     if (!modoEdicionRecepcion || !recepcionEditandoId) { mostrarNotificacion('No hay una recepción en edición', 'warning'); return; }
     try {
         const datosActualizados = {
-            cliente: { nombre: document.getElementById('clienteNombre')?.value || '', telefono: document.getElementById('clienteTelefono')?.value || '', ubicacion: document.getElementById('clienteUbicacion')?.value || '' },
+            cliente: { 
+                nombre: document.getElementById('clienteNombre')?.value || '', 
+                telefono: document.getElementById('clienteTelefono')?.value || '', 
+                ubicacion: document.getElementById('clienteUbicacion')?.value || '',
+                latitud: document.getElementById('clienteLatitud')?.value || null,
+                longitud: document.getElementById('clienteLongitud')?.value || null
+            },
             vehiculo: { placa: document.getElementById('vehiculoPlaca')?.value.toUpperCase() || '', marca: document.getElementById('vehiculoMarca')?.value || '', modelo: document.getElementById('vehiculoModelo')?.value || '', anio: parseInt(document.getElementById('vehiculoAnio')?.value) || null, kilometraje: parseInt(document.getElementById('vehiculoKilometraje')?.value) || 0 },
             descripcion: { texto: descripcionProblema?.value || '', audio_url: audioBlob ? await getAudioBase64() : null },
             fotos: {}
@@ -2068,5 +2295,7 @@ styleImagen.textContent = `
     .btn-danger { background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 500; }
     .btn-danger:hover { background: #c82333; }
     .modo-edicion-badge { background: #FFB347; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; margin-left: 12px; }
+    #mapUbicacion { border-radius: 12px; margin-top: 10px; border: 1px solid var(--borde-claro); }
+    .map-hint { display: block; font-size: 11px; color: var(--texto-secundario); margin-top: 5px; }
 `;
 document.head.appendChild(styleImagen);

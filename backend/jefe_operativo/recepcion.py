@@ -164,7 +164,128 @@ def transcribir_audio_bytes(audio_bytes, idioma="es", model_size="base"):
 sesiones_activas = {}
 
 # =====================================================
-# FUNCIONES DE CLOUDINARY
+# FUNCIONES DE PERSISTENCIA DE SESIONES EN SUPABASE
+# =====================================================
+
+def guardar_sesion_en_db(sesion):
+    """Guardar o actualizar sesión en Supabase"""
+    try:
+        # Verificar si la sesión ya existe
+        existente = supabase.table('sesion_colaborativa') \
+            .select('codigo') \
+            .eq('codigo', sesion['codigo']) \
+            .execute()
+        
+        if existente.data:
+            # Actualizar sesión existente
+            supabase.table('sesion_colaborativa') \
+                .update({
+                    'colaboradores_ids': sesion.get('colaboradores', []),
+                    'colaboradores_nombres': sesion.get('colaboradores_nombres', []),
+                    'datos': sesion.get('datos', {}),
+                    'secciones_completadas': sesion.get('secciones_completadas', {}),
+                    'secciones_editando': sesion.get('secciones_editando', {}),
+                    'ultima_actividad': datetime.datetime.now().isoformat()
+                }) \
+                .eq('codigo', sesion['codigo']) \
+                .execute()
+            logger.info(f"✅ Sesión {sesion['codigo']} actualizada en BD")
+        else:
+            # Insertar nueva sesión
+            supabase.table('sesion_colaborativa') \
+                .insert({
+                    'codigo': sesion['codigo'],
+                    'creador_id': sesion['creador'],
+                    'creador_nombre': sesion['creador_nombre'],
+                    'colaboradores_ids': sesion.get('colaboradores', []),
+                    'colaboradores_nombres': sesion.get('colaboradores_nombres', []),
+                    'datos': sesion.get('datos', {}),
+                    'secciones_completadas': sesion.get('secciones_completadas', {}),
+                    'secciones_editando': sesion.get('secciones_editando', {}),
+                    'estado': sesion.get('estado', 'activa'),
+                    'fecha_creacion': sesion.get('fecha_creacion', datetime.datetime.now().isoformat())
+                }) \
+                .execute()
+            logger.info(f"✅ Sesión {sesion['codigo']} guardada en BD")
+        
+        return True
+    except Exception as e:
+        logger.error(f"❌ Error guardando sesión en BD: {str(e)}")
+        return False
+
+def cargar_sesiones_activas_db():
+    """Cargar todas las sesiones activas desde Supabase"""
+    try:
+        # Limpiar sesiones inactivas por más de 8 horas
+        limite = datetime.datetime.now() - datetime.timedelta(hours=8)
+        
+        supabase.table('sesion_colaborativa') \
+            .update({'estado': 'expirada'}) \
+            .eq('estado', 'activa') \
+            .lt('ultima_actividad', limite.isoformat()) \
+            .execute()
+        
+        # Cargar sesiones activas
+        resultado = supabase.table('sesion_colaborativa') \
+            .select('*') \
+            .eq('estado', 'activa') \
+            .execute()
+        
+        sesiones = {}
+        for s in resultado.data:
+            sesiones[s['codigo']] = {
+                'codigo': s['codigo'],
+                'creador': s['creador_id'],
+                'creador_nombre': s['creador_nombre'],
+                'colaboradores': s['colaboradores_ids'],
+                'colaboradores_nombres': s['colaboradores_nombres'],
+                'datos': s['datos'],
+                'secciones_completadas': s['secciones_completadas'],
+                'secciones_editando': s.get('secciones_editando', {}),
+                'estado': s['estado'],
+                'fecha_creacion': s['fecha_creacion']
+            }
+        
+        logger.info(f"📋 Cargadas {len(sesiones)} sesiones activas desde BD")
+        return sesiones
+    except Exception as e:
+        logger.error(f"❌ Error cargando sesiones desde BD: {str(e)}")
+        return {}
+
+def eliminar_sesion_db(codigo):
+    """Eliminar una sesión de la base de datos"""
+    try:
+        supabase.table('sesion_colaborativa') \
+            .delete() \
+            .eq('codigo', codigo) \
+            .execute()
+        logger.info(f"🗑️ Sesión {codigo} eliminada de BD")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Error eliminando sesión {codigo}: {str(e)}")
+        return False
+
+def actualizar_actividad_sesion(codigo):
+    """Actualizar timestamp de última actividad"""
+    try:
+        supabase.table('sesion_colaborativa') \
+            .update({'ultima_actividad': datetime.datetime.now().isoformat()}) \
+            .eq('codigo', codigo) \
+            .execute()
+        return True
+    except Exception as e:
+        logger.error(f"❌ Error actualizando actividad: {str(e)}")
+        return False
+
+# Cargar sesiones activas al iniciar el módulo
+try:
+    sesiones_activas = cargar_sesiones_activas_db()
+    logger.info(f"🚀 Módulo iniciado con {len(sesiones_activas)} sesiones activas")
+except Exception as e:
+    logger.error(f"❌ Error cargando sesiones al inicio: {str(e)}")
+
+# =====================================================
+# FUNCIONES DE CLOUDINARY Y UTILIDADES
 # =====================================================
 
 def subir_imagen_a_cloudinary(base64_data, carpeta, nombre):
@@ -323,10 +444,10 @@ def generar_codigo_sesion():
     codigo = ''.join(random.choices(caracteres, k=6))
     return f"S-{codigo}"
 
-def obtener_o_crear_cliente(nombre, telefono, ubicacion):
+def obtener_o_crear_cliente(nombre, telefono, ubicacion, latitud=None, longitud=None):
     """
     Obtener un cliente existente o crear uno nuevo.
-    Los roles se manejan en la tabla usuario_rol, no en usuario.id_rol
+    Ahora también guarda coordenadas si se proporcionan.
     """
     id_cliente = None
     id_usuario = None
@@ -343,15 +464,33 @@ def obtener_o_crear_cliente(nombre, telefono, ubicacion):
                 id_usuario = usuario_existente.data[0]['id']
                 
                 # Actualizar datos del usuario
+                update_data = {
+                    'nombre': nombre,
+                    'ubicacion': ubicacion
+                }
+                
                 supabase.table('usuario') \
-                    .update({
-                        'nombre': nombre,
-                        'ubicacion': ubicacion
-                    }) \
+                    .update(update_data) \
                     .eq('id', id_usuario) \
                     .execute()
                 
-                # Verificar si ya tiene rol de cliente en usuario_rol
+                # Actualizar cliente con coordenadas
+                cliente_update = {}
+                if latitud is not None:
+                    cliente_update['latitud'] = latitud
+                if longitud is not None:
+                    cliente_update['longitud'] = longitud
+                if ubicacion and latitud is not None and longitud is not None:
+                    cliente_update['ubicacion_confirmada'] = True
+                
+                if cliente_update:
+                    supabase.table('cliente') \
+                        .update(cliente_update) \
+                        .eq('id_usuario', id_usuario) \
+                        .execute()
+                    logger.info(f"Coordenadas guardadas para cliente: lat={latitud}, lng={longitud}")
+                
+                # Verificar si ya tiene rol de cliente
                 rol_result = supabase.table('usuario_rol') \
                     .select('id_rol') \
                     .eq('id_usuario', id_usuario) \
@@ -359,13 +498,11 @@ def obtener_o_crear_cliente(nombre, telefono, ubicacion):
                     .execute()
                 
                 if not rol_result.data:
-                    # Asignar rol de cliente (id_rol = 5)
                     supabase.table('usuario_rol').insert({
                         'id_usuario': id_usuario,
                         'id_rol': 5,
                         'fecha_asignacion': datetime.datetime.now().isoformat()
                     }).execute()
-                    logger.info(f"Rol cliente asignado al usuario {id_usuario}")
                 
                 # Buscar en tabla cliente
                 cliente_existente = supabase.table('cliente') \
@@ -396,36 +533,40 @@ def obtener_o_crear_cliente(nombre, telefono, ubicacion):
             
             id_usuario = user_result.data[0]['id']
             
-            # Asignar rol de cliente (id_rol = 5) en usuario_rol
-            rol_result = supabase.table('usuario_rol').insert({
+            # Asignar rol de cliente
+            supabase.table('usuario_rol').insert({
                 'id_usuario': id_usuario,
                 'id_rol': 5,
                 'fecha_asignacion': datetime.datetime.now().isoformat()
             }).execute()
             
-            if not rol_result.data:
-                logger.error("Error asignando rol cliente")
-                supabase.table('usuario').delete().eq('id', id_usuario).execute()
-                return None, None
-            
-            # Crear registro en tabla cliente
+            # Crear registro en tabla cliente con coordenadas
             numero_documento = f"TEMP-{int(datetime.datetime.now().timestamp())}"
-            cliente_result = supabase.table('cliente').insert({
+            cliente_data = {
                 'id_usuario': id_usuario,
                 'tipo_documento': 'CI',
                 'numero_documento': numero_documento,
                 'email': email_cliente
-            }).execute()
+            }
+            
+            if latitud is not None:
+                cliente_data['latitud'] = latitud
+            if longitud is not None:
+                cliente_data['longitud'] = longitud
+            if latitud is not None and longitud is not None:
+                cliente_data['ubicacion_confirmada'] = True
+            
+            cliente_result = supabase.table('cliente').insert(cliente_data).execute()
             
             if not cliente_result.data:
-                # Rollback: eliminar usuario y rol
+                # Rollback
                 supabase.table('usuario_rol').delete().eq('id_usuario', id_usuario).execute()
                 supabase.table('usuario').delete().eq('id', id_usuario).execute()
                 logger.error("Error creando cliente")
                 return None, None
             
             id_cliente = cliente_result.data[0]['id']
-            logger.info(f"Nuevo cliente creado: {nombre} (ID: {id_cliente})")
+            logger.info(f"Nuevo cliente creado con coordenadas: {nombre}")
         
         return id_cliente, id_usuario
         
@@ -436,7 +577,7 @@ def obtener_o_crear_cliente(nombre, telefono, ubicacion):
         return None, None
 
 # =====================================================
-# SESIONES COLABORATIVAS
+# ENDPOINTS DE SESIONES COLABORATIVAS
 # =====================================================
 
 @jefe_operativo_recepcion_bp.route('/iniciar-sesion', methods=['POST'])
@@ -452,32 +593,34 @@ def iniciar_sesion(current_user):
             'colaboradores': [current_user['id']],
             'colaboradores_nombres': [current_user.get('nombre', 'Técnico')],
             'datos': {
-                'cliente': {'nombre': '', 'telefono': '', 'ubicacion': ''},
+                'cliente': {'nombre': '', 'telefono': '', 'ubicacion': '', 'latitud': None, 'longitud': None},
                 'vehiculo': {'placa': '', 'marca': '', 'modelo': '', 'anio': None, 'kilometraje': None},
                 'fotos': {
-                    'url_lateral_izquierda': None,
-                    'url_lateral_derecha': None,
-                    'url_foto_frontal': None,
-                    'url_foto_trasera': None,
-                    'url_foto_superior': None,
-                    'url_foto_inferior': None,
-                    'url_foto_tablero': None
+                    'url_lateral_izquierda': None, 'url_lateral_derecha': None,
+                    'url_foto_frontal': None, 'url_foto_trasera': None,
+                    'url_foto_superior': None, 'url_foto_inferior': None, 'url_foto_tablero': None
                 },
                 'descripcion': {'texto': '', 'audio_url': None}
             },
             'secciones_completadas': {'cliente': False, 'vehiculo': False, 'fotos': False, 'descripcion': False},
+            'secciones_editando': {},
             'estado': 'activa',
-            'fecha_creacion': datetime.datetime.now().isoformat(),
-            'secciones_editando': {}
+            'fecha_creacion': datetime.datetime.now().isoformat()
         }
         
+        # Guardar en BD primero
+        if not guardar_sesion_en_db(sesion):
+            return jsonify({'error': 'Error guardando sesión en base de datos'}), 500
+        
+        # Luego en memoria
         sesiones_activas[codigo_sesion] = sesion
-        logger.info(f"Sesión iniciada: {codigo_sesion}")
+        
+        logger.info(f"✅ Sesión iniciada: {codigo_sesion}")
         
         return jsonify({'success': True, 'codigo': codigo_sesion, 'sesion': sesion}), 200
         
     except Exception as e:
-        logger.error(f"Error iniciando sesión: {str(e)}")
+        logger.error(f"❌ Error iniciando sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -491,8 +634,14 @@ def unirse_sesion(current_user):
         if not codigo_sesion:
             return jsonify({'error': 'Código de sesión requerido'}), 400
         
+        # Intentar cargar desde BD si no está en memoria
         if codigo_sesion not in sesiones_activas:
-            return jsonify({'error': 'Sesión no encontrada'}), 404
+            sesiones_recuperadas = cargar_sesiones_activas_db()
+            if codigo_sesion in sesiones_recuperadas:
+                sesiones_activas[codigo_sesion] = sesiones_recuperadas[codigo_sesion]
+                logger.info(f"🔄 Sesión {codigo_sesion} recuperada desde BD")
+            else:
+                return jsonify({'error': 'Sesión no encontrada'}), 404
         
         sesion = sesiones_activas[codigo_sesion]
         
@@ -505,7 +654,11 @@ def unirse_sesion(current_user):
         if current_user['id'] not in sesion['colaboradores']:
             sesion['colaboradores'].append(current_user['id'])
             sesion['colaboradores_nombres'].append(current_user.get('nombre', 'Técnico'))
-            logger.info(f"Usuario {current_user.get('nombre')} se unió a sesión {codigo_sesion}")
+            
+            # Persistir en BD
+            guardar_sesion_en_db(sesion)
+            
+            logger.info(f"👤 Usuario {current_user.get('nombre')} se unió a sesión {codigo_sesion}")
         
         return jsonify({'success': True, 'sesion': sesion}), 200
         
@@ -524,24 +677,41 @@ def guardar_seccion(current_user):
         datos_seccion = data.get('datos', {})
         usuario_id = data.get('usuario_id')
         
-        if not codigo_sesion or codigo_sesion not in sesiones_activas:
-            return jsonify({'error': 'Sesión no encontrada'}), 404
+        if not codigo_sesion:
+            return jsonify({'error': 'Código de sesión requerido'}), 400
+        
+        # Intentar cargar desde BD si no está en memoria
+        if codigo_sesion not in sesiones_activas:
+            sesiones_recuperadas = cargar_sesiones_activas_db()
+            if codigo_sesion in sesiones_recuperadas:
+                sesiones_activas[codigo_sesion] = sesiones_recuperadas[codigo_sesion]
+                logger.info(f"🔄 Sesión {codigo_sesion} recuperada desde BD")
+            else:
+                return jsonify({'error': 'Sesión no encontrada'}), 404
         
         sesion = sesiones_activas[codigo_sesion]
         
+        if sesion['estado'] != 'activa':
+            return jsonify({'error': 'Sesión ya finalizada'}), 400
+        
+        # Marcar quién está editando
         if usuario_id:
-            if 'secciones_editando' not in sesion:
-                sesion['secciones_editando'] = {}
+            sesion.setdefault('secciones_editando', {})
             sesion['secciones_editando'][seccion] = usuario_id
         
+        # Actualizar datos según sección
         if seccion == 'cliente':
             sesion['datos']['cliente'] = {
                 'nombre': datos_seccion.get('nombre', ''),
                 'telefono': datos_seccion.get('telefono', ''),
-                'ubicacion': datos_seccion.get('ubicacion', '')
+                'ubicacion': datos_seccion.get('ubicacion', ''),
+                'latitud': datos_seccion.get('latitud'),
+                'longitud': datos_seccion.get('longitud')
             }
-            sesion['secciones_completadas']['cliente'] = bool(datos_seccion.get('nombre') and datos_seccion.get('telefono'))
-                
+            sesion['secciones_completadas']['cliente'] = bool(
+                datos_seccion.get('nombre') and datos_seccion.get('telefono')
+            )
+            
         elif seccion == 'vehiculo':
             sesion['datos']['vehiculo'] = {
                 'placa': datos_seccion.get('placa', '').upper(),
@@ -550,8 +720,12 @@ def guardar_seccion(current_user):
                 'anio': datos_seccion.get('anio'),
                 'kilometraje': datos_seccion.get('kilometraje', 0)
             }
-            sesion['secciones_completadas']['vehiculo'] = bool(datos_seccion.get('placa') and datos_seccion.get('marca') and datos_seccion.get('modelo'))
-                
+            sesion['secciones_completadas']['vehiculo'] = bool(
+                datos_seccion.get('placa') and 
+                datos_seccion.get('marca') and 
+                datos_seccion.get('modelo')
+            )
+            
         elif seccion == 'fotos':
             fotos_procesadas = {}
             timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -574,7 +748,7 @@ def guardar_seccion(current_user):
             sesion['datos']['fotos'] = fotos_procesadas
             todas_completas = all(fotos_procesadas.get(foto) for foto in campos_fotos)
             sesion['secciones_completadas']['fotos'] = todas_completas
-                
+            
         elif seccion == 'descripcion':
             sesion['datos']['descripcion']['texto'] = datos_seccion.get('texto', '')
             
@@ -596,6 +770,13 @@ def guardar_seccion(current_user):
             
             sesion['secciones_completadas']['descripcion'] = bool(datos_seccion.get('texto'))
         
+        # Actualizar timestamp de actividad
+        sesion['ultima_actividad'] = datetime.datetime.now().isoformat()
+        
+        # Persistir en base de datos
+        if not guardar_sesion_en_db(sesion):
+            logger.warning(f"⚠️ No se pudo guardar sesión {codigo_sesion} en BD, pero continúa en memoria")
+        
         return jsonify({'success': True, 'sesion': sesion}), 200
         
     except Exception as e:
@@ -609,10 +790,40 @@ def guardar_seccion(current_user):
 @jefe_operativo_required
 def obtener_sesion(current_user, codigo):
     try:
-        if codigo not in sesiones_activas:
-            return jsonify({'error': 'Sesión no encontrada'}), 404
+        # Buscar en memoria primero
+        if codigo in sesiones_activas:
+            sesion = sesiones_activas[codigo]
+            # Actualizar actividad
+            actualizar_actividad_sesion(codigo)
+            return jsonify({'success': True, 'sesion': sesion}), 200
         
-        return jsonify({'success': True, 'sesion': sesiones_activas[codigo]}), 200
+        # Si no está en memoria, buscar en BD
+        resultado = supabase.table('sesion_colaborativa') \
+            .select('*') \
+            .eq('codigo', codigo) \
+            .eq('estado', 'activa') \
+            .execute()
+        
+        if resultado.data:
+            s = resultado.data[0]
+            sesion = {
+                'codigo': s['codigo'],
+                'creador': s['creador_id'],
+                'creador_nombre': s['creador_nombre'],
+                'colaboradores': s['colaboradores_ids'],
+                'colaboradores_nombres': s['colaboradores_nombres'],
+                'datos': s['datos'],
+                'secciones_completadas': s['secciones_completadas'],
+                'secciones_editando': s.get('secciones_editando', {}),
+                'estado': s['estado'],
+                'fecha_creacion': s['fecha_creacion']
+            }
+            # Restaurar en memoria
+            sesiones_activas[codigo] = sesion
+            logger.info(f"🔄 Sesión {codigo} restaurada desde BD a memoria")
+            return jsonify({'success': True, 'sesion': sesion}), 200
+        
+        return jsonify({'error': 'Sesión no encontrada'}), 404
         
     except Exception as e:
         logger.error(f"Error obteniendo sesión: {str(e)}")
@@ -627,8 +838,16 @@ def finalizar_sesion(current_user):
         codigo_sesion = data.get('codigo')
         datos_directos = data.get('datos')
         
-        if not codigo_sesion or codigo_sesion not in sesiones_activas:
-            return jsonify({'error': 'Sesión no encontrada'}), 404
+        if not codigo_sesion:
+            return jsonify({'error': 'Código de sesión requerido'}), 400
+        
+        # Intentar cargar desde BD si no está en memoria
+        if codigo_sesion not in sesiones_activas:
+            sesiones_recuperadas = cargar_sesiones_activas_db()
+            if codigo_sesion in sesiones_recuperadas:
+                sesiones_activas[codigo_sesion] = sesiones_recuperadas[codigo_sesion]
+            else:
+                return jsonify({'error': 'Sesión no encontrada'}), 404
         
         sesion = sesiones_activas[codigo_sesion]
         
@@ -647,9 +866,14 @@ def finalizar_sesion(current_user):
             return jsonify({'error': resultado['error']}), 500
         
         sesion['estado'] = 'finalizada'
-        sesion['fecha_finalizacion'] = datetime.datetime.now().isoformat()
         
-        logger.info(f"Sesión {codigo_sesion} finalizada por {current_user.get('nombre')}. Colaboradores: {sesion.get('colaboradores', [])}")
+        # Persistir en BD
+        guardar_sesion_en_db(sesion)
+        
+        # Limpiar de memoria
+        del sesiones_activas[codigo_sesion]
+        
+        logger.info(f"✅ Sesión {codigo_sesion} finalizada por {current_user.get('nombre')}")
         
         return jsonify({
             'success': True, 
@@ -673,12 +897,16 @@ def crear_orden_desde_sesion(datos, current_user):
         telefono_cliente = cliente_data.get('telefono', '')
         nombre_cliente = cliente_data.get('nombre', '')
         ubicacion_cliente = cliente_data.get('ubicacion', '')
+        latitud = cliente_data.get('latitud')
+        longitud = cliente_data.get('longitud')
         
-        # Crear o obtener cliente con rol 5
+        # Crear o obtener cliente con coordenadas
         id_cliente, id_usuario = obtener_o_crear_cliente(
             nombre_cliente, 
             telefono_cliente, 
-            ubicacion_cliente
+            ubicacion_cliente,
+            latitud,
+            longitud
         )
         
         if not id_cliente:
@@ -724,7 +952,6 @@ def crear_orden_desde_sesion(datos, current_user):
         
         # Obtener segundo jefe operativo de la sesión
         segundo_jefe_id = None
-        
         for codigo_sesion, sesion in sesiones_activas.items():
             if sesion.get('estado') == 'activa' and len(sesion.get('colaboradores', [])) > 1:
                 colaboradores = sesion.get('colaboradores', [])
@@ -792,7 +1019,6 @@ def verificar_placa(current_user, placa):
     try:
         placa = placa.upper()
         
-        # CORREGIDO: La relación correcta es vehiculo -> cliente -> usuario
         resultado = supabase.table('vehiculo') \
             .select('id, placa, marca, modelo, id_cliente, cliente!inner(id_usuario), usuario:cliente!inner(id_usuario)!inner(nombre, contacto)') \
             .eq('placa', placa) \
@@ -802,7 +1028,6 @@ def verificar_placa(current_user, placa):
             vehiculo = resultado.data[0]
             
             cliente_data = {}
-            # Obtener datos del usuario asociado al cliente
             if 'usuario' in vehiculo:
                 cliente_data = vehiculo['usuario']
             
@@ -872,22 +1097,37 @@ def cancelar_sesion(current_user):
         if not codigo_sesion:
             return jsonify({'error': 'Código de sesión requerido'}), 400
         
-        if codigo_sesion not in sesiones_activas:
-            return jsonify({'error': 'Sesión no encontrada'}), 404
+        # Eliminar de memoria
+        if codigo_sesion in sesiones_activas:
+            del sesiones_activas[codigo_sesion]
         
-        sesion = sesiones_activas[codigo_sesion]
+        # Eliminar de BD
+        eliminar_sesion_db(codigo_sesion)
         
-        if current_user['id'] not in sesion['colaboradores']:
-            return jsonify({'error': 'No tienes permiso para cancelar esta sesión'}), 403
-        
-        del sesiones_activas[codigo_sesion]
-        
-        logger.info(f"Sesión {codigo_sesion} cancelada")
+        logger.info(f"🗑️ Sesión {codigo_sesion} cancelada")
         
         return jsonify({'success': True, 'message': 'Sesión cancelada exitosamente'}), 200
         
     except Exception as e:
         logger.error(f"Error cancelando sesión: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# PING PARA MANTENER SESIÓN ACTIVA
+# =====================================================
+@jefe_operativo_recepcion_bp.route('/ping-sesion/<codigo>', methods=['GET'])
+@jefe_operativo_required
+def ping_sesion(current_user, codigo):
+    """Mantener sesión activa - actualiza timestamp"""
+    try:
+        if codigo in sesiones_activas:
+            sesiones_activas[codigo]['ultima_actividad'] = datetime.datetime.now().isoformat()
+        
+        actualizar_actividad_sesion(codigo)
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logger.error(f"Error en ping: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -918,11 +1158,13 @@ def listar_sesiones_activas(current_user):
         return jsonify({'error': str(e)}), 500
 
 
+# =====================================================
+# LISTAR RECEPCIONES GUARDADAS
+# =====================================================
 @jefe_operativo_recepcion_bp.route('/listar-recepciones', methods=['GET'])
 @jefe_operativo_required
 def listar_recepciones(current_user):
     try:
-        # LIMITAR A LAS ÚLTIMAS 10 RECEPCIONES
         resultado = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo, vehiculo!inner(placa, marca, modelo, cliente!inner(id_usuario, usuario!inner(nombre, contacto, ubicacion)))') \
             .order('fecha_ingreso', desc=True) \
@@ -956,6 +1198,9 @@ def listar_recepciones(current_user):
         return jsonify({'error': str(e)}), 500
 
 
+# =====================================================
+# DETALLE DE RECEPCIÓN
+# =====================================================
 @jefe_operativo_recepcion_bp.route('/detalle-recepcion/<int:id_orden>', methods=['GET'])
 @jefe_operativo_required
 def detalle_recepcion(current_user, id_orden):
@@ -989,7 +1234,6 @@ def detalle_recepcion(current_user, id_orden):
             if jefe2.data:
                 jefe_secundario = jefe2.data[0]
         
-        # CORREGIDO: Relación vehiculo -> cliente -> usuario
         vehiculo_result = supabase.table('vehiculo') \
             .select('id, placa, marca, modelo, anio, kilometraje, id_cliente, cliente!inner(id_usuario, usuario!inner(nombre, contacto, ubicacion))') \
             .eq('id', orden['id_vehiculo']) \
@@ -1041,6 +1285,7 @@ def detalle_recepcion(current_user, id_orden):
     except Exception as e:
         logger.error(f"Error obteniendo detalle: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 # =====================================================
 # ELIMINAR RECEPCIÓN
@@ -1104,12 +1349,16 @@ def actualizar_recepcion(current_user, id_orden):
         telefono_cliente = cliente_data.get('telefono', '')
         nombre_cliente = cliente_data.get('nombre', '')
         ubicacion_cliente = cliente_data.get('ubicacion', '')
+        latitud = cliente_data.get('latitud')
+        longitud = cliente_data.get('longitud')
         
-        # Usar la misma función para obtener/crear cliente con rol 5
+        # Usar la misma función para obtener/crear cliente con coordenadas
         id_cliente, id_usuario = obtener_o_crear_cliente(
             nombre_cliente, 
             telefono_cliente, 
-            ubicacion_cliente
+            ubicacion_cliente,
+            latitud,
+            longitud
         )
         
         if not id_cliente:
@@ -1196,4 +1445,60 @@ def actualizar_recepcion(current_user, id_orden):
         logger.error(f"Error actualizando recepción: {str(e)}")
         import traceback
         traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# MARCAR EDICIÓN DE SECCIÓN
+# =====================================================
+@jefe_operativo_recepcion_bp.route('/marcar-editando', methods=['POST'])
+@jefe_operativo_required
+def marcar_editando(current_user):
+    try:
+        data = request.get_json()
+        codigo_sesion = data.get('codigo')
+        seccion = data.get('seccion')
+        usuario_id = data.get('usuario_id')
+        usuario_nombre = data.get('usuario_nombre')
+        
+        if not codigo_sesion or codigo_sesion not in sesiones_activas:
+            return jsonify({'error': 'Sesión no encontrada'}), 404
+        
+        sesion = sesiones_activas[codigo_sesion]
+        sesion.setdefault('secciones_editando', {})
+        sesion['secciones_editando'][seccion] = usuario_id
+        
+        # Persistir en BD
+        guardar_sesion_en_db(sesion)
+        
+        return jsonify({'success': True}), 200
+        
+    except Exception as e:
+        logger.error(f"Error marcando edición: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@jefe_operativo_recepcion_bp.route('/liberar-edicion', methods=['POST'])
+@jefe_operativo_required
+def liberar_edicion(current_user):
+    try:
+        data = request.get_json()
+        codigo_sesion = data.get('codigo')
+        seccion = data.get('seccion')
+        usuario_id = data.get('usuario_id')
+        
+        if not codigo_sesion or codigo_sesion not in sesiones_activas:
+            return jsonify({'error': 'Sesión no encontrada'}), 404
+        
+        sesion = sesiones_activas[codigo_sesion]
+        
+        if sesion.get('secciones_editando', {}).get(seccion) == usuario_id:
+            sesion['secciones_editando'][seccion] = None
+            # Persistir en BD
+            guardar_sesion_en_db(sesion)
+        
+        return jsonify({'success': True}), 200
+        
+    except Exception as e:
+        logger.error(f"Error liberando edición: {str(e)}")
         return jsonify({'error': str(e)}), 500

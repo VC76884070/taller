@@ -936,6 +936,7 @@ body.sidebar-open {
     font-size: 1rem;
     letter-spacing: 1px;
     color: var(--azul-acento);
+    word-break: break-all;
 }
 
 .colaboradores-info {
@@ -1069,6 +1070,7 @@ body.sidebar-open {
     overflow-y: auto;
     animation: modalIn 0.3s ease;
     border: 1px solid var(--border-color);
+    -webkit-overflow-scrolling: touch;
 }
 
 .modal-detalle-content {
@@ -1177,6 +1179,7 @@ body.sidebar-open {
     font-family: monospace;
     letter-spacing: 2px;
     margin: 1rem 0;
+    word-break: break-all;
 }
 
 .codigo-card {
@@ -1193,6 +1196,7 @@ body.sidebar-open {
     font-weight: 700;
     color: var(--rojo-primario);
     font-family: monospace;
+    word-break: break-all;
 }
 
 .resumen-datos {
@@ -1358,6 +1362,7 @@ body.sidebar-open {
     padding: 1rem;
     max-height: 500px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .recepcion-card {
@@ -1811,6 +1816,11 @@ body.sidebar-open {
         gap: 0.75rem;
     }
     
+    .btn-crear-sesion,
+    .btn-unirse-codigo {
+        width: 100%;
+    }
+    
     .session-info {
         flex-direction: column;
         align-items: stretch;
@@ -1871,6 +1881,101 @@ body.sidebar-open {
         width: 100%;
         justify-content: center;
     }
+    
+    /* MEJORAS PARA MODAL DE SESIONES EN MÓVIL */
+    .modal-content {
+        width: 95%;
+        max-height: 80vh;
+        margin: 1rem;
+    }
+    
+    .modal-header {
+        padding: 1rem;
+    }
+    
+    .modal-header h2 {
+        font-size: 1.1rem;
+    }
+    
+    .modal-body {
+        padding: 1rem;
+    }
+    
+    .modal-footer {
+        padding: 1rem;
+    }
+    
+    /* Input de código en modal */
+    #modalUnirsePorCodigo .codigo-input {
+        font-size: 1rem;
+        padding: 0.75rem;
+        text-align: center;
+    }
+    
+    /* Items de sesión en móvil */
+    .sesion-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: 0.75rem;
+    }
+    
+    .sesion-info {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    .sesion-codigo {
+        font-size: 0.75rem;
+        padding: 0.15rem 0.5rem;
+    }
+    
+    .sesion-colaboradores {
+        font-size: 0.7rem;
+    }
+    
+    .sesion-progreso {
+        width: 100%;
+        margin-top: 0.25rem;
+    }
+    
+    .sesion-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    
+    .btn-unirse-sesion {
+        width: 100%;
+        padding: 0.5rem;
+        text-align: center;
+    }
+    
+    /* Panel de sesión actual */
+    .status-indicator,
+    .codigo-actual {
+        justify-content: center;
+    }
+    
+    .btn-cancelar-sesion,
+    .btn-finalizar {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* Panel de colaboradores */
+    .colaboradores-header {
+        padding: 0.75rem 1rem;
+    }
+    
+    .colaborador {
+        padding: 0.5rem 0.75rem;
+    }
+    
+    .colaborador i {
+        font-size: 0.8rem;
+        width: 20px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -1889,11 +1994,50 @@ body.sidebar-open {
     }
     
     .codigo-sesion {
-        font-size: 1.5rem;
+        font-size: 1.2rem;
+        padding: 0.75rem;
+    }
+    
+    .codigo-card {
+        padding: 1rem;
+    }
+    
+    .codigo-valor {
+        font-size: 1.3rem;
     }
     
     .detalle-fotos {
         grid-template-columns: 1fr;
+    }
+    
+    .resumen-item {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    
+    .sesion-codigo {
+        font-size: 0.7rem;
+    }
+    
+    .badge-active,
+    .badge-full {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+    }
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+    .modal-content {
+        max-height: 90vh;
+    }
+    
+    .sesiones-list {
+        max-height: 200px;
+    }
+    
+    .modal-body {
+        max-height: 60vh;
+        overflow-y: auto;
     }
 }
 

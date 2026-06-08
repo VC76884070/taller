@@ -1211,6 +1211,7 @@ def listar_recepciones(current_user):
 @jefe_operativo_required
 def detalle_recepcion(current_user, id_orden):
     try:
+        # 1. Obtener orden de trabajo
         orden_result = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo, id_jefe_operativo, id_jefe_operativo_2') \
             .eq('id', id_orden) \
@@ -1222,6 +1223,7 @@ def detalle_recepcion(current_user, id_orden):
         
         orden = orden_result.data
         
+        # 2. Obtener jefe principal
         jefe_principal = {}
         if orden.get('id_jefe_operativo'):
             jefe1 = supabase.table('usuario') \
@@ -1231,6 +1233,7 @@ def detalle_recepcion(current_user, id_orden):
             if jefe1.data:
                 jefe_principal = jefe1.data[0]
         
+        # 3. Obtener jefe secundario
         jefe_secundario = {}
         if orden.get('id_jefe_operativo_2'):
             jefe2 = supabase.table('usuario') \
@@ -1240,16 +1243,41 @@ def detalle_recepcion(current_user, id_orden):
             if jefe2.data:
                 jefe_secundario = jefe2.data[0]
         
+        # 4. Obtener vehículo
         vehiculo_result = supabase.table('vehiculo') \
-            .select('id, placa, marca, modelo, anio, kilometraje, id_cliente, cliente!inner(id_usuario, usuario!inner(nombre, contacto, ubicacion, latitud, longitud))') \
+            .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
             .eq('id', orden['id_vehiculo']) \
             .single() \
             .execute()
         
         vehiculo = vehiculo_result.data if vehiculo_result.data else {}
-        cliente = vehiculo.get('cliente', {}) if vehiculo else {}
-        usuario = cliente.get('usuario', {}) if cliente else {}
         
+        # 5. Obtener cliente y usuario (separado para evitar errores de columnas)
+        usuario = {}
+        cliente_data = {}
+        
+        if vehiculo.get('id_cliente'):
+            # Obtener cliente (aquí están latitud y longitud)
+            cliente_result = supabase.table('cliente') \
+                .select('id, id_usuario, latitud, longitud, ubicacion_confirmada') \
+                .eq('id', vehiculo['id_cliente']) \
+                .single() \
+                .execute()
+            
+            if cliente_result.data:
+                cliente_data = cliente_result.data
+                
+                # Obtener usuario (aquí están nombre, contacto, ubicacion)
+                if cliente_data.get('id_usuario'):
+                    usuario_result = supabase.table('usuario') \
+                        .select('nombre, contacto, ubicacion, email') \
+                        .eq('id', cliente_data['id_usuario']) \
+                        .single() \
+                        .execute()
+                    if usuario_result.data:
+                        usuario = usuario_result.data
+        
+        # 6. Obtener recepción
         recepcion_result = supabase.table('recepcion') \
             .select('*') \
             .eq('id_orden_trabajo', id_orden) \
@@ -1258,6 +1286,7 @@ def detalle_recepcion(current_user, id_orden):
         
         recepcion = recepcion_result.data if recepcion_result.data else {}
         
+        # 7. Construir detalle
         detalle = {
             'id': orden['id'],
             'codigo_unico': orden['codigo_unico'],
@@ -1273,8 +1302,8 @@ def detalle_recepcion(current_user, id_orden):
             'cliente_nombre': usuario.get('nombre', ''),
             'cliente_telefono': usuario.get('contacto', ''),
             'cliente_ubicacion': usuario.get('ubicacion', ''),
-            'latitud': usuario.get('latitud'),      # ← NUEVO: latitud del cliente
-            'longitud': usuario.get('longitud'),    # ← NUEVO: longitud del cliente
+            'latitud': cliente_data.get('latitud'),      # ← De la tabla cliente
+            'longitud': cliente_data.get('longitud'),    # ← De la tabla cliente
             'fotos': {
                 'url_lateral_izquierda': recepcion.get('url_lateral_izquierda'),
                 'url_lateral_derecha': recepcion.get('url_lateral_derecha'),
@@ -1292,6 +1321,8 @@ def detalle_recepcion(current_user, id_orden):
         
     except Exception as e:
         logger.error(f"Error obteniendo detalle: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 

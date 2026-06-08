@@ -164,7 +164,86 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     iniciarPollingSesiones();
     initRecepcionesPanel();
+    
+    // Iniciar escucha de cambios para colaboración en tiempo real
+    iniciarEscuchaCambios();
 });
+
+// =====================================================
+// COLABORACIÓN EN TIEMPO REAL
+// =====================================================
+
+function notificarCambioSeccion(seccion) {
+    // Guardar en localStorage para que otras pestañas lo detecten
+    const evento = {
+        type: 'SECCION_GUARDADA',
+        seccion: seccion,
+        timestamp: Date.now(),
+        usuario: userInfo?.nombre || 'Usuario'
+    };
+    
+    localStorage.setItem('furia_cambio_seccion', JSON.stringify(evento));
+    
+    // Limpiar después de 500ms
+    setTimeout(() => {
+        if (localStorage.getItem('furia_cambio_seccion') === JSON.stringify(evento)) {
+            localStorage.removeItem('furia_cambio_seccion');
+        }
+    }, 500);
+    
+    console.log(`📢 Notificando cambio en sección: ${seccion} por ${evento.usuario}`);
+}
+
+function iniciarEscuchaCambios() {
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'furia_cambio_seccion' && e.newValue) {
+            try {
+                const evento = JSON.parse(e.newValue);
+                
+                // Ignorar si el cambio lo hizo el mismo usuario
+                if (evento.usuario === userInfo?.nombre) return;
+                
+                console.log(`🔄 Detectado cambio en sección: ${evento.seccion} por ${evento.usuario}`);
+                
+                // Recargar datos de sesión inmediatamente
+                if (codigoSesion) {
+                    cargarDatosSesion();
+                    mostrarNotificacion(`📝 ${evento.usuario} actualizó la sección: ${evento.seccion}`, 'info');
+                }
+            } catch (error) {
+                console.error('Error procesando evento:', error);
+            }
+        }
+    });
+}
+
+// Forzar actualización inmediata después de guardar
+async function forzarActualizacionInmediata() {
+    if (!codigoSesion) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/jefe-operativo/obtener-sesion/${codigoSesion}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.sesion) {
+            const oldSesion = sesionActual;
+            sesionActual = data.sesion;
+            
+            // Solo actualizar UI si hay cambios reales
+            if (JSON.stringify(oldSesion?.datos) !== JSON.stringify(sesionActual?.datos)) {
+                actualizarUIconDatos();
+                actualizarBadgesSecciones();
+                verificarSeccionesCompletadas();
+                console.log('🔄 Actualización forzada completada');
+            }
+        }
+    } catch (error) {
+        console.error('Error en actualización forzada:', error);
+    }
+}
 
 // =====================================================
 // CHECK AUTH
@@ -496,15 +575,13 @@ function confirmarUbicacionLeaflet() {
     if (clienteLatitudInput) clienteLatitudInput.value = ubicacionTemporal.lat;
     if (clienteLongitudInput) clienteLongitudInput.value = ubicacionTemporal.lng;
     
-    // 🔥 IMPORTANTE: Guardar inmediatamente en el servidor
+    // Guardar inmediatamente en el servidor
     if (codigoSesion) {
-        // Marcar que estamos editando cliente
         marcarEditandoSeccion('cliente');
         
-        // Guardar la sección cliente con la nueva ubicación
         guardarSeccion('cliente').then(() => {
             mostrarNotificacion('Ubicación guardada correctamente', 'success');
-            // Liberar edición después de guardar
+            forzarActualizacionInmediata();
             setTimeout(() => {
                 if (camposEnEdicion.cliente) {
                     camposEnEdicion.cliente = false;
@@ -778,10 +855,9 @@ function setupUnirsePorCodigo() {
 }
 
 // =====================================================
-// RASTREO DE EDICIÓN - VERSIÓN MEJORADA
+// RASTREO DE EDICIÓN
 // =====================================================
 function setupInputTracking() {
-    // Cliente inputs
     const clienteInputs = ['clienteNombre', 'clienteTelefono', 'clienteUbicacion'];
     clienteInputs.forEach(id => {
         const input = document.getElementById(id);
@@ -795,9 +871,10 @@ function setupInputTracking() {
             input.addEventListener('blur', async () => {
                 console.log('📤 Dejando de editar:', id);
                 if (timeoutsEdicion.cliente) clearTimeout(timeoutsEdicion.cliente);
-                // Guardar automáticamente al perder el foco
                 if (codigoSesion) {
                     await guardarSeccion('cliente');
+                    forzarActualizacionInmediata();
+                    notificarCambioSeccion('cliente');
                 }
                 timeoutsEdicion.cliente = setTimeout(() => {
                     camposEnEdicion.cliente = false;
@@ -808,7 +885,6 @@ function setupInputTracking() {
         }
     });
     
-    // Vehículo inputs
     const vehiculoInputs = ['vehiculoPlaca', 'vehiculoMarca', 'vehiculoModelo', 'vehiculoAnio', 'vehiculoKilometraje'];
     vehiculoInputs.forEach(id => {
         const input = document.getElementById(id);
@@ -824,6 +900,8 @@ function setupInputTracking() {
                 if (timeoutsEdicion.vehiculo) clearTimeout(timeoutsEdicion.vehiculo);
                 if (codigoSesion) {
                     await guardarSeccion('vehiculo');
+                    forzarActualizacionInmediata();
+                    notificarCambioSeccion('vehiculo');
                 }
                 timeoutsEdicion.vehiculo = setTimeout(() => {
                     camposEnEdicion.vehiculo = false;
@@ -834,7 +912,6 @@ function setupInputTracking() {
         }
     });
     
-    // Descripción
     if (descripcionProblema) {
         descripcionProblema.addEventListener('focus', () => {
             console.log('✏️ Editando descripción');
@@ -848,6 +925,8 @@ function setupInputTracking() {
             if (timeoutsEdicion.descripcion) clearTimeout(timeoutsEdicion.descripcion);
             if (codigoSesion && descripcionProblema.value !== descripcionOriginal) {
                 await guardarSeccion('descripcion');
+                forzarActualizacionInmediata();
+                notificarCambioSeccion('descripcion');
             }
             timeoutsEdicion.descripcion = setTimeout(() => {
                 camposEnEdicion.descripcion = false;
@@ -926,6 +1005,9 @@ function setupEventListeners() {
             const seccion = btn.dataset.seccion;
             if (seccion && codigoSesion) {
                 await guardarSeccion(seccion);
+                forzarActualizacionInmediata();
+                notificarCambioSeccion(seccion);
+                mostrarNotificacion(`✓ Sección ${seccion} guardada`, 'success');
             }
         });
     });
@@ -1004,7 +1086,7 @@ function renderSesionesActivas(sesiones) {
                 </div>
                 <div class="sesion-actions">
                     ${!esActiva && !estaCompleta ? `
-                        <button class="btn-unirse-sesion" onclick="mostrarModalUnirse()">
+                        <button class="btn-unirse-sesion" onclick="unirseSesionConCodigo('${sesion.codigo}')">
                             <i class="fas fa-sign-in-alt"></i> Unirse
                         </button>
                     ` : estaCompleta && !esActiva ? `
@@ -1144,12 +1226,7 @@ async function cargarDatosSesion() {
 }
 
 // =====================================================
-// ACTUALIZAR UI CON DATOS - VERSIÓN MEJORADA
-// (NO SOBRESCRIBE MIENTRAS EL USUARIO EDITA)
-// =====================================================
-// =====================================================
-// ACTUALIZAR UI CON DATOS - VERSIÓN MEJORADA
-// (NO SOBRESCRIBE MIENTRAS EL USUARIO EDITA, INCLUYE UBICACIÓN)
+// ACTUALIZAR UI CON DATOS - NO SOBRESCRIBE MIENTRAS EL USUARIO EDITA
 // =====================================================
 function actualizarUIconDatos() {
     if (!sesionActual) return;
@@ -1177,13 +1254,9 @@ function actualizarUIconDatos() {
         if (clienteTelefono && datos.cliente && clienteTelefono.value !== datos.cliente.telefono) {
             clienteTelefono.value = datos.cliente.telefono || '';
         }
-        // IMPORTANTE: Ubicación y coordenadas SOLO si no se acaban de guardar
-        if (clienteUbicacion && datos.cliente && clienteUbicacion.value !== datos.cliente.ubicacion) {
-            // Verificar si el usuario no está en medio de seleccionar ubicación
-            const modalAbierto = document.getElementById('modalUbicacionLeaflet')?.classList.contains('show');
-            if (!modalAbierto) {
-                clienteUbicacion.value = datos.cliente.ubicacion || '';
-            }
+        const modalAbierto = document.getElementById('modalUbicacionLeaflet')?.classList.contains('show');
+        if (clienteUbicacion && datos.cliente && !modalAbierto && clienteUbicacion.value !== datos.cliente.ubicacion) {
+            clienteUbicacion.value = datos.cliente.ubicacion || '';
         }
         if (clienteLatitud && datos.cliente && datos.cliente.latitud !== undefined && 
             clienteLatitud.value != datos.cliente.latitud) {
@@ -1582,8 +1655,6 @@ async function guardarSeccion(seccion) {
                 setTimeout(() => guardadoIndicator.style.display = 'none', 2000);
             }
             
-            mostrarNotificacion(`✓ Sección ${seccion} guardada correctamente`, 'success');
-            
             if (seccion === 'fotos') {
                 for (const foto of FOTOS_CONFIG) {
                     const input = document.getElementById(foto.id);
@@ -1664,7 +1735,7 @@ function limpiarDescripcion() {
 }
 
 // =====================================================
-// TRANSCRIPCIÓN DE AUDIO
+// TRANSCRIPCIÓN DE AUDIO (código existente se mantiene)
 // =====================================================
 function setupTranscripcion() {
     if (!btnTranscribirAudio) return;
@@ -1742,7 +1813,7 @@ function setupTranscripcion() {
 }
 
 // =====================================================
-// GRABACIÓN DE AUDIO
+// GRABACIÓN DE AUDIO (código existente se mantiene)
 // =====================================================
 function setupAudioRecording() {
     if (!btnGrabarAudio) return;
@@ -2004,7 +2075,7 @@ async function finalizarSesion() {
 }
 
 // =====================================================
-// FUNCIONES AUXILIARES
+// FUNCIONES AUXILIARES (generación de fotos, validaciones, etc.)
 // =====================================================
 function generatePhotoUploads() {
     if (!photoGrid) return;
@@ -2147,7 +2218,7 @@ function escapeHtml(text) {
 }
 
 // =====================================================
-// MODALES
+// MODALES (mostrarModalCodigo, mostrarCodigoGenerado, etc.)
 // =====================================================
 function mostrarModalCodigo(codigo) {
     const modal = document.getElementById('codigoModal');
@@ -2227,7 +2298,7 @@ window.logout = () => {
 };
 
 // =====================================================
-// PANEL DE RECEPCIONES GUARDADAS
+// PANEL DE RECEPCIONES GUARDADAS (funciones existentes)
 // =====================================================
 function initRecepcionesPanel() {
     cargarRecepciones();

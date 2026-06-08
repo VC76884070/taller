@@ -488,6 +488,7 @@ function confirmarUbicacionLeaflet() {
         return;
     }
     
+    // Guardar en los campos del formulario principal
     if (clienteUbicacionInput) {
         clienteUbicacionInput.value = ubicacionTemporal.texto;
         clienteUbicacionInput.dispatchEvent(new Event('input'));
@@ -495,18 +496,28 @@ function confirmarUbicacionLeaflet() {
     if (clienteLatitudInput) clienteLatitudInput.value = ubicacionTemporal.lat;
     if (clienteLongitudInput) clienteLongitudInput.value = ubicacionTemporal.lng;
     
-    mostrarNotificacion('Ubicación guardada correctamente', 'success');
-    cerrarModalLeaflet();
-    
+    // 🔥 IMPORTANTE: Guardar inmediatamente en el servidor
     if (codigoSesion) {
+        // Marcar que estamos editando cliente
         marcarEditandoSeccion('cliente');
-        setTimeout(() => {
-            if (camposEnEdicion.cliente) {
-                camposEnEdicion.cliente = false;
-                liberarEdicionSeccion('cliente');
-            }
-        }, 2000);
+        
+        // Guardar la sección cliente con la nueva ubicación
+        guardarSeccion('cliente').then(() => {
+            mostrarNotificacion('Ubicación guardada correctamente', 'success');
+            // Liberar edición después de guardar
+            setTimeout(() => {
+                if (camposEnEdicion.cliente) {
+                    camposEnEdicion.cliente = false;
+                    liberarEdicionSeccion('cliente');
+                }
+            }, 2000);
+        }).catch(error => {
+            console.error('Error guardando ubicación:', error);
+            mostrarNotificacion('Error al guardar la ubicación', 'error');
+        });
     }
+    
+    cerrarModalLeaflet();
 }
 
 async function buscarYMostrarLeaflet() {
@@ -1136,6 +1147,10 @@ async function cargarDatosSesion() {
 // ACTUALIZAR UI CON DATOS - VERSIÓN MEJORADA
 // (NO SOBRESCRIBE MIENTRAS EL USUARIO EDITA)
 // =====================================================
+// =====================================================
+// ACTUALIZAR UI CON DATOS - VERSIÓN MEJORADA
+// (NO SOBRESCRIBE MIENTRAS EL USUARIO EDITA, INCLUYE UBICACIÓN)
+// =====================================================
 function actualizarUIconDatos() {
     if (!sesionActual) return;
     
@@ -1144,9 +1159,12 @@ function actualizarUIconDatos() {
     const usuarioId = userInfo.id;
     
     // CLIENTE - Solo si NO está siendo editado
-    if (!camposEnEdicion.cliente && document.activeElement?.id !== 'clienteNombre' && 
-        document.activeElement?.id !== 'clienteTelefono' && document.activeElement?.id !== 'clienteUbicacion') {
-        
+    const clienteEditando = camposEnEdicion.cliente || 
+        document.activeElement?.id === 'clienteNombre' ||
+        document.activeElement?.id === 'clienteTelefono' ||
+        document.activeElement?.id === 'clienteUbicacion';
+    
+    if (!clienteEditando) {
         const clienteNombre = document.getElementById('clienteNombre');
         const clienteTelefono = document.getElementById('clienteTelefono');
         const clienteUbicacion = document.getElementById('clienteUbicacion');
@@ -1159,8 +1177,13 @@ function actualizarUIconDatos() {
         if (clienteTelefono && datos.cliente && clienteTelefono.value !== datos.cliente.telefono) {
             clienteTelefono.value = datos.cliente.telefono || '';
         }
+        // IMPORTANTE: Ubicación y coordenadas SOLO si no se acaban de guardar
         if (clienteUbicacion && datos.cliente && clienteUbicacion.value !== datos.cliente.ubicacion) {
-            clienteUbicacion.value = datos.cliente.ubicacion || '';
+            // Verificar si el usuario no está en medio de seleccionar ubicación
+            const modalAbierto = document.getElementById('modalUbicacionLeaflet')?.classList.contains('show');
+            if (!modalAbierto) {
+                clienteUbicacion.value = datos.cliente.ubicacion || '';
+            }
         }
         if (clienteLatitud && datos.cliente && datos.cliente.latitud !== undefined && 
             clienteLatitud.value != datos.cliente.latitud) {
@@ -1173,10 +1196,14 @@ function actualizarUIconDatos() {
     }
     
     // VEHÍCULO - Solo si NO está siendo editado
-    if (!camposEnEdicion.vehiculo && document.activeElement?.id !== 'vehiculoPlaca' &&
-        document.activeElement?.id !== 'vehiculoMarca' && document.activeElement?.id !== 'vehiculoModelo' &&
-        document.activeElement?.id !== 'vehiculoAnio' && document.activeElement?.id !== 'vehiculoKilometraje') {
-        
+    const vehiculoEditando = camposEnEdicion.vehiculo ||
+        document.activeElement?.id === 'vehiculoPlaca' ||
+        document.activeElement?.id === 'vehiculoMarca' ||
+        document.activeElement?.id === 'vehiculoModelo' ||
+        document.activeElement?.id === 'vehiculoAnio' ||
+        document.activeElement?.id === 'vehiculoKilometraje';
+    
+    if (!vehiculoEditando) {
         const vehiculoPlaca = document.getElementById('vehiculoPlaca');
         const vehiculoMarca = document.getElementById('vehiculoMarca');
         const vehiculoModelo = document.getElementById('vehiculoModelo');

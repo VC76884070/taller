@@ -767,59 +767,81 @@ function setupUnirsePorCodigo() {
 }
 
 // =====================================================
-// RASTREO DE EDICIÓN
+// RASTREO DE EDICIÓN - VERSIÓN MEJORADA
 // =====================================================
 function setupInputTracking() {
+    // Cliente inputs
     const clienteInputs = ['clienteNombre', 'clienteTelefono', 'clienteUbicacion'];
     clienteInputs.forEach(id => {
         const input = document.getElementById(id);
         if (input) {
             input.addEventListener('focus', () => {
+                console.log('✏️ Editando campo:', id);
                 marcarEditandoSeccion('cliente');
                 camposEnEdicion.cliente = true;
                 if (timeoutsEdicion.cliente) clearTimeout(timeoutsEdicion.cliente);
             });
-            input.addEventListener('blur', () => {
+            input.addEventListener('blur', async () => {
+                console.log('📤 Dejando de editar:', id);
                 if (timeoutsEdicion.cliente) clearTimeout(timeoutsEdicion.cliente);
+                // Guardar automáticamente al perder el foco
+                if (codigoSesion) {
+                    await guardarSeccion('cliente');
+                }
                 timeoutsEdicion.cliente = setTimeout(() => {
                     camposEnEdicion.cliente = false;
                     liberarEdicionSeccion('cliente');
+                    console.log('✅ Campo cliente liberado');
                 }, 2000);
             });
         }
     });
     
+    // Vehículo inputs
     const vehiculoInputs = ['vehiculoPlaca', 'vehiculoMarca', 'vehiculoModelo', 'vehiculoAnio', 'vehiculoKilometraje'];
     vehiculoInputs.forEach(id => {
         const input = document.getElementById(id);
         if (input) {
             input.addEventListener('focus', () => {
+                console.log('✏️ Editando campo:', id);
                 marcarEditandoSeccion('vehiculo');
                 camposEnEdicion.vehiculo = true;
                 if (timeoutsEdicion.vehiculo) clearTimeout(timeoutsEdicion.vehiculo);
             });
-            input.addEventListener('blur', () => {
+            input.addEventListener('blur', async () => {
+                console.log('📤 Dejando de editar:', id);
                 if (timeoutsEdicion.vehiculo) clearTimeout(timeoutsEdicion.vehiculo);
+                if (codigoSesion) {
+                    await guardarSeccion('vehiculo');
+                }
                 timeoutsEdicion.vehiculo = setTimeout(() => {
                     camposEnEdicion.vehiculo = false;
                     liberarEdicionSeccion('vehiculo');
+                    console.log('✅ Campo vehículo liberado');
                 }, 2000);
             });
         }
     });
     
+    // Descripción
     if (descripcionProblema) {
         descripcionProblema.addEventListener('focus', () => {
+            console.log('✏️ Editando descripción');
             marcarEditandoSeccion('descripcion');
             camposEnEdicion.descripcion = true;
             if (timeoutsEdicion.descripcion) clearTimeout(timeoutsEdicion.descripcion);
         });
         
-        descripcionProblema.addEventListener('blur', () => {
+        descripcionProblema.addEventListener('blur', async () => {
+            console.log('📤 Dejando de editar descripción');
             if (timeoutsEdicion.descripcion) clearTimeout(timeoutsEdicion.descripcion);
+            if (codigoSesion && descripcionProblema.value !== descripcionOriginal) {
+                await guardarSeccion('descripcion');
+            }
             timeoutsEdicion.descripcion = setTimeout(() => {
                 camposEnEdicion.descripcion = false;
                 liberarEdicionSeccion('descripcion');
+                console.log('✅ Campo descripción liberado');
             }, 2000);
         });
         
@@ -1110,6 +1132,10 @@ async function cargarDatosSesion() {
     }
 }
 
+// =====================================================
+// ACTUALIZAR UI CON DATOS - VERSIÓN MEJORADA
+// (NO SOBRESCRIBE MIENTRAS EL USUARIO EDITA)
+// =====================================================
 function actualizarUIconDatos() {
     if (!sesionActual) return;
     
@@ -1117,62 +1143,74 @@ function actualizarUIconDatos() {
     const seccionesEditando = sesionActual.secciones_editando || {};
     const usuarioId = userInfo.id;
     
-    if (!camposEnEdicion.cliente) {
+    // CLIENTE - Solo si NO está siendo editado
+    if (!camposEnEdicion.cliente && document.activeElement?.id !== 'clienteNombre' && 
+        document.activeElement?.id !== 'clienteTelefono' && document.activeElement?.id !== 'clienteUbicacion') {
+        
         const clienteNombre = document.getElementById('clienteNombre');
         const clienteTelefono = document.getElementById('clienteTelefono');
         const clienteUbicacion = document.getElementById('clienteUbicacion');
         const clienteLatitud = document.getElementById('clienteLatitud');
         const clienteLongitud = document.getElementById('clienteLongitud');
         
-        if (clienteNombre && datos.cliente && document.activeElement !== clienteNombre) {
-            if (clienteNombre.value !== datos.cliente.nombre) clienteNombre.value = datos.cliente.nombre || '';
+        if (clienteNombre && datos.cliente && clienteNombre.value !== datos.cliente.nombre) {
+            clienteNombre.value = datos.cliente.nombre || '';
         }
-        if (clienteTelefono && datos.cliente && document.activeElement !== clienteTelefono) {
-            if (clienteTelefono.value !== datos.cliente.telefono) clienteTelefono.value = datos.cliente.telefono || '';
+        if (clienteTelefono && datos.cliente && clienteTelefono.value !== datos.cliente.telefono) {
+            clienteTelefono.value = datos.cliente.telefono || '';
         }
-        if (clienteUbicacion && datos.cliente && document.activeElement !== clienteUbicacion) {
-            if (clienteUbicacion.value !== datos.cliente.ubicacion) clienteUbicacion.value = datos.cliente.ubicacion || '';
+        if (clienteUbicacion && datos.cliente && clienteUbicacion.value !== datos.cliente.ubicacion) {
+            clienteUbicacion.value = datos.cliente.ubicacion || '';
         }
-        if (clienteLatitud && datos.cliente && datos.cliente.latitud) {
-            clienteLatitud.value = datos.cliente.latitud;
+        if (clienteLatitud && datos.cliente && datos.cliente.latitud !== undefined && 
+            clienteLatitud.value != datos.cliente.latitud) {
+            clienteLatitud.value = datos.cliente.latitud || '';
         }
-        if (clienteLongitud && datos.cliente && datos.cliente.longitud) {
-            clienteLongitud.value = datos.cliente.longitud;
+        if (clienteLongitud && datos.cliente && datos.cliente.longitud !== undefined && 
+            clienteLongitud.value != datos.cliente.longitud) {
+            clienteLongitud.value = datos.cliente.longitud || '';
         }
     }
     
-    if (!camposEnEdicion.vehiculo) {
+    // VEHÍCULO - Solo si NO está siendo editado
+    if (!camposEnEdicion.vehiculo && document.activeElement?.id !== 'vehiculoPlaca' &&
+        document.activeElement?.id !== 'vehiculoMarca' && document.activeElement?.id !== 'vehiculoModelo' &&
+        document.activeElement?.id !== 'vehiculoAnio' && document.activeElement?.id !== 'vehiculoKilometraje') {
+        
         const vehiculoPlaca = document.getElementById('vehiculoPlaca');
         const vehiculoMarca = document.getElementById('vehiculoMarca');
         const vehiculoModelo = document.getElementById('vehiculoModelo');
         const vehiculoAnio = document.getElementById('vehiculoAnio');
         const vehiculoKilometraje = document.getElementById('vehiculoKilometraje');
         
-        if (vehiculoPlaca && datos.vehiculo && document.activeElement !== vehiculoPlaca) {
-            if (vehiculoPlaca.value !== datos.vehiculo.placa) vehiculoPlaca.value = datos.vehiculo.placa || '';
+        if (vehiculoPlaca && datos.vehiculo && vehiculoPlaca.value !== datos.vehiculo.placa) {
+            vehiculoPlaca.value = datos.vehiculo.placa || '';
         }
-        if (vehiculoMarca && datos.vehiculo && document.activeElement !== vehiculoMarca) {
-            if (vehiculoMarca.value !== datos.vehiculo.marca) vehiculoMarca.value = datos.vehiculo.marca || '';
+        if (vehiculoMarca && datos.vehiculo && vehiculoMarca.value !== datos.vehiculo.marca) {
+            vehiculoMarca.value = datos.vehiculo.marca || '';
         }
-        if (vehiculoModelo && datos.vehiculo && document.activeElement !== vehiculoModelo) {
-            if (vehiculoModelo.value !== datos.vehiculo.modelo) vehiculoModelo.value = datos.vehiculo.modelo || '';
+        if (vehiculoModelo && datos.vehiculo && vehiculoModelo.value !== datos.vehiculo.modelo) {
+            vehiculoModelo.value = datos.vehiculo.modelo || '';
         }
-        if (vehiculoAnio && datos.vehiculo && document.activeElement !== vehiculoAnio) {
-            const nuevoValor = datos.vehiculo.anio || '';
-            if (vehiculoAnio.value != nuevoValor) vehiculoAnio.value = nuevoValor;
+        if (vehiculoAnio && datos.vehiculo && vehiculoAnio.value != (datos.vehiculo.anio || '')) {
+            vehiculoAnio.value = datos.vehiculo.anio || '';
         }
-        if (vehiculoKilometraje && datos.vehiculo && document.activeElement !== vehiculoKilometraje) {
-            const nuevoValor = datos.vehiculo.kilometraje || 0;
-            if (vehiculoKilometraje.value != nuevoValor) vehiculoKilometraje.value = nuevoValor;
+        if (vehiculoKilometraje && datos.vehiculo && vehiculoKilometraje.value != (datos.vehiculo.kilometraje || 0)) {
+            vehiculoKilometraje.value = datos.vehiculo.kilometraje || 0;
         }
     }
     
-    if (!camposEnEdicion.descripcion && descripcionProblema && datos.descripcion) {
+    // DESCRIPCIÓN - Solo si NO está siendo editada
+    if (!camposEnEdicion.descripcion && document.activeElement !== descripcionProblema && 
+        descripcionProblema && datos.descripcion) {
+        
         const textoServer = datos.descripcion.texto || '';
         
         if (descripcionModificadaManualmente) return;
         if (transcripcionManual && textoTranscripcion && !pendingTranscription) {
-            if (descripcionProblema.value !== textoTranscripcion) descripcionProblema.value = textoTranscripcion;
+            if (descripcionProblema.value !== textoTranscripcion) {
+                descripcionProblema.value = textoTranscripcion;
+            }
             return;
         }
         if (pendingTranscription) {
@@ -1180,12 +1218,13 @@ function actualizarUIconDatos() {
             pendingTranscription = null;
             return;
         }
-        if (document.activeElement !== descripcionProblema && textoServer !== descripcionProblema.value) {
+        if (textoServer !== descripcionProblema.value) {
             descripcionProblema.value = textoServer;
             descripcionOriginal = textoServer;
         }
     }
     
+    // AUDIO
     if (datos.descripcion && datos.descripcion.audio_url) {
         const audioUrl = datos.descripcion.audio_url;
         if (audioPreview && audioUrl && audioUrl !== 'null' && audioUrl !== 'None') {
@@ -1204,6 +1243,7 @@ function actualizarUIconDatos() {
         }
     }
     
+    // FOTOS
     if (datos.fotos) {
         actualizarFotosDesdeSesion(datos.fotos);
         
@@ -1211,7 +1251,10 @@ function actualizarUIconDatos() {
             const url = datos.fotos[foto.campo];
             return url && url !== 'null' && url !== 'None' && url !== '';
         });
-        sesionActual.secciones_completadas.fotos = fotosCompletas;
+        
+        if (sesionActual.secciones_completadas.fotos !== fotosCompletas) {
+            sesionActual.secciones_completadas.fotos = fotosCompletas;
+        }
         
         const fotosBadge = document.getElementById('statusFotos');
         if (fotosBadge) {
@@ -1231,6 +1274,7 @@ function actualizarUIconDatos() {
         }
     }
     
+    // INDICADORES DE EDICIÓN
     const editandoCliente = document.getElementById('editandoCliente');
     if (editandoCliente && seccionesEditando.cliente && seccionesEditando.cliente !== usuarioId) {
         editandoCliente.style.display = 'flex';
@@ -1238,7 +1282,9 @@ function actualizarUIconDatos() {
             sesionActual.colaboradores?.[idx] === seccionesEditando.cliente
         );
         editandoCliente.innerHTML = `<i class="fas fa-pen"></i> ${nombreEditor || 'Alguien'} está editando...`;
-    } else if (editandoCliente) editandoCliente.style.display = 'none';
+    } else if (editandoCliente) {
+        editandoCliente.style.display = 'none';
+    }
     
     const editandoVehiculo = document.getElementById('editandoVehiculo');
     if (editandoVehiculo && seccionesEditando.vehiculo && seccionesEditando.vehiculo !== usuarioId) {
@@ -1247,7 +1293,9 @@ function actualizarUIconDatos() {
             sesionActual.colaboradores?.[idx] === seccionesEditando.vehiculo
         );
         editandoVehiculo.innerHTML = `<i class="fas fa-pen"></i> ${nombreEditor || 'Alguien'} está editando...`;
-    } else if (editandoVehiculo) editandoVehiculo.style.display = 'none';
+    } else if (editandoVehiculo) {
+        editandoVehiculo.style.display = 'none';
+    }
     
     const editandoDescripcion = document.getElementById('editandoDescripcion');
     if (editandoDescripcion && seccionesEditando.descripcion && seccionesEditando.descripcion !== usuarioId) {
@@ -1256,7 +1304,9 @@ function actualizarUIconDatos() {
             sesionActual.colaboradores?.[idx] === seccionesEditando.descripcion
         );
         editandoDescripcion.innerHTML = `<i class="fas fa-pen"></i> ${nombreEditor || 'Alguien'} está editando...`;
-    } else if (editandoDescripcion) editandoDescripcion.style.display = 'none';
+    } else if (editandoDescripcion) {
+        editandoDescripcion.style.display = 'none';
+    }
     
     actualizarBadgesSecciones();
 }
@@ -2130,7 +2180,7 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
 // =====================================================
 function iniciarPolling() {
     if (pollingInterval) clearInterval(pollingInterval);
-    pollingInterval = setInterval(() => { if (codigoSesion) cargarDatosSesion(); }, 2000);
+    pollingInterval = setInterval(() => { if (codigoSesion) cargarDatosSesion(); }, 3000);
 }
 
 function detenerPolling() {
@@ -2306,7 +2356,6 @@ function mostrarModalDetalle(detalle) {
                         <button class="btn-ruta" onclick="abrirRutaEnGoogleMaps(${latCliente || 'null'}, ${lngCliente || 'null'}, '${escapeHtml(ubicacionCliente)}')">
                             <i class="fab fa-google"></i> Google Maps
                         </button>
-                        <button class="btn-ruta-waze" onclick="abrirRutaEnWaze(${latCliente || 'null'}, ${lngCliente || 'null'}// Continuación de mostrarModalDetalle - parte faltante
                         <button class="btn-ruta-waze" onclick="abrirRutaEnWaze(${latCliente || 'null'}, ${lngCliente || 'null'})">
                             <i class="fab fa-waze"></i> Waze
                         </button>
@@ -2537,7 +2586,7 @@ async function editarRecepcion(id) {
 }
 
 // =====================================================
-// ESTILOS ADICIONALES (agregar los que faltan)
+// ESTILOS ADICIONALES
 // =====================================================
 const styleImagen = document.createElement('style');
 styleImagen.textContent = `

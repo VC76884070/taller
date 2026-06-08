@@ -36,6 +36,12 @@ SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
 
 # =====================================================
+# COORDENADAS DEL TALLER (CAMBIAR SEGÚN UBICACIÓN REAL)
+# =====================================================
+TALLER_LAT = -17.3895   # Latitud del taller (ejemplo: Cochabamba)
+TALLER_LNG = -66.1568   # Longitud del taller
+
+# =====================================================
 # CONFIGURACIÓN DE CLOUDINARY
 # =====================================================
 CLOUDINARY_CONFIGURED = False
@@ -216,11 +222,11 @@ def guardar_sesion_en_db(sesion):
 def cargar_sesiones_activas_db():
     """Cargar todas las sesiones activas desde Supabase"""
     try:
-        # Limpiar sesiones inactivas por más de 8 horas
-        limite = datetime.datetime.now() - datetime.timedelta(hours=8)
+        # Cambiado: 24 horas en lugar de 8 para que no se borren tan rápido
+        limite = datetime.datetime.now() - datetime.timedelta(hours=24)
         
         supabase.table('sesion_colaborativa') \
-            .update({'estado': 'expirada'}) \
+            .update({'estado': 'inactiva'}) \
             .eq('estado', 'activa') \
             .lt('ultima_actividad', limite.isoformat()) \
             .execute()
@@ -474,21 +480,30 @@ def obtener_o_crear_cliente(nombre, telefono, ubicacion, latitud=None, longitud=
                     .eq('id', id_usuario) \
                     .execute()
                 
-                # Actualizar cliente con coordenadas
-                cliente_update = {}
-                if latitud is not None:
-                    cliente_update['latitud'] = latitud
-                if longitud is not None:
-                    cliente_update['longitud'] = longitud
-                if ubicacion and latitud is not None and longitud is not None:
-                    cliente_update['ubicacion_confirmada'] = True
+                # Buscar en tabla cliente
+                cliente_existente = supabase.table('cliente') \
+                    .select('id') \
+                    .eq('id_usuario', id_usuario) \
+                    .execute()
                 
-                if cliente_update:
-                    supabase.table('cliente') \
-                        .update(cliente_update) \
-                        .eq('id_usuario', id_usuario) \
-                        .execute()
-                    logger.info(f"Coordenadas guardadas para cliente: lat={latitud}, lng={longitud}")
+                if cliente_existente.data and len(cliente_existente.data) > 0:
+                    id_cliente = cliente_existente.data[0]['id']
+                    
+                    # Actualizar cliente con coordenadas
+                    cliente_update = {}
+                    if latitud is not None:
+                        cliente_update['latitud'] = latitud
+                    if longitud is not None:
+                        cliente_update['longitud'] = longitud
+                    if ubicacion and latitud is not None and longitud is not None:
+                        cliente_update['ubicacion_confirmada'] = True
+                    
+                    if cliente_update:
+                        supabase.table('cliente') \
+                            .update(cliente_update) \
+                            .eq('id', id_cliente) \
+                            .execute()
+                        logger.info(f"✅ Coordenadas actualizadas para cliente {nombre}: lat={latitud}, lng={longitud}")
                 
                 # Verificar si ya tiene rol de cliente
                 rol_result = supabase.table('usuario_rol') \
@@ -503,15 +518,6 @@ def obtener_o_crear_cliente(nombre, telefono, ubicacion, latitud=None, longitud=
                         'id_rol': 5,
                         'fecha_asignacion': datetime.datetime.now().isoformat()
                     }).execute()
-                
-                # Buscar en tabla cliente
-                cliente_existente = supabase.table('cliente') \
-                    .select('id') \
-                    .eq('id_usuario', id_usuario) \
-                    .execute()
-                
-                if cliente_existente.data and len(cliente_existente.data) > 0:
-                    id_cliente = cliente_existente.data[0]['id']
         
         # Si no existe, crear nuevo usuario
         if not id_cliente:
@@ -566,7 +572,7 @@ def obtener_o_crear_cliente(nombre, telefono, ubicacion, latitud=None, longitud=
                 return None, None
             
             id_cliente = cliente_result.data[0]['id']
-            logger.info(f"Nuevo cliente creado con coordenadas: {nombre}")
+            logger.info(f"✅ Nuevo cliente creado con coordenadas: {nombre}")
         
         return id_cliente, id_usuario
         
@@ -1235,7 +1241,7 @@ def detalle_recepcion(current_user, id_orden):
                 jefe_secundario = jefe2.data[0]
         
         vehiculo_result = supabase.table('vehiculo') \
-            .select('id, placa, marca, modelo, anio, kilometraje, id_cliente, cliente!inner(id_usuario, usuario!inner(nombre, contacto, ubicacion))') \
+            .select('id, placa, marca, modelo, anio, kilometraje, id_cliente, cliente!inner(id_usuario, usuario!inner(nombre, contacto, ubicacion, latitud, longitud))') \
             .eq('id', orden['id_vehiculo']) \
             .single() \
             .execute()
@@ -1267,6 +1273,8 @@ def detalle_recepcion(current_user, id_orden):
             'cliente_nombre': usuario.get('nombre', ''),
             'cliente_telefono': usuario.get('contacto', ''),
             'cliente_ubicacion': usuario.get('ubicacion', ''),
+            'latitud': usuario.get('latitud'),      # ← NUEVO: latitud del cliente
+            'longitud': usuario.get('longitud'),    # ← NUEVO: longitud del cliente
             'fotos': {
                 'url_lateral_izquierda': recepcion.get('url_lateral_izquierda'),
                 'url_lateral_derecha': recepcion.get('url_lateral_derecha'),
@@ -1502,3 +1510,17 @@ def liberar_edicion(current_user):
     except Exception as e:
         logger.error(f"Error liberando edición: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT PARA OBTENER COORDENADAS DEL TALLER
+# =====================================================
+@jefe_operativo_recepcion_bp.route('/taller-coordenadas', methods=['GET'])
+@jefe_operativo_required
+def obtener_coordenadas_taller(current_user):
+    """Retorna las coordenadas del taller para usar en el frontend"""
+    return jsonify({
+        'success': True,
+        'lat': TALLER_LAT,
+        'lng': TALLER_LNG
+    }), 200

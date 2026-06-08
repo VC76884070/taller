@@ -16,7 +16,7 @@ if (typeof window.API_BASE_URL === 'undefined') {
 
 // =====================================================
 // RECEPCION.JS - JEFE OPERATIVO
-// VERSIÓN CORREGIDA CON PERSISTENCIA Y GOOGLE MAPS
+// VERSIÓN COMPLETA CON LEAFLET (GRATIS) Y RUTAS
 // =====================================================
 
 // Configuración
@@ -26,6 +26,10 @@ const logger = {
     error: (...args) => console.error('[ERROR]', ...args),
     warn: (...args) => console.warn('[WARN]', ...args)
 };
+
+// Coordenadas del taller (CAMBIA ESTO POR LA UBICACIÓN REAL DE TU TALLER)
+const TALLER_LAT = -17.3895;   // Latitud del taller (Cochabamba)
+const TALLER_LNG = -66.1568;   // Longitud del taller
 
 // Variables de sesión
 let sesionActual = null;
@@ -67,11 +71,11 @@ let recepcionSeleccionada = null;
 let modoEdicionRecepcion = false;
 let recepcionEditandoId = null;
 
-// Variables para Google Maps
+// Variables para Leaflet (GRATIS, sin API key)
 let mapCliente = null;
 let markerCliente = null;
-let autocompleteUbicacion = null;
-let googleMapsCargado = false;
+let ubicacionTemporal = { texto: '', lat: null, lng: null };
+let leafletInicializado = false;
 
 // Elementos DOM
 const sesionesActivasPanel = document.getElementById('sesionesActivasPanel');
@@ -101,13 +105,12 @@ const transcripcionLoading = document.getElementById('transcripcionLoading');
 const codigoModal = document.getElementById('codigoModal');
 const codigoOrdenModal = document.getElementById('codigoOrdenModal');
 const currentDateSpan = document.getElementById('currentDate');
-const notificacionesCount = document.getElementById('notificacionesCount');
 
 // Elementos de ubicación
 const clienteUbicacionInput = document.getElementById('clienteUbicacion');
 const clienteLatitudInput = document.getElementById('clienteLatitud');
 const clienteLongitudInput = document.getElementById('clienteLongitud');
-const mapUbicacionDiv = document.getElementById('mapUbicacion');
+const btnAbrirModalUbicacion = document.getElementById('btnAbrirModalUbicacion');
 
 // Configuración de las 7 fotos requeridas
 const FOTOS_CONFIG = [
@@ -119,183 +122,6 @@ const FOTOS_CONFIG = [
     { id: 'fotoInferior', nombre: 'inferior', label: 'Inferior', icono: 'fa-arrow-down', campo: 'url_foto_inferior' },
     { id: 'fotoTablero', nombre: 'tablero', label: 'Tablero', icono: 'fa-tachometer-alt', campo: 'url_foto_tablero' }
 ];
-
-// =====================================================
-// GOOGLE MAPS - UBICACIÓN
-// =====================================================
-
-function initGoogleMaps() {
-    if (!clienteUbicacionInput || !mapUbicacionDiv) {
-        console.log('📍 Elementos de mapa no encontrados');
-        return;
-    }
-    
-    if (googleMapsCargado) return;
-    
-    // Coordenadas por defecto (Cochabamba, Bolivia - ajusta a tu ciudad)
-    const defaultLocation = { lat: -17.3895, lng: -66.1568 };
-    
-    try {
-        // Inicializar mapa
-        mapCliente = new google.maps.Map(mapUbicacionDiv, {
-            center: defaultLocation,
-            zoom: 13,
-            mapTypeControl: true,
-            streetViewControl: false,
-            fullscreenControl: true,
-            zoomControl: true
-        });
-        
-        // Crear marcador arrastrable
-        markerCliente = new google.maps.Marker({
-            map: mapCliente,
-            draggable: true,
-            animation: google.maps.Animation.DROP,
-            title: 'Ubicación del cliente'
-        });
-        
-        // Autocompletado de direcciones
-        autocompleteUbicacion = new google.maps.places.Autocomplete(clienteUbicacionInput, {
-            componentRestrictions: { country: 'bo' },
-            fields: ['formatted_address', 'geometry', 'place_id']
-        });
-        
-        autocompleteUbicacion.bindTo('bounds', mapCliente);
-        
-        // Cuando se selecciona un lugar del autocompletado
-        autocompleteUbicacion.addListener('place_changed', () => {
-            const place = autocompleteUbicacion.getPlace();
-            if (!place.geometry) {
-                mostrarNotificacion('No se pudo obtener la ubicación', 'warning');
-                return;
-            }
-            
-            const location = place.geometry.location;
-            mapCliente.setCenter(location);
-            mapCliente.setZoom(15);
-            markerCliente.setPosition(location);
-            
-            if (clienteLatitudInput) clienteLatitudInput.value = location.lat();
-            if (clienteLongitudInput) clienteLongitudInput.value = location.lng();
-            
-            if (place.formatted_address) {
-                clienteUbicacionInput.value = place.formatted_address;
-            }
-        });
-        
-        // Cuando se arrastra el marcador
-        markerCliente.addListener('dragend', () => {
-            const position = markerCliente.getPosition();
-            const lat = position.lat();
-            const lng = position.lng();
-            
-            if (clienteLatitudInput) clienteLatitudInput.value = lat;
-            if (clienteLongitudInput) clienteLongitudInput.value = lng;
-            
-            const geocoder = new google.maps.Geocoder();
-            geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-                if (status === 'OK' && results[0]) {
-                    clienteUbicacionInput.value = results[0].formatted_address;
-                }
-            });
-        });
-        
-        // Click en el mapa para mover el marcador
-        mapCliente.addListener('click', (e) => {
-            const lat = e.latLng.lat();
-            const lng = e.latLng.lng();
-            
-            markerCliente.setPosition({ lat, lng });
-            if (clienteLatitudInput) clienteLatitudInput.value = lat;
-            if (clienteLongitudInput) clienteLongitudInput.value = lng;
-            
-            const geocoder = new google.maps.Geocoder();
-            geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-                if (status === 'OK' && results[0]) {
-                    clienteUbicacionInput.value = results[0].formatted_address;
-                }
-            });
-        });
-        
-        googleMapsCargado = true;
-        console.log('✅ Google Maps inicializado correctamente');
-        
-        // Cargar ubicación existente si hay
-        cargarUbicacionExistente();
-        
-    } catch (error) {
-        console.error('Error inicializando Google Maps:', error);
-    }
-}
-
-function cargarUbicacionExistente() {
-    if (!googleMapsCargado || !mapCliente || !markerCliente) return;
-    
-    const ubicacion = clienteUbicacionInput?.value;
-    const lat = clienteLatitudInput?.value;
-    const lng = clienteLongitudInput?.value;
-    
-    if (lat && lng && lat !== 'undefined' && lng !== 'undefined') {
-        const position = { lat: parseFloat(lat), lng: parseFloat(lng) };
-        mapCliente.setCenter(position);
-        markerCliente.setPosition(position);
-    } else if (ubicacion && ubicacion !== '') {
-        const geocoder = new google.maps.Geocoder();
-        geocoder.geocode({ address: ubicacion }, (results, status) => {
-            if (status === 'OK' && results[0]) {
-                const location = results[0].geometry.location;
-                mapCliente.setCenter(location);
-                markerCliente.setPosition(location);
-                if (clienteLatitudInput) clienteLatitudInput.value = location.lat();
-                if (clienteLongitudInput) clienteLongitudInput.value = location.lng();
-            }
-        });
-    }
-}
-
-function cargarGoogleMaps() {
-    const apiKey = 'TU_API_KEY_AQUI'; // Reemplaza con tu API Key de Google
-    
-    if (typeof google !== 'undefined') {
-        initGoogleMaps();
-        return;
-    }
-    
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMaps`;
-    script.async = true;
-    script.defer = true;
-    script.onerror = () => console.error('Error cargando Google Maps');
-    document.head.appendChild(script);
-}
-
-// =====================================================
-// KEEP-ALIVE PARA MANTENER SESIÓN ACTIVA
-// =====================================================
-
-function iniciarKeepAlive() {
-    if (keepAliveInterval) clearInterval(keepAliveInterval);
-    
-    keepAliveInterval = setInterval(async () => {
-        if (codigoSesion) {
-            try {
-                await fetch(`${API_URL}/jefe-operativo/ping-sesion/${codigoSesion}`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
-                });
-                console.log('💓 Keep-alive enviado para sesión:', codigoSesion);
-            } catch (error) {
-                console.log('Keep-alive error:', error);
-            }
-        }
-    }, 30000);
-}
-
-function detenerKeepAlive() {
-    if (keepAliveInterval) {
-        clearInterval(keepAliveInterval);
-        keepAliveInterval = null;
-    }
-}
 
 // =====================================================
 // INICIALIZACIÓN
@@ -332,11 +158,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupPlacaValidation();
     setupInputTracking();
     setupUnirsePorCodigo();
-    
-    // Cargar Google Maps si existe el contenedor
-    if (mapUbicacionDiv) {
-        cargarGoogleMaps();
-    }
+    setupModalUbicacionLeaflet();
     
     await recuperarSesionActiva();
     
@@ -422,6 +244,410 @@ function initPage() {
     
     if (currentDateSpan) {
         currentDateSpan.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+    }
+}
+
+// =====================================================
+// RUTAS A GOOGLE MAPS Y OTROS MAPAS
+// =====================================================
+
+function abrirRutaEnGoogleMaps(lat, lng, direccion) {
+    let destino = '';
+    
+    if (lat && lng && lat !== 'null' && lat !== '' && lng !== 'null' && lng !== '') {
+        destino = `${lat},${lng}`;
+        console.log('📍 Abriendo ruta con coordenadas:', destino);
+    } else if (direccion && direccion !== '' && direccion !== 'null') {
+        destino = encodeURIComponent(direccion);
+        console.log('📍 Abriendo ruta con dirección:', direccion);
+    } else {
+        mostrarNotificacion('❌ No hay ubicación guardada para este cliente', 'warning');
+        return;
+    }
+    
+    const url = `https://www.google.com/maps/dir/${TALLER_LAT},${TALLER_LNG}/${destino}`;
+    console.log('🗺️ Abriendo Google Maps:', url);
+    window.open(url, '_blank');
+}
+
+function abrirRutaEnWaze(lat, lng) {
+    if (!lat || lat === 'null' || lat === '' || !lng || lng === 'null' || lng === '') {
+        mostrarNotificacion('❌ No hay coordenadas para abrir Waze', 'warning');
+        return;
+    }
+    const url = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+    console.log('🗺️ Abriendo Waze:', url);
+    window.open(url, '_blank');
+}
+
+function abrirRutaEnOpenStreetMap(lat, lng, direccion) {
+    let destino = '';
+    
+    if (lat && lng && lat !== 'null' && lat !== '' && lng !== 'null' && lng !== '') {
+        destino = `${lat},${lng}`;
+    } else if (direccion && direccion !== '' && direccion !== 'null') {
+        destino = encodeURIComponent(direccion);
+    } else {
+        mostrarNotificacion('❌ No hay ubicación para abrir el mapa', 'warning');
+        return;
+    }
+    
+    const url = `https://www.openstreetmap.org/directions?engine=osrm_car&from=${TALLER_LAT},${TALLER_LNG}&to=${destino}`;
+    console.log('🗺️ Abriendo OpenStreetMap:', url);
+    window.open(url, '_blank');
+}
+
+function copiarCoordenadas(lat, lng) {
+    if (!lat || !lng) {
+        mostrarNotificacion('No hay coordenadas para copiar', 'warning');
+        return;
+    }
+    const texto = `${lat},${lng}`;
+    navigator.clipboard.writeText(texto);
+    mostrarNotificacion('📋 Coordenadas copiadas: ' + texto, 'success');
+}
+
+// =====================================================
+// LEAFLET - SELECTOR DE UBICACIÓN GRATUITO
+// =====================================================
+
+function initLeafletMap() {
+    if (leafletInicializado) return;
+    
+    const mapContainer = document.getElementById('leafletMapa');
+    if (!mapContainer) return;
+    
+    const defaultCoords = [TALLER_LAT, TALLER_LNG];
+    
+    mapCliente = L.map(mapContainer).setView(defaultCoords, 13);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+    }).addTo(mapCliente);
+    
+    markerCliente = L.marker(defaultCoords, {
+        draggable: true,
+        autoPan: true
+    });
+    
+    markerCliente.on('dragend', async function(e) {
+        const pos = markerCliente.getLatLng();
+        const direccion = await obtenerDireccionDesdeCoordenadas(pos.lat, pos.lng);
+        
+        ubicacionTemporal = {
+            texto: direccion,
+            lat: pos.lat,
+            lng: pos.lng
+        };
+        actualizarInfoUbicacionLeaflet();
+    });
+    
+    mapCliente.on('click', async function(e) {
+        markerCliente.setLatLng(e.latlng);
+        const direccion = await obtenerDireccionDesdeCoordenadas(e.latlng.lat, e.latlng.lng);
+        
+        ubicacionTemporal = {
+            texto: direccion,
+            lat: e.latlng.lat,
+            lng: e.latlng.lng
+        };
+        actualizarInfoUbicacionLeaflet();
+        
+        if (!mapCliente.hasLayer(markerCliente)) {
+            markerCliente.addTo(mapCliente);
+        }
+    });
+    
+    leafletInicializado = true;
+    console.log('✅ Leaflet inicializado correctamente');
+    
+    cargarUbicacionExistenteLeaflet();
+}
+
+async function obtenerDireccionDesdeCoordenadas(lat, lng) {
+    try {
+        const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`
+        );
+        const data = await response.json();
+        
+        if (data && data.display_name) {
+            return data.display_name;
+        }
+        return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    } catch (error) {
+        console.error('Error obteniendo dirección:', error);
+        return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
+}
+
+async function buscarDireccionLeaflet(query) {
+    try {
+        const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`
+        );
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error buscando dirección:', error);
+        return [];
+    }
+}
+
+function actualizarInfoUbicacionLeaflet() {
+    const ubicacionInfoDiv = document.getElementById('ubicacionInfoLeaflet');
+    const ubicacionSeleccionadaTexto = document.getElementById('ubicacionSeleccionadaTextoLeaflet');
+    const btnConfirmarUbicacionLeaflet = document.getElementById('btnConfirmarUbicacionLeaflet');
+    
+    if (ubicacionTemporal.texto && ubicacionInfoDiv) {
+        ubicacionInfoDiv.style.display = 'block';
+        if (ubicacionSeleccionadaTexto) {
+            ubicacionSeleccionadaTexto.textContent = ubicacionTemporal.texto;
+        }
+        if (btnConfirmarUbicacionLeaflet) {
+            btnConfirmarUbicacionLeaflet.disabled = false;
+        }
+    }
+}
+
+function cargarUbicacionExistenteLeaflet() {
+    if (!leafletInicializado || !mapCliente || !markerCliente) return;
+    
+    const ubicacion = clienteUbicacionInput?.value;
+    const lat = clienteLatitudInput?.value;
+    const lng = clienteLongitudInput?.value;
+    
+    if (lat && lng && lat !== '' && lng !== '') {
+        const position = { lat: parseFloat(lat), lng: parseFloat(lng) };
+        mapCliente.setView([position.lat, position.lng], 15);
+        markerCliente.setLatLng([position.lat, position.lng]);
+        if (!mapCliente.hasLayer(markerCliente)) {
+            markerCliente.addTo(mapCliente);
+        }
+    } else if (ubicacion && ubicacion !== '') {
+        buscarDireccionLeaflet(ubicacion).then(resultados => {
+            if (resultados && resultados.length > 0) {
+                const lugar = resultados[0];
+                const lat = parseFloat(lugar.lat);
+                const lng = parseFloat(lugar.lon);
+                mapCliente.setView([lat, lng], 15);
+                markerCliente.setLatLng([lat, lng]);
+                if (!mapCliente.hasLayer(markerCliente)) {
+                    markerCliente.addTo(mapCliente);
+                }
+                if (clienteLatitudInput) clienteLatitudInput.value = lat;
+                if (clienteLongitudInput) clienteLongitudInput.value = lng;
+            }
+        });
+    }
+}
+
+function abrirModalLeaflet() {
+    const modal = document.getElementById('modalUbicacionLeaflet');
+    if (!modal) return;
+    
+    ubicacionTemporal = { texto: '', lat: null, lng: null };
+    const searchInput = document.getElementById('modalBuscarUbicacionLeaflet');
+    if (searchInput) searchInput.value = '';
+    
+    const ubicacionInfoDiv = document.getElementById('ubicacionInfoLeaflet');
+    if (ubicacionInfoDiv) ubicacionInfoDiv.style.display = 'none';
+    
+    const btnConfirmar = document.getElementById('btnConfirmarUbicacionLeaflet');
+    if (btnConfirmar) btnConfirmar.disabled = true;
+    
+    if (!leafletInicializado) {
+        setTimeout(() => {
+            initLeafletMap();
+            setTimeout(() => {
+                if (mapCliente) mapCliente.invalidateSize();
+                cargarUbicacionExistenteLeaflet();
+            }, 100);
+        }, 100);
+    } else {
+        setTimeout(() => {
+            if (mapCliente) mapCliente.invalidateSize();
+            cargarUbicacionExistenteLeaflet();
+        }, 100);
+    }
+    
+    modal.classList.add('show');
+}
+
+function cerrarModalLeaflet() {
+    const modal = document.getElementById('modalUbicacionLeaflet');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+function confirmarUbicacionLeaflet() {
+    if (!ubicacionTemporal.texto || ubicacionTemporal.lat === null) {
+        mostrarNotificacion('Por favor selecciona una ubicación en el mapa', 'warning');
+        return;
+    }
+    
+    if (clienteUbicacionInput) {
+        clienteUbicacionInput.value = ubicacionTemporal.texto;
+        clienteUbicacionInput.dispatchEvent(new Event('input'));
+    }
+    if (clienteLatitudInput) clienteLatitudInput.value = ubicacionTemporal.lat;
+    if (clienteLongitudInput) clienteLongitudInput.value = ubicacionTemporal.lng;
+    
+    mostrarNotificacion('Ubicación guardada correctamente', 'success');
+    cerrarModalLeaflet();
+    
+    if (codigoSesion) {
+        marcarEditandoSeccion('cliente');
+        setTimeout(() => {
+            if (camposEnEdicion.cliente) {
+                camposEnEdicion.cliente = false;
+                liberarEdicionSeccion('cliente');
+            }
+        }, 2000);
+    }
+}
+
+async function buscarYMostrarLeaflet() {
+    const searchInput = document.getElementById('modalBuscarUbicacionLeaflet');
+    const query = searchInput?.value.trim();
+    
+    if (!query || query.length < 3) return;
+    
+    const resultados = await buscarDireccionLeaflet(query);
+    
+    if (resultados && resultados.length > 0) {
+        const lugar = resultados[0];
+        const lat = parseFloat(lugar.lat);
+        const lng = parseFloat(lugar.lon);
+        
+        if (mapCliente) {
+            mapCliente.setView([lat, lng], 15);
+            markerCliente.setLatLng([lat, lng]);
+            if (!mapCliente.hasLayer(markerCliente)) {
+                markerCliente.addTo(mapCliente);
+            }
+            
+            ubicacionTemporal = {
+                texto: lugar.display_name,
+                lat: lat,
+                lng: lng
+            };
+            actualizarInfoUbicacionLeaflet();
+        }
+    }
+}
+
+function setupModalUbicacionLeaflet() {
+    if (!document.getElementById('modalUbicacionLeaflet')) {
+        const modalHTML = `
+            <div class="modal" id="modalUbicacionLeaflet">
+                <div class="modal-content modal-ubicacion">
+                    <div class="modal-header">
+                        <h2><i class="fas fa-map-marker-alt"></i> Seleccionar Ubicación del Cliente</h2>
+                        <button class="modal-close" id="btnCerrarModalUbicacionLeaflet">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="ubicacion-busqueda">
+                            <div class="search-container">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="modalBuscarUbicacionLeaflet" placeholder="Buscar dirección (calle, zona, ciudad)..." class="ubicacion-search">
+                            </div>
+                            <div id="leafletMapa" class="modal-mapa" style="height: 400px; width: 100%; border-radius: 12px; margin: 15px 0;"></div>
+                            <div class="ubicacion-info" id="ubicacionInfoLeaflet" style="display: none;">
+                                <div class="info-card">
+                                    <i class="fas fa-check-circle"></i>
+                                    <div>
+                                        <strong>Ubicación seleccionada:</strong>
+                                        <span id="ubicacionSeleccionadaTextoLeaflet">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" id="btnCancelarUbicacionLeaflet">
+                            <i class="fas fa-times"></i> Cancelar
+                        </button>
+                        <button class="btn-primary" id="btnConfirmarUbicacionLeaflet" disabled>
+                            <i class="fas fa-check"></i> Usar esta ubicación
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+    
+    if (!document.querySelector('link[href*="leaflet.css"]')) {
+        const linkCSS = document.createElement('link');
+        linkCSS.rel = 'stylesheet';
+        linkCSS.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(linkCSS);
+        
+        const scriptJS = document.createElement('script');
+        scriptJS.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        scriptJS.onload = () => {
+            initLeafletMap();
+        };
+        document.head.appendChild(scriptJS);
+    } else {
+        initLeafletMap();
+    }
+    
+    const btnAbrir = document.getElementById('btnAbrirModalUbicacion');
+    const btnCerrar = document.getElementById('btnCerrarModalUbicacionLeaflet');
+    const btnCancelar = document.getElementById('btnCancelarUbicacionLeaflet');
+    const btnConfirmar = document.getElementById('btnConfirmarUbicacionLeaflet');
+    const searchInput = document.getElementById('modalBuscarUbicacionLeaflet');
+    
+    if (btnAbrir) btnAbrir.addEventListener('click', abrirModalLeaflet);
+    if (btnCerrar) btnCerrar.addEventListener('click', cerrarModalLeaflet);
+    if (btnCancelar) btnCancelar.addEventListener('click', cerrarModalLeaflet);
+    if (btnConfirmar) btnConfirmar.addEventListener('click', confirmarUbicacionLeaflet);
+    
+    if (searchInput) {
+        let timeoutId;
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => buscarYMostrarLeaflet(), 500);
+        });
+    }
+    
+    const modal = document.getElementById('modalUbicacionLeaflet');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) cerrarModalLeaflet();
+        });
+    }
+}
+
+// =====================================================
+// KEEP-ALIVE PARA MANTENER SESIÓN ACTIVA
+// =====================================================
+
+function iniciarKeepAlive() {
+    if (keepAliveInterval) clearInterval(keepAliveInterval);
+    
+    keepAliveInterval = setInterval(async () => {
+        if (codigoSesion) {
+            try {
+                await fetch(`${API_URL}/jefe-operativo/ping-sesion/${codigoSesion}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+                });
+                console.log('💓 Keep-alive enviado para sesión:', codigoSesion);
+            } catch (error) {
+                console.log('Keep-alive error:', error);
+            }
+        }
+    }, 60000);
+}
+
+function detenerKeepAlive() {
+    if (keepAliveInterval) {
+        clearInterval(keepAliveInterval);
+        keepAliveInterval = null;
     }
 }
 
@@ -891,7 +1117,6 @@ function actualizarUIconDatos() {
     const seccionesEditando = sesionActual.secciones_editando || {};
     const usuarioId = userInfo.id;
     
-    // Cliente (incluyendo coordenadas)
     if (!camposEnEdicion.cliente) {
         const clienteNombre = document.getElementById('clienteNombre');
         const clienteTelefono = document.getElementById('clienteTelefono');
@@ -914,14 +1139,8 @@ function actualizarUIconDatos() {
         if (clienteLongitud && datos.cliente && datos.cliente.longitud) {
             clienteLongitud.value = datos.cliente.longitud;
         }
-        
-        // Actualizar mapa si está cargado
-        if (googleMapsCargado && datos.cliente) {
-            cargarUbicacionExistente();
-        }
     }
     
-    // Vehículo
     if (!camposEnEdicion.vehiculo) {
         const vehiculoPlaca = document.getElementById('vehiculoPlaca');
         const vehiculoMarca = document.getElementById('vehiculoMarca');
@@ -948,7 +1167,6 @@ function actualizarUIconDatos() {
         }
     }
     
-    // Descripción
     if (!camposEnEdicion.descripcion && descripcionProblema && datos.descripcion) {
         const textoServer = datos.descripcion.texto || '';
         
@@ -968,7 +1186,6 @@ function actualizarUIconDatos() {
         }
     }
     
-    // Audio
     if (datos.descripcion && datos.descripcion.audio_url) {
         const audioUrl = datos.descripcion.audio_url;
         if (audioPreview && audioUrl && audioUrl !== 'null' && audioUrl !== 'None') {
@@ -987,7 +1204,6 @@ function actualizarUIconDatos() {
         }
     }
     
-    // Fotos
     if (datos.fotos) {
         actualizarFotosDesdeSesion(datos.fotos);
         
@@ -1015,7 +1231,6 @@ function actualizarUIconDatos() {
         }
     }
     
-    // Indicadores de edición
     const editandoCliente = document.getElementById('editandoCliente');
     if (editandoCliente && seccionesEditando.cliente && seccionesEditando.cliente !== usuarioId) {
         editandoCliente.style.display = 'flex';
@@ -1647,15 +1862,8 @@ function limpiarFormularioCompleto() {
     if (btnTranscribirAudio) btnTranscribirAudio.style.display = 'none';
     if (btnEliminarAudio) btnEliminarAudio.style.display = 'none';
     
-    // Limpiar coordenadas
     if (clienteLatitudInput) clienteLatitudInput.value = '';
     if (clienteLongitudInput) clienteLongitudInput.value = '';
-    
-    // Limpiar mapa
-    if (googleMapsCargado && markerCliente) {
-        markerCliente.setMap(null);
-        markerCliente = null;
-    }
 }
 
 // =====================================================
@@ -1942,7 +2150,7 @@ window.logout = () => {
 };
 
 // =====================================================
-// PANEL DE RECEPCIONES GUARDADAS (código existente)
+// PANEL DE RECEPCIONES GUARDADAS
 // =====================================================
 function initRecepcionesPanel() {
     cargarRecepciones();
@@ -2033,9 +2241,17 @@ function renderRecepcionesList(recepciones) {
                 <div class="info-item"><i class="fas fa-user"></i><strong>Cliente:</strong> ${escapeHtml(rec.cliente_nombre || 'N/A')}</div>
                 <div class="info-item"><i class="fas fa-car"></i><strong>Vehículo:</strong> ${escapeHtml(rec.marca || '')} ${escapeHtml(rec.modelo || '')}</div>
                 <div class="info-item"><i class="fas fa-id-card"></i><strong>Placa:</strong> ${escapeHtml(rec.placa || 'N/A')}</div>
+                ${rec.cliente_ubicacion ? `
+                <div class="info-item"><i class="fas fa-map-marker-alt"></i><strong>Ubicación:</strong> ${escapeHtml(rec.cliente_ubicacion.substring(0, 50))}${rec.cliente_ubicacion.length > 50 ? '...' : ''}</div>
+                ` : ''}
             </div>
             <div class="recepcion-actions">
                 <button class="btn-ver-detalle" onclick="verDetalleRecepcion(${rec.id})"><i class="fas fa-eye"></i> Ver Detalles</button>
+                ${rec.cliente_ubicacion ? `
+                <button class="btn-ruta-mini" onclick="abrirRutaEnGoogleMaps(null, null, '${escapeHtml(rec.cliente_ubicacion || '')}')">
+                    <i class="fas fa-directions"></i> Ruta
+                </button>
+                ` : ''}
                 <button class="btn-editar-recepcion" onclick="editarRecepcion(${rec.id})"><i class="fas fa-edit"></i> Editar</button>
                 <button class="btn-eliminar-recepcion" onclick="confirmarEliminarRecepcion(${rec.id}, '${escapeHtml(rec.codigo_unico || '')}')"><i class="fas fa-trash-alt"></i> Eliminar</button>
             </div>
@@ -2064,21 +2280,54 @@ function mostrarModalDetalle(detalle) {
     const modal = document.getElementById('modalDetalleRecepcion');
     const body = document.getElementById('detalleRecepcionBody');
     if (!modal || !body) return;
+    
     const fotosHtml = generarFotosHtml(detalle.fotos);
     let jefesHtml = '';
     if (detalle.jefe_operativo && detalle.jefe_operativo.nombre) jefesHtml += `<div class="detalle-item"><span class="detalle-label">Jefe Principal</span><span class="detalle-value">${escapeHtml(detalle.jefe_operativo.nombre)}</span>${detalle.jefe_operativo.contacto ? `<span class="detalle-value-small">📞 ${escapeHtml(detalle.jefe_operativo.contacto)}</span>` : ''}</div>`;
     if (detalle.jefe_operativo_2 && detalle.jefe_operativo_2.nombre) jefesHtml += `<div class="detalle-item"><span class="detalle-label">Jefe Secundario</span><span class="detalle-value">${escapeHtml(detalle.jefe_operativo_2.nombre)}</span>${detalle.jefe_operativo_2.contacto ? `<span class="detalle-value-small">📞 ${escapeHtml(detalle.jefe_operativo_2.contacto)}</span>` : ''}</div>`;
+    
+    const latCliente = detalle.latitud || null;
+    const lngCliente = detalle.longitud || null;
+    const ubicacionCliente = detalle.cliente_ubicacion || '';
+    const tieneUbicacion = (latCliente && lngCliente) || ubicacionCliente;
+    
     body.innerHTML = `
         <div class="detalle-recepcion">
             <div class="detalle-seccion"><h4><i class="fas fa-info-circle"></i> Información General</h4><div class="detalle-grid"><div class="detalle-item"><span class="detalle-label">Código de Trabajo</span><span class="detalle-value">${escapeHtml(detalle.codigo_unico || 'N/A')}</span></div><div class="detalle-item"><span class="detalle-label">Fecha de Ingreso</span><span class="detalle-value">${new Date(detalle.fecha_ingreso).toLocaleString()}</span></div><div class="detalle-item"><span class="detalle-label">Estado</span><span class="detalle-value">${escapeHtml(detalle.estado_global || 'En Recepción')}</span></div></div></div>
             ${jefesHtml ? `<div class="detalle-seccion"><h4><i class="fas fa-user-tie"></i> Jefes Operativos que registraron</h4><div class="detalle-grid">${jefesHtml}</div></div>` : ''}
-            <div class="detalle-seccion"><h4><i class="fas fa-user"></i> Datos del Cliente</h4><div class="detalle-grid"><div class="detalle-item"><span class="detalle-label">Nombre</span><span class="detalle-value">${escapeHtml(detalle.cliente_nombre || 'N/A')}</span></div><div class="detalle-item"><span class="detalle-label">Teléfono</span><span class="detalle-value">${escapeHtml(detalle.cliente_telefono || 'N/A')}</span></div><div class="detalle-item"><span class="detalle-label">Ubicación</span><span class="detalle-value">${escapeHtml(detalle.cliente_ubicacion || 'N/A')}</span></div></div></div>
+            <div class="detalle-seccion"><h4><i class="fas fa-user"></i> Datos del Cliente</h4><div class="detalle-grid">
+                <div class="detalle-item"><span class="detalle-label">Nombre</span><span class="detalle-value">${escapeHtml(detalle.cliente_nombre || 'N/A')}</span></div>
+                <div class="detalle-item"><span class="detalle-label">Teléfono</span><span class="detalle-value">${escapeHtml(detalle.cliente_telefono || 'N/A')}</span></div>
+                <div class="detalle-item full-width">
+                    <span class="detalle-label">Ubicación</span>
+                    <span class="detalle-value">${escapeHtml(ubicacionCliente || 'No especificada')}</span>
+                    ${tieneUbicacion ? `
+                    <div class="rutas-botones">
+                        <button class="btn-ruta" onclick="abrirRutaEnGoogleMaps(${latCliente || 'null'}, ${lngCliente || 'null'}, '${escapeHtml(ubicacionCliente)}')">
+                            <i class="fab fa-google"></i> Google Maps
+                        </button>
+                        <button class="btn-ruta-waze" onclick="abrirRutaEnWaze(${latCliente || 'null'}, ${lngCliente || 'null'}// Continuación de mostrarModalDetalle - parte faltante
+                        <button class="btn-ruta-waze" onclick="abrirRutaEnWaze(${latCliente || 'null'}, ${lngCliente || 'null'})">
+                            <i class="fab fa-waze"></i> Waze
+                        </button>
+                        <button class="btn-ruta-osm" onclick="abrirRutaEnOpenStreetMap(${latCliente || 'null'}, ${lngCliente || 'null'}, '${escapeHtml(ubicacionCliente)}')">
+                            <i class="fas fa-map"></i> OpenStreetMap
+                        </button>
+                        <button class="btn-ruta-copy" onclick="copiarCoordenadas(${latCliente || 'null'}, ${lngCliente || 'null'})">
+                            <i class="fas fa-copy"></i> Copiar coordenadas
+                        </button>
+                    </div>
+                    <small class="ruta-hint"><i class="fas fa-info-circle"></i> Haz clic para ver la ruta desde el taller hasta el cliente</small>
+                    ` : ''}
+                </div>
+            </div></div>
             <div class="detalle-seccion"><h4><i class="fas fa-car"></i> Datos del Vehículo</h4><div class="detalle-grid"><div class="detalle-item"><span class="detalle-label">Placa</span><span class="detalle-value">${escapeHtml(detalle.placa || 'N/A')}</span></div><div class="detalle-item"><span class="detalle-label">Marca</span><span class="detalle-value">${escapeHtml(detalle.marca || 'N/A')}</span></div><div class="detalle-item"><span class="detalle-label">Modelo</span><span class="detalle-value">${escapeHtml(detalle.modelo || 'N/A')}</span></div><div class="detalle-item"><span class="detalle-label">Año</span><span class="detalle-value">${detalle.anio || 'N/A'}</span></div><div class="detalle-item"><span class="detalle-label">Kilometraje</span><span class="detalle-value">${detalle.kilometraje?.toLocaleString() || '0'} km</span></div></div></div>
             <div class="detalle-seccion"><h4><i class="fas fa-camera"></i> Registro Fotográfico</h4>${fotosHtml}</div>
             <div class="detalle-seccion"><h4><i class="fas fa-pencil-alt"></i> Descripción del Problema</h4><div class="detalle-descripcion">${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}</div>${detalle.audio_url ? `<div class="detalle-audio"><audio controls><source src="${detalle.audio_url.startsWith('http') ? detalle.audio_url : window.API_BASE_URL + detalle.audio_url}" type="audio/wav">Tu navegador no soporta el elemento de audio.</audio></div>` : ''}</div>
         </div>
     `;
     modal.classList.add('show');
+    
     const btnWord = document.getElementById('btnExportarWord');
     const btnPDF = document.getElementById('btnExportarPDF');
     if (btnWord) btnWord.onclick = () => exportarAWord(detalle);
@@ -2155,9 +2404,14 @@ function cargarDatosParaEdicion(detalle) {
     const clienteNombre = document.getElementById('clienteNombre');
     const clienteTelefono = document.getElementById('clienteTelefono');
     const clienteUbicacion = document.getElementById('clienteUbicacion');
+    const clienteLatitud = document.getElementById('clienteLatitud');
+    const clienteLongitud = document.getElementById('clienteLongitud');
+    
     if (clienteNombre) clienteNombre.value = detalle.cliente_nombre || '';
     if (clienteTelefono) clienteTelefono.value = detalle.cliente_telefono || '';
     if (clienteUbicacion) clienteUbicacion.value = detalle.cliente_ubicacion || '';
+    if (clienteLatitud && detalle.latitud) clienteLatitud.value = detalle.latitud;
+    if (clienteLongitud && detalle.longitud) clienteLongitud.value = detalle.longitud;
     
     const vehiculoPlaca = document.getElementById('vehiculoPlaca');
     const vehiculoMarca = document.getElementById('vehiculoMarca');
@@ -2283,7 +2537,7 @@ async function editarRecepcion(id) {
 }
 
 // =====================================================
-// ESTILOS ADICIONALES
+// ESTILOS ADICIONALES (agregar los que faltan)
 // =====================================================
 const styleImagen = document.createElement('style');
 styleImagen.textContent = `
@@ -2295,7 +2549,68 @@ styleImagen.textContent = `
     .btn-danger { background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 500; }
     .btn-danger:hover { background: #c82333; }
     .modo-edicion-badge { background: #FFB347; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; margin-left: 12px; }
-    #mapUbicacion { border-radius: 12px; margin-top: 10px; border: 1px solid var(--borde-claro); }
-    .map-hint { display: block; font-size: 11px; color: var(--texto-secundario); margin-top: 5px; }
+    #leafletMapa { border-radius: 12px; margin-top: 10px; border: 1px solid var(--borde-claro); z-index: 1; }
+    .ubicacion-info { margin-top: 10px; padding: 12px; background: var(--fondo-suave); border-radius: 8px; animation: fadeIn 0.3s ease; }
+    .info-card { display: flex; align-items: center; gap: 12px; }
+    .info-card i { font-size: 20px; color: var(--verde-exito); }
+    .info-card strong { display: block; font-size: 12px; color: var(--texto-secundario); }
+    .info-card span { font-size: 14px; color: var(--texto-principal); }
+    .ubicacion-input-group { display: flex; gap: 10px; align-items: center; }
+    .ubicacion-input-group input { flex: 1; }
+    .btn-ubicacion { background: var(--fondo-suave); border: 1px solid var(--borde-claro); border-radius: 8px; padding: 10px 16px; cursor: pointer; font-size: 14px; color: var(--texto-principal); transition: all 0.3s ease; white-space: nowrap; }
+    .btn-ubicacion:hover { background: var(--rojo-acento); color: white; border-color: var(--rojo-acento); }
+    .btn-ubicacion i { margin-right: 8px; }
+    .form-hint { display: block; font-size: 11px; color: var(--texto-secundario); margin-top: 5px; }
+    .full-width { width: 100%; grid-column: 1 / -1; }
+    .search-container { position: relative; margin-bottom: 10px; }
+    .search-container i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--texto-secundario); z-index: 2; }
+    .ubicacion-search { width: 100%; padding: 12px 12px 12px 40px; border: 1px solid var(--borde-claro); border-radius: 8px; font-size: 14px; outline: none; transition: all 0.3s ease; background: var(--gris-oscuro); color: var(--blanco); }
+    .ubicacion-search:focus { border-color: var(--rojo-acento); box-shadow: 0 0 0 2px rgba(193,18,31,0.1); }
+    
+    /* Estilos para botones de ruta */
+    .rutas-botones {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+    .btn-ruta, .btn-ruta-waze, .btn-ruta-osm, .btn-ruta-copy {
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        border: none;
+    }
+    .btn-ruta { background: #4285F4; color: white; }
+    .btn-ruta:hover { background: #3367D6; transform: translateY(-1px); }
+    .btn-ruta-waze { background: #33CCFF; color: #1D1D1B; }
+    .btn-ruta-waze:hover { background: #2BB8E6; transform: translateY(-1px); }
+    .btn-ruta-osm { background: #7BC5AE; color: #1D1D1B; }
+    .btn-ruta-osm:hover { background: #6BB59E; transform: translateY(-1px); }
+    .btn-ruta-copy { background: var(--gris-medio); color: var(--blanco); border: 1px solid var(--border-color); }
+    .btn-ruta-copy:hover { background: var(--rojo-primario); border-color: var(--rojo-primario); transform: translateY(-1px); }
+    .btn-ruta-mini {
+        background: linear-gradient(135deg, #4285F4, #3367D6);
+        border: none;
+        color: white;
+        padding: 0.3rem 0.8rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: var(--transition);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    .btn-ruta-mini:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.05); }
+    .btn-ruta-mini:disabled { opacity: 0.5; cursor: not-allowed; }
+    .ruta-hint { display: block; font-size: 0.65rem; color: var(--gris-texto); margin-top: 0.5rem; }
+    
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 `;
 document.head.appendChild(styleImagen);

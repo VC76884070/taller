@@ -1,7 +1,7 @@
 /* =====================================================
    RECEPCIÓN DE VEHÍCULO - ESTILOS OSCUROS MODERNOS
    PALETA: Rojo como acento, fondo oscuro elegante
-   VERSIÓN COMPLETA CON RESPONSIVE Y SIDEBAR
+   VERSIÓN COMPLETA CON RESPONSIVE Y LEAFLET
    ===================================================== */
 
 /* =====================================================
@@ -49,28 +49,35 @@
     --bg-secondary: #121214;
     --bg-card: #1C1C1E;
     --border-color: #2C2C2E;
+    --fondo-suave: rgba(255,255,255,0.05);
 }
 
 /* =====================================================
    ESTILOS BASE
    ===================================================== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
 body {
     background: var(--bg-primary);
     color: var(--blanco);
     font-family: 'Plus Jakarta Sans', sans-serif;
+    overflow-x: hidden;
 }
 
 /* =====================================================
    LAYOUT PRINCIPAL Y SIDEBAR
    ===================================================== */
-
-/* Ajustes para el main content cuando sidebar está presente */
 .main-content {
     margin-left: 280px;
     transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    min-height: 100vh;
+    padding: 0 1.5rem 2rem 1.5rem;
 }
 
-/* Overlay para cerrar sidebar */
 .sidebar-overlay {
     position: fixed;
     top: 0;
@@ -88,9 +95,31 @@ body {
     display: block;
 }
 
-/* Ajuste para body cuando sidebar está abierto */
 body.sidebar-open {
     overflow: hidden;
+}
+
+.hamburger-menu {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 1000;
+    background: var(--gris-medio);
+    border: none;
+    color: var(--blanco);
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: var(--transition);
+}
+
+.hamburger-menu:hover {
+    background: var(--rojo-primario);
 }
 
 .recepcion-form {
@@ -127,6 +156,7 @@ body.sidebar-open {
     padding: 1.2rem 1.5rem;
     background: linear-gradient(135deg, rgba(193,18,31,0.05), transparent);
     border-bottom: 1px solid var(--border-color);
+    flex-wrap: wrap;
 }
 
 .card-icon {
@@ -154,6 +184,39 @@ body.sidebar-open {
     font-size: 0.75rem;
     padding: 0.3rem 0.8rem;
     border-radius: var(--radius-full);
+}
+
+.seccion-status {
+    margin-left: auto;
+}
+
+.status-badge {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-full);
+    background: var(--gris-oscuro);
+    color: var(--gris-texto);
+}
+
+.status-badge.completado {
+    background: rgba(16,185,129,0.2);
+    color: var(--verde-exito);
+}
+
+.status-badge.en-proceso {
+    background: rgba(245,158,11,0.2);
+    color: var(--ambar-alerta);
+}
+
+.colaborador-editando {
+    font-size: 0.7rem;
+    color: var(--ambar-alerta);
+    background: rgba(245,158,11,0.15);
+    padding: 0.25rem 0.6rem;
+    border-radius: var(--radius-full);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
 }
 
 .card-body {
@@ -211,19 +274,54 @@ body.sidebar-open {
     background: var(--gris-medio);
 }
 
-.form-group input.error,
-.form-group textarea.error {
-    border-color: var(--rojo-acento);
-    box-shadow: 0 0 0 2px rgba(220,38,38,0.2);
+/* =====================================================
+   UBICACIÓN - INPUT CON MAPA
+   ===================================================== */
+.ubicacion-input-group {
+    display: flex;
+    gap: 10px;
+    align-items: center;
 }
 
-.error-message {
-    color: var(--rojo-acento);
-    font-size: 0.7rem;
-    margin-top: 0.25rem;
-    display: flex;
+.ubicacion-input-group input {
+    flex: 1;
+}
+
+.ubicacion-input-group input:read-only {
+    cursor: pointer;
+    background: var(--gris-oscuro);
+}
+
+.btn-ubicacion {
+    background: var(--fondo-suave);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--blanco);
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 8px;
+}
+
+.btn-ubicacion:hover {
+    background: var(--rojo-primario);
+    color: white;
+    border-color: var(--rojo-primario);
+}
+
+.form-hint {
+    display: block;
+    font-size: 11px;
+    color: var(--gris-texto);
+    margin-top: 5px;
+}
+
+.full-width {
+    width: 100%;
 }
 
 /* =====================================================
@@ -447,17 +545,6 @@ body.sidebar-open {
     color: var(--gris-texto);
 }
 
-.audio-status.success {
-    background: rgba(16,185,129,0.15);
-    color: var(--verde-exito);
-}
-
-.audio-status.recording {
-    background: rgba(220,38,38,0.15);
-    color: var(--rojo-acento);
-    animation: pulse-text 1s infinite;
-}
-
 #audioPreview {
     width: 100%;
     max-width: 100%;
@@ -629,19 +716,6 @@ body.sidebar-open {
     border-bottom: 1px solid var(--border-color);
 }
 
-.sesiones-activas-panel .panel-header i {
-    color: var(--rojo-primario);
-    font-size: 1.2rem;
-}
-
-.sesiones-activas-panel .panel-header h3 {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--blanco);
-    margin: 0;
-    flex: 1;
-}
-
 .sesiones-activas-panel .panel-header .badge {
     background: var(--rojo-primario);
     color: white;
@@ -784,17 +858,6 @@ body.sidebar-open {
     transition: width 0.3s ease;
 }
 
-.sesion-progreso span {
-    font-size: 0.7rem;
-    color: var(--gris-texto);
-    min-width: 35px;
-}
-
-.sesion-actions {
-    display: flex;
-    gap: 0.5rem;
-}
-
 .btn-unirse-sesion {
     background: transparent;
     border: 1px solid var(--rojo-primario);
@@ -867,11 +930,6 @@ body.sidebar-open {
     border-radius: 30px;
 }
 
-.codigo-actual .label {
-    font-size: 0.75rem;
-    color: var(--gris-texto);
-}
-
 .codigo-actual .codigo {
     font-family: monospace;
     font-weight: 700;
@@ -916,11 +974,6 @@ body.sidebar-open {
     border-bottom: 1px solid var(--border-color);
 }
 
-.colaboradores-header i {
-    color: var(--azul-acento);
-    font-size: 1.1rem;
-}
-
 .colaboradores-header .badge {
     background: var(--azul-acento);
     color: white;
@@ -955,11 +1008,6 @@ body.sidebar-open {
     text-align: center;
 }
 
-.colaborador span {
-    flex: 1;
-    font-size: 0.9rem;
-}
-
 .colaborador .badge-you {
     background: rgba(16,185,129,0.2);
     color: var(--verde-exito);
@@ -967,39 +1015,6 @@ body.sidebar-open {
     border-radius: 12px;
     font-size: 0.7rem;
     font-weight: 500;
-}
-
-.colaborador.placeholder {
-    background: transparent;
-    justify-content: center;
-    color: var(--gris-texto);
-    font-size: 0.85rem;
-    padding: 1rem;
-}
-
-/* =====================================================
-   INDICADORES DE ESTADO
-   ===================================================== */
-.seccion-status {
-    margin-left: auto;
-}
-
-.status-badge {
-    font-size: 0.7rem;
-    padding: 0.2rem 0.6rem;
-    border-radius: var(--radius-full);
-    background: var(--gris-oscuro);
-    color: var(--gris-texto);
-}
-
-.status-badge.completado {
-    background: rgba(16,185,129,0.2);
-    color: var(--verde-exito);
-}
-
-.status-badge.en-proceso {
-    background: rgba(245,158,11,0.2);
-    color: var(--ambar-alerta);
 }
 
 .badge-active {
@@ -1019,17 +1034,6 @@ body.sidebar-open {
     padding: 0.3rem 0.75rem;
     border-radius: 20px;
     font-size: 0.75rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-}
-
-.colaborador-editando {
-    font-size: 0.7rem;
-    color: var(--ambar-alerta);
-    background: rgba(245,158,11,0.15);
-    padding: 0.25rem 0.6rem;
-    border-radius: var(--radius-full);
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
@@ -1067,28 +1071,10 @@ body.sidebar-open {
     border: 1px solid var(--border-color);
 }
 
-#modalUnirsePorCodigo .modal-content {
-    max-width: 450px;
-}
-
-#modalUnirsePorCodigo .codigo-input {
-    width: 100%;
-    padding: 1rem;
-    font-size: 1.2rem;
-    text-align: center;
-    letter-spacing: 2px;
-    font-weight: 600;
-    background: var(--gris-oscuro);
-    border: 2px solid var(--border-color);
-    border-radius: 12px;
-    color: var(--blanco);
-    transition: all 0.3s ease;
-}
-
-#modalUnirsePorCodigo .codigo-input:focus {
-    outline: none;
-    border-color: var(--azul-acento);
-    box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+.modal-detalle-content {
+    max-width: 800px;
+    width: 90%;
+    max-height: 85vh;
 }
 
 .modal-header {
@@ -1123,56 +1109,6 @@ body.sidebar-open {
 
 .modal-body {
     padding: 1.5rem;
-}
-
-.modal-hint {
-    font-size: 0.8rem;
-    color: var(--gris-texto);
-    margin-top: 0.75rem;
-    text-align: center;
-}
-
-.codigo-card {
-    background: linear-gradient(135deg, var(--gris-oscuro), var(--bg-card));
-    border-radius: var(--radius-lg);
-    padding: 2rem;
-    text-align: center;
-    margin: 1.5rem 0;
-    border: 2px dashed var(--rojo-primario);
-}
-
-.codigo-sesion {
-    font-size: 2rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 1rem;
-    background: var(--gris-oscuro);
-    border-radius: var(--radius-md);
-    font-family: monospace;
-    letter-spacing: 2px;
-    margin: 1rem 0;
-}
-
-.codigo-valor {
-    font-size: 2.2rem;
-    font-weight: 700;
-    color: var(--rojo-primario);
-    font-family: monospace;
-}
-
-.resumen-datos {
-    background: var(--gris-oscuro);
-    border-radius: var(--radius-md);
-    padding: 1rem;
-    margin-top: 1rem;
-    border: 1px solid var(--border-color);
-}
-
-.resumen-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--border-color);
 }
 
 .modal-footer {
@@ -1215,6 +1151,63 @@ body.sidebar-open {
 .btn-primary:hover {
     transform: translateY(-1px);
     box-shadow: var(--shadow-red);
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+}
+
+.codigo-sesion {
+    font-size: 2rem;
+    font-weight: bold;
+    text-align: center;
+    padding: 1rem;
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-md);
+    font-family: monospace;
+    letter-spacing: 2px;
+    margin: 1rem 0;
+}
+
+.codigo-card {
+    background: linear-gradient(135deg, var(--gris-oscuro), var(--bg-card));
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    text-align: center;
+    margin: 1.5rem 0;
+    border: 2px dashed var(--rojo-primario);
+}
+
+.codigo-valor {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--rojo-primario);
+    font-family: monospace;
+}
+
+.resumen-datos {
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    margin-top: 1rem;
+    border: 1px solid var(--border-color);
+}
+
+.resumen-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
 }
 
 /* Modal de confirmación */
@@ -1294,17 +1287,12 @@ body.sidebar-open {
     border-bottom: 1px solid var(--border-color);
 }
 
-.recepciones-guardadas-panel .panel-header i {
-    color: var(--verde-exito);
-    font-size: 1.2rem;
-}
-
-.recepciones-guardadas-panel .panel-header h3 {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--blanco);
-    margin: 0;
-    flex: 1;
+.recepciones-guardadas-panel .panel-header .badge {
+    background: var(--verde-exito);
+    color: white;
+    border-radius: var(--radius-full);
+    padding: 0.2rem 0.6rem;
+    font-size: 0.7rem;
 }
 
 .btn-refresh {
@@ -1565,13 +1553,7 @@ body.sidebar-open {
     color: var(--gris-texto);
 }
 
-/* Modal de detalle */
-.modal-detalle-content {
-    max-width: 800px;
-    width: 90%;
-    max-height: 85vh;
-}
-
+/* Detalle de recepción */
 .detalle-recepcion {
     padding: 0.5rem;
 }
@@ -1670,7 +1652,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   NOTIFICACIONES TOAST - CORREGIDAS
+   NOTIFICACIONES TOAST
    ===================================================== */
 .toast-notification {
     position: fixed;
@@ -1695,16 +1677,6 @@ body.sidebar-open {
     line-height: 1.4;
 }
 
-.toast-notification i {
-    font-size: 18px;
-    flex-shrink: 0;
-}
-
-.toast-notification span {
-    flex: 1;
-    word-break: break-word;
-}
-
 .toast-notification.success { border-left-color: var(--verde-exito); }
 .toast-notification.success i { color: var(--verde-exito); }
 .toast-notification.error { border-left-color: var(--rojo-primario); }
@@ -1720,8 +1692,8 @@ body.sidebar-open {
 .top-bar {
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
-    padding: 1rem 2rem;
-    margin-bottom: 1rem;
+    padding: 1rem 0;
+    margin-bottom: 1.5rem;
 }
 
 .page-title h1 {
@@ -1747,11 +1719,6 @@ body.sidebar-open {
     100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); }
 }
 
-@keyframes pulse-text {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
-}
-
 @keyframes modalIn {
     from { transform: translateY(-30px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
@@ -1760,11 +1727,6 @@ body.sidebar-open {
 @keyframes slideIn {
     from { transform: translateX(100%); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes slideOut {
-    from { transform: translateX(0); opacity: 1; }
-    to { transform: translateX(100%); opacity: 0; }
 }
 
 @keyframes fadeInOut {
@@ -1796,32 +1758,20 @@ body.sidebar-open {
     background: var(--rojo-primario);
 }
 
-.colaboradores-list::-webkit-scrollbar {
-    width: 4px;
-}
-
-.colaboradores-list::-webkit-scrollbar-track {
-    background: rgba(255,255,255,0.05);
-}
-
-.colaboradores-list::-webkit-scrollbar-thumb {
-    background: var(--azul-acento);
-}
-
 /* =====================================================
-   ========== RESPONSIVE ==========
+   RESPONSIVE
    ===================================================== */
-
-/* Tablet y móvil (max 1024px) - Sidebar con hamburguesa */
 @media (max-width: 1024px) {
-    /* Main content sin margen cuando sidebar está oculto */
     .main-content {
         margin-left: 0;
         padding: 1rem;
         padding-top: 70px;
     }
     
-    /* Área táctil mínima 44px para todos los elementos clickeables */
+    .hamburger-menu {
+        display: flex;
+    }
+    
     .btn-crear-sesion,
     .btn-unirse-codigo,
     .btn-guardar-seccion,
@@ -1841,41 +1791,12 @@ body.sidebar-open {
     .btn-eliminar-audio,
     .btn-transcribir,
     .modal-close,
-    .tab-btn,
-    .action-btn {
+    .btn-ubicacion {
         min-height: 44px;
         min-width: 44px;
     }
-    
-    /* Feedback táctil al tocar */
-    .form-card:active,
-    .btn-crear-sesion:active,
-    .btn-unirse-codigo:active,
-    .btn-guardar-seccion:active,
-    .btn-cancelar-sesion:active,
-    .btn-finalizar:active,
-    .recepcion-card:active,
-    .sesion-item:active {
-        transform: scale(0.98);
-        transition: transform 0.05s;
-    }
-    
-    /* Scroll suave en listas */
-    .sesiones-list,
-    .colaboradores-list,
-    .recepciones-list {
-        -webkit-overflow-scrolling: touch;
-    }
-    
-    /* Mejorar área táctil de inputs y selects */
-    input,
-    select,
-    textarea {
-        min-height: 44px;
-    }
 }
 
-/* Mobile (max 768px) */
 @media (max-width: 768px) {
     .form-row {
         grid-template-columns: 1fr;
@@ -1942,16 +1863,16 @@ body.sidebar-open {
         grid-template-columns: repeat(2, 1fr);
     }
     
-    .paginacion {
-        flex-wrap: wrap;
+    .ubicacion-input-group {
+        flex-direction: column;
     }
     
-    .recepcion-actions {
-        flex-wrap: wrap;
+    .btn-ubicacion {
+        width: 100%;
+        justify-content: center;
     }
 }
 
-/* Mobile pequeño (max 480px) */
 @media (max-width: 480px) {
     .photo-grid {
         grid-template-columns: 1fr;
@@ -1976,31 +1897,12 @@ body.sidebar-open {
     }
 }
 
-/* Desktop (min 1025px) - Sidebar siempre visible */
 @media (min-width: 1025px) {
     .main-content {
         margin-left: 300px;
     }
 }
 
-/* Estilo para mostrar el código de forma segura */
-.sesion-codigo {
-    font-family: monospace;
-    font-size: 0.85rem;
-    background: rgba(0,0,0,0.3);
-    padding: 0.2rem 0.5rem;
-    border-radius: var(--radius-sm);
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-}
-
-.sesion-codigo i {
-    font-size: 0.7rem;
-    color: var(--verde-exito);
-}
-
-/* Selección de texto */
 ::selection {
     background: var(--rojo-primario);
     color: var(--blanco);

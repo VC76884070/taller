@@ -149,6 +149,7 @@ class WhisperTranscriber:
 transcriber = WhisperTranscriber()
 
 def transcribir_audio_bytes(audio_bytes, idioma="es", model_size="base"):
+    """Función auxiliar para transcribir audio desde bytes"""
     if not audio_bytes:
         logger.info("No hay audio para transcribir")
         return None
@@ -1056,7 +1057,7 @@ def verificar_placa(current_user, placa):
 
 
 # =====================================================
-# TRANSCRIPCIÓN DE AUDIO
+# TRANSCRIPCIÓN DE AUDIO - VERSIÓN CORREGIDA
 # =====================================================
 @jefe_operativo_recepcion_bp.route('/transcribir-audio', methods=['POST'])
 @jefe_operativo_required
@@ -1069,24 +1070,40 @@ def transcribir_audio_endpoint(current_user):
             return jsonify({'error': 'Audio no proporcionado'}), 400
         
         if not WHISPER_AVAILABLE:
-            return jsonify({'error': 'Whisper no está disponible en el servidor'}), 500
+            return jsonify({'error': 'Whisper no está disponible en el servidor. Asegúrate de tener instalado: pip install openai-whisper'}), 500
         
+        # Limpiar el base64
         if 'base64,' in audio_base64:
             audio_base64 = audio_base64.split('base64,')[1]
         
-        audio_bytes = base64.b64decode(audio_base64)
+        # Decodificar audio
+        try:
+            audio_bytes = base64.b64decode(audio_base64)
+        except Exception as e:
+            logger.error(f"Error decodificando base64: {str(e)}")
+            return jsonify({'error': 'Error decodificando el audio'}), 400
         
-        logger.info(f"Audio recibido: {len(audio_bytes)} bytes")
+        logger.info(f"🎤 Audio recibido: {len(audio_bytes)} bytes")
         
+        # Verificar que el audio no esté vacío
+        if len(audio_bytes) < 1000:
+            logger.warning("⚠️ Audio muy pequeño, puede estar vacío o corrupto")
+            return jsonify({'error': 'El audio grabado es muy corto o está vacío. Graba nuevamente.'}), 400
+        
+        # Transcribir
         texto = transcribir_audio_bytes(audio_bytes, idioma="es", model_size="base")
         
         if not texto:
-            return jsonify({'error': 'No se pudo transcribir el audio'}), 500
+            return jsonify({'error': 'No se pudo transcribir el audio. Intenta grabar con mejor calidad.'}), 500
+        
+        logger.info(f"✅ Transcripción exitosa: {len(texto)} caracteres")
         
         return jsonify({'success': True, 'transcripcion': texto}), 200
         
     except Exception as e:
         logger.error(f"Error en transcripción: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -1302,8 +1319,8 @@ def detalle_recepcion(current_user, id_orden):
             'cliente_nombre': usuario.get('nombre', ''),
             'cliente_telefono': usuario.get('contacto', ''),
             'cliente_ubicacion': usuario.get('ubicacion', ''),
-            'latitud': cliente_data.get('latitud'),      # ← De la tabla cliente
-            'longitud': cliente_data.get('longitud'),    # ← De la tabla cliente
+            'latitud': cliente_data.get('latitud'),
+            'longitud': cliente_data.get('longitud'),
             'fotos': {
                 'url_lateral_izquierda': recepcion.get('url_lateral_izquierda'),
                 'url_lateral_derecha': recepcion.get('url_lateral_derecha'),

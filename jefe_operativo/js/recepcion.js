@@ -886,11 +886,20 @@ async function finalizarSesion() {
         const data = await response.json();
         if (data.success) {
             mostrarCodigoGenerado(data.codigo);
+            
+            // IMPORTANTE: Limpiar la sesión actual
             limpiarSesionCompleta();
+            
             mostrarNotificacion('Recepción finalizada', 'success');
+            
+            // Forzar actualización de la lista de sesiones activas
             if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
-            cargarRecepciones();
-            cargarSesionesActivas();
+            
+            // Recargar sesiones activas inmediatamente
+            await cargarSesionesActivas();
+            
+            // Recargar recepciones guardadas
+            await cargarRecepciones();
         }
     } catch (error) {
         mostrarNotificacion(error.message, 'error');
@@ -900,6 +909,8 @@ async function finalizarSesion() {
 function limpiarSesionCompleta() {
     detenerPolling();
     detenerKeepAlive();
+    
+    // Limpiar variables globales
     codigoSesion = null;
     sesionActual = null;
     audioCloudinaryUrl = null;
@@ -910,14 +921,59 @@ function limpiarSesionCompleta() {
         fotos: false,
         descripcion: false
     };
+    
+    // Limpiar localStorage
     localStorage.removeItem('sesion_actual');
     
+    // Ocultar paneles de sesión activa
     if (sessionPanel) sessionPanel.style.display = 'none';
     if (colaboradoresPanel) colaboradoresPanel.style.display = 'none';
     if (recepcionForm) recepcionForm.style.display = 'none';
+    
+    // Mostrar panel de sesiones activas
     if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
     
+    // Limpiar formulario
+    const inputs = document.querySelectorAll('#recepcionForm input, #recepcionForm textarea');
+    inputs.forEach(input => { 
+        if (input.id !== 'clienteLatitud' && input.id !== 'clienteLongitud') {
+            input.value = '';
+        }
+    });
+    
+    // Limpiar fotos
+    document.querySelectorAll('.photo-upload').forEach(upload => {
+        upload.classList.remove('has-image');
+        const preview = upload.querySelector('.upload-preview');
+        if (preview) preview.style.backgroundImage = '';
+        const removeBtn = upload.querySelector('.remove-photo');
+        if (removeBtn) removeBtn.style.display = 'none';
+        delete upload.dataset.cloudinaryUrl;
+        if (upload.dataset.objectUrl) {
+            URL.revokeObjectURL(upload.dataset.objectUrl);
+            delete upload.dataset.objectUrl;
+        }
+    });
+    
+    // Limpiar audio
+    if (audioPreview) {
+        if (audioPreview.src && audioPreview.src.startsWith('blob:')) {
+            URL.revokeObjectURL(audioPreview.src);
+        }
+        audioPreview.src = '';
+        audioPreview.style.display = 'none';
+    }
+    if (audioStatus) audioStatus.textContent = '';
+    if (btnEliminarAudio) btnEliminarAudio.style.display = 'none';
+    if (btnGrabarAudio) {
+        btnGrabarAudio.classList.remove('recording');
+        btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
+    }
+    
+    // Resetear estado del botón finalizar
     actualizarBotonFinalizar();
+    
+    console.log('✅ Sesión limpiada correctamente');
 }
 
 function mostrarConfirmacionCancelar() {
@@ -946,8 +1002,15 @@ async function cargarSesionesActivas() {
     try {
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/sesiones-activas`, { method: 'GET' });
         const data = await response.json();
-        if (data.sesiones) renderSesionesActivas(data.sesiones);
-    } catch (error) {}
+        
+        if (data.sesiones) {
+            // Filtrar solo sesiones activas (por si acaso)
+            const sesionesActivasFiltradas = data.sesiones.filter(s => s.estado === 'activa');
+            renderSesionesActivas(sesionesActivasFiltradas);
+        }
+    } catch (error) {
+        console.error('Error cargando sesiones activas:', error);
+    }
 }
 
 function renderSesionesActivas(sesiones) {

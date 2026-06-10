@@ -666,9 +666,15 @@ def finalizar_sesion(current_user):
         if not resultado['success']:
             return jsonify({'error': resultado['error']}), 500
         
+        # Cambiar estado a 'finalizada'
         sesion['estado'] = 'finalizada'
         guardar_sesion_en_db(sesion)
-        del sesiones_activas[codigo_sesion]
+        
+        # Eliminar de memoria
+        if codigo_sesion in sesiones_activas:
+            del sesiones_activas[codigo_sesion]
+        
+        logger.info(f"✅ Sesión {codigo_sesion} finalizada y eliminada de activas")
         
         return jsonify({
             'success': True,
@@ -677,6 +683,7 @@ def finalizar_sesion(current_user):
         }), 200
         
     except Exception as e:
+        logger.error(f"Error finalizando: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -746,7 +753,8 @@ def listar_sesiones_activas(current_user):
     try:
         sesiones = []
         for codigo, s in sesiones_activas.items():
-            if s['estado'] == 'activa':
+            # Solo incluir sesiones con estado 'activa'
+            if s.get('estado') == 'activa':
                 sesiones.append({
                     'codigo': s['codigo'],
                     'creador_nombre': s['creador_nombre'],
@@ -758,6 +766,7 @@ def listar_sesiones_activas(current_user):
                 })
         return jsonify({'success': True, 'sesiones': sesiones}), 200
     except Exception as e:
+        logger.error(f"Error listando sesiones: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

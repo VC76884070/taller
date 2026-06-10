@@ -1,6 +1,6 @@
 # =====================================================
 # RECEPCION.PY - JEFE OPERATIVO
-# VERSIÓN CORREGIDA - CON id_rol EN LA CONSULTA
+# VERSIÓN CORREGIDA - SIN PROCESAMIENTO DE FOTOS/AUDIO
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -10,10 +10,6 @@ import jwt
 import datetime
 import logging
 from werkzeug.security import generate_password_hash, check_password_hash
-import cloudinary
-import cloudinary.uploader
-import base64
-import io
 import uuid
 import random
 import string
@@ -36,25 +32,6 @@ supabase = config.supabase
 # =====================================================
 TALLER_LAT = -17.3895
 TALLER_LNG = -66.1568
-
-# =====================================================
-# CONFIGURACIÓN DE CLOUDINARY (SOLO PARA FOTOS)
-# =====================================================
-CLOUDINARY_CONFIGURED = False
-try:
-    if hasattr(config, 'CLOUDINARY_CLOUD_NAME') and config.CLOUDINARY_CLOUD_NAME:
-        cloudinary.config(
-            cloud_name=config.CLOUDINARY_CLOUD_NAME,
-            api_key=config.CLOUDINARY_API_KEY,
-            api_secret=config.CLOUDINARY_API_SECRET,
-            secure=True
-        )
-        CLOUDINARY_CONFIGURED = True
-        logger.info(f"✅ Cloudinary configurado: {config.CLOUDINARY_CLOUD_NAME}")
-    else:
-        logger.warning("⚠️ Cloudinary no configurado")
-except Exception as e:
-    logger.error(f"❌ Error configurando Cloudinary: {str(e)}")
 
 # =====================================================
 # ALMACENAMIENTO DE SESIONES COLABORATIVAS
@@ -84,7 +61,6 @@ def guardar_sesion_en_db(sesion):
                 }) \
                 .eq('codigo', sesion['codigo']) \
                 .execute()
-            logger.info(f"✅ Sesión {sesion['codigo']} actualizada en BD")
         else:
             supabase.table('sesion_colaborativa') \
                 .insert({
@@ -100,10 +76,9 @@ def guardar_sesion_en_db(sesion):
                     'fecha_creacion': sesion.get('fecha_creacion', datetime.datetime.now().isoformat())
                 }) \
                 .execute()
-            logger.info(f"✅ Sesión {sesion['codigo']} guardada en BD")
         return True
     except Exception as e:
-        logger.error(f"❌ Error guardando sesión en BD: {str(e)}")
+        logger.error(f"Error guardando sesión: {str(e)}")
         return False
 
 def cargar_sesiones_activas_db():
@@ -134,22 +109,18 @@ def cargar_sesiones_activas_db():
                 'estado': s['estado'],
                 'fecha_creacion': s['fecha_creacion']
             }
-        logger.info(f"📋 Cargadas {len(sesiones)} sesiones activas desde BD")
+        logger.info(f"📋 Cargadas {len(sesiones)} sesiones activas")
         return sesiones
     except Exception as e:
-        logger.error(f"❌ Error cargando sesiones desde BD: {str(e)}")
+        logger.error(f"Error cargando sesiones: {str(e)}")
         return {}
 
 def eliminar_sesion_db(codigo):
     try:
-        supabase.table('sesion_colaborativa') \
-            .delete() \
-            .eq('codigo', codigo) \
-            .execute()
-        logger.info(f"🗑️ Sesión {codigo} eliminada de BD")
+        supabase.table('sesion_colaborativa').delete().eq('codigo', codigo).execute()
         return True
     except Exception as e:
-        logger.error(f"❌ Error eliminando sesión {codigo}: {str(e)}")
+        logger.error(f"Error eliminando sesión: {str(e)}")
         return False
 
 def actualizar_actividad_sesion(codigo):
@@ -160,7 +131,6 @@ def actualizar_actividad_sesion(codigo):
             .execute()
         return True
     except Exception as e:
-        logger.error(f"❌ Error actualizando actividad: {str(e)}")
         return False
 
 # Cargar sesiones al inicio
@@ -169,37 +139,6 @@ try:
     logger.info(f"🚀 {len(sesiones_activas)} sesiones activas cargadas")
 except Exception as e:
     logger.error(f"Error: {str(e)}")
-
-# =====================================================
-# FUNCIÓN PARA SUBIR IMAGEN A CLOUDINARY (FOTOS)
-# =====================================================
-
-def subir_imagen_a_cloudinary(base64_data, carpeta, nombre):
-    """Subir imagen a Cloudinary y retornar URL"""
-    try:
-        if not base64_data or not CLOUDINARY_CONFIGURED:
-            return None
-        
-        if 'base64,' in base64_data:
-            base64_data = base64_data.split('base64,')[1]
-        
-        image_data = base64.b64decode(base64_data)
-        image_file = io.BytesIO(image_data)
-        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S%f')
-        image_file.name = f"{nombre}_{timestamp}.jpg"
-        
-        resultado = cloudinary.uploader.upload(
-            image_file,
-            folder=f"furia_motor/{carpeta}",
-            public_id=f"{nombre}_{timestamp}",
-            resource_type="image"
-        )
-        
-        return resultado.get('secure_url')
-        
-    except Exception as e:
-        logger.error(f"Error subiendo imagen: {str(e)}")
-        return None
 
 # =====================================================
 # FUNCIONES AUXILIARES
@@ -267,10 +206,7 @@ def obtener_o_crear_cliente(nombre, telefono, ubicacion, latitud=None, longitud=
                     if longitud is not None:
                         cliente_update['longitud'] = longitud
                     if cliente_update:
-                        supabase.table('cliente') \
-                            .update(cliente_update) \
-                            .eq('id', id_cliente) \
-                            .execute()
+                        supabase.table('cliente').update(cliente_update).eq('id', id_cliente).execute()
                 
                 rol_result = supabase.table('usuario_rol') \
                     .select('id_rol') \
@@ -420,6 +356,7 @@ def crear_orden_desde_sesion(datos, current_user, sesion_codigo=None):
         
         id_orden = orden_result.data[0]['id']
         
+        # Guardar recepción - LAS URLs YA VIENEN DE CLOUDINARY (frontend)
         recepcion_data = {
             'id_orden_trabajo': id_orden,
             'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
@@ -446,7 +383,7 @@ def crear_orden_desde_sesion(datos, current_user, sesion_codigo=None):
         return {'success': False, 'error': str(e)}
 
 # =====================================================
-# DECORADOR DE AUTENTICACIÓN CORREGIDO (USANDO id_rol)
+# DECORADOR DE AUTENTICACIÓN
 # =====================================================
 
 def jefe_operativo_required(f):
@@ -454,46 +391,33 @@ def jefe_operativo_required(f):
     def decorated_function(*args, **kwargs):
         token = request.headers.get('Authorization', '').replace('Bearer ', '')
         
-        logger.info(f"🔍 [jefe_operativo_required] Token recibido: {token[:50]}..." if token else "No token")
-        
         if not token:
-            logger.error("❌ [jefe_operativo_required] No token")
             return jsonify({'error': 'Token no proporcionado'}), 401
         
         try:
-            # Decodificar token
             payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
-            logger.info(f"🔍 [jefe_operativo_required] Payload decodificado correctamente")
             
-            # El token puede tener la estructura {'user': {...}} o ser directo
             if 'user' in payload:
                 user_data = payload['user']
-                logger.info(f"🔍 [jefe_operativo_required] Token tiene estructura 'user'")
             else:
                 user_data = payload
-                logger.info(f"🔍 [jefe_operativo_required] Token es directo")
             
             user_id = user_data.get('id')
             if not user_id:
-                logger.error("❌ [jefe_operativo_required] No user_id en token")
-                return jsonify({'error': 'Token inválido: ID de usuario no encontrado'}), 401
+                return jsonify({'error': 'Token inválido'}), 401
             
-            logger.info(f"🔍 [jefe_operativo_required] user_id: {user_id}")
-            
-            # Obtener usuario de la base de datos
+            # Obtener usuario
             user_result = supabase.table('usuario') \
                 .select('id, nombre, email, contacto') \
                 .eq('id', user_id) \
                 .execute()
             
             if not user_result.data:
-                logger.error(f"❌ [jefe_operativo_required] Usuario {user_id} no encontrado en BD")
                 return jsonify({'error': 'Usuario no encontrado'}), 401
             
             usuario = user_result.data[0]
-            logger.info(f"🔍 [jefe_operativo_required] Usuario encontrado: {usuario.get('nombre')}")
             
-            # 🔧 CORREGIDO: Usar 'id_rol' en lugar de 'rol_id'
+            # Obtener roles usando id_rol
             roles_result = supabase.table('usuario_rol') \
                 .select('id_rol, rol!inner(nombre_rol)') \
                 .eq('id_usuario', user_id) \
@@ -504,14 +428,8 @@ def jefe_operativo_required(f):
                 if 'rol' in ur and 'nombre_rol' in ur['rol']:
                     roles.append(ur['rol']['nombre_rol'])
             
-            logger.info(f"🔍 [jefe_operativo_required] Roles del usuario: {roles}")
-            
-            # Verificar si tiene rol de jefe_operativo o admin_general
-            tiene_rol = 'jefe_operativo' in roles or 'admin_general' in roles
-            
-            if not tiene_rol:
-                logger.warning(f"❌ [jefe_operativo_required] Usuario {user_id} no tiene rol jefe_operativo. Roles: {roles}")
-                return jsonify({'error': 'Acceso no autorizado. Se requiere rol de Jefe Operativo'}), 403
+            if 'jefe_operativo' not in roles and 'admin_general' not in roles:
+                return jsonify({'error': 'Acceso no autorizado'}), 403
             
             current_user = {
                 'id': user_id,
@@ -520,19 +438,14 @@ def jefe_operativo_required(f):
                 'roles': roles
             }
             
-            logger.info(f"✅ [jefe_operativo_required] Acceso permitido para {current_user['nombre']}")
             return f(current_user, *args, **kwargs)
             
         except jwt.ExpiredSignatureError:
-            logger.error("❌ [jefe_operativo_required] Token expirado")
             return jsonify({'error': 'Token expirado'}), 401
-        except jwt.InvalidTokenError as e:
-            logger.error(f"❌ [jefe_operativo_required] Token inválido: {str(e)}")
+        except jwt.InvalidTokenError:
             return jsonify({'error': 'Token inválido'}), 401
         except Exception as e:
-            logger.error(f"❌ [jefe_operativo_required] Error inesperado: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error: {str(e)}")
             return jsonify({'error': str(e)}), 401
     
     return decorated_function
@@ -569,16 +482,12 @@ def iniciar_sesion(current_user):
             'fecha_creacion': datetime.datetime.now().isoformat()
         }
         
-        if not guardar_sesion_en_db(sesion):
-            return jsonify({'error': 'Error guardando sesión'}), 500
-        
+        guardar_sesion_en_db(sesion)
         sesiones_activas[codigo_sesion] = sesion
-        logger.info(f"✅ Sesión iniciada: {codigo_sesion}")
         
         return jsonify({'success': True, 'codigo': codigo_sesion, 'sesion': sesion}), 200
         
     except Exception as e:
-        logger.error(f"Error iniciando sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -611,12 +520,10 @@ def unirse_sesion(current_user):
             sesion['colaboradores'].append(current_user['id'])
             sesion['colaboradores_nombres'].append(current_user.get('nombre', 'Técnico'))
             guardar_sesion_en_db(sesion)
-            logger.info(f"👤 {current_user.get('nombre')} se unió a {codigo_sesion}")
         
         return jsonify({'success': True, 'sesion': sesion}), 200
         
     except Exception as e:
-        logger.error(f"Error uniéndose: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -669,36 +576,16 @@ def guardar_seccion(current_user):
             )
             
         elif seccion == 'fotos':
-            fotos_procesadas = {}
-            carpeta = f"sesion/{codigo_sesion}"
-            
-            campos_fotos = ['url_lateral_izquierda', 'url_lateral_derecha', 'url_foto_frontal',
-                           'url_foto_trasera', 'url_foto_superior', 'url_foto_inferior', 'url_foto_tablero']
-            
-            for campo in campos_fotos:
-                valor = datos_seccion.get(campo)
-                if valor and isinstance(valor, str) and valor.startswith('data:image'):
-                    logger.info(f"Subiendo foto {campo} a Cloudinary")
-                    url = subir_imagen_a_cloudinary(valor, carpeta, campo.replace('url_', ''))
-                    fotos_procesadas[campo] = url
-                elif valor and isinstance(valor, str) and valor.startswith('http'):
-                    fotos_procesadas[campo] = valor
-                else:
-                    fotos_procesadas[campo] = None
-            
-            sesion['datos']['fotos'] = fotos_procesadas
-            fotos_validas = sum(1 for url in fotos_procesadas.values() if url)
+            # Solo guardamos las URLs que vienen del frontend (ya subidas a Cloudinary)
+            sesion['datos']['fotos'] = datos_seccion
+            fotos_validas = sum(1 for url in datos_seccion.values() if url and url != 'null')
             sesion['secciones_completadas']['fotos'] = fotos_validas == 7
-            logger.info(f"📸 Fotos guardadas: {fotos_validas}/7")
             
         elif seccion == 'descripcion':
             sesion['datos']['descripcion']['texto'] = datos_seccion.get('texto', '')
-            
             audio_url = datos_seccion.get('audio_url')
-            if audio_url and isinstance(audio_url, str) and audio_url.startswith('http'):
+            if audio_url and audio_url.startswith('http'):
                 sesion['datos']['descripcion']['audio_url'] = audio_url
-                logger.info(f"🎤 Audio URL guardada")
-            
             sesion['secciones_completadas']['descripcion'] = bool(datos_seccion.get('texto'))
         
         sesion['ultima_actividad'] = datetime.datetime.now().isoformat()
@@ -716,9 +603,7 @@ def guardar_seccion(current_user):
 def obtener_sesion(current_user, codigo):
     try:
         if codigo in sesiones_activas:
-            sesion = sesiones_activas[codigo]
-            actualizar_actividad_sesion(codigo)
-            return jsonify({'success': True, 'sesion': sesion}), 200
+            return jsonify({'success': True, 'sesion': sesiones_activas[codigo]}), 200
         
         resultado = supabase.table('sesion_colaborativa') \
             .select('*') \
@@ -746,7 +631,6 @@ def obtener_sesion(current_user, codigo):
         return jsonify({'error': 'Sesión no encontrada'}), 404
         
     except Exception as e:
-        logger.error(f"Error obteniendo sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -786,8 +670,6 @@ def finalizar_sesion(current_user):
         guardar_sesion_en_db(sesion)
         del sesiones_activas[codigo_sesion]
         
-        logger.info(f"✅ Sesión {codigo_sesion} finalizada")
-        
         return jsonify({
             'success': True,
             'codigo': resultado['codigo'],
@@ -795,7 +677,6 @@ def finalizar_sesion(current_user):
         }), 200
         
     except Exception as e:
-        logger.error(f"Error finalizando: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -824,7 +705,6 @@ def verificar_placa(current_user, placa):
             }), 200
         return jsonify({'exists': False}), 200
     except Exception as e:
-        logger.error(f"Error verificando placa: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -845,7 +725,6 @@ def cancelar_sesion(current_user):
         
         return jsonify({'success': True}), 200
     except Exception as e:
-        logger.error(f"Error cancelando sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -858,7 +737,6 @@ def ping_sesion(current_user, codigo):
         actualizar_actividad_sesion(codigo)
         return jsonify({'success': True}), 200
     except Exception as e:
-        logger.error(f"Error en ping: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -880,7 +758,6 @@ def listar_sesiones_activas(current_user):
                 })
         return jsonify({'success': True, 'sesiones': sesiones}), 200
     except Exception as e:
-        logger.error(f"Error listando sesiones: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -914,7 +791,6 @@ def listar_recepciones(current_user):
         
         return jsonify({'success': True, 'recepciones': recepciones}), 200
     except Exception as e:
-        logger.error(f"Error listando recepciones: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1001,7 +877,6 @@ def detalle_recepcion(current_user, id_orden):
         }), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo detalle: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1021,7 +896,6 @@ def eliminar_recepcion(current_user, id_orden):
         
         return jsonify({'success': True}), 200
     except Exception as e:
-        logger.error(f"Error eliminando recepción: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1059,26 +933,14 @@ def actualizar_recepcion(current_user, id_orden):
         fotos = data.get('fotos', {})
         descripcion = data.get('descripcion', {})
         
-        fotos_procesadas = {}
-        if fotos:
-            carpeta = f"recepcion/{id_orden}"
-            for campo, valor in fotos.items():
-                if valor and isinstance(valor, str) and valor.startswith('data:image'):
-                    url = subir_imagen_a_cloudinary(valor, carpeta, campo.replace('url_', ''))
-                    fotos_procesadas[campo] = url
-                elif valor and isinstance(valor, str) and valor.startswith('http'):
-                    fotos_procesadas[campo] = valor
-                else:
-                    fotos_procesadas[campo] = None
-        
         supabase.table('recepcion').update({
-            'url_lateral_izquierda': fotos_procesadas.get('url_lateral_izquierda') or fotos.get('url_lateral_izquierda'),
-            'url_lateral_derecha': fotos_procesadas.get('url_lateral_derecha') or fotos.get('url_lateral_derecha'),
-            'url_foto_frontal': fotos_procesadas.get('url_foto_frontal') or fotos.get('url_foto_frontal'),
-            'url_foto_trasera': fotos_procesadas.get('url_foto_trasera') or fotos.get('url_foto_trasera'),
-            'url_foto_superior': fotos_procesadas.get('url_foto_superior') or fotos.get('url_foto_superior'),
-            'url_foto_inferior': fotos_procesadas.get('url_foto_inferior') or fotos.get('url_foto_inferior'),
-            'url_foto_tablero': fotos_procesadas.get('url_foto_tablero') or fotos.get('url_foto_tablero'),
+            'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
+            'url_lateral_derecha': fotos.get('url_lateral_derecha'),
+            'url_foto_frontal': fotos.get('url_foto_frontal'),
+            'url_foto_trasera': fotos.get('url_foto_trasera'),
+            'url_foto_superior': fotos.get('url_foto_superior'),
+            'url_foto_inferior': fotos.get('url_foto_inferior'),
+            'url_foto_tablero': fotos.get('url_foto_tablero'),
             'url_grabacion_problema': descripcion.get('audio_url'),
             'transcripcion_problema': descripcion.get('texto', '')
         }).eq('id_orden_trabajo', id_orden).execute()
@@ -1086,7 +948,6 @@ def actualizar_recepcion(current_user, id_orden):
         return jsonify({'success': True}), 200
         
     except Exception as e:
-        logger.error(f"Error actualizando recepción: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1106,7 +967,6 @@ def marcar_editando(current_user):
         
         return jsonify({'success': True}), 200
     except Exception as e:
-        logger.error(f"Error marcando edición: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1126,7 +986,6 @@ def liberar_edicion(current_user):
         
         return jsonify({'success': True}), 200
     except Exception as e:
-        logger.error(f"Error liberando edición: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

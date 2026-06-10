@@ -15,8 +15,17 @@ if (typeof window.API_BASE_URL === 'undefined') {
 }
 
 // =====================================================
+// CONFIGURACIÓN DE SUPABASE - ¡CAMBIA ESTOS VALORES!
+// =====================================================
+const SUPABASE_URL = 'https://tu-proyecto.supabase.co';  // 👈 REEMPLAZAR
+const SUPABASE_ANON_KEY = 'tu-anon-key';  // 👈 REEMPLAZAR
+
+// Inicializar cliente Supabase
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// =====================================================
 // RECEPCION.JS - JEFE OPERATIVO
-// VERSIÓN CORREGIDA - SIN PARPADEOS
+// VERSIÓN CORREGIDA CON SUPABASE STORAGE
 // =====================================================
 
 // Configuración
@@ -53,12 +62,9 @@ let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
 let audioBlob = null;
+let audioUrlGuardado = null;  // URL de Supabase del audio
 
-// Variables para controlar transcripción
-let transcripcionManual = false;
-let textoTranscripcion = null;
-let lastTranscriptionTime = null;
-let pendingTranscription = null;
+// Variables para control de descripción
 let descripcionModificadaManualmente = false;
 let descripcionOriginal = '';
 
@@ -99,7 +105,6 @@ const btnTranscribirAudio = document.getElementById('btnTranscribirAudio');
 const audioStatus = document.getElementById('audioStatus');
 const audioPreview = document.getElementById('audioPreview');
 const descripcionProblema = document.getElementById('descripcionProblema');
-const transcripcionLoading = document.getElementById('transcripcionLoading');
 const codigoModal = document.getElementById('codigoModal');
 const codigoOrdenModal = document.getElementById('codigoOrdenModal');
 const currentDateSpan = document.getElementById('currentDate');
@@ -118,6 +123,77 @@ const FOTOS_CONFIG = [
     { id: 'fotoInferior', nombre: 'inferior', label: 'Inferior', icono: 'fa-arrow-down', campo: 'url_foto_inferior' },
     { id: 'fotoTablero', nombre: 'tablero', label: 'Tablero', icono: 'fa-tachometer-alt', campo: 'url_foto_tablero' }
 ];
+
+// =====================================================
+// SUPABASE STORAGE - FUNCIONES DE SUBIDA DIRECTA
+// =====================================================
+
+async function subirFotoDirecta(file, carpeta, campo) {
+    try {
+        if (!file) return null;
+        
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}_${campo}.${fileExt}`;
+        const filePath = `recepcion/${carpeta}/${fileName}`;
+        
+        console.log(`📤 Subiendo foto ${campo} a Supabase...`);
+        
+        const { data, error } = await supabaseClient.storage
+            .from('fotos-vehiculos')
+            .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false,
+                contentType: file.type
+            });
+        
+        if (error) throw error;
+        
+        const { data: { publicUrl } } = supabaseClient.storage
+            .from('fotos-vehiculos')
+            .getPublicUrl(filePath);
+        
+        console.log(`✅ Foto ${campo} subida:`, publicUrl);
+        return publicUrl;
+        
+    } catch (error) {
+        console.error(`❌ Error subiendo foto ${campo}:`, error);
+        mostrarNotificacion(`Error al subir ${campo}`, 'error');
+        return null;
+    }
+}
+
+async function subirAudioDirecta(audioBlob, carpeta) {
+    try {
+        if (!audioBlob) return null;
+        
+        const fileName = `${Date.now()}_audio.wav`;
+        const filePath = `audios/${carpeta}/${fileName}`;
+        
+        console.log('📤 Subiendo audio a Supabase...');
+        
+        const { data, error } = await supabaseClient.storage
+            .from('audios')
+            .upload(filePath, audioBlob, {
+                contentType: 'audio/wav',
+                cacheControl: '3600',
+                upsert: false
+            });
+        
+        if (error) throw error;
+        
+        const { data: { publicUrl } } = supabaseClient.storage
+            .from('audios')
+            .getPublicUrl(filePath);
+        
+        console.log('✅ Audio subido:', publicUrl);
+        return publicUrl;
+        
+    } catch (error) {
+        console.error('❌ Error subiendo audio:', error);
+        mostrarNotificacion('Error al subir el audio', 'error');
+        return null;
+    }
+}
 
 // =====================================================
 // INICIALIZACIÓN
@@ -139,6 +215,7 @@ async function verificarSesionAbandonada() {
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Inicializando recepcion.js');
     console.log('📡 API_BASE_URL:', window.API_BASE_URL);
+    console.log('📡 SUPABASE_URL:', SUPABASE_URL);
     
     const autenticado = await checkAuth();
     if (!autenticado) return;
@@ -629,6 +706,14 @@ async function recuperarSesionActiva() {
                     descripcionOriginal = sesionActual.datos.descripcion.texto;
                     descripcionProblema.value = descripcionOriginal;
                 }
+                if (sesionActual.datos?.descripcion?.audio_url) {
+                    audioUrlGuardado = sesionActual.datos.descripcion.audio_url;
+                    if (audioPreview && audioUrlGuardado) {
+                        audioPreview.src = audioUrlGuardado;
+                        audioPreview.style.display = 'block';
+                        audioStatus.textContent = 'Audio disponible';
+                    }
+                }
             } else {
                 localStorage.removeItem('sesion_actual');
             }
@@ -686,129 +771,65 @@ function setupUnirsePorCodigo() {
 }
 
 // =====================================================
-// RASTREO DE EDICIÓN - VERSIÓN MEJORADA
+// RASTREO DE EDICIÓN
 // =====================================================
 function setupInputTracking() {
-    // =====================================================
-    // CLIENTE INPUTS
-    // =====================================================
     const clienteInputs = ['clienteNombre', 'clienteTelefono', 'clienteUbicacion'];
     clienteInputs.forEach(id => {
         const input = document.getElementById(id);
         if (input) {
             let debounceTimeout;
-            
-            input.addEventListener('focus', () => {
-                camposEnEdicion.cliente = true;
-                if (timeoutsEdicion.cliente) clearTimeout(timeoutsEdicion.cliente);
-            });
-            
+            input.addEventListener('focus', () => { camposEnEdicion.cliente = true; if (timeoutsEdicion.cliente) clearTimeout(timeoutsEdicion.cliente); });
             input.addEventListener('blur', async () => {
                 if (timeoutsEdicion.cliente) clearTimeout(timeoutsEdicion.cliente);
-                if (codigoSesion && camposEnEdicion.cliente) {
-                    await guardarSeccion('cliente');
-                }
+                if (codigoSesion && camposEnEdicion.cliente) await guardarSeccion('cliente');
                 timeoutsEdicion.cliente = setTimeout(() => { camposEnEdicion.cliente = false; }, 500);
             });
-            
             input.addEventListener('input', () => {
                 if (debounceTimeout) clearTimeout(debounceTimeout);
                 debounceTimeout = setTimeout(async () => {
-                    if (codigoSesion && camposEnEdicion.cliente) {
-                        await guardarSeccion('cliente');
-                    }
+                    if (codigoSesion && camposEnEdicion.cliente) await guardarSeccion('cliente');
                 }, 1000);
             });
         }
     });
     
-    // =====================================================
-    // VEHÍCULO INPUTS - MISMO COMPORTAMIENTO QUE CLIENTE
-    // =====================================================
     const vehiculoInputs = ['vehiculoPlaca', 'vehiculoMarca', 'vehiculoModelo', 'vehiculoAnio', 'vehiculoKilometraje'];
     vehiculoInputs.forEach(id => {
         const input = document.getElementById(id);
         if (input) {
             let debounceTimeout;
-            
-            input.addEventListener('focus', () => {
-                console.log('✏️ Editando vehículo:', id);
-                camposEnEdicion.vehiculo = true;
-                if (timeoutsEdicion.vehiculo) clearTimeout(timeoutsEdicion.vehiculo);
-            });
-            
+            input.addEventListener('focus', () => { camposEnEdicion.vehiculo = true; if (timeoutsEdicion.vehiculo) clearTimeout(timeoutsEdicion.vehiculo); });
             input.addEventListener('blur', async () => {
-                console.log('📤 Dejando de editar vehículo:', id);
                 if (timeoutsEdicion.vehiculo) clearTimeout(timeoutsEdicion.vehiculo);
-                if (codigoSesion && camposEnEdicion.vehiculo) {
-                    await guardarSeccion('vehiculo');
-                }
+                if (codigoSesion && camposEnEdicion.vehiculo) await guardarSeccion('vehiculo');
                 timeoutsEdicion.vehiculo = setTimeout(() => { camposEnEdicion.vehiculo = false; }, 500);
             });
-            
             input.addEventListener('input', () => {
                 if (debounceTimeout) clearTimeout(debounceTimeout);
                 debounceTimeout = setTimeout(async () => {
-                    if (codigoSesion && camposEnEdicion.vehiculo) {
-                        await guardarSeccion('vehiculo');
-                        console.log('💾 Auto-guardado vehículo:', id);
-                    }
+                    if (codigoSesion && camposEnEdicion.vehiculo) await guardarSeccion('vehiculo');
                 }, 1000);
             });
         }
     });
     
-    // =====================================================
-    // DESCRIPCIÓN
-    // =====================================================
     if (descripcionProblema) {
         let debounceTimeout;
-        
-        descripcionProblema.addEventListener('focus', () => {
-            camposEnEdicion.descripcion = true;
-            if (timeoutsEdicion.descripcion) clearTimeout(timeoutsEdicion.descripcion);
-        });
-        
+        descripcionProblema.addEventListener('focus', () => { camposEnEdicion.descripcion = true; if (timeoutsEdicion.descripcion) clearTimeout(timeoutsEdicion.descripcion); });
         descripcionProblema.addEventListener('blur', async () => {
             if (timeoutsEdicion.descripcion) clearTimeout(timeoutsEdicion.descripcion);
-            if (codigoSesion && descripcionProblema.value !== descripcionOriginal) {
-                await guardarSeccion('descripcion');
-            }
+            if (codigoSesion && descripcionProblema.value !== descripcionOriginal) await guardarSeccion('descripcion');
             timeoutsEdicion.descripcion = setTimeout(() => { camposEnEdicion.descripcion = false; }, 500);
         });
-        
         descripcionProblema.addEventListener('input', () => {
             descripcionModificadaManualmente = true;
             if (debounceTimeout) clearTimeout(debounceTimeout);
             debounceTimeout = setTimeout(async () => {
-                if (codigoSesion && camposEnEdicion.descripcion) {
-                    await guardarSeccion('descripcion');
-                }
+                if (codigoSesion && camposEnEdicion.descripcion) await guardarSeccion('descripcion');
             }, 1500);
         });
     }
-}
-
-async function marcarEditandoSeccion(seccion) {
-    if (!codigoSesion) return;
-    try {
-        await fetch(`${API_URL}/jefe-operativo/marcar-editando`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` },
-            body: JSON.stringify({ codigo: codigoSesion, seccion: seccion, usuario_id: userInfo.id, usuario_nombre: userInfo.nombre })
-        });
-    } catch (error) {}
-}
-
-async function liberarEdicionSeccion(seccion) {
-    if (!codigoSesion) return;
-    try {
-        await fetch(`${API_URL}/jefe-operativo/liberar-edicion`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` },
-            body: JSON.stringify({ codigo: codigoSesion, seccion: seccion, usuario_id: userInfo.id })
-        });
-    } catch (error) {}
 }
 
 function setupEventListeners() {
@@ -959,7 +980,7 @@ function activarSesion() {
 }
 
 // =====================================================
-// CARGAR DATOS DE SESIÓN - SIN PARPADEOS
+// CARGAR DATOS DE SESIÓN
 // =====================================================
 async function cargarDatosSesion() {
     if (!codigoSesion || actualizando) return;
@@ -1027,17 +1048,11 @@ async function cargarDatosSesion() {
             if (nuevosDatos.descripcion && nuevosDatos.descripcion.audio_url) {
                 const audioUrl = nuevosDatos.descripcion.audio_url;
                 if (audioPreview && audioUrl && audioUrl !== 'null' && audioUrl !== 'None') {
-                    const fullAudioUrl = audioUrl.startsWith('http') ? audioUrl : `${window.API_BASE_URL}${audioUrl}`;
-                    if (audioPreview.src !== fullAudioUrl) {
-                        audioPreview.src = fullAudioUrl;
+                    if (audioPreview.src !== audioUrl) {
+                        audioPreview.src = audioUrl;
                         audioPreview.style.display = 'block';
                         audioStatus.textContent = 'Audio disponible';
                         audioStatus.style.color = 'var(--verde-exito)';
-                        if (btnTranscribirAudio) {
-                            btnTranscribirAudio.style.display = 'flex';
-                            btnTranscribirAudio.disabled = false;
-                        }
-                        if (btnEliminarAudio) btnEliminarAudio.style.display = 'flex';
                     }
                 }
             }
@@ -1137,17 +1152,12 @@ function actualizarFotosDesdeSesion(fotos) {
                 const removeBtn = uploadDiv?.querySelector('.remove-photo');
                 if (preview && uploadDiv) {
                     let fullUrl = url;
-                    if (url.startsWith('/uploads/')) fullUrl = `${window.API_BASE_URL}${url}`;
-                    else if (!url.startsWith('http')) fullUrl = `${window.API_BASE_URL}/uploads/${url}`;
-                    const img = new Image();
-                    img.onload = () => {
-                        preview.style.backgroundImage = `url('${fullUrl}')`;
-                        preview.style.backgroundSize = 'cover';
-                        preview.style.backgroundPosition = 'center';
-                        uploadDiv.classList.add('has-image');
-                        if (removeBtn) removeBtn.style.display = 'flex';
-                    };
-                    img.src = fullUrl;
+                    if (!fullUrl.startsWith('http')) fullUrl = url;
+                    preview.style.backgroundImage = `url('${fullUrl}')`;
+                    preview.style.backgroundSize = 'cover';
+                    preview.style.backgroundPosition = 'center';
+                    uploadDiv.classList.add('has-image');
+                    if (removeBtn) removeBtn.style.display = 'flex';
                 }
             }
         }
@@ -1155,7 +1165,7 @@ function actualizarFotosDesdeSesion(fotos) {
 }
 
 // =====================================================
-// GUARDAR SECCIÓN - VERSIÓN SIMPLIFICADA
+// GUARDAR SECCIÓN - CON SUPABASE STORAGE
 // =====================================================
 async function guardarSeccion(seccion) {
     if (!codigoSesion) return;
@@ -1172,6 +1182,7 @@ async function guardarSeccion(seccion) {
                 longitud: document.getElementById('clienteLongitud')?.value || null
             };
             break;
+            
         case 'vehiculo':
             datos = {
                 placa: document.getElementById('vehiculoPlaca')?.value.toUpperCase() || '',
@@ -1181,22 +1192,23 @@ async function guardarSeccion(seccion) {
                 kilometraje: parseInt(document.getElementById('vehiculoKilometraje')?.value) || 0
             };
             break;
+            
         case 'fotos':
+            // 🔥 SUBIR FOTOS DIRECTAMENTE A SUPABASE
             const fotosData = {};
             const fotosExistentes = sesionActual?.datos?.fotos || {};
+            
             for (const foto of FOTOS_CONFIG) {
                 const input = document.getElementById(foto.id);
-                if (input && input.files && input.files.length > 0) {
-                    const file = input.files[0];
-                    if (file) {
-                        if (file.size > 5 * 1024 * 1024) {
-                            mostrarNotificacion(`La foto ${foto.label} no debe superar los 5MB`, 'warning');
-                            fotosData[foto.campo] = fotosExistentes[foto.campo] || null;
-                        } else {
-                            fotosData[foto.campo] = await fileToBase64(file);
-                        }
-                    } else {
+                const file = input?.files?.[0];
+                
+                if (file && file.size > 0) {
+                    if (file.size > 5 * 1024 * 1024) {
+                        mostrarNotificacion(`La foto ${foto.label} no debe superar los 5MB`, 'warning');
                         fotosData[foto.campo] = fotosExistentes[foto.campo] || null;
+                    } else {
+                        const publicUrl = await subirFotoDirecta(file, codigoSesion, foto.campo);
+                        fotosData[foto.campo] = publicUrl;
                     }
                 } else {
                     fotosData[foto.campo] = fotosExistentes[foto.campo] || null;
@@ -1204,12 +1216,20 @@ async function guardarSeccion(seccion) {
             }
             datos = fotosData;
             break;
+            
         case 'descripcion':
-            let audioBase64 = null;
-            if (audioBlob) audioBase64 = await getAudioBase64();
+            // 🔥 SUBIR AUDIO DIRECTAMENTE A SUPABASE
+            let audioUrl = audioUrlGuardado;
+            if (audioBlob) {
+                const nuevaUrl = await subirAudioDirecta(audioBlob, codigoSesion);
+                if (nuevaUrl) {
+                    audioUrl = nuevaUrl;
+                    audioUrlGuardado = nuevaUrl;
+                }
+            }
             datos = {
                 texto: descripcionProblema?.value || '',
-                audio_url: audioBase64
+                audio_url: audioUrl
             };
             descripcionModificadaManualmente = false;
             descripcionOriginal = descripcionProblema?.value || '';
@@ -1240,21 +1260,25 @@ async function guardarSeccion(seccion) {
                 setTimeout(() => guardadoIndicator.style.display = 'none', 1500);
             }
             notificarCambioSeccion(seccion);
+            
             if (seccion === 'fotos') {
                 for (const foto of FOTOS_CONFIG) {
                     const input = document.getElementById(foto.id);
                     if (input) input.value = '';
                 }
             }
+            
             if (seccion === 'descripcion' && audioBlob) {
                 audioBlob = null;
                 audioChunks = [];
-                if (btnTranscribirAudio) {
-                    btnTranscribirAudio.disabled = true;
-                    btnTranscribirAudio.style.opacity = '0.5';
-                }
                 if (btnEliminarAudio) btnEliminarAudio.style.display = 'flex';
                 audioStatus.textContent = 'Descripción guardada';
+            }
+            
+            // Actualizar estado del botón finalizar
+            if (sesionActual.secciones_completadas) {
+                const todasCompletas = Object.values(sesionActual.secciones_completadas).every(v => v === true);
+                if (btnFinalizar) btnFinalizar.disabled = !todasCompletas;
             }
         } else {
             throw new Error(data.error || 'Error al guardar');
@@ -1281,16 +1305,13 @@ function limpiarDescripcion() {
         descripcionOriginal = '';
         if (audioBlob) audioBlob = null;
         audioChunks = [];
+        audioUrlGuardado = null;
         if (audioPreview) {
             if (audioPreview.src && audioPreview.src.startsWith('blob:')) URL.revokeObjectURL(audioPreview.src);
             audioPreview.src = '';
             audioPreview.style.display = 'none';
         }
         if (audioStatus) audioStatus.textContent = 'Descripción limpiada';
-        if (btnTranscribirAudio) {
-            btnTranscribirAudio.disabled = true;
-            btnTranscribirAudio.style.opacity = '0.5';
-        }
         if (btnEliminarAudio) btnEliminarAudio.style.display = 'none';
         if (btnGrabarAudio) {
             btnGrabarAudio.classList.remove('recording');
@@ -1302,83 +1323,17 @@ function limpiarDescripcion() {
 }
 
 // =====================================================
-// TRANSCRIPCIÓN DE AUDIO - VERSIÓN CORREGIDA
+// TRANSCRIPCIÓN - DESHABILITADA TEMPORALMENTE
 // =====================================================
 function setupTranscripcion() {
     if (!btnTranscribirAudio) return;
     
     btnTranscribirAudio.disabled = true;
     btnTranscribirAudio.style.opacity = '0.5';
-    btnTranscribirAudio.title = 'Primero graba un audio';
+    btnTranscribirAudio.title = 'Transcripción no disponible en versión gratuita';
     
-    btnTranscribirAudio.addEventListener('click', async () => {
-        if (!audioBlob) {
-            mostrarNotificacion('❌ Primero debes grabar un audio', 'warning');
-            return;
-        }
-        
-        if (btnTranscribirAudio.disabled) return;
-        
-        try {
-            btnTranscribirAudio.disabled = true;
-            btnTranscribirAudio.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Transcribiendo...';
-            btnTranscribirAudio.style.opacity = '0.5';
-            if (transcripcionLoading) transcripcionLoading.style.display = 'flex';
-            
-            const audioBase64 = await getAudioBase64();
-            
-            if (!audioBase64) {
-                throw new Error('No se pudo procesar el audio');
-            }
-            
-            console.log('📤 Enviando audio para transcripción');
-            
-            const response = await fetch(`${API_URL}/jefe-operativo/transcribir-audio`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-                },
-                body: JSON.stringify({ audio: audioBase64 })
-            });
-            
-            const data = await response.json();
-            
-            if (response.ok && data.transcripcion) {
-                const nuevaTranscripcion = data.transcripcion;
-                const textoActual = descripcionProblema.value;
-                let textoFinal;
-                
-                if (textoActual.trim() && !textoActual.includes('[Transcripción del audio]')) {
-                    textoFinal = `${textoActual}\n\n[Transcripción del audio]:\n${nuevaTranscripcion}`;
-                } else if (textoActual.includes('[Transcripción del audio]')) {
-                    textoFinal = textoActual.replace(/\[Transcripción del audio\]:\n.*$/s, `[Transcripción del audio]:\n${nuevaTranscripcion}`);
-                } else {
-                    textoFinal = nuevaTranscripcion;
-                }
-                
-                descripcionProblema.value = textoFinal;
-                descripcionModificadaManualmente = true;
-                
-                mostrarNotificacion('✅ Audio transcrito correctamente', 'success');
-                audioStatus.textContent = 'Audio transcrito. Presiona "Guardar Descripción" para guardar los cambios.';
-                audioStatus.style.color = 'var(--verde-exito)';
-                
-                if (codigoSesion) {
-                    await guardarSeccion('descripcion');
-                }
-            } else {
-                throw new Error(data.error || 'Error al transcribir el audio');
-            }
-        } catch (error) {
-            console.error('Error en transcripción:', error);
-            mostrarNotificacion(error.message || 'Error al transcribir el audio', 'error');
-        } finally {
-            btnTranscribirAudio.disabled = false;
-            btnTranscribirAudio.innerHTML = '<i class="fas fa-language"></i> Transcribir Audio';
-            btnTranscribirAudio.style.opacity = '1';
-            if (transcripcionLoading) transcripcionLoading.style.display = 'none';
-        }
+    btnTranscribirAudio.addEventListener('click', () => {
+        mostrarNotificacion('⏳ Transcripción no disponible en el plan gratuito. Próximamente disponible.', 'info');
     });
 }
 
@@ -1407,12 +1362,8 @@ async function startRecording() {
             const audioUrl = URL.createObjectURL(audioBlob);
             audioPreview.src = audioUrl;
             audioPreview.style.display = 'block';
-            audioStatus.textContent = 'Audio grabado';
+            audioStatus.textContent = 'Audio grabado - Presiona "Guardar Descripción" para guardar';
             audioStatus.style.color = 'var(--verde-exito)';
-            if (btnTranscribirAudio) {
-                btnTranscribirAudio.style.display = 'flex';
-                btnTranscribirAudio.disabled = false;
-            }
             if (btnEliminarAudio) btnEliminarAudio.style.display = 'flex';
             stream.getTracks().forEach(track => track.stop());
         };
@@ -1423,10 +1374,6 @@ async function startRecording() {
         btnGrabarAudio.innerHTML = '<i class="fas fa-stop"></i> Detener Grabación';
         audioStatus.textContent = 'Grabando...';
         audioStatus.style.color = 'var(--rojo-acento)';
-        if (btnTranscribirAudio) {
-            btnTranscribirAudio.disabled = true;
-            btnTranscribirAudio.style.opacity = '0.5';
-        }
         if (btnEliminarAudio) btnEliminarAudio.style.display = 'none';
     } catch (error) {
         logger.error('Error al acceder al micrófono:', error);
@@ -1446,36 +1393,17 @@ function stopRecording() {
 function eliminarGrabacion() {
     if (audioBlob) audioBlob = null;
     audioChunks = [];
+    audioUrlGuardado = null;
     if (audioPreview) {
         if (audioPreview.src && audioPreview.src.startsWith('blob:')) URL.revokeObjectURL(audioPreview.src);
         audioPreview.src = '';
         audioPreview.style.display = 'none';
     }
     if (audioStatus) audioStatus.textContent = 'Grabación eliminada';
-    if (btnTranscribirAudio) {
-        btnTranscribirAudio.style.display = 'flex';
-        btnTranscribirAudio.disabled = true;
-        btnTranscribirAudio.style.opacity = '0.5';
-    }
     if (btnEliminarAudio) btnEliminarAudio.style.display = 'none';
     if (btnGrabarAudio) btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
     isRecording = false;
     mostrarNotificacion('Grabación eliminada', 'info');
-}
-
-async function getAudioBase64() {
-    if (!audioBlob) return null;
-    return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-            let result = reader.result;
-            if (!result.includes('base64,')) {
-                result = `data:audio/wav;base64,${result}`;
-            }
-            resolve(result);
-        };
-        reader.readAsDataURL(audioBlob);
-    });
 }
 
 // =====================================================
@@ -1520,6 +1448,7 @@ function limpiarSesionCompleta() {
     detenerKeepAlive();
     codigoSesion = null;
     sesionActual = null;
+    audioUrlGuardado = null;
     localStorage.removeItem('sesion_actual');
     
     if (sessionPanel) sessionPanel.style.display = 'none';
@@ -1546,12 +1475,12 @@ function limpiarFormularioCompleto() {
     
     audioChunks = [];
     audioBlob = null;
+    audioUrlGuardado = null;
     if (audioPreview) {
         audioPreview.src = '';
         audioPreview.style.display = 'none';
     }
     if (audioStatus) audioStatus.textContent = '';
-    if (btnTranscribirAudio) btnTranscribirAudio.style.display = 'none';
     if (btnEliminarAudio) btnEliminarAudio.style.display = 'none';
     if (clienteLatitudInput) clienteLatitudInput.value = '';
     if (clienteLongitudInput) clienteLongitudInput.value = '';
@@ -1666,15 +1595,6 @@ function setupPhotoUploads() {
             }
         });
         removeBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-    });
-}
-
-function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
     });
 }
 
@@ -2097,6 +2017,13 @@ function cargarDatosParaEdicion(detalle) {
     if (vehiculoKilometraje) vehiculoKilometraje.value = detalle.kilometraje || '';
     if (descripcionProblema) descripcionProblema.value = detalle.transcripcion_problema || '';
     
+    if (detalle.audio_url && audioPreview) { 
+        audioPreview.src = detalle.audio_url; 
+        audioPreview.style.display = 'block'; 
+        audioStatus.textContent = 'Audio disponible'; 
+        audioUrlGuardado = detalle.audio_url;
+    }
+    
     if (detalle.fotos) {
         for (const [campo, url] of Object.entries(detalle.fotos)) {
             if (url && url !== 'null' && url !== 'None') {
@@ -2104,12 +2031,17 @@ function cargarDatosParaEdicion(detalle) {
                 if (fotoConfig) {
                     const uploadDiv = document.getElementById(`upload-${fotoConfig.id}`);
                     const preview = uploadDiv?.querySelector('.upload-preview');
-                    if (preview) { preview.style.backgroundImage = `url('${url}')`; preview.style.backgroundSize = 'cover'; preview.style.backgroundPosition = 'center'; if (uploadDiv) uploadDiv.classList.add('has-image'); }
+                    if (preview) { 
+                        preview.style.backgroundImage = `url('${url}')`; 
+                        preview.style.backgroundSize = 'cover'; 
+                        preview.style.backgroundPosition = 'center'; 
+                        if (uploadDiv) uploadDiv.classList.add('has-image'); 
+                    }
                 }
             }
         }
     }
-    if (detalle.audio_url && audioPreview) { audioPreview.src = detalle.audio_url; audioPreview.style.display = 'block'; audioStatus.textContent = 'Audio disponible'; if (btnEliminarAudio) btnEliminarAudio.style.display = 'flex'; }
+    
     if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'none';
     if (sessionPanel) sessionPanel.style.display = 'flex';
     if (colaboradoresPanel) colaboradoresPanel.style.display = 'block';
@@ -2119,6 +2051,23 @@ function cargarDatosParaEdicion(detalle) {
 async function guardarCambiosRecepcion() {
     if (!modoEdicionRecepcion || !recepcionEditandoId) { mostrarNotificacion('No hay recepción en edición', 'warning'); return; }
     try {
+        // Subir fotos nuevas a Supabase si las hay
+        const fotosData = {};
+        for (const foto of FOTOS_CONFIG) {
+            const input = document.getElementById(foto.id);
+            const file = input?.files?.[0];
+            if (file && file.size > 0) {
+                const publicUrl = await subirFotoDirecta(file, `edicion_${recepcionEditandoId}`, foto.campo);
+                fotosData[foto.campo] = publicUrl;
+            }
+        }
+        
+        // Subir audio nuevo si lo hay
+        let audioUrl = null;
+        if (audioBlob) {
+            audioUrl = await subirAudioDirecta(audioBlob, `edicion_${recepcionEditandoId}`);
+        }
+        
         const datosActualizados = {
             cliente: { 
                 nombre: document.getElementById('clienteNombre')?.value || '', 
@@ -2127,24 +2076,20 @@ async function guardarCambiosRecepcion() {
                 latitud: document.getElementById('clienteLatitud')?.value || null,
                 longitud: document.getElementById('clienteLongitud')?.value || null
             },
-            vehiculo: { placa: document.getElementById('vehiculoPlaca')?.value.toUpperCase() || '', marca: document.getElementById('vehiculoMarca')?.value || '', modelo: document.getElementById('vehiculoModelo')?.value || '', anio: parseInt(document.getElementById('vehiculoAnio')?.value) || null, kilometraje: parseInt(document.getElementById('vehiculoKilometraje')?.value) || 0 },
-            descripcion: { texto: descripcionProblema?.value || '', audio_url: audioBlob ? await getAudioBase64() : null },
-            fotos: {}
+            vehiculo: { 
+                placa: document.getElementById('vehiculoPlaca')?.value.toUpperCase() || '', 
+                marca: document.getElementById('vehiculoMarca')?.value || '', 
+                modelo: document.getElementById('vehiculoModelo')?.value || '', 
+                anio: parseInt(document.getElementById('vehiculoAnio')?.value) || null, 
+                kilometraje: parseInt(document.getElementById('vehiculoKilometraje')?.value) || 0 
+            },
+            descripcion: { 
+                texto: descripcionProblema?.value || '', 
+                audio_url: audioUrl || audioUrlGuardado 
+            },
+            fotos: fotosData
         };
-        for (const foto of FOTOS_CONFIG) {
-            const input = document.getElementById(foto.id);
-            if (input && input.files && input.files.length > 0) {
-                const file = input.files[0];
-                if (file) datosActualizados.fotos[foto.campo] = await fileToBase64(file);
-            } else {
-                const uploadDiv = document.getElementById(`upload-${foto.id}`);
-                const preview = uploadDiv?.querySelector('.upload-preview');
-                if (preview && preview.style.backgroundImage) {
-                    const match = preview.style.backgroundImage.match(/url\(["']?([^"']*)["']?\)/);
-                    if (match && match[1]) datosActualizados.fotos[foto.campo] = match[1];
-                }
-            }
-        }
+        
         mostrarNotificacion('Guardando cambios...', 'info');
         const response = await fetch(`${API_URL}/jefe-operativo/actualizar-recepcion/${recepcionEditandoId}`, {
             method: 'PUT',
@@ -2165,7 +2110,12 @@ async function guardarCambiosRecepcion() {
             }
             cargarRecepciones();
             limpiarFormularioCompleto();
-            if (!codigoSesion) { if (recepcionForm) recepcionForm.style.display = 'none'; if (sessionPanel) sessionPanel.style.display = 'none'; if (colaboradoresPanel) colaboradoresPanel.style.display = 'none'; if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block'; }
+            if (!codigoSesion) { 
+                if (recepcionForm) recepcionForm.style.display = 'none'; 
+                if (sessionPanel) sessionPanel.style.display = 'none'; 
+                if (colaboradoresPanel) colaboradoresPanel.style.display = 'none'; 
+                if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block'; 
+            }
         } else throw new Error(data.error || 'Error al actualizar');
     } catch (error) { mostrarNotificacion(error.message, 'error'); }
 }

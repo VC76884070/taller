@@ -537,6 +537,49 @@
         </div>
     </div>
 
+    <!-- ===================================================== -->
+    <!-- MODAL PARA SELECCIONAR UBICACIÓN CON LEAFLET (AGREGADO) -->
+    <!-- ===================================================== -->
+    <div class="modal" id="modalUbicacionLeaflet">
+        <div class="modal-content modal-ubicacion">
+            <div class="modal-header">
+                <h2><i class="fas fa-map-marker-alt"></i> Seleccionar Ubicación del Cliente</h2>
+                <button class="modal-close" id="btnCerrarModalUbicacionLeaflet">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="ubicacion-busqueda">
+                    <div class="search-container">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="modalBuscarUbicacionLeaflet" 
+                               placeholder="Buscar dirección (calle, zona, ciudad)..." 
+                               class="ubicacion-search">
+                        <button type="button" id="btnBuscarUbicacionLeaflet" class="btn-buscar">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                    </div>
+                    <div id="leafletMapa" style="height: 400px; width: 100%; border-radius: 12px; margin: 15px 0;"></div>
+                    <div class="ubicacion-info" id="ubicacionInfoLeaflet" style="display: none;">
+                        <div class="info-card">
+                            <i class="fas fa-check-circle"></i>
+                            <div>
+                                <strong>Ubicación seleccionada:</strong>
+                                <span id="ubicacionSeleccionadaTextoLeaflet">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnCancelarUbicacionLeaflet">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button class="btn-primary" id="btnConfirmarUbicacionLeaflet" disabled>
+                    <i class="fas fa-check"></i> Usar esta ubicación
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Leaflet JS (gratuito, sin API key) -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -616,6 +659,62 @@
         window.closeSidebar = closeSidebar;
         console.log('✅ recepcion.html - Funciones responsive cargadas');
     </script>
+
+    <!-- Estilos adicionales para el modal del mapa -->
+    <style>
+        .modal-ubicacion .modal-content {
+            max-width: 800px;
+            width: 90%;
+            border-radius: 16px;
+        }
+        .search-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        .ubicacion-search {
+            flex: 1;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            font-size: 14px;
+            background: var(--gris-oscuro);
+            color: var(--blanco);
+        }
+        .btn-buscar {
+            padding: 10px 20px;
+            background: var(--rojo-primario);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-buscar:hover {
+            background: var(--rojo-oscuro);
+        }
+        .info-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(16,185,129,0.15);
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .info-card i {
+            color: var(--verde-exito);
+            font-size: 20px;
+        }
+        @media (max-width: 768px) {
+            .search-container { flex-direction: column; }
+            .modal-ubicacion .modal-content { width: 95%; }
+            #leafletMapa { height: 300px; }
+            .btn-buscar { justify-content: center; }
+        }
+    </style>
 </body>
 
 </html>

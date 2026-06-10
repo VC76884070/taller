@@ -1,6 +1,6 @@
 # =====================================================
 # RECEPCION.PY - JEFE OPERATIVO
-# VERSIÓN CORREGIDA - SIN WHISPER
+# VERSIÓN CORREGIDA - CON id_rol EN LA CONSULTA
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -84,6 +84,7 @@ def guardar_sesion_en_db(sesion):
                 }) \
                 .eq('codigo', sesion['codigo']) \
                 .execute()
+            logger.info(f"✅ Sesión {sesion['codigo']} actualizada en BD")
         else:
             supabase.table('sesion_colaborativa') \
                 .insert({
@@ -99,9 +100,10 @@ def guardar_sesion_en_db(sesion):
                     'fecha_creacion': sesion.get('fecha_creacion', datetime.datetime.now().isoformat())
                 }) \
                 .execute()
+            logger.info(f"✅ Sesión {sesion['codigo']} guardada en BD")
         return True
     except Exception as e:
-        logger.error(f"Error guardando sesión: {str(e)}")
+        logger.error(f"❌ Error guardando sesión en BD: {str(e)}")
         return False
 
 def cargar_sesiones_activas_db():
@@ -132,9 +134,10 @@ def cargar_sesiones_activas_db():
                 'estado': s['estado'],
                 'fecha_creacion': s['fecha_creacion']
             }
+        logger.info(f"📋 Cargadas {len(sesiones)} sesiones activas desde BD")
         return sesiones
     except Exception as e:
-        logger.error(f"Error cargando sesiones: {str(e)}")
+        logger.error(f"❌ Error cargando sesiones desde BD: {str(e)}")
         return {}
 
 def eliminar_sesion_db(codigo):
@@ -143,9 +146,10 @@ def eliminar_sesion_db(codigo):
             .delete() \
             .eq('codigo', codigo) \
             .execute()
+        logger.info(f"🗑️ Sesión {codigo} eliminada de BD")
         return True
     except Exception as e:
-        logger.error(f"Error eliminando sesión: {str(e)}")
+        logger.error(f"❌ Error eliminando sesión {codigo}: {str(e)}")
         return False
 
 def actualizar_actividad_sesion(codigo):
@@ -156,6 +160,7 @@ def actualizar_actividad_sesion(codigo):
             .execute()
         return True
     except Exception as e:
+        logger.error(f"❌ Error actualizando actividad: {str(e)}")
         return False
 
 # Cargar sesiones al inicio
@@ -166,7 +171,7 @@ except Exception as e:
     logger.error(f"Error: {str(e)}")
 
 # =====================================================
-# FUNCIÓN PARA SUBIR IMAGEN A CLOUDINARY (SOLO FOTOS)
+# FUNCIÓN PARA SUBIR IMAGEN A CLOUDINARY (FOTOS)
 # =====================================================
 
 def subir_imagen_a_cloudinary(base64_data, carpeta, nombre):
@@ -415,7 +420,6 @@ def crear_orden_desde_sesion(datos, current_user, sesion_codigo=None):
         
         id_orden = orden_result.data[0]['id']
         
-        # NOTA: audio_url ya viene como URL de Cloudinary (subida desde frontend)
         recepcion_data = {
             'id_orden_trabajo': id_orden,
             'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
@@ -442,62 +446,99 @@ def crear_orden_desde_sesion(datos, current_user, sesion_codigo=None):
         return {'success': False, 'error': str(e)}
 
 # =====================================================
-# DECORADOR DE AUTENTICACIÓN
+# DECORADOR DE AUTENTICACIÓN CORREGIDO (USANDO id_rol)
 # =====================================================
 
 def jefe_operativo_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        
+        logger.info(f"🔍 [jefe_operativo_required] Token recibido: {token[:50]}..." if token else "No token")
+        
         if not token:
+            logger.error("❌ [jefe_operativo_required] No token")
             return jsonify({'error': 'Token no proporcionado'}), 401
         
         try:
+            # Decodificar token
             payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
-            user_id = payload.get('user_id')
+            logger.info(f"🔍 [jefe_operativo_required] Payload decodificado correctamente")
             
+            # El token puede tener la estructura {'user': {...}} o ser directo
+            if 'user' in payload:
+                user_data = payload['user']
+                logger.info(f"🔍 [jefe_operativo_required] Token tiene estructura 'user'")
+            else:
+                user_data = payload
+                logger.info(f"🔍 [jefe_operativo_required] Token es directo")
+            
+            user_id = user_data.get('id')
             if not user_id:
-                return jsonify({'error': 'Token inválido'}), 401
+                logger.error("❌ [jefe_operativo_required] No user_id en token")
+                return jsonify({'error': 'Token inválido: ID de usuario no encontrado'}), 401
             
+            logger.info(f"🔍 [jefe_operativo_required] user_id: {user_id}")
+            
+            # Obtener usuario de la base de datos
             user_result = supabase.table('usuario') \
-                .select('id, nombre, email, contacto, usuario_rol!inner(rol_id, rol!inner(nombre_rol))') \
+                .select('id, nombre, email, contacto') \
                 .eq('id', user_id) \
                 .execute()
             
             if not user_result.data:
+                logger.error(f"❌ [jefe_operativo_required] Usuario {user_id} no encontrado en BD")
                 return jsonify({'error': 'Usuario no encontrado'}), 401
             
-            user_data = user_result.data[0]
-            roles = []
-            if 'usuario_rol' in user_data:
-                for ur in user_data['usuario_rol']:
-                    if 'rol' in ur and 'nombre_rol' in ur['rol']:
-                        roles.append(ur['rol']['nombre_rol'])
+            usuario = user_result.data[0]
+            logger.info(f"🔍 [jefe_operativo_required] Usuario encontrado: {usuario.get('nombre')}")
             
-            if 'jefe_operativo' not in roles and 'admin_general' not in roles:
-                return jsonify({'error': 'Acceso no autorizado'}), 403
+            # 🔧 CORREGIDO: Usar 'id_rol' en lugar de 'rol_id'
+            roles_result = supabase.table('usuario_rol') \
+                .select('id_rol, rol!inner(nombre_rol)') \
+                .eq('id_usuario', user_id) \
+                .execute()
+            
+            roles = []
+            for ur in (roles_result.data or []):
+                if 'rol' in ur and 'nombre_rol' in ur['rol']:
+                    roles.append(ur['rol']['nombre_rol'])
+            
+            logger.info(f"🔍 [jefe_operativo_required] Roles del usuario: {roles}")
+            
+            # Verificar si tiene rol de jefe_operativo o admin_general
+            tiene_rol = 'jefe_operativo' in roles or 'admin_general' in roles
+            
+            if not tiene_rol:
+                logger.warning(f"❌ [jefe_operativo_required] Usuario {user_id} no tiene rol jefe_operativo. Roles: {roles}")
+                return jsonify({'error': 'Acceso no autorizado. Se requiere rol de Jefe Operativo'}), 403
             
             current_user = {
-                'id': user_data['id'],
-                'nombre': user_data.get('nombre', ''),
-                'email': user_data.get('email', ''),
+                'id': user_id,
+                'nombre': usuario.get('nombre', ''),
+                'email': usuario.get('email', ''),
                 'roles': roles
             }
             
+            logger.info(f"✅ [jefe_operativo_required] Acceso permitido para {current_user['nombre']}")
             return f(current_user, *args, **kwargs)
             
         except jwt.ExpiredSignatureError:
+            logger.error("❌ [jefe_operativo_required] Token expirado")
             return jsonify({'error': 'Token expirado'}), 401
-        except jwt.InvalidTokenError:
+        except jwt.InvalidTokenError as e:
+            logger.error(f"❌ [jefe_operativo_required] Token inválido: {str(e)}")
             return jsonify({'error': 'Token inválido'}), 401
         except Exception as e:
-            logger.error(f"Error en autenticación: {str(e)}")
-            return jsonify({'error': 'Error de autenticación'}), 401
+            logger.error(f"❌ [jefe_operativo_required] Error inesperado: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': str(e)}), 401
     
     return decorated_function
 
 # =====================================================
-# ENDPOINTS DE SESIONES COLABORATIVAS
+# ENDPOINTS
 # =====================================================
 
 @jefe_operativo_recepcion_bp.route('/iniciar-sesion', methods=['POST'])
@@ -570,6 +611,7 @@ def unirse_sesion(current_user):
             sesion['colaboradores'].append(current_user['id'])
             sesion['colaboradores_nombres'].append(current_user.get('nombre', 'Técnico'))
             guardar_sesion_en_db(sesion)
+            logger.info(f"👤 {current_user.get('nombre')} se unió a {codigo_sesion}")
         
         return jsonify({'success': True, 'sesion': sesion}), 200
         
@@ -581,7 +623,6 @@ def unirse_sesion(current_user):
 @jefe_operativo_recepcion_bp.route('/guardar-seccion', methods=['POST'])
 @jefe_operativo_required
 def guardar_seccion(current_user):
-    """Guardar una sección - Las fotos vienen en Base64, el audio ya es URL de Cloudinary"""
     try:
         data = request.get_json()
         codigo_sesion = data.get('codigo')
@@ -628,7 +669,6 @@ def guardar_seccion(current_user):
             )
             
         elif seccion == 'fotos':
-            # Procesar fotos: subir a Cloudinary y guardar URLs
             fotos_procesadas = {}
             carpeta = f"sesion/{codigo_sesion}"
             
@@ -647,20 +687,17 @@ def guardar_seccion(current_user):
                     fotos_procesadas[campo] = None
             
             sesion['datos']['fotos'] = fotos_procesadas
-            
-            # Contar fotos válidas
             fotos_validas = sum(1 for url in fotos_procesadas.values() if url)
             sesion['secciones_completadas']['fotos'] = fotos_validas == 7
             logger.info(f"📸 Fotos guardadas: {fotos_validas}/7")
             
         elif seccion == 'descripcion':
-            # El audio ya viene como URL de Cloudinary (subido desde frontend)
             sesion['datos']['descripcion']['texto'] = datos_seccion.get('texto', '')
             
             audio_url = datos_seccion.get('audio_url')
             if audio_url and isinstance(audio_url, str) and audio_url.startswith('http'):
                 sesion['datos']['descripcion']['audio_url'] = audio_url
-                logger.info(f"🎤 Audio URL guardada: {audio_url[:80]}...")
+                logger.info(f"🎤 Audio URL guardada")
             
             sesion['secciones_completadas']['descripcion'] = bool(datos_seccion.get('texto'))
         
@@ -787,6 +824,7 @@ def verificar_placa(current_user, placa):
             }), 200
         return jsonify({'exists': False}), 200
     except Exception as e:
+        logger.error(f"Error verificando placa: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -807,6 +845,7 @@ def cancelar_sesion(current_user):
         
         return jsonify({'success': True}), 200
     except Exception as e:
+        logger.error(f"Error cancelando sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -819,6 +858,7 @@ def ping_sesion(current_user, codigo):
         actualizar_actividad_sesion(codigo)
         return jsonify({'success': True}), 200
     except Exception as e:
+        logger.error(f"Error en ping: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -840,6 +880,7 @@ def listar_sesiones_activas(current_user):
                 })
         return jsonify({'success': True, 'sesiones': sesiones}), 200
     except Exception as e:
+        logger.error(f"Error listando sesiones: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -873,6 +914,7 @@ def listar_recepciones(current_user):
         
         return jsonify({'success': True, 'recepciones': recepciones}), 200
     except Exception as e:
+        logger.error(f"Error listando recepciones: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -959,6 +1001,7 @@ def detalle_recepcion(current_user, id_orden):
         }), 200
         
     except Exception as e:
+        logger.error(f"Error obteniendo detalle: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -978,6 +1021,7 @@ def eliminar_recepcion(current_user, id_orden):
         
         return jsonify({'success': True}), 200
     except Exception as e:
+        logger.error(f"Error eliminando recepción: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1015,7 +1059,6 @@ def actualizar_recepcion(current_user, id_orden):
         fotos = data.get('fotos', {})
         descripcion = data.get('descripcion', {})
         
-        # Procesar nuevas fotos si vienen en Base64
         fotos_procesadas = {}
         if fotos:
             carpeta = f"recepcion/{id_orden}"
@@ -1043,6 +1086,7 @@ def actualizar_recepcion(current_user, id_orden):
         return jsonify({'success': True}), 200
         
     except Exception as e:
+        logger.error(f"Error actualizando recepción: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1062,6 +1106,7 @@ def marcar_editando(current_user):
         
         return jsonify({'success': True}), 200
     except Exception as e:
+        logger.error(f"Error marcando edición: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1081,6 +1126,7 @@ def liberar_edicion(current_user):
         
         return jsonify({'success': True}), 200
     except Exception as e:
+        logger.error(f"Error liberando edición: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

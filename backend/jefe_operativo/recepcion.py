@@ -1,8 +1,6 @@
 # =====================================================
 # RECEPCION.PY - JEFE OPERATIVO
 # VERSIÓN CORREGIDA - SIN WHISPER
-# LAS FOTOS VAN A CLOUDINARY (backend)
-# EL AUDIO VA DIRECTO A CLOUDINARY (frontend)
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -40,7 +38,7 @@ TALLER_LAT = -17.3895
 TALLER_LNG = -66.1568
 
 # =====================================================
-# CONFIGURACIÓN DE CLOUDINARY
+# CONFIGURACIÓN DE CLOUDINARY (SOLO PARA FOTOS)
 # =====================================================
 CLOUDINARY_CONFIGURED = False
 try:
@@ -168,7 +166,7 @@ except Exception as e:
     logger.error(f"Error: {str(e)}")
 
 # =====================================================
-# FUNCIÓN PARA SUBIR IMAGEN A CLOUDINARY
+# FUNCIÓN PARA SUBIR IMAGEN A CLOUDINARY (SOLO FOTOS)
 # =====================================================
 
 def subir_imagen_a_cloudinary(base64_data, carpeta, nombre):
@@ -192,9 +190,7 @@ def subir_imagen_a_cloudinary(base64_data, carpeta, nombre):
             resource_type="image"
         )
         
-        url = resultado.get('secure_url')
-        logger.info(f"✅ Imagen subida a Cloudinary: {url[:100]}...")
-        return url
+        return resultado.get('secure_url')
         
     except Exception as e:
         logger.error(f"Error subiendo imagen: {str(e)}")
@@ -419,7 +415,7 @@ def crear_orden_desde_sesion(datos, current_user, sesion_codigo=None):
         
         id_orden = orden_result.data[0]['id']
         
-        # Guardar recepción con URLs de Cloudinary (fotos) y audio (viene del frontend)
+        # NOTA: audio_url ya viene como URL de Cloudinary (subida desde frontend)
         recepcion_data = {
             'id_orden_trabajo': id_orden,
             'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
@@ -501,7 +497,7 @@ def jefe_operativo_required(f):
     return decorated_function
 
 # =====================================================
-# ENDPOINTS
+# ENDPOINTS DE SESIONES COLABORATIVAS
 # =====================================================
 
 @jefe_operativo_recepcion_bp.route('/iniciar-sesion', methods=['POST'])
@@ -585,6 +581,7 @@ def unirse_sesion(current_user):
 @jefe_operativo_recepcion_bp.route('/guardar-seccion', methods=['POST'])
 @jefe_operativo_required
 def guardar_seccion(current_user):
+    """Guardar una sección - Las fotos vienen en Base64, el audio ya es URL de Cloudinary"""
     try:
         data = request.get_json()
         codigo_sesion = data.get('codigo')
@@ -633,7 +630,6 @@ def guardar_seccion(current_user):
         elif seccion == 'fotos':
             # Procesar fotos: subir a Cloudinary y guardar URLs
             fotos_procesadas = {}
-            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
             carpeta = f"sesion/{codigo_sesion}"
             
             campos_fotos = ['url_lateral_izquierda', 'url_lateral_derecha', 'url_foto_frontal',
@@ -658,13 +654,13 @@ def guardar_seccion(current_user):
             logger.info(f"📸 Fotos guardadas: {fotos_validas}/7")
             
         elif seccion == 'descripcion':
-            # EL AUDIO YA VIENE COMO URL DE CLOUDINARY (subido desde frontend)
+            # El audio ya viene como URL de Cloudinary (subido desde frontend)
             sesion['datos']['descripcion']['texto'] = datos_seccion.get('texto', '')
             
             audio_url = datos_seccion.get('audio_url')
             if audio_url and isinstance(audio_url, str) and audio_url.startswith('http'):
                 sesion['datos']['descripcion']['audio_url'] = audio_url
-                logger.info(f"🎤 Audio URL guardada: {audio_url[:100]}...")
+                logger.info(f"🎤 Audio URL guardada: {audio_url[:80]}...")
             
             sesion['secciones_completadas']['descripcion'] = bool(datos_seccion.get('texto'))
         

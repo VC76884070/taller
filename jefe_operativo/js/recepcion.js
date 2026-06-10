@@ -17,9 +17,9 @@ if (typeof window.API_BASE_URL === 'undefined') {
 // =====================================================
 // CONFIGURACIÓN DE CLOUDINARY PARA SUBIDA DIRECTA DE AUDIO
 // =====================================================
-// 👇 CAMBIA ESTOS VALORES POR LOS TUYOS 👇
-const CLOUDINARY_CLOUD_NAME = 'tu-cloud-name';  // Ej: 'furia-motor'
-const CLOUDINARY_UPLOAD_PRESET = 'furia_audio_unsigned';  // Creado en Cloudinary
+
+const CLOUDINARY_CLOUD_NAME = 'drpt6ztkd';  // Tu cloud name
+const CLOUDINARY_UPLOAD_PRESET = 'furia_audio_unsigned';  // El preset que creaste
 
 // =====================================================
 // RECEPCION.JS - JEFE OPERATIVO
@@ -125,13 +125,13 @@ const FOTOS_CONFIG = [
 // =====================================================
 // FUNCIÓN PARA SUBIR AUDIO DIRECTAMENTE A CLOUDINARY
 // =====================================================
-async function subirAudioCloudinary(blob) {
+async function subirAudioCloudinary(audioBlob) {
     return new Promise((resolve, reject) => {
         const formData = new FormData();
-        formData.append('file', blob, 'audio.wav');
+        formData.append('file', audioBlob, 'audio.wav');
         formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
         formData.append('folder', 'furia_motor/audios');
-        formData.append('resource_type', 'video');  // Cloudinary trata audio como video
+        formData.append('resource_type', 'video');  // Importante!
         
         const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`;
         

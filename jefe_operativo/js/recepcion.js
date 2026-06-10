@@ -686,46 +686,89 @@ function setupUnirsePorCodigo() {
 }
 
 // =====================================================
-// RASTREO DE EDICIÓN - VERSIÓN SIMPLIFICADA
+// RASTREO DE EDICIÓN - VERSIÓN MEJORADA
 // =====================================================
 function setupInputTracking() {
+    // =====================================================
+    // CLIENTE INPUTS
+    // =====================================================
     const clienteInputs = ['clienteNombre', 'clienteTelefono', 'clienteUbicacion'];
     clienteInputs.forEach(id => {
         const input = document.getElementById(id);
         if (input) {
+            let debounceTimeout;
+            
             input.addEventListener('focus', () => {
                 camposEnEdicion.cliente = true;
                 if (timeoutsEdicion.cliente) clearTimeout(timeoutsEdicion.cliente);
             });
+            
             input.addEventListener('blur', async () => {
                 if (timeoutsEdicion.cliente) clearTimeout(timeoutsEdicion.cliente);
-                if (codigoSesion) await guardarSeccion('cliente');
+                if (codigoSesion && camposEnEdicion.cliente) {
+                    await guardarSeccion('cliente');
+                }
                 timeoutsEdicion.cliente = setTimeout(() => { camposEnEdicion.cliente = false; }, 500);
+            });
+            
+            input.addEventListener('input', () => {
+                if (debounceTimeout) clearTimeout(debounceTimeout);
+                debounceTimeout = setTimeout(async () => {
+                    if (codigoSesion && camposEnEdicion.cliente) {
+                        await guardarSeccion('cliente');
+                    }
+                }, 1000);
             });
         }
     });
     
+    // =====================================================
+    // VEHÍCULO INPUTS - MISMO COMPORTAMIENTO QUE CLIENTE
+    // =====================================================
     const vehiculoInputs = ['vehiculoPlaca', 'vehiculoMarca', 'vehiculoModelo', 'vehiculoAnio', 'vehiculoKilometraje'];
     vehiculoInputs.forEach(id => {
         const input = document.getElementById(id);
         if (input) {
+            let debounceTimeout;
+            
             input.addEventListener('focus', () => {
+                console.log('✏️ Editando vehículo:', id);
                 camposEnEdicion.vehiculo = true;
                 if (timeoutsEdicion.vehiculo) clearTimeout(timeoutsEdicion.vehiculo);
             });
+            
             input.addEventListener('blur', async () => {
+                console.log('📤 Dejando de editar vehículo:', id);
                 if (timeoutsEdicion.vehiculo) clearTimeout(timeoutsEdicion.vehiculo);
-                if (codigoSesion) await guardarSeccion('vehiculo');
+                if (codigoSesion && camposEnEdicion.vehiculo) {
+                    await guardarSeccion('vehiculo');
+                }
                 timeoutsEdicion.vehiculo = setTimeout(() => { camposEnEdicion.vehiculo = false; }, 500);
+            });
+            
+            input.addEventListener('input', () => {
+                if (debounceTimeout) clearTimeout(debounceTimeout);
+                debounceTimeout = setTimeout(async () => {
+                    if (codigoSesion && camposEnEdicion.vehiculo) {
+                        await guardarSeccion('vehiculo');
+                        console.log('💾 Auto-guardado vehículo:', id);
+                    }
+                }, 1000);
             });
         }
     });
     
+    // =====================================================
+    // DESCRIPCIÓN
+    // =====================================================
     if (descripcionProblema) {
+        let debounceTimeout;
+        
         descripcionProblema.addEventListener('focus', () => {
             camposEnEdicion.descripcion = true;
             if (timeoutsEdicion.descripcion) clearTimeout(timeoutsEdicion.descripcion);
         });
+        
         descripcionProblema.addEventListener('blur', async () => {
             if (timeoutsEdicion.descripcion) clearTimeout(timeoutsEdicion.descripcion);
             if (codigoSesion && descripcionProblema.value !== descripcionOriginal) {
@@ -733,12 +776,15 @@ function setupInputTracking() {
             }
             timeoutsEdicion.descripcion = setTimeout(() => { camposEnEdicion.descripcion = false; }, 500);
         });
+        
         descripcionProblema.addEventListener('input', () => {
             descripcionModificadaManualmente = true;
-            if (transcripcionManual) {
-                transcripcionManual = false;
-                textoTranscripcion = null;
-            }
+            if (debounceTimeout) clearTimeout(debounceTimeout);
+            debounceTimeout = setTimeout(async () => {
+                if (codigoSesion && camposEnEdicion.descripcion) {
+                    await guardarSeccion('descripcion');
+                }
+            }, 1500);
         });
     }
 }
@@ -1256,58 +1302,81 @@ function limpiarDescripcion() {
 }
 
 // =====================================================
-// TRANSCRIPCIÓN DE AUDIO
+// TRANSCRIPCIÓN DE AUDIO - VERSIÓN CORREGIDA
 // =====================================================
 function setupTranscripcion() {
     if (!btnTranscribirAudio) return;
+    
     btnTranscribirAudio.disabled = true;
     btnTranscribirAudio.style.opacity = '0.5';
+    btnTranscribirAudio.title = 'Primero graba un audio';
     
     btnTranscribirAudio.addEventListener('click', async () => {
         if (!audioBlob) {
-            mostrarNotificacion('Primero graba un audio', 'warning');
+            mostrarNotificacion('❌ Primero debes grabar un audio', 'warning');
             return;
         }
+        
         if (btnTranscribirAudio.disabled) return;
         
         try {
             btnTranscribirAudio.disabled = true;
             btnTranscribirAudio.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Transcribiendo...';
+            btnTranscribirAudio.style.opacity = '0.5';
             if (transcripcionLoading) transcripcionLoading.style.display = 'flex';
             
             const audioBase64 = await getAudioBase64();
+            
+            if (!audioBase64) {
+                throw new Error('No se pudo procesar el audio');
+            }
+            
+            console.log('📤 Enviando audio para transcripción');
+            
             const response = await fetch(`${API_URL}/jefe-operativo/transcribir-audio`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                },
                 body: JSON.stringify({ audio: audioBase64 })
             });
+            
             const data = await response.json();
             
             if (response.ok && data.transcripcion) {
                 const nuevaTranscripcion = data.transcripcion;
                 const textoActual = descripcionProblema.value;
                 let textoFinal;
-                if (textoActual.trim() && !textoActual.includes('[Transcripción]')) {
-                    textoFinal = `${textoActual}\n\n[Transcripción]:\n${nuevaTranscripcion}`;
-                } else if (textoActual.includes('[Transcripción]')) {
-                    textoFinal = textoActual.replace(/\[Transcripción\]:\n.*$/s, `[Transcripción]:\n${nuevaTranscripcion}`);
+                
+                if (textoActual.trim() && !textoActual.includes('[Transcripción del audio]')) {
+                    textoFinal = `${textoActual}\n\n[Transcripción del audio]:\n${nuevaTranscripcion}`;
+                } else if (textoActual.includes('[Transcripción del audio]')) {
+                    textoFinal = textoActual.replace(/\[Transcripción del audio\]:\n.*$/s, `[Transcripción del audio]:\n${nuevaTranscripcion}`);
                 } else {
                     textoFinal = nuevaTranscripcion;
                 }
-                descripcionProblema.value = textoFinal;
-                mostrarNotificacion('Audio transcrito', 'success');
-                audioStatus.textContent = 'Audio transcrito. Guarda los cambios.';
                 
-                btnTranscribirAudio.disabled = false;
-                btnTranscribirAudio.innerHTML = '<i class="fas fa-language"></i> Transcribir Audio';
+                descripcionProblema.value = textoFinal;
+                descripcionModificadaManualmente = true;
+                
+                mostrarNotificacion('✅ Audio transcrito correctamente', 'success');
+                audioStatus.textContent = 'Audio transcrito. Presiona "Guardar Descripción" para guardar los cambios.';
+                audioStatus.style.color = 'var(--verde-exito)';
+                
+                if (codigoSesion) {
+                    await guardarSeccion('descripcion');
+                }
             } else {
-                throw new Error(data.error || 'Error al transcribir');
+                throw new Error(data.error || 'Error al transcribir el audio');
             }
         } catch (error) {
-            mostrarNotificacion(error.message, 'error');
+            console.error('Error en transcripción:', error);
+            mostrarNotificacion(error.message || 'Error al transcribir el audio', 'error');
+        } finally {
             btnTranscribirAudio.disabled = false;
             btnTranscribirAudio.innerHTML = '<i class="fas fa-language"></i> Transcribir Audio';
-        } finally {
+            btnTranscribirAudio.style.opacity = '1';
             if (transcripcionLoading) transcripcionLoading.style.display = 'none';
         }
     });
@@ -1398,7 +1467,13 @@ async function getAudioBase64() {
     if (!audioBlob) return null;
     return new Promise((resolve) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
+        reader.onload = () => {
+            let result = reader.result;
+            if (!result.includes('base64,')) {
+                result = `data:audio/wav;base64,${result}`;
+            }
+            resolve(result);
+        };
         reader.readAsDataURL(audioBlob);
     });
 }
@@ -1898,13 +1973,12 @@ function mostrarModalDetalle(detalle) {
                 <div><div><span>Ubicación:</span><span>${escapeHtml(ubicacionCliente || 'No especificada')}</span></div>
                 ${tieneUbicacion ? `
                 <div class="rutas-botones">
-                    <button onclick="abrirRutaEnGoogleMaps(${latCliente || 'null'}, ${lngCliente || 'null'}, '${escapeHtml(ubicacionCliente)}')"><i class="fab fa-google"></i> Google Maps</button>
-                    <button onclick="abrirRutaEnWaze(${latCliente || 'null'}, ${lngCliente || 'null'}// Continuación de mostrarModalDetalle
-                    <button onclick="abrirRutaEnWaze(${latCliente || 'null'}, ${lngCliente || 'null'})"><i class="fab fa-waze"></i> Waze</button>
-                    <button onclick="abrirRutaEnOpenStreetMap(${latCliente || 'null'}, ${lngCliente || 'null'}, '${escapeHtml(ubicacionCliente)}')"><i class="fas fa-map"></i> OpenStreetMap</button>
-                    <button onclick="copiarCoordenadas(${latCliente || 'null'}, ${lngCliente || 'null'})"><i class="fas fa-copy"></i> Copiar coordenadas</button>
+                    <button class="btn-ruta" onclick="abrirRutaEnGoogleMaps(${latCliente || 'null'}, ${lngCliente || 'null'}, '${escapeHtml(ubicacionCliente)}')"><i class="fab fa-google"></i> Google Maps</button>
+                    <button class="btn-ruta-waze" onclick="abrirRutaEnWaze(${latCliente || 'null'}, ${lngCliente || 'null'}化肥"><i class="fab fa-waze"></i> Waze</button>
+                    <button class="btn-ruta-osm" onclick="abrirRutaEnOpenStreetMap(${latCliente || 'null'}, ${lngCliente || 'null'}, '${escapeHtml(ubicacionCliente)}')"><i class="fas fa-map"></i> OpenStreetMap</button>
+                    <button class="btn-ruta-copy" onclick="copiarCoordenadas(${latCliente || 'null'}, ${lngCliente || 'null'}化肥"><i class="fas fa-copy"></i> Copiar coordenadas</button>
                 </div>
-                <small>Haz clic para ver la ruta desde el taller</small>
+                <small class="ruta-hint">Haz clic para ver la ruta desde el taller</small>
                 ` : ''}
                 </div>
             </div>

@@ -1,7 +1,8 @@
 # =====================================================
 # RECEPCION.PY - JEFE OPERATIVO
-# VERSIÓN CORREGIDA - SIN CLOUDINARY, SIN WHISPER
-# SOLO RECIBE URLs DE SUPABASE DESDE EL FRONTEND
+# VERSIÓN CORREGIDA - SIN WHISPER
+# LAS FOTOS VAN A CLOUDINARY (backend)
+# EL AUDIO VA DIRECTO A CLOUDINARY (frontend)
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -11,10 +12,13 @@ import jwt
 import datetime
 import logging
 from werkzeug.security import generate_password_hash, check_password_hash
+import cloudinary
+import cloudinary.uploader
+import base64
+import io
 import uuid
 import random
 import string
-import json
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -30,10 +34,29 @@ SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
 
 # =====================================================
-# COORDENADAS DEL TALLER (CAMBIAR SEGÚN UBICACIÓN REAL)
+# COORDENADAS DEL TALLER
 # =====================================================
-TALLER_LAT = -17.3895   # Latitud del taller (ejemplo: Cochabamba)
-TALLER_LNG = -66.1568   # Longitud del taller
+TALLER_LAT = -17.3895
+TALLER_LNG = -66.1568
+
+# =====================================================
+# CONFIGURACIÓN DE CLOUDINARY
+# =====================================================
+CLOUDINARY_CONFIGURED = False
+try:
+    if hasattr(config, 'CLOUDINARY_CLOUD_NAME') and config.CLOUDINARY_CLOUD_NAME:
+        cloudinary.config(
+            cloud_name=config.CLOUDINARY_CLOUD_NAME,
+            api_key=config.CLOUDINARY_API_KEY,
+            api_secret=config.CLOUDINARY_API_SECRET,
+            secure=True
+        )
+        CLOUDINARY_CONFIGURED = True
+        logger.info(f"✅ Cloudinary configurado: {config.CLOUDINARY_CLOUD_NAME}")
+    else:
+        logger.warning("⚠️ Cloudinary no configurado")
+except Exception as e:
+    logger.error(f"❌ Error configurando Cloudinary: {str(e)}")
 
 # =====================================================
 # ALMACENAMIENTO DE SESIONES COLABORATIVAS
@@ -41,20 +64,17 @@ TALLER_LNG = -66.1568   # Longitud del taller
 sesiones_activas = {}
 
 # =====================================================
-# FUNCIONES DE PERSISTENCIA DE SESIONES EN SUPABASE
+# FUNCIONES DE PERSISTENCIA
 # =====================================================
 
 def guardar_sesion_en_db(sesion):
-    """Guardar o actualizar sesión en Supabase"""
     try:
-        # Verificar si la sesión ya existe
         existente = supabase.table('sesion_colaborativa') \
             .select('codigo') \
             .eq('codigo', sesion['codigo']) \
             .execute()
         
         if existente.data:
-            # Actualizar sesión existente
             supabase.table('sesion_colaborativa') \
                 .update({
                     'colaboradores_ids': sesion.get('colaboradores', []),
@@ -66,9 +86,7 @@ def guardar_sesion_en_db(sesion):
                 }) \
                 .eq('codigo', sesion['codigo']) \
                 .execute()
-            logger.info(f"✅ Sesión {sesion['codigo']} actualizada en BD")
         else:
-            # Insertar nueva sesión
             supabase.table('sesion_colaborativa') \
                 .insert({
                     'codigo': sesion['codigo'],
@@ -83,25 +101,20 @@ def guardar_sesion_en_db(sesion):
                     'fecha_creacion': sesion.get('fecha_creacion', datetime.datetime.now().isoformat())
                 }) \
                 .execute()
-            logger.info(f"✅ Sesión {sesion['codigo']} guardada en BD")
-        
         return True
     except Exception as e:
-        logger.error(f"❌ Error guardando sesión en BD: {str(e)}")
+        logger.error(f"Error guardando sesión: {str(e)}")
         return False
 
 def cargar_sesiones_activas_db():
-    """Cargar todas las sesiones activas desde Supabase"""
     try:
         limite = datetime.datetime.now() - datetime.timedelta(hours=24)
-        
         supabase.table('sesion_colaborativa') \
             .update({'estado': 'inactiva'}) \
             .eq('estado', 'activa') \
             .lt('ultima_actividad', limite.isoformat()) \
             .execute()
         
-        # Cargar sesiones activas
         resultado = supabase.table('sesion_colaborativa') \
             .select('*') \
             .eq('estado', 'activa') \
@@ -121,28 +134,23 @@ def cargar_sesiones_activas_db():
                 'estado': s['estado'],
                 'fecha_creacion': s['fecha_creacion']
             }
-        
-        logger.info(f"📋 Cargadas {len(sesiones)} sesiones activas desde BD")
         return sesiones
     except Exception as e:
-        logger.error(f"❌ Error cargando sesiones desde BD: {str(e)}")
+        logger.error(f"Error cargando sesiones: {str(e)}")
         return {}
 
 def eliminar_sesion_db(codigo):
-    """Eliminar una sesión de la base de datos"""
     try:
         supabase.table('sesion_colaborativa') \
             .delete() \
             .eq('codigo', codigo) \
             .execute()
-        logger.info(f"🗑️ Sesión {codigo} eliminada de BD")
         return True
     except Exception as e:
-        logger.error(f"❌ Error eliminando sesión {codigo}: {str(e)}")
+        logger.error(f"Error eliminando sesión: {str(e)}")
         return False
 
 def actualizar_actividad_sesion(codigo):
-    """Actualizar timestamp de última actividad"""
     try:
         supabase.table('sesion_colaborativa') \
             .update({'ultima_actividad': datetime.datetime.now().isoformat()}) \
@@ -150,22 +158,53 @@ def actualizar_actividad_sesion(codigo):
             .execute()
         return True
     except Exception as e:
-        logger.error(f"❌ Error actualizando actividad: {str(e)}")
         return False
 
-# Cargar sesiones activas al iniciar el módulo
+# Cargar sesiones al inicio
 try:
     sesiones_activas = cargar_sesiones_activas_db()
-    logger.info(f"🚀 Módulo iniciado con {len(sesiones_activas)} sesiones activas")
+    logger.info(f"🚀 {len(sesiones_activas)} sesiones activas cargadas")
 except Exception as e:
-    logger.error(f"❌ Error cargando sesiones al inicio: {str(e)}")
+    logger.error(f"Error: {str(e)}")
+
+# =====================================================
+# FUNCIÓN PARA SUBIR IMAGEN A CLOUDINARY
+# =====================================================
+
+def subir_imagen_a_cloudinary(base64_data, carpeta, nombre):
+    """Subir imagen a Cloudinary y retornar URL"""
+    try:
+        if not base64_data or not CLOUDINARY_CONFIGURED:
+            return None
+        
+        if 'base64,' in base64_data:
+            base64_data = base64_data.split('base64,')[1]
+        
+        image_data = base64.b64decode(base64_data)
+        image_file = io.BytesIO(image_data)
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S%f')
+        image_file.name = f"{nombre}_{timestamp}.jpg"
+        
+        resultado = cloudinary.uploader.upload(
+            image_file,
+            folder=f"furia_motor/{carpeta}",
+            public_id=f"{nombre}_{timestamp}",
+            resource_type="image"
+        )
+        
+        url = resultado.get('secure_url')
+        logger.info(f"✅ Imagen subida a Cloudinary: {url[:100]}...")
+        return url
+        
+    except Exception as e:
+        logger.error(f"Error subiendo imagen: {str(e)}")
+        return None
 
 # =====================================================
 # FUNCIONES AUXILIARES
 # =====================================================
 
 def generar_codigo_unico():
-    """Generar código único para orden de trabajo"""
     try:
         fecha = datetime.datetime.now()
         año = fecha.strftime('%y')
@@ -185,28 +224,20 @@ def generar_codigo_unico():
         secuencia = str(contador + 1).zfill(3)
         
         return f"OT-{año}{mes}{dia}-{secuencia}"
-        
     except Exception as e:
-        logger.error(f"Error generando código: {str(e)}")
         timestamp = datetime.datetime.now().strftime('%y%m%d%H%M%S')
         return f"OT-{timestamp}"
 
 def generar_codigo_sesion():
-    """Generar código único para sesión colaborativa"""
     caracteres = string.ascii_uppercase + string.digits
     codigo = ''.join(random.choices(caracteres, k=6))
     return f"S-{codigo}"
 
 def obtener_o_crear_cliente(nombre, telefono, ubicacion, latitud=None, longitud=None):
-    """
-    Obtener un cliente existente o crear uno nuevo.
-    Ahora también guarda coordenadas si se proporcionan.
-    """
     id_cliente = None
     id_usuario = None
     
     try:
-        # Buscar por teléfono
         if telefono:
             usuario_existente = supabase.table('usuario') \
                 .select('id, nombre, ubicacion') \
@@ -216,18 +247,11 @@ def obtener_o_crear_cliente(nombre, telefono, ubicacion, latitud=None, longitud=
             if usuario_existente.data and len(usuario_existente.data) > 0:
                 id_usuario = usuario_existente.data[0]['id']
                 
-                # Actualizar datos del usuario
-                update_data = {
-                    'nombre': nombre,
-                    'ubicacion': ubicacion
-                }
-                
                 supabase.table('usuario') \
-                    .update(update_data) \
+                    .update({'nombre': nombre, 'ubicacion': ubicacion}) \
                     .eq('id', id_usuario) \
                     .execute()
                 
-                # Buscar en tabla cliente
                 cliente_existente = supabase.table('cliente') \
                     .select('id') \
                     .eq('id_usuario', id_usuario) \
@@ -236,23 +260,17 @@ def obtener_o_crear_cliente(nombre, telefono, ubicacion, latitud=None, longitud=
                 if cliente_existente.data and len(cliente_existente.data) > 0:
                     id_cliente = cliente_existente.data[0]['id']
                     
-                    # Actualizar cliente con coordenadas
                     cliente_update = {}
                     if latitud is not None:
                         cliente_update['latitud'] = latitud
                     if longitud is not None:
                         cliente_update['longitud'] = longitud
-                    if ubicacion and latitud is not None and longitud is not None:
-                        cliente_update['ubicacion_confirmada'] = True
-                    
                     if cliente_update:
                         supabase.table('cliente') \
                             .update(cliente_update) \
                             .eq('id', id_cliente) \
                             .execute()
-                        logger.info(f"✅ Coordenadas actualizadas para cliente {nombre}: lat={latitud}, lng={longitud}")
                 
-                # Verificar si ya tiene rol de cliente
                 rol_result = supabase.table('usuario_rol') \
                     .select('id_rol') \
                     .eq('id_usuario', id_usuario) \
@@ -266,7 +284,6 @@ def obtener_o_crear_cliente(nombre, telefono, ubicacion, latitud=None, longitud=
                         'fecha_asignacion': datetime.datetime.now().isoformat()
                     }).execute()
         
-        # Si no existe, crear nuevo usuario
         if not id_cliente:
             email_cliente = f"cliente_{uuid.uuid4().hex[:8]}@furia.com"
             contrasenia = generate_password_hash(telefono if telefono else '123456')
@@ -281,19 +298,16 @@ def obtener_o_crear_cliente(nombre, telefono, ubicacion, latitud=None, longitud=
             }).execute()
             
             if not user_result.data:
-                logger.error("Error creando usuario cliente")
                 return None, None
             
             id_usuario = user_result.data[0]['id']
             
-            # Asignar rol de cliente
             supabase.table('usuario_rol').insert({
                 'id_usuario': id_usuario,
                 'id_rol': 5,
                 'fecha_asignacion': datetime.datetime.now().isoformat()
             }).execute()
             
-            # Crear registro en tabla cliente con coordenadas
             numero_documento = f"TEMP-{int(datetime.datetime.now().timestamp())}"
             cliente_data = {
                 'id_usuario': id_usuario,
@@ -306,35 +320,23 @@ def obtener_o_crear_cliente(nombre, telefono, ubicacion, latitud=None, longitud=
                 cliente_data['latitud'] = latitud
             if longitud is not None:
                 cliente_data['longitud'] = longitud
-            if latitud is not None and longitud is not None:
-                cliente_data['ubicacion_confirmada'] = True
             
             cliente_result = supabase.table('cliente').insert(cliente_data).execute()
             
             if not cliente_result.data:
-                # Rollback
                 supabase.table('usuario_rol').delete().eq('id_usuario', id_usuario).execute()
                 supabase.table('usuario').delete().eq('id', id_usuario).execute()
-                logger.error("Error creando cliente")
                 return None, None
             
             id_cliente = cliente_result.data[0]['id']
-            logger.info(f"✅ Nuevo cliente creado con coordenadas: {nombre}")
         
         return id_cliente, id_usuario
         
     except Exception as e:
         logger.error(f"Error en obtener_o_crear_cliente: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return None, None
 
-
 def crear_orden_desde_sesion(datos, current_user, sesion_codigo=None):
-    """
-    Crear orden de trabajo a partir de los datos de la sesión.
-    LOS DATOS YA VIENEN CON URLs DE SUPABASE (no se procesan archivos aquí)
-    """
     try:
         cliente_data = datos.get('cliente', {})
         vehiculo_data = datos.get('vehiculo', {})
@@ -347,19 +349,13 @@ def crear_orden_desde_sesion(datos, current_user, sesion_codigo=None):
         latitud = cliente_data.get('latitud')
         longitud = cliente_data.get('longitud')
         
-        # Crear o obtener cliente con coordenadas
         id_cliente, id_usuario = obtener_o_crear_cliente(
-            nombre_cliente, 
-            telefono_cliente, 
-            ubicacion_cliente,
-            latitud,
-            longitud
+            nombre_cliente, telefono_cliente, ubicacion_cliente, latitud, longitud
         )
         
         if not id_cliente:
             return {'success': False, 'error': 'Error creando cliente'}
         
-        # Gestionar vehículo
         placa = vehiculo_data.get('placa', '').upper()
         id_vehiculo = None
         
@@ -392,25 +388,19 @@ def crear_orden_desde_sesion(datos, current_user, sesion_codigo=None):
                 
                 if not vehiculo_result.data:
                     return {'success': False, 'error': 'Error creando vehículo'}
-                
                 id_vehiculo = vehiculo_result.data[0]['id']
         
         codigo_unico = generar_codigo_unico()
         
-        # Obtener segundo jefe operativo de la sesión
         segundo_jefe_id = None
         if sesion_codigo and sesion_codigo in sesiones_activas:
             sesion = sesiones_activas[sesion_codigo]
             if len(sesion.get('colaboradores', [])) > 1:
-                colaboradores = sesion.get('colaboradores', [])
-                for colab_id in colaboradores:
+                for colab_id in sesion.get('colaboradores', []):
                     if colab_id != current_user['id']:
                         segundo_jefe_id = colab_id
                         break
         
-        logger.info(f"Segundo jefe operativo ID: {segundo_jefe_id}")
-        
-        # Crear orden de trabajo
         orden_data = {
             'codigo_unico': codigo_unico,
             'id_vehiculo': id_vehiculo,
@@ -421,7 +411,6 @@ def crear_orden_desde_sesion(datos, current_user, sesion_codigo=None):
         
         if segundo_jefe_id:
             orden_data['id_jefe_operativo_2'] = segundo_jefe_id
-            logger.info(f"✅ Guardando segundo jefe operativo: {segundo_jefe_id}")
         
         orden_result = supabase.table('ordentrabajo').insert(orden_data).execute()
         
@@ -430,7 +419,7 @@ def crear_orden_desde_sesion(datos, current_user, sesion_codigo=None):
         
         id_orden = orden_result.data[0]['id']
         
-        # Crear recepción - LAS URLs YA VIENEN DEL FRONTEND (Supabase)
+        # Guardar recepción con URLs de Cloudinary (fotos) y audio (viene del frontend)
         recepcion_data = {
             'id_orden_trabajo': id_orden,
             'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
@@ -450,22 +439,17 @@ def crear_orden_desde_sesion(datos, current_user, sesion_codigo=None):
             supabase.table('ordentrabajo').delete().eq('id', id_orden).execute()
             return {'success': False, 'error': 'Error guardando recepción'}
         
-        logger.info(f"✅ Orden de trabajo creada: {codigo_unico} (ID: {id_orden})")
-        
         return {'success': True, 'codigo': codigo_unico, 'id_orden': id_orden}
         
     except Exception as e:
-        logger.error(f"Error creando orden desde sesión: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error creando orden: {str(e)}")
         return {'success': False, 'error': str(e)}
 
 # =====================================================
-# DECORADOR PARA VERIFICAR ROL
+# DECORADOR DE AUTENTICACIÓN
 # =====================================================
 
 def jefe_operativo_required(f):
-    """Decorador para verificar que el usuario es Jefe Operativo"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         token = request.headers.get('Authorization', '').replace('Bearer ', '')
@@ -479,7 +463,6 @@ def jefe_operativo_required(f):
             if not user_id:
                 return jsonify({'error': 'Token inválido'}), 401
             
-            # Obtener usuario con sus roles
             user_result = supabase.table('usuario') \
                 .select('id, nombre, email, contacto, usuario_rol!inner(rol_id, rol!inner(nombre_rol))') \
                 .eq('id', user_id) \
@@ -495,9 +478,8 @@ def jefe_operativo_required(f):
                     if 'rol' in ur and 'nombre_rol' in ur['rol']:
                         roles.append(ur['rol']['nombre_rol'])
             
-            # Verificar si tiene rol de jefe_operativo o admin_general
             if 'jefe_operativo' not in roles and 'admin_general' not in roles:
-                return jsonify({'error': 'Acceso no autorizado. Se requiere rol de Jefe Operativo'}), 403
+                return jsonify({'error': 'Acceso no autorizado'}), 403
             
             current_user = {
                 'id': user_data['id'],
@@ -518,9 +500,8 @@ def jefe_operativo_required(f):
     
     return decorated_function
 
-
 # =====================================================
-# ENDPOINTS DE SESIONES COLABORATIVAS
+# ENDPOINTS
 # =====================================================
 
 @jefe_operativo_recepcion_bp.route('/iniciar-sesion', methods=['POST'])
@@ -551,19 +532,16 @@ def iniciar_sesion(current_user):
             'fecha_creacion': datetime.datetime.now().isoformat()
         }
         
-        # Guardar en BD primero
         if not guardar_sesion_en_db(sesion):
-            return jsonify({'error': 'Error guardando sesión en base de datos'}), 500
+            return jsonify({'error': 'Error guardando sesión'}), 500
         
-        # Luego en memoria
         sesiones_activas[codigo_sesion] = sesion
-        
         logger.info(f"✅ Sesión iniciada: {codigo_sesion}")
         
         return jsonify({'success': True, 'codigo': codigo_sesion, 'sesion': sesion}), 200
         
     except Exception as e:
-        logger.error(f"❌ Error iniciando sesión: {str(e)}")
+        logger.error(f"Error iniciando sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -575,49 +553,38 @@ def unirse_sesion(current_user):
         codigo_sesion = data.get('codigo')
         
         if not codigo_sesion:
-            return jsonify({'error': 'Código de sesión requerido'}), 400
+            return jsonify({'error': 'Código requerido'}), 400
         
-        # Intentar cargar desde BD si no está en memoria
         if codigo_sesion not in sesiones_activas:
             sesiones_recuperadas = cargar_sesiones_activas_db()
             if codigo_sesion in sesiones_recuperadas:
                 sesiones_activas[codigo_sesion] = sesiones_recuperadas[codigo_sesion]
-                logger.info(f"🔄 Sesión {codigo_sesion} recuperada desde BD")
             else:
                 return jsonify({'error': 'Sesión no encontrada'}), 404
         
         sesion = sesiones_activas[codigo_sesion]
         
         if sesion['estado'] != 'activa':
-            return jsonify({'error': 'Sesión ya finalizada'}), 400
+            return jsonify({'error': 'Sesión finalizada'}), 400
         
         if len(sesion['colaboradores']) >= 2:
-            return jsonify({'error': 'La sesión ya tiene el máximo de 2 colaboradores permitidos'}), 400
+            return jsonify({'error': 'Máximo 2 colaboradores'}), 400
         
         if current_user['id'] not in sesion['colaboradores']:
             sesion['colaboradores'].append(current_user['id'])
             sesion['colaboradores_nombres'].append(current_user.get('nombre', 'Técnico'))
-            
-            # Persistir en BD
             guardar_sesion_en_db(sesion)
-            
-            logger.info(f"👤 Usuario {current_user.get('nombre')} se unió a sesión {codigo_sesion}")
         
         return jsonify({'success': True, 'sesion': sesion}), 200
         
     except Exception as e:
-        logger.error(f"Error uniéndose a sesión: {str(e)}")
+        logger.error(f"Error uniéndose: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
 @jefe_operativo_recepcion_bp.route('/guardar-seccion', methods=['POST'])
 @jefe_operativo_required
 def guardar_seccion(current_user):
-    """
-    Guardar una sección de la sesión.
-    IMPORTANTE: El frontend ya subió las fotos/audio a Supabase,
-    aquí solo recibimos las URLs y las guardamos.
-    """
     try:
         data = request.get_json()
         codigo_sesion = data.get('codigo')
@@ -625,24 +592,19 @@ def guardar_seccion(current_user):
         datos_seccion = data.get('datos', {})
         
         if not codigo_sesion:
-            return jsonify({'error': 'Código de sesión requerido'}), 400
+            return jsonify({'error': 'Código requerido'}), 400
         
-        # Intentar cargar desde BD si no está en memoria
         if codigo_sesion not in sesiones_activas:
             sesiones_recuperadas = cargar_sesiones_activas_db()
             if codigo_sesion in sesiones_recuperadas:
                 sesiones_activas[codigo_sesion] = sesiones_recuperadas[codigo_sesion]
-                logger.info(f"🔄 Sesión {codigo_sesion} recuperada desde BD")
             else:
                 return jsonify({'error': 'Sesión no encontrada'}), 404
         
         sesion = sesiones_activas[codigo_sesion]
         
         if sesion['estado'] != 'activa':
-            return jsonify({'error': 'Sesión ya finalizada'}), 400
-        
-        # Actualizar datos según sección
-        # NOTA: NO se procesan archivos aquí, solo se guardan las URLs
+            return jsonify({'error': 'Sesión finalizada'}), 400
         
         if seccion == 'cliente':
             sesion['datos']['cliente'] = {
@@ -665,48 +627,54 @@ def guardar_seccion(current_user):
                 'kilometraje': datos_seccion.get('kilometraje', 0)
             }
             sesion['secciones_completadas']['vehiculo'] = bool(
-                datos_seccion.get('placa') and 
-                datos_seccion.get('marca') and 
-                datos_seccion.get('modelo')
+                datos_seccion.get('placa') and datos_seccion.get('marca') and datos_seccion.get('modelo')
             )
             
         elif seccion == 'fotos':
-            # Las fotos ya son URLs de Supabase, solo las guardamos
-            sesion['datos']['fotos'] = datos_seccion
+            # Procesar fotos: subir a Cloudinary y guardar URLs
+            fotos_procesadas = {}
+            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            carpeta = f"sesion/{codigo_sesion}"
             
-            # Verificar cuántas fotos válidas hay
-            fotos_validas = 0
-            for campo, url in datos_seccion.items():
-                if url and url != 'null' and url != 'None' and url != '':
-                    fotos_validas += 1
+            campos_fotos = ['url_lateral_izquierda', 'url_lateral_derecha', 'url_foto_frontal',
+                           'url_foto_trasera', 'url_foto_superior', 'url_foto_inferior', 'url_foto_tablero']
             
+            for campo in campos_fotos:
+                valor = datos_seccion.get(campo)
+                if valor and isinstance(valor, str) and valor.startswith('data:image'):
+                    logger.info(f"Subiendo foto {campo} a Cloudinary")
+                    url = subir_imagen_a_cloudinary(valor, carpeta, campo.replace('url_', ''))
+                    fotos_procesadas[campo] = url
+                elif valor and isinstance(valor, str) and valor.startswith('http'):
+                    fotos_procesadas[campo] = valor
+                else:
+                    fotos_procesadas[campo] = None
+            
+            sesion['datos']['fotos'] = fotos_procesadas
+            
+            # Contar fotos válidas
+            fotos_validas = sum(1 for url in fotos_procesadas.values() if url)
             sesion['secciones_completadas']['fotos'] = fotos_validas == 7
-            logger.info(f"📸 Fotos guardadas: {fotos_validas}/7 completas")
+            logger.info(f"📸 Fotos guardadas: {fotos_validas}/7")
             
         elif seccion == 'descripcion':
+            # EL AUDIO YA VIENE COMO URL DE CLOUDINARY (subido desde frontend)
             sesion['datos']['descripcion']['texto'] = datos_seccion.get('texto', '')
             
-            # El audio_url ya es URL de Supabase
             audio_url = datos_seccion.get('audio_url')
-            if audio_url and audio_url != 'null' and audio_url != 'None':
+            if audio_url and isinstance(audio_url, str) and audio_url.startswith('http'):
                 sesion['datos']['descripcion']['audio_url'] = audio_url
                 logger.info(f"🎤 Audio URL guardada: {audio_url[:100]}...")
             
             sesion['secciones_completadas']['descripcion'] = bool(datos_seccion.get('texto'))
         
-        # Actualizar timestamp de actividad
         sesion['ultima_actividad'] = datetime.datetime.now().isoformat()
-        
-        # Persistir en base de datos
-        if not guardar_sesion_en_db(sesion):
-            logger.warning(f"⚠️ No se pudo guardar sesión {codigo_sesion} en BD, pero continúa en memoria")
+        guardar_sesion_en_db(sesion)
         
         return jsonify({'success': True, 'sesion': sesion}), 200
         
     except Exception as e:
         logger.error(f"Error guardando sección: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -714,13 +682,11 @@ def guardar_seccion(current_user):
 @jefe_operativo_required
 def obtener_sesion(current_user, codigo):
     try:
-        # Buscar en memoria primero
         if codigo in sesiones_activas:
             sesion = sesiones_activas[codigo]
             actualizar_actividad_sesion(codigo)
             return jsonify({'success': True, 'sesion': sesion}), 200
         
-        # Si no está en memoria, buscar en BD
         resultado = supabase.table('sesion_colaborativa') \
             .select('*') \
             .eq('codigo', codigo) \
@@ -741,9 +707,7 @@ def obtener_sesion(current_user, codigo):
                 'estado': s['estado'],
                 'fecha_creacion': s['fecha_creacion']
             }
-            # Restaurar en memoria
             sesiones_activas[codigo] = sesion
-            logger.info(f"🔄 Sesión {codigo} restaurada desde BD a memoria")
             return jsonify({'success': True, 'sesion': sesion}), 200
         
         return jsonify({'error': 'Sesión no encontrada'}), 404
@@ -762,9 +726,8 @@ def finalizar_sesion(current_user):
         datos_directos = data.get('datos')
         
         if not codigo_sesion:
-            return jsonify({'error': 'Código de sesión requerido'}), 400
+            return jsonify({'error': 'Código requerido'}), 400
         
-        # Intentar cargar desde BD si no está en memoria
         if codigo_sesion not in sesiones_activas:
             sesiones_recuperadas = cargar_sesiones_activas_db()
             if codigo_sesion in sesiones_recuperadas:
@@ -776,38 +739,30 @@ def finalizar_sesion(current_user):
         
         if datos_directos:
             sesion['datos'] = datos_directos
-            logger.info(f"Datos actualizados directamente en sesión {codigo_sesion}")
         
-        secciones_faltantes = [s for s, completada in sesion['secciones_completadas'].items() if not completada]
-        
+        secciones_faltantes = [s for s, c in sesion['secciones_completadas'].items() if not c]
         if secciones_faltantes:
-            return jsonify({'error': f'Faltan completar: {", ".join(secciones_faltantes)}'}), 400
+            return jsonify({'error': f'Faltan: {", ".join(secciones_faltantes)}'}), 400
         
-        # Crear orden de trabajo (las URLs ya están en sesion['datos'])
         resultado = crear_orden_desde_sesion(sesion['datos'], current_user, codigo_sesion)
         
         if not resultado['success']:
             return jsonify({'error': resultado['error']}), 500
         
         sesion['estado'] = 'finalizada'
-        
-        # Persistir en BD
         guardar_sesion_en_db(sesion)
-        
-        # Limpiar de memoria
         del sesiones_activas[codigo_sesion]
         
-        logger.info(f"✅ Sesión {codigo_sesion} finalizada por {current_user.get('nombre')}")
+        logger.info(f"✅ Sesión {codigo_sesion} finalizada")
         
         return jsonify({
-            'success': True, 
-            'codigo': resultado['codigo'], 
-            'id_orden': resultado['id_orden'],
-            'sesion_finalizada': True
+            'success': True,
+            'codigo': resultado['codigo'],
+            'id_orden': resultado['id_orden']
         }), 200
         
     except Exception as e:
-        logger.error(f"Error finalizando sesión: {str(e)}")
+        logger.error(f"Error finalizando: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -816,40 +771,29 @@ def finalizar_sesion(current_user):
 def verificar_placa(current_user, placa):
     try:
         placa = placa.upper()
-        
         resultado = supabase.table('vehiculo') \
             .select('id, placa, marca, modelo, id_cliente, cliente!inner(id_usuario), usuario:cliente!inner(id_usuario)!inner(nombre, contacto)') \
             .eq('placa', placa) \
             .execute()
         
-        if resultado.data and len(resultado.data) > 0:
-            vehiculo = resultado.data[0]
-            
-            cliente_data = {}
-            if 'usuario' in vehiculo:
-                cliente_data = vehiculo['usuario']
-            
+        if resultado.data:
+            v = resultado.data[0]
+            cliente_data = v.get('usuario', {})
             return jsonify({
                 'exists': True,
                 'vehiculo': {
-                    'placa': vehiculo['placa'],
-                    'marca': vehiculo.get('marca', ''),
-                    'modelo': vehiculo.get('modelo', ''),
+                    'placa': v['placa'],
+                    'marca': v.get('marca', ''),
+                    'modelo': v.get('modelo', ''),
                     'cliente': cliente_data.get('nombre', ''),
                     'telefono': cliente_data.get('contacto', '')
                 }
             }), 200
-        else:
-            return jsonify({'exists': False}), 200
-            
+        return jsonify({'exists': False}), 200
     except Exception as e:
-        logger.error(f"Error verificando placa: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# CANCELAR SESIÓN
-# =====================================================
 @jefe_operativo_recepcion_bp.route('/cancelar-sesion', methods=['DELETE'])
 @jefe_operativo_required
 def cancelar_sesion(current_user):
@@ -858,72 +802,51 @@ def cancelar_sesion(current_user):
         codigo_sesion = data.get('codigo')
         
         if not codigo_sesion:
-            return jsonify({'error': 'Código de sesión requerido'}), 400
+            return jsonify({'error': 'Código requerido'}), 400
         
-        # Eliminar de memoria
         if codigo_sesion in sesiones_activas:
             del sesiones_activas[codigo_sesion]
         
-        # Eliminar de BD
         eliminar_sesion_db(codigo_sesion)
         
-        logger.info(f"🗑️ Sesión {codigo_sesion} cancelada")
-        
-        return jsonify({'success': True, 'message': 'Sesión cancelada exitosamente'}), 200
-        
+        return jsonify({'success': True}), 200
     except Exception as e:
-        logger.error(f"Error cancelando sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# PING PARA MANTENER SESIÓN ACTIVA
-# =====================================================
 @jefe_operativo_recepcion_bp.route('/ping-sesion/<codigo>', methods=['GET'])
 @jefe_operativo_required
 def ping_sesion(current_user, codigo):
-    """Mantener sesión activa - actualiza timestamp"""
     try:
         if codigo in sesiones_activas:
             sesiones_activas[codigo]['ultima_actividad'] = datetime.datetime.now().isoformat()
-        
         actualizar_actividad_sesion(codigo)
         return jsonify({'success': True}), 200
     except Exception as e:
-        logger.error(f"Error en ping: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# LISTAR SESIONES ACTIVAS
-# =====================================================
 @jefe_operativo_recepcion_bp.route('/sesiones-activas', methods=['GET'])
 @jefe_operativo_required
 def listar_sesiones_activas(current_user):
     try:
         sesiones = []
-        for codigo, sesion in sesiones_activas.items():
-            if sesion['estado'] == 'activa':
+        for codigo, s in sesiones_activas.items():
+            if s['estado'] == 'activa':
                 sesiones.append({
-                    'codigo': sesion['codigo'],
-                    'creador_nombre': sesion['creador_nombre'],
-                    'colaboradores': sesion['colaboradores'],
-                    'colaboradores_nombres': sesion['colaboradores_nombres'],
-                    'secciones_completadas': sesion['secciones_completadas'],
-                    'fecha_creacion': sesion['fecha_creacion'],
-                    'estado': sesion['estado']
+                    'codigo': s['codigo'],
+                    'creador_nombre': s['creador_nombre'],
+                    'colaboradores': s['colaboradores'],
+                    'colaboradores_nombres': s['colaboradores_nombres'],
+                    'secciones_completadas': s['secciones_completadas'],
+                    'fecha_creacion': s['fecha_creacion'],
+                    'estado': s['estado']
                 })
-        
         return jsonify({'success': True, 'sesiones': sesiones}), 200
-        
     except Exception as e:
-        logger.error(f"Error listando sesiones activas: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# LISTAR RECEPCIONES GUARDADAS
-# =====================================================
 @jefe_operativo_recepcion_bp.route('/listar-recepciones', methods=['GET'])
 @jefe_operativo_required
 def listar_recepciones(current_user):
@@ -935,40 +858,32 @@ def listar_recepciones(current_user):
             .execute()
         
         recepciones = []
-        if resultado.data:
-            for orden in resultado.data:
-                vehiculo = orden.get('vehiculo', {})
-                cliente = vehiculo.get('cliente', {}) if vehiculo else {}
-                usuario = cliente.get('usuario', {}) if cliente else {}
-                
-                recepciones.append({
-                    'id': orden['id'],
-                    'codigo_unico': orden['codigo_unico'],
-                    'fecha_ingreso': orden['fecha_ingreso'],
-                    'estado_global': orden['estado_global'],
-                    'placa': vehiculo.get('placa', ''),
-                    'marca': vehiculo.get('marca', ''),
-                    'modelo': vehiculo.get('modelo', ''),
-                    'cliente_nombre': usuario.get('nombre', ''),
-                    'cliente_telefono': usuario.get('contacto', ''),
-                    'cliente_ubicacion': usuario.get('ubicacion', '')
-                })
+        for orden in (resultado.data or []):
+            vehiculo = orden.get('vehiculo', {})
+            cliente = vehiculo.get('cliente', {})
+            usuario = cliente.get('usuario', {})
+            recepciones.append({
+                'id': orden['id'],
+                'codigo_unico': orden['codigo_unico'],
+                'fecha_ingreso': orden['fecha_ingreso'],
+                'estado_global': orden['estado_global'],
+                'placa': vehiculo.get('placa', ''),
+                'marca': vehiculo.get('marca', ''),
+                'modelo': vehiculo.get('modelo', ''),
+                'cliente_nombre': usuario.get('nombre', ''),
+                'cliente_telefono': usuario.get('contacto', ''),
+                'cliente_ubicacion': usuario.get('ubicacion', '')
+            })
         
         return jsonify({'success': True, 'recepciones': recepciones}), 200
-        
     except Exception as e:
-        logger.error(f"Error listando recepciones: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# DETALLE DE RECEPCIÓN
-# =====================================================
 @jefe_operativo_recepcion_bp.route('/detalle-recepcion/<int:id_orden>', methods=['GET'])
 @jefe_operativo_required
 def detalle_recepcion(current_user, id_orden):
     try:
-        # 1. Obtener orden de trabajo
         orden_result = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo, id_jefe_operativo, id_jefe_operativo_2') \
             .eq('id', id_orden) \
@@ -980,27 +895,18 @@ def detalle_recepcion(current_user, id_orden):
         
         orden = orden_result.data
         
-        # 2. Obtener jefe principal
         jefe_principal = {}
         if orden.get('id_jefe_operativo'):
-            jefe1 = supabase.table('usuario') \
-                .select('id, nombre, contacto, email') \
-                .eq('id', orden['id_jefe_operativo']) \
-                .execute()
-            if jefe1.data:
-                jefe_principal = jefe1.data[0]
+            j1 = supabase.table('usuario').select('id, nombre, contacto, email').eq('id', orden['id_jefe_operativo']).execute()
+            if j1.data:
+                jefe_principal = j1.data[0]
         
-        # 3. Obtener jefe secundario
         jefe_secundario = {}
         if orden.get('id_jefe_operativo_2'):
-            jefe2 = supabase.table('usuario') \
-                .select('id, nombre, contacto, email') \
-                .eq('id', orden['id_jefe_operativo_2']) \
-                .execute()
-            if jefe2.data:
-                jefe_secundario = jefe2.data[0]
+            j2 = supabase.table('usuario').select('id, nombre, contacto, email').eq('id', orden['id_jefe_operativo_2']).execute()
+            if j2.data:
+                jefe_secundario = j2.data[0]
         
-        # 4. Obtener vehículo
         vehiculo_result = supabase.table('vehiculo') \
             .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
             .eq('id', orden['id_vehiculo']) \
@@ -1009,222 +915,141 @@ def detalle_recepcion(current_user, id_orden):
         
         vehiculo = vehiculo_result.data if vehiculo_result.data else {}
         
-        # 5. Obtener cliente y usuario
         usuario = {}
         cliente_data = {}
-        
         if vehiculo.get('id_cliente'):
-            cliente_result = supabase.table('cliente') \
-                .select('id, id_usuario, latitud, longitud, ubicacion_confirmada') \
-                .eq('id', vehiculo['id_cliente']) \
-                .single() \
-                .execute()
-            
-            if cliente_result.data:
-                cliente_data = cliente_result.data
-                
+            c_result = supabase.table('cliente').select('id, id_usuario, latitud, longitud').eq('id', vehiculo['id_cliente']).single().execute()
+            if c_result.data:
+                cliente_data = c_result.data
                 if cliente_data.get('id_usuario'):
-                    usuario_result = supabase.table('usuario') \
-                        .select('nombre, contacto, ubicacion, email') \
-                        .eq('id', cliente_data['id_usuario']) \
-                        .single() \
-                        .execute()
-                    if usuario_result.data:
-                        usuario = usuario_result.data
+                    u_result = supabase.table('usuario').select('nombre, contacto, ubicacion, email').eq('id', cliente_data['id_usuario']).single().execute()
+                    if u_result.data:
+                        usuario = u_result.data
         
-        # 6. Obtener recepción
-        recepcion_result = supabase.table('recepcion') \
-            .select('*') \
-            .eq('id_orden_trabajo', id_orden) \
-            .single() \
-            .execute()
-        
+        recepcion_result = supabase.table('recepcion').select('*').eq('id_orden_trabajo', id_orden).single().execute()
         recepcion = recepcion_result.data if recepcion_result.data else {}
         
-        # 7. Construir detalle
-        detalle = {
-            'id': orden['id'],
-            'codigo_unico': orden['codigo_unico'],
-            'fecha_ingreso': orden['fecha_ingreso'],
-            'estado_global': orden['estado_global'],
-            'jefe_operativo': jefe_principal,
-            'jefe_operativo_2': jefe_secundario,
-            'placa': vehiculo.get('placa', ''),
-            'marca': vehiculo.get('marca', ''),
-            'modelo': vehiculo.get('modelo', ''),
-            'anio': vehiculo.get('anio'),
-            'kilometraje': vehiculo.get('kilometraje'),
-            'cliente_nombre': usuario.get('nombre', ''),
-            'cliente_telefono': usuario.get('contacto', ''),
-            'cliente_ubicacion': usuario.get('ubicacion', ''),
-            'latitud': cliente_data.get('latitud'),
-            'longitud': cliente_data.get('longitud'),
-            'fotos': {
-                'url_lateral_izquierda': recepcion.get('url_lateral_izquierda'),
-                'url_lateral_derecha': recepcion.get('url_lateral_derecha'),
-                'url_foto_frontal': recepcion.get('url_foto_frontal'),
-                'url_foto_trasera': recepcion.get('url_foto_trasera'),
-                'url_foto_superior': recepcion.get('url_foto_superior'),
-                'url_foto_inferior': recepcion.get('url_foto_inferior'),
-                'url_foto_tablero': recepcion.get('url_foto_tablero')
-            },
-            'audio_url': recepcion.get('url_grabacion_problema'),
-            'transcripcion_problema': recepcion.get('transcripcion_problema', '')
-        }
-        
-        return jsonify({'success': True, 'detalle': detalle}), 200
+        return jsonify({
+            'success': True,
+            'detalle': {
+                'id': orden['id'],
+                'codigo_unico': orden['codigo_unico'],
+                'fecha_ingreso': orden['fecha_ingreso'],
+                'estado_global': orden['estado_global'],
+                'jefe_operativo': jefe_principal,
+                'jefe_operativo_2': jefe_secundario,
+                'placa': vehiculo.get('placa', ''),
+                'marca': vehiculo.get('marca', ''),
+                'modelo': vehiculo.get('modelo', ''),
+                'anio': vehiculo.get('anio'),
+                'kilometraje': vehiculo.get('kilometraje'),
+                'cliente_nombre': usuario.get('nombre', ''),
+                'cliente_telefono': usuario.get('contacto', ''),
+                'cliente_ubicacion': usuario.get('ubicacion', ''),
+                'latitud': cliente_data.get('latitud'),
+                'longitud': cliente_data.get('longitud'),
+                'fotos': {
+                    'url_lateral_izquierda': recepcion.get('url_lateral_izquierda'),
+                    'url_lateral_derecha': recepcion.get('url_lateral_derecha'),
+                    'url_foto_frontal': recepcion.get('url_foto_frontal'),
+                    'url_foto_trasera': recepcion.get('url_foto_trasera'),
+                    'url_foto_superior': recepcion.get('url_foto_superior'),
+                    'url_foto_inferior': recepcion.get('url_foto_inferior'),
+                    'url_foto_tablero': recepcion.get('url_foto_tablero')
+                },
+                'audio_url': recepcion.get('url_grabacion_problema'),
+                'transcripcion_problema': recepcion.get('transcripcion_problema', '')
+            }
+        }), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo detalle: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# ELIMINAR RECEPCIÓN
-# =====================================================
 @jefe_operativo_recepcion_bp.route('/eliminar-recepcion/<int:id_orden>', methods=['DELETE'])
 @jefe_operativo_required
 def eliminar_recepcion(current_user, id_orden):
     try:
-        orden_result = supabase.table('ordentrabajo') \
-            .select('id, estado_global') \
-            .eq('id', id_orden) \
-            .execute()
-        
+        orden_result = supabase.table('ordentrabajo').select('id, estado_global').eq('id', id_orden).execute()
         if not orden_result.data:
             return jsonify({'error': 'Recepción no encontrada'}), 404
         
-        orden = orden_result.data[0]
+        if orden_result.data[0]['estado_global'] != 'EnRecepcion':
+            return jsonify({'error': 'No se puede eliminar'}), 400
         
-        if orden['estado_global'] != 'EnRecepcion':
-            return jsonify({'error': 'No se puede eliminar una recepción que ya está en proceso o finalizada'}), 400
+        supabase.table('recepcion').delete().eq('id_orden_trabajo', id_orden).execute()
+        supabase.table('ordentrabajo').delete().eq('id', id_orden).execute()
         
-        supabase.table('recepcion') \
-            .delete() \
-            .eq('id_orden_trabajo', id_orden) \
-            .execute()
-        
-        supabase.table('ordentrabajo') \
-            .delete() \
-            .eq('id', id_orden) \
-            .execute()
-        
-        logger.info(f"Recepción {id_orden} eliminada por {current_user.get('nombre')}")
-        
-        return jsonify({'success': True, 'message': 'Recepción eliminada correctamente'}), 200
-        
+        return jsonify({'success': True}), 200
     except Exception as e:
-        logger.error(f"Error eliminando recepción: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# ACTUALIZAR RECEPCIÓN (EDITAR)
-# =====================================================
 @jefe_operativo_recepcion_bp.route('/actualizar-recepcion/<int:id_orden>', methods=['PUT'])
 @jefe_operativo_required
 def actualizar_recepcion(current_user, id_orden):
-    """
-    Actualizar una recepción existente.
-    IMPORTANTE: Las URLs ya vienen de Supabase desde el frontend.
-    """
     try:
         data = request.get_json()
         
-        orden_result = supabase.table('ordentrabajo') \
-            .select('id, estado_global') \
-            .eq('id', id_orden) \
-            .execute()
-        
-        if not orden_result.data:
-            return jsonify({'error': 'Recepción no encontrada'}), 404
-        
         cliente_data = data.get('cliente', {})
-        telefono_cliente = cliente_data.get('telefono', '')
-        nombre_cliente = cliente_data.get('nombre', '')
-        ubicacion_cliente = cliente_data.get('ubicacion', '')
-        latitud = cliente_data.get('latitud')
-        longitud = cliente_data.get('longitud')
-        
-        # Usar la misma función para obtener/crear cliente con coordenadas
-        id_cliente, id_usuario = obtener_o_crear_cliente(
-            nombre_cliente, 
-            telefono_cliente, 
-            ubicacion_cliente,
-            latitud,
-            longitud
+        id_cliente, _ = obtener_o_crear_cliente(
+            cliente_data.get('nombre', ''),
+            cliente_data.get('telefono', ''),
+            cliente_data.get('ubicacion', ''),
+            cliente_data.get('latitud'),
+            cliente_data.get('longitud')
         )
         
         if not id_cliente:
             return jsonify({'error': 'Error procesando cliente'}), 500
         
         vehiculo_data = data.get('vehiculo', {})
-        placa = vehiculo_data.get('placa', '').upper()
-        
-        orden_actual = supabase.table('ordentrabajo') \
-            .select('id_vehiculo') \
-            .eq('id', id_orden) \
-            .single() \
-            .execute()
+        orden_actual = supabase.table('ordentrabajo').select('id_vehiculo').eq('id', id_orden).single().execute()
         
         if orden_actual.data:
-            id_vehiculo_actual = orden_actual.data['id_vehiculo']
-            
-            supabase.table('vehiculo') \
-                .update({
-                    'id_cliente': id_cliente,
-                    'placa': placa,
-                    'marca': vehiculo_data.get('marca', ''),
-                    'modelo': vehiculo_data.get('modelo', ''),
-                    'anio': vehiculo_data.get('anio'),
-                    'kilometraje': vehiculo_data.get('kilometraje', 0)
-                }) \
-                .eq('id', id_vehiculo_actual) \
-                .execute()
+            supabase.table('vehiculo').update({
+                'id_cliente': id_cliente,
+                'placa': vehiculo_data.get('placa', '').upper(),
+                'marca': vehiculo_data.get('marca', ''),
+                'modelo': vehiculo_data.get('modelo', ''),
+                'anio': vehiculo_data.get('anio'),
+                'kilometraje': vehiculo_data.get('kilometraje', 0)
+            }).eq('id', orden_actual.data['id_vehiculo']).execute()
         
         fotos = data.get('fotos', {})
         descripcion = data.get('descripcion', {})
         
-        # NOTA: Las fotos y audio ya son URLs de Supabase, no se procesan aquí
-        recepcion_update = {
-            'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
-            'url_lateral_derecha': fotos.get('url_lateral_derecha'),
-            'url_foto_frontal': fotos.get('url_foto_frontal'),
-            'url_foto_trasera': fotos.get('url_foto_trasera'),
-            'url_foto_superior': fotos.get('url_foto_superior'),
-            'url_foto_inferior': fotos.get('url_foto_inferior'),
-            'url_foto_tablero': fotos.get('url_foto_tablero'),
+        # Procesar nuevas fotos si vienen en Base64
+        fotos_procesadas = {}
+        if fotos:
+            carpeta = f"recepcion/{id_orden}"
+            for campo, valor in fotos.items():
+                if valor and isinstance(valor, str) and valor.startswith('data:image'):
+                    url = subir_imagen_a_cloudinary(valor, carpeta, campo.replace('url_', ''))
+                    fotos_procesadas[campo] = url
+                elif valor and isinstance(valor, str) and valor.startswith('http'):
+                    fotos_procesadas[campo] = valor
+                else:
+                    fotos_procesadas[campo] = None
+        
+        supabase.table('recepcion').update({
+            'url_lateral_izquierda': fotos_procesadas.get('url_lateral_izquierda') or fotos.get('url_lateral_izquierda'),
+            'url_lateral_derecha': fotos_procesadas.get('url_lateral_derecha') or fotos.get('url_lateral_derecha'),
+            'url_foto_frontal': fotos_procesadas.get('url_foto_frontal') or fotos.get('url_foto_frontal'),
+            'url_foto_trasera': fotos_procesadas.get('url_foto_trasera') or fotos.get('url_foto_trasera'),
+            'url_foto_superior': fotos_procesadas.get('url_foto_superior') or fotos.get('url_foto_superior'),
+            'url_foto_inferior': fotos_procesadas.get('url_foto_inferior') or fotos.get('url_foto_inferior'),
+            'url_foto_tablero': fotos_procesadas.get('url_foto_tablero') or fotos.get('url_foto_tablero'),
             'url_grabacion_problema': descripcion.get('audio_url'),
             'transcripcion_problema': descripcion.get('texto', '')
-        }
+        }).eq('id_orden_trabajo', id_orden).execute()
         
-        supabase.table('recepcion') \
-            .update(recepcion_update) \
-            .eq('id_orden_trabajo', id_orden) \
-            .execute()
-        
-        logger.info(f"Recepción {id_orden} actualizada por {current_user.get('nombre')}")
-        
-        return jsonify({
-            'success': True,
-            'message': 'Recepción actualizada correctamente',
-            'id_orden': id_orden
-        }), 200
+        return jsonify({'success': True}), 200
         
     except Exception as e:
-        logger.error(f"Error actualizando recepción: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# MARCAR EDICIÓN DE SECCIÓN
-# =====================================================
 @jefe_operativo_recepcion_bp.route('/marcar-editando', methods=['POST'])
 @jefe_operativo_required
 def marcar_editando(current_user):
@@ -1234,20 +1059,13 @@ def marcar_editando(current_user):
         seccion = data.get('seccion')
         usuario_id = data.get('usuario_id')
         
-        if not codigo_sesion or codigo_sesion not in sesiones_activas:
-            return jsonify({'error': 'Sesión no encontrada'}), 404
-        
-        sesion = sesiones_activas[codigo_sesion]
-        sesion.setdefault('secciones_editando', {})
-        sesion['secciones_editando'][seccion] = usuario_id
-        
-        # Persistir en BD
-        guardar_sesion_en_db(sesion)
+        if codigo_sesion in sesiones_activas:
+            sesiones_activas[codigo_sesion].setdefault('secciones_editando', {})
+            sesiones_activas[codigo_sesion]['secciones_editando'][seccion] = usuario_id
+            guardar_sesion_en_db(sesiones_activas[codigo_sesion])
         
         return jsonify({'success': True}), 200
-        
     except Exception as e:
-        logger.error(f"Error marcando edición: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1260,32 +1078,17 @@ def liberar_edicion(current_user):
         seccion = data.get('seccion')
         usuario_id = data.get('usuario_id')
         
-        if not codigo_sesion or codigo_sesion not in sesiones_activas:
-            return jsonify({'error': 'Sesión no encontrada'}), 404
-        
-        sesion = sesiones_activas[codigo_sesion]
-        
-        if sesion.get('secciones_editando', {}).get(seccion) == usuario_id:
-            sesion['secciones_editando'][seccion] = None
-            # Persistir en BD
-            guardar_sesion_en_db(sesion)
+        if codigo_sesion in sesiones_activas:
+            if sesiones_activas[codigo_sesion].get('secciones_editando', {}).get(seccion) == usuario_id:
+                sesiones_activas[codigo_sesion]['secciones_editando'][seccion] = None
+                guardar_sesion_en_db(sesiones_activas[codigo_sesion])
         
         return jsonify({'success': True}), 200
-        
     except Exception as e:
-        logger.error(f"Error liberando edición: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# ENDPOINT PARA OBTENER COORDENADAS DEL TALLER
-# =====================================================
 @jefe_operativo_recepcion_bp.route('/taller-coordenadas', methods=['GET'])
 @jefe_operativo_required
 def obtener_coordenadas_taller(current_user):
-    """Retorna las coordenadas del taller para usar en el frontend"""
-    return jsonify({
-        'success': True,
-        'lat': TALLER_LAT,
-        'lng': TALLER_LNG
-    }), 200
+    return jsonify({'success': True, 'lat': TALLER_LAT, 'lng': TALLER_LNG}), 200

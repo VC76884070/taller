@@ -15,17 +15,15 @@ if (typeof window.API_BASE_URL === 'undefined') {
 }
 
 // =====================================================
-// CONFIGURACIÓN DE SUPABASE - ¡CAMBIA ESTOS VALORES!
+// CONFIGURACIÓN DE CLOUDINARY PARA SUBIDA DIRECTA DE AUDIO
 // =====================================================
-const SUPABASE_URL = 'https://tu-proyecto.supabase.co';  // 👈 REEMPLAZAR
-const SUPABASE_ANON_KEY = 'tu-anon-key';  // 👈 REEMPLAZAR
-
-// Inicializar cliente Supabase
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// 👇 CAMBIA ESTOS VALORES POR LOS TUYOS 👇
+const CLOUDINARY_CLOUD_NAME = 'tu-cloud-name';  // Ej: 'furia-motor'
+const CLOUDINARY_UPLOAD_PRESET = 'furia_audio_unsigned';  // Creado en Cloudinary
 
 // =====================================================
 // RECEPCION.JS - JEFE OPERATIVO
-// VERSIÓN CORREGIDA CON SUPABASE STORAGE
+// VERSIÓN CORREGIDA - AUDIO DIRECTO A CLOUDINARY
 // =====================================================
 
 // Configuración
@@ -62,7 +60,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
 let audioBlob = null;
-let audioUrlGuardado = null;  // URL de Supabase del audio
+let audioCloudinaryUrl = null;  // URL guardada después de subir a Cloudinary
 
 // Variables para control de descripción
 let descripcionModificadaManualmente = false;
@@ -125,74 +123,39 @@ const FOTOS_CONFIG = [
 ];
 
 // =====================================================
-// SUPABASE STORAGE - FUNCIONES DE SUBIDA DIRECTA
+// FUNCIÓN PARA SUBIR AUDIO DIRECTAMENTE A CLOUDINARY
 // =====================================================
-
-async function subirFotoDirecta(file, carpeta, campo) {
-    try {
-        if (!file) return null;
+async function subirAudioCloudinary(blob) {
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('file', blob, 'audio.wav');
+        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+        formData.append('folder', 'furia_motor/audios');
+        formData.append('resource_type', 'video');  // Cloudinary trata audio como video
         
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}_${campo}.${fileExt}`;
-        const filePath = `recepcion/${carpeta}/${fileName}`;
+        const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`;
         
-        console.log(`📤 Subiendo foto ${campo} a Supabase...`);
+        console.log('📤 Subiendo audio a Cloudinary...');
         
-        const { data, error } = await supabaseClient.storage
-            .from('fotos-vehiculos')
-            .upload(filePath, file, {
-                cacheControl: '3600',
-                upsert: false,
-                contentType: file.type
-            });
-        
-        if (error) throw error;
-        
-        const { data: { publicUrl } } = supabaseClient.storage
-            .from('fotos-vehiculos')
-            .getPublicUrl(filePath);
-        
-        console.log(`✅ Foto ${campo} subida:`, publicUrl);
-        return publicUrl;
-        
-    } catch (error) {
-        console.error(`❌ Error subiendo foto ${campo}:`, error);
-        mostrarNotificacion(`Error al subir ${campo}`, 'error');
-        return null;
-    }
-}
-
-async function subirAudioDirecta(audioBlob, carpeta) {
-    try {
-        if (!audioBlob) return null;
-        
-        const fileName = `${Date.now()}_audio.wav`;
-        const filePath = `audios/${carpeta}/${fileName}`;
-        
-        console.log('📤 Subiendo audio a Supabase...');
-        
-        const { data, error } = await supabaseClient.storage
-            .from('audios')
-            .upload(filePath, audioBlob, {
-                contentType: 'audio/wav',
-                cacheControl: '3600',
-                upsert: false
-            });
-        
-        if (error) throw error;
-        
-        const { data: { publicUrl } } = supabaseClient.storage
-            .from('audios')
-            .getPublicUrl(filePath);
-        
-        console.log('✅ Audio subido:', publicUrl);
-        return publicUrl;
-        
-    } catch (error) {
-        console.error('❌ Error subiendo audio:', error);
-        mostrarNotificacion('Error al subir el audio', 'error');
-        return null;
-    }
+        fetch(url, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.secure_url) {
+                console.log('✅ Audio subido a Cloudinary:', data.secure_url);
+                resolve(data.secure_url);
+            } else {
+                console.error('❌ Error Cloudinary:', data);
+                reject(new Error(data.error?.message || 'Error subiendo audio'));
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error en fetch:', error);
+            reject(error);
+        });
+    });
 }
 
 // =====================================================
@@ -215,7 +178,7 @@ async function verificarSesionAbandonada() {
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Inicializando recepcion.js');
     console.log('📡 API_BASE_URL:', window.API_BASE_URL);
-    console.log('📡 SUPABASE_URL:', SUPABASE_URL);
+    console.log('📡 CLOUDINARY_CLOUD_NAME:', CLOUDINARY_CLOUD_NAME);
     
     const autenticado = await checkAuth();
     if (!autenticado) return;
@@ -226,7 +189,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     generatePhotoUploads();
     setupPhotoUploads();
     setupAudioRecording();
-    setupTranscripcion();
+    setupTranscripcion();  // Deshabilitada
     setupEventListeners();
     setupPlacaValidation();
     setupInputTracking();
@@ -707,11 +670,12 @@ async function recuperarSesionActiva() {
                     descripcionProblema.value = descripcionOriginal;
                 }
                 if (sesionActual.datos?.descripcion?.audio_url) {
-                    audioUrlGuardado = sesionActual.datos.descripcion.audio_url;
-                    if (audioPreview && audioUrlGuardado) {
-                        audioPreview.src = audioUrlGuardado;
+                    audioCloudinaryUrl = sesionActual.datos.descripcion.audio_url;
+                    if (audioPreview && audioCloudinaryUrl) {
+                        audioPreview.src = audioCloudinaryUrl;
                         audioPreview.style.display = 'block';
                         audioStatus.textContent = 'Audio disponible';
+                        if (btnEliminarAudio) btnEliminarAudio.style.display = 'flex';
                     }
                 }
             } else {
@@ -1053,6 +1017,7 @@ async function cargarDatosSesion() {
                         audioPreview.style.display = 'block';
                         audioStatus.textContent = 'Audio disponible';
                         audioStatus.style.color = 'var(--verde-exito)';
+                        if (btnEliminarAudio) btnEliminarAudio.style.display = 'flex';
                     }
                 }
             }
@@ -1165,7 +1130,7 @@ function actualizarFotosDesdeSesion(fotos) {
 }
 
 // =====================================================
-// GUARDAR SECCIÓN - CON SUPABASE STORAGE
+// GUARDAR SECCIÓN - CON AUDIO DIRECTO A CLOUDINARY
 // =====================================================
 async function guardarSeccion(seccion) {
     if (!codigoSesion) return;
@@ -1194,21 +1159,22 @@ async function guardarSeccion(seccion) {
             break;
             
         case 'fotos':
-            // 🔥 SUBIR FOTOS DIRECTAMENTE A SUPABASE
+            // Las fotos se suben al backend (Cloudinary) como antes
             const fotosData = {};
             const fotosExistentes = sesionActual?.datos?.fotos || {};
-            
             for (const foto of FOTOS_CONFIG) {
                 const input = document.getElementById(foto.id);
-                const file = input?.files?.[0];
-                
-                if (file && file.size > 0) {
-                    if (file.size > 5 * 1024 * 1024) {
-                        mostrarNotificacion(`La foto ${foto.label} no debe superar los 5MB`, 'warning');
-                        fotosData[foto.campo] = fotosExistentes[foto.campo] || null;
+                if (input && input.files && input.files.length > 0) {
+                    const file = input.files[0];
+                    if (file) {
+                        if (file.size > 5 * 1024 * 1024) {
+                            mostrarNotificacion(`La foto ${foto.label} no debe superar los 5MB`, 'warning');
+                            fotosData[foto.campo] = fotosExistentes[foto.campo] || null;
+                        } else {
+                            fotosData[foto.campo] = await fileToBase64(file);
+                        }
                     } else {
-                        const publicUrl = await subirFotoDirecta(file, codigoSesion, foto.campo);
-                        fotosData[foto.campo] = publicUrl;
+                        fotosData[foto.campo] = fotosExistentes[foto.campo] || null;
                     }
                 } else {
                     fotosData[foto.campo] = fotosExistentes[foto.campo] || null;
@@ -1218,15 +1184,22 @@ async function guardarSeccion(seccion) {
             break;
             
         case 'descripcion':
-            // 🔥 SUBIR AUDIO DIRECTAMENTE A SUPABASE
-            let audioUrl = audioUrlGuardado;
+            // 🔥 NUEVO: Subir audio DIRECTAMENTE a Cloudinary desde el frontend
+            let audioUrl = audioCloudinaryUrl;
+            
             if (audioBlob) {
-                const nuevaUrl = await subirAudioDirecta(audioBlob, codigoSesion);
-                if (nuevaUrl) {
-                    audioUrl = nuevaUrl;
-                    audioUrlGuardado = nuevaUrl;
+                mostrarNotificacion('Subiendo audio a Cloudinary...', 'info');
+                try {
+                    audioUrl = await subirAudioCloudinary(audioBlob);
+                    audioCloudinaryUrl = audioUrl;
+                    mostrarNotificacion('✅ Audio subido correctamente', 'success');
+                } catch (error) {
+                    console.error('Error subiendo audio:', error);
+                    mostrarNotificacion('❌ Error al subir el audio', 'error');
+                    audioUrl = null;
                 }
             }
+            
             datos = {
                 texto: descripcionProblema?.value || '',
                 audio_url: audioUrl
@@ -1305,7 +1278,7 @@ function limpiarDescripcion() {
         descripcionOriginal = '';
         if (audioBlob) audioBlob = null;
         audioChunks = [];
-        audioUrlGuardado = null;
+        audioCloudinaryUrl = null;
         if (audioPreview) {
             if (audioPreview.src && audioPreview.src.startsWith('blob:')) URL.revokeObjectURL(audioPreview.src);
             audioPreview.src = '';
@@ -1393,7 +1366,7 @@ function stopRecording() {
 function eliminarGrabacion() {
     if (audioBlob) audioBlob = null;
     audioChunks = [];
-    audioUrlGuardado = null;
+    audioCloudinaryUrl = null;
     if (audioPreview) {
         if (audioPreview.src && audioPreview.src.startsWith('blob:')) URL.revokeObjectURL(audioPreview.src);
         audioPreview.src = '';
@@ -1448,7 +1421,7 @@ function limpiarSesionCompleta() {
     detenerKeepAlive();
     codigoSesion = null;
     sesionActual = null;
-    audioUrlGuardado = null;
+    audioCloudinaryUrl = null;
     localStorage.removeItem('sesion_actual');
     
     if (sessionPanel) sessionPanel.style.display = 'none';
@@ -1475,7 +1448,7 @@ function limpiarFormularioCompleto() {
     
     audioChunks = [];
     audioBlob = null;
-    audioUrlGuardado = null;
+    audioCloudinaryUrl = null;
     if (audioPreview) {
         audioPreview.src = '';
         audioPreview.style.display = 'none';
@@ -1595,6 +1568,15 @@ function setupPhotoUploads() {
             }
         });
         removeBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+    });
+}
+
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
     });
 }
 
@@ -2021,7 +2003,8 @@ function cargarDatosParaEdicion(detalle) {
         audioPreview.src = detalle.audio_url; 
         audioPreview.style.display = 'block'; 
         audioStatus.textContent = 'Audio disponible'; 
-        audioUrlGuardado = detalle.audio_url;
+        audioCloudinaryUrl = detalle.audio_url;
+        if (btnEliminarAudio) btnEliminarAudio.style.display = 'flex';
     }
     
     if (detalle.fotos) {
@@ -2051,21 +2034,31 @@ function cargarDatosParaEdicion(detalle) {
 async function guardarCambiosRecepcion() {
     if (!modoEdicionRecepcion || !recepcionEditandoId) { mostrarNotificacion('No hay recepción en edición', 'warning'); return; }
     try {
-        // Subir fotos nuevas a Supabase si las hay
+        // Procesar nuevas fotos
         const fotosData = {};
         for (const foto of FOTOS_CONFIG) {
             const input = document.getElementById(foto.id);
             const file = input?.files?.[0];
             if (file && file.size > 0) {
-                const publicUrl = await subirFotoDirecta(file, `edicion_${recepcionEditandoId}`, foto.campo);
-                fotosData[foto.campo] = publicUrl;
+                if (file.size > 5 * 1024 * 1024) {
+                    mostrarNotificacion(`La foto ${foto.label} no debe superar los 5MB`, 'warning');
+                } else {
+                    fotosData[foto.campo] = await fileToBase64(file);
+                }
             }
         }
         
-        // Subir audio nuevo si lo hay
-        let audioUrl = null;
+        // Procesar audio nuevo
+        let audioUrl = audioCloudinaryUrl;
         if (audioBlob) {
-            audioUrl = await subirAudioDirecta(audioBlob, `edicion_${recepcionEditandoId}`);
+            mostrarNotificacion('Subiendo audio a Cloudinary...', 'info');
+            try {
+                audioUrl = await subirAudioCloudinary(audioBlob);
+                audioCloudinaryUrl = audioUrl;
+                mostrarNotificacion('Audio subido', 'success');
+            } catch (error) {
+                console.error('Error subiendo audio:', error);
+            }
         }
         
         const datosActualizados = {
@@ -2085,7 +2078,7 @@ async function guardarCambiosRecepcion() {
             },
             descripcion: { 
                 texto: descripcionProblema?.value || '', 
-                audio_url: audioUrl || audioUrlGuardado 
+                audio_url: audioUrl 
             },
             fotos: fotosData
         };

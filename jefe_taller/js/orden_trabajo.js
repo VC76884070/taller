@@ -1,23 +1,17 @@
 // =====================================================
-// ÓRDENES DE TRABAJO - JEFE TALLER (VERSIÓN OPTIMIZADA)
-// VERSIÓN CORREGIDA - USA DIRECTAMENTE window.API_BASE_URL
+// ÓRDENES DE TRABAJO - JEFE TALLER
+// VERSIÓN COMPLETA Y CORREGIDA
 // =====================================================
 
-// =====================================================
-// NOTA: API_BASE_URL ya está definida globalmente por include.js
-// como window.API_BASE_URL. NO redeclarar como const aquí.
-// =====================================================
-
-// Verificar si existe la variable global, si no, crearla (solo por si acaso)
 if (typeof window.API_BASE_URL === 'undefined') {
     window.API_BASE_URL = (() => {
         if (window.location.hostname === 'localhost' || 
             window.location.hostname === '127.0.0.1' ||
             window.location.hostname.includes('192.168.')) {
-            console.log('📡 OrdenTrabajo.js - Modo DESARROLLO (fallback)');
+            console.log('📡 OrdenTrabajo.js - Modo DESARROLLO');
             return 'http://localhost:5000';
         }
-        console.log('📡 OrdenTrabajo.js - Modo PRODUCCIÓN (fallback)');
+        console.log('📡 OrdenTrabajo.js - Modo PRODUCCIÓN');
         return '';
     })();
 }
@@ -35,20 +29,18 @@ let audioBlob = null;
 let audioChunks = [];
 let isRecording = false;
 let mediaRecorder = null;
+let audioUrlTemporal = null;
 
-// Control de estado para evitar actualizaciones simultáneas
 let isUpdating = false;
 let lastActivasFetch = 0;
 let lastFinalizadasFetch = 0;
 
-// Cache TTL en milisegundos
 const CACHE_TTL = {
-    activas: 30000,      // 30 segundos para órdenes activas
-    finalizadas: 60000,  // 60 segundos para finalizadas (cambian menos)
-    tecnicos: 30000      // 30 segundos para técnicos
+    activas: 30000,
+    finalizadas: 60000,
+    tecnicos: 30000
 };
 
-// Cache para datos que cambian poco
 const dataCache = {
     tecnicos: { data: null, timestamp: null },
     
@@ -91,7 +83,7 @@ function puedeEditarOrden(estadoGlobal, trabajoIniciado = false) {
         };
     }
     
-    const estadosBloqueados = ['Finalizado', 'Entregado'];
+    const estadosBloqueados = ['Finalizado', 'Entregado', 'CotizacionAceptada', 'CotizacionEnviada'];
     
     if (estadosBloqueados.includes(estadoGlobal)) {
         return { 
@@ -117,7 +109,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     initPage();
     setupEventListeners();
     
-    // Cargar datos en paralelo para mayor velocidad
     await Promise.all([
         cargarTecnicos(),
         cargarUltimasOrdenesActivas(),
@@ -126,7 +117,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     iniciarPolling();
     
-    // Detectar cuando la página se vuelve visible para actualizar
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {
             cargarUltimasOrdenesActivas(true);
@@ -260,7 +250,7 @@ function cambiarPestana(tabId) {
 }
 
 // =====================================================
-// API CALLS - VERSIÓN OPTIMIZADA (CORS CORREGIDO)
+// API CALLS
 // =====================================================
 
 async function cargarUltimasOrdenesActivas(forceRefresh = false) {
@@ -280,30 +270,14 @@ async function cargarUltimasOrdenesActivas(forceRefresh = false) {
         if (!container) return;
         
         if (ordenesActivas.length === 0) {
-            container.innerHTML = `
-                <div class="skeleton-loading">
-                    ${Array(3).fill(0).map(() => `
-                        <div class="skeleton-card">
-                            <div class="skeleton-header"></div>
-                            <div class="skeleton-body"></div>
-                            <div class="skeleton-footer"></div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
+            container.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i><p>Cargando órdenes activas...</p></div>`;
         }
         
-        // CORRECCIÓN: Eliminar el header 'Cache-Control' que causaba error CORS
         const response = await fetch(`${API_URL}/jefe-taller/ultimas-ordenes`, {
-            headers: { 
-                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-                // 'Cache-Control' eliminado - causaba error CORS
-            }
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
         });
         
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
         const data = await response.json();
         
@@ -313,11 +287,7 @@ async function cargarUltimasOrdenesActivas(forceRefresh = false) {
             
             const countElement = document.getElementById('activasCount');
             if (countElement) {
-                const totalActivas = ordenesActivas.length;
-                countElement.textContent = totalActivas;
-                if (totalActivas === 10) {
-                    countElement.title = "Mostrando últimas 10 órdenes. Puede haber más.";
-                }
+                countElement.textContent = ordenesActivas.length;
             }
             
             renderOrdenesActivas(ordenesActivas);
@@ -326,7 +296,7 @@ async function cargarUltimasOrdenesActivas(forceRefresh = false) {
         }
         
     } catch (error) {
-        console.error('Error cargando últimas órdenes:', error);
+        console.error('Error cargando órdenes:', error);
         const container = document.getElementById('ordenesActivasList');
         if (container && ordenesActivas.length === 0) {
             container.innerHTML = `
@@ -452,7 +422,7 @@ async function cargarOrdenesFinalizadas(forceRefresh = false) {
 }
 
 // =====================================================
-// RENDERIZAR ÓRDENES ACTIVAS
+// RENDERIZAR ÓRDENES
 // =====================================================
 
 function renderOrdenesActivas(ordenes) {
@@ -547,20 +517,6 @@ function renderOrdenesActivas(ordenes) {
                     <div class="orden-info-item">
                         <span class="orden-info-label">Bahía</span>
                         <span class="orden-info-value"><i class="fas fa-warehouse"></i> Bahía ${orden.bahia_asignada}</span>
-                    </div>
-                    ` : ''}
-                    ${orden.fecha_hora_inicio_estimado ? `
-                    <div class="orden-info-item">
-                        <span class="orden-info-label">Inicio estimado</span>
-                        <span class="orden-info-value">
-                            <i class="far fa-clock"></i> ${new Date(orden.fecha_hora_inicio_estimado).toLocaleString()}
-                        </span>
-                    </div>
-                    ` : ''}
-                    ${orden.horas_estimadas ? `
-                    <div class="orden-info-item">
-                        <span class="orden-info-label">Horas estimadas</span>
-                        <span class="orden-info-value"><i class="fas fa-hourglass-half"></i> ${orden.horas_estimadas} h</span>
                     </div>
                     ` : ''}
                     ${trabajoIniciado ? `
@@ -695,7 +651,7 @@ function filtrarOrdenesFinalizadas() {
 }
 
 // =====================================================
-// POLLING OPTIMIZADO
+// POLLING
 // =====================================================
 
 function iniciarPolling() {
@@ -773,7 +729,7 @@ async function abrirModalGestionOrden(idOrden) {
         ordenEnGestion = data.detalle;
         
         if (tecnicosDisponibles.length === 0) {
-            await cargarTecnicos();
+            await cargarTecnicos(true);
         }
         
         renderModalGestionOrden();
@@ -793,88 +749,157 @@ function renderModalGestionOrden() {
     
     if (!body || !ordenEnGestion) return;
     
+    const puedeEditar = puedeEditarOrden(ordenEnGestion.estado_global, ordenEnGestion.trabajo_iniciado);
+    
     body.innerHTML = `
-        <div class="gestion-orden-container">
-            <div class="info-orden">
-                <h3>Orden: ${escapeHtml(ordenEnGestion.codigo_unico)}</h3>
-                <p>Estado: ${ordenEnGestion.estado_global}</p>
-                <p>Vehículo: ${escapeHtml(ordenEnGestion.marca)} ${escapeHtml(ordenEnGestion.modelo)} (${escapeHtml(ordenEnGestion.placa)})</p>
-                <p>Cliente: ${escapeHtml(ordenEnGestion.cliente?.nombre || 'No registrado')}</p>
-            </div>
-            
-            <div class="gestion-seccion">
-                <h4><i class="fas fa-users"></i> Asignar Técnicos</h4>
-                <div class="tecnicos-selector">
-                    ${tecnicosDisponibles.map(t => `
-                        <label class="tecnico-checkbox">
-                            <input type="checkbox" name="tecnico" value="${t.id}" 
-                                ${ordenEnGestion.tecnicos?.some(tec => tec.id === t.id) ? 'checked' : ''}
-                                ${!t.disponible && !ordenEnGestion.tecnicos?.some(tec => tec.id === t.id) ? 'disabled' : ''}>
-                            <span>${escapeHtml(t.nombre)}</span>
-                            <small>(${t.ordenes_activas}/${t.max_vehiculos})</small>
-                        </label>
-                    `).join('')}
+        <div class="gestion-orden">
+            <!-- Información de la orden -->
+            <div class="gestion-section">
+                <div class="gestion-section-header">
+                    <h3><i class="fas fa-info-circle"></i> Información de la Orden</h3>
                 </div>
-                <small>Máximo 2 técnicos por orden</small>
-            </div>
-            
-            <div class="gestion-seccion">
-                <h4><i class="fas fa-calendar"></i> Planificación</h4>
-                <div class="planificacion-form">
-                    <div class="form-group">
-                        <label>Bahía (1-12):</label>
-                        <input type="number" id="bahia" min="1" max="12" value="${ordenEnGestion.planificacion?.bahia_asignada || ''}">
+                <div class="gestion-section-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Código de Orden</label>
+                            <input type="text" class="form-input" value="${escapeHtml(ordenEnGestion.codigo_unico)}" readonly disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Estado Actual</label>
+                            <input type="text" class="form-input" value="${ordenEnGestion.estado_global}" readonly disabled>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Fecha inicio:</label>
-                        <input type="datetime-local" id="fecha_inicio" value="${ordenEnGestion.planificacion?.fecha_hora_inicio_estimado ? new Date(ordenEnGestion.planificacion.fecha_hora_inicio_estimado).toISOString().slice(0, 16) : ''}">
-                    </div>
-                    <div class="form-group">
-                        <label>Horas estimadas:</label>
-                        <input type="number" id="horas_estimadas" step="0.5" value="${ordenEnGestion.planificacion?.horas_estimadas || ''}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Vehículo</label>
+                            <input type="text" class="form-input" value="${escapeHtml(ordenEnGestion.marca)} ${escapeHtml(ordenEnGestion.modelo)} (${escapeHtml(ordenEnGestion.placa)})" readonly disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Cliente</label>
+                            <input type="text" class="form-input" value="${escapeHtml(ordenEnGestion.cliente?.nombre || 'No registrado')}" readonly disabled>
+                        </div>
                     </div>
                 </div>
             </div>
             
-            <div class="gestion-seccion">
-                <h4><i class="fas fa-stethoscope"></i> Diagnóstico Inicial</h4>
-                <textarea id="diagnostico" rows="4" placeholder="Ingrese el diagnóstico inicial...">${ordenEnGestion.transcripcion_problema || ''}</textarea>
-                <div class="audio-controls">
-                    <button type="button" id="btnGrabarAudio" class="btn-audio">
-                        <i class="fas fa-microphone"></i> Grabar Audio
-                    </button>
-                    <button type="button" id="btnDetenerAudio" class="btn-audio stop" style="display:none;">
-                        <i class="fas fa-stop"></i> Detener
-                    </button>
-                    <audio id="audioReproduccion" controls style="display:none;"></audio>
+            <!-- Asignación de Técnicos -->
+            <div class="gestion-section">
+                <div class="gestion-section-header">
+                    <h3><i class="fas fa-users"></i> Asignar Técnicos</h3>
+                    <span class="section-status ${ordenEnGestion.tecnicos?.length > 0 ? 'completado' : 'pendiente'}">
+                        ${ordenEnGestion.tecnicos?.length > 0 ? '✓ Asignados' : '○ Pendiente'}
+                    </span>
+                </div>
+                <div class="gestion-section-body">
+                    <div class="tecnicos-grid">
+                        ${tecnicosDisponibles.map(t => {
+                            const isAssigned = ordenEnGestion.tecnicos?.some(tec => tec.id === t.id);
+                            const isDisabled = !t.disponible && !isAssigned;
+                            return `
+                                <label class="tecnico-option ${isAssigned ? 'selected' : ''}" style="${isDisabled ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
+                                    <input type="checkbox" name="tecnico" value="${t.id}" ${isAssigned ? 'checked' : ''} ${isDisabled ? 'disabled' : ''}>
+                                    <div class="tecnico-info">
+                                        <div class="tecnico-nombre">${escapeHtml(t.nombre)}</div>
+                                        <div class="tecnico-carga">${t.ordenes_activas}/${t.max_vehiculos} vehículos</div>
+                                    </div>
+                                </label>
+                            `;
+                        }).join('')}
+                    </div>
+                    <small class="modal-hint">Selecciona hasta 2 técnicos para esta orden</small>
                 </div>
             </div>
+            
+            <!-- Planificación -->
+            <div class="gestion-section">
+                <div class="gestion-section-header">
+                    <h3><i class="fas fa-calendar"></i> Planificación</h3>
+                    <span class="section-status ${ordenEnGestion.planificacion?.bahia_asignada ? 'completado' : 'pendiente'}">
+                        ${ordenEnGestion.planificacion?.bahia_asignada ? '✓ Planificado' : '○ Pendiente'}
+                    </span>
+                </div>
+                <div class="gestion-section-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Bahía (1-12)</label>
+                            <input type="number" id="bahia" class="form-input" min="1" max="12" value="${ordenEnGestion.planificacion?.bahia_asignada || ''}" ${!puedeEditar.editable ? 'disabled' : ''}>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Fecha/Hora Inicio Estimado</label>
+                            <input type="datetime-local" id="fecha_inicio" class="form-input" value="${ordenEnGestion.planificacion?.fecha_hora_inicio_estimado ? new Date(ordenEnGestion.planificacion.fecha_hora_inicio_estimado).toISOString().slice(0, 16) : ''}" ${!puedeEditar.editable ? 'disabled' : ''}>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Horas Estimadas</label>
+                            <input type="number" id="horas_estimadas" class="form-input" step="0.5" value="${ordenEnGestion.planificacion?.horas_estimadas || ''}" ${!puedeEditar.editable ? 'disabled' : ''}>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Diagnóstico Inicial -->
+            <div class="gestion-section">
+                <div class="gestion-section-header">
+                    <h3><i class="fas fa-stethoscope"></i> Diagnóstico Inicial</h3>
+                    <span class="section-status ${ordenEnGestion.transcripcion_problema ? 'completado' : 'pendiente'}">
+                        ${ordenEnGestion.transcripcion_problema ? '✓ Registrado' : '○ Pendiente'}
+                    </span>
+                </div>
+                <div class="gestion-section-body">
+                    <div class="form-group">
+                        <label class="form-label">Descripción del diagnóstico</label>
+                        <textarea id="diagnostico" class="form-textarea" rows="4" placeholder="Ingrese el diagnóstico inicial..." ${!puedeEditar.editable ? 'disabled' : ''}>${escapeHtml(ordenEnGestion.transcripcion_problema || '')}</textarea>
+                    </div>
+                    <div class="diagnostico-audio">
+                        <div class="diagnostico-audio-controls">
+                            <button type="button" id="btnGrabarAudioDiagnostico" class="btn-audio" ${!puedeEditar.editable ? 'disabled' : ''}>
+                                <i class="fas fa-microphone"></i> Grabar Audio
+                            </button>
+                            <button type="button" id="btnDetenerAudioDiagnostico" class="btn-audio" style="display:none;">
+                                <i class="fas fa-stop"></i> Detener Grabación
+                            </button>
+                        </div>
+                        <audio id="audioReproduccionDiagnostico" controls style="display:none; width: 100%; margin-top: 10px;"></audio>
+                    </div>
+                </div>
+            </div>
+            
+            ${!puedeEditar.editable ? `
+            <div class="bloqueo-banner warning">
+                <i class="fas fa-lock"></i>
+                <div>
+                    <strong>⚠️ Orden Bloqueada</strong>
+                    <p>${puedeEditar.mensaje}</p>
+                </div>
+            </div>
+            ` : ''}
         </div>
     `;
     
     if (footer) {
         footer.innerHTML = `
-            <button class="btn-cancelar" onclick="window.cerrarModalGestionOrden()">Cancelar</button>
-            <button class="btn-guardar" onclick="window.guardarGestionOrden()">Guardar Cambios</button>
+            <button class="btn-secondary" onclick="window.cerrarModalGestionOrden()">Cancelar</button>
+            ${puedeEditar.editable ? `<button class="btn-primary" onclick="window.guardarGestionOrden()">Guardar Cambios</button>` : ''}
         `;
     }
     
-    setupAudioEvents();
+    if (puedeEditar.editable) {
+        setupAudioEventosDiagnostico();
+    }
 }
 
-function setupAudioEvents() {
-    const btnGrabar = document.getElementById('btnGrabarAudio');
-    const btnDetener = document.getElementById('btnDetenerAudio');
+function setupAudioEventosDiagnostico() {
+    const btnGrabar = document.getElementById('btnGrabarAudioDiagnostico');
+    const btnDetener = document.getElementById('btnDetenerAudioDiagnostico');
     
     if (btnGrabar) {
-        btnGrabar.onclick = () => iniciarGrabacionAudio();
+        btnGrabar.onclick = () => iniciarGrabacionAudioDiagnostico();
     }
     if (btnDetener) {
-        btnDetener.onclick = () => detenerGrabacionAudio();
+        btnDetener.onclick = () => detenerGrabacionAudioDiagnostico();
     }
 }
 
-async function iniciarGrabacionAudio() {
+async function iniciarGrabacionAudioDiagnostico() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream);
@@ -887,7 +912,7 @@ async function iniciarGrabacionAudio() {
         mediaRecorder.onstop = async () => {
             audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
             const audioUrl = URL.createObjectURL(audioBlob);
-            const audioElem = document.getElementById('audioReproduccion');
+            const audioElem = document.getElementById('audioReproduccionDiagnostico');
             if (audioElem) {
                 audioElem.src = audioUrl;
                 audioElem.style.display = 'block';
@@ -899,10 +924,10 @@ async function iniciarGrabacionAudio() {
         mediaRecorder.start();
         isRecording = true;
         
-        const btnGrabar = document.getElementById('btnGrabarAudio');
-        const btnDetener = document.getElementById('btnDetenerAudio');
+        const btnGrabar = document.getElementById('btnGrabarAudioDiagnostico');
+        const btnDetener = document.getElementById('btnDetenerAudioDiagnostico');
         if (btnGrabar) btnGrabar.style.display = 'none';
-        if (btnDetener) btnDetener.style.display = 'inline-block';
+        if (btnDetener) btnDetener.style.display = 'inline-flex';
         
         mostrarNotificacion('Grabando audio...', 'info');
         
@@ -912,14 +937,14 @@ async function iniciarGrabacionAudio() {
     }
 }
 
-function detenerGrabacionAudio() {
+function detenerGrabacionAudioDiagnostico() {
     if (mediaRecorder && isRecording) {
         mediaRecorder.stop();
         isRecording = false;
         
-        const btnGrabar = document.getElementById('btnGrabarAudio');
-        const btnDetener = document.getElementById('btnDetenerAudio');
-        if (btnGrabar) btnGrabar.style.display = 'inline-block';
+        const btnGrabar = document.getElementById('btnGrabarAudioDiagnostico');
+        const btnDetener = document.getElementById('btnDetenerAudioDiagnostico');
+        if (btnGrabar) btnGrabar.style.display = 'inline-flex';
         if (btnDetener) btnDetener.style.display = 'none';
         
         mostrarNotificacion('Grabación detenida', 'success');
@@ -932,9 +957,11 @@ async function guardarGestionOrden() {
     mostrarNotificacion('Guardando cambios...', 'info');
     
     try {
+        // Obtener técnicos seleccionados
         const tecnicosSeleccionados = Array.from(document.querySelectorAll('input[name="tecnico"]:checked'))
             .map(cb => parseInt(cb.value));
         
+        // Solo guardar si hay técnicos seleccionados
         if (tecnicosSeleccionados.length > 0) {
             const asignarResponse = await fetch(`${API_URL}/jefe-taller/asignar-tecnicos`, {
                 method: 'POST',
@@ -955,6 +982,7 @@ async function guardarGestionOrden() {
             }
         }
         
+        // Obtener datos de planificación
         const bahia = document.getElementById('bahia')?.value;
         const fechaInicio = document.getElementById('fecha_inicio')?.value;
         const horasEstimadas = document.getElementById('horas_estimadas')?.value;
@@ -980,33 +1008,16 @@ async function guardarGestionOrden() {
             }
         }
         
+        // Guardar diagnóstico
         const diagnostico = document.getElementById('diagnostico')?.value;
-        let audioUrl = null;
+        let audioBase64 = null;
         
         if (audioBlob) {
-            const reader = new FileReader();
-            audioUrl = await new Promise((resolve, reject) => {
+            audioBase64 = await new Promise((resolve) => {
+                const reader = new FileReader();
                 reader.onloadend = () => resolve(reader.result);
-                reader.onerror = reject;
                 reader.readAsDataURL(audioBlob);
             });
-            
-            const audioResponse = await fetch(`${API_URL}/jefe-taller/subir-audio-diagnostico`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-                },
-                body: JSON.stringify({
-                    audio: audioUrl,
-                    id_orden: ordenEnGestion.id
-                })
-            });
-            
-            if (audioResponse.ok) {
-                const audioData = await audioResponse.json();
-                audioUrl = audioData.url;
-            }
         }
         
         if (diagnostico) {
@@ -1019,7 +1030,7 @@ async function guardarGestionOrden() {
                 body: JSON.stringify({
                     id_orden: ordenEnGestion.id,
                     diagnostico: diagnostico,
-                    audio_url: audioUrl
+                    audio_url: audioBase64
                 })
             });
             
@@ -1031,6 +1042,7 @@ async function guardarGestionOrden() {
         
         mostrarNotificacion('Cambios guardados correctamente', 'success');
         
+        // Limpiar cache y recargar datos
         dataCache.clear('tecnicos');
         await cargarUltimasOrdenesActivas(true);
         await cargarTecnicos(true);
@@ -1055,7 +1067,16 @@ function cerrarModalGestionOrden() {
     ordenEnGestion = null;
     audioBlob = null;
     audioChunks = [];
+    
+    if (audioUrlTemporal) {
+        URL.revokeObjectURL(audioUrlTemporal);
+        audioUrlTemporal = null;
+    }
 }
+
+// =====================================================
+// VER DETALLE DE ORDEN
+// =====================================================
 
 async function verDetalleOrden(idOrden) {
     try {
@@ -1077,41 +1098,56 @@ async function verDetalleOrden(idOrden) {
         if (body) {
             body.innerHTML = `
                 <div class="detalle-orden">
-                    <div class="detalle-header">
-                        <h3>Orden: ${escapeHtml(orden.codigo_unico)}</h3>
-                        <span class="estado-badge ${orden.estado_global}">${orden.estado_global}</span>
+                    <div class="detalle-seccion">
+                        <h4><i class="fas fa-info-circle"></i> Información General</h4>
+                        <div class="detalle-grid">
+                            <div class="detalle-item"><span class="detalle-label">Código</span><span class="detalle-value">${escapeHtml(orden.codigo_unico)}</span></div>
+                            <div class="detalle-item"><span class="detalle-label">Estado</span><span class="detalle-value estado-${orden.estado_global}">${orden.estado_global}</span></div>
+                            <div class="detalle-item"><span class="detalle-label">Fecha Ingreso</span><span class="detalle-value">${new Date(orden.fecha_ingreso).toLocaleString()}</span></div>
+                        </div>
                     </div>
                     
                     <div class="detalle-seccion">
-                        <h4><i class="fas fa-car"></i> Información del Vehículo</h4>
-                        <p><strong>Placa:</strong> ${escapeHtml(orden.placa)}</p>
-                        <p><strong>Marca/Modelo:</strong> ${escapeHtml(orden.marca)} ${escapeHtml(orden.modelo)}</p>
-                        <p><strong>Año:</strong> ${orden.anio || 'N/A'}</p>
-                        <p><strong>Kilometraje:</strong> ${orden.kilometraje || 'N/A'} km</p>
+                        <h4><i class="fas fa-car"></i> Vehículo</h4>
+                        <div class="detalle-grid">
+                            <div class="detalle-item"><span class="detalle-label">Placa</span><span class="detalle-value">${escapeHtml(orden.placa)}</span></div>
+                            <div class="detalle-item"><span class="detalle-label">Marca/Modelo</span><span class="detalle-value">${escapeHtml(orden.marca)} ${escapeHtml(orden.modelo)}</span></div>
+                            <div class="detalle-item"><span class="detalle-label">Año</span><span class="detalle-value">${orden.anio || 'N/A'}</span></div>
+                            <div class="detalle-item"><span class="detalle-label">Kilometraje</span><span class="detalle-value">${orden.kilometraje?.toLocaleString() || '0'} km</span></div>
+                        </div>
                     </div>
                     
                     <div class="detalle-seccion">
                         <h4><i class="fas fa-user"></i> Cliente</h4>
-                        <p><strong>Nombre:</strong> ${escapeHtml(orden.cliente?.nombre || 'No registrado')}</p>
+                        <div class="detalle-grid">
+                            <div class="detalle-item"><span class="detalle-label">Nombre</span><span class="detalle-value">${escapeHtml(orden.cliente?.nombre || 'No registrado')}</span></div>
+                            <div class="detalle-item"><span class="detalle-label">Teléfono</span><span class="detalle-value">${escapeHtml(orden.cliente?.telefono || 'N/A')}</span></div>
+                            <div class="detalle-item"><span class="detalle-label">Ubicación</span><span class="detalle-value">${escapeHtml(orden.cliente?.ubicacion || 'N/A')}</span></div>
+                        </div>
                     </div>
                     
                     <div class="detalle-seccion">
                         <h4><i class="fas fa-users"></i> Técnicos Asignados</h4>
-                        ${orden.tecnicos?.length > 0 ? 
-                            orden.tecnicos.map(t => `<p>👨‍🔧 ${escapeHtml(t.nombre)}</p>`).join('') :
-                            '<p>Sin técnicos asignados</p>'}
+                        <div class="orden-tecnicos">
+                            ${orden.tecnicos?.length > 0 ? 
+                                orden.tecnicos.map(t => `<span class="tecnico-badge"><i class="fas fa-user"></i> ${escapeHtml(t.nombre)}</span>`).join('') :
+                                '<span class="tecnico-badge sin-asignar">Sin técnicos asignados</span>'}
+                        </div>
                     </div>
                     
                     <div class="detalle-seccion">
                         <h4><i class="fas fa-calendar"></i> Planificación</h4>
-                        <p><strong>Bahía:</strong> ${orden.planificacion?.bahia_asignada || 'No asignada'}</p>
-                        <p><strong>Inicio estimado:</strong> ${orden.planificacion?.fecha_hora_inicio_estimado ? new Date(orden.planificacion.fecha_hora_inicio_estimado).toLocaleString() : 'N/A'}</p>
-                        <p><strong>Horas estimadas:</strong> ${orden.planificacion?.horas_estimadas || 'N/A'} h</p>
+                        <div class="detalle-grid">
+                            <div class="detalle-item"><span class="detalle-label">Bahía</span><span class="detalle-value">${orden.planificacion?.bahia_asignada || 'No asignada'}</span></div>
+                            <div class="detalle-item"><span class="detalle-label">Inicio Estimado</span><span class="detalle-value">${orden.planificacion?.fecha_hora_inicio_estimado ? new Date(orden.planificacion.fecha_hora_inicio_estimado).toLocaleString() : 'N/A'}</span></div>
+                            <div class="detalle-item"><span class="detalle-label">Horas Estimadas</span><span class="detalle-value">${orden.planificacion?.horas_estimadas || 'N/A'} h</span></div>
+                        </div>
                     </div>
                     
                     <div class="detalle-seccion">
                         <h4><i class="fas fa-stethoscope"></i> Problema Reportado</h4>
-                        <p>${escapeHtml(orden.transcripcion_problema) || 'No registrado'}</p>
+                        <div class="detalle-descripcion">${escapeHtml(orden.transcripcion_problema) || 'No registrado'}</div>
+                        ${orden.audio_url ? `<div class="detalle-audio"><audio controls src="${orden.audio_url}" style="width: 100%; margin-top: 10px;"></audio></div>` : ''}
                     </div>
                 </div>
             `;
@@ -1153,12 +1189,24 @@ async function verDiagnosticoPendiente(idOrden) {
                             <i class="fas fa-clock"></i>
                             <strong>Diagnóstico Pendiente de Revisión</strong>
                         </div>
-                        <p><strong>Técnico:</strong> ${escapeHtml(data.tecnico_nombre)}</p>
-                        <p><strong>Versión:</strong> ${data.version}</p>
-                        <p><strong>Estado:</strong> ${data.estado}</p>
-                        <button class="btn-primary" onclick="window.revisarDiagnostico(${idOrden})">
-                            <i class="fas fa-eye"></i> Revisar Diagnóstico
-                        </button>
+                        <div class="detalle-grid">
+                            <div class="detalle-item"><span class="detalle-label">Técnico</span><span class="detalle-value">${escapeHtml(data.tecnico_nombre)}</span></div>
+                            <div class="detalle-item"><span class="detalle-label">Versión</span><span class="detalle-value">${data.version}</span></div>
+                            <div class="detalle-item"><span class="detalle-label">Estado</span><span class="detalle-value">${data.estado}</span></div>
+                        </div>
+                        <div class="diagnostico-contenido">
+                            <h5>Diagnóstico:</h5>
+                            <p>${escapeHtml(data.diagnostico || 'No hay diagnóstico disponible')}</p>
+                        </div>
+                        ${data.audio_url ? `<div class="detalle-audio"><audio controls src="${data.audio_url}" style="width: 100%; margin-top: 10px;"></audio></div>` : ''}
+                        <div class="diagnostico-acciones">
+                            <button class="btn-success" onclick="window.aprobarDiagnostico(${idOrden})">
+                                <i class="fas fa-check"></i> Aprobar Diagnóstico
+                            </button>
+                            <button class="btn-warning" onclick="window.solicitarCambiosDiagnostico(${idOrden})">
+                                <i class="fas fa-edit"></i> Solicitar Cambios
+                            </button>
+                        </div>
                     </div>
                 `;
             }
@@ -1174,6 +1222,19 @@ async function verDiagnosticoPendiente(idOrden) {
     }
 }
 
+// Funciones para diagnóstico
+window.aprobarDiagnostico = (idOrden) => {
+    mostrarNotificacion('Función en desarrollo - Aprobar diagnóstico', 'info');
+};
+
+window.solicitarCambiosDiagnostico = (idOrden) => {
+    mostrarNotificacion('Función en desarrollo - Solicitar cambios', 'info');
+};
+
+// =====================================================
+// EXPOSICIÓN DE FUNCIONES GLOBALES
+// =====================================================
+
 window.verDetalleOrden = verDetalleOrden;
 window.cerrarModalDetalleOrden = cerrarModalDetalleOrden;
 window.cerrarModalHistorialDiagnostico = cerrarModalHistorialDiagnostico;
@@ -1184,6 +1245,5 @@ window.cargarUltimasOrdenesActivas = cargarUltimasOrdenesActivas;
 window.cargarTodasOrdenesActivas = cargarTodasOrdenesActivas;
 window.cargarOrdenesFinalizadas = cargarOrdenesFinalizadas;
 window.verDiagnosticoPendiente = verDiagnosticoPendiente;
-window.revisarDiagnostico = (idOrden) => {
-    mostrarNotificacion('Función en desarrollo', 'info');
-};
+
+console.log('✅ orden_trabajo.js cargado - Versión completa');

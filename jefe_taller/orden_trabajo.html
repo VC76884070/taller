@@ -15,24 +15,20 @@
     <!-- Estilos globales y específicos -->
     <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
     <link rel="stylesheet" href="/jefe_taller/css/orden_trabajo.css">
-    <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
+    
+    <!-- ========== CONFIGURACIÓN PWA ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TORQUE">
 
-    <!-- ICONO PARA LA PESTAÑA DEL NAVEGADOR -->
+    <!-- ICONOS -->
     <link rel="icon" type="image/png" href="/icono.png">
     <link rel="shortcut icon" type="image/png" href="/icono.png">
-
-    <!-- ICONO PARA IPHONE / IPAD (pantalla de inicio) -->
     <link rel="apple-touch-icon" href="/icono.png">
-
-    <!-- ICONO PARA ANDROID (chrome) -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
-    <!-- ===================================================== -->
 </head>
 
 <body>
@@ -62,7 +58,7 @@
             </header>
 
             <div class="content">
-                <!-- Pestañas de navegación - Solo 2 -->
+                <!-- Pestañas de navegación -->
                 <div class="tabs-container">
                     <button class="tab-btn active" data-tab="activas">
                         <i class="fas fa-tasks"></i> Órdenes Activas
@@ -84,8 +80,7 @@
                         <div class="filtros-grid">
                             <div class="filtro-grupo">
                                 <i class="fas fa-search"></i>
-                                <input type="text" id="searchActivas"
-                                    placeholder="Buscar por código, placa o cliente..." class="filtro-input">
+                                <input type="text" id="searchActivas" placeholder="Buscar por código, placa o cliente..." class="filtro-input">
                             </div>
                             <div class="filtro-grupo">
                                 <i class="fas fa-user-cog"></i>
@@ -98,6 +93,7 @@
                                 <select id="estadoFiltroActivas" class="filtro-select">
                                     <option value="">Todos los estados</option>
                                     <option value="EnRecepcion">En Recepción</option>
+                                    <option value="EnDiagnostico">En Diagnóstico</option>
                                     <option value="EnProceso">En Proceso</option>
                                     <option value="EnPausa">En Pausa</option>
                                 </select>
@@ -126,8 +122,7 @@
                         <div class="filtros-grid">
                             <div class="filtro-grupo">
                                 <i class="fas fa-search"></i>
-                                <input type="text" id="searchFinalizadas"
-                                    placeholder="Buscar por código, placa o cliente..." class="filtro-input">
+                                <input type="text" id="searchFinalizadas" placeholder="Buscar por código, placa o cliente..." class="filtro-input">
                             </div>
                             <div class="filtro-grupo">
                                 <i class="fas fa-calendar"></i>
@@ -154,7 +149,11 @@
         </main>
     </div>
 
-    <!-- Modal UNIFICADO para gestión de orden (técnicos, planificación, diagnóstico con audio) -->
+    <!-- ===================================================== -->
+    <!-- MODALES -->
+    <!-- ===================================================== -->
+
+    <!-- Modal UNIFICADO para gestión de orden -->
     <div class="modal" id="modalGestionOrden">
         <div class="modal-content modal-xl">
             <div class="modal-header">
@@ -199,15 +198,10 @@
     <script src="/jefe_taller/js/include.js"></script>
     <script src="/jefe_taller/js/orden_trabajo.js"></script>
 
-    <!-- ========== SCRIPT RESPONSIVE PARA SIDEBAR (JEFE TALLER - ÓRDENES) ========== -->
+    <!-- ========== SCRIPT RESPONSIVE PARA SIDEBAR ========== -->
     <script>
-        // =====================================================
-        // FUNCIONES RESPONSIVE PARA SIDEBAR (JEFE TALLER - ÓRDENES)
-        // =====================================================
-
         let sidebarOpen = false;
 
-        // Función para toggle sidebar en móvil/tablet
         function toggleSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
@@ -223,8 +217,6 @@
                 if (overlay) overlay.classList.add('active');
                 if (hamburger) hamburger.classList.add('active');
                 body.classList.add('sidebar-open');
-
-                // Cambiar icono del hamburguesa
                 const icon = hamburger.querySelector('i');
                 if (icon) icon.className = 'fas fa-times';
             } else {
@@ -232,7 +224,6 @@
             }
         }
 
-        // Función para cerrar sidebar
         function closeSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
@@ -244,64 +235,40 @@
                 if (overlay) overlay.classList.remove('active');
                 if (hamburger) hamburger.classList.remove('active');
                 body.classList.remove('sidebar-open');
-
                 const icon = hamburger.querySelector('i');
                 if (icon) icon.className = 'fas fa-bars';
             }
-
             sidebarOpen = false;
         }
 
-        // Event Listeners
         document.addEventListener('DOMContentLoaded', function () {
-            // Botón hamburguesa
             const hamburgerBtn = document.getElementById('hamburgerMenu');
-            if (hamburgerBtn) {
-                hamburgerBtn.addEventListener('click', toggleSidebar);
-            }
-
-            // Overlay
+            if (hamburgerBtn) hamburgerBtn.addEventListener('click', toggleSidebar);
             const overlay = document.getElementById('sidebarOverlay');
-            if (overlay) {
-                overlay.addEventListener('click', closeSidebar);
-            }
-
-            // Cerrar sidebar al redimensionar a desktop
+            if (overlay) overlay.addEventListener('click', closeSidebar);
             window.addEventListener('resize', function () {
-                if (window.innerWidth > 1024 && sidebarOpen) {
-                    closeSidebar();
-                }
+                if (window.innerWidth > 1024 && sidebarOpen) closeSidebar();
             });
-
-            // Cerrar sidebar al hacer click en enlaces (móvil)
             document.addEventListener('click', function (e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
                     const hamburger = document.getElementById('hamburgerMenu');
-
-                    // Si el click no fue en el sidebar ni en el botón hamburguesa
                     if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
                         closeSidebar();
                     }
                 }
             });
-
-            // Prevenir scroll del body cuando sidebar está abierto
             document.addEventListener('touchmove', function (e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
-                    if (sidebar && !sidebar.contains(e.target)) {
-                        e.preventDefault();
-                    }
+                    if (sidebar && !sidebar.contains(e.target)) e.preventDefault();
                 }
             });
         });
 
-        // Exponer funciones globalmente
         window.toggleSidebar = toggleSidebar;
         window.closeSidebar = closeSidebar;
-
-        console.log('✅ orden_trabajo.html (Jefe Taller) - Funciones responsive cargadas');
+        console.log('✅ orden_trabajo.html - Funciones responsive cargadas');
     </script>
 </body>
 

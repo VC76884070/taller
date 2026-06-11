@@ -40,69 +40,10 @@
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <div class="app">
-        <!-- Sidebar -->
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <img src="/logo.png" alt="Logo" class="sidebar-logo" onerror="this.src='https://via.placeholder.com/40x40?text=F'">
-                <span class="sidebar-brand">FURIA MOTOR</span>
-            </div>
-            
-            <div class="sidebar-user">
-                <div class="user-avatar">
-                    <i class="fas fa-user-tie"></i>
-                </div>
-                <div class="user-info">
-                    <span class="user-name" id="userName">Jefe Operativo</span>
-                    <span class="user-role">Administrador</span>
-                </div>
-            </div>
-            
-            <div class="sidebar-nav">
-                <ul>
-                    <li class="nav-item active">
-                        <a href="#" class="nav-link">
-                            <i class="fas fa-chart-line"></i>
-                            <span>Dashboard</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" onclick="return false;">
-                            <i class="fas fa-clipboard-list"></i>
-                            <span>Órdenes de Trabajo</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" onclick="return false;">
-                            <i class="fas fa-users"></i>
-                            <span>Clientes</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" onclick="return false;">
-                            <i class="fas fa-car"></i>
-                            <span>Vehículos</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" onclick="return false;">
-                            <i class="fas fa-chart-bar"></i>
-                            <span>Reportes</span>
-                        </a>
-                    </li>
-                </ul>
-                
-                <div class="sidebar-bottom">
-                    <ul>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" onclick="logout()">
-                                <i class="fas fa-sign-out-alt"></i>
-                                <span>Cerrar Sesión</span>
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </aside>
+        <!-- ===================================================== -->
+        <!-- CONTENEDOR PARA SIDEBAR - INCLUDE.JS LO CARGA AQUÍ -->
+        <!-- ===================================================== -->
+        <div id="sidebar-container"></div>
 
         <main class="main-content">
             <header class="top-bar">
@@ -194,7 +135,6 @@
                             <div class="calendario-wrapper">
                                 <div id="calendarioOperativo"></div>
                             </div>
-                            <!-- Indicador de scroll para móvil -->
                             <div class="scroll-indicator">
                                 <i class="fas fa-arrows-alt-h"></i>
                                 <span>Desliza para ver más días</span>
@@ -244,10 +184,13 @@
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/es.min.js"></script>
     
-    <!-- Tu archivo de JavaScript principal -->
+    <!-- INCLUDE.JS - Sidebar dinámico (el que ya tienes) -->
+    <script src="/jefe_operativo/js/include.js"></script>
+    
+    <!-- DASHBOARD.JS - Lógica principal -->
     <script src="/jefe_operativo/js/dashboard.js"></script>
 
-    <!-- Script adicional para manejo del sidebar -->
+    <!-- Script para manejo del sidebar responsive (compatible con include.js) -->
     <script>
         let sidebarOpen = false;
         
@@ -299,16 +242,7 @@
             }
         }
         
-        // Función global de logout
-        window.logout = function() {
-            if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
-                localStorage.removeItem('furia_token');
-                localStorage.removeItem('furia_user');
-                window.location.href = window.API_BASE_URL || '/';
-            }
-        };
-        
-        // Inicialización
+        // Esperar a que el sidebar se cargue (include.js lo carga)
         document.addEventListener('DOMContentLoaded', function() {
             updateCurrentDate();
             
@@ -332,53 +266,27 @@
                 }
             });
             
-            // Prevenir clicks en enlaces del sidebar que no tienen funcionalidad aún
-            const sidebarLinks = document.querySelectorAll('.sidebar-nav .nav-link');
-            sidebarLinks.forEach(link => {
-                if (link.getAttribute('onclick') === 'return false;') {
-                    link.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        mostrarNotificacion('Funcionalidad en desarrollo', 'info');
-                    });
-                }
-            });
-        });
-        
-        // Función de notificación temporal (si no está definida en dashboard.js)
-        window.mostrarNotificacion = function(mensaje, tipo = 'info') {
-            let toastContainer = document.querySelector('.toast-container');
-            
-            if (!toastContainer) {
-                toastContainer = document.createElement('div');
-                toastContainer.className = 'toast-container';
-                document.body.appendChild(toastContainer);
-            }
-            
-            const toast = document.createElement('div');
-            toast.className = `toast-notification ${tipo}`;
-            const iconos = {
-                success: 'fa-check-circle',
-                error: 'fa-exclamation-circle',
-                warning: 'fa-exclamation-triangle',
-                info: 'fa-info-circle'
-            };
-            
-            toast.innerHTML = `
-                <i class="fas ${iconos[tipo] || iconos.info}"></i>
-                <span>${mensaje}</span>
-            `;
-            
-            toastContainer.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.style.animation = 'slideOut 0.3s ease';
-                setTimeout(() => {
-                    if (toastContainer.contains(toast)) {
-                        toastContainer.removeChild(toast);
+            // Observar cuando el sidebar se cargue dinámicamente
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'childList' && mutation.addedNodes.length) {
+                        const sidebar = document.querySelector('.sidebar');
+                        if (sidebar && sidebar.classList) {
+                            // Asegurar que el sidebar empiece cerrado en móvil
+                            if (window.innerWidth <= 1024) {
+                                sidebar.classList.remove('open');
+                            }
+                            observer.disconnect();
+                        }
                     }
-                }, 300);
-            }, 3000);
-        };
+                });
+            });
+            
+            const sidebarContainer = document.getElementById('sidebar-container');
+            if (sidebarContainer) {
+                observer.observe(sidebarContainer, { childList: true, subtree: true });
+            }
+        });
         
         // Exponer funciones globales
         window.toggleSidebar = toggleSidebar;

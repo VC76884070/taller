@@ -126,7 +126,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   SIDEBAR
+   SIDEBAR (estilos base para el sidebar cargado por include.js)
    ===================================================== */
 .sidebar {
     width: 280px;
@@ -452,7 +452,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   CALENDARIO - VERSIÓN COMPLETAMENTE RESPONSIVE
+   CALENDARIO - COMPLETAMENTE RESPONSIVE
    ===================================================== */
 .calendario-wrapper {
     width: 100%;
@@ -465,13 +465,11 @@ body.sidebar-open {
     padding: 1rem;
 }
 
-/* El calendario se adapta al ancho del contenedor */
 #calendarioOperativo {
     min-width: 100%;
     width: 100%;
 }
 
-/* Forzar que FullCalendar sea responsivo */
 .fc {
     width: 100% !important;
     max-width: 100% !important;
@@ -481,7 +479,6 @@ body.sidebar-open {
     width: 100% !important;
 }
 
-/* Personalización de celdas del calendario */
 .fc .fc-daygrid-day-frame {
     min-height: 80px;
     transition: var(--transition);
@@ -502,7 +499,6 @@ body.sidebar-open {
     font-weight: bold;
 }
 
-/* Eventos del calendario */
 .fc .fc-daygrid-event {
     font-size: 11px;
     padding: 2px 4px;
@@ -519,7 +515,6 @@ body.sidebar-open {
     transform: scale(1.02);
 }
 
-/* Toolbar del calendario */
 .fc .fc-toolbar {
     margin-bottom: 1rem;
     flex-wrap: wrap;
@@ -553,7 +548,6 @@ body.sidebar-open {
     border-color: var(--rojo-primario);
 }
 
-/* Leyenda del calendario */
 .calendario-leyenda {
     display: flex;
     gap: 1rem;
@@ -589,7 +583,6 @@ body.sidebar-open {
     border-radius: 2px;
 }
 
-/* Indicador de scroll para móvil */
 .scroll-indicator {
     text-align: center;
     padding: 8px;
@@ -667,11 +660,6 @@ body.sidebar-open {
 .entrega-content .placa,
 .vehiculo-taller-modelo {
     font-size: 0.7rem;
-    color: var(--gris-texto);
-}
-
-.entrega-content .cliente {
-    font-size: 0.75rem;
     color: var(--gris-texto);
 }
 
@@ -911,7 +899,6 @@ body.sidebar-open {
     padding: 1.2rem;
 }
 
-/* Sin comunicados */
 .sin-comunicados {
     text-align: center;
     padding: 3rem 1.5rem;
@@ -924,7 +911,6 @@ body.sidebar-open {
     opacity: 0.5;
 }
 
-/* Lista de comunicados */
 .comunicados-list {
     display: flex;
     flex-direction: column;
@@ -1038,7 +1024,6 @@ body.sidebar-open {
     color: #4caf50;
 }
 
-/* Botón volver */
 .volver-btn {
     background: var(--gris-medio);
     border: none;
@@ -1058,7 +1043,6 @@ body.sidebar-open {
     background: var(--rojo-primario);
 }
 
-/* Detalle del comunicado */
 .comunicado-detalle {
     background: var(--gris-oscuro);
     border-radius: var(--radius-md);
@@ -1200,7 +1184,7 @@ body.sidebar-open {
    ========== RESPONSIVE COMPLETO ==========
    ===================================================== */
 
-/* TABLETS Y MÓVILES (max 1024px) - Sidebar oculto con hamburguesa */
+/* TABLETS Y MÓVILES (max 1024px) */
 @media (max-width: 1024px) {
     .hamburger-menu {
         display: flex !important;
@@ -1214,7 +1198,6 @@ body.sidebar-open {
         width: 280px;
         height: 100vh;
         z-index: 1000;
-        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     
     .sidebar.open {
@@ -1225,7 +1208,6 @@ body.sidebar-open {
     .main-content {
         margin-left: 0 !important;
         width: 100% !important;
-        max-width: 100% !important;
     }
     
     .top-bar {
@@ -1247,7 +1229,7 @@ body.sidebar-open {
     }
 }
 
-/* MÓVILES GRANDES Y TABLETS (max 768px) */
+/* MÓVILES (max 768px) */
 @media (max-width: 768px) {
     .top-bar {
         flex-direction: column;
@@ -1291,49 +1273,35 @@ body.sidebar-open {
         gap: 0.5rem;
     }
     
-    /* CALENDARIO RESPONSIVE - CORRECCIÓN PARA MÓVILES */
     .calendario-wrapper {
         margin: 0 -0.5rem;
         padding: 0.5rem;
         border-radius: 0;
     }
     
-    /* Hacer que el calendario sea scrolleable horizontalmente */
     .fc-direction-ltr .fc-daygrid-body {
         min-width: 600px;
     }
     
-    /* Reducir padding de las celdas */
     .fc .fc-daygrid-day-frame {
         min-height: 60px !important;
         padding: 4px !important;
     }
     
-    /* Texto más pequeño en móvil */
     .fc .fc-daygrid-day-number {
         font-size: 11px !important;
         padding: 4px !important;
     }
     
-    /* Eventos más compactos */
-    .fc .fc-daygrid-day-events {
-        min-height: 30px !important;
-    }
-    
     .fc .fc-daygrid-event {
         font-size: 9px !important;
         padding: 2px 3px !important;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
     }
     
-    /* Toolbar más compacta */
     .fc .fc-toolbar {
         flex-direction: column;
         gap: 8px;
         align-items: center;
-        padding: 0 0 8px 0;
     }
     
     .fc .fc-toolbar-title {
@@ -1345,12 +1313,10 @@ body.sidebar-open {
         font-size: 11px !important;
     }
     
-    /* Mostrar indicador de scroll */
     .scroll-indicator {
         display: block;
     }
     
-    /* Mejorar visualización de listas en móvil */
     .entrega-item,
     .vehiculo-taller-item {
         flex-direction: column;
@@ -1360,35 +1326,17 @@ body.sidebar-open {
     
     .entrega-icon,
     .vehiculo-taller-icon {
-        width: 35px;
-        height: 35px;
-        font-size: 0.9rem;
         margin: 0 auto;
     }
     
     .entrega-content,
     .vehiculo-taller-info {
         text-align: center;
-        min-width: auto;
     }
     
-    .entrega-content h4,
-    .vehiculo-taller-placa {
-        font-size: 0.85rem;
-    }
-    
-    /* Modal responsive */
     .modal-content-comunicados {
         width: 95%;
         max-height: 90vh;
-    }
-    
-    .modal-header-comunicados {
-        padding: 1rem;
-    }
-    
-    .modal-header-comunicados h3 {
-        font-size: 1rem;
     }
     
     .comunicado-header {
@@ -1398,7 +1346,6 @@ body.sidebar-open {
     
     .comunicado-fecha {
         white-space: normal;
-        font-size: 0.65rem;
     }
     
     .toast-container {
@@ -1409,8 +1356,6 @@ body.sidebar-open {
     
     .toast-notification {
         min-width: auto;
-        width: auto;
-        font-size: 0.85rem;
     }
 }
 
@@ -1432,55 +1377,18 @@ body.sidebar-open {
         left: 275px;
     }
     
-    .top-bar {
-        padding: 0.6rem;
-    }
-    
     .date-display span {
         display: none;
-    }
-    
-    .date-display i {
-        font-size: 1rem;
-    }
-    
-    .notification-icon {
-        font-size: 1rem;
     }
     
     .page-title h1 {
         font-size: 1rem;
     }
     
-    .page-title p {
-        font-size: 0.7rem;
-    }
-    
-    .kpi-card {
-        padding: 0.8rem;
-    }
-    
-    .kpi-title {
-        font-size: 0.8rem;
-    }
-    
     .kpi-value {
         font-size: 1.4rem;
     }
     
-    .kpi-footer {
-        font-size: 0.7rem;
-    }
-    
-    .card-header {
-        padding: 0.8rem;
-    }
-    
-    .card-header h3 {
-        font-size: 0.9rem;
-    }
-    
-    /* Calendario aún más compacto */
     .fc-direction-ltr .fc-daygrid-body {
         min-width: 500px;
     }
@@ -1506,42 +1414,10 @@ body.sidebar-open {
     .fc .fc-toolbar-title {
         font-size: 12px !important;
     }
-    
-    /* Listas más compactas */
-    .entrega-item,
-    .vehiculo-taller-item {
-        padding: 0.6rem;
-    }
-    
-    /* Modal más compacto */
-    .comunicado-detalle-titulo {
-        font-size: 1rem;
-    }
-    
-    .comunicado-detalle-meta {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-    
-    .modal-header-comunicados {
-        padding: 0.8rem;
-    }
-    
-    .comunicado-titulo {
-        font-size: 0.9rem;
-    }
-    
-    .comunicado-contenido {
-        font-size: 0.8rem;
-    }
 }
 
-/* ORIENTACIÓN LANDSCAPE EN MÓVIL */
+/* LANDSCAPE EN MÓVIL */
 @media (max-width: 768px) and (orientation: landscape) {
-    .sidebar {
-        overflow-y: auto;
-    }
-    
     .kpi-grid {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -1565,17 +1441,9 @@ body.sidebar-open {
     .vehiculo-taller-info {
         text-align: left;
     }
-    
-    .calendario-wrapper {
-        margin: 0;
-    }
-    
-    .modal-content-comunicados {
-        max-height: 90vh;
-    }
 }
 
-/* DESKTOP (min 1025px) - Sidebar siempre visible */
+/* DESKTOP (min 1025px) */
 @media (min-width: 1025px) {
     .sidebar {
         transform: translateX(0) !important;
@@ -1612,26 +1480,6 @@ body.sidebar-open {
     }
 }
 
-/* PANTALLAS MUY GRANDES (min 1800px) */
-@media (min-width: 1800px) {
-    .content {
-        max-width: 1600px;
-    }
-    
-    .kpi-grid {
-        grid-template-columns: repeat(4, 1fr);
-        gap: 2rem;
-    }
-    
-    .kpi-card {
-        padding: 2rem;
-    }
-    
-    .kpi-value {
-        font-size: 2.5rem;
-    }
-}
-
 /* IMPRESIÓN */
 @media print {
     .sidebar,
@@ -1645,25 +1493,9 @@ body.sidebar-open {
     
     .main-content {
         margin-left: 0 !important;
-        padding: 0 !important;
-    }
-    
-    .content {
-        padding: 0 !important;
     }
     
     .card {
         break-inside: avoid;
-        page-break-inside: avoid;
-    }
-    
-    .kpi-card {
-        border: 1px solid #ccc;
-        background: white;
-        color: black;
-    }
-    
-    .kpi-value {
-        color: black;
     }
 }

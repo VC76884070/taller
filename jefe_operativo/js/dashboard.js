@@ -1,22 +1,12 @@
 // =====================================================
 // DASHBOARD JEFE OPERATIVO - VERSIÓN COMPLETA Y CORREGIDA
-// BASADA EN EL CÓDIGO FUNCIONAL DE JEFE TALLER
-// VERSIÓN FINAL CON CALENDARIO RESPONSIVE
+// PARA INTEGRACIÓN CON INCLUDE.JS Y SIDEBAR.HTML
 // =====================================================
 
-if (typeof window.API_BASE_URL === 'undefined') {
-    window.API_BASE_URL = (() => {
-        if (window.location.hostname === 'localhost' || 
-            window.location.hostname === '127.0.0.1' ||
-            window.location.hostname.includes('192.168.')) {
-            console.log('📡 Modo DESARROLLO');
-            return 'http://localhost:5000';
-        }
-        return '';
-    })();
-}
+// API_BASE_URL ya está definida en include.js
+// No la redeclaramos, solo la usamos
+const API_URL = (typeof window.API_BASE_URL !== 'undefined' ? window.API_BASE_URL : '') + '/api/jefe-operativo';
 
-const API_URL = window.API_BASE_URL + '/api/jefe-operativo';
 let calendar = null;
 let ordenesActivas = [];
 let currentUser = null;
@@ -43,7 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function checkAuth() {
     const token = localStorage.getItem('furia_token');
     if (!token) {
-        window.location.href = window.API_BASE_URL + '/';
+        window.location.href = (window.API_BASE_URL || '') + '/';
         return false;
     }
     
@@ -59,16 +49,10 @@ async function checkAuth() {
             });
         }
         
-        // Actualizar nombre de usuario en el sidebar
-        const userNameElement = document.getElementById('userName');
-        if (userNameElement && currentUser.nombre) {
-            userNameElement.textContent = currentUser.nombre;
-        }
-        
         return true;
     } catch (error) {
-        console.error('Error:', error);
-        window.location.href = window.API_BASE_URL + '/';
+        console.error('Error en autenticación:', error);
+        window.location.href = (window.API_BASE_URL || '') + '/';
         return false;
     }
 }
@@ -97,19 +81,18 @@ function setupEventListeners() {
 }
 
 function iniciarAutoRefresh() {
-    // Limpiar intervalo existente
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
     }
     
-    // Actualizar datos automáticamente cada 5 minutos
+    // Actualizar datos cada 5 minutos
     autoRefreshInterval = setInterval(() => {
-        console.log('🔄 Actualización automática programada...');
+        console.log('🔄 Actualización automática...');
         cargarDatosIniciales();
         if (calendar) {
             calendar.refetchEvents();
         }
-    }, 5 * 60 * 1000); // 5 minutos
+    }, 5 * 60 * 1000);
 }
 
 // =====================================================
@@ -133,13 +116,11 @@ async function cargarDatosIniciales() {
         const entregas = await entregasRes.json();
         const vehiculos = await vehiculosRes.json();
         
-        // Guardar órdenes activas para el calendario
         if (ordenes.success && ordenes.ordenes) {
             ordenesActivas = ordenes.ordenes;
-            console.log(`📊 Órdenes activas cargadas: ${ordenesActivas.length}`);
+            console.log(`📊 Órdenes activas: ${ordenesActivas.length}`);
         }
         
-        // Actualizar KPIs
         if (stats.success && stats.stats) {
             actualizarKPI('ingresadosHoy', stats.stats.ingresados_hoy || 0);
             actualizarKPI('enProceso', stats.stats.en_proceso || 0);
@@ -147,7 +128,6 @@ async function cargarDatosIniciales() {
             actualizarKPI('entregasHoy', stats.stats.entregas_hoy || 0);
         }
         
-        // Renderizar próximas entregas
         if (entregas.success && entregas.entregas && entregas.entregas.length > 0) {
             renderizarEntregas(entregas.entregas);
             actualizarKPI('proximasEntregasCount', entregas.entregas.length);
@@ -156,7 +136,6 @@ async function cargarDatosIniciales() {
             actualizarKPI('proximasEntregasCount', 0);
         }
         
-        // Renderizar vehículos en taller
         if (vehiculos.success && vehiculos.vehiculos && vehiculos.vehiculos.length > 0) {
             renderizarVehiculosTaller(vehiculos.vehiculos);
             actualizarKPI('vehiculosTallerCount', vehiculos.vehiculos.length);
@@ -165,10 +144,8 @@ async function cargarDatosIniciales() {
             actualizarKPI('vehiculosTallerCount', 0);
         }
         
-        // Cargar comunicados y actualizar badge
         await cargarContadorComunicados();
         
-        // Refrescar calendario
         if (calendar) {
             calendar.refetchEvents();
         }
@@ -190,7 +167,6 @@ async function cargarContadorComunicados() {
         });
         
         const data = await response.json();
-        console.log('📬 Comunicados recibidos:', data);
         
         if (data.success && data.comunicados) {
             const cantidad = data.comunicados.length;
@@ -199,7 +175,6 @@ async function cargarContadorComunicados() {
                 badge.textContent = cantidad;
                 badge.style.display = cantidad > 0 ? 'inline-block' : 'none';
             }
-            // Guardar en cache
             comunicadosActuales = data.comunicados;
         } else {
             const badge = document.getElementById('notificacionesCount');
@@ -209,7 +184,7 @@ async function cargarContadorComunicados() {
             }
         }
     } catch (error) {
-        console.error('Error cargando contador de comunicados:', error);
+        console.error('Error cargando contador:', error);
     }
 }
 
@@ -267,7 +242,6 @@ function renderizarEntregas(entregas) {
             statusText = 'Pendiente';
         }
         
-        // Determinar clase de badge
         let badgeClass = 'aprobada';
         if (prioridadClass === 'urgente') badgeClass = 'pendiente';
         if (prioridadClass === 'hoy') badgeClass = 'aprobada';
@@ -280,9 +254,7 @@ function renderizarEntregas(entregas) {
                     <p class="entrega-total">${diasTexto}</p>
                 </div>
                 <div class="entrega-status">
-                    <span class="status-badge ${badgeClass}">
-                        ${statusText}
-                    </span>
+                    <span class="status-badge ${badgeClass}">${statusText}</span>
                 </div>
             </div>
         `;
@@ -352,7 +324,7 @@ function renderizarVehiculosTaller(vehiculos) {
 }
 
 // =====================================================
-// FULLCALENDAR - VERSIÓN RESPONSIVE MEJORADA
+// FULLCALENDAR - RESPONSIVE
 // =====================================================
 
 function initFullCalendar() {
@@ -370,18 +342,15 @@ function initFullCalendar() {
     
     console.log('✅ Inicializando FullCalendar...');
     
-    // Detectar si es móvil
     const isMobile = window.innerWidth <= 768;
-    const isTablet = window.innerWidth > 768 && window.innerWidth <= 1024;
     
-    // Configuración base del calendario
-    let calendarConfig = {
+    const calendarConfig = {
         locale: 'es',
         initialView: isMobile ? 'timeGridWeek' : 'dayGridMonth',
         headerToolbar: {
             left: 'prev,next',
             center: 'title',
-            right: isMobile ? 'timeGridWeek,dayGridMonth' : (isTablet ? 'dayGridMonth,timeGridWeek' : 'dayGridMonth')
+            right: isMobile ? 'timeGridWeek,dayGridMonth' : 'dayGridMonth'
         },
         height: 'auto',
         weekends: true,
@@ -389,11 +358,8 @@ function initFullCalendar() {
         buttonText: {
             today: 'Hoy',
             month: 'Mes',
-            week: 'Semana',
-            day: 'Día'
+            week: 'Semana'
         },
-        
-        // Personalización para móvil
         views: {
             dayGridMonth: {
                 titleFormat: { year: 'numeric', month: 'long' },
@@ -410,12 +376,8 @@ function initFullCalendar() {
                 slotLabelFormat: isMobile ? { hour: 'numeric', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit' }
             }
         },
-        
         events: function(fetchInfo, successCallback, failureCallback) {
-            console.log('📅 Generando eventos del calendario...');
-            
             if (!ordenesActivas.length) {
-                console.log('📭 No hay órdenes activas');
                 successCallback([]);
                 return;
             }
@@ -445,11 +407,9 @@ function initFullCalendar() {
                 const placa = orden.vehiculo?.placa || orden.codigo_unico || 'Vehículo';
                 const estaAtrasado = fechaFin < hoy;
                 
-                // Títulos más cortos para móvil
-                let tituloReparacion = isMobile ? `🔧 ${placa}` : `🔧 Reparación: ${placa}`;
-                let tituloEntrega = isMobile ? `🚗 ${placa}` : `🚗 ENTREGA: ${placa}`;
+                const tituloReparacion = isMobile ? `🔧 ${placa}` : `🔧 Reparación: ${placa}`;
+                const tituloEntrega = isMobile ? `🚗 ${placa}` : `🚗 ENTREGA: ${placa}`;
                 
-                // Evento de reparación (rango completo)
                 events.push({
                     id: `reparacion-${orden.id_orden}`,
                     title: tituloReparacion,
@@ -458,14 +418,9 @@ function initFullCalendar() {
                     allDay: true,
                     backgroundColor: estaAtrasado ? '#EF4444' : '#F59E0B',
                     borderColor: estaAtrasado ? '#EF4444' : '#F59E0B',
-                    textColor: 'white',
-                    extendedProps: {
-                        ordenId: orden.id_orden,
-                        tipo: 'reparacion'
-                    }
+                    textColor: 'white'
                 });
                 
-                // Evento de entrega
                 events.push({
                     id: `entrega-${orden.id_orden}`,
                     title: tituloEntrega,
@@ -473,38 +428,17 @@ function initFullCalendar() {
                     allDay: true,
                     backgroundColor: estaAtrasado ? '#DC2626' : '#8B5CF6',
                     borderColor: estaAtrasado ? '#DC2626' : '#8B5CF6',
-                    textColor: 'white',
-                    extendedProps: {
-                        ordenId: orden.id_orden,
-                        tipo: 'entrega'
-                    }
+                    textColor: 'white'
                 });
             });
             
-            console.log(`✅ ${events.length} eventos generados`);
             successCallback(events);
         },
-        
         eventClick: function(info) {
             info.jsEvent.preventDefault();
             const ordenId = info.event.id.split('-')[1];
             if (ordenId) {
                 window.verOrdenTrabajo(parseInt(ordenId));
-            }
-        },
-        
-        // Personalización para mejor UX
-        eventDidMount: function(info) {
-            // En móvil, añadir tooltip nativo
-            if (isMobile && info.el) {
-                info.el.setAttribute('title', info.event.title);
-            }
-        },
-        
-        // Manejo de errores
-        loading: function(isLoading) {
-            if (isLoading) {
-                console.log('📅 Calendario cargando eventos...');
             }
         }
     };
@@ -512,7 +446,6 @@ function initFullCalendar() {
     calendar = new FullCalendar.Calendar(container, calendarConfig);
     calendar.render();
     
-    // Escuchar cambios de orientación/resize
     window.addEventListener('resize', function() {
         if (calendar) {
             const newIsMobile = window.innerWidth <= 768;
@@ -526,7 +459,7 @@ function initFullCalendar() {
         }
     });
     
-    console.log('✅ FullCalendar inicializado correctamente');
+    console.log('✅ FullCalendar inicializado');
 }
 
 // =====================================================
@@ -534,7 +467,6 @@ function initFullCalendar() {
 // =====================================================
 
 function crearModalComunicados() {
-    // Verificar si ya existe
     if (document.getElementById('modalComunicados')) return;
     
     const modalHTML = `
@@ -553,7 +485,6 @@ function crearModalComunicados() {
     
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     
-    // Cerrar modal al hacer clic fuera
     const modal = document.getElementById('modalComunicados');
     if (modal) {
         modal.addEventListener('click', (e) => {
@@ -576,7 +507,6 @@ function cerrarModalComunicados() {
     const modal = document.getElementById('modalComunicados');
     if (modal) {
         modal.classList.remove('active');
-        // Restaurar la vista a la lista al cerrar
         const modalBody = document.getElementById('modalBodyComunicados');
         if (modalBody) {
             modalBody.innerHTML = '<div class="loading-skeleton">Cargando comunicados...</div>';
@@ -588,12 +518,7 @@ async function cargarComunicados() {
     const modalBody = document.getElementById('modalBodyComunicados');
     if (!modalBody) return;
     
-    modalBody.innerHTML = `
-        <div class="sin-comunicados">
-            <i class="fas fa-spinner fa-spin"></i>
-            <p>Cargando comunicados...</p>
-        </div>
-    `;
+    modalBody.innerHTML = `<div class="sin-comunicados"><i class="fas fa-spinner fa-spin"></i><p>Cargando comunicados...</p></div>`;
     
     try {
         const response = await fetch(`${API_URL}/mis-comunicados`, {
@@ -601,28 +526,17 @@ async function cargarComunicados() {
         });
         
         const data = await response.json();
-        console.log('📬 Comunicados recibidos:', data);
         
         if (data.success && data.comunicados && data.comunicados.length > 0) {
             comunicadosActuales = data.comunicados;
             renderizarListaComunicados();
         } else {
-            modalBody.innerHTML = `
-                <div class="sin-comunicados">
-                    <i class="fas fa-inbox"></i>
-                    <p>No hay comunicados nuevos</p>
-                </div>
-            `;
+            modalBody.innerHTML = `<div class="sin-comunicados"><i class="fas fa-inbox"></i><p>No hay comunicados nuevos</p></div>`;
         }
         
     } catch (error) {
         console.error('Error cargando comunicados:', error);
-        modalBody.innerHTML = `
-            <div class="sin-comunicados">
-                <i class="fas fa-exclamation-circle"></i>
-                <p>Error al cargar comunicados</p>
-            </div>
-        `;
+        modalBody.innerHTML = `<div class="sin-comunicados"><i class="fas fa-exclamation-circle"></i><p>Error al cargar comunicados</p></div>`;
     }
 }
 
@@ -631,12 +545,7 @@ function renderizarListaComunicados() {
     if (!modalBody) return;
     
     if (comunicadosActuales.length === 0) {
-        modalBody.innerHTML = `
-            <div class="sin-comunicados">
-                <i class="fas fa-inbox"></i>
-                <p>No hay comunicados nuevos</p>
-            </div>
-        `;
+        modalBody.innerHTML = `<div class="sin-comunicados"><i class="fas fa-inbox"></i><p>No hay comunicados nuevos</p></div>`;
         return;
     }
     
@@ -650,26 +559,13 @@ function renderizarListaComunicados() {
         html += `
             <div class="comunicado-item ${prioridadClass}" onclick="verDetalleComunicado(${com.id})">
                 <div class="comunicado-header">
-                    <h4 class="comunicado-titulo">
-                        <i class="fas fa-envelope"></i>
-                        ${escapeHtml(com.titulo)}
-                    </h4>
-                    <span class="comunicado-fecha">
-                        <i class="far fa-calendar-alt"></i>
-                        ${fecha}
-                    </span>
+                    <h4 class="comunicado-titulo"><i class="fas fa-envelope"></i>${escapeHtml(com.titulo)}</h4>
+                    <span class="comunicado-fecha"><i class="far fa-calendar-alt"></i>${fecha}</span>
                 </div>
-                <div class="comunicado-contenido">
-                    ${escapeHtml(com.contenido.substring(0, 200))}${com.contenido.length > 200 ? '...' : ''}
-                </div>
+                <div class="comunicado-contenido">${escapeHtml(com.contenido.substring(0, 200))}${com.contenido.length > 200 ? '...' : ''}</div>
                 <div class="comunicado-footer">
-                    <div class="comunicado-autor">
-                        <i class="fas fa-user"></i>
-                        ${escapeHtml(com.creador_nombre || 'Sistema')}
-                    </div>
-                    <div class="comunicado-prioridad ${prioridadClass}">
-                        ${prioridadTexto}
-                    </div>
+                    <div class="comunicado-autor"><i class="fas fa-user"></i>${escapeHtml(com.creador_nombre || 'Sistema')}</div>
+                    <div class="comunicado-prioridad ${prioridadClass}">${prioridadTexto}</div>
                 </div>
             </div>
         `;
@@ -691,25 +587,15 @@ function verDetalleComunicado(id) {
     const prioridadTexto = comunicado.prioridad === 'alta' ? '⚠️ Alta' : (comunicado.prioridad === 'media' ? '📌 Media' : 'ℹ️ Normal');
     
     modalBody.innerHTML = `
-        <button class="volver-btn" onclick="cargarComunicados()">
-            <i class="fas fa-arrow-left"></i> Volver a la lista
-        </button>
+        <button class="volver-btn" onclick="cargarComunicados()"><i class="fas fa-arrow-left"></i> Volver a la lista</button>
         <div class="comunicado-detalle">
             <div class="comunicado-detalle-titulo">${escapeHtml(comunicado.titulo)}</div>
             <div class="comunicado-detalle-meta">
-                <div class="comunicado-detalle-fecha">
-                    <i class="far fa-calendar-alt"></i> ${fecha}
-                </div>
-                <div class="comunicado-detalle-autor">
-                    <i class="fas fa-user"></i> ${escapeHtml(comunicado.creador_nombre || 'Sistema')}
-                </div>
-                <div class="comunicado-prioridad ${prioridadClass}">
-                    ${prioridadTexto}
-                </div>
+                <div class="comunicado-detalle-fecha"><i class="far fa-calendar-alt"></i> ${fecha}</div>
+                <div class="comunicado-detalle-autor"><i class="fas fa-user"></i> ${escapeHtml(comunicado.creador_nombre || 'Sistema')}</div>
+                <div class="comunicado-prioridad ${prioridadClass}">${prioridadTexto}</div>
             </div>
-            <div class="comunicado-detalle-contenido">
-                ${escapeHtml(comunicado.contenido).replace(/\n/g, '<br>')}
-            </div>
+            <div class="comunicado-detalle-contenido">${escapeHtml(comunicado.contenido).replace(/\n/g, '<br>')}</div>
         </div>
     `;
 }
@@ -754,7 +640,6 @@ async function manualRefresh() {
             }
             mostrarNotificacion('Dashboard actualizado correctamente', 'success');
         } catch (error) {
-            console.error('Error en actualización manual:', error);
             mostrarNotificacion('Error al actualizar datos', 'error');
         } finally {
             setTimeout(() => {
@@ -763,7 +648,6 @@ async function manualRefresh() {
             }, 1000);
         }
     } else {
-        // Fallback: recargar datos sin el botón
         await cargarDatosIniciales();
         if (calendar) {
             calendar.refetchEvents();
@@ -807,10 +691,7 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
         info: 'fa-info-circle'
     };
     
-    toast.innerHTML = `
-        <i class="fas ${iconos[tipo] || iconos.info}"></i>
-        <span>${escapeHtml(mensaje)}</span>
-    `;
+    toast.innerHTML = `<i class="fas ${iconos[tipo] || iconos.info}"></i><span>${escapeHtml(mensaje)}</span>`;
     
     toastContainer.appendChild(toast);
     
@@ -825,44 +706,28 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
 }
 
 // =====================================================
-// FUNCIONES GLOBALES (para llamar desde HTML)
+// FUNCIONES GLOBALES
 // =====================================================
 
 window.verOrdenTrabajo = function(id) {
     if (id) {
-        window.location.href = window.API_BASE_URL + `/jefe_operativo/orden_trabajo.html?id=${id}`;
+        window.location.href = (window.API_BASE_URL || '') + `/jefe_operativo/orden_trabajo.html?id=${id}`;
     }
 };
 
 window.verDetalleComunicado = verDetalleComunicado;
 window.cerrarModalComunicados = cerrarModalComunicados;
 window.cargarComunicados = cargarComunicados;
-
-window.logout = function() {
-    localStorage.clear();
-    window.location.href = window.API_BASE_URL + '/';
-};
-
-window.refreshDashboard = function() {
-    manualRefresh();
-};
+window.refreshDashboard = manualRefresh;
 
 // =====================================================
 // MANEJO DE ERRORES GLOBAL
 // =====================================================
 
 window.addEventListener('unhandledrejection', function(event) {
-    console.error('Promesa rechazada no manejada:', event.reason);
+    console.error('Promesa rechazada:', event.reason);
     mostrarNotificacion('Error inesperado en la aplicación', 'error');
 });
-
-window.addEventListener('error', function(event) {
-    console.error('Error global:', event.error);
-});
-
-// =====================================================
-// LIMPIEZA AL CERRAR
-// =====================================================
 
 window.addEventListener('beforeunload', function() {
     if (autoRefreshInterval) {

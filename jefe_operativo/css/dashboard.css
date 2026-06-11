@@ -1,7 +1,7 @@
 /* =====================================================
    DASHBOARD JEFE OPERATIVO - ESTILOS OSCUROS MODERNOS
    BASADO EN LA PALETA FURIA MOTOR
-   VERSIÓN COMPLETA CON MODAL DE COMUNICADOS Y RESPONSIVE FIX
+   VERSIÓN COMPLETA CORREGIDA - RESPONSIVE 100%
    ===================================================== */
 
 :root {
@@ -65,7 +65,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   BOTÓN HAMBURGUESA - MEJORADO
+   BOTÓN HAMBURGUESA
    ===================================================== */
 .hamburger-menu {
     position: fixed;
@@ -126,7 +126,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   SIDEBAR - CORREGIDO PARA RESPONSIVE
+   SIDEBAR
    ===================================================== */
 .sidebar {
     width: 280px;
@@ -342,7 +342,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   KPI CARDS - MEJORADO PARA RESPONSIVE
+   KPI CARDS
    ===================================================== */
 .kpi-grid {
     display: grid;
@@ -452,16 +452,108 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   CALENDARIO - CORREGIDO PARA RESPONSIVE
+   CALENDARIO - VERSIÓN COMPLETAMENTE RESPONSIVE
    ===================================================== */
 .calendario-wrapper {
-    min-height: 400px;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
     background: var(--bg-card);
     border-radius: var(--radius-lg);
     padding: 1rem;
-    overflow-x: auto;
 }
 
+/* El calendario se adapta al ancho del contenedor */
+#calendarioOperativo {
+    min-width: 100%;
+    width: 100%;
+}
+
+/* Forzar que FullCalendar sea responsivo */
+.fc {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.fc .fc-view-harness {
+    width: 100% !important;
+}
+
+/* Personalización de celdas del calendario */
+.fc .fc-daygrid-day-frame {
+    min-height: 80px;
+    transition: var(--transition);
+}
+
+.fc .fc-daygrid-day-number {
+    font-size: 14px;
+    padding: 8px;
+    color: var(--gris-texto);
+}
+
+.fc-daygrid-day.fc-day-today {
+    background: rgba(193, 18, 31, 0.1);
+}
+
+.fc-daygrid-day.fc-day-today .fc-daygrid-day-number {
+    color: var(--rojo-primario);
+    font-weight: bold;
+}
+
+/* Eventos del calendario */
+.fc .fc-daygrid-event {
+    font-size: 11px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    margin: 1px 2px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fc .fc-daygrid-event:hover {
+    filter: brightness(1.1);
+    transform: scale(1.02);
+}
+
+/* Toolbar del calendario */
+.fc .fc-toolbar {
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.fc .fc-toolbar-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--blanco);
+}
+
+.fc .fc-button {
+    background: var(--gris-medio);
+    border: 1px solid var(--border-color);
+    color: var(--blanco);
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    transition: var(--transition);
+}
+
+.fc .fc-button:hover {
+    background: var(--rojo-primario);
+    border-color: var(--rojo-primario);
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+    background: var(--rojo-primario);
+    border-color: var(--rojo-primario);
+}
+
+/* Leyenda del calendario */
 .calendario-leyenda {
     display: flex;
     gap: 1rem;
@@ -497,37 +589,25 @@ body.sidebar-open {
     border-radius: 2px;
 }
 
-/* FullCalendar personalización */
-.fc {
-    background: transparent;
-    min-width: 500px;
-}
-
-.fc-theme-standard .fc-scrollgrid {
-    border-color: var(--border-color);
-}
-
-.fc th {
+/* Indicador de scroll para móvil */
+.scroll-indicator {
+    text-align: center;
+    padding: 8px;
     background: var(--gris-oscuro);
-    color: var(--blanco);
-    border-color: var(--border-color);
-    padding: 10px;
-}
-
-.fc td {
-    border-color: var(--border-color);
-}
-
-.fc-daygrid-day-number {
+    font-size: 11px;
     color: var(--gris-texto);
+    border-top: 1px solid var(--border-color);
+    display: none;
 }
 
-.fc-daygrid-day.fc-day-today {
-    background: rgba(193, 18, 31, 0.1);
+.scroll-indicator i {
+    margin-right: 5px;
+    animation: bounceHorizontal 1s ease infinite;
 }
 
-.fc-daygrid-day.fc-day-today .fc-daygrid-day-number {
-    color: var(--rojo-primario);
+@keyframes bounceHorizontal {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(5px); }
 }
 
 /* =====================================================
@@ -573,6 +653,7 @@ body.sidebar-open {
 .entrega-content,
 .vehiculo-taller-info {
     flex: 1;
+    min-width: 120px;
 }
 
 .entrega-content h4,
@@ -611,6 +692,7 @@ body.sidebar-open {
     font-size: 0.7rem;
     padding: 0.2rem 0.5rem;
     border-radius: var(--radius-sm);
+    white-space: nowrap;
 }
 
 .vehiculo-taller-dias.atrasado {
@@ -627,6 +709,7 @@ body.sidebar-open {
     padding: 0.2rem 0.6rem;
     border-radius: var(--radius-full);
     font-size: 0.7rem;
+    white-space: nowrap;
 }
 
 .status-badge.aprobada {
@@ -720,7 +803,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   SCROLLBAR
+   SCROLLBAR GLOBAL
    ===================================================== */
 ::-webkit-scrollbar {
     width: 6px;
@@ -987,6 +1070,7 @@ body.sidebar-open {
     font-weight: 700;
     margin-bottom: 1rem;
     color: var(--blanco);
+    word-break: break-word;
 }
 
 .comunicado-detalle-meta {
@@ -1113,7 +1197,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   ========== RESPONSIVE MEJORADO ==========
+   ========== RESPONSIVE COMPLETO ==========
    ===================================================== */
 
 /* TABLETS Y MÓVILES (max 1024px) - Sidebar oculto con hamburguesa */
@@ -1163,7 +1247,7 @@ body.sidebar-open {
     }
 }
 
-/* MÓVILES GRANDES Y TABLET PEQUEÑA (max 768px) */
+/* MÓVILES GRANDES Y TABLETS (max 768px) */
 @media (max-width: 768px) {
     .top-bar {
         flex-direction: column;
@@ -1207,12 +1291,71 @@ body.sidebar-open {
         gap: 0.5rem;
     }
     
+    /* CALENDARIO RESPONSIVE - CORRECCIÓN PARA MÓVILES */
+    .calendario-wrapper {
+        margin: 0 -0.5rem;
+        padding: 0.5rem;
+        border-radius: 0;
+    }
+    
+    /* Hacer que el calendario sea scrolleable horizontalmente */
+    .fc-direction-ltr .fc-daygrid-body {
+        min-width: 600px;
+    }
+    
+    /* Reducir padding de las celdas */
+    .fc .fc-daygrid-day-frame {
+        min-height: 60px !important;
+        padding: 4px !important;
+    }
+    
+    /* Texto más pequeño en móvil */
+    .fc .fc-daygrid-day-number {
+        font-size: 11px !important;
+        padding: 4px !important;
+    }
+    
+    /* Eventos más compactos */
+    .fc .fc-daygrid-day-events {
+        min-height: 30px !important;
+    }
+    
+    .fc .fc-daygrid-event {
+        font-size: 9px !important;
+        padding: 2px 3px !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    /* Toolbar más compacta */
+    .fc .fc-toolbar {
+        flex-direction: column;
+        gap: 8px;
+        align-items: center;
+        padding: 0 0 8px 0;
+    }
+    
+    .fc .fc-toolbar-title {
+        font-size: 14px !important;
+    }
+    
+    .fc .fc-button {
+        padding: 4px 8px !important;
+        font-size: 11px !important;
+    }
+    
+    /* Mostrar indicador de scroll */
+    .scroll-indicator {
+        display: block;
+    }
+    
     /* Mejorar visualización de listas en móvil */
     .entrega-item,
     .vehiculo-taller-item {
-        flex-direction: row;
-        flex-wrap: wrap;
-        gap: 0.75rem;
+        flex-direction: column;
+        text-align: center;
+        gap: 0.5rem;
     }
     
     .entrega-icon,
@@ -1220,6 +1363,13 @@ body.sidebar-open {
         width: 35px;
         height: 35px;
         font-size: 0.9rem;
+        margin: 0 auto;
+    }
+    
+    .entrega-content,
+    .vehiculo-taller-info {
+        text-align: center;
+        min-width: auto;
     }
     
     .entrega-content h4,
@@ -1227,16 +1377,7 @@ body.sidebar-open {
         font-size: 0.85rem;
     }
     
-    .calendario-wrapper {
-        padding: 0.5rem;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-    
-    .fc {
-        min-width: 500px;
-    }
-    
+    /* Modal responsive */
     .modal-content-comunicados {
         width: 95%;
         max-height: 90vh;
@@ -1280,8 +1421,8 @@ body.sidebar-open {
     }
     
     .hamburger-menu {
-        width: 40px;
-        height: 40px;
+        width: 38px;
+        height: 38px;
         font-size: 1.1rem;
         top: 12px;
         left: 12px;
@@ -1339,13 +1480,42 @@ body.sidebar-open {
         font-size: 0.9rem;
     }
     
+    /* Calendario aún más compacto */
+    .fc-direction-ltr .fc-daygrid-body {
+        min-width: 500px;
+    }
+    
+    .fc .fc-daygrid-day-frame {
+        min-height: 50px !important;
+    }
+    
+    .fc .fc-daygrid-day-number {
+        font-size: 9px !important;
+    }
+    
+    .fc .fc-daygrid-event {
+        font-size: 7px !important;
+        padding: 1px 2px !important;
+    }
+    
+    .fc .fc-button {
+        padding: 3px 6px !important;
+        font-size: 10px !important;
+    }
+    
+    .fc .fc-toolbar-title {
+        font-size: 12px !important;
+    }
+    
+    /* Listas más compactas */
     .entrega-item,
     .vehiculo-taller-item {
         padding: 0.6rem;
     }
     
+    /* Modal más compacto */
     .comunicado-detalle-titulo {
-        font-size: 1.1rem;
+        font-size: 1rem;
     }
     
     .comunicado-detalle-meta {
@@ -1355,6 +1525,53 @@ body.sidebar-open {
     
     .modal-header-comunicados {
         padding: 0.8rem;
+    }
+    
+    .comunicado-titulo {
+        font-size: 0.9rem;
+    }
+    
+    .comunicado-contenido {
+        font-size: 0.8rem;
+    }
+}
+
+/* ORIENTACIÓN LANDSCAPE EN MÓVIL */
+@media (max-width: 768px) and (orientation: landscape) {
+    .sidebar {
+        overflow-y: auto;
+    }
+    
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .entrega-item,
+    .vehiculo-taller-item {
+        flex-direction: row;
+        text-align: left;
+    }
+    
+    .entrega-icon,
+    .vehiculo-taller-icon {
+        margin: 0;
+    }
+    
+    .entrega-content,
+    .vehiculo-taller-info {
+        text-align: left;
+    }
+    
+    .calendario-wrapper {
+        margin: 0;
+    }
+    
+    .modal-content-comunicados {
+        max-height: 90vh;
     }
 }
 
@@ -1378,40 +1595,6 @@ body.sidebar-open {
     }
 }
 
-/* ORIENTACIÓN LANDSCAPE EN MÓVIL */
-@media (max-width: 1024px) and (orientation: landscape) {
-    .sidebar {
-        overflow-y: auto;
-    }
-    
-    .kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
-    .dashboard-grid {
-        grid-template-columns: 1fr 1fr;
-    }
-    
-    .entrega-item,
-    .vehiculo-taller-item {
-        flex-direction: row;
-        text-align: left;
-    }
-    
-    .entrega-content,
-    .vehiculo-taller-info {
-        text-align: left;
-    }
-    
-    .modal-content-comunicados {
-        max-height: 90vh;
-    }
-    
-    .calendario-wrapper {
-        overflow-x: auto;
-    }
-}
-
 /* PANTALLAS GRANDES (min 1400px) */
 @media (min-width: 1400px) {
     .content {
@@ -1426,5 +1609,61 @@ body.sidebar-open {
     
     .dashboard-grid {
         gap: 2rem;
+    }
+}
+
+/* PANTALLAS MUY GRANDES (min 1800px) */
+@media (min-width: 1800px) {
+    .content {
+        max-width: 1600px;
+    }
+    
+    .kpi-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 2rem;
+    }
+    
+    .kpi-card {
+        padding: 2rem;
+    }
+    
+    .kpi-value {
+        font-size: 2.5rem;
+    }
+}
+
+/* IMPRESIÓN */
+@media print {
+    .sidebar,
+    .hamburger-menu,
+    .top-actions,
+    .refresh-btn,
+    .notification-icon,
+    .scroll-indicator {
+        display: none !important;
+    }
+    
+    .main-content {
+        margin-left: 0 !important;
+        padding: 0 !important;
+    }
+    
+    .content {
+        padding: 0 !important;
+    }
+    
+    .card {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+    
+    .kpi-card {
+        border: 1px solid #ccc;
+        background: white;
+        color: black;
+    }
+    
+    .kpi-value {
+        color: black;
     }
 }

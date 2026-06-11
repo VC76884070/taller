@@ -232,7 +232,7 @@ function validarCompletadoVehiculo() {
     const modelo = document.getElementById('vehiculoModelo')?.value.trim();
     const completada = !!(placa && marca && modelo);
     
-    console.log('🚗 Validando vehículo - Placa:', placa, 'Marca:', marca, 'Modelo:', modelo, 'Completo:', completada);
+    console.log('🚗 Validando vehículo - Completo:', completada);
     
     if (seccionesCompletadasLocal.vehiculo !== completada) {
         seccionesCompletadasLocal.vehiculo = completada;
@@ -240,7 +240,6 @@ function validarCompletadoVehiculo() {
         actualizarBotonFinalizar();
         
         if (completada && codigoSesion && !camposEnEdicion.vehiculo) {
-            console.log('🚗 Vehículo completado, guardando automáticamente...');
             guardarSeccion('vehiculo');
         }
     }
@@ -313,8 +312,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('========================================');
     console.log('🚀 INICIANDO RECEPCION.JS');
     console.log('========================================');
-    console.log('📡 API_BASE_URL:', window.API_BASE_URL);
-    console.log('📡 API_URL:', API_URL);
     
     const autenticado = await checkAuth();
     if (!autenticado) return;
@@ -623,7 +620,7 @@ function eliminarGrabacion() {
 }
 
 // =====================================================
-// GUARDAR SECCIÓN - VERSIÓN CORREGIDA PARA VEHÍCULO
+// GUARDAR SECCIÓN
 // =====================================================
 async function guardarSeccion(seccion) {
     if (!codigoSesion) return;
@@ -690,13 +687,11 @@ async function guardarSeccion(seccion) {
         if (data.success) {
             sesionActual = data.sesion;
             
-            // 🔥 IMPORTANTE: Forzar el estado de completado basado en los DATOS REALES, no en lo que dice el servidor
             if (seccion === 'vehiculo') {
                 const placa = datos.placa?.trim();
                 const marca = datos.marca?.trim();
                 const modelo = datos.modelo?.trim();
                 const vehiculoCompleto = !!(placa && marca && modelo);
-                
                 seccionesCompletadasLocal.vehiculo = vehiculoCompleto;
                 
                 const badgeVehiculo = document.getElementById('statusVehiculo');
@@ -711,8 +706,6 @@ async function guardarSeccion(seccion) {
                         badgeVehiculo.classList.remove('completado');
                     }
                 }
-                
-                console.log('🚗 Vehículo guardado - Estado completado:', vehiculoCompleto);
             }
             
             if (seccion !== 'vehiculo' && data.sesion.secciones_completadas) {
@@ -728,7 +721,7 @@ async function guardarSeccion(seccion) {
                 setTimeout(() => guardadoSpan.style.display = 'none', 1500);
             }
             
-            mostrarNotificacion(`✓ ${seccion} guardado correctamente`, 'success');
+            mostrarNotificacion(`✓ ${seccion} guardado`, 'success');
         }
     } catch (error) {
         logger.error('Error guardando:', error);
@@ -1116,7 +1109,6 @@ async function cargarDatosSesionLigero() {
             return;
         }
         
-        const nuevosDatos = data.sesion.datos;
         const nuevasSecciones = data.sesion.secciones_completadas;
         
         const placaLocal = document.getElementById('vehiculoPlaca')?.value.trim();
@@ -1142,13 +1134,6 @@ async function cargarDatosSesionLigero() {
             if (seccionesCompletadasLocal.descripcion !== nuevasSecciones.descripcion) {
                 seccionesCompletadasLocal.descripcion = nuevasSecciones.descripcion;
                 actualizarEstadoVisualSeccion('descripcion', nuevasSecciones.descripcion);
-            }
-        }
-        
-        if (!camposEnEdicion.vehiculo && nuevosDatos.vehiculo) {
-            const placaInput = document.getElementById('vehiculoPlaca');
-            if (placaInput && !placaInput.value && nuevosDatos.vehiculo.placa) {
-                placaInput.value = nuevosDatos.vehiculo.placa;
             }
         }
         
@@ -1436,42 +1421,251 @@ function mostrarModalDetalle(detalle) {
     const body = document.getElementById('detalleRecepcionBody');
     if (!modal || !body) return;
     
-    body.innerHTML = `
-        <div class="detalle-recepcion">
-            <div class="detalle-seccion">
-                <h4><i class="fas fa-info-circle"></i> Información General</h4>
+    // Contar fotos
+    const fotosArray = Object.values(detalle.fotos || {}).filter(url => url && url !== 'null' && url !== 'None');
+    const fotosCount = fotosArray.length;
+    
+    // HTML con tabs
+    const tabsHtml = `
+        <div class="detalle-tabs">
+            <button class="detalle-tab active" data-tab="info">📋 Información</button>
+            <button class="detalle-tab" data-tab="fotos">📸 Fotos (${fotosCount}/7)</button>
+            <button class="detalle-tab" data-tab="descripcion">📝 Descripción</button>
+        </div>
+        <div class="detalle-panes">
+            <div class="detalle-pane active" id="pane-info">
                 <div class="detalle-grid">
-                    <div class="detalle-item"><span class="detalle-label">Código:</span><span class="detalle-value">${escapeHtml(detalle.codigo_unico || 'N/A')}</span></div>
-                    <div class="detalle-item"><span class="detalle-label">Fecha:</span><span class="detalle-value">${new Date(detalle.fecha_ingreso).toLocaleString()}</span></div>
-                    <div class="detalle-item"><span class="detalle-label">Estado:</span><span class="detalle-value">${escapeHtml(detalle.estado_global || 'En Recepción')}</span></div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Código de Trabajo</span>
+                        <span class="detalle-value">${escapeHtml(detalle.codigo_unico || 'N/A')}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Fecha de Ingreso</span>
+                        <span class="detalle-value">${new Date(detalle.fecha_ingreso).toLocaleString()}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Estado</span>
+                        <span class="detalle-value estado-${detalle.estado_global || 'EnRecepcion'}">${detalle.estado_global || 'En Recepción'}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Jefe Principal</span>
+                        <span class="detalle-value">${escapeHtml(detalle.jefe_operativo?.nombre || 'No asignado')}</span>
+                    </div>
+                    ${detalle.jefe_operativo_2?.nombre ? `
+                    <div class="detalle-item">
+                        <span class="detalle-label">Jefe Secundario</span>
+                        <span class="detalle-value">${escapeHtml(detalle.jefe_operativo_2.nombre)}</span>
+                    </div>
+                    ` : ''}
+                </div>
+                
+                <h4 style="margin-top: 1.2rem; margin-bottom: 0.6rem; color: var(--rojo-primario); font-size: 0.9rem;">
+                    <i class="fas fa-user"></i> Datos del Cliente
+                </h4>
+                <div class="detalle-grid">
+                    <div class="detalle-item">
+                        <span class="detalle-label">Nombre</span>
+                        <span class="detalle-value">${escapeHtml(detalle.cliente_nombre || 'N/A')}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Teléfono</span>
+                        <span class="detalle-value">${escapeHtml(detalle.cliente_telefono || 'N/A')}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Ubicación</span>
+                        <span class="detalle-value">${escapeHtml(detalle.cliente_ubicacion || 'No especificada')}</span>
+                    </div>
+                    ${detalle.latitud && detalle.longitud ? `
+                    <div class="detalle-item">
+                        <span class="detalle-label">Coordenadas</span>
+                        <span class="detalle-value">${detalle.latitud}, ${detalle.longitud}</span>
+                    </div>
+                    ` : ''}
+                </div>
+                
+                <h4 style="margin-top: 1.2rem; margin-bottom: 0.6rem; color: var(--rojo-primario); font-size: 0.9rem;">
+                    <i class="fas fa-car"></i> Datos del Vehículo
+                </h4>
+                <div class="detalle-grid">
+                    <div class="detalle-item">
+                        <span class="detalle-label">Placa</span>
+                        <span class="detalle-value">${escapeHtml(detalle.placa || 'N/A')}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Marca</span>
+                        <span class="detalle-value">${escapeHtml(detalle.marca || 'N/A')}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Modelo</span>
+                        <span class="detalle-value">${escapeHtml(detalle.modelo || 'N/A')}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Año</span>
+                        <span class="detalle-value">${detalle.anio || 'N/A'}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Kilometraje</span>
+                        <span class="detalle-value">${detalle.kilometraje?.toLocaleString() || '0'} km</span>
+                    </div>
                 </div>
             </div>
-            <div class="detalle-seccion">
-                <h4><i class="fas fa-user"></i> Cliente</h4>
-                <div class="detalle-grid">
-                    <div class="detalle-item"><span class="detalle-label">Nombre:</span><span class="detalle-value">${escapeHtml(detalle.cliente_nombre || 'N/A')}</span></div>
-                    <div class="detalle-item"><span class="detalle-label">Teléfono:</span><span class="detalle-value">${escapeHtml(detalle.cliente_telefono || 'N/A')}</span></div>
-                    <div class="detalle-item"><span class="detalle-label">Ubicación:</span><span class="detalle-value">${escapeHtml(detalle.cliente_ubicacion || 'No especificada')}</span></div>
-                </div>
+            
+            <div class="detalle-pane" id="pane-fotos">
+                ${generarFotosHtmlDetalle(detalle.fotos)}
             </div>
-            <div class="detalle-seccion">
-                <h4><i class="fas fa-car"></i> Vehículo</h4>
-                <div class="detalle-grid">
-                    <div class="detalle-item"><span class="detalle-label">Placa:</span><span class="detalle-value">${escapeHtml(detalle.placa || 'N/A')}</span></div>
-                    <div class="detalle-item"><span class="detalle-label">Marca:</span><span class="detalle-value">${escapeHtml(detalle.marca || 'N/A')}</span></div>
-                    <div class="detalle-item"><span class="detalle-label">Modelo:</span><span class="detalle-value">${escapeHtml(detalle.modelo || 'N/A')}</span></div>
-                    <div class="detalle-item"><span class="detalle-label">Año:</span><span class="detalle-value">${detalle.anio || 'N/A'}</span></div>
-                    <div class="detalle-item"><span class="detalle-label">Kilometraje:</span><span class="detalle-value">${detalle.kilometraje?.toLocaleString() || '0'} km</span></div>
-                </div>
-            </div>
-            <div class="detalle-seccion">
-                <h4><i class="fas fa-pencil-alt"></i> Descripción del Problema</h4>
-                <div class="detalle-descripcion">${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}</div>
-                ${detalle.audio_url ? `<div class="detalle-audio"><audio controls src="${detalle.audio_url}"></audio></div>` : ''}
+            
+            <div class="detalle-pane" id="pane-descripcion">
+                <div class="detalle-descripcion-texto">${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}</div>
+                ${detalle.audio_url ? `<div class="detalle-audio" style="margin-top: 1rem;"><audio controls src="${detalle.audio_url}" style="width: 100%; border-radius: 8px;"></audio></div>` : ''}
             </div>
         </div>
     `;
+    
+    body.innerHTML = tabsHtml;
     modal.classList.add('show');
+    
+    // Configurar eventos de tabs
+    const tabs = document.querySelectorAll('.detalle-tab');
+    const panes = document.querySelectorAll('.detalle-pane');
+    
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const tabId = tab.dataset.tab;
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            panes.forEach(pane => pane.classList.remove('active'));
+            const activePane = document.getElementById(`pane-${tabId}`);
+            if (activePane) activePane.classList.add('active');
+        });
+    });
+    
+    // Configurar botones de exportación
+    const btnWord = document.getElementById('btnExportarWord');
+    const btnPDF = document.getElementById('btnExportarPDF');
+    if (btnWord) btnWord.onclick = () => exportarAWord(detalle);
+    if (btnPDF) btnPDF.onclick = () => exportarAPDF();
+}
+
+function generarFotosHtmlDetalle(fotos) {
+    if (!fotos) return '<p class="detalle-value">No se registraron fotos</p>';
+    
+    const camposFotos = [
+        { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo' },
+        { campo: 'url_lateral_derecha', label: 'Lateral Derecho' },
+        { campo: 'url_foto_frontal', label: 'Frontal' },
+        { campo: 'url_foto_trasera', label: 'Trasera' },
+        { campo: 'url_foto_superior', label: 'Superior' },
+        { campo: 'url_foto_inferior', label: 'Inferior' },
+        { campo: 'url_foto_tablero', label: 'Tablero' }
+    ];
+    
+    const fotosExistentes = camposFotos.filter(f => {
+        const url = fotos[f.campo];
+        return url && url !== 'null' && url !== 'None' && url !== '' && url !== null;
+    });
+    
+    if (fotosExistentes.length === 0) {
+        return '<p class="detalle-value">No se registraron fotos</p>';
+    }
+    
+    return `
+        <div class="detalle-fotos-grid">
+            ${fotosExistentes.map(f => `
+                <div class="detalle-foto" onclick="verImagenAmpliada('${fotos[f.campo]}', '${f.label}')">
+                    <img src="${fotos[f.campo]}" alt="${f.label}" loading="lazy">
+                    <div class="detalle-foto-label">${f.label}</div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function verImagenAmpliada(url, label) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-imagen';
+    modal.innerHTML = `
+        <div class="modal-imagen-content">
+            <button class="modal-imagen-close" onclick="this.closest('.modal-imagen').remove()">&times;</button>
+            <img src="${url}" alt="${label}">
+            <p>${label}</p>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+}
+
+function exportarAWord(detalle) {
+    const contenido = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Recepcion_${detalle.codigo_unico}</title><style>
+        body{font-family:Arial,sans-serif;padding:40px;line-height:1.6;}
+        h1{color:#C1121F;border-bottom:2px solid #C1121F;padding-bottom:10px;}
+        h2{color:#333;margin-top:20px;border-bottom:1px solid #ddd;padding-bottom:5px;}
+        .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:15px;margin:15px 0;}
+        .fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;margin:15px 0;}
+        .foto{border:1px solid #ddd;border-radius:8px;overflow:hidden;}
+        .foto img{width:100%;height:auto;}
+        .foto p{text-align:center;padding:5px;background:#f5f5f5;margin:0;}
+        .descripcion{background:#f9f9f9;padding:15px;border-radius:8px;margin:15px 0;}
+        .footer{margin-top:30px;text-align:center;color:#999;font-size:12px;}
+    </style></head><body>
+        <h1>FURIA MOTOR COMPANY</h1>
+        <h2>Recepción de Vehículo</h2>
+        <p><strong>Código:</strong> ${detalle.codigo_unico}</p>
+        <p><strong>Fecha:</strong> ${new Date(detalle.fecha_ingreso).toLocaleString()}</p>
+        
+        <h2>Cliente</h2>
+        <div class="grid">
+            <div><strong>Nombre:</strong> ${detalle.cliente_nombre || 'N/A'}</div>
+            <div><strong>Teléfono:</strong> ${detalle.cliente_telefono || 'N/A'}</div>
+            <div><strong>Ubicación:</strong> ${detalle.cliente_ubicacion || 'N/A'}</div>
+        </div>
+        
+        <h2>Vehículo</h2>
+        <div class="grid">
+            <div><strong>Placa:</strong> ${detalle.placa || 'N/A'}</div>
+            <div><strong>Marca:</strong> ${detalle.marca || 'N/A'}</div>
+            <div><strong>Modelo:</strong> ${detalle.modelo || 'N/A'}</div>
+            <div><strong>Año:</strong> ${detalle.anio || 'N/A'}</div>
+            <div><strong>Kilometraje:</strong> ${detalle.kilometraje?.toLocaleString() || '0'} km</div>
+        </div>
+        
+        <h2>Fotos</h2>
+        <div class="fotos">
+            ${Object.entries(detalle.fotos || {}).filter(([_, url]) => url && url !== 'null').map(([campo, url]) => `
+                <div class="foto"><img src="${url}" alt="${campo}"><p>${campo.replace(/url_/g, '').replace(/_/g, ' ').toUpperCase()}</p></div>
+            `).join('')}
+        </div>
+        
+        <h2>Descripción del Problema</h2>
+        <div class="descripcion">${detalle.transcripcion_problema || 'No se registró descripción'}</div>
+        ${detalle.audio_url ? `<audio controls src="${detalle.audio_url}"></audio>` : ''}
+        
+        <div class="footer">Documento generado automáticamente por FURIA MOTOR</div>
+    </body></html>`;
+    
+    const blob = new Blob([contenido], { type: 'application/msword' });
+    saveAs(blob, `Recepcion_${detalle.codigo_unico}.doc`);
+    mostrarNotificacion('Documento Word generado', 'success');
+}
+
+function exportarAPDF() {
+    const modal = document.getElementById('modalDetalleRecepcion');
+    const contenido = document.getElementById('detalleRecepcionBody');
+    if (!contenido) return;
+    
+    const originalDisplay = contenido.style.display;
+    contenido.style.display = 'block';
+    
+    const opt = {
+        margin: [0.5, 0.5, 0.5, 0.5],
+        filename: `Recepcion_${recepcionSeleccionada?.codigo_unico || 'export'}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+    
+    html2pdf().set(opt).from(contenido).save()
+        .then(() => { contenido.style.display = originalDisplay; mostrarNotificacion('PDF generado', 'success'); })
+        .catch(err => { contenido.style.display = originalDisplay; mostrarNotificacion('Error generando PDF', 'error'); });
 }
 
 async function editarRecepcion(id) {
@@ -1750,4 +1944,4 @@ window.logout = () => {
     window.location.href = `${window.API_BASE_URL}/`;
 };
 
-console.log('✅ recepcion.js cargado - Versión completa');
+console.log('✅ recepcion.js cargado - Versión completa con tabs');

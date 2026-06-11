@@ -1,6 +1,7 @@
 // =====================================================
 // DASHBOARD JEFE OPERATIVO - VERSIÓN COMPLETA Y CORREGIDA
 // BASADA EN EL CÓDIGO FUNCIONAL DE JEFE TALLER
+// VERSIÓN FINAL CON CALENDARIO RESPONSIVE
 // =====================================================
 
 if (typeof window.API_BASE_URL === 'undefined') {
@@ -20,6 +21,7 @@ let calendar = null;
 let ordenesActivas = [];
 let currentUser = null;
 let comunicadosActuales = [];
+let autoRefreshInterval = null;
 
 // =====================================================
 // INICIALIZACIÓN
@@ -35,6 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initFullCalendar();
     setupEventListeners();
     crearModalComunicados();
+    iniciarAutoRefresh();
 });
 
 async function checkAuth() {
@@ -55,6 +58,13 @@ async function checkAuth() {
                 year: 'numeric', month: 'long', day: 'numeric' 
             });
         }
+        
+        // Actualizar nombre de usuario en el sidebar
+        const userNameElement = document.getElementById('userName');
+        if (userNameElement && currentUser.nombre) {
+            userNameElement.textContent = currentUser.nombre;
+        }
+        
         return true;
     } catch (error) {
         console.error('Error:', error);
@@ -78,12 +88,28 @@ function setupEventListeners() {
         notificationIcon.addEventListener('click', abrirModalComunicados);
     }
     
-    // Botón de actualización manual - CORREGIDO: ahora busca el ID correcto
+    // Botón de actualización manual
     const refreshBtn = document.getElementById('refreshDashboardBtn');
     if (refreshBtn) {
         refreshBtn.removeEventListener('click', manualRefresh);
         refreshBtn.addEventListener('click', manualRefresh);
     }
+}
+
+function iniciarAutoRefresh() {
+    // Limpiar intervalo existente
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+    }
+    
+    // Actualizar datos automáticamente cada 5 minutos
+    autoRefreshInterval = setInterval(() => {
+        console.log('🔄 Actualización automática programada...');
+        cargarDatosIniciales();
+        if (calendar) {
+            calendar.refetchEvents();
+        }
+    }, 5 * 60 * 1000); // 5 minutos
 }
 
 // =====================================================
@@ -167,8 +193,6 @@ async function cargarContadorComunicados() {
         console.log('📬 Comunicados recibidos:', data);
         
         if (data.success && data.comunicados) {
-            // SOLO contar los NO leídos si tienes ese campo
-            // Por ahora contamos todos los comunicados
             const cantidad = data.comunicados.length;
             const badge = document.getElementById('notificacionesCount');
             if (badge) {
@@ -328,7 +352,7 @@ function renderizarVehiculosTaller(vehiculos) {
 }
 
 // =====================================================
-// FULLCALENDAR
+// FULLCALENDAR - VERSIÓN RESPONSIVE MEJORADA
 // =====================================================
 
 function initFullCalendar() {
@@ -346,13 +370,18 @@ function initFullCalendar() {
     
     console.log('✅ Inicializando FullCalendar...');
     
-    calendar = new FullCalendar.Calendar(container, {
+    // Detectar si es móvil
+    const isMobile = window.innerWidth <= 768;
+    const isTablet = window.innerWidth > 768 && window.innerWidth <= 1024;
+    
+    // Configuración base del calendario
+    let calendarConfig = {
         locale: 'es',
-        initialView: 'dayGridMonth',
+        initialView: isMobile ? 'timeGridWeek' : 'dayGridMonth',
         headerToolbar: {
-            left: 'prev,next today',
+            left: 'prev,next',
             center: 'title',
-            right: ''
+            right: isMobile ? 'timeGridWeek,dayGridMonth' : (isTablet ? 'dayGridMonth,timeGridWeek' : 'dayGridMonth')
         },
         height: 'auto',
         weekends: true,
@@ -362,6 +391,24 @@ function initFullCalendar() {
             month: 'Mes',
             week: 'Semana',
             day: 'Día'
+        },
+        
+        // Personalización para móvil
+        views: {
+            dayGridMonth: {
+                titleFormat: { year: 'numeric', month: 'long' },
+                dayHeaderFormat: { weekday: 'short' },
+                dayMaxEvents: isMobile ? 2 : true,
+                moreLinkText: function(num) {
+                    return `+${num} más`;
+                }
+            },
+            timeGridWeek: {
+                titleFormat: { year: 'numeric', month: 'long', day: 'numeric' },
+                slotDuration: '01:00:00',
+                allDaySlot: true,
+                slotLabelFormat: isMobile ? { hour: 'numeric', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit' }
+            }
         },
         
         events: function(fetchInfo, successCallback, failureCallback) {
@@ -398,10 +445,14 @@ function initFullCalendar() {
                 const placa = orden.vehiculo?.placa || orden.codigo_unico || 'Vehículo';
                 const estaAtrasado = fechaFin < hoy;
                 
+                // Títulos más cortos para móvil
+                let tituloReparacion = isMobile ? `🔧 ${placa}` : `🔧 Reparación: ${placa}`;
+                let tituloEntrega = isMobile ? `🚗 ${placa}` : `🚗 ENTREGA: ${placa}`;
+                
                 // Evento de reparación (rango completo)
                 events.push({
                     id: `reparacion-${orden.id_orden}`,
-                    title: `🔧 ${placa}`,
+                    title: tituloReparacion,
                     start: fechaInicio,
                     end: new Date(fechaFin.getTime() + 24 * 60 * 60 * 1000),
                     allDay: true,
@@ -417,7 +468,7 @@ function initFullCalendar() {
                 // Evento de entrega
                 events.push({
                     id: `entrega-${orden.id_orden}`,
-                    title: `🚗 ENTREGA: ${placa}`,
+                    title: tituloEntrega,
                     start: fechaFin,
                     allDay: true,
                     backgroundColor: estaAtrasado ? '#DC2626' : '#8B5CF6',
@@ -440,10 +491,41 @@ function initFullCalendar() {
             if (ordenId) {
                 window.verOrdenTrabajo(parseInt(ordenId));
             }
+        },
+        
+        // Personalización para mejor UX
+        eventDidMount: function(info) {
+            // En móvil, añadir tooltip nativo
+            if (isMobile && info.el) {
+                info.el.setAttribute('title', info.event.title);
+            }
+        },
+        
+        // Manejo de errores
+        loading: function(isLoading) {
+            if (isLoading) {
+                console.log('📅 Calendario cargando eventos...');
+            }
+        }
+    };
+    
+    calendar = new FullCalendar.Calendar(container, calendarConfig);
+    calendar.render();
+    
+    // Escuchar cambios de orientación/resize
+    window.addEventListener('resize', function() {
+        if (calendar) {
+            const newIsMobile = window.innerWidth <= 768;
+            const currentView = calendar.view.type;
+            
+            if (newIsMobile && currentView === 'dayGridMonth') {
+                calendar.changeView('timeGridWeek');
+            } else if (!newIsMobile && currentView === 'timeGridWeek' && window.innerWidth > 768) {
+                calendar.changeView('dayGridMonth');
+            }
         }
     });
     
-    calendar.render();
     console.log('✅ FullCalendar inicializado correctamente');
 }
 
@@ -672,6 +754,7 @@ async function manualRefresh() {
             }
             mostrarNotificacion('Dashboard actualizado correctamente', 'success');
         } catch (error) {
+            console.error('Error en actualización manual:', error);
             mostrarNotificacion('Error al actualizar datos', 'error');
         } finally {
             setTimeout(() => {
@@ -778,14 +861,11 @@ window.addEventListener('error', function(event) {
 });
 
 // =====================================================
-// ACTUALIZACIÓN AUTOMÁTICA CADA 5 MINUTOS
+// LIMPIEZA AL CERRAR
 // =====================================================
 
-// Actualizar datos automáticamente cada 5 minutos
-setInterval(() => {
-    console.log('🔄 Actualización automática programada...');
-    cargarDatosIniciales();
-    if (calendar) {
-        calendar.refetchEvents();
+window.addEventListener('beforeunload', function() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
     }
-}, 5 * 60 * 1000); // 5 minutos
+});

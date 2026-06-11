@@ -302,7 +302,7 @@
                 </form>
 
                 <!-- PANEL DE RECEPCIONES GUARDADAS (se oculta cuando hay sesión activa) -->
-                <div class="recepciones-guardadas-panel" id="recepcionesGuardadasPanel">
+                <div class="recepciones-guardadas-panel" id="recepcionesGuardadasPanel" style="display: block;">
                     <div class="panel-header">
                         <i class="fas fa-archive"></i>
                         <h3>Recepciones Guardadas</h3>
@@ -315,7 +315,7 @@
                     <div class="filtros-recepciones">
                         <div class="filtro-grupo">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="searchRecepcion" placeholder="Buscar por código, placa o cliente..." class="filtro-input">
+                            <input type="text" id="searchRecepcion" placeholder="Buscar..." class="filtro-input">
                         </div>
                         <div class="filtro-grupo">
                             <i class="fas fa-calendar"></i>
@@ -327,7 +327,7 @@
                         </div>
                         <div class="filtro-grupo">
                             <select id="estadoFiltro" class="filtro-select">
-                                <option value="todos">Todos los estados</option>
+                                <option value="todos">Todos</option>
                                 <option value="EnRecepcion">En Recepción</option>
                                 <option value="EnTaller">En Taller</option>
                                 <option value="Finalizado">Finalizado</option>
@@ -360,15 +360,15 @@
     <!-- MODALES -->
     <!-- ===================================================== -->
 
-    <!-- Modal para unirse por código (manual) -->
+    <!-- Modal para unirse por código -->
     <div class="modal" id="modalUnirsePorCodigo">
         <div class="modal-content">
             <div class="modal-header">
-                <h2><i class="fas fa-sign-in-alt"></i> Unirse a sesión con código</h2>
+                <h2><i class="fas fa-sign-in-alt"></i> Unirse a sesión</h2>
                 <button class="modal-close" id="btnCerrarModalUnirse">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Ingresa el código de la sesión a la que deseas unirte:</p>
+                <p>Ingresa el código de la sesión:</p>
                 <div class="form-group">
                     <input type="text" id="codigoUnirseInput" placeholder="Ej: S-ABC123" class="codigo-input" autocomplete="off" style="text-transform: uppercase;">
                 </div>
@@ -389,10 +389,9 @@
                 <button class="modal-close" onclick="cerrarModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Comparte este código con otros técnicos para trabajar juntos:</p>
+                <p>Comparte este código con otros técnicos:</p>
                 <div class="codigo-sesion" id="codigoSesionModal">S-XXXXXX</div>
                 <button class="btn-copy" id="btnCopiarCodigoModal"><i class="fas fa-copy"></i> Copiar código</button>
-                <p class="modal-hint">* Los cambios se guardan manualmente con los botones "Guardar"</p>
             </div>
             <div class="modal-footer">
                 <button class="btn-primary" onclick="cerrarModal()">Empezar a trabajar</button>
@@ -422,20 +421,25 @@
         </div>
     </div>
 
-    <!-- Modal para ver detalles de recepción -->
+    <!-- Modal para ver detalles de recepción (con tabs) -->
     <div class="modal modal-detalle" id="modalDetalleRecepcion">
         <div class="modal-content modal-detalle-content">
             <div class="modal-header">
                 <h2><i class="fas fa-file-alt"></i> Detalle de Recepción</h2>
                 <button class="modal-close" onclick="cerrarModalDetalle()">&times;</button>
             </div>
+            <div class="modal-tabs">
+                <button class="tab-btn active" data-tab="info">Información</button>
+                <button class="tab-btn" data-tab="fotos">Fotos</button>
+                <button class="tab-btn" data-tab="descripcion">Descripción</button>
+            </div>
             <div class="modal-body" id="detalleRecepcionBody">
                 <!-- Contenido dinámico -->
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModalDetalle()"><i class="fas fa-times"></i> Cerrar</button>
-                <button class="btn-primary" id="btnExportarWord"><i class="fas fa-file-word"></i> Exportar a Word</button>
-                <button class="btn-primary" id="btnExportarPDF"><i class="fas fa-file-pdf"></i> Exportar a PDF</button>
+                <button class="btn-primary" id="btnExportarWord"><i class="fas fa-file-word"></i> Word</button>
+                <button class="btn-primary" id="btnExportarPDF"><i class="fas fa-file-pdf"></i> PDF</button>
             </div>
         </div>
     </div>
@@ -448,7 +452,7 @@
                 <button class="modal-close" onclick="cerrarModalEliminar()">&times;</button>
             </div>
             <div class="modal-body">
-                <p>¿Estás seguro de que deseas eliminar esta recepción?</p>
+                <p>¿Estás seguro de eliminar esta recepción?</p>
                 <p><strong>Esta acción no se puede deshacer.</strong></p>
                 <div id="eliminarInfo"></div>
             </div>
@@ -463,14 +467,14 @@
     <div class="modal" id="modalUbicacionLeaflet">
         <div class="modal-content modal-ubicacion">
             <div class="modal-header">
-                <h2><i class="fas fa-map-marker-alt"></i> Seleccionar Ubicación del Cliente</h2>
+                <h2><i class="fas fa-map-marker-alt"></i> Seleccionar Ubicación</h2>
                 <button class="modal-close" id="btnCerrarModalUbicacionLeaflet">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="ubicacion-busqueda">
                     <div class="search-container">
                         <i class="fas fa-search"></i>
-                        <input type="text" id="modalBuscarUbicacionLeaflet" placeholder="Buscar dirección (calle, zona, ciudad)..." class="ubicacion-search">
+                        <input type="text" id="modalBuscarUbicacionLeaflet" placeholder="Buscar dirección..." class="ubicacion-search">
                         <button type="button" id="btnBuscarUbicacionLeaflet" class="btn-buscar">
                             <i class="fas fa-search"></i> Buscar
                         </button>
@@ -494,14 +498,14 @@
         </div>
     </div>
 
-    <!-- Leaflet JS (gratuito, sin API key) -->
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="/jefe_operativo/js/include.js"></script>
     <script src="/jefe_operativo/js/recepcion.js"></script>
 
-    <!-- ========== SCRIPT RESPONSIVE PARA SIDEBAR ========== -->
+    <!-- Sidebar responsive -->
     <script>
         let sidebarOpen = false;
 
@@ -571,11 +575,43 @@
 
         window.toggleSidebar = toggleSidebar;
         window.closeSidebar = closeSidebar;
-        console.log('✅ recepcion.html - Funciones responsive cargadas');
+        console.log('✅ recepcion.html cargado');
     </script>
 
-    <!-- Estilos adicionales para el modal del mapa -->
+    <!-- Estilos adicionales -->
     <style>
+        .modal-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--gris-oscuro);
+            padding: 0 1rem;
+        }
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--gris-texto);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .tab-btn:hover {
+            color: var(--blanco);
+        }
+        .tab-btn.active {
+            color: var(--rojo-primario);
+        }
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--rojo-primario);
+        }
         .modal-ubicacion .modal-content {
             max-width: 800px;
             width: 90%;
@@ -627,6 +663,10 @@
             .modal-ubicacion .modal-content { width: 95%; }
             #leafletMapa { height: 300px; }
             .btn-buscar { justify-content: center; }
+            .tab-btn { padding: 0.5rem 1rem; font-size: 0.8rem; }
+        }
+        @media (max-width: 480px) {
+            .tab-btn { padding: 0.4rem 0.8rem; font-size: 0.75rem; }
         }
     </style>
 </body>

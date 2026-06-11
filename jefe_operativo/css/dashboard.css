@@ -1,7 +1,7 @@
 /* =====================================================
    DASHBOARD JEFE OPERATIVO - ESTILOS OSCUROS MODERNOS
    BASADO EN LA PALETA FURIA MOTOR
-   VERSIÓN COMPLETA CON MODAL DE COMUNICADOS
+   VERSIÓN COMPLETA CON MODAL DE COMUNICADOS Y RESPONSIVE FIX
    ===================================================== */
 
 :root {
@@ -38,7 +38,7 @@
     --radius-full: 9999px;
     
     /* TRANSICIONES */
-    --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     
     /* FONDOS */
     --bg-primary: #0A0A0C;
@@ -65,7 +65,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   BOTÓN HAMBURGUESA
+   BOTÓN HAMBURGUESA - MEJORADO
    ===================================================== */
 .hamburger-menu {
     position: fixed;
@@ -126,7 +126,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   SIDEBAR
+   SIDEBAR - CORREGIDO PARA RESPONSIVE
    ===================================================== */
 .sidebar {
     width: 280px;
@@ -342,7 +342,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   KPI CARDS
+   KPI CARDS - MEJORADO PARA RESPONSIVE
    ===================================================== */
 .kpi-grid {
     display: grid;
@@ -452,18 +452,20 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   CALENDARIO
+   CALENDARIO - CORREGIDO PARA RESPONSIVE
    ===================================================== */
 .calendario-wrapper {
     min-height: 400px;
     background: var(--bg-card);
     border-radius: var(--radius-lg);
     padding: 1rem;
+    overflow-x: auto;
 }
 
 .calendario-leyenda {
     display: flex;
     gap: 1rem;
+    flex-wrap: wrap;
 }
 
 .leyenda-item {
@@ -498,6 +500,7 @@ body.sidebar-open {
 /* FullCalendar personalización */
 .fc {
     background: transparent;
+    min-width: 500px;
 }
 
 .fc-theme-standard .fc-scrollgrid {
@@ -634,6 +637,34 @@ body.sidebar-open {
 .status-badge.pendiente {
     background: rgba(245, 158, 11, 0.15);
     color: var(--ambar-alerta);
+}
+
+/* =====================================================
+   BOTÓN DE ACTUALIZACIÓN MANUAL
+   ===================================================== */
+.refresh-btn {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.refresh-btn:hover {
+    background: #45a049;
+    transform: translateY(-1px);
+}
+
+.refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
 }
 
 /* =====================================================
@@ -985,34 +1016,6 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   BOTÓN DE ACTUALIZACIÓN MANUAL
-   ===================================================== */
-.refresh-btn {
-    background: #4CAF50;
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.3s;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.refresh-btn:hover {
-    background: #45a049;
-    transform: translateY(-1px);
-}
-
-.refresh-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-}
-
-/* =====================================================
    TOAST NOTIFICATIONS
    ===================================================== */
 .toast-container {
@@ -1110,10 +1113,10 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   ========== RESPONSIVE ==========
+   ========== RESPONSIVE MEJORADO ==========
    ===================================================== */
 
-/* MÓVILES Y TABLETS (max 1024px) - Sidebar oculto con hamburguesa */
+/* TABLETS Y MÓVILES (max 1024px) - Sidebar oculto con hamburguesa */
 @media (max-width: 1024px) {
     .hamburger-menu {
         display: flex !important;
@@ -1127,29 +1130,12 @@ body.sidebar-open {
         width: 280px;
         height: 100vh;
         z-index: 1000;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     
     .sidebar.open {
         transform: translateX(0);
         box-shadow: 5px 0 25px rgba(0, 0, 0, 0.5);
-    }
-    
-    .sidebar.open .sidebar-brand,
-    .sidebar.open .user-info,
-    .sidebar.open .nav-link span {
-        display: block;
-    }
-    
-    .sidebar.open .sidebar-header {
-        justify-content: flex-start;
-    }
-    
-    .sidebar.open .sidebar-user {
-        justify-content: flex-start;
-    }
-    
-    .sidebar.open .nav-link {
-        justify-content: flex-start;
     }
     
     .main-content {
@@ -1177,11 +1163,12 @@ body.sidebar-open {
     }
 }
 
-/* MÓVILES (max 768px) */
+/* MÓVILES GRANDES Y TABLET PEQUEÑA (max 768px) */
 @media (max-width: 768px) {
     .top-bar {
         flex-direction: column;
         align-items: flex-start;
+        padding: 0.8rem;
     }
     
     .top-actions {
@@ -1199,6 +1186,7 @@ body.sidebar-open {
     
     .kpi-grid {
         grid-template-columns: 1fr;
+        gap: 0.8rem;
     }
     
     .kpi-card {
@@ -1216,26 +1204,37 @@ body.sidebar-open {
     
     .calendario-leyenda {
         flex-wrap: wrap;
+        gap: 0.5rem;
     }
     
+    /* Mejorar visualización de listas en móvil */
     .entrega-item,
     .vehiculo-taller-item {
-        flex-direction: column;
-        text-align: center;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.75rem;
     }
     
-    .entrega-content,
-    .vehiculo-taller-info {
-        text-align: center;
+    .entrega-icon,
+    .vehiculo-taller-icon {
+        width: 35px;
+        height: 35px;
+        font-size: 0.9rem;
+    }
+    
+    .entrega-content h4,
+    .vehiculo-taller-placa {
+        font-size: 0.85rem;
     }
     
     .calendario-wrapper {
         padding: 0.5rem;
         overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
     
     .fc {
-        min-width: 600px;
+        min-width: 500px;
     }
     
     .modal-content-comunicados {
@@ -1258,6 +1257,7 @@ body.sidebar-open {
     
     .comunicado-fecha {
         white-space: normal;
+        font-size: 0.65rem;
     }
     
     .toast-container {
@@ -1268,6 +1268,8 @@ body.sidebar-open {
     
     .toast-notification {
         min-width: auto;
+        width: auto;
+        font-size: 0.85rem;
     }
 }
 
@@ -1278,8 +1280,8 @@ body.sidebar-open {
     }
     
     .hamburger-menu {
-        width: 38px;
-        height: 38px;
+        width: 40px;
+        height: 40px;
         font-size: 1.1rem;
         top: 12px;
         left: 12px;
@@ -1289,20 +1291,57 @@ body.sidebar-open {
         left: 275px;
     }
     
+    .top-bar {
+        padding: 0.6rem;
+    }
+    
     .date-display span {
         display: none;
     }
     
-    .date-display {
-        padding: 0.4rem 0.7rem;
+    .date-display i {
+        font-size: 1rem;
     }
     
     .notification-icon {
-        width: 36px;
-        height: 36px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        font-size: 1rem;
+    }
+    
+    .page-title h1 {
+        font-size: 1rem;
+    }
+    
+    .page-title p {
+        font-size: 0.7rem;
+    }
+    
+    .kpi-card {
+        padding: 0.8rem;
+    }
+    
+    .kpi-title {
+        font-size: 0.8rem;
+    }
+    
+    .kpi-value {
+        font-size: 1.4rem;
+    }
+    
+    .kpi-footer {
+        font-size: 0.7rem;
+    }
+    
+    .card-header {
+        padding: 0.8rem;
+    }
+    
+    .card-header h3 {
+        font-size: 0.9rem;
+    }
+    
+    .entrega-item,
+    .vehiculo-taller-item {
+        padding: 0.6rem;
     }
     
     .comunicado-detalle-titulo {
@@ -1312,6 +1351,10 @@ body.sidebar-open {
     .comunicado-detalle-meta {
         flex-direction: column;
         gap: 0.5rem;
+    }
+    
+    .modal-header-comunicados {
+        padding: 0.8rem;
     }
 }
 
@@ -1335,7 +1378,7 @@ body.sidebar-open {
     }
 }
 
-/* ORIENTACIÓN LANDSCAPE */
+/* ORIENTACIÓN LANDSCAPE EN MÓVIL */
 @media (max-width: 1024px) and (orientation: landscape) {
     .sidebar {
         overflow-y: auto;
@@ -1362,5 +1405,26 @@ body.sidebar-open {
     
     .modal-content-comunicados {
         max-height: 90vh;
+    }
+    
+    .calendario-wrapper {
+        overflow-x: auto;
+    }
+}
+
+/* PANTALLAS GRANDES (min 1400px) */
+@media (min-width: 1400px) {
+    .content {
+        max-width: 1400px;
+        margin: 0 auto;
+        width: 100%;
+    }
+    
+    .kpi-grid {
+        gap: 2rem;
+    }
+    
+    .dashboard-grid {
+        gap: 2rem;
     }
 }

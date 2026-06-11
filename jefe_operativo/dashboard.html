@@ -50,6 +50,12 @@
                 </div>
 
                 <div class="top-actions">
+                    <!-- Botón de refresh añadido -->
+                    <button class="refresh-btn" id="refreshDashboardBtn" title="Actualizar datos">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>Actualizar</span>
+                    </button>
+                    
                     <div class="notification-icon" id="notificationIcon">
                         <i class="fas fa-bell"></i>
                         <span class="notification-badge" id="notificacionesCount">0</span>
@@ -215,8 +221,37 @@
             }
         }
         
+        // Función para el botón de refresh (conectar con tu dashboard.js)
+        function setupRefreshButton() {
+            const refreshBtn = document.getElementById('refreshDashboardBtn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', function() {
+                    // Mostrar loading
+                    const loadingOverlay = document.getElementById('loadingOverlay');
+                    if (loadingOverlay) loadingOverlay.style.display = 'flex';
+                    
+                    // Disparar evento personalizado o llamar a la función de refresh
+                    // Asumiendo que tu dashboard.js tiene una función refreshDashboard()
+                    if (typeof window.refreshDashboard === 'function') {
+                        window.refreshDashboard();
+                    } else {
+                        // Recargar la página si no hay función específica
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 500);
+                    }
+                    
+                    // Ocultar loading después de un tiempo (ajustar según tu lógica)
+                    setTimeout(() => {
+                        if (loadingOverlay) loadingOverlay.style.display = 'none';
+                    }, 2000);
+                });
+            }
+        }
+        
         document.addEventListener('DOMContentLoaded', function() {
             updateCurrentDate();
+            setupRefreshButton();
             
             const hamburgerBtn = document.getElementById('hamburgerMenu');
             if (hamburgerBtn) hamburgerBtn.addEventListener('click', toggleSidebar);

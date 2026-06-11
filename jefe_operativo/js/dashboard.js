@@ -72,14 +72,14 @@ function getHeaders() {
 
 function setupEventListeners() {
     // Click en campanita para abrir modal de comunicados
-    const notificationIcon = document.querySelector('.notification-icon');
+    const notificationIcon = document.getElementById('notificationIcon');
     if (notificationIcon) {
         notificationIcon.removeEventListener('click', abrirModalComunicados);
         notificationIcon.addEventListener('click', abrirModalComunicados);
     }
     
-    // Botón de actualización manual
-    const refreshBtn = document.getElementById('manualRefreshBtn');
+    // Botón de actualización manual - CORREGIDO: ahora busca el ID correcto
+    const refreshBtn = document.getElementById('refreshDashboardBtn');
     if (refreshBtn) {
         refreshBtn.removeEventListener('click', manualRefresh);
         refreshBtn.addEventListener('click', manualRefresh);
@@ -118,6 +118,7 @@ async function cargarDatosIniciales() {
             actualizarKPI('ingresadosHoy', stats.stats.ingresados_hoy || 0);
             actualizarKPI('enProceso', stats.stats.en_proceso || 0);
             actualizarKPI('enPausa', stats.stats.en_pausa || 0);
+            actualizarKPI('entregasHoy', stats.stats.entregas_hoy || 0);
         }
         
         // Renderizar próximas entregas
@@ -126,6 +127,7 @@ async function cargarDatosIniciales() {
             actualizarKPI('proximasEntregasCount', entregas.entregas.length);
         } else {
             renderizarVacio('entregasList', 'No hay entregas pendientes');
+            actualizarKPI('proximasEntregasCount', 0);
         }
         
         // Renderizar vehículos en taller
@@ -134,6 +136,7 @@ async function cargarDatosIniciales() {
             actualizarKPI('vehiculosTallerCount', vehiculos.vehiculos.length);
         } else {
             renderizarVacio('vehiculosTallerList', 'No hay vehículos en taller');
+            actualizarKPI('vehiculosTallerCount', 0);
         }
         
         // Cargar comunicados y actualizar badge
@@ -164,6 +167,8 @@ async function cargarContadorComunicados() {
         console.log('📬 Comunicados recibidos:', data);
         
         if (data.success && data.comunicados) {
+            // SOLO contar los NO leídos si tienes ese campo
+            // Por ahora contamos todos los comunicados
             const cantidad = data.comunicados.length;
             const badge = document.getElementById('notificacionesCount');
             if (badge) {
@@ -172,6 +177,12 @@ async function cargarContadorComunicados() {
             }
             // Guardar en cache
             comunicadosActuales = data.comunicados;
+        } else {
+            const badge = document.getElementById('notificacionesCount');
+            if (badge) {
+                badge.textContent = '0';
+                badge.style.display = 'none';
+            }
         }
     } catch (error) {
         console.error('Error cargando contador de comunicados:', error);
@@ -232,6 +243,11 @@ function renderizarEntregas(entregas) {
             statusText = 'Pendiente';
         }
         
+        // Determinar clase de badge
+        let badgeClass = 'aprobada';
+        if (prioridadClass === 'urgente') badgeClass = 'pendiente';
+        if (prioridadClass === 'hoy') badgeClass = 'aprobada';
+        
         html += `
             <div class="entrega-item ${prioridadClass}" onclick="window.verOrdenTrabajo(${e.id_orden})">
                 <div class="entrega-icon"><i class="fas fa-calendar-check"></i></div>
@@ -240,7 +256,7 @@ function renderizarEntregas(entregas) {
                     <p class="entrega-total">${diasTexto}</p>
                 </div>
                 <div class="entrega-status">
-                    <span class="status-badge ${prioridadClass === 'urgente' ? 'pendiente' : 'aprobada'}">
+                    <span class="status-badge ${badgeClass}">
                         ${statusText}
                     </span>
                 </div>
@@ -262,7 +278,8 @@ function renderizarVehiculosTaller(vehiculos) {
     
     const estadoColor = {
         'EnRecepcion': '#FF9800', 'EnDiagnostico': '#2196F3', 'EnReparacion': '#4CAF50',
-        'EnPausa': '#9E9E9E', 'PendienteAprobacion': '#FF5722', 'ReparacionCompletada': '#8BC34A'
+        'EnPausa': '#9E9E9E', 'PendienteAprobacion': '#FF5722', 'ReparacionCompletada': '#8BC34A',
+        'Finalizado': '#00BCD4', 'Entregado': '#4CAF50'
     };
     
     const estadoDisplay = {
@@ -322,7 +339,7 @@ function initFullCalendar() {
     }
     
     if (typeof FullCalendar === 'undefined') {
-        console.error('❌ FullCalendar no está cargado');
+        console.error('❌ FullCalendar no está cargado, reintentando...');
         setTimeout(() => initFullCalendar(), 500);
         return;
     }
@@ -340,6 +357,12 @@ function initFullCalendar() {
         height: 'auto',
         weekends: true,
         nowIndicator: true,
+        buttonText: {
+            today: 'Hoy',
+            month: 'Mes',
+            week: 'Semana',
+            day: 'Día'
+        },
         
         events: function(fetchInfo, successCallback, failureCallback) {
             console.log('📅 Generando eventos del calendario...');
@@ -384,7 +407,11 @@ function initFullCalendar() {
                     allDay: true,
                     backgroundColor: estaAtrasado ? '#EF4444' : '#F59E0B',
                     borderColor: estaAtrasado ? '#EF4444' : '#F59E0B',
-                    textColor: 'white'
+                    textColor: 'white',
+                    extendedProps: {
+                        ordenId: orden.id_orden,
+                        tipo: 'reparacion'
+                    }
                 });
                 
                 // Evento de entrega
@@ -395,7 +422,11 @@ function initFullCalendar() {
                     allDay: true,
                     backgroundColor: estaAtrasado ? '#DC2626' : '#8B5CF6',
                     borderColor: estaAtrasado ? '#DC2626' : '#8B5CF6',
-                    textColor: 'white'
+                    textColor: 'white',
+                    extendedProps: {
+                        ordenId: orden.id_orden,
+                        tipo: 'entrega'
+                    }
                 });
             });
             
@@ -413,7 +444,7 @@ function initFullCalendar() {
     });
     
     calendar.render();
-    console.log('✅ FullCalendar inicializado');
+    console.log('✅ FullCalendar inicializado correctamente');
 }
 
 // =====================================================
@@ -441,11 +472,14 @@ function crearModalComunicados() {
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     
     // Cerrar modal al hacer clic fuera
-    document.getElementById('modalComunicados').addEventListener('click', (e) => {
-        if (e.target === document.getElementById('modalComunicados')) {
-            cerrarModalComunicados();
-        }
-    });
+    const modal = document.getElementById('modalComunicados');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                cerrarModalComunicados();
+            }
+        });
+    }
 }
 
 async function abrirModalComunicados() {
@@ -592,7 +626,7 @@ function verDetalleComunicado(id) {
                 </div>
             </div>
             <div class="comunicado-detalle-contenido">
-                ${comunicado.contenido.replace(/\n/g, '<br>')}
+                ${escapeHtml(comunicado.contenido).replace(/\n/g, '<br>')}
             </div>
         </div>
     `;
@@ -625,22 +659,32 @@ function formatearFechaComunicado(fechaISO) {
 // =====================================================
 
 async function manualRefresh() {
-    const refreshBtn = document.getElementById('manualRefreshBtn');
+    const refreshBtn = document.getElementById('refreshDashboardBtn');
     if (refreshBtn) {
         refreshBtn.disabled = true;
+        const originalHtml = refreshBtn.innerHTML;
         refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Actualizando...';
-    }
-    
-    await cargarDatosIniciales();
-    if (calendar) {
-        calendar.refetchEvents();
-    }
-    
-    if (refreshBtn) {
-        setTimeout(() => {
-            refreshBtn.disabled = false;
-            refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Actualizar';
-        }, 1000);
+        
+        try {
+            await cargarDatosIniciales();
+            if (calendar) {
+                calendar.refetchEvents();
+            }
+            mostrarNotificacion('Dashboard actualizado correctamente', 'success');
+        } catch (error) {
+            mostrarNotificacion('Error al actualizar datos', 'error');
+        } finally {
+            setTimeout(() => {
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = originalHtml;
+            }, 1000);
+        }
+    } else {
+        // Fallback: recargar datos sin el botón
+        await cargarDatosIniciales();
+        if (calendar) {
+            calendar.refetchEvents();
+        }
     }
 }
 
@@ -716,7 +760,7 @@ window.logout = function() {
     window.location.href = window.API_BASE_URL + '/';
 };
 
-window.reloadDashboard = function() {
+window.refreshDashboard = function() {
     manualRefresh();
 };
 
@@ -726,8 +770,22 @@ window.reloadDashboard = function() {
 
 window.addEventListener('unhandledrejection', function(event) {
     console.error('Promesa rechazada no manejada:', event.reason);
+    mostrarNotificacion('Error inesperado en la aplicación', 'error');
 });
 
 window.addEventListener('error', function(event) {
     console.error('Error global:', event.error);
 });
+
+// =====================================================
+// ACTUALIZACIÓN AUTOMÁTICA CADA 5 MINUTOS
+// =====================================================
+
+// Actualizar datos automáticamente cada 5 minutos
+setInterval(() => {
+    console.log('🔄 Actualización automática programada...');
+    cargarDatosIniciales();
+    if (calendar) {
+        calendar.refetchEvents();
+    }
+}, 5 * 60 * 1000); // 5 minutos

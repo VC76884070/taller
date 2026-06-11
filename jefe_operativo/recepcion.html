@@ -131,13 +131,12 @@
                     <div class="colaboradores-list" id="colaboradoresList"></div>
                 </div>
 
+                <!-- FORMULARIO DE RECEPCIÓN -->
                 <form id="recepcionForm" class="recepcion-form" style="display: none;">
                     <!-- 1️⃣ DATOS DEL CLIENTE -->
                     <div class="form-card" data-seccion="cliente">
                         <div class="card-header">
-                            <div class="card-icon">
-                                <i class="fas fa-user"></i>
-                            </div>
+                            <div class="card-icon"><i class="fas fa-user"></i></div>
                             <h2>Datos del Cliente</h2>
                             <div class="seccion-status">
                                 <span class="status-badge" id="statusCliente">○ Pendiente</span>
@@ -149,39 +148,26 @@
                         <div class="card-body">
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="clienteNombre">
-                                        <i class="fas fa-user"></i>
-                                        Nombre completo *
-                                    </label>
+                                    <label for="clienteNombre"><i class="fas fa-user"></i> Nombre completo *</label>
                                     <input type="text" id="clienteNombre" placeholder="Ej: Juan Pérez">
                                 </div>
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="clienteTelefono">
-                                        <i class="fas fa-phone"></i>
-                                        Teléfono *
-                                    </label>
+                                    <label for="clienteTelefono"><i class="fas fa-phone"></i> Teléfono *</label>
                                     <input type="tel" id="clienteTelefono" placeholder="Ej: 77712345">
                                 </div>
                                 <div class="form-group full-width">
-                                    <label for="clienteUbicacion">
-                                        <i class="fas fa-map-marker-alt"></i>
-                                        Ubicación del Cliente
-                                    </label>
+                                    <label for="clienteUbicacion"><i class="fas fa-map-marker-alt"></i> Ubicación del Cliente</label>
                                     <div class="ubicacion-input-group">
-                                        <input type="text" id="clienteUbicacion"
-                                            placeholder="Selecciona una ubicación en el mapa..." readonly>
+                                        <input type="text" id="clienteUbicacion" placeholder="Selecciona una ubicación en el mapa..." readonly>
                                         <button type="button" class="btn-ubicacion" id="btnAbrirModalUbicacion">
                                             <i class="fas fa-map-pin"></i> Elegir en mapa
                                         </button>
                                     </div>
                                     <input type="hidden" id="clienteLatitud" value="">
                                     <input type="hidden" id="clienteLongitud" value="">
-                                    <small class="form-hint">
-                                        <i class="fas fa-info-circle"></i> Haz clic en "Elegir en mapa" para seleccionar
-                                        la ubicación exacta del cliente
-                                    </small>
+                                    <small class="form-hint"><i class="fas fa-info-circle"></i> Haz clic en "Elegir en mapa" para seleccionar la ubicación exacta del cliente</small>
                                 </div>
                             </div>
                             <div class="form-actions-seccion">
@@ -198,9 +184,7 @@
                     <!-- 2️⃣ DATOS DEL VEHÍCULO -->
                     <div class="form-card" data-seccion="vehiculo">
                         <div class="card-header">
-                            <div class="card-icon">
-                                <i class="fas fa-car"></i>
-                            </div>
+                            <div class="card-icon"><i class="fas fa-car"></i></div>
                             <h2>Datos del Vehículo</h2>
                             <div class="seccion-status">
                                 <span class="status-badge" id="statusVehiculo">○ Pendiente</span>
@@ -212,43 +196,27 @@
                         <div class="card-body">
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="vehiculoPlaca">
-                                        <i class="fas fa-id-card"></i>
-                                        Placa *
-                                    </label>
-                                    <input type="text" id="vehiculoPlaca" placeholder="Ej: ABC123" maxlength="8"
-                                        style="text-transform: uppercase;">
+                                    <label for="vehiculoPlaca"><i class="fas fa-id-card"></i> Placa *</label>
+                                    <input type="text" id="vehiculoPlaca" placeholder="Ej: ABC123" maxlength="8" style="text-transform: uppercase;">
                                 </div>
                                 <div class="form-group">
-                                    <label for="vehiculoMarca">
-                                        <i class="fas fa-tag"></i>
-                                        Marca *
-                                    </label>
+                                    <label for="vehiculoMarca"><i class="fas fa-tag"></i> Marca *</label>
                                     <input type="text" id="vehiculoMarca" placeholder="Ej: Toyota">
                                 </div>
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="vehiculoModelo">
-                                        <i class="fas fa-car-side"></i>
-                                        Modelo *
-                                    </label>
+                                    <label for="vehiculoModelo"><i class="fas fa-car-side"></i> Modelo *</label>
                                     <input type="text" id="vehiculoModelo" placeholder="Ej: Corolla">
                                 </div>
                                 <div class="form-group">
-                                    <label for="vehiculoAnio">
-                                        <i class="fas fa-calendar"></i>
-                                        Año
-                                    </label>
+                                    <label for="vehiculoAnio"><i class="fas fa-calendar"></i> Año</label>
                                     <input type="number" id="vehiculoAnio" placeholder="Ej: 2020" min="1900" max="2026">
                                 </div>
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="vehiculoKilometraje">
-                                        <i class="fas fa-tachometer-alt"></i>
-                                        Kilometraje
-                                    </label>
+                                    <label for="vehiculoKilometraje"><i class="fas fa-tachometer-alt"></i> Kilometraje</label>
                                     <input type="number" id="vehiculoKilometraje" placeholder="Ej: 45000">
                                 </div>
                             </div>
@@ -266,9 +234,7 @@
                     <!-- 3️⃣ REGISTRO FOTOGRÁFICO -->
                     <div class="form-card" data-seccion="fotos">
                         <div class="card-header">
-                            <div class="card-icon">
-                                <i class="fas fa-camera"></i>
-                            </div>
+                            <div class="card-icon"><i class="fas fa-camera"></i></div>
                             <h2>Registro Fotográfico</h2>
                             <span class="card-badge">7 vistas requeridas</span>
                             <div class="seccion-status">
@@ -292,9 +258,7 @@
                     <!-- 4️⃣ DESCRIPCIÓN DEL PROBLEMA -->
                     <div class="form-card" data-seccion="descripcion">
                         <div class="card-header">
-                            <div class="card-icon">
-                                <i class="fas fa-pencil-alt"></i>
-                            </div>
+                            <div class="card-icon"><i class="fas fa-pencil-alt"></i></div>
                             <h2>Descripción del Problema</h2>
                             <div class="seccion-status">
                                 <span class="status-badge" id="statusDescripcion">○ Pendiente</span>
@@ -305,38 +269,22 @@
                         </div>
                         <div class="card-body">
                             <div class="form-group">
-                                <label for="descripcionProblema">
-                                    <i class="fas fa-align-left"></i>
-                                    Describa el problema reportado por el cliente *
-                                </label>
-                                <textarea id="descripcionProblema" rows="5"
-                                    placeholder="Ej: El vehículo hace un ruido extraño al frenar..."></textarea>
+                                <label for="descripcionProblema"><i class="fas fa-align-left"></i> Describa el problema reportado por el cliente *</label>
+                                <textarea id="descripcionProblema" rows="5" placeholder="Ej: El vehículo hace un ruido extraño al frenar..."></textarea>
                             </div>
                             <div class="audio-controls">
                                 <div class="audio-buttons">
                                     <button type="button" class="btn-audio" id="btnGrabarAudio">
-                                        <i class="fas fa-microphone"></i>
-                                        <span>Grabar Audio</span>
+                                        <i class="fas fa-microphone"></i> <span>Grabar Audio</span>
                                     </button>
-                                    <button type="button" class="btn-eliminar-audio" id="btnEliminarAudio"
-                                        style="display: none;">
-                                        <i class="fas fa-trash-alt"></i>
-                                        <span>Eliminar Grabación</span>
-                                    </button>
-                                    <button type="button" class="btn-transcribir" id="btnTranscribirAudio"
-                                        style="display: none;">
-                                        <i class="fas fa-language"></i>
-                                        <span>Transcribir Audio</span>
+                                    <button type="button" class="btn-eliminar-audio" id="btnEliminarAudio" style="display: none;">
+                                        <i class="fas fa-trash-alt"></i> <span>Eliminar Grabación</span>
                                     </button>
                                 </div>
                                 <div class="audio-status-container">
                                     <span class="audio-status" id="audioStatus"></span>
                                     <audio id="audioPreview" controls style="display: none;"></audio>
                                 </div>
-                            </div>
-                            <div id="transcripcionLoading" style="display: none;">
-                                <i class="fas fa-spinner fa-spin"></i>
-                                <span>Procesando transcripción...</span>
                             </div>
                             <div class="form-actions-seccion">
                                 <button type="button" class="btn-limpiar" id="btnLimpiarDescripcion">
@@ -353,7 +301,7 @@
                     </div>
                 </form>
 
-                <!-- PANEL DE RECEPCIONES GUARDADAS -->
+                <!-- PANEL DE RECEPCIONES GUARDADAS (se oculta cuando hay sesión activa) -->
                 <div class="recepciones-guardadas-panel" id="recepcionesGuardadasPanel">
                     <div class="panel-header">
                         <i class="fas fa-archive"></i>
@@ -367,8 +315,7 @@
                     <div class="filtros-recepciones">
                         <div class="filtro-grupo">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="searchRecepcion" placeholder="Buscar por código, placa o cliente..."
-                                class="filtro-input">
+                            <input type="text" id="searchRecepcion" placeholder="Buscar por código, placa o cliente..." class="filtro-input">
                         </div>
                         <div class="filtro-grupo">
                             <i class="fas fa-calendar"></i>
@@ -410,8 +357,10 @@
     </div>
 
     <!-- ===================================================== -->
-    <!-- MODAL PARA UNIRSE POR CÓDIGO (MANUAL) -->
+    <!-- MODALES -->
     <!-- ===================================================== -->
+
+    <!-- Modal para unirse por código (manual) -->
     <div class="modal" id="modalUnirsePorCodigo">
         <div class="modal-content">
             <div class="modal-header">
@@ -421,23 +370,18 @@
             <div class="modal-body">
                 <p>Ingresa el código de la sesión a la que deseas unirte:</p>
                 <div class="form-group">
-                    <input type="text" id="codigoUnirseInput" placeholder="Ej: S-ABC123" class="codigo-input"
-                        autocomplete="off" style="text-transform: uppercase;">
+                    <input type="text" id="codigoUnirseInput" placeholder="Ej: S-ABC123" class="codigo-input" autocomplete="off" style="text-transform: uppercase;">
                 </div>
                 <p class="modal-hint">* Máximo 2 colaboradores por sesión</p>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" id="btnCerrarModalUnirseFooter">Cancelar</button>
-                <button class="btn-primary" id="btnConfirmarUnirse">
-                    <i class="fas fa-sign-in-alt"></i> Unirse
-                </button>
+                <button class="btn-primary" id="btnConfirmarUnirse"><i class="fas fa-sign-in-alt"></i> Unirse</button>
             </div>
         </div>
     </div>
 
-    <!-- ===================================================== -->
-    <!-- MODAL DE CÓDIGO GENERADO (sesión creada) -->
-    <!-- ===================================================== -->
+    <!-- Modal de código generado (sesión creada) -->
     <div class="modal" id="codigoModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -447,9 +391,7 @@
             <div class="modal-body">
                 <p>Comparte este código con otros técnicos para trabajar juntos:</p>
                 <div class="codigo-sesion" id="codigoSesionModal">S-XXXXXX</div>
-                <button class="btn-copy" id="btnCopiarCodigoModal">
-                    <i class="fas fa-copy"></i> Copiar código
-                </button>
+                <button class="btn-copy" id="btnCopiarCodigoModal"><i class="fas fa-copy"></i> Copiar código</button>
                 <p class="modal-hint">* Los cambios se guardan manualmente con los botones "Guardar"</p>
             </div>
             <div class="modal-footer">
@@ -458,9 +400,7 @@
         </div>
     </div>
 
-    <!-- ===================================================== -->
-    <!-- MODAL DE CÓDIGO GENERADO (orden finalizada) -->
-    <!-- ===================================================== -->
+    <!-- Modal de código generado (orden finalizada) -->
     <div class="modal" id="codigoOrdenModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -476,19 +416,13 @@
                 <div class="resumen-datos" id="resumenDatos"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalOrden()">
-                    <i class="fas fa-times"></i> Cerrar
-                </button>
-                <button class="btn-primary" onclick="imprimirCodigo()">
-                    <i class="fas fa-print"></i> Imprimir
-                </button>
+                <button class="btn-secondary" onclick="cerrarModalOrden()"><i class="fas fa-times"></i> Cerrar</button>
+                <button class="btn-primary" onclick="imprimirCodigo()"><i class="fas fa-print"></i> Imprimir</button>
             </div>
         </div>
     </div>
 
-    <!-- ===================================================== -->
-    <!-- MODAL PARA VER DETALLES DE RECEPCIÓN -->
-    <!-- ===================================================== -->
+    <!-- Modal para ver detalles de recepción -->
     <div class="modal modal-detalle" id="modalDetalleRecepcion">
         <div class="modal-content modal-detalle-content">
             <div class="modal-header">
@@ -499,22 +433,14 @@
                 <!-- Contenido dinámico -->
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalDetalle()">
-                    <i class="fas fa-times"></i> Cerrar
-                </button>
-                <button class="btn-primary" id="btnExportarWord">
-                    <i class="fas fa-file-word"></i> Exportar a Word
-                </button>
-                <button class="btn-primary" id="btnExportarPDF">
-                    <i class="fas fa-file-pdf"></i> Exportar a PDF
-                </button>
+                <button class="btn-secondary" onclick="cerrarModalDetalle()"><i class="fas fa-times"></i> Cerrar</button>
+                <button class="btn-primary" id="btnExportarWord"><i class="fas fa-file-word"></i> Exportar a Word</button>
+                <button class="btn-primary" id="btnExportarPDF"><i class="fas fa-file-pdf"></i> Exportar a PDF</button>
             </div>
         </div>
     </div>
 
-    <!-- ===================================================== -->
-    <!-- MODAL PARA CONFIRMAR ELIMINACIÓN -->
-    <!-- ===================================================== -->
+    <!-- Modal para confirmar eliminación -->
     <div class="modal" id="modalConfirmarEliminar">
         <div class="modal-content">
             <div class="modal-header">
@@ -527,19 +453,13 @@
                 <div id="eliminarInfo"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalEliminar()">
-                    <i class="fas fa-times"></i> Cancelar
-                </button>
-                <button class="btn-danger" id="btnConfirmarEliminar">
-                    <i class="fas fa-trash-alt"></i> Sí, Eliminar
-                </button>
+                <button class="btn-secondary" onclick="cerrarModalEliminar()"><i class="fas fa-times"></i> Cancelar</button>
+                <button class="btn-danger" id="btnConfirmarEliminar"><i class="fas fa-trash-alt"></i> Sí, Eliminar</button>
             </div>
         </div>
     </div>
 
-    <!-- ===================================================== -->
-    <!-- MODAL PARA SELECCIONAR UBICACIÓN CON LEAFLET (AGREGADO) -->
-    <!-- ===================================================== -->
+    <!-- Modal para seleccionar ubicación con Leaflet -->
     <div class="modal" id="modalUbicacionLeaflet">
         <div class="modal-content modal-ubicacion">
             <div class="modal-header">
@@ -550,9 +470,7 @@
                 <div class="ubicacion-busqueda">
                     <div class="search-container">
                         <i class="fas fa-search"></i>
-                        <input type="text" id="modalBuscarUbicacionLeaflet" 
-                               placeholder="Buscar dirección (calle, zona, ciudad)..." 
-                               class="ubicacion-search">
+                        <input type="text" id="modalBuscarUbicacionLeaflet" placeholder="Buscar dirección (calle, zona, ciudad)..." class="ubicacion-search">
                         <button type="button" id="btnBuscarUbicacionLeaflet" class="btn-buscar">
                             <i class="fas fa-search"></i> Buscar
                         </button>
@@ -570,12 +488,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" id="btnCancelarUbicacionLeaflet">
-                    <i class="fas fa-times"></i> Cancelar
-                </button>
-                <button class="btn-primary" id="btnConfirmarUbicacionLeaflet" disabled>
-                    <i class="fas fa-check"></i> Usar esta ubicación
-                </button>
+                <button class="btn-secondary" id="btnCancelarUbicacionLeaflet"><i class="fas fa-times"></i> Cancelar</button>
+                <button class="btn-primary" id="btnConfirmarUbicacionLeaflet" disabled><i class="fas fa-check"></i> Usar esta ubicación</button>
             </div>
         </div>
     </div>

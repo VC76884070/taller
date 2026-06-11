@@ -107,7 +107,6 @@ const btnCopiarCodigoSesion = document.getElementById('btnCopiarCodigoSesion');
 const photoGrid = document.getElementById('photoGrid');
 const btnGrabarAudio = document.getElementById('btnGrabarAudio');
 const btnEliminarAudio = document.getElementById('btnEliminarAudio');
-const btnTranscribirAudio = document.getElementById('btnTranscribirAudio');
 const audioStatus = document.getElementById('audioStatus');
 const audioPreview = document.getElementById('audioPreview');
 const descripcionProblema = document.getElementById('descripcionProblema');
@@ -129,69 +128,6 @@ const FOTOS_CONFIG = [
     { id: 'fotoInferior', nombre: 'inferior', label: 'Inferior', icono: 'fa-arrow-down', campo: 'url_foto_inferior' },
     { id: 'fotoTablero', nombre: 'tablero', label: 'Tablero', icono: 'fa-tachometer-alt', campo: 'url_foto_tablero' }
 ];
-
-// =====================================================
-// FUNCIÓN PARA SUBIR FOTO A CLOUDINARY (DESDE FRONTEND)
-// =====================================================
-async function subirFotoCloudinary(file, carpeta, campo) {
-    return new Promise((resolve, reject) => {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-        formData.append('folder', `furia_motor/recepcion/${carpeta}`);
-        
-        const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
-        
-        logger.info(`📤 Subiendo foto ${campo}...`);
-        
-        fetch(url, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.secure_url) {
-                logger.info(`✅ Foto ${campo} subida: ${data.secure_url}`);
-                resolve(data.secure_url);
-            } else {
-                reject(new Error(data.error?.message || 'Error subiendo foto'));
-            }
-        })
-        .catch(reject);
-    });
-}
-
-// =====================================================
-// FUNCIÓN PARA SUBIR AUDIO A CLOUDINARY
-// =====================================================
-async function subirAudioCloudinary(audioBlob, carpeta) {
-    return new Promise((resolve, reject) => {
-        const formData = new FormData();
-        formData.append('file', audioBlob, 'audio.wav');
-        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-        formData.append('folder', `furia_motor/audios/${carpeta}`);
-        formData.append('resource_type', 'video');
-        
-        const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`;
-        
-        logger.info('📤 Subiendo audio a Cloudinary...');
-        
-        fetch(url, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.secure_url) {
-                logger.info(`✅ Audio subido: ${data.secure_url}`);
-                resolve(data.secure_url);
-            } else {
-                reject(new Error(data.error?.message || 'Error subiendo audio'));
-            }
-        })
-        .catch(reject);
-    });
-}
 
 // =====================================================
 // FUNCIÓN PARA HACER PETICIONES CON TOKEN
@@ -245,8 +181,10 @@ function actualizarBotonFinalizar() {
         if (!seccionesCompletadasLocal.fotos) faltantes.push('Fotos (7)');
         if (!seccionesCompletadasLocal.descripcion) faltantes.push('Descripción');
         btnFinalizar.title = `Completa: ${faltantes.join(', ')}`;
+        console.log('⏳ Botón deshabilitado - Faltan:', faltantes);
     } else {
         btnFinalizar.title = 'Finalizar recepción';
+        console.log('✅ Botón habilitado - Todas las secciones completas');
     }
 }
 
@@ -374,7 +312,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('========================================');
     console.log('📡 API_BASE_URL:', window.API_BASE_URL);
     console.log('📡 API_URL:', API_URL);
-    console.log('📡 CLOUDINARY_CLOUD_NAME:', CLOUDINARY_CLOUD_NAME);
     
     const autenticado = await checkAuth();
     if (!autenticado) return;
@@ -467,7 +404,32 @@ function generatePhotoUploads() {
     `).join('');
 }
 
-async function procesarFoto(input, foto) {
+async function subirFotoCloudinary(file, carpeta, campo) {
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+        formData.append('folder', `furia_motor/recepcion/${carpeta}`);
+        
+        const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+        
+        fetch(url, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.secure_url) {
+                resolve(data.secure_url);
+            } else {
+                reject(new Error(data.error?.message || 'Error subiendo foto'));
+            }
+        })
+        .catch(reject);
+    });
+}
+
+function procesarFoto(input, foto) {
     const file = input.files[0];
     if (!file) return;
     
@@ -490,25 +452,24 @@ async function procesarFoto(input, foto) {
         uploadDiv.dataset.objectUrl = objectUrl;
         if (removeBtn) removeBtn.style.display = 'flex';
         
-        // Subir directamente a Cloudinary
         mostrarNotificacion(`Subiendo ${foto.label}...`, 'info');
-        try {
-            const url = await subirFotoCloudinary(file, codigoSesion || 'temp', foto.campo);
-            uploadDiv.dataset.cloudinaryUrl = url;
-            fotosSubidasLocal[foto.campo] = url;
-            mostrarNotificacion(`✅ ${foto.label} subida`, 'success');
-            validarCompletadoFotos();
-            
-            if (codigoSesion && seccionesCompletadasLocal.fotos) {
-                await guardarSeccion('fotos');
-            }
-        } catch (error) {
-            console.error('Error subiendo foto:', error);
-            mostrarNotificacion(`Error al subir ${foto.label}`, 'error');
-            preview.style.backgroundImage = '';
-            uploadDiv.classList.remove('has-image');
-            if (removeBtn) removeBtn.style.display = 'none';
-        }
+        subirFotoCloudinary(file, codigoSesion || 'temp', foto.campo)
+            .then(url => {
+                uploadDiv.dataset.cloudinaryUrl = url;
+                fotosSubidasLocal[foto.campo] = url;
+                mostrarNotificacion(`✅ ${foto.label} subida`, 'success');
+                validarCompletadoFotos();
+                if (codigoSesion && seccionesCompletadasLocal.fotos) {
+                    guardarSeccion('fotos');
+                }
+            })
+            .catch(error => {
+                console.error('Error subiendo foto:', error);
+                mostrarNotificacion(`Error al subir ${foto.label}`, 'error');
+                preview.style.backgroundImage = '';
+                uploadDiv.classList.remove('has-image');
+                if (removeBtn) removeBtn.style.display = 'none';
+            });
     }
 }
 
@@ -555,6 +516,32 @@ function setupAudioRecording() {
     if (btnEliminarAudio) btnEliminarAudio.addEventListener('click', eliminarGrabacion);
 }
 
+async function subirAudioCloudinary(audioBlob, carpeta) {
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'audio.wav');
+        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+        formData.append('folder', `furia_motor/audios/${carpeta}`);
+        formData.append('resource_type', 'video');
+        
+        const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`;
+        
+        fetch(url, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.secure_url) {
+                resolve(data.secure_url);
+            } else {
+                reject(new Error(data.error?.message || 'Error subiendo audio'));
+            }
+        })
+        .catch(reject);
+    });
+}
+
 async function startRecording() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -568,7 +555,7 @@ async function startRecording() {
             const audioUrl = URL.createObjectURL(audioBlob);
             audioPreview.src = audioUrl;
             audioPreview.style.display = 'block';
-            audioStatus.textContent = 'Audio grabado - Guardando...';
+            audioStatus.textContent = 'Audio grabado - Subiendo...';
             
             mostrarNotificacion('Subiendo audio...', 'info');
             try {
@@ -709,6 +696,12 @@ async function guardarSeccion(seccion) {
                 guardadoSpan.style.display = 'flex';
                 setTimeout(() => guardadoSpan.style.display = 'none', 1500);
             }
+            
+            // 🔥 FORZAR ACTUALIZACIÓN DEL ESTADO LOCAL
+            if (seccion === 'cliente') validarCompletadoCliente();
+            if (seccion === 'vehiculo') validarCompletadoVehiculo();
+            if (seccion === 'fotos') validarCompletadoFotos();
+            if (seccion === 'descripcion') validarCompletadoDescripcion();
         }
     } catch (error) {
         logger.error('Error guardando:', error);
@@ -771,21 +764,33 @@ async function cargarDatosSesionInicial() {
         
         // Cargar cliente
         if (datos.cliente) {
-            document.getElementById('clienteNombre').value = datos.cliente.nombre || '';
-            document.getElementById('clienteTelefono').value = datos.cliente.telefono || '';
-            document.getElementById('clienteUbicacion').value = datos.cliente.ubicacion || '';
-            document.getElementById('clienteLatitud').value = datos.cliente.latitud || '';
-            document.getElementById('clienteLongitud').value = datos.cliente.longitud || '';
+            const nombre = document.getElementById('clienteNombre');
+            const telefono = document.getElementById('clienteTelefono');
+            const ubicacion = document.getElementById('clienteUbicacion');
+            const latitud = document.getElementById('clienteLatitud');
+            const longitud = document.getElementById('clienteLongitud');
+            
+            if (nombre) nombre.value = datos.cliente.nombre || '';
+            if (telefono) telefono.value = datos.cliente.telefono || '';
+            if (ubicacion) ubicacion.value = datos.cliente.ubicacion || '';
+            if (latitud) latitud.value = datos.cliente.latitud || '';
+            if (longitud) longitud.value = datos.cliente.longitud || '';
             validarCompletadoCliente();
         }
         
         // Cargar vehículo
         if (datos.vehiculo) {
-            document.getElementById('vehiculoPlaca').value = datos.vehiculo.placa || '';
-            document.getElementById('vehiculoMarca').value = datos.vehiculo.marca || '';
-            document.getElementById('vehiculoModelo').value = datos.vehiculo.modelo || '';
-            document.getElementById('vehiculoAnio').value = datos.vehiculo.anio || '';
-            document.getElementById('vehiculoKilometraje').value = datos.vehiculo.kilometraje || '';
+            const placa = document.getElementById('vehiculoPlaca');
+            const marca = document.getElementById('vehiculoMarca');
+            const modelo = document.getElementById('vehiculoModelo');
+            const anio = document.getElementById('vehiculoAnio');
+            const kilometraje = document.getElementById('vehiculoKilometraje');
+            
+            if (placa) placa.value = datos.vehiculo.placa || '';
+            if (marca) marca.value = datos.vehiculo.marca || '';
+            if (modelo) modelo.value = datos.vehiculo.modelo || '';
+            if (anio) anio.value = datos.vehiculo.anio || '';
+            if (kilometraje) kilometraje.value = datos.vehiculo.kilometraje || '';
             validarCompletadoVehiculo();
         }
         
@@ -812,13 +817,15 @@ async function cargarDatosSesionInicial() {
         
         // Cargar descripción
         if (datos.descripcion) {
-            descripcionProblema.value = datos.descripcion.texto || '';
+            if (descripcionProblema) descripcionProblema.value = datos.descripcion.texto || '';
             if (datos.descripcion.audio_url) {
                 audioCloudinaryUrl = datos.descripcion.audio_url;
-                audioPreview.src = audioCloudinaryUrl;
-                audioPreview.style.display = 'block';
+                if (audioPreview) {
+                    audioPreview.src = audioCloudinaryUrl;
+                    audioPreview.style.display = 'block';
+                }
                 if (btnEliminarAudio) btnEliminarAudio.style.display = 'flex';
-                audioStatus.textContent = 'Audio disponible';
+                if (audioStatus) audioStatus.textContent = 'Audio disponible';
             }
             validarCompletadoDescripcion();
         }
@@ -869,6 +876,12 @@ async function recuperarSesionActiva() {
 async function finalizarSesion() {
     if (!codigoSesion) return;
     
+    // 🔥 VERIFICAR NUEVAMENTE ANTES DE FINALIZAR
+    validarCompletadoCliente();
+    validarCompletadoVehiculo();
+    validarCompletadoFotos();
+    validarCompletadoDescripcion();
+    
     if (!seccionesCompletadasLocal.cliente || !seccionesCompletadasLocal.vehiculo || 
         !seccionesCompletadasLocal.fotos || !seccionesCompletadasLocal.descripcion) {
         mostrarNotificacion('Completa todas las secciones antes de finalizar', 'warning');
@@ -886,19 +899,9 @@ async function finalizarSesion() {
         const data = await response.json();
         if (data.success) {
             mostrarCodigoGenerado(data.codigo);
-            
-            // IMPORTANTE: Limpiar la sesión actual
             limpiarSesionCompleta();
-            
             mostrarNotificacion('Recepción finalizada', 'success');
-            
-            // Forzar actualización de la lista de sesiones activas
             if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
-            
-            // Recargar sesiones activas inmediatamente
-            await cargarSesionesActivas();
-            
-            // Recargar recepciones guardadas
             await cargarRecepciones();
         }
     } catch (error) {
@@ -910,7 +913,6 @@ function limpiarSesionCompleta() {
     detenerPolling();
     detenerKeepAlive();
     
-    // Limpiar variables globales
     codigoSesion = null;
     sesionActual = null;
     audioCloudinaryUrl = null;
@@ -922,15 +924,11 @@ function limpiarSesionCompleta() {
         descripcion: false
     };
     
-    // Limpiar localStorage
     localStorage.removeItem('sesion_actual');
     
-    // Ocultar paneles de sesión activa
     if (sessionPanel) sessionPanel.style.display = 'none';
     if (colaboradoresPanel) colaboradoresPanel.style.display = 'none';
     if (recepcionForm) recepcionForm.style.display = 'none';
-    
-    // Mostrar panel de sesiones activas
     if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
     
     // Limpiar formulario
@@ -970,9 +968,7 @@ function limpiarSesionCompleta() {
         btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
     }
     
-    // Resetear estado del botón finalizar
     actualizarBotonFinalizar();
-    
     console.log('✅ Sesión limpiada correctamente');
 }
 
@@ -1004,7 +1000,6 @@ async function cargarSesionesActivas() {
         const data = await response.json();
         
         if (data.sesiones) {
-            // Filtrar solo sesiones activas (por si acaso)
             const sesionesActivasFiltradas = data.sesiones.filter(s => s.estado === 'activa');
             renderSesionesActivas(sesionesActivasFiltradas);
         }
@@ -1104,27 +1099,31 @@ async function cargarDatosSesionLigero() {
         }
         
         const nuevosDatos = data.sesion.datos;
+        const nuevasSecciones = data.sesion.secciones_completadas;
         
-        // Solo actualizar campos no editados
-        if (!camposEnEdicion.cliente && nuevosDatos.cliente) {
-            const clienteNombre = document.getElementById('clienteNombre');
-            if (clienteNombre && clienteNombre.value !== nuevosDatos.cliente.nombre && nuevosDatos.cliente.nombre) {
-                clienteNombre.value = nuevosDatos.cliente.nombre;
+        // Actualizar estado de completado desde el servidor
+        if (nuevasSecciones) {
+            let cambio = false;
+            if (seccionesCompletadasLocal.cliente !== nuevasSecciones.cliente) {
+                seccionesCompletadasLocal.cliente = nuevasSecciones.cliente;
+                actualizarEstadoVisualSeccion('cliente', nuevasSecciones.cliente);
+                cambio = true;
             }
-        }
-        
-        if (!camposEnEdicion.vehiculo && nuevosDatos.vehiculo) {
-            const vehiculoPlaca = document.getElementById('vehiculoPlaca');
-            if (vehiculoPlaca && vehiculoPlaca.value !== nuevosDatos.vehiculo.placa && nuevosDatos.vehiculo.placa) {
-                vehiculoPlaca.value = nuevosDatos.vehiculo.placa;
+            if (seccionesCompletadasLocal.vehiculo !== nuevasSecciones.vehiculo) {
+                seccionesCompletadasLocal.vehiculo = nuevasSecciones.vehiculo;
+                actualizarEstadoVisualSeccion('vehiculo', nuevasSecciones.vehiculo);
+                cambio = true;
             }
-        }
-        
-        if (!camposEnEdicion.descripcion && nuevosDatos.descripcion && !descripcionModificadaManualmente) {
-            if (descripcionProblema && descripcionProblema.value !== nuevosDatos.descripcion.texto && nuevosDatos.descripcion.texto) {
-                descripcionProblema.value = nuevosDatos.descripcion.texto;
-                descripcionOriginal = nuevosDatos.descripcion.texto;
+            if (seccionesCompletadasLocal.fotos !== nuevasSecciones.fotos) {
+                seccionesCompletadasLocal.fotos = nuevasSecciones.fotos;
+                cambio = true;
             }
+            if (seccionesCompletadasLocal.descripcion !== nuevasSecciones.descripcion) {
+                seccionesCompletadasLocal.descripcion = nuevasSecciones.descripcion;
+                actualizarEstadoVisualSeccion('descripcion', nuevasSecciones.descripcion);
+                cambio = true;
+            }
+            if (cambio) actualizarBotonFinalizar();
         }
         
         sesionActual = data.sesion;
@@ -1224,18 +1223,13 @@ function filtrarYMostrarRecepciones() {
 }
 
 // =====================================================
-// LEAFLET MAPA - FUNCIONES COMPLETAS
+// LEAFLET MAPA
 // =====================================================
 function initLeafletMap() {
     if (leafletInicializado) return;
     
     const mapContainer = document.getElementById('leafletMapa');
-    if (!mapContainer) {
-        console.log('❌ No se encontró el contenedor del mapa');
-        return;
-    }
-    
-    console.log('🗺️ Inicializando mapa Leaflet...');
+    if (!mapContainer) return;
     
     mapCliente = L.map(mapContainer).setView([TALLER_LAT, TALLER_LNG], 13);
     
@@ -1261,7 +1255,6 @@ function initLeafletMap() {
     });
     
     leafletInicializado = true;
-    console.log('✅ Mapa Leaflet inicializado');
 }
 
 async function obtenerDireccion(lat, lng) {
@@ -1288,12 +1281,7 @@ function actualizarInfoUbicacion() {
 
 function abrirModalLeaflet() {
     const modal = document.getElementById('modalUbicacionLeaflet');
-    if (!modal) {
-        console.log('❌ Modal de ubicación no encontrado');
-        return;
-    }
-    
-    console.log('📍 Abriendo modal de ubicación');
+    if (!modal) return;
     
     ubicacionTemporal = { texto: '', lat: null, lng: null };
     
@@ -1308,9 +1296,7 @@ function abrirModalLeaflet() {
     }
     
     setTimeout(() => {
-        if (mapCliente) {
-            mapCliente.invalidateSize();
-        }
+        if (mapCliente) mapCliente.invalidateSize();
     }, 100);
     
     modal.classList.add('show');
@@ -1370,14 +1356,9 @@ async function buscarYMostrarLeaflet() {
 }
 
 function setupModalUbicacionLeaflet() {
-    if (!btnAbrirModalUbicacion) {
-        console.log('❌ Botón de ubicación no encontrado');
-        return;
-    }
+    if (!btnAbrirModalUbicacion) return;
     
-    btnAbrirModalUbicacion.addEventListener('click', () => {
-        abrirModalLeaflet();
-    });
+    btnAbrirModalUbicacion.addEventListener('click', abrirModalLeaflet);
     
     const btnCerrar = document.getElementById('btnCerrarModalUbicacionLeaflet');
     if (btnCerrar) btnCerrar.addEventListener('click', cerrarModalLeaflet);
@@ -1404,8 +1385,6 @@ function setupModalUbicacionLeaflet() {
             if (e.target === modal) cerrarModalLeaflet();
         });
     }
-    
-    console.log('✅ Modal de ubicación configurado');
 }
 
 // =====================================================
@@ -1459,7 +1438,7 @@ function mostrarModalDetalle(detalle) {
                 </div>
             </div>
             <div class="detalle-seccion">
-                <h4><i class="fas fa-camera"></i> Descripción del Problema</h4>
+                <h4><i class="fas fa-pencil-alt"></i> Descripción del Problema</h4>
                 <div class="detalle-descripcion">${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}</div>
                 ${detalle.audio_url ? `<div class="detalle-audio"><audio controls src="${detalle.audio_url}"></audio></div>` : ''}
             </div>
@@ -1473,24 +1452,31 @@ async function editarRecepcion(id) {
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/detalle-recepcion/${id}`, { method: 'GET' });
         const data = await response.json();
         if (response.ok && data.detalle) {
-            cargarDatosParaEdicion(data.detalle);
+            const detalle = data.detalle;
+            if (document.getElementById('clienteNombre')) document.getElementById('clienteNombre').value = detalle.cliente_nombre || '';
+            if (document.getElementById('clienteTelefono')) document.getElementById('clienteTelefono').value = detalle.cliente_telefono || '';
+            if (document.getElementById('clienteUbicacion')) document.getElementById('clienteUbicacion').value = detalle.cliente_ubicacion || '';
+            if (document.getElementById('vehiculoPlaca')) document.getElementById('vehiculoPlaca').value = detalle.placa || '';
+            if (document.getElementById('vehiculoMarca')) document.getElementById('vehiculoMarca').value = detalle.marca || '';
+            if (document.getElementById('vehiculoModelo')) document.getElementById('vehiculoModelo').value = detalle.modelo || '';
+            if (descripcionProblema) descripcionProblema.value = detalle.transcripcion_problema || '';
+            
             modoEdicionRecepcion = true;
             recepcionEditandoId = id;
             mostrarNotificacion('Modo edición activado', 'info');
+            
+            if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'none';
+            if (sessionPanel) sessionPanel.style.display = 'flex';
+            if (colaboradoresPanel) colaboradoresPanel.style.display = 'block';
+            if (recepcionForm) recepcionForm.style.display = 'block';
+            
+            validarCompletadoCliente();
+            validarCompletadoVehiculo();
+            validarCompletadoDescripcion();
         }
     } catch (error) {
         mostrarNotificacion('Error cargando datos para edición', 'error');
     }
-}
-
-function cargarDatosParaEdicion(detalle) {
-    if (document.getElementById('clienteNombre')) document.getElementById('clienteNombre').value = detalle.cliente_nombre || '';
-    if (document.getElementById('clienteTelefono')) document.getElementById('clienteTelefono').value = detalle.cliente_telefono || '';
-    if (document.getElementById('clienteUbicacion')) document.getElementById('clienteUbicacion').value = detalle.cliente_ubicacion || '';
-    if (document.getElementById('vehiculoPlaca')) document.getElementById('vehiculoPlaca').value = detalle.placa || '';
-    if (document.getElementById('vehiculoMarca')) document.getElementById('vehiculoMarca').value = detalle.marca || '';
-    if (document.getElementById('vehiculoModelo')) document.getElementById('vehiculoModelo').value = detalle.modelo || '';
-    if (descripcionProblema) descripcionProblema.value = detalle.transcripcion_problema || '';
 }
 
 function confirmarEliminarRecepcion(id) {
@@ -1533,6 +1519,11 @@ function setupEventListeners() {
             if (seccion && codigoSesion) {
                 await guardarSeccion(seccion);
                 mostrarNotificacion(`✓ ${seccion} guardado`, 'success');
+                // Forzar validación después de guardar manualmente
+                if (seccion === 'cliente') validarCompletadoCliente();
+                if (seccion === 'vehiculo') validarCompletadoVehiculo();
+                if (seccion === 'fotos') validarCompletadoFotos();
+                if (seccion === 'descripcion') validarCompletadoDescripcion();
             }
         });
     });
@@ -1695,6 +1686,8 @@ function escapeHtml(text) {
 }
 
 function mostrarNotificacion(mensaje, tipo = 'info') {
+    const existingToasts = document.querySelectorAll('.toast-notification');
+    existingToasts.forEach(toast => toast.remove());
     const toast = document.createElement('div');
     toast.className = `toast-notification ${tipo}`;
     const iconos = { success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };

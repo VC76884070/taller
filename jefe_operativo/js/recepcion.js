@@ -232,12 +232,15 @@ function validarCompletadoVehiculo() {
     const modelo = document.getElementById('vehiculoModelo')?.value.trim();
     const completada = !!(placa && marca && modelo);
     
+    console.log('🚗 Validando vehículo - Placa:', placa, 'Marca:', marca, 'Modelo:', modelo, 'Completo:', completada);
+    
     if (seccionesCompletadasLocal.vehiculo !== completada) {
         seccionesCompletadasLocal.vehiculo = completada;
         actualizarEstadoVisualSeccion('vehiculo', completada);
         actualizarBotonFinalizar();
         
         if (completada && codigoSesion && !camposEnEdicion.vehiculo) {
+            console.log('🚗 Vehículo completado, guardando automáticamente...');
             guardarSeccion('vehiculo');
         }
     }
@@ -620,7 +623,7 @@ function eliminarGrabacion() {
 }
 
 // =====================================================
-// GUARDAR SECCIÓN
+// GUARDAR SECCIÓN - VERSIÓN CORREGIDA PARA VEHÍCULO
 // =====================================================
 async function guardarSeccion(seccion) {
     if (!codigoSesion) return;
@@ -686,10 +689,38 @@ async function guardarSeccion(seccion) {
         
         if (data.success) {
             sesionActual = data.sesion;
-            if (data.sesion.secciones_completadas) {
-                seccionesCompletadasLocal = { ...data.sesion.secciones_completadas };
-                actualizarBotonFinalizar();
+            
+            // 🔥 IMPORTANTE: Forzar el estado de completado basado en los DATOS REALES, no en lo que dice el servidor
+            if (seccion === 'vehiculo') {
+                const placa = datos.placa?.trim();
+                const marca = datos.marca?.trim();
+                const modelo = datos.modelo?.trim();
+                const vehiculoCompleto = !!(placa && marca && modelo);
+                
+                seccionesCompletadasLocal.vehiculo = vehiculoCompleto;
+                
+                const badgeVehiculo = document.getElementById('statusVehiculo');
+                if (badgeVehiculo) {
+                    if (vehiculoCompleto) {
+                        badgeVehiculo.textContent = '✓ Completado';
+                        badgeVehiculo.classList.add('completado');
+                        badgeVehiculo.classList.remove('en-proceso');
+                    } else {
+                        badgeVehiculo.textContent = '○ Pendiente';
+                        badgeVehiculo.classList.add('en-proceso');
+                        badgeVehiculo.classList.remove('completado');
+                    }
+                }
+                
+                console.log('🚗 Vehículo guardado - Estado completado:', vehiculoCompleto);
             }
+            
+            if (seccion !== 'vehiculo' && data.sesion.secciones_completadas) {
+                seccionesCompletadasLocal[seccion] = data.sesion.secciones_completadas[seccion];
+                actualizarEstadoVisualSeccion(seccion, data.sesion.secciones_completadas[seccion]);
+            }
+            
+            actualizarBotonFinalizar();
             
             const guardadoSpan = document.getElementById(`guardado${seccion.charAt(0).toUpperCase() + seccion.slice(1)}`);
             if (guardadoSpan) {
@@ -697,11 +728,7 @@ async function guardarSeccion(seccion) {
                 setTimeout(() => guardadoSpan.style.display = 'none', 1500);
             }
             
-            // 🔥 FORZAR ACTUALIZACIÓN DEL ESTADO LOCAL
-            if (seccion === 'cliente') validarCompletadoCliente();
-            if (seccion === 'vehiculo') validarCompletadoVehiculo();
-            if (seccion === 'fotos') validarCompletadoFotos();
-            if (seccion === 'descripcion') validarCompletadoDescripcion();
+            mostrarNotificacion(`✓ ${seccion} guardado correctamente`, 'success');
         }
     } catch (error) {
         logger.error('Error guardando:', error);
@@ -762,7 +789,6 @@ async function cargarDatosSesionInicial() {
         sesionActual = data.sesion;
         const datos = sesionActual.datos;
         
-        // Cargar cliente
         if (datos.cliente) {
             const nombre = document.getElementById('clienteNombre');
             const telefono = document.getElementById('clienteTelefono');
@@ -778,7 +804,6 @@ async function cargarDatosSesionInicial() {
             validarCompletadoCliente();
         }
         
-        // Cargar vehículo
         if (datos.vehiculo) {
             const placa = document.getElementById('vehiculoPlaca');
             const marca = document.getElementById('vehiculoMarca');
@@ -794,7 +819,6 @@ async function cargarDatosSesionInicial() {
             validarCompletadoVehiculo();
         }
         
-        // Cargar fotos
         if (datos.fotos) {
             for (const foto of FOTOS_CONFIG) {
                 const url = datos.fotos[foto.campo];
@@ -815,7 +839,6 @@ async function cargarDatosSesionInicial() {
             validarCompletadoFotos();
         }
         
-        // Cargar descripción
         if (datos.descripcion) {
             if (descripcionProblema) descripcionProblema.value = datos.descripcion.texto || '';
             if (datos.descripcion.audio_url) {
@@ -830,7 +853,6 @@ async function cargarDatosSesionInicial() {
             validarCompletadoDescripcion();
         }
         
-        // Colaboradores
         if (sesionActual.colaboradores_nombres) {
             const count = sesionActual.colaboradores_nombres.length;
             if (colaboradoresCount) colaboradoresCount.textContent = count;
@@ -876,7 +898,6 @@ async function recuperarSesionActiva() {
 async function finalizarSesion() {
     if (!codigoSesion) return;
     
-    // 🔥 VERIFICAR NUEVAMENTE ANTES DE FINALIZAR
     validarCompletadoCliente();
     validarCompletadoVehiculo();
     validarCompletadoFotos();
@@ -931,7 +952,6 @@ function limpiarSesionCompleta() {
     if (recepcionForm) recepcionForm.style.display = 'none';
     if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
     
-    // Limpiar formulario
     const inputs = document.querySelectorAll('#recepcionForm input, #recepcionForm textarea');
     inputs.forEach(input => { 
         if (input.id !== 'clienteLatitud' && input.id !== 'clienteLongitud') {
@@ -939,7 +959,6 @@ function limpiarSesionCompleta() {
         }
     });
     
-    // Limpiar fotos
     document.querySelectorAll('.photo-upload').forEach(upload => {
         upload.classList.remove('has-image');
         const preview = upload.querySelector('.upload-preview');
@@ -953,7 +972,6 @@ function limpiarSesionCompleta() {
         }
     });
     
-    // Limpiar audio
     if (audioPreview) {
         if (audioPreview.src && audioPreview.src.startsWith('blob:')) {
             URL.revokeObjectURL(audioPreview.src);
@@ -1101,31 +1119,40 @@ async function cargarDatosSesionLigero() {
         const nuevosDatos = data.sesion.datos;
         const nuevasSecciones = data.sesion.secciones_completadas;
         
-        // Actualizar estado de completado desde el servidor
-        if (nuevasSecciones) {
-            let cambio = false;
-            if (seccionesCompletadasLocal.cliente !== nuevasSecciones.cliente) {
-                seccionesCompletadasLocal.cliente = nuevasSecciones.cliente;
-                actualizarEstadoVisualSeccion('cliente', nuevasSecciones.cliente);
-                cambio = true;
-            }
+        const placaLocal = document.getElementById('vehiculoPlaca')?.value.trim();
+        const marcaLocal = document.getElementById('vehiculoMarca')?.value.trim();
+        const modeloLocal = document.getElementById('vehiculoModelo')?.value.trim();
+        const vehiculoLocalCompleto = !!(placaLocal && marcaLocal && modeloLocal);
+        
+        if (!vehiculoLocalCompleto && nuevasSecciones) {
             if (seccionesCompletadasLocal.vehiculo !== nuevasSecciones.vehiculo) {
                 seccionesCompletadasLocal.vehiculo = nuevasSecciones.vehiculo;
                 actualizarEstadoVisualSeccion('vehiculo', nuevasSecciones.vehiculo);
-                cambio = true;
+            }
+        }
+        
+        if (nuevasSecciones) {
+            if (seccionesCompletadasLocal.cliente !== nuevasSecciones.cliente) {
+                seccionesCompletadasLocal.cliente = nuevasSecciones.cliente;
+                actualizarEstadoVisualSeccion('cliente', nuevasSecciones.cliente);
             }
             if (seccionesCompletadasLocal.fotos !== nuevasSecciones.fotos) {
                 seccionesCompletadasLocal.fotos = nuevasSecciones.fotos;
-                cambio = true;
             }
             if (seccionesCompletadasLocal.descripcion !== nuevasSecciones.descripcion) {
                 seccionesCompletadasLocal.descripcion = nuevasSecciones.descripcion;
                 actualizarEstadoVisualSeccion('descripcion', nuevasSecciones.descripcion);
-                cambio = true;
             }
-            if (cambio) actualizarBotonFinalizar();
         }
         
+        if (!camposEnEdicion.vehiculo && nuevosDatos.vehiculo) {
+            const placaInput = document.getElementById('vehiculoPlaca');
+            if (placaInput && !placaInput.value && nuevosDatos.vehiculo.placa) {
+                placaInput.value = nuevosDatos.vehiculo.placa;
+            }
+        }
+        
+        actualizarBotonFinalizar();
         sesionActual = data.sesion;
         
     } catch (error) {
@@ -1519,7 +1546,6 @@ function setupEventListeners() {
             if (seccion && codigoSesion) {
                 await guardarSeccion(seccion);
                 mostrarNotificacion(`✓ ${seccion} guardado`, 'success');
-                // Forzar validación después de guardar manualmente
                 if (seccion === 'cliente') validarCompletadoCliente();
                 if (seccion === 'vehiculo') validarCompletadoVehiculo();
                 if (seccion === 'fotos') validarCompletadoFotos();
@@ -1698,7 +1724,9 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
     }, 3000);
 }
 
-// Funciones globales necesarias
+// =====================================================
+// FUNCIONES GLOBALES
+// =====================================================
 window.unirseSesionConCodigo = unirseSesionConCodigo;
 window.verDetalleRecepcion = verDetalleRecepcion;
 window.editarRecepcion = editarRecepcion;

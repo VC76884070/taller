@@ -1,7 +1,7 @@
 # =====================================================
 # DIAGNÓSTICO - JEFE DE TALLER
 # Gestión completa de diagnósticos técnicos
-# Versión: Solo últimos 5 por estado
+# Versión: CORREGIDA - SIN columnas inexistentes
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -171,29 +171,29 @@ def procesar_diagnosticos(diagnosticos):
 
 
 # =====================================================
-# 1. LISTAR DIAGNÓSTICOS - SOLO ÚLTIMOS 5 POR ESTADO
+# 1. LISTAR DIAGNÓSTICOS - ÚLTIMOS 10 POR ESTADO (CORREGIDO)
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/diagnosticos', methods=['GET'])
 @jefe_taller_required
 def listar_diagnosticos(current_user):
-    """Lista los últimos 5 diagnósticos por estado"""
+    """Lista los últimos 10 diagnósticos por estado"""
     try:
         estado_filtro = request.args.get('estado', 'todos')
-        logger.info(f"📋 Listando diagnósticos - Últimos 5 - Filtro: {estado_filtro}")
+        logger.info(f"📋 Listando diagnósticos - Últimos 10 por estado - Filtro: {estado_filtro}")
         
-        # Si hay filtro específico, solo mostrar últimos 5 de ese estado
+        # Si hay filtro específico, solo mostrar últimos 10 de ese estado
         if estado_filtro != 'todos':
             diagnosticos = supabase.table('diagnostico_tecnico') \
                 .select('*') \
                 .eq('estado', estado_filtro) \
                 .order('fecha_envio', desc=True) \
-                .limit(5) \
+                .limit(10) \
                 .execute()
             
             resultado = procesar_diagnosticos(diagnosticos.data or [])
             return jsonify({'success': True, 'diagnosticos': resultado}), 200
         
-        # Si no hay filtro, obtener últimos 5 de cada estado en PARALELO
+        # Si no hay filtro, obtener últimos 10 de cada estado en PARALELO
         estados = ['pendiente', 'aprobado', 'rechazado', 'borrador']
         
         def fetch_por_estado(estado):
@@ -201,7 +201,7 @@ def listar_diagnosticos(current_user):
                 .select('*') \
                 .eq('estado', estado) \
                 .order('fecha_envio', desc=True) \
-                .limit(5) \
+                .limit(10) \
                 .execute()
         
         # Ejecutar consultas en paralelo
@@ -222,7 +222,7 @@ def listar_diagnosticos(current_user):
         for estado in estados:
             todos_diagnosticos.extend(resultados.get(estado, []))
         
-        logger.info(f"✅ {len(todos_diagnosticos)} diagnósticos (últimos 5 por estado)")
+        logger.info(f"✅ {len(todos_diagnosticos)} diagnósticos (últimos 10 por estado)")
         
         # Procesar y enriquecer datos
         resultado = procesar_diagnosticos(todos_diagnosticos)
@@ -242,13 +242,13 @@ def listar_diagnosticos(current_user):
 @jefe_taller_diagnostico_bp.route('/diagnosticos-pendientes', methods=['GET'])
 @jefe_taller_required
 def listar_diagnosticos_pendientes(current_user):
-    """Endpoint legacy - redirige al nuevo endpoint con filtro pendiente"""
+    """Endpoint legacy - redirige al nuevo endpoint con filtro pendiente - Últimos 10"""
     try:
         diagnosticos = supabase.table('diagnostico_tecnico') \
             .select('*') \
             .in_('estado', ['pendiente', 'borrador']) \
             .order('fecha_envio', desc=True) \
-            .limit(5) \
+            .limit(10) \
             .execute()
         
         resultado = procesar_diagnosticos(diagnosticos.data or [])
@@ -436,12 +436,12 @@ def diagnosticos_stats(current_user):
 
 
 # =====================================================
-# 5. APROBAR DIAGNÓSTICO
+# 5. APROBAR DIAGNÓSTICO - CORREGIDO (SIN COLUMNAS INEXISTENTES)
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/aprobar-diagnostico-simple', methods=['POST'])
 @jefe_taller_required
 def aprobar_diagnostico_simple(current_user):
-    """Aprobar diagnóstico de forma optimizada"""
+    """Aprobar diagnóstico - CORREGIDO (sin columnas que no existen)"""
     try:
         # Obtener ID
         diagnostico_id = None
@@ -472,12 +472,12 @@ def aprobar_diagnostico_simple(current_user):
         
         ahora = datetime.datetime.now().isoformat()
         
-        # Actualizar diagnóstico
+        # ACTUALIZAR DIAGNÓSTICO - SOLO COLUMNAS QUE EXISTEN
+        # NOTA: NO usar 'fecha_aprobacion' porque no existe en la tabla
         supabase.table('diagnostico_tecnico') \
             .update({
                 'estado': 'aprobado',
-                'fecha_modificacion': ahora,
-                'fecha_aprobacion': ahora
+                'fecha_modificacion': ahora
             }) \
             .eq('id', diagnostico_id) \
             .execute()
@@ -485,8 +485,7 @@ def aprobar_diagnostico_simple(current_user):
         # Actualizar orden de trabajo
         supabase.table('ordentrabajo') \
             .update({
-                'estado_global': 'DiagnosticoAprobado',
-                'fecha_aprobacion_diagnostico': ahora
+                'estado_global': 'DiagnosticoAprobado'
             }) \
             .eq('id', dt['id_orden_trabajo']) \
             .execute()
@@ -517,12 +516,12 @@ def aprobar_diagnostico_simple(current_user):
 
 
 # =====================================================
-# 6. RECHAZAR DIAGNÓSTICO
+# 6. RECHAZAR DIAGNÓSTICO - CORREGIDO (SIN COLUMNAS INEXISTENTES)
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/rechazar-diagnostico', methods=['POST'])
 @jefe_taller_required
 def rechazar_diagnostico(current_user):
-    """Rechazar diagnóstico con observación"""
+    """Rechazar diagnóstico con observación - CORREGIDO"""
     try:
         # Obtener datos
         diagnostico_id = None
@@ -575,14 +574,13 @@ def rechazar_diagnostico(current_user):
         }
         supabase.table('observaciondiagnostico').insert(observacion_data).execute()
         
-        # Actualizar diagnóstico
+        # ACTUALIZAR DIAGNÓSTICO - SOLO COLUMNAS QUE EXISTEN
+        # NOTA: NO usar 'fecha_rechazo' ni 'motivo_rechazo' porque no existen
         supabase.table('diagnostico_tecnico') \
             .update({
                 'estado': 'rechazado',
                 'version': nueva_version,
-                'fecha_modificacion': ahora,
-                'fecha_rechazo': ahora,
-                'motivo_rechazo': observacion[:200]
+                'fecha_modificacion': ahora
             }) \
             .eq('id', diagnostico_id) \
             .execute()
@@ -590,9 +588,7 @@ def rechazar_diagnostico(current_user):
         # Actualizar orden de trabajo
         supabase.table('ordentrabajo') \
             .update({
-                'estado_global': 'DiagnosticoRechazado',
-                'fecha_rechazo_diagnostico': ahora,
-                'motivo_rechazo_diagnostico': observacion[:200]
+                'estado_global': 'DiagnosticoRechazado'
             }) \
             .eq('id', dt['id_orden_trabajo']) \
             .execute()
@@ -732,7 +728,6 @@ def test_endpoint():
     return jsonify({
         'success': True,
         'message': 'Endpoint de diagnóstico funcionando correctamente',
-        'version': '2.0',
+        'version': '3.0',
         'features': ['Últimos 5 por estado', 'Aprobación optimizada', 'Rechazo con observación']
     }), 200
-

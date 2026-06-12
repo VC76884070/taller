@@ -1,5 +1,6 @@
 # =====================================================
-# ÓRDENES DE TRABAJO - JEFE TALLER (VERSIÓN COMPLETA OPTIMIZADA)
+# ÓRDENES DE TRABAJO - JEFE TALLER (VERSIÓN COMPLETA CORREGIDA)
+# CORREGIDO: Usa el nombre real de la tabla 'diagnostigoinicial'
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -124,20 +125,18 @@ def listar_tecnicos(current_user):
 
 
 # =====================================================
-# ENDPOINT 2: ÚLTIMAS 10 ÓRDENES ACTIVAS (NUEVO - MÁS RÁPIDO)
+# ENDPOINT 2: ÚLTIMAS 10 ÓRDENES ACTIVAS
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/ultimas-ordenes', methods=['GET'])
 @jefe_taller_required
 def obtener_ultimas_ordenes(current_user):
-    """Obtiene SOLO las últimas 10 órdenes de trabajo activas - MÁXIMO RÁPIDO"""
+    """Obtiene SOLO las últimas 10 órdenes de trabajo activas"""
     try:
-        # Verificar caché
         cached_data = cache.get('ultimas_ordenes')
         if cached_data:
             return jsonify({'success': True, 'ordenes': cached_data}), 200
         
-        # 1. Obtener SOLO las últimas 10 órdenes activas
         ordenes = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
             .not_.in_('estado_global', ['Finalizado', 'Entregado']) \
@@ -151,7 +150,6 @@ def obtener_ultimas_ordenes(current_user):
         ordenes_data = ordenes.data
         ordenes_ids = [o['id'] for o in ordenes_data]
         
-        # 2. Obtener vehículos de esas 10 órdenes (máximo 10)
         vehiculos_ids = list(set([o['id_vehiculo'] for o in ordenes_data if o.get('id_vehiculo')]))
         vehiculos_map = {}
         
@@ -163,7 +161,6 @@ def obtener_ultimas_ordenes(current_user):
             for v in (vehiculos.data or []):
                 vehiculos_map[v['id']] = v
         
-        # 3. Obtener clientes de esos vehículos
         clientes_ids = list(set([v['id_cliente'] for v in vehiculos_map.values() if v.get('id_cliente')]))
         clientes_map = {}
         
@@ -175,7 +172,6 @@ def obtener_ultimas_ordenes(current_user):
             for c in (clientes.data or []):
                 clientes_map[c['id']] = c
         
-        # 4. Obtener nombres de usuarios
         usuarios_ids = list(set([c['id_usuario'] for c in clientes_map.values() if c.get('id_usuario')]))
         usuarios_map = {}
         
@@ -187,7 +183,6 @@ def obtener_ultimas_ordenes(current_user):
             for u in (usuarios.data or []):
                 usuarios_map[u['id']] = u
         
-        # 5. Obtener asignaciones de técnicos
         asignaciones = supabase.table('asignaciontecnico') \
             .select('id_orden_trabajo, id_tecnico') \
             .in_('id_orden_trabajo', ordenes_ids) \
@@ -218,7 +213,6 @@ def obtener_ultimas_ordenes(current_user):
                     'nombre': tecnicos_nombres[tecnico_id]
                 })
         
-        # 6. Obtener planificaciones
         planificaciones = supabase.table('planificacion') \
             .select('id_orden_trabajo, bahia_asignada, fecha_hora_inicio_estimado, horas_estimadas, fecha_hora_inicio_real') \
             .in_('id_orden_trabajo', ordenes_ids) \
@@ -229,7 +223,6 @@ def obtener_ultimas_ordenes(current_user):
             if p.get('id_orden_trabajo'):
                 planificaciones_map[p['id_orden_trabajo']] = p
         
-        # 7. Construir resultado
         resultado = []
         for orden in ordenes_data:
             vehiculo = vehiculos_map.get(orden.get('id_vehiculo'), {})
@@ -262,7 +255,6 @@ def obtener_ultimas_ordenes(current_user):
                 'trabajo_iniciado': trabajo_iniciado
             })
         
-        # Guardar en caché por 10 segundos
         cache.set('ultimas_ordenes', resultado, ttl=10)
         
         return jsonify({'success': True, 'ordenes': resultado}), 200
@@ -275,13 +267,13 @@ def obtener_ultimas_ordenes(current_user):
 
 
 # =====================================================
-# ENDPOINT 3: LISTAR ÓRDENES ACTIVAS COMPLETAS (PARA VER MÁS)
+# ENDPOINT 3: LISTAR ÓRDENES ACTIVAS COMPLETAS
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/ordenes-activas-v2', methods=['GET'])
 @jefe_taller_required
 def listar_ordenes_activas_v2(current_user):
-    """Listar órdenes activas - VERSIÓN COMPLETA (para cuando el usuario pide ver todas)"""
+    """Listar órdenes activas - VERSIÓN COMPLETA"""
     try:
         estados_activos = [
             'EnRecepcion', 'EnDiagnostico', 'DiagnosticoCompletado',
@@ -290,7 +282,6 @@ def listar_ordenes_activas_v2(current_user):
             'EnReparacion', 'EnPausa', 'ReparacionCompletada'
         ]
         
-        # 1. Obtener TODAS las órdenes activas
         ordenes_result = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
             .in_('estado_global', estados_activos) \
@@ -301,7 +292,6 @@ def listar_ordenes_activas_v2(current_user):
         
         ordenes = ordenes_result.data
         
-        # 2. Obtener TODOS los vehículos
         vehiculos_ids = list(set([o['id_vehiculo'] for o in ordenes if o.get('id_vehiculo')]))
         vehiculos_map = {}
         
@@ -313,7 +303,6 @@ def listar_ordenes_activas_v2(current_user):
             for v in (vehiculos_result.data or []):
                 vehiculos_map[v['id']] = v
         
-        # 3. Obtener TODOS los clientes
         clientes_ids = list(set([v['id_cliente'] for v in vehiculos_map.values() if v.get('id_cliente')]))
         clientes_map = {}
         
@@ -325,7 +314,6 @@ def listar_ordenes_activas_v2(current_user):
             for c in (clientes_result.data or []):
                 clientes_map[c['id']] = c
         
-        # 4. Obtener TODOS los usuarios
         usuarios_ids = list(set([c['id_usuario'] for c in clientes_map.values() if c.get('id_usuario')]))
         usuarios_map = {}
         
@@ -337,7 +325,6 @@ def listar_ordenes_activas_v2(current_user):
             for u in (usuarios_result.data or []):
                 usuarios_map[u['id']] = u
         
-        # 5. Obtener TODAS las asignaciones de técnicos
         ordenes_ids = [o['id'] for o in ordenes]
         asignaciones_map = {}
         
@@ -371,7 +358,6 @@ def listar_ordenes_activas_v2(current_user):
                         'nombre': tecnicos_nombres[tecnico_id]
                     })
         
-        # 6. Obtener TODAS las planificaciones
         planificaciones_map = {}
         if ordenes_ids:
             planificaciones_result = supabase.table('planificacion') \
@@ -382,12 +368,10 @@ def listar_ordenes_activas_v2(current_user):
                 if p.get('id_orden_trabajo'):
                     planificaciones_map[p['id_orden_trabajo']] = p
         
-        # 7. Construir resultado
         ordenes_resultado = []
         for orden in ordenes:
             vehiculo = vehiculos_map.get(orden.get('id_vehiculo'), {})
             
-            # Obtener nombre del cliente
             cliente_nombre = 'No registrado'
             cliente_id = vehiculo.get('id_cliente')
             if cliente_id and cliente_id in clientes_map:
@@ -416,7 +400,6 @@ def listar_ordenes_activas_v2(current_user):
                 'trabajo_iniciado': trabajo_iniciado
             })
         
-        # 8. ORDENAR: EnRecepcion primero, luego EnDiagnostico (últimas 5), luego el resto
         en_recepcion = [o for o in ordenes_resultado if o['estado_global'] == 'EnRecepcion']
         en_diagnostico = [o for o in ordenes_resultado if o['estado_global'] == 'EnDiagnostico']
         otros = [o for o in ordenes_resultado if o['estado_global'] not in ['EnRecepcion', 'EnDiagnostico']]
@@ -425,7 +408,6 @@ def listar_ordenes_activas_v2(current_user):
         en_diagnostico.sort(key=lambda o: o['fecha_ingreso'], reverse=True)
         otros.sort(key=lambda o: o['fecha_ingreso'], reverse=True)
         
-        # Solo últimas 5 de EnDiagnostico
         ordenes_final = en_recepcion + en_diagnostico[:5] + otros
         
         return jsonify({'success': True, 'ordenes': ordenes_final}), 200
@@ -438,7 +420,7 @@ def listar_ordenes_activas_v2(current_user):
 
 
 # =====================================================
-# ENDPOINT 4: LISTAR ÓRDENES FINALIZADAS (OPTIMIZADO)
+# ENDPOINT 4: LISTAR ÓRDENES FINALIZADAS
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/ordenes-finalizadas', methods=['GET'])
@@ -457,7 +439,6 @@ def listar_ordenes_finalizadas(current_user):
         
         ordenes = resultado.data
         
-        # Obtener vehículos
         vehiculos_ids = list(set([o['id_vehiculo'] for o in ordenes if o.get('id_vehiculo')]))
         vehiculos_map = {}
         
@@ -469,7 +450,6 @@ def listar_ordenes_finalizadas(current_user):
             for v in (vehiculos.data or []):
                 vehiculos_map[v['id']] = v
         
-        # Obtener clientes
         clientes_ids = list(set([v['id_cliente'] for v in vehiculos_map.values() if v.get('id_cliente')]))
         clientes_map = {}
         
@@ -481,7 +461,6 @@ def listar_ordenes_finalizadas(current_user):
             for c in (clientes.data or []):
                 clientes_map[c['id']] = c
         
-        # Obtener usuarios
         usuarios_ids = list(set([c['id_usuario'] for c in clientes_map.values() if c.get('id_usuario')]))
         usuarios_map = {}
         
@@ -526,7 +505,7 @@ def listar_ordenes_finalizadas(current_user):
 
 
 # =====================================================
-# ENDPOINT 5: DETALLE DE ORDEN
+# ENDPOINT 5: DETALLE DE ORDEN (CORREGIDO)
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/detalle-orden/<int:id_orden>', methods=['GET'])
@@ -543,7 +522,6 @@ def detalle_orden(current_user, id_orden):
         
         orden = orden_result.data[0]
         
-        # Obtener vehículo
         vehiculo = {}
         if orden.get('id_vehiculo'):
             vehiculo_resp = supabase.table('vehiculo') \
@@ -553,8 +531,8 @@ def detalle_orden(current_user, id_orden):
             if vehiculo_resp.data:
                 vehiculo = vehiculo_resp.data[0]
         
-        # Obtener cliente
         cliente_nombre = 'No registrado'
+        cliente_telefono = 'No registrado'
         if vehiculo.get('id_cliente'):
             cliente_resp = supabase.table('cliente') \
                 .select('id_usuario') \
@@ -562,13 +540,13 @@ def detalle_orden(current_user, id_orden):
                 .execute()
             if cliente_resp.data and cliente_resp.data[0].get('id_usuario'):
                 usuario_resp = supabase.table('usuario') \
-                    .select('nombre') \
+                    .select('nombre, contacto') \
                     .eq('id', cliente_resp.data[0]['id_usuario']) \
                     .execute()
                 if usuario_resp.data:
                     cliente_nombre = usuario_resp.data[0].get('nombre', 'No registrado')
+                    cliente_telefono = usuario_resp.data[0].get('contacto', 'No registrado')
         
-        # Obtener técnicos
         tecnicos = []
         asignaciones_resp = supabase.table('asignaciontecnico') \
             .select('id_tecnico') \
@@ -586,7 +564,6 @@ def detalle_orden(current_user, id_orden):
                 if tecnico_resp.data:
                     tecnicos.append(tecnico_resp.data[0])
         
-        # Obtener planificación
         planificacion = {}
         planif_resp = supabase.table('planificacion') \
             .select('*') \
@@ -595,7 +572,6 @@ def detalle_orden(current_user, id_orden):
         if planif_resp.data:
             planificacion = planif_resp.data[0]
         
-        # Obtener recepción
         recepcion = {}
         recep_resp = supabase.table('recepcion') \
             .select('transcripcion_problema') \
@@ -603,6 +579,15 @@ def detalle_orden(current_user, id_orden):
             .execute()
         if recep_resp.data:
             recepcion = recep_resp.data[0]
+        
+        # CORREGIDO: Usar 'diagnostigoinicial' que es el nombre real de la tabla
+        diagnostico_taller = ''
+        diag_resp = supabase.table('diagnostigoinicial') \
+            .select('diagnostigo') \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        if diag_resp.data:
+            diagnostico_taller = diag_resp.data[0].get('diagnostigo', '')
         
         detalle = {
             'id': orden['id'],
@@ -615,10 +600,11 @@ def detalle_orden(current_user, id_orden):
             'modelo': vehiculo.get('modelo', ''),
             'anio': vehiculo.get('anio'),
             'kilometraje': vehiculo.get('kilometraje'),
-            'cliente': {'nombre': cliente_nombre, 'telefono': 'No registrado'},
+            'cliente': {'nombre': cliente_nombre, 'telefono': cliente_telefono},
             'tecnicos': tecnicos,
             'planificacion': planificacion,
-            'transcripcion_problema': recepcion.get('transcripcion_problema', '')
+            'transcripcion_problema': recepcion.get('transcripcion_problema', ''),
+            'diagnostigo_taller': diagnostico_taller
         }
         
         return jsonify({'success': True, 'detalle': detalle}), 200
@@ -677,7 +663,6 @@ def asignar_tecnicos(current_user):
             if tecnicos_con_error:
                 return jsonify({'error': 'No se pueden asignar los técnicos seleccionados', 'detalles': tecnicos_con_error}), 400
         
-        # Finalizar asignaciones activas actuales
         supabase.table('asignaciontecnico') \
             .update({'fecha_hora_final': datetime.datetime.now().isoformat()}) \
             .eq('id_orden_trabajo', id_orden) \
@@ -685,7 +670,6 @@ def asignar_tecnicos(current_user):
             .is_('fecha_hora_final', 'null') \
             .execute()
         
-        # Crear nuevas asignaciones
         for tecnico_id in tecnicos_ids:
             supabase.table('asignaciontecnico').insert({
                 'id_orden_trabajo': id_orden,
@@ -694,7 +678,6 @@ def asignar_tecnicos(current_user):
                 'fecha_hora_inicio': datetime.datetime.now().isoformat()
             }).execute()
         
-        # Limpiar caché
         cache.clear('tecnicos_list')
         cache.clear('ultimas_ordenes')
         
@@ -752,7 +735,6 @@ def planificar_trabajo(current_user):
             planificacion_data['id_orden_trabajo'] = id_orden
             supabase.table('planificacion').insert(planificacion_data).execute()
         
-        # Limpiar caché
         cache.clear('ultimas_ordenes')
         
         return jsonify({'success': True, 'message': 'Planificación guardada correctamente'}), 200
@@ -763,7 +745,7 @@ def planificar_trabajo(current_user):
 
 
 # =====================================================
-# ENDPOINT 8: GUARDAR DIAGNÓSTICO INICIAL
+# ENDPOINT 8: GUARDAR DIAGNÓSTICO INICIAL (CORREGIDO)
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/diagnostico-inicial', methods=['POST'])
@@ -780,6 +762,7 @@ def guardar_diagnostico_inicial(current_user):
         if not diagnostico:
             return jsonify({'error': 'El diagnóstico es obligatorio'}), 400
         
+        # CORREGIDO: Usar 'diagnostigoinicial' que es el nombre real de la tabla
         diagnostico_existente = supabase.table('diagnostigoinicial') \
             .select('id') \
             .eq('id_orden_trabajo', id_orden) \
@@ -812,6 +795,8 @@ def guardar_diagnostico_inicial(current_user):
                 
             supabase.table('diagnostigoinicial').insert(insert_data).execute()
         
+        cache.clear('ultimas_ordenes')
+        
         return jsonify({'success': True, 'message': 'Diagnóstico guardado correctamente'}), 200
         
     except Exception as e:
@@ -839,7 +824,6 @@ def cambiar_estado_orden(current_user):
             .eq('id', id_orden) \
             .execute()
         
-        # Limpiar caché
         cache.clear('ultimas_ordenes')
         
         return jsonify({'success': True, 'message': f'Orden cambiada a {nuevo_estado}'}), 200

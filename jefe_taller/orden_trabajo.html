@@ -8,9 +8,7 @@
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- Estilos globales y específicos -->
     <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
@@ -21,7 +19,7 @@
     <meta name="theme-color" content="#C1121F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="TORQUE">
+    <meta name="apple-mobile-web-app-title" content="FURIA MOTOR">
 
     <!-- ICONOS -->
     <link rel="icon" type="image/png" href="/icono.png">
@@ -58,7 +56,27 @@
             </header>
 
             <div class="content">
-                <!-- Pestañas de navegación -->
+                <!-- ===================================================== -->
+                <!-- SECCIÓN DE BAHÍAS - ESTADO VISUAL -->
+                <!-- ===================================================== -->
+                <div class="bahias-section">
+                    <div class="bahias-header">
+                        <h3><i class="fas fa-warehouse"></i> Estado de Bahías</h3>
+                        <button class="btn-refresh-bahias" id="refreshBahiasBtn" title="Actualizar bahías">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <div class="bahias-grid" id="bahiasGrid">
+                        <div class="loading-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Cargando estado de bahías...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===================================================== -->
+                <!-- PESTAÑAS DE NAVEGACIÓN -->
+                <!-- ===================================================== -->
                 <div class="tabs-container">
                     <button class="tab-btn active" data-tab="activas">
                         <i class="fas fa-tasks"></i> Órdenes Activas
@@ -195,6 +213,7 @@
         </div>
     </div>
 
+    <!-- Scripts -->
     <script src="/jefe_taller/js/include.js"></script>
     <script src="/jefe_taller/js/orden_trabajo.js"></script>
 

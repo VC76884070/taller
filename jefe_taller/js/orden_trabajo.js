@@ -1,6 +1,6 @@
 // =====================================================
 // ÓRDENES DE TRABAJO - JEFE TALLER
-// VERSIÓN COMPLETA Y CORREGIDA
+// VERSIÓN COMPLETA Y CORREGIDA CON BAHÍAS Y DIAGNÓSTICOS
 // =====================================================
 
 if (typeof window.API_BASE_URL === 'undefined') {
@@ -25,11 +25,13 @@ let ordenesActivas = [];
 let ordenesFinalizadas = [];
 let tecnicosDisponibles = [];
 let ordenEnGestion = null;
+let bahiasEstado = [];
+
+// Variables para grabación de audio
 let audioBlob = null;
 let audioChunks = [];
 let isRecording = false;
 let mediaRecorder = null;
-let audioUrlTemporal = null;
 
 let isUpdating = false;
 let lastActivasFetch = 0;
@@ -38,11 +40,13 @@ let lastFinalizadasFetch = 0;
 const CACHE_TTL = {
     activas: 30000,
     finalizadas: 60000,
-    tecnicos: 30000
+    tecnicos: 30000,
+    bahias: 10000
 };
 
 const dataCache = {
     tecnicos: { data: null, timestamp: null },
+    bahias: { data: null, timestamp: null },
     
     get(key) {
         const item = this[key];
@@ -111,6 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     await Promise.all([
         cargarTecnicos(),
+        cargarEstadoBahias(),
         cargarUltimasOrdenesActivas(),
         cargarOrdenesFinalizadas()
     ]);
@@ -121,6 +126,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!document.hidden) {
             cargarUltimasOrdenesActivas(true);
             cargarOrdenesFinalizadas(true);
+            cargarEstadoBahias(true);
         }
     });
 });
@@ -171,11 +177,6 @@ function initPage() {
     if (dateDisplay) {
         dateDisplay.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
     }
-    
-    const userNombreSpan = document.getElementById('userNombre');
-    if (userNombreSpan && userInfo) {
-        userNombreSpan.textContent = userInfo.nombre || userInfo.email || 'Usuario';
-    }
 }
 
 function setupEventListeners() {
@@ -193,6 +194,11 @@ function setupEventListeners() {
     document.getElementById('refreshFinalizadas')?.addEventListener('click', () => {
         cargarOrdenesFinalizadas(true);
     });
+    
+    const refreshBahiasBtn = document.getElementById('refreshBahiasBtn');
+    if (refreshBahiasBtn) {
+        refreshBahiasBtn.addEventListener('click', () => cargarEstadoBahias(true));
+    }
     
     const searchActivas = document.getElementById('searchActivas');
     const tecnicoFiltro = document.getElementById('tecnicoFiltro');
@@ -250,7 +256,95 @@ function cambiarPestana(tabId) {
 }
 
 // =====================================================
-// API CALLS
+// API CALLS - BAHÍAS
+// =====================================================
+
+async function cargarEstadoBahias(forceRefresh = false) {
+    try {
+        if (!forceRefresh) {
+            const cached = dataCache.get('bahias');
+            if (cached) {
+                bahiasEstado = cached;
+                renderBahias(bahiasEstado);
+                return;
+            }
+        }
+        
+        const response = await fetch(`${API_URL}/jefe-taller/bahias/estado`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.bahias) {
+            bahiasEstado = data.bahias;
+            dataCache.set('bahias', bahiasEstado);
+            renderBahias(bahiasEstado);
+        } else {
+            const container = document.getElementById('bahiasGrid');
+            if (container) {
+                container.innerHTML = `<div class="error-state"><i class="fas fa-exclamation-circle"></i><p>Error al cargar bahías</p></div>`;
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error cargando bahías:', error);
+        const container = document.getElementById('bahiasGrid');
+        if (container) {
+            container.innerHTML = `<div class="error-state"><i class="fas fa-exclamation-circle"></i><p>Error al cargar bahías</p></div>`;
+        }
+    }
+}
+
+function renderBahias(bahias) {
+    const container = document.getElementById('bahiasGrid');
+    if (!container) return;
+    
+    if (!bahias || bahias.length === 0) {
+        container.innerHTML = `<div class="empty-state"><i class="fas fa-warehouse"></i><p>No hay bahías configuradas</p></div>`;
+        return;
+    }
+    
+    const estadoTexto = {
+        'libre': 'Libre',
+        'ocupado': 'Ocupado',
+        'reservado': 'Reservado'
+    };
+    
+    const estadoIcono = {
+        'libre': 'fa-check-circle',
+        'ocupado': 'fa-circle',
+        'reservado': 'fa-clock'
+    };
+    
+    const html = bahias.map(bahia => {
+        const estado = bahia.estado;
+        return `
+            <div class="bahia-card ${estado}" onclick="verOrdenEnBahia(${bahia.numero}, '${bahia.orden_codigo || ''}')">
+                <div class="bahia-numero">Bahía ${bahia.numero}</div>
+                <div class="bahia-estado ${estado}">
+                    <i class="fas ${estadoIcono[estado]}"></i> ${estadoTexto[estado]}
+                </div>
+                ${bahia.orden_codigo ? `<div class="bahia-orden">Orden: ${escapeHtml(bahia.orden_codigo)}</div>` : ''}
+                ${bahia.fecha_inicio_estimado ? `<div class="bahia-tiempo">Inicio: ${new Date(bahia.fecha_inicio_estimado).toLocaleString()}</div>` : ''}
+                ${bahia.horas_estimadas ? `<div class="bahia-tiempo">⏱️ ${bahia.horas_estimadas}h</div>` : ''}
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = html;
+}
+
+function verOrdenEnBahia(bahiaNumero, ordenCodigo) {
+    if (ordenCodigo) {
+        mostrarNotificacion(`Bahía ${bahiaNumero} - Orden: ${ordenCodigo}`, 'info');
+    } else {
+        mostrarNotificacion(`Bahía ${bahiaNumero} está libre`, 'success');
+    }
+}
+
+// =====================================================
+// API CALLS - ÓRDENES
 // =====================================================
 
 async function cargarUltimasOrdenesActivas(forceRefresh = false) {
@@ -308,8 +402,6 @@ async function cargarUltimasOrdenesActivas(forceRefresh = false) {
                     </button>
                 </div>
             `;
-        } else {
-            mostrarNotificacion('Error al actualizar órdenes', 'error');
         }
     } finally {
         isUpdating = false;
@@ -666,8 +758,9 @@ function iniciarPolling() {
             } else if (activeTab === 'finalizadas') {
                 cargarOrdenesFinalizadas();
             }
+            cargarEstadoBahias();
         }
-    }, 60000);
+    }, 30000);
 }
 
 // =====================================================
@@ -732,6 +825,8 @@ async function abrirModalGestionOrden(idOrden) {
             await cargarTecnicos(true);
         }
         
+        await cargarEstadoBahias(true);
+        
         renderModalGestionOrden();
         
         const modal = document.getElementById('modalGestionOrden');
@@ -750,6 +845,10 @@ function renderModalGestionOrden() {
     if (!body || !ordenEnGestion) return;
     
     const puedeEditar = puedeEditarOrden(ordenEnGestion.estado_global, ordenEnGestion.trabajo_iniciado);
+    
+    // Obtener bahías para mostrar en el grid visual
+    const bahiasParaSeleccion = bahiasEstado.length > 0 ? bahiasEstado : [];
+    const bahiaActual = ordenEnGestion.planificacion?.bahia_asignada || null;
     
     body.innerHTML = `
         <div class="gestion-orden">
@@ -782,6 +881,61 @@ function renderModalGestionOrden() {
                 </div>
             </div>
             
+            <!-- ===================================================== -->
+            <!-- DIAGNÓSTICO DEL CLIENTE (NO EDITABLE) -->
+            <!-- ===================================================== -->
+            <div class="gestion-section">
+                <div class="gestion-section-header">
+                    <h3><i class="fas fa-headset"></i> Diagnóstico del Cliente</h3>
+                    <span class="section-status ${ordenEnGestion.transcripcion_problema ? 'completado' : 'pendiente'}">
+                        ${ordenEnGestion.transcripcion_problema ? '✓ Registrado' : '○ Pendiente'}
+                    </span>
+                </div>
+                <div class="gestion-section-body">
+                    <div class="alert-info" style="background: rgba(59,130,246,0.1); padding: 0.75rem; border-radius: var(--radius-md); margin-bottom: 1rem;">
+                        <i class="fas fa-info-circle"></i>
+                        <small>Este diagnóstico fue proporcionado por el cliente durante la recepción del vehículo. <strong>NO es editable</strong>.</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Problema reportado por el cliente</label>
+                        <textarea class="form-textarea" rows="3" readonly disabled style="background: var(--gris-oscuro);">${escapeHtml(ordenEnGestion.transcripcion_problema || 'No se ha registrado diagnóstico del cliente')}</textarea>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ===================================================== -->
+            <!-- DIAGNÓSTICO DEL JEFE DE TALLER (EDITABLE) -->
+            <!-- ===================================================== -->
+            <div class="gestion-section">
+                <div class="gestion-section-header">
+                    <h3><i class="fas fa-stethoscope"></i> Diagnóstico del Jefe Taller</h3>
+                    <span class="section-status ${ordenEnGestion.diagnostigo_taller ? 'completado' : 'pendiente'}">
+                        ${ordenEnGestion.diagnostigo_taller ? '✓ Registrado' : '○ Pendiente'}
+                    </span>
+                </div>
+                <div class="gestion-section-body">
+                    <div class="alert-warning" style="background: rgba(245,158,11,0.1); padding: 0.75rem; border-radius: var(--radius-md); margin-bottom: 1rem;">
+                        <i class="fas fa-edit"></i>
+                        <small>Este diagnóstico será visible para los técnicos. <strong>Puede editarlo</strong> para dar instrucciones específicas.</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Diagnóstico e instrucciones para el técnico</label>
+                        <textarea id="diagnosticoTaller" class="form-textarea" rows="4" placeholder="Ingrese el diagnóstico técnico y las instrucciones para los mecánicos..." ${!puedeEditar.editable ? 'disabled' : ''}>${escapeHtml(ordenEnGestion.diagnostigo_taller || '')}</textarea>
+                    </div>
+                    <div class="diagnostico-audio">
+                        <div class="diagnostico-audio-controls">
+                            <button type="button" id="btnGrabarAudioTaller" class="btn-audio" ${!puedeEditar.editable ? 'disabled' : ''}>
+                                <i class="fas fa-microphone"></i> Grabar Audio
+                            </button>
+                            <button type="button" id="btnDetenerAudioTaller" class="btn-audio" style="display:none;">
+                                <i class="fas fa-stop"></i> Detener Grabación
+                            </button>
+                        </div>
+                        <audio id="audioReproduccionTaller" controls style="display:none; width: 100%; margin-top: 10px;"></audio>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Asignación de Técnicos -->
             <div class="gestion-section">
                 <div class="gestion-section-header">
@@ -810,20 +964,22 @@ function renderModalGestionOrden() {
                 </div>
             </div>
             
-            <!-- Planificación -->
+            <!-- Planificación con Bahías Visuales -->
             <div class="gestion-section">
                 <div class="gestion-section-header">
-                    <h3><i class="fas fa-calendar"></i> Planificación</h3>
+                    <h3><i class="fas fa-calendar"></i> Planificación y Bahías</h3>
                     <span class="section-status ${ordenEnGestion.planificacion?.bahia_asignada ? 'completado' : 'pendiente'}">
                         ${ordenEnGestion.planificacion?.bahia_asignada ? '✓ Planificado' : '○ Pendiente'}
                     </span>
                 </div>
                 <div class="gestion-section-body">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label">Bahía (1-12)</label>
-                            <input type="number" id="bahia" class="form-input" min="1" max="12" value="${ordenEnGestion.planificacion?.bahia_asignada || ''}" ${!puedeEditar.editable ? 'disabled' : ''}>
+                    <div class="bahias-seleccion-section">
+                        <label class="form-label">Seleccionar Bahía</label>
+                        <div class="bahias-grid-seleccion" id="bahiasGridSeleccion">
+                            ${renderBahiasSeleccion(bahiasParaSeleccion, bahiaActual, puedeEditar.editable)}
                         </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Fecha/Hora Inicio Estimado</label>
                             <input type="datetime-local" id="fecha_inicio" class="form-input" value="${ordenEnGestion.planificacion?.fecha_hora_inicio_estimado ? new Date(ordenEnGestion.planificacion.fecha_hora_inicio_estimado).toISOString().slice(0, 16) : ''}" ${!puedeEditar.editable ? 'disabled' : ''}>
@@ -832,33 +988,6 @@ function renderModalGestionOrden() {
                             <label class="form-label">Horas Estimadas</label>
                             <input type="number" id="horas_estimadas" class="form-input" step="0.5" value="${ordenEnGestion.planificacion?.horas_estimadas || ''}" ${!puedeEditar.editable ? 'disabled' : ''}>
                         </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Diagnóstico Inicial -->
-            <div class="gestion-section">
-                <div class="gestion-section-header">
-                    <h3><i class="fas fa-stethoscope"></i> Diagnóstico Inicial</h3>
-                    <span class="section-status ${ordenEnGestion.transcripcion_problema ? 'completado' : 'pendiente'}">
-                        ${ordenEnGestion.transcripcion_problema ? '✓ Registrado' : '○ Pendiente'}
-                    </span>
-                </div>
-                <div class="gestion-section-body">
-                    <div class="form-group">
-                        <label class="form-label">Descripción del diagnóstico</label>
-                        <textarea id="diagnostico" class="form-textarea" rows="4" placeholder="Ingrese el diagnóstico inicial..." ${!puedeEditar.editable ? 'disabled' : ''}>${escapeHtml(ordenEnGestion.transcripcion_problema || '')}</textarea>
-                    </div>
-                    <div class="diagnostico-audio">
-                        <div class="diagnostico-audio-controls">
-                            <button type="button" id="btnGrabarAudioDiagnostico" class="btn-audio" ${!puedeEditar.editable ? 'disabled' : ''}>
-                                <i class="fas fa-microphone"></i> Grabar Audio
-                            </button>
-                            <button type="button" id="btnDetenerAudioDiagnostico" class="btn-audio" style="display:none;">
-                                <i class="fas fa-stop"></i> Detener Grabación
-                            </button>
-                        </div>
-                        <audio id="audioReproduccionDiagnostico" controls style="display:none; width: 100%; margin-top: 10px;"></audio>
                     </div>
                 </div>
             </div>
@@ -883,23 +1012,104 @@ function renderModalGestionOrden() {
     }
     
     if (puedeEditar.editable) {
-        setupAudioEventosDiagnostico();
+        setupAudioEventosTaller();
+        setupBahiasSeleccion();
     }
 }
 
-function setupAudioEventosDiagnostico() {
-    const btnGrabar = document.getElementById('btnGrabarAudioDiagnostico');
-    const btnDetener = document.getElementById('btnDetenerAudioDiagnostico');
+function renderBahiasSeleccion(bahias, bahiaActual, editable) {
+    if (!bahias || bahias.length === 0) {
+        // Si no hay datos de bahías, mostrar del 1 al 12
+        let html = '';
+        for (let i = 1; i <= 12; i++) {
+            const isSelected = bahiaActual == i;
+            html += `
+                <div class="bahia-item ${isSelected ? 'selected' : ''}" data-bahia="${i}" style="${!editable ? 'cursor: not-allowed; opacity: 0.6;' : ''}">
+                    <div class="bahia-numero">${i}</div>
+                    <div class="bahia-estado-icono"><i class="fas fa-warehouse"></i></div>
+                    <div class="bahia-estado-texto">Disponible</div>
+                </div>
+            `;
+        }
+        return html;
+    }
+    
+    return bahias.map(bahia => {
+        const isSelected = bahiaActual == bahia.numero;
+        const isOcupada = bahia.estado === 'ocupado';
+        const isReservada = bahia.estado === 'reservado';
+        let estadoClass = '';
+        let estadoTexto = bahia.estado === 'libre' ? 'Disponible' : (bahia.estado === 'ocupado' ? 'Ocupada' : 'Reservada');
+        
+        if (isOcupada) estadoClass = 'ocupada';
+        if (isReservada) estadoClass = 'reservada';
+        if (isReservada && isSelected) estadoClass = 'reservada actual';
+        
+        return `
+            <div class="bahia-item ${estadoClass} ${isSelected ? 'selected' : ''}" data-bahia="${bahia.numero}" data-estado="${bahia.estado}" style="${!editable || isOcupada ? 'cursor: not-allowed; opacity: 0.6;' : ''}">
+                <div class="bahia-numero">${bahia.numero}</div>
+                <div class="bahia-estado-icono">
+                    ${bahia.estado === 'libre' ? '<i class="fas fa-check-circle" style="color: #10B981;"></i>' : 
+                      bahia.estado === 'ocupado' ? '<i class="fas fa-circle" style="color: #EF4444;"></i>' : 
+                      '<i class="fas fa-clock" style="color: #F59E0B;"></i>'}
+                </div>
+                <div class="bahia-estado-texto">${estadoTexto}</div>
+                ${bahia.orden_codigo ? `<div class="bahia-orden">${bahia.orden_codigo.substring(0, 8)}</div>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+function setupBahiasSeleccion() {
+    const bahiasItems = document.querySelectorAll('#bahiasGridSeleccion .bahia-item');
+    const inputBahia = document.getElementById('bahia');
+    
+    bahiasItems.forEach(item => {
+        const estado = item.dataset.estado;
+        if (estado === 'ocupado') return; // No permitir seleccionar bahías ocupadas
+        
+        item.addEventListener('click', () => {
+            const bahiaNumero = item.dataset.bahia;
+            
+            // Remover selección de todas
+            bahiasItems.forEach(i => i.classList.remove('selected'));
+            
+            // Agregar selección a la actual
+            item.classList.add('selected');
+            
+            // Actualizar input oculto
+            if (inputBahia) {
+                inputBahia.value = bahiaNumero;
+            } else {
+                // Crear input si no existe
+                const formRow = document.querySelector('.bahias-seleccion-section');
+                if (formRow && !document.getElementById('bahia')) {
+                    const hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.id = 'bahia';
+                    hiddenInput.value = bahiaNumero;
+                    formRow.appendChild(hiddenInput);
+                } else if (inputBahia) {
+                    inputBahia.value = bahiaNumero;
+                }
+            }
+        });
+    });
+}
+
+function setupAudioEventosTaller() {
+    const btnGrabar = document.getElementById('btnGrabarAudioTaller');
+    const btnDetener = document.getElementById('btnDetenerAudioTaller');
     
     if (btnGrabar) {
-        btnGrabar.onclick = () => iniciarGrabacionAudioDiagnostico();
+        btnGrabar.onclick = () => iniciarGrabacionAudioTaller();
     }
     if (btnDetener) {
-        btnDetener.onclick = () => detenerGrabacionAudioDiagnostico();
+        btnDetener.onclick = () => detenerGrabacionAudioTaller();
     }
 }
 
-async function iniciarGrabacionAudioDiagnostico() {
+async function iniciarGrabacionAudioTaller() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream);
@@ -912,7 +1122,7 @@ async function iniciarGrabacionAudioDiagnostico() {
         mediaRecorder.onstop = async () => {
             audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
             const audioUrl = URL.createObjectURL(audioBlob);
-            const audioElem = document.getElementById('audioReproduccionDiagnostico');
+            const audioElem = document.getElementById('audioReproduccionTaller');
             if (audioElem) {
                 audioElem.src = audioUrl;
                 audioElem.style.display = 'block';
@@ -924,8 +1134,8 @@ async function iniciarGrabacionAudioDiagnostico() {
         mediaRecorder.start();
         isRecording = true;
         
-        const btnGrabar = document.getElementById('btnGrabarAudioDiagnostico');
-        const btnDetener = document.getElementById('btnDetenerAudioDiagnostico');
+        const btnGrabar = document.getElementById('btnGrabarAudioTaller');
+        const btnDetener = document.getElementById('btnDetenerAudioTaller');
         if (btnGrabar) btnGrabar.style.display = 'none';
         if (btnDetener) btnDetener.style.display = 'inline-flex';
         
@@ -937,13 +1147,13 @@ async function iniciarGrabacionAudioDiagnostico() {
     }
 }
 
-function detenerGrabacionAudioDiagnostico() {
+function detenerGrabacionAudioTaller() {
     if (mediaRecorder && isRecording) {
         mediaRecorder.stop();
         isRecording = false;
         
-        const btnGrabar = document.getElementById('btnGrabarAudioDiagnostico');
-        const btnDetener = document.getElementById('btnDetenerAudioDiagnostico');
+        const btnGrabar = document.getElementById('btnGrabarAudioTaller');
+        const btnDetener = document.getElementById('btnDetenerAudioTaller');
         if (btnGrabar) btnGrabar.style.display = 'inline-flex';
         if (btnDetener) btnDetener.style.display = 'none';
         
@@ -957,11 +1167,10 @@ async function guardarGestionOrden() {
     mostrarNotificacion('Guardando cambios...', 'info');
     
     try {
-        // Obtener técnicos seleccionados
+        // 1. Guardar técnicos seleccionados
         const tecnicosSeleccionados = Array.from(document.querySelectorAll('input[name="tecnico"]:checked'))
             .map(cb => parseInt(cb.value));
         
-        // Solo guardar si hay técnicos seleccionados
         if (tecnicosSeleccionados.length > 0) {
             const asignarResponse = await fetch(`${API_URL}/jefe-taller/asignar-tecnicos`, {
                 method: 'POST',
@@ -982,8 +1191,13 @@ async function guardarGestionOrden() {
             }
         }
         
-        // Obtener datos de planificación
-        const bahia = document.getElementById('bahia')?.value;
+        // 2. Obtener bahía seleccionada
+        let bahia = null;
+        const bahiaSeleccionada = document.querySelector('#bahiasGridSeleccion .bahia-item.selected');
+        if (bahiaSeleccionada) {
+            bahia = bahiaSeleccionada.dataset.bahia;
+        }
+        
         const fechaInicio = document.getElementById('fecha_inicio')?.value;
         const horasEstimadas = document.getElementById('horas_estimadas')?.value;
         
@@ -1008,8 +1222,8 @@ async function guardarGestionOrden() {
             }
         }
         
-        // Guardar diagnóstico
-        const diagnostico = document.getElementById('diagnostico')?.value;
+        // 3. Guardar diagnóstico del taller (EDITABLE)
+        const diagnosticoTaller = document.getElementById('diagnosticoTaller')?.value;
         let audioBase64 = null;
         
         if (audioBlob) {
@@ -1020,7 +1234,7 @@ async function guardarGestionOrden() {
             });
         }
         
-        if (diagnostico) {
+        if (diagnosticoTaller) {
             const diagResponse = await fetch(`${API_URL}/jefe-taller/diagnostico-inicial`, {
                 method: 'POST',
                 headers: {
@@ -1029,7 +1243,7 @@ async function guardarGestionOrden() {
                 },
                 body: JSON.stringify({
                     id_orden: ordenEnGestion.id,
-                    diagnostico: diagnostico,
+                    diagnostico: diagnosticoTaller,
                     audio_url: audioBase64
                 })
             });
@@ -1042,9 +1256,11 @@ async function guardarGestionOrden() {
         
         mostrarNotificacion('Cambios guardados correctamente', 'success');
         
-        // Limpiar cache y recargar datos
+        // Limpiar caché y recargar datos
         dataCache.clear('tecnicos');
+        dataCache.clear('bahias');
         await cargarUltimasOrdenesActivas(true);
+        await cargarEstadoBahias(true);
         await cargarTecnicos(true);
         
         cerrarModalGestionOrden();
@@ -1067,11 +1283,6 @@ function cerrarModalGestionOrden() {
     ordenEnGestion = null;
     audioBlob = null;
     audioChunks = [];
-    
-    if (audioUrlTemporal) {
-        URL.revokeObjectURL(audioUrlTemporal);
-        audioUrlTemporal = null;
-    }
 }
 
 // =====================================================
@@ -1122,7 +1333,6 @@ async function verDetalleOrden(idOrden) {
                         <div class="detalle-grid">
                             <div class="detalle-item"><span class="detalle-label">Nombre</span><span class="detalle-value">${escapeHtml(orden.cliente?.nombre || 'No registrado')}</span></div>
                             <div class="detalle-item"><span class="detalle-label">Teléfono</span><span class="detalle-value">${escapeHtml(orden.cliente?.telefono || 'N/A')}</span></div>
-                            <div class="detalle-item"><span class="detalle-label">Ubicación</span><span class="detalle-value">${escapeHtml(orden.cliente?.ubicacion || 'N/A')}</span></div>
                         </div>
                     </div>
                     
@@ -1145,10 +1355,16 @@ async function verDetalleOrden(idOrden) {
                     </div>
                     
                     <div class="detalle-seccion">
-                        <h4><i class="fas fa-stethoscope"></i> Problema Reportado</h4>
+                        <h4><i class="fas fa-headset"></i> Diagnóstico del Cliente</h4>
                         <div class="detalle-descripcion">${escapeHtml(orden.transcripcion_problema) || 'No registrado'}</div>
-                        ${orden.audio_url ? `<div class="detalle-audio"><audio controls src="${orden.audio_url}" style="width: 100%; margin-top: 10px;"></audio></div>` : ''}
                     </div>
+                    
+                    ${orden.diagnostigo_taller ? `
+                    <div class="detalle-seccion">
+                        <h4><i class="fas fa-stethoscope"></i> Diagnóstico del Jefe Taller</h4>
+                        <div class="detalle-descripcion" style="background: rgba(193,18,31,0.1);">${escapeHtml(orden.diagnostigo_taller)}</div>
+                    </div>
+                    ` : ''}
                 </div>
             `;
         }
@@ -1185,7 +1401,7 @@ async function verDiagnosticoPendiente(idOrden) {
             if (body) {
                 body.innerHTML = `
                     <div class="diagnostico-pendiente">
-                        <div class="alert alert-warning">
+                        <div class="alert alert-warning" style="background: rgba(245,158,11,0.15); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1rem;">
                             <i class="fas fa-clock"></i>
                             <strong>Diagnóstico Pendiente de Revisión</strong>
                         </div>
@@ -1194,12 +1410,7 @@ async function verDiagnosticoPendiente(idOrden) {
                             <div class="detalle-item"><span class="detalle-label">Versión</span><span class="detalle-value">${data.version}</span></div>
                             <div class="detalle-item"><span class="detalle-label">Estado</span><span class="detalle-value">${data.estado}</span></div>
                         </div>
-                        <div class="diagnostico-contenido">
-                            <h5>Diagnóstico:</h5>
-                            <p>${escapeHtml(data.diagnostico || 'No hay diagnóstico disponible')}</p>
-                        </div>
-                        ${data.audio_url ? `<div class="detalle-audio"><audio controls src="${data.audio_url}" style="width: 100%; margin-top: 10px;"></audio></div>` : ''}
-                        <div class="diagnostico-acciones">
+                        <div class="diagnostico-acciones" style="display: flex; gap: 1rem; margin-top: 1.5rem;">
                             <button class="btn-success" onclick="window.aprobarDiagnostico(${idOrden})">
                                 <i class="fas fa-check"></i> Aprobar Diagnóstico
                             </button>
@@ -1245,5 +1456,7 @@ window.cargarUltimasOrdenesActivas = cargarUltimasOrdenesActivas;
 window.cargarTodasOrdenesActivas = cargarTodasOrdenesActivas;
 window.cargarOrdenesFinalizadas = cargarOrdenesFinalizadas;
 window.verDiagnosticoPendiente = verDiagnosticoPendiente;
+window.verOrdenEnBahia = verOrdenEnBahia;
+window.cargarEstadoBahias = cargarEstadoBahias;
 
-console.log('✅ orden_trabajo.js cargado - Versión completa');
+console.log('✅ orden_trabajo.js cargado - Versión completa con bahías y diagnósticos');

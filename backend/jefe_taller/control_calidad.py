@@ -1,9 +1,9 @@
 # =====================================================
 # CONTROL_CALIDAD.PY - JEFE DE TALLER
-# VERSIÓN CORREGIDA - USANDO 'id' COMO PRIMARY KEY
+# VERSIÓN CORREGIDA - USANDO TABLAS REALES DE LA BD
 # =====================================================
 
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, request, jsonify
 from config import config
 from decorators import jefe_taller_required
 import datetime
@@ -25,32 +25,32 @@ supabase = config.supabase
 def obtener_tecnicos_orden(id_orden: int) -> str:
     """Obtener nombres de técnicos asignados a una orden"""
     try:
+        # Obtener asignaciones activas
         asignaciones = supabase.table('asignaciontecnico') \
-            .select('id_tecnico, usuario!inner(id, nombre)') \
+            .select('id_tecnico') \
             .eq('id_orden_trabajo', id_orden) \
             .is_('fecha_hora_final', 'null') \
             .execute()
         
-        nombres = []
-        for asignacion in (asignaciones.data or []):
-            usuario = asignacion.get('usuario', {})
-            nombre = usuario.get('nombre') if isinstance(usuario, dict) else None
-            if nombre:
-                nombres.append(nombre)
+        tecnicos_ids = [a['id_tecnico'] for a in (asignaciones.data or []) if a.get('id_tecnico')]
         
-        if not nombres:
-            asignaciones_hist = supabase.table('asignaciontecnico') \
-                .select('id_tecnico, usuario!inner(id, nombre)') \
+        # Si no hay activas, buscar históricas
+        if not tecnicos_ids:
+            asignaciones = supabase.table('asignaciontecnico') \
+                .select('id_tecnico') \
                 .eq('id_orden_trabajo', id_orden) \
                 .execute()
-            
-            for asignacion in (asignaciones_hist.data or []):
-                usuario = asignacion.get('usuario', {})
-                nombre = usuario.get('nombre') if isinstance(usuario, dict) else None
-                if nombre and nombre not in nombres:
-                    nombres.append(nombre)
+            tecnicos_ids = [a['id_tecnico'] for a in (asignaciones.data or []) if a.get('id_tecnico')]
         
-        return ', '.join(nombres) if nombres else 'No asignado'
+        if tecnicos_ids:
+            tecnicos = supabase.table('usuario') \
+                .select('nombre') \
+                .in_('id', tecnicos_ids) \
+                .execute()
+            nombres = [t.get('nombre', 'Técnico') for t in (tecnicos.data or [])]
+            return ', '.join(nombres) if nombres else 'No asignado'
+        
+        return 'No asignado'
     
     except Exception as e:
         logger.error(f"Error obteniendo técnicos para orden {id_orden}: {e}")
@@ -69,46 +69,135 @@ def formatear_vehiculo(vehiculo_data: Optional[Dict]) -> str:
         return f"{marca} {modelo} ({placa})".strip()
     return f"Vehículo ({placa})" if placa else 'Vehículo no registrado'
 
-def obtener_servicios_orden(id_orden: int) -> List[Dict]:
-    """Obtener servicios de una orden"""
+def obtener_cliente_nombre(id_cliente: int) -> str:
+    """Obtener nombre del cliente por ID de cliente"""
     try:
-        servicios = supabase.table('ordenservicio') \
-            .select('''
-                id_servicio,
-                cantidad,
-                precio_unitario,
-                servicio!inner(descripcion)
-            ''') \
+        if not id_cliente:
+            return 'Cliente no registrado'
+        
+        # Obtener id_usuario desde tabla cliente
+        cliente = supabase.table('cliente') \
+            .select('id_usuario') \
+            .eq('id', id_cliente) \
+            .execute()
+        
+        if cliente.data and cliente.data[0].get('id_usuario'):
+            usuario = supabase.table('usuario') \
+                .select('nombre') \
+                .eq('id', cliente.data[0]['id_usuario']) \
+                .execute()
+            if usuario.data:
+                return usuario.data[0].get('nombre', 'Cliente no registrado')
+        
+        return 'Cliente no registrado'
+    except Exception as e:
+        logger.error(f"Error obteniendo cliente: {e}")
+        return 'Cliente no registrado'
+
+def obtener_diagnostico_tecnico(id_orden: int) -> Dict:
+    """Obtener diagnóstico técnico de una orden (tabla diagnostico_tecnico)"""
+    try:
+        diagnostico = supabase.table('diagnostico_tecnico') \
+            .select('informe, url_grabacion_informe, fecha_envio, estado, version') \
             .eq('id_orden_trabajo', id_orden) \
+            .order('version', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if diagnostico.data:
+            diag = diagnostico.data[0]
+            return {
+                'informe': diag.get('informe'),
+                'audio_url': diag.get('url_grabacion_informe'),
+                'fecha_diagnostico': diag.get('fecha_envio'),
+                'estado': diag.get('estado'),
+                'version': diag.get('version', 1)
+            }
+        return {}
+    except Exception as e:
+        logger.error(f"Error obteniendo diagnóstico: {e}")
+        return {}
+
+def obtener_servicios_orden(id_orden: int) -> List[Dict]:
+    """Obtener servicios de una orden (tabla servicio_tecnico)"""
+    try:
+        # Primero obtener diagnóstico de la orden
+        diagnostico = supabase.table('diagnostico_tecnico') \
+            .select('id') \
+            .eq('id_orden_trabajo', id_orden) \
+            .order('version', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if not diagnostico.data:
+            return []
+        
+        diagnostico_id = diagnostico.data[0]['id']
+        
+        # Obtener servicios del diagnóstico
+        servicios = supabase.table('servicio_tecnico') \
+            .select('id, descripcion, orden') \
+            .eq('id_diagnostico_tecnico', diagnostico_id) \
+            .order('orden') \
             .execute()
         
         return [{
-            'descripcion': s.get('servicio', {}).get('descripcion', 'Servicio no especificado'),
-            'cantidad': s.get('cantidad', 1),
-            'precio': s.get('precio_unitario', 0) * s.get('cantidad', 1)
+            'descripcion': s.get('descripcion', 'Servicio no especificado'),
+            'cantidad': 1,
+            'precio': 0  # No tenemos precio directo en servicio_tecnico
         } for s in (servicios.data or [])]
     
     except Exception as e:
         logger.error(f"Error obteniendo servicios: {e}")
         return []
 
-def obtener_fotos_recepcion(id_orden: int) -> Dict[str, str]:
-    """Obtener fotos de la recepción"""
+def obtener_recepcion(id_orden: int) -> Dict:
+    """Obtener datos de recepción (tabla recepcion)"""
     try:
-        recepcion = supabase.table('recepcionvehiculo') \
-            .select('fotos') \
+        recepcion = supabase.table('recepcion') \
+            .select('transcripcion_problema, url_grabacion_problema, url_foto_frontal, url_foto_trasera, url_foto_superior, url_foto_inferior, url_foto_tablero, url_lateral_izquierda, url_lateral_derecha') \
             .eq('id_orden_trabajo', id_orden) \
             .execute()
         
-        if recepcion.data and len(recepcion.data) > 0:
-            fotos = recepcion.data[0].get('fotos', {})
-            if isinstance(fotos, dict):
-                return fotos
+        if recepcion.data:
+            r = recepcion.data[0]
+            # Organizar fotos en un diccionario
+            fotos = {}
+            for key in ['url_foto_frontal', 'url_foto_trasera', 'url_foto_superior', 'url_foto_inferior', 'url_foto_tablero', 'url_lateral_izquierda', 'url_lateral_derecha']:
+                if r.get(key):
+                    nombre = key.replace('url_', '').replace('_', ' ').title()
+                    fotos[nombre] = r[key]
+            
+            return {
+                'transcripcion_problema': r.get('transcripcion_problema'),
+                'audio_url': r.get('url_grabacion_problema'),
+                'fotos': fotos
+            }
         return {}
+    except Exception as e:
+        logger.error(f"Error obteniendo recepción: {e}")
+        return {}
+
+def obtener_historial_orden(id_orden: int) -> List[Dict]:
+    """Obtener historial de cambios (tabla seguimientoorden)"""
+    try:
+        historial = supabase.table('seguimientoorden') \
+            .select('estado, motivo_pausa, fecha_hora_cambio, notificaciones_enviadas') \
+            .eq('id_orden_trabajo', id_orden) \
+            .order('fecha_hora_cambio', desc=True) \
+            .limit(10) \
+            .execute()
+        
+        return [{
+            'estado_anterior': None,
+            'estado_nuevo': h.get('estado'),
+            'fecha_cambio': h.get('fecha_hora_cambio'),
+            'comentarios': h.get('motivo_pausa')
+        } for h in (historial.data or [])]
     
     except Exception as e:
-        logger.error(f"Error obteniendo fotos: {e}")
-        return {}
+        logger.error(f"Error obteniendo historial: {e}")
+        return []
 
 # =====================================================
 # ENDPOINTS DE PRUEBA
@@ -123,22 +212,8 @@ def test_endpoint():
         'timestamp': datetime.datetime.now().isoformat()
     }), 200
 
-@control_calidad_bp.route('/test-auth', methods=['GET'])
-@jefe_taller_required
-def test_auth_endpoint(current_user):
-    """Endpoint de prueba CON autenticación"""
-    return jsonify({
-        'success': True,
-        'message': 'Autenticación exitosa',
-        'user': {
-            'id': current_user.get('id'),
-            'nombre': current_user.get('nombre'),
-            'email': current_user.get('email')
-        }
-    }), 200
-
 # =====================================================
-# ENDPOINTS PRINCIPALES (CORREGIDOS CON 'id')
+# ENDPOINTS PRINCIPALES (CORREGIDOS)
 # =====================================================
 
 @control_calidad_bp.route('/ordenes-pendientes', methods=['GET'])
@@ -154,11 +229,11 @@ def obtener_ordenes_pendientes(current_user):
         
         logger.info(f"📋 Usuario {current_user.get('id')} - Pendientes | Estado: {estado} | Límite: {limit}")
         
-        # Consulta usando '*' para obtener todos los campos
+        # Órdenes con VehiculoArmado o ReparacionCompletada
         query = supabase.table('ordentrabajo') \
             .select('*') \
             .in_('estado_global', ['VehiculoArmado', 'ReparacionCompletada']) \
-            .order('fecha_fin_armado', desc=True) \
+            .order('fecha_ingreso', desc=True) \
             .limit(limit)
         
         if estado != 'all':
@@ -173,33 +248,15 @@ def obtener_ordenes_pendientes(current_user):
         if search:
             ordenes = [o for o in ordenes if 
                 search in (o.get('codigo_unico', '') or '').lower() or
-                search in (o.get('cliente_nombre', '') or '').lower() or
-                search in (o.get('vehiculo_placa', '') or '').lower()
+                search in (o.get('id_vehiculo', '') or '').lower()
             ]
         
         # Para cada orden, obtener datos relacionados
         ordenes_formateadas = []
         for orden in ordenes:
-            # IMPORTANTE: La PK se llama 'id' no 'id_orden'
             orden_id = orden.get('id')
             if not orden_id:
-                logger.warning(f"Orden sin id: {orden}")
                 continue
-                
-            logger.info(f"Procesando orden ID: {orden_id} - {orden.get('codigo_unico')}")
-            
-            # Obtener datos del cliente
-            cliente_nombre = 'Cliente no registrado'
-            if orden.get('cliente_id'):
-                try:
-                    cliente_result = supabase.table('cliente') \
-                        .select('nombre') \
-                        .eq('id', orden['cliente_id']) \
-                        .execute()
-                    if cliente_result.data and len(cliente_result.data) > 0:
-                        cliente_nombre = cliente_result.data[0].get('nombre', 'Cliente no registrado')
-                except Exception as e:
-                    logger.error(f"Error obteniendo cliente: {e}")
             
             # Obtener datos del vehículo
             vehiculo_texto = 'Vehículo no registrado'
@@ -209,24 +266,28 @@ def obtener_ordenes_pendientes(current_user):
                         .select('placa, marca, modelo') \
                         .eq('id', orden['id_vehiculo']) \
                         .execute()
-                    if vehiculo_result.data and len(vehiculo_result.data) > 0:
-                        v = vehiculo_result.data[0]
-                        vehiculo_texto = formatear_vehiculo(v)
+                    if vehiculo_result.data:
+                        vehiculo_texto = formatear_vehiculo(vehiculo_result.data[0])
                 except Exception as e:
                     logger.error(f"Error obteniendo vehículo: {e}")
+            
+            # Obtener nombre del cliente
+            cliente_nombre = 'Cliente no registrado'
+            if orden.get('id_cliente'):
+                cliente_nombre = obtener_cliente_nombre(orden['id_cliente'])
             
             # Obtener técnicos
             tecnicos_nombres = obtener_tecnicos_orden(orden_id)
             
             ordenes_formateadas.append({
-                'id_orden': orden_id,  # Enviamos como id_orden para el frontend
+                'id_orden': orden_id,
                 'codigo_unico': orden.get('codigo_unico', 'N/A'),
                 'estado_global': orden.get('estado_global', 'Pendiente'),
                 'vehiculo': vehiculo_texto,
                 'cliente_nombre': cliente_nombre,
                 'tecnicos_nombres': tecnicos_nombres,
-                'fecha_inicio': orden.get('fecha_inicio_armado') or orden.get('fecha_ingreso'),
-                'fecha_fin': orden.get('fecha_fin_armado') or orden.get('fecha_ingreso'),
+                'fecha_inicio': orden.get('fecha_ingreso'),
+                'fecha_fin': orden.get('fecha_estimada_finalizacion') or orden.get('fecha_ingreso'),
                 'fecha_ingreso': orden.get('fecha_ingreso')
             })
         
@@ -254,11 +315,11 @@ def obtener_ordenes_finalizadas(current_user):
         
         logger.info(f"📋 Usuario {current_user.get('id')} - Finalizadas | Estado: {estado} | Límite: {limit}")
         
-        # Consulta usando '*' para obtener todos los campos
+        # Órdenes finalizadas o entregadas
         query = supabase.table('ordentrabajo') \
             .select('*') \
             .in_('estado_global', ['Finalizado', 'Entregado']) \
-            .order('fecha_salida', desc=True) \
+            .order('fecha_ingreso', desc=True) \
             .limit(limit)
         
         if estado != 'all':
@@ -269,39 +330,18 @@ def obtener_ordenes_finalizadas(current_user):
         
         logger.info(f"📊 Se encontraron {len(ordenes)} órdenes finalizadas")
         
-        # Filtrar por búsqueda si es necesario
         if search:
             ordenes = [o for o in ordenes if 
                 search in (o.get('codigo_unico', '') or '').lower() or
-                search in (o.get('cliente_nombre', '') or '').lower() or
-                search in (o.get('vehiculo_placa', '') or '').lower()
+                search in (o.get('id_vehiculo', '') or '').lower()
             ]
         
-        # Para cada orden, obtener datos relacionados
         ordenes_formateadas = []
         for orden in ordenes:
-            # IMPORTANTE: La PK se llama 'id' no 'id_orden'
             orden_id = orden.get('id')
             if not orden_id:
-                logger.warning(f"Orden sin id: {orden}")
                 continue
-                
-            logger.info(f"Procesando orden ID: {orden_id} - {orden.get('codigo_unico')}")
             
-            # Obtener datos del cliente
-            cliente_nombre = 'Cliente no registrado'
-            if orden.get('cliente_id'):
-                try:
-                    cliente_result = supabase.table('cliente') \
-                        .select('nombre') \
-                        .eq('id', orden['cliente_id']) \
-                        .execute()
-                    if cliente_result.data and len(cliente_result.data) > 0:
-                        cliente_nombre = cliente_result.data[0].get('nombre', 'Cliente no registrado')
-                except Exception as e:
-                    logger.error(f"Error obteniendo cliente: {e}")
-            
-            # Obtener datos del vehículo
             vehiculo_texto = 'Vehículo no registrado'
             if orden.get('id_vehiculo'):
                 try:
@@ -309,23 +349,25 @@ def obtener_ordenes_finalizadas(current_user):
                         .select('placa, marca, modelo') \
                         .eq('id', orden['id_vehiculo']) \
                         .execute()
-                    if vehiculo_result.data and len(vehiculo_result.data) > 0:
-                        v = vehiculo_result.data[0]
-                        vehiculo_texto = formatear_vehiculo(v)
+                    if vehiculo_result.data:
+                        vehiculo_texto = formatear_vehiculo(vehiculo_result.data[0])
                 except Exception as e:
                     logger.error(f"Error obteniendo vehículo: {e}")
             
-            # Obtener técnicos
+            cliente_nombre = 'Cliente no registrado'
+            if orden.get('id_cliente'):
+                cliente_nombre = obtener_cliente_nombre(orden['id_cliente'])
+            
             tecnicos_nombres = obtener_tecnicos_orden(orden_id)
             
             ordenes_formateadas.append({
-                'id_orden': orden_id,  # Enviamos como id_orden para el frontend
+                'id_orden': orden_id,
                 'codigo_unico': orden.get('codigo_unico', 'N/A'),
                 'estado_global': orden.get('estado_global', 'Finalizado'),
                 'vehiculo': vehiculo_texto,
                 'cliente_nombre': cliente_nombre,
                 'tecnicos_nombres': tecnicos_nombres,
-                'fecha_finalizacion': orden.get('fecha_salida') or orden.get('fecha_fin_armado') or orden.get('fecha_ingreso'),
+                'fecha_finalizacion': orden.get('fecha_salida') or orden.get('fecha_ingreso'),
                 'comentarios_aprobacion': orden.get('instrucciones_tecnico', '')
             })
         
@@ -347,67 +389,37 @@ def obtener_detalle_orden(current_user, id_orden):
     try:
         logger.info(f"🔍 Usuario {current_user.get('id')} consultando detalle de orden {id_orden}")
         
-        # Obtener datos de la orden - Usando 'id' como PK
+        # Obtener datos de la orden
         orden_result = supabase.table('ordentrabajo') \
             .select('*') \
             .eq('id', id_orden) \
             .execute()
         
-        if not orden_result.data or len(orden_result.data) == 0:
+        if not orden_result.data:
             return jsonify({'success': False, 'error': 'Orden no encontrada'}), 404
         
         orden_data = orden_result.data[0]
-        
-        # Obtener datos del cliente
-        cliente_data = {}
-        if orden_data.get('cliente_id'):
-            cliente_result = supabase.table('cliente') \
-                .select('id, nombre, telefono, email') \
-                .eq('id', orden_data['cliente_id']) \
-                .execute()
-            if cliente_result.data and len(cliente_result.data) > 0:
-                cliente_data = cliente_result.data[0]
         
         # Obtener datos del vehículo
         vehiculo_data = {}
         if orden_data.get('id_vehiculo'):
             vehiculo_result = supabase.table('vehiculo') \
-                .select('id, placa, marca, modelo, anio, kilometraje') \
+                .select('*') \
                 .eq('id', orden_data['id_vehiculo']) \
                 .execute()
-            if vehiculo_result.data and len(vehiculo_result.data) > 0:
+            if vehiculo_result.data:
                 vehiculo_data = vehiculo_result.data[0]
+        
+        # Obtener nombre del cliente
+        cliente_nombre = 'No registrado'
+        if orden_data.get('id_cliente'):
+            cliente_nombre = obtener_cliente_nombre(orden_data['id_cliente'])
         
         tecnicos_nombres = obtener_tecnicos_orden(id_orden)
         servicios = obtener_servicios_orden(id_orden)
-        
-        # Obtener diagnóstico
-        diagnostico_result = supabase.table('diagnostico') \
-            .select('informe, audio_url, fecha_diagnostico') \
-            .eq('id_orden_trabajo', id_orden) \
-            .execute()
-        
-        diagnostico_data = diagnostico_result.data[0] if diagnostico_result.data else None
-        
-        # Obtener recepción y fotos
-        recepcion_result = supabase.table('recepcionvehiculo') \
-            .select('transcripcion_problema, audio_url, fotos') \
-            .eq('id_orden_trabajo', id_orden) \
-            .execute()
-        
-        recepcion_data = recepcion_result.data[0] if recepcion_result.data else {}
-        fotos = recepcion_data.get('fotos', {})
-        fotos_validas = {k: v for k, v in fotos.items() if v and v != ''}
-        
-        # Obtener historial de cambios de estado
-        historial_result = supabase.table('historialorden') \
-            .select('estado_anterior, estado_nuevo, fecha_cambio, comentarios') \
-            .eq('id_orden_trabajo', id_orden) \
-            .order('fecha_cambio', desc=True) \
-            .limit(10) \
-            .execute()
-        
-        historial = historial_result.data or []
+        diagnostico_data = obtener_diagnostico_tecnico(id_orden)
+        recepcion_data = obtener_recepcion(id_orden)
+        historial = obtener_historial_orden(id_orden)
         
         detalle_completo = {
             'orden': {
@@ -416,17 +428,15 @@ def obtener_detalle_orden(current_user, id_orden):
                 'estado_global': orden_data.get('estado_global'),
                 'fecha_ingreso': orden_data.get('fecha_ingreso'),
                 'fecha_salida': orden_data.get('fecha_salida'),
-                'fecha_inicio_armado': orden_data.get('fecha_inicio_armado'),
-                'fecha_fin_armado': orden_data.get('fecha_fin_armado'),
-                'instrucciones_tecnico': orden_data.get('instrucciones_tecnico'),
-                'total_diagnostico': orden_data.get('total_diagnostico')
+                'total_diagnostico': orden_data.get('total_diagnostico'),
+                'dias_estimados_reparacion': orden_data.get('dias_estimados_reparacion'),
+                'fecha_estimada_finalizacion': orden_data.get('fecha_estimada_finalizacion')
             },
             'cliente': {
-                'id': cliente_data.get('id'),
-                'nombre': cliente_data.get('nombre'),
-                'telefono': cliente_data.get('telefono'),
-                'email': cliente_data.get('email')
-            } if cliente_data else None,
+                'nombre': cliente_nombre,
+                'telefono': 'No registrado',
+                'email': 'No registrado'
+            } if cliente_nombre else None,
             'vehiculo': {
                 'id': vehiculo_data.get('id'),
                 'placa': vehiculo_data.get('placa'),
@@ -437,16 +447,8 @@ def obtener_detalle_orden(current_user, id_orden):
             } if vehiculo_data else None,
             'tecnicos_nombres': tecnicos_nombres,
             'servicios': servicios,
-            'diagnostico': {
-                'informe': diagnostico_data.get('informe') if diagnostico_data else None,
-                'audio_url': diagnostico_data.get('audio_url') if diagnostico_data else None,
-                'fecha_diagnostico': diagnostico_data.get('fecha_diagnostico') if diagnostico_data else None
-            } if diagnostico_data else None,
-            'recepcion': {
-                'transcripcion_problema': recepcion_data.get('transcripcion_problema'),
-                'audio_url': recepcion_data.get('audio_url'),
-                'fotos': fotos_validas
-            },
+            'diagnostico': diagnostico_data if diagnostico_data else None,
+            'recepcion': recepcion_data,
             'historial': historial
         }
         
@@ -469,13 +471,13 @@ def finalizar_orden(current_user, id_orden):
         
         logger.info(f"✅ Usuario {current_user.get('id')} finalizando orden {id_orden}")
         
-        # Verificar que la orden existe - Usando 'id' como PK
+        # Verificar que la orden existe
         orden_result = supabase.table('ordentrabajo') \
             .select('id, estado_global') \
             .eq('id', id_orden) \
             .execute()
         
-        if not orden_result.data or len(orden_result.data) == 0:
+        if not orden_result.data:
             return jsonify({'success': False, 'error': 'Orden no encontrada'}), 404
         
         estado_actual = orden_result.data[0].get('estado_global')
@@ -485,10 +487,12 @@ def finalizar_orden(current_user, id_orden):
                 'error': f'La orden está en estado "{estado_actual}" y no puede ser finalizada'
             }), 400
         
+        ahora = datetime.datetime.now().isoformat()
+        
         # Actualizar la orden
         update_data = {
             'estado_global': 'Finalizado',
-            'fecha_salida': datetime.datetime.now().isoformat()
+            'fecha_salida': ahora
         }
         
         if comentarios:
@@ -499,12 +503,12 @@ def finalizar_orden(current_user, id_orden):
             .eq('id', id_orden) \
             .execute()
         
-        # Registrar en historial
-        supabase.table('historialorden').insert({
+        # Registrar en seguimientoorden
+        supabase.table('seguimientoorden').insert({
             'id_orden_trabajo': id_orden,
-            'estado_anterior': estado_actual,
-            'estado_nuevo': 'Finalizado',
-            'comentarios': f'Aprobado por control de calidad. {comentarios}' if comentarios else 'Aprobado por control de calidad'
+            'estado': 'Finalizado',
+            'fecha_hora_cambio': ahora,
+            'notificaciones_enviadas': 0
         }).execute()
         
         logger.info(f"✅ Orden {id_orden} finalizada exitosamente")
@@ -535,13 +539,13 @@ def rechazar_orden(current_user, id_orden):
         
         logger.info(f"❌ Usuario {current_user.get('id')} rechazando orden {id_orden}")
         
-        # Verificar que la orden existe - Usando 'id' como PK
+        # Verificar que la orden existe
         orden_result = supabase.table('ordentrabajo') \
             .select('id, estado_global') \
             .eq('id', id_orden) \
             .execute()
         
-        if not orden_result.data or len(orden_result.data) == 0:
+        if not orden_result.data:
             return jsonify({'success': False, 'error': 'Orden no encontrada'}), 404
         
         estado_actual = orden_result.data[0].get('estado_global')
@@ -551,23 +555,24 @@ def rechazar_orden(current_user, id_orden):
                 'error': f'La orden está en estado "{estado_actual}" y no puede ser rechazada'
             }), 400
         
-        # Actualizar la orden
-        update_data = {
-            'estado_global': 'EnReparacion',
-            'instrucciones_tecnico': instrucciones
-        }
+        ahora = datetime.datetime.now().isoformat()
         
+        # Actualizar la orden
         supabase.table('ordentrabajo') \
-            .update(update_data) \
+            .update({
+                'estado_global': 'EnReparacion',
+                'instrucciones_tecnico': instrucciones
+            }) \
             .eq('id', id_orden) \
             .execute()
         
-        # Registrar en historial
-        supabase.table('historialorden').insert({
+        # Registrar en seguimientoorden
+        supabase.table('seguimientoorden').insert({
             'id_orden_trabajo': id_orden,
-            'estado_anterior': estado_actual,
-            'estado_nuevo': 'EnReparacion',
-            'comentarios': f'Rechazado por control de calidad. Instrucciones: {instrucciones}'
+            'estado': 'EnReparacion',
+            'motivo_pausa': instrucciones,
+            'fecha_hora_cambio': ahora,
+            'notificaciones_enviadas': 1
         }).execute()
         
         logger.info(f"❌ Orden {id_orden} enviada a revisión")

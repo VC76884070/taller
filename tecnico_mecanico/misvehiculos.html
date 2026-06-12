@@ -13,24 +13,18 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/misvehiculos.css">
     
-    <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
+    <!-- ========== CONFIGURACIÓN PWA ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="TORQUE">
+    <meta name="apple-mobile-web-app-title" content="FURIA MOTOR">
     
-    <!-- ICONO PARA LA PESTAÑA DEL NAVEGADOR -->
     <link rel="icon" type="image/png" href="/icono.png">
     <link rel="shortcut icon" type="image/png" href="/icono.png">
-    
-    <!-- ICONO PARA IPHONE / IPAD (pantalla de inicio) -->
     <link rel="apple-touch-icon" href="/icono.png">
-    
-    <!-- ICONO PARA ANDROID (chrome) -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
-    <!-- ===================================================== -->
 </head>
 
 <body>
@@ -82,12 +76,6 @@
                     </div>
                 </div>
 
-                <!-- Limit Indicator -->
-                <div class="limit-indicator" id="limitIndicator">
-                    <i class="fas fa-info-circle"></i>
-                    <span>Has completado <strong id="completadosCount">0</strong> de <strong id="totalAsignados">0</strong> trabajos asignados este mes</span>
-                </div>
-
                 <!-- Vehículos Grid -->
                 <div id="vehiculosGrid" class="vehiculos-grid">
                     <div class="loading-container">
@@ -99,163 +87,187 @@
         </main>
     </div>
 
-    <!-- Modal: Diagnóstico -->
-    <div class="modal" id="modalDiagnostico">
-        <div class="modal-content modal-lg">
+    <!-- ===================================================== -->
+    <!-- MODALES NECESARIOS -->
+    <!-- ===================================================== -->
+
+    <!-- Modal: Empezar Diagnóstico -->
+    <div class="modal" id="empezarModal">
+        <div class="modal-content">
             <div class="modal-header">
-                <h2><i class="fas fa-stethoscope"></i> Registrar Diagnóstico</h2>
-                <button class="modal-close" onclick="cerrarModal('modalDiagnostico')">&times;</button>
+                <h2><i class="fas fa-play-circle"></i> Empezar Diagnóstico</h2>
+                <button class="modal-close" onclick="cerrarEmpezarModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <div id="diagnosticoInfo"></div>
-                <div class="form-group">
-                    <label><i class="fas fa-clipboard-list"></i> Descripción del Diagnóstico</label>
-                    <textarea id="diagnosticoDescripcion" class="form-textarea" rows="4" placeholder="Detalla el diagnóstico realizado, problemas encontrados, etc."></textarea>
-                </div>
+                <div id="empezarInfo"></div>
+                <input type="hidden" id="ordenIdEmpezar">
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalDiagnostico')">Cancelar</button>
-                <button class="btn-primary" id="btnGuardarDiagnostico">
-                    <i class="fas fa-save"></i> Guardar Diagnóstico
-                </button>
+                <button class="btn-secondary" onclick="cerrarEmpezarModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmarEmpezarBtn">Confirmar Inicio</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Iniciar Reparación -->
+    <div class="modal" id="iniciarModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-play-circle"></i> Iniciar Reparación</h2>
+                <button class="modal-close" onclick="cerrarIniciarModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="iniciarInfo"></div>
+                <input type="hidden" id="ordenIdIniciar">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarIniciarModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmarInicioBtn">Iniciar Reparación</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Pausa Manual -->
+    <div class="modal" id="pausaManualModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-pause-circle"></i> Pausar Trabajo</h2>
+                <button class="modal-close" onclick="cerrarPausaManualModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas pausar este trabajo?</p>
+                <div class="form-group">
+                    <label>Motivo de la pausa:</label>
+                    <textarea id="motivoPausaManual" class="form-textarea" rows="3" placeholder="Describe el motivo por el cual pausas el trabajo..."></textarea>
+                </div>
+                <input type="hidden" id="ordenIdPausaManual">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarPausaManualModal()">Cancelar</button>
+                <button class="btn-warning" id="confirmarPausaManualBtn">Confirmar Pausa</button>
             </div>
         </div>
     </div>
 
     <!-- Modal: Solicitar Repuestos -->
-    <div class="modal" id="modalSolicitarRepuestos">
+    <div class="modal" id="solicitarRepuestosModal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h2><i class="fas fa-clipboard-list"></i> Solicitar Repuestos</h2>
-                <button class="modal-close" onclick="cerrarModal('modalSolicitarRepuestos')">&times;</button>
+                <h2><i class="fas fa-shopping-cart"></i> Solicitar Repuestos</h2>
+                <button class="modal-close" onclick="cerrarSolicitarRepuestosModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <div id="solicitarRepuestosInfo"></div>
+                <div id="solicitarInfo"></div>
+                <div class="form-group">
+                    <label>Observaciones / Motivo:</label>
+                    <textarea id="motivoSolicitud" class="form-textarea" rows="2" placeholder="Describe por qué necesitas estos repuestos..."></textarea>
+                </div>
                 <div class="items-list-container">
                     <div class="items-list-header">
                         <strong><i class="fas fa-list"></i> Lista de Repuestos</strong>
                     </div>
-                    <div id="itemsList" class="items-list">
+                    <div id="itemsListSolicitud" class="items-list">
                         <div class="item-empty">
                             <i class="fas fa-box-open"></i>
                             <p>No hay repuestos agregados</p>
+                            <small>Haz clic en "Agregar repuesto" para comenzar</small>
                         </div>
                     </div>
-                    <button class="btn-add-item" id="btnAgregarItem">
+                    <button type="button" class="btn-add-item" id="btnAgregarItemSolicitud">
                         <i class="fas fa-plus"></i> Agregar Repuesto
                     </button>
                 </div>
-                <div class="form-group">
-                    <label><i class="fas fa-calendar-alt"></i> Fecha Requerida</label>
-                    <input type="date" id="fechaRequerida" class="form-input">
-                </div>
+                <input type="hidden" id="ordenIdSolicitud">
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalSolicitarRepuestos')">Cancelar</button>
-                <button class="btn-primary" id="btnEnviarSolicitud">
-                    <i class="fas fa-paper-plane"></i> Enviar Solicitud
-                </button>
+                <button class="btn-secondary" onclick="cerrarSolicitarRepuestosModal()">Cancelar</button>
+                <button class="btn-primary" id="confirmarSolicitarRepuestosBtn">Enviar Solicitud</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal: Registrar Avance -->
-    <div class="modal" id="modalRegistrarAvance">
-        <div class="modal-content modal-lg">
+    <!-- Modal: Reanudar Reparación -->
+    <div class="modal" id="reanudarModal">
+        <div class="modal-content">
             <div class="modal-header">
-                <h2><i class="fas fa-tasks"></i> Registrar Avance de Trabajo</h2>
-                <button class="modal-close" onclick="cerrarModal('modalRegistrarAvance')">&times;</button>
+                <h2><i class="fas fa-play"></i> Reanudar Trabajo</h2>
+                <button class="modal-close" onclick="cerrarReanudarModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <div id="avanceInfo"></div>
-                <div class="form-group">
-                    <label><i class="fas fa-percent"></i> Porcentaje de Avance</label>
-                    <input type="range" id="porcentajeAvance" min="0" max="100" step="5" value="50" class="slider-input">
-                    <div class="slider-value" id="porcentajeValue">50%</div>
-                </div>
-                <div class="form-group">
-                    <label><i class="fas fa-comment-dots"></i> Observaciones</label>
-                    <textarea id="observacionesAvance" class="form-textarea" rows="3" placeholder="Detalla el trabajo realizado, pendientes, etc."></textarea>
-                </div>
+                <div id="reanudarInfo"></div>
+                <p>¿Estás seguro de que deseas reanudar este trabajo?</p>
+                <input type="hidden" id="ordenIdReanudar">
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalRegistrarAvance')">Cancelar</button>
-                <button class="btn-primary" id="btnGuardarAvance">
-                    <i class="fas fa-save"></i> Registrar Avance
-                </button>
+                <button class="btn-secondary" onclick="cerrarReanudarModal()">Cancelar</button>
+                <button class="btn-success" id="confirmarReanudarBtn">Reanudar Trabajo</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal: Completar Armado -->
-    <div class="modal" id="modalCompletarArmado">
-        <div class="modal-content modal-lg">
+    <!-- Modal: Finalizar Reparación -->
+    <div class="modal" id="finalizarModal">
+        <div class="modal-content">
             <div class="modal-header">
-                <h2><i class="fas fa-check-circle"></i> Completar Armado</h2>
-                <button class="modal-close" onclick="cerrarModal('modalCompletarArmado')">&times;</button>
+                <h2><i class="fas fa-flag-checkered"></i> Finalizar Trabajo</h2>
+                <button class="modal-close" onclick="cerrarFinalizarModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <div id="armadoInfo"></div>
-                <div class="alert-info">
-                    <i class="fas fa-info-circle"></i>
-                    <span>Al completar el armado, el vehículo pasará a la etapa de <strong>Control de Calidad</strong> para su revisión final.</span>
+                <div id="finalizarInfo"></div>
+                <div id="solicitudesPendientesMsg" style="display: none;"></div>
+                <div id="bahiaWarningMsg" style="display: none;" class="warning-box">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>No hay bahía asignada para este vehículo. El trabajo no podrá continuar.</span>
                 </div>
-                <div class="form-group">
-                    <label><i class="fas fa-comment-dots"></i> Observaciones finales</label>
-                    <textarea id="observacionesArmado" class="form-textarea" rows="3" placeholder="Notas adicionales sobre el armado..."></textarea>
-                </div>
+                <p>¿Confirmas que has completado la reparación de este vehículo?</p>
+                <input type="hidden" id="ordenIdFinalizar">
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalCompletarArmado')">Cancelar</button>
-                <button class="btn-success" id="btnConfirmarArmado">
-                    <i class="fas fa-check-double"></i> Confirmar Armado
-                </button>
+                <button class="btn-secondary" onclick="cerrarFinalizarModal()">Cancelar</button>
+                <button class="btn-success" id="confirmarFinalizarBtn">Sí, Completar Trabajo</button>
             </div>
         </div>
     </div>
 
     <!-- Modal: Ver Detalle -->
-    <div class="modal" id="modalVerDetalle">
+    <div class="modal" id="detalleModal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
                 <h2><i class="fas fa-info-circle"></i> Detalle del Vehículo</h2>
-                <button class="modal-close" onclick="cerrarModal('modalVerDetalle')">&times;</button>
+                <button class="modal-close" onclick="cerrarDetalleModal()">&times;</button>
             </div>
             <div class="modal-body" id="detalleBody"></div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalVerDetalle')">Cerrar</button>
+                <button class="btn-secondary" onclick="cerrarDetalleModal()">Cerrar</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal: Historial Trabajo -->
-    <div class="modal" id="modalHistorial">
+    <!-- Modal: Historial de Solicitudes -->
+    <div class="modal" id="historialSolicitudesModal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h2><i class="fas fa-history"></i> Historial de Trabajo</h2>
-                <button class="modal-close" onclick="cerrarModal('modalHistorial')">&times;</button>
+                <h2><i class="fas fa-history"></i> Historial de Solicitudes</h2>
+                <button class="modal-close" onclick="cerrarHistorialModal()">&times;</button>
             </div>
-            <div class="modal-body" id="historialBody"></div>
+            <div class="modal-body" id="historialSolicitudesBody"></div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalHistorial')">Cerrar</button>
+                <button class="btn-secondary" onclick="cerrarHistorialModal()">Cerrar</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal: Ver Solicitud Repuestos -->
-    <div class="modal" id="modalVerSolicitud">
-        <div class="modal-content modal-lg">
-            <div class="modal-header">
-                <h2><i class="fas fa-clipboard-list"></i> Detalle de Solicitud</h2>
-                <button class="modal-close" onclick="cerrarModal('modalVerSolicitud')">&times;</button>
+    <!-- Modal: Foto Ampliada -->
+    <div class="modal" id="fotoModal">
+        <div class="modal-content" style="max-width: 90%; background: transparent;">
+            <div style="text-align: right;">
+                <button class="modal-close" onclick="cerrarFotoModal()" style="color: white; font-size: 2rem;">&times;</button>
             </div>
-            <div class="modal-body" id="solicitudBody"></div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalVerSolicitud')">Cerrar</button>
-            </div>
+            <img id="fotoAmpliada" src="" alt="Foto ampliada" style="width: 100%; border-radius: var(--radius-lg);">
         </div>
     </div>
 
+    <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay" style="display: none;">
         <div class="loading-spinner"></div>
         <p>Cargando...</p>
@@ -264,11 +276,10 @@
     <script src="js/include.js"></script>
     <script src="js/misvehiculos.js"></script>
 
+    <!-- ===================================================== -->
+    <!-- FUNCIONES RESPONSIVE PARA MÓVIL (HAMBURGUESA) -->
+    <!-- ===================================================== -->
     <script>
-        // =====================================================
-        // FUNCIONES RESPONSIVE PARA MÓVIL (HAMBURGUESA)
-        // =====================================================
-        
         let sidebarOpen = false;
         
         function toggleSidebar() {
@@ -341,17 +352,58 @@
                     }
                 }
             });
-            
-            document.addEventListener('touchmove', function(e) {
-                if (window.innerWidth <= 1024 && sidebarOpen) {
-                    const sidebar = document.querySelector('.sidebar');
-                    if (sidebar && !sidebar.contains(e.target)) e.preventDefault();
-                }
-            });
         });
         
         window.toggleSidebar = toggleSidebar;
         window.closeSidebar = closeSidebar;
+        
+        // Funciones auxiliares para cerrar modales
+        window.cerrarEmpezarModal = function() {
+            const modal = document.getElementById('empezarModal');
+            if (modal) modal.classList.remove('show');
+        };
+        
+        window.cerrarIniciarModal = function() {
+            const modal = document.getElementById('iniciarModal');
+            if (modal) modal.classList.remove('show');
+        };
+        
+        window.cerrarPausaManualModal = function() {
+            const modal = document.getElementById('pausaManualModal');
+            if (modal) modal.classList.remove('show');
+            document.getElementById('motivoPausaManual').value = '';
+        };
+        
+        window.cerrarSolicitarRepuestosModal = function() {
+            const modal = document.getElementById('solicitarRepuestosModal');
+            if (modal) modal.classList.remove('show');
+            document.getElementById('motivoSolicitud').value = '';
+        };
+        
+        window.cerrarReanudarModal = function() {
+            const modal = document.getElementById('reanudarModal');
+            if (modal) modal.classList.remove('show');
+        };
+        
+        window.cerrarFinalizarModal = function() {
+            const modal = document.getElementById('finalizarModal');
+            if (modal) modal.classList.remove('show');
+        };
+        
+        window.cerrarDetalleModal = function() {
+            const modal = document.getElementById('detalleModal');
+            if (modal) modal.classList.remove('show');
+        };
+        
+        window.cerrarHistorialModal = function() {
+            const modal = document.getElementById('historialSolicitudesModal');
+            if (modal) modal.classList.remove('show');
+        };
+        
+        window.cerrarFotoModal = function() {
+            const modal = document.getElementById('fotoModal');
+            if (modal) modal.classList.remove('show');
+        };
         
         console.log('✅ misvehiculos.html (Técnico Mecánico) - Funciones responsive cargadas');
     </script>

@@ -1,27 +1,26 @@
 // =====================================================
-// INCLUDE.JS - CLIENTE (VERSIÓN CORREGIDA)
-// CON RESALTADO DE PESTAÑAS: Mis Reservas e Historial SEPARADOS
-// FURIA MOTOR COMPANY SRL
+// INCLUDE.JS - SIDEBAR PARA CLIENTE
+// VERSIÓN CORREGIDA - BASADA EN EL PATRÓN DE JEFE OPERATIVO
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API
+// CONFIGURACIÓN DE API - VARIABLE GLOBAL
 // =====================================================
 window.API_BASE_URL = (() => {
     if (window.location.hostname === 'localhost' || 
         window.location.hostname === '127.0.0.1' ||
         window.location.hostname.includes('192.168.')) {
-        console.log('📡 [CLIENTE] Modo DESARROLLO');
+        console.log('📡 Include.js (Cliente) - Modo DESARROLLO');
         return 'http://localhost:5000';
     }
-    console.log('📡 [CLIENTE] Modo PRODUCCIÓN');
-    return '';
+    console.log('📡 Include.js (Cliente) - Modo PRODUCCIÓN');
+    return 'https://taller-mecanico-dt10.onrender.com'; // <--- CAMBIA POR TU URL REAL
 })();
 
-console.log('🌐 [CLIENTE] API_BASE_URL:', window.API_BASE_URL);
+const API_BASE_URL = window.API_BASE_URL;
 
 // =====================================================
-// FORZAR ROL CLIENTE - SOBREESCRIBIR CUALQUIER OTRA CONFIGURACIÓN
+// FORZAR ROL CLIENTE
 // =====================================================
 localStorage.setItem('furia_selected_role', 'cliente');
 sessionStorage.setItem('current_role_mode', 'cliente');
@@ -30,81 +29,38 @@ sessionStorage.setItem('current_role_mode', 'cliente');
 // CONFIGURACIÓN DEL CLIENTE
 // =====================================================
 const CONFIG = {
-    sidebarPath: '/cliente/components/sidebar.html',
-    logoPath: '/img/logoblanco.jpeg',
+    sidebarPath: `${API_BASE_URL}/cliente/components/sidebar.html`,
+    logoPath: `${API_BASE_URL}/img/logoblanco.jpeg`,
     defaultUserName: 'Cliente',
-    userRole: 'Cliente',
-    API_URL: window.API_BASE_URL + '/api/cliente'
+    userRole: 'Cliente'
 };
 
-// MAPEO DE PÁGINAS - Incluye TODAS las páginas del cliente
+// Mapeo de páginas del cliente
 const PAGE_FILES = {
-    'misvehiculos': '/cliente/misvehiculos.html',
-    'cotizaciones': '/cliente/cotizaciones.html',
-    'avances': '/cliente/avances.html',
-    'misreservas': '/cliente/misreservas.html',
-    'historial': '/cliente/historial.html',
-    'perfil': '/cliente/perfil.html'
-};
-
-// MAPEO PARA EL RESALTADO - data-page debe coincidir con el valor en sidebar.html
-const PAGE_MAPPING = {
-    'misvehiculos': 'misvehiculos',
-    'cotizaciones': 'cotizaciones',
-    'avances': 'avances',
-    'misreservas': 'misreservas',
-    'historial': 'historial',
-    'perfil': 'perfil'
+    'misvehiculos': 'misvehiculos.html',
+    'cotizaciones': 'cotizaciones.html',
+    'avances': 'avances.html',
+    'misreservas': 'misreservas.html',
+    'historial': 'historial.html',
+    'perfil': 'perfil.html'
 };
 
 // =====================================================
-// FUNCIONES DE AUTENTICACIÓN
-// =====================================================
-
-function getAuthHeaders() {
-    let token = localStorage.getItem('furia_token');
-    if (!token) token = localStorage.getItem('token');
-    return {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-    };
-}
-
-async function verificarAutenticacion() {
-    let token = localStorage.getItem('furia_token');
-    if (!token) token = localStorage.getItem('token');
-    
-    if (!token) {
-        console.log('❌ [CLIENTE] No hay token');
-        window.location.href = window.API_BASE_URL + '/';
-        return false;
-    }
-    
-    console.log('✅ [CLIENTE] Verificación exitosa');
-    return true;
-}
-
-// =====================================================
-// FUNCIÓN PRINCIPAL PARA CARGAR EL SIDEBAR
+// FUNCIÓN PRINCIPAL PARA INCLUIR EL SIDEBAR
 // =====================================================
 async function includeSidebar() {
     const sidebarContainer = document.getElementById('sidebar-container');
     
     if (!sidebarContainer) {
-        console.warn('⚠️ [CLIENTE] No se encontró el contenedor del sidebar');
+        console.warn('⚠️ No se encontró el contenedor del sidebar');
         return;
     }
     
-    const autenticado = await verificarAutenticacion();
-    if (!autenticado) return;
-    
     mostrarLoader(sidebarContainer);
     
-    const sidebarUrl = CONFIG.sidebarPath;
-    console.log(`🔄 [CLIENTE] Cargando sidebar desde: ${sidebarUrl}`);
-    
     try {
-        const response = await fetch(sidebarUrl);
+        console.log('🔄 Intentando cargar sidebar desde:', CONFIG.sidebarPath);
+        const response = await fetch(CONFIG.sidebarPath);
         
         if (!response.ok) {
             throw new Error(`Error HTTP ${response.status}`);
@@ -112,18 +68,24 @@ async function includeSidebar() {
         
         let html = await response.text();
         
-        // CORREGIR ENLACES RELATIVOS
-        html = html.replace(/href="\.\.\//g, 'href="/cliente/');
-        html = html.replace(/href="\.\//g, 'href="/cliente/');
-        html = html.replace(/src="\.\.\//g, 'src="/cliente/');
+        if (!html || html.trim() === '') {
+            throw new Error('El archivo sidebar.html está vacío');
+        }
+        
+        // CORREGIR ENLACES RELATIVOS para que funcionen en producción
+        html = html.replace(/href="\.\.\//g, `href="${API_BASE_URL}/cliente/`);
+        html = html.replace(/href="\.\//g, `href="${API_BASE_URL}/cliente/`);
+        html = html.replace(/src="\.\.\//g, `src="${API_BASE_URL}/cliente/`);
+        html = html.replace(/src="\.\//g, `src="${API_BASE_URL}/cliente/`);
         
         sidebarContainer.innerHTML = html;
-        console.log('✅ [CLIENTE] Sidebar cargado correctamente');
+        console.log('✅ Sidebar cargado correctamente');
         
         inicializarSidebar();
         
     } catch (error) {
-        console.error('❌ [CLIENTE] Error cargando sidebar:', error);
+        console.error('❌ Error cargando sidebar:', error);
+        console.warn('⚠️ Usando sidebar de respaldo');
         crearSidebarRespaldo(sidebarContainer);
         inicializarSidebar();
     }
@@ -132,7 +94,7 @@ async function includeSidebar() {
 function mostrarLoader(container) {
     container.innerHTML = `
         <aside class="sidebar sidebar-loader">
-            <div style="padding: 2rem; text-align: center; color: #6B7280;">
+            <div style="padding: 2rem; text-align: center; color: var(--gris-medio);">
                 <i class="fas fa-spinner fa-spin fa-2x"></i>
                 <p style="margin-top: 1rem;">Cargando menú...</p>
             </div>
@@ -140,18 +102,15 @@ function mostrarLoader(container) {
     `;
 }
 
-// =====================================================
-// SIDEBAR DE RESPALDO (FALLBACK)
-// =====================================================
 function crearSidebarRespaldo(container) {
-    const user = obtenerUsuarioActualSync();
+    const user = obtenerUsuarioActual();
     const currentPage = obtenerPaginaActual();
     
     container.innerHTML = `
         <aside class="sidebar">
             <div class="sidebar-header">
-                <img src="/img/logoblanco.jpeg" alt="FURIA MOTOR" class="sidebar-logo" 
-                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22%3E%3Crect width=%2240%22 height=%2240%22 fill=%22%23C1121F%22/%3E%3Ctext x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22white%22%3EFM%3C/text%3E%3C/svg%3E'">
+                <img src="${CONFIG.logoPath}" alt="FURIA MOTOR" class="sidebar-logo" 
+                     onerror="this.src='https://via.placeholder.com/40x40?text=FM'">
                 <span class="sidebar-brand">FURIA MOTOR</span>
             </div>
             <div class="sidebar-user">
@@ -160,21 +119,21 @@ function crearSidebarRespaldo(container) {
                 </div>
                 <div class="user-info">
                     <span class="user-name" id="userName">${user.nombre}</span>
-                    <span class="user-role">Cliente</span>
+                    <span class="user-role">${CONFIG.userRole}</span>
                 </div>
             </div>
             <nav class="sidebar-nav">
                 <ul>
-                    ${crearMenuItemRespaldo('misvehiculos', 'Mis Vehículos', 'car', currentPage)}
-                    ${crearMenuItemRespaldo('cotizaciones', 'Informes de Cotización', 'file-invoice-dollar', currentPage)}
-                    ${crearMenuItemRespaldo('avances', 'Avances de Reparación', 'chart-line', currentPage)}
-                    ${crearMenuItemRespaldo('misreservas', 'Mis Reservas', 'calendar-check', currentPage)}
-                    ${crearMenuItemRespaldo('historial', 'Historial', 'history', currentPage)}
-                    ${crearMenuItemRespaldo('perfil', 'Perfil', 'user-circle', currentPage)}
+                    ${crearMenuItem('misvehiculos', 'Mis Vehículos', 'car', currentPage)}
+                    ${crearMenuItem('cotizaciones', 'Cotizaciones', 'file-invoice-dollar', currentPage)}
+                    ${crearMenuItem('avances', 'Avances', 'chart-line', currentPage)}
+                    ${crearMenuItem('misreservas', 'Mis Reservas', 'calendar-check', currentPage)}
+                    ${crearMenuItem('historial', 'Historial', 'history', currentPage)}
+                    ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage)}
                 </ul>
                 <ul class="sidebar-bottom">
                     <li class="nav-item">
-                        <a href="#" onclick="logout(); return false;" class="nav-link">
+                        <a href="#" onclick="window.logout()" class="nav-link">
                             <i class="fas fa-sign-out-alt"></i>
                             <span>Cerrar Sesión</span>
                         </a>
@@ -185,195 +144,157 @@ function crearSidebarRespaldo(container) {
     `;
 }
 
-function crearMenuItemRespaldo(page, label, icon, currentPage) {
+function crearMenuItem(page, label, icon, currentPage, badge = null) {
     const isActive = currentPage === page ? 'active' : '';
-    const href = PAGE_FILES[page] || `/cliente/${page}.html`;
+    const href = PAGE_FILES[page] || `${page}.html`;
+    const badgeHtml = badge ? `<span class="badge">${badge}</span>` : '';
     
     return `
         <li class="nav-item ${isActive}" data-page="${page}">
             <a href="${href}" class="nav-link" onclick="navegarPagina(event, '${page}')">
                 <i class="fas fa-${icon}"></i>
                 <span>${label}</span>
+                ${badgeHtml}
             </a>
         </li>
     `;
 }
 
-// =====================================================
-// NAVEGACIÓN CON RESALTADO
-// =====================================================
 window.navegarPagina = function(event, page) {
     event.preventDefault();
-    
-    // Forzar rol cliente
-    localStorage.setItem('furia_selected_role', 'cliente');
-    
-    const href = PAGE_FILES[page];
-    if (href) {
-        console.log(`🔗 [CLIENTE] Navegando a: ${href}`);
-        window.location.href = href;
-    } else {
-        console.error(`❌ [CLIENTE] Página no encontrada: ${page}`);
-    }
+    const href = PAGE_FILES[page] || `${page}.html`;
+    window.location.href = href;
 };
 
-// =====================================================
-// INICIALIZAR SIDEBAR - RESALTADO DE PESTAÑA ACTIVA
-// =====================================================
 function inicializarSidebar() {
     setTimeout(() => {
         const currentPage = obtenerPaginaActual();
-        console.log(`📍 [CLIENTE] Página actual detectada: ${currentPage}`);
-        
         marcarItemActivo(currentPage);
         actualizarNombreUsuario();
         
-        // Agregar event listeners a los enlaces
-        document.querySelectorAll('.nav-link').forEach(link => {
+        // Agregar event listeners a los enlaces del sidebar
+        document.querySelectorAll('.sidebar-nav .nav-link').forEach(link => {
             link.addEventListener('click', (e) => {
                 const href = link.getAttribute('href');
                 if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
                     const token = localStorage.getItem('furia_token');
                     if (!token) {
                         e.preventDefault();
-                        window.location.href = window.API_BASE_URL + '/';
+                        window.location.href = API_BASE_URL + '/';
                     }
                 }
             });
         });
-        
-        console.log(`✅ [CLIENTE] Sidebar inicializado - Pestaña activa: ${currentPage}`);
     }, 100);
 }
 
-// =====================================================
-// OBTENER PÁGINA ACTUAL DESDE LA URL
-// =====================================================
 function obtenerPaginaActual() {
     const path = window.location.pathname;
     const filename = path.split('/').pop() || 'misvehiculos.html';
     let pageName = filename.replace('.html', '');
     
-    // Mapeo especial para ciertos nombres de archivo
-    if (pageName === 'misreservas') return 'misreservas';
-    if (pageName === 'historial') return 'historial';
-    if (pageName === 'misvehiculos') return 'misvehiculos';
-    if (pageName === 'cotizaciones') return 'cotizaciones';
-    if (pageName === 'avances') return 'avances';
-    if (pageName === 'perfil') return 'perfil';
+    const pageMapping = {
+        'misvehiculos': 'misvehiculos',
+        'cotizaciones': 'cotizaciones',
+        'avances': 'avances',
+        'misreservas': 'misreservas',
+        'historial': 'historial',
+        'perfil': 'perfil'
+    };
     
-    // Si no coincide con ninguno, devolver el nombre original
-    const mappedPage = PAGE_MAPPING[pageName];
-    return mappedPage || 'misvehiculos';
+    return pageMapping[pageName] || 'misvehiculos';
 }
 
-// =====================================================
-// MARCAR ITEM ACTIVO EN EL MENÚ
-// =====================================================
 function marcarItemActivo(currentPage) {
-    // Remover clase active de todos los items
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
-        const link = item.querySelector('.nav-link');
-        if (link) link.classList.remove('active');
-    });
-    
-    // Buscar y activar el item correspondiente
-    const activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
-    if (activeItem) {
-        activeItem.classList.add('active');
-        const activeLink = activeItem.querySelector('.nav-link');
-        if (activeLink) activeLink.classList.add('active');
-        console.log(`✅ [CLIENTE] Item activado: ${currentPage}`);
-    } else {
-        console.log(`⚠️ [CLIENTE] No se encontró item para: ${currentPage}`);
+    setTimeout(() => {
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
+        });
         
-        // Si estamos en historial.html pero no encuentra 'historial', buscar alternativas
-        if (window.location.pathname.includes('historial')) {
-            const fallbackItem = document.querySelector('.nav-item[data-page="historial"]');
-            if (fallbackItem) {
-                fallbackItem.classList.add('active');
-                console.log(`✅ [CLIENTE] Fallback activado: historial`);
-            }
+        const activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
+        if (activeItem) {
+            activeItem.classList.add('active');
+            console.log(`✅ Item activo: ${currentPage}`);
+        } else {
+            // Fallback: activar Mis Vehículos
+            const dashboardItem = document.querySelector('.nav-item[data-page="misvehiculos"]');
+            if (dashboardItem) dashboardItem.classList.add('active');
         }
-        if (window.location.pathname.includes('misreservas')) {
-            const fallbackItem = document.querySelector('.nav-item[data-page="misreservas"]');
-            if (fallbackItem) {
-                fallbackItem.classList.add('active');
-                console.log(`✅ [CLIENTE] Fallback activado: misreservas`);
-            }
-        }
-    }
+    }, 50);
 }
 
-// =====================================================
-// OBTENER USUARIO ACTUAL
-// =====================================================
-function obtenerUsuarioActualSync() {
+function obtenerUsuarioActual() {
     try {
-        let userStr = localStorage.getItem('furia_user');
+        const userStr = localStorage.getItem('furia_user');
         if (userStr) {
             const user = JSON.parse(userStr);
-            if (user.nombre) {
-                return { nombre: user.nombre, rol: 'cliente' };
-            }
+            return {
+                nombre: user.nombre || CONFIG.defaultUserName,
+                rol: user.rol || 'cliente',
+                roles: user.roles || [user.rol]
+            };
         }
-        return { nombre: CONFIG.defaultUserName, rol: 'cliente' };
     } catch (error) {
-        return { nombre: CONFIG.defaultUserName, rol: 'cliente' };
+        console.error('Error obteniendo usuario:', error);
     }
-}
-
-async function obtenerUsuarioActual() {
-    try {
-        let userStr = localStorage.getItem('furia_user');
-        if (userStr) {
-            const user = JSON.parse(userStr);
-            if (user.nombre) {
-                return { nombre: user.nombre, rol: 'cliente' };
-            }
-        }
-        return { nombre: CONFIG.defaultUserName, rol: 'cliente' };
-    } catch (error) {
-        return { nombre: CONFIG.defaultUserName, rol: 'cliente' };
-    }
+    
+    return { nombre: CONFIG.defaultUserName, rol: 'cliente' };
 }
 
 function actualizarNombreUsuario() {
-    const userNameSpan = document.getElementById('userName');
-    if (!userNameSpan) return;
-    
-    obtenerUsuarioActual().then(user => {
+    setTimeout(() => {
+        const userNameSpan = document.getElementById('userName');
+        if (!userNameSpan) return;
+        
+        const user = obtenerUsuarioActual();
         userNameSpan.textContent = user.nombre;
-    });
+    }, 100);
 }
 
-// =====================================================
-// LOGOUT
-// =====================================================
 window.logout = function() {
     if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
-        console.log('🚪 [CLIENTE] Cerrando sesión...');
-        localStorage.clear();
-        sessionStorage.clear();
-        window.location.href = window.API_BASE_URL + '/';
+        localStorage.removeItem('furia_token');
+        localStorage.removeItem('furia_user');
+        localStorage.removeItem('furia_remembered');
+        localStorage.removeItem('furia_remembered_type');
+        window.location.href = `${API_BASE_URL}/`;
     }
 };
 
 // =====================================================
-// INICIALIZACIÓN PRINCIPAL
+// FUNCIONES RESPONSIVE PARA EL SIDEBAR
 // =====================================================
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 [CLIENTE] Inicializando include.js');
-    console.log('📍 Path actual:', window.location.pathname);
-    console.log('📍 Sidebar a cargar:', CONFIG.sidebarPath);
+function ajustarSidebarResponsive() {
+    const sidebar = document.querySelector('.sidebar');
+    const hamburgerMenu = document.getElementById('hamburgerMenu');
     
-    await includeSidebar();
+    if (!sidebar) return;
     
-    console.log('✅ [CLIENTE] include.js inicializado correctamente');
+    if (window.innerWidth > 1024) {
+        sidebar.classList.remove('open');
+        if (hamburgerMenu) hamburgerMenu.classList.remove('active');
+        document.body.classList.remove('sidebar-open');
+    } else {
+        // En móvil, asegurar que el sidebar empiece cerrado
+        if (!sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
+            if (hamburgerMenu) hamburgerMenu.classList.remove('active');
+            document.body.classList.remove('sidebar-open');
+        }
+    }
+}
+
+window.addEventListener('orientationchange', function() {
+    setTimeout(ajustarSidebarResponsive, 100);
 });
 
-// Exponer funciones globales
-window.getAuthHeaders = getAuthHeaders;
-window.logout = window.logout;
-window.obtenerPaginaActual = obtenerPaginaActual;
+window.addEventListener('resize', function() {
+    ajustarSidebarResponsive();
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    includeSidebar();
+    ajustarSidebarResponsive();
+});
+
+window.ajustarSidebarResponsive = ajustarSidebarResponsive;

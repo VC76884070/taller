@@ -3065,9 +3065,11 @@ function cerrarModalFoto() {
     if (modal) modal.classList.remove('show');
 }
 
-// Exponer función para pruebas en consola
-window.verificarDiasGuardados = verificarDiasGuardados;
-// Exponer funciones globales
+// =====================================================
+// EXPORTAR FUNCIONES GLOBALES (AGREGAR ESTAS LÍNEAS)
+// =====================================================
+
+// Asegurar que las funciones necesarias estén disponibles globalmente
 window.descargarDocumentoCotizacion = descargarDocumentoCotizacion;
 window.verDetalleSolicitudCompra = verDetalleSolicitudCompra;
 window.verComprobanteCompra = verComprobanteCompra;
@@ -3091,7 +3093,6 @@ window.confirmarIniciarReparacion = confirmarIniciarReparacion;
 window.abrirModalNotificarArmado = abrirModalNotificarArmado;
 window.confirmarNotificarArmado = confirmarNotificarArmado;
 window.verAvanceReparacion = verAvanceReparacion;
-window.abrirModalSolicitudParaOrden = abrirModalSolicitudParaOrden;
 window.verInstruccionesArmado = verInstruccionesArmado;
 window.toggleServicioCotizable = toggleServicioCotizable;
 window.abrirModalNuevaSolicitudCompraDirecta = abrirModalNuevaSolicitudCompraDirecta;
@@ -3099,6 +3100,7 @@ window.abrirModalCompraDesdeSolicitudTecnico = abrirModalCompraDesdeSolicitudTec
 window.agregarItemCompraDirecta = agregarItemCompraDirecta;
 window.actualizarItemCompraDirecta = actualizarItemCompraDirecta;
 window.eliminarItemCompraDirecta = eliminarItemCompraDirecta;
+window.verificarDiasGuardados = verificarDiasGuardados;
 
-// Inicializar
+console.log('✅ Funciones globales de cotizaciones.js exportadas correctamente');
 document.addEventListener('DOMContentLoaded', inicializar);

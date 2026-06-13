@@ -11,26 +11,21 @@
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="css/dashboard.css">
-    <link rel="stylesheet" href="css/cotizaciones.css">
-    <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
+    <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_taller/css/cotizaciones.css">
+
+    <!-- ========== CONFIGURACIÓN PWA ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="TORQUE">
-    
-    <!-- ICONO PARA LA PESTAÑA DEL NAVEGADOR -->
+    <meta name="apple-mobile-web-app-title" content="FURIA MOTOR">
+
     <link rel="icon" type="image/png" href="/icono.png">
     <link rel="shortcut icon" type="image/png" href="/icono.png">
-    
-    <!-- ICONO PARA IPHONE / IPAD (pantalla de inicio) -->
     <link rel="apple-touch-icon" href="/icono.png">
-    
-    <!-- ICONO PARA ANDROID (chrome) -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
-    <!-- ===================================================== -->
 
     <style>
         /* Estilos adicionales para validación de días */
@@ -71,7 +66,6 @@
             background: rgba(193, 18, 31, 0.05);
         }
 
-        /* Loading overlay mejorado */
         .loading-overlay {
             display: none;
             position: fixed;
@@ -79,33 +73,32 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
             z-index: 9999;
             justify-content: center;
             align-items: center;
-        }
-
-        .loading-content {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            text-align: center;
+            flex-direction: column;
         }
 
         .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(193, 18, 31, 0.2);
+            width: 50px;
+            height: 50px;
+            border: 3px solid var(--gris-medio);
+            border-top-color: var(--rojo-primario);
             border-radius: 50%;
-            border-top-color: var(--rojo-primario, #C1121F);
-            animation: spin 0.8s linear infinite;
-            margin: 0 auto 1rem auto;
+            animation: spin 1s linear infinite;
         }
 
         @keyframes spin {
             to {
                 transform: rotate(360deg);
             }
+        }
+
+        .loading-overlay p {
+            margin-top: 1rem;
+            color: var(--blanco);
         }
     </style>
 </head>
@@ -536,8 +529,8 @@
             <div class="modal-body" id="detalleCotizacionContainer"></div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalDetalleCotizacion')">Cerrar</button>
-                <button class="btn-success" id="descargarDocumentoBtn"><i class="fas fa-download"></i> Descargar
-                    Documento</button>
+                <button class="btn-success" id="descargarDocumentoBtn" style="display: none;"><i
+                        class="fas fa-download"></i> Descargar Documento</button>
             </div>
         </div>
     </div>
@@ -768,117 +761,88 @@
 
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
-        <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <p>Cargando...</p>
-        </div>
+        <div class="loading-spinner"></div>
+        <p>Cargando...</p>
     </div>
 
-    <script src="js/include.js"></script>
-    <script src="js/cotizaciones.js"></script>
-    
-    <!-- ========== SCRIPT RESPONSIVE PARA SIDEBAR (JEFE TALLER - COTIZACIONES) ========== -->
+    <script src="/jefe_taller/js/include.js"></script>
+    <script src="/jefe_taller/js/cotizaciones.js"></script>
+
+    <!-- ========== SCRIPT RESPONSIVE PARA SIDEBAR ========== -->
     <script>
-        // =====================================================
-        // FUNCIONES RESPONSIVE PARA SIDEBAR (JEFE TALLER - COTIZACIONES)
-        // =====================================================
-        
         let sidebarOpen = false;
-        
-        // Función para toggle sidebar en móvil/tablet
+
         function toggleSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             const hamburger = document.getElementById('hamburgerMenu');
             const body = document.body;
-            
+
             if (!sidebar) return;
-            
+
             sidebarOpen = !sidebarOpen;
-            
+
             if (sidebarOpen) {
                 sidebar.classList.add('open');
                 if (overlay) overlay.classList.add('active');
                 if (hamburger) hamburger.classList.add('active');
                 body.classList.add('sidebar-open');
-                
-                // Cambiar icono del hamburguesa
                 const icon = hamburger.querySelector('i');
                 if (icon) icon.className = 'fas fa-times';
             } else {
                 closeSidebar();
             }
         }
-        
-        // Función para cerrar sidebar
+
         function closeSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             const hamburger = document.getElementById('hamburgerMenu');
             const body = document.body;
-            
+
             if (sidebar) {
                 sidebar.classList.remove('open');
                 if (overlay) overlay.classList.remove('active');
                 if (hamburger) hamburger.classList.remove('active');
                 body.classList.remove('sidebar-open');
-                
                 const icon = hamburger.querySelector('i');
                 if (icon) icon.className = 'fas fa-bars';
             }
-            
             sidebarOpen = false;
         }
-        
-        // Event Listeners
-        document.addEventListener('DOMContentLoaded', function() {
-            // Botón hamburguesa
+
+        document.addEventListener('DOMContentLoaded', function () {
             const hamburgerBtn = document.getElementById('hamburgerMenu');
-            if (hamburgerBtn) {
-                hamburgerBtn.addEventListener('click', toggleSidebar);
-            }
-            
-            // Overlay
+            if (hamburgerBtn) hamburgerBtn.addEventListener('click', toggleSidebar);
+
             const overlay = document.getElementById('sidebarOverlay');
-            if (overlay) {
-                overlay.addEventListener('click', closeSidebar);
-            }
-            
-            // Cerrar sidebar al redimensionar a desktop
-            window.addEventListener('resize', function() {
-                if (window.innerWidth > 1024 && sidebarOpen) {
-                    closeSidebar();
-                }
+            if (overlay) overlay.addEventListener('click', closeSidebar);
+
+            window.addEventListener('resize', function () {
+                if (window.innerWidth > 1024 && sidebarOpen) closeSidebar();
             });
-            
-            // Cerrar sidebar al hacer click en enlaces (móvil)
-            document.addEventListener('click', function(e) {
+
+            document.addEventListener('click', function (e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
                     const hamburger = document.getElementById('hamburgerMenu');
-                    
-                    // Si el click no fue en el sidebar ni en el botón hamburguesa
                     if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
                         closeSidebar();
                     }
                 }
             });
-            
-            // Prevenir scroll del body cuando sidebar está abierto
-            document.addEventListener('touchmove', function(e) {
+
+            document.addEventListener('touchmove', function (e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
-                    if (sidebar && !sidebar.contains(e.target)) {
-                        e.preventDefault();
-                    }
+                    if (sidebar && !sidebar.contains(e.target)) e.preventDefault();
                 }
             });
         });
-        
-        // Exponer funciones globalmente
+
         window.toggleSidebar = toggleSidebar;
         window.closeSidebar = closeSidebar;
-        
+
         console.log('✅ cotizaciones.html (Jefe Taller) - Funciones responsive cargadas');
     </script>
 </body>

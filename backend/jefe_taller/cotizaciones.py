@@ -1,7 +1,7 @@
 # =====================================================
 # COTIZACIONES - JEFE DE TALLER
 # FURIA MOTOR COMPANY SRL
-# VERSIÓN 5.0 - COMPLETAMENTE CORREGIDA
+# VERSIÓN 6.0 - COMPLETAMENTE CORREGIDA CON DETALLE DE COTIZACIÓN
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -15,7 +15,7 @@ from functools import wraps
 
 logger = logging.getLogger(__name__)
 print("="*60)
-print("🔥🔥🔥 COTIZACIONES - VERSIÓN CORREGIDA 5.0 🔥🔥🔥")
+print("🔥🔥🔥 COTIZACIONES - VERSIÓN CORREGIDA 6.0 🔥🔥🔥")
 print("="*60)
 
 # =====================================================
@@ -333,7 +333,7 @@ def obtener_ordenes_con_servicios(current_user):
             solicitudes_map[key] = s
         
         cotizaciones = supabase.table('cotizacion') \
-            .select('id, id_orden_trabajo, estado, total, motivo_rechazo, fecha_rechazo') \
+            .select('id, id_orden_trabajo, estado, total, motivo_rechazo, fecha_rechazo, comentarios_rechazo') \
             .in_('id_orden_trabajo', ordenes_ids) \
             .execute()
         
@@ -392,8 +392,10 @@ def obtener_ordenes_con_servicios(current_user):
                 'servicios': servicios,
                 'cotizacion_estado': cotizacion_info.get('estado') if cotizacion_info else None,
                 'cotizacion_total': float(cotizacion_info.get('total', 0)) if cotizacion_info else 0,
+                'cotizacion_id': cotizacion_info.get('id') if cotizacion_info else None,
                 'motivo_rechazo': cotizacion_info.get('motivo_rechazo') if cotizacion_info else None,
-                'fecha_rechazo': cotizacion_info.get('fecha_rechazo') if cotizacion_info else None
+                'fecha_rechazo': cotizacion_info.get('fecha_rechazo') if cotizacion_info else None,
+                'comentarios_rechazo': cotizacion_info.get('comentarios_rechazo') if cotizacion_info else None
             })
         
         return jsonify({'success': True, 'ordenes': resultado}), 200
@@ -1096,7 +1098,8 @@ def obtener_cotizaciones_enviadas(current_user):
                 'estado': cot.get('estado', 'enviada'),
                 'fecha_envio': cot.get('fecha_envio'),
                 'fecha_rechazo': cot.get('fecha_rechazo'),
-                'motivo_rechazo': cot.get('motivo_rechazo')
+                'motivo_rechazo': cot.get('motivo_rechazo'),
+                'comentarios_rechazo': cot.get('comentarios_rechazo')
             })
         
         return jsonify({'success': True, 'cotizaciones': resultado}), 200
@@ -1106,7 +1109,7 @@ def obtener_cotizaciones_enviadas(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# APARTADO 11: DETALLE DE COTIZACIÓN
+# APARTADO 11: DETALLE DE COTIZACIÓN POR ID
 # =====================================================
 
 @cotizaciones_bp.route('/detalle-cotizacion/<int:id_cotizacion>', methods=['GET'])
@@ -1184,17 +1187,108 @@ def obtener_detalle_cotizacion(current_user, id_cotizacion):
                 'vehiculo_modelo': vehiculo_modelo,
                 'vehiculo_placa': vehiculo_placa,
                 'fecha_envio': cot.get('fecha_envio'),
+                'fecha_actualizacion': cot.get('fecha_actualizacion'),
                 'servicios': servicios,
                 'total': float(cot.get('total', 0)),
                 'estado': cot.get('estado', 'enviada'),
                 'notas': cot.get('notas'),
                 'nombre_archivo': cot.get('nombre_archivo'),
-                'archivo_base64': cot.get('archivo_base64')
+                'archivo_base64': cot.get('archivo_base64'),
+                'motivo_rechazo': cot.get('motivo_rechazo'),
+                'fecha_rechazo': cot.get('fecha_rechazo'),
+                'comentarios_rechazo': cot.get('comentarios_rechazo')
             }
         }), 200
         
     except Exception as e:
         logger.error(f"Error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# =====================================================
+# APARTADO 11B: OBTENER DETALLE DE COTIZACIÓN POR ORDEN
+# =====================================================
+
+@cotizaciones_bp.route('/detalle-cotizacion-orden/<int:id_orden>', methods=['GET'])
+@jefe_taller_required
+def obtener_detalle_cotizacion_por_orden(current_user, id_orden):
+    """Obtener detalle de la cotización de una orden específica"""
+    try:
+        logger.info(f"🔍 Obteniendo cotización para orden {id_orden}")
+        
+        # Obtener la cotización más reciente de la orden
+        cotizacion = supabase.table('cotizacion') \
+            .select('*') \
+            .eq('id_orden_trabajo', id_orden) \
+            .order('fecha_envio', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if not cotizacion.data:
+            return jsonify({'success': False, 'error': 'No hay cotización para esta orden'}), 404
+        
+        cot = cotizacion.data[0]
+        
+        # Obtener la orden
+        orden = supabase.table('ordentrabajo') \
+            .select('codigo_unico, estado_global, id_vehiculo') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        orden_data = orden.data[0] if orden.data else {}
+        
+        # Obtener vehículo
+        vehiculo = {}
+        if orden_data.get('id_vehiculo'):
+            v = supabase.table('vehiculo') \
+                .select('placa, marca, modelo') \
+                .eq('id', orden_data['id_vehiculo']) \
+                .execute()
+            if v.data:
+                vehiculo = v.data[0]
+        
+        # Obtener servicios de la cotización
+        servicios = []
+        if cot.get('servicios_json'):
+            try:
+                servicios = json.loads(cot['servicios_json'])
+            except:
+                servicios = []
+        
+        # Historial de rechazo
+        historial_rechazo = None
+        if cot.get('estado') == 'rechazada' or orden_data.get('estado_global') == 'CotizacionRechazada':
+            historial_rechazo = {
+                'fecha_rechazo': cot.get('fecha_rechazo'),
+                'motivo_rechazo': cot.get('motivo_rechazo'),
+                'comentarios_rechazo': cot.get('comentarios_rechazo')
+            }
+        
+        return jsonify({
+            'success': True,
+            'detalle': {
+                'id': cot['id'],
+                'id_orden_trabajo': id_orden,
+                'orden_codigo': orden_data.get('codigo_unico'),
+                'orden_estado': orden_data.get('estado_global'),
+                'vehiculo': {
+                    'placa': vehiculo.get('placa', ''),
+                    'marca': vehiculo.get('marca', ''),
+                    'modelo': vehiculo.get('modelo', '')
+                },
+                'fecha_envio': cot.get('fecha_envio'),
+                'fecha_actualizacion': cot.get('fecha_actualizacion'),
+                'servicios': servicios,
+                'total': float(cot.get('total', 0)),
+                'estado': cot.get('estado', 'enviada'),
+                'notas': cot.get('notas'),
+                'nombre_archivo': cot.get('nombre_archivo'),
+                'archivo_base64': cot.get('archivo_base64'),
+                'historial_rechazo': historial_rechazo
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo cotización por orden: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
@@ -1407,8 +1501,7 @@ def iniciar_armado_vehiculo(current_user):
                     'id_orden_trabajo': id_orden,
                     'id_tecnico': ta['id_tecnico'],
                     'tipo_asignacion': 'armado',
-                    'fecha_hora_inicio': ahora,
-                    'id_jefe_taller': current_user['id']
+                    'fecha_hora_inicio': ahora
                 }).execute()
                 logger.info(f"✅ Asignación de ARMADO creada para técnico {ta['id_tecnico']} en orden {id_orden}")
         else:
@@ -1555,15 +1648,15 @@ def obtener_tecnicos_con_carga(current_user):
         return jsonify({'success': True, 'tecnicos': []}), 200
 
 # =====================================================
-# APARTADO 17: ASIGNAR TÉCNICOS
+# APARTADO 17: ASIGNAR TÉCNICOS (LEGACY)
 # =====================================================
 
 @cotizaciones_bp.route('/asignar-tecnicos', methods=['POST'])
 @jefe_taller_required
 def asignar_tecnicos_reparacion(current_user):
-    """Asignar técnicos para reparación con días estimados"""
+    """Asignar técnicos para reparación con días estimados (legacy)"""
     print("\n" + "="*80)
-    print("🚨 ASIGNAR TÉCNICOS 🚨")
+    print("🚨 ASIGNAR TÉCNICOS - VERSIÓN LEGACY 🚨")
     print("="*80)
     
     try:
@@ -1611,8 +1704,7 @@ def asignar_tecnicos_reparacion(current_user):
                 'id_tecnico': tecnico_id,
                 'tipo_asignacion': 'reparacion',
                 'fecha_hora_inicio': ahora.isoformat(),
-                'fecha_hora_final_estimada': fecha_estimada_fin.isoformat(),
-                'id_jefe_taller': current_user['id']
+                'fecha_hora_final_estimada': fecha_estimada_fin.isoformat()
             }).execute()
         
         supabase.table('instrucciones_tecnico_historial').insert({
@@ -1708,7 +1800,187 @@ def obtener_instrucciones_armado(current_user, id_orden):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# APARTADO 20: VER AVANCES DE REPARACIÓN (CORREGIDO)
+# APARTADO 20: NUEVO ENDPOINT - INICIAR REPARACIÓN CON DÍAS (CORREGIDO)
+# =====================================================
+
+@cotizaciones_bp.route('/iniciar-reparacion-con-dias', methods=['POST'])
+@jefe_taller_required
+def iniciar_reparacion_con_dias(current_user):
+    """
+    NUEVO ENDPOINT - Iniciar reparación GUARDANDO los días
+    ========================================================
+    """
+    print("\n" + "="*80)
+    print("🟢🟢🟢 NUEVO ENDPOINT: iniciar-reparacion-con-dias 🟢🟢🟢")
+    print("="*80)
+    
+    try:
+        data = request.get_json()
+        print(f"📦 Datos recibidos: {json.dumps(data, indent=2)}")
+        
+        id_orden = data.get('id_orden')
+        tecnicos_ids = data.get('tecnicos', [])
+        instrucciones = data.get('instrucciones', '')
+        dias = data.get('dias')
+        
+        print(f"📊 Datos extraídos:")
+        print(f"   🔹 id_orden: {id_orden}")
+        print(f"   🔹 dias: {dias}")
+        print(f"   🔹 tecnicos_ids: {tecnicos_ids}")
+        print(f"   🔹 instrucciones (primeros 50): {instrucciones[:50] if instrucciones else 'None'}")
+        
+        # =====================================================
+        # VALIDACIONES
+        # =====================================================
+        if not id_orden:
+            print("❌ Error: id_orden no proporcionado")
+            return jsonify({'success': False, 'error': 'Orden requerida'}), 400
+        
+        if not dias:
+            print("❌ Error: dias no proporcionado")
+            return jsonify({'success': False, 'error': 'Debes especificar cuántos días durará la reparación'}), 400
+        
+        try:
+            dias = int(dias)
+            if dias < 1:
+                print(f"❌ Error: dias {dias} es menor que 1")
+                return jsonify({'success': False, 'error': 'El plazo debe ser al menos 1 día'}), 400
+            if dias > 60:
+                print(f"❌ Error: dias {dias} es mayor que 60")
+                return jsonify({'success': False, 'error': 'El plazo no puede ser mayor a 60 días'}), 400
+        except (ValueError, TypeError):
+            print(f"❌ Error: dias no es número válido")
+            return jsonify({'success': False, 'error': 'El plazo debe ser un número válido'}), 400
+        
+        if not tecnicos_ids:
+            print("❌ Error: No hay técnicos seleccionados")
+            return jsonify({'success': False, 'error': 'Debe seleccionar al menos un técnico'}), 400
+        
+        if not instrucciones or not instrucciones.strip():
+            print("❌ Error: Instrucciones vacías")
+            return jsonify({'success': False, 'error': 'Debes escribir instrucciones para los técnicos'}), 400
+        
+        print("✅ Todas las validaciones pasaron")
+        
+        # =====================================================
+        # CALCULAR FECHAS
+        # =====================================================
+        ahora = datetime.datetime.now()
+        fecha_estimada_fin = ahora + datetime.timedelta(days=dias)
+        fecha_estimada_fin_str = fecha_estimada_fin.isoformat()
+        ahora_str = ahora.isoformat()
+        
+        print(f"📅 Fecha actual: {ahora.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"📅 Días a sumar: {dias}")
+        print(f"📅 Fecha estimada fin: {fecha_estimada_fin.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        # =====================================================
+        # 1. ACTUALIZAR LA ORDEN CON LOS DÍAS
+        # =====================================================
+        print("\n💾 PASO 1: Actualizando tabla ordentrabajo...")
+        
+        update_data = {
+            'dias_estimados_reparacion': dias,
+            'fecha_estimada_finalizacion': fecha_estimada_fin_str,
+            'estado_global': 'EnReparacion'
+        }
+        
+        print(f"   📤 Datos a actualizar: {update_data}")
+        
+        result = supabase.table('ordentrabajo').update(update_data).eq('id', id_orden).execute()
+        print(f"   ✅ Resultado update: {result.data}")
+        
+        # =====================================================
+        # 2. ACTUALIZAR ASIGNACIONES DE TÉCNICOS
+        # =====================================================
+        print("\n👨‍🔧 PASO 2: Actualizando asignaciones de técnicos...")
+        
+        # Finalizar asignaciones anteriores activas
+        try:
+            supabase.table('asignaciontecnico') \
+                .update({'fecha_hora_final': ahora_str}) \
+                .eq('id_orden_trabajo', id_orden) \
+                .is_('fecha_hora_final', 'null') \
+                .execute()
+            print(f"   ✅ Asignaciones anteriores finalizadas")
+        except Exception as e:
+            print(f"   ⚠️ Error al finalizar asignaciones: {e}")
+        
+        # Crear nuevas asignaciones (SIN id_jefe_taller porque no existe)
+        for tecnico_id in tecnicos_ids:
+            try:
+                supabase.table('asignaciontecnico').insert({
+                    'id_orden_trabajo': id_orden,
+                    'id_tecnico': tecnico_id,
+                    'tipo_asignacion': 'reparacion',
+                    'fecha_hora_inicio': ahora_str,
+                    'fecha_hora_final_estimada': fecha_estimada_fin_str
+                }).execute()
+                print(f"   ✅ Técnico {tecnico_id} asignado")
+            except Exception as e:
+                print(f"   ⚠️ Error asignando técnico {tecnico_id}: {e}")
+        
+        # =====================================================
+        # 3. GUARDAR INSTRUCCIONES
+        # =====================================================
+        print("\n📝 PASO 3: Guardando instrucciones...")
+        
+        instruccion_completa = f"""
+[REPARACIÓN - COTIZACIÓN ACEPTADA]
+
+📅 Plazo estimado: {dias} días
+⏱️ Fecha estimada de finalización: {fecha_estimada_fin.strftime('%d/%m/%Y')}
+
+Instrucciones específicas:
+{instrucciones}
+
+⚠️ IMPORTANTE:
+- Registrar avances diariamente en el sistema
+- Notificar cualquier retraso o problema
+- Al finalizar, marcar como "Reparación Completada"
+"""
+        
+        try:
+            supabase.table('instrucciones_tecnico_historial').insert({
+                'id_orden_trabajo': id_orden,
+                'id_jefe_taller': current_user['id'],
+                'instrucciones': instruccion_completa,
+                'fecha_envio': ahora_str,
+                'leida': False
+            }).execute()
+            print(f"   ✅ Instrucciones guardadas")
+        except Exception as e:
+            print(f"   ⚠️ Error guardando instrucciones: {e}")
+        
+        # =====================================================
+        # RESPUESTA FINAL
+        # =====================================================
+        print("\n" + "="*80)
+        print("✅✅✅ NUEVO ENDPOINT - PROCESO COMPLETADO ✅✅✅")
+        print(f"   Orden: {id_orden}")
+        print(f"   Días guardados: {dias}")
+        print(f"   Fecha estimada: {fecha_estimada_fin_str}")
+        print("="*80 + "\n")
+        
+        return jsonify({
+            'success': True,
+            'message': f'✅ Reparación iniciada correctamente. Plazo: {dias} días',
+            'dias_guardados': dias,
+            'fecha_estimada': fecha_estimada_fin_str,
+            'tecnicos_asignados': len(tecnicos_ids)
+        }), 200
+        
+    except Exception as e:
+        print("\n" + "="*80)
+        print("❌❌❌ ERROR EN NUEVO ENDPOINT ❌❌❌")
+        print(f"   Error: {str(e)}")
+        print("="*80 + "\n")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# =====================================================
+# APARTADO 21: VER AVANCES DE REPARACIÓN
 # =====================================================
 
 @cotizaciones_bp.route('/orden/<int:id_orden>/avances-reparacion', methods=['GET'])
@@ -1718,7 +1990,6 @@ def obtener_avances_reparacion(current_user, id_orden):
     try:
         print(f"🔍 Obteniendo avances de reparación para orden {id_orden}")
         
-        # Verificar que la orden existe
         orden = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, estado_global') \
             .eq('id', id_orden) \
@@ -1730,68 +2001,30 @@ def obtener_avances_reparacion(current_user, id_orden):
         orden_data = orden.data[0]
         print(f"✅ Orden encontrada: {orden_data.get('codigo_unico')}")
         
-        # Obtener avances de trabajo de la tabla avance_trabajo (la correcta)
-        avances = supabase.table('avance_trabajo') \
-            .select('*') \
+        avances = supabase.table('avancetrabajo') \
+            .select('''
+                id,
+                descripcion,
+                tipo_avance,
+                fecha_hora,
+                id_tecnico,
+                usuario!id_tecnico(nombre, contacto)
+            ''') \
             .eq('id_orden_trabajo', id_orden) \
-            .order('fecha_creacion', desc=True) \
+            .order('fecha_hora', desc=True) \
             .execute()
         
-        if not avances.data:
-            print(f"📭 No hay avances para orden {id_orden}")
-            return jsonify({
-                'success': True,
-                'orden_codigo': orden_data.get('codigo_unico'),
-                'estado_orden': orden_data.get('estado_global'),
-                'avances': []
-            }), 200
-        
-        # Obtener nombres de técnicos
-        tecnicos_ids = list(set([a.get('id_tecnico') for a in avances.data if a.get('id_tecnico')]))
-        tecnicos_map = {}
-        
-        if tecnicos_ids:
-            tecnicos = supabase.table('usuario') \
-                .select('id, nombre, contacto') \
-                .in_('id', tecnicos_ids) \
-                .execute()
-            for t in (tecnicos.data or []):
-                tecnicos_map[t['id']] = t
-        
-        # Construir resultado
         avances_procesados = []
-        for av in avances.data:
-            tecnico = tecnicos_map.get(av.get('id_tecnico'), {})
-            
-            # Las fotos están en la columna JSONB 'fotos' dentro de avance_trabajo
-            fotos = []
-            fotos_data = av.get('fotos')
-            if fotos_data:
-                if isinstance(fotos_data, list):
-                    for foto in fotos_data:
-                        if isinstance(foto, dict):
-                            fotos.append({
-                                'url': foto.get('url', ''),
-                                'comentario': foto.get('comentario', '')
-                            })
-                        elif isinstance(foto, str):
-                            fotos.append({'url': foto, 'comentario': ''})
-                elif isinstance(fotos_data, dict):
-                    for key, url in fotos_data.items():
-                        fotos.append({'url': url, 'comentario': key})
+        for av in (avances.data or []):
+            tecnico_info = av.get('usuario', {}) if isinstance(av.get('usuario'), dict) else {}
             
             avances_procesados.append({
                 'id': av.get('id'),
-                'titulo': av.get('titulo', f"Avance del {format_fecha(av.get('fecha_creacion'))}"),
                 'descripcion': av.get('descripcion', ''),
-                'estado': av.get('estado', 'pendiente'),
-                'fecha_creacion': av.get('fecha_creacion'),
-                'fecha_aprobacion': av.get('fecha_aprobacion'),
-                'comentario_revision': av.get('comentario_revision', ''),
-                'tecnico_nombre': tecnico.get('nombre', 'Técnico'),
-                'tecnico_contacto': tecnico.get('contacto', ''),
-                'fotos': fotos,
-                'aprobado_por_nombre': None
+                'tipo': av.get('tipo_avance', 'avance'),
+                'fecha': av.get('fecha_hora'),
+                'tecnico_nombre': tecnico_info.get('nombre', 'Técnico'),
+                'tecnico_contacto': tecnico_info.get('contacto', '')
             })
         
         print(f"✅ {len(avances_procesados)} avances encontrados")
@@ -1810,127 +2043,7 @@ def obtener_avances_reparacion(current_user, id_orden):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # =====================================================
-# APARTADO 21: NUEVO ENDPOINT - INICIAR REPARACIÓN CON DÍAS
-# =====================================================
-
-@cotizaciones_bp.route('/iniciar-reparacion-con-dias', methods=['POST'])
-@jefe_taller_required
-def iniciar_reparacion_con_dias(current_user):
-    """Iniciar reparación guardando los días"""
-    print("\n" + "="*80)
-    print("🟢 NUEVO ENDPOINT: iniciar-reparacion-con-dias 🟢")
-    print("="*80)
-    
-    try:
-        data = request.get_json()
-        print(f"📦 Datos recibidos: {json.dumps(data, indent=2)}")
-        
-        id_orden = data.get('id_orden')
-        tecnicos_ids = data.get('tecnicos', [])
-        instrucciones = data.get('instrucciones', '')
-        dias = data.get('dias')
-        
-        if not id_orden:
-            return jsonify({'success': False, 'error': 'Orden requerida'}), 400
-        if not dias:
-            return jsonify({'success': False, 'error': 'Debes especificar cuántos días durará la reparación'}), 400
-        
-        try:
-            dias = int(dias)
-            if dias < 1:
-                return jsonify({'success': False, 'error': 'El plazo debe ser al menos 1 día'}), 400
-            if dias > 60:
-                return jsonify({'success': False, 'error': 'El plazo no puede ser mayor a 60 días'}), 400
-        except (ValueError, TypeError):
-            return jsonify({'success': False, 'error': 'El plazo debe ser un número válido'}), 400
-        
-        if not tecnicos_ids:
-            return jsonify({'success': False, 'error': 'Debe seleccionar al menos un técnico'}), 400
-        if not instrucciones or not instrucciones.strip():
-            return jsonify({'success': False, 'error': 'Debes escribir instrucciones para los técnicos'}), 400
-        
-        ahora = datetime.datetime.now()
-        fecha_estimada_fin = ahora + datetime.timedelta(days=dias)
-        fecha_estimada_fin_str = fecha_estimada_fin.isoformat()
-        ahora_str = ahora.isoformat()
-        
-        # 1. Actualizar la orden
-        supabase.table('ordentrabajo').update({
-            'dias_estimados_reparacion': dias,
-            'fecha_estimada_finalizacion': fecha_estimada_fin_str,
-            'estado_global': 'EnReparacion'
-        }).eq('id', id_orden).execute()
-        
-        # 2. Actualizar asignaciones
-        supabase.table('asignaciontecnico') \
-            .update({'fecha_hora_final': ahora_str}) \
-            .eq('id_orden_trabajo', id_orden) \
-            .is_('fecha_hora_final', 'null') \
-            .execute()
-        
-        for tecnico_id in tecnicos_ids:
-            supabase.table('asignaciontecnico').insert({
-                'id_orden_trabajo': id_orden,
-                'id_tecnico': tecnico_id,
-                'tipo_asignacion': 'reparacion',
-                'fecha_hora_inicio': ahora_str,
-                'fecha_hora_final_estimada': fecha_estimada_fin_str,
-                'id_jefe_taller': current_user['id']
-            }).execute()
-        
-        # 3. Guardar instrucciones
-        instruccion_completa = f"""
-[REPARACIÓN - COTIZACIÓN ACEPTADA]
-
-📅 Plazo estimado: {dias} días
-⏱️ Fecha estimada de finalización: {fecha_estimada_fin.strftime('%d/%m/%Y')}
-
-Instrucciones específicas:
-{instrucciones}
-
-⚠️ IMPORTANTE:
-- Registrar avances diariamente en el sistema
-- Notificar cualquier retraso o problema
-- Al finalizar, marcar como "Reparación Completada"
-"""
-        
-        supabase.table('instrucciones_tecnico_historial').insert({
-            'id_orden_trabajo': id_orden,
-            'id_jefe_taller': current_user['id'],
-            'instrucciones': instruccion_completa,
-            'fecha_envio': ahora_str,
-            'leida': False
-        }).execute()
-        
-        print("✅✅✅ PROCESO COMPLETADO ✅✅✅")
-        
-        return jsonify({
-            'success': True,
-            'message': f'✅ Reparación iniciada correctamente. Plazo: {dias} días',
-            'dias_guardados': dias,
-            'fecha_estimada': fecha_estimada_fin_str,
-            'tecnicos_asignados': len(tecnicos_ids)
-        }), 200
-        
-    except Exception as e:
-        print(f"❌ ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT DE PRUEBA
-# =====================================================
-
-@cotizaciones_bp.route('/test-version', methods=['GET'])
-def test_version():
-    return jsonify({
-        'version': 'VERSION_CORREGIDA_5.0',
-        'message': 'Backend funcionando correctamente con tabla avance_trabajo'
-    })
-
-# =====================================================
-# MARCAR INSTRUCCIONES COMO LEÍDAS
+# APARTADO 22: MARCAR INSTRUCCIONES COMO LEÍDAS
 # =====================================================
 
 @cotizaciones_bp.route('/orden/<int:id_orden>/marcar-instrucciones-leidas', methods=['PUT'])
@@ -1949,3 +2062,14 @@ def marcar_instrucciones_leidas(current_user, id_orden):
     except Exception as e:
         logger.error(f"Error marcando instrucciones: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+# =====================================================
+# ENDPOINT DE PRUEBA
+# =====================================================
+
+@cotizaciones_bp.route('/test-version', methods=['GET'])
+def test_version():
+    return jsonify({
+        'version': 'VERSION_CORREGIDA_6.0',
+        'message': 'Backend funcionando correctamente'
+    }), 200

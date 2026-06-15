@@ -941,6 +941,7 @@ async function cargarDatosSesionInicial() {
         
         if (!data.sesion || data.sesion.estado === 'finalizada') {
             limpiarSesionCompleta();
+            mostrarNotificacion('Esta sesión ya fue finalizada', 'warning');
             return;
         }
         
@@ -1048,6 +1049,9 @@ async function recuperarSesionActiva() {
             mostrarNotificacion(`Sesión recuperada: ${codigoSesion}`, 'success');
         } else {
             localStorage.removeItem('sesion_actual');
+            if (data.sesion && data.sesion.estado === 'finalizada') {
+                mostrarNotificacion('La sesión guardada ya fue finalizada', 'info');
+            }
         }
     } catch (error) {
         localStorage.removeItem('sesion_actual');
@@ -1089,14 +1093,27 @@ async function finalizarSesion() {
         updateProgressBar(70, 2);
         updateProgressMessage('Generando orden de trabajo...');
         
+        if (!userInfo || !userInfo.id) {
+            throw new Error('No se encontró información del usuario. Por favor, recarga la página.');
+        }
+        
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/finalizar-sesion`, {
             method: 'POST',
-            body: JSON.stringify({ codigo: codigoSesion, datos: sesionActual?.datos })
+            body: JSON.stringify({ 
+                codigo: codigoSesion, 
+                datos: sesionActual?.datos,
+                usuario_id: userInfo.id,
+                usuario_nombre: userInfo.nombre
+            })
         });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Error del servidor: ${response.status}`);
+        }
         
         updateProgressBar(90, 3);
         updateProgressMessage('Creando código de seguimiento...');
-        await new Promise(resolve => setTimeout(resolve, 300));
         
         const data = await response.json();
         
@@ -1114,13 +1131,14 @@ async function finalizarSesion() {
             
             if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
             await cargarRecepciones();
+            await cargarSesionesActivas(); // Recargar lista de sesiones activas
         } else {
             throw new Error(data.message || 'Error al finalizar');
         }
     } catch (error) {
         console.error('Error finalizando:', error);
         completeProgress(false);
-        mostrarNotificacion(error.message || 'Error al finalizar la recepción', 'error');
+        mostrarNotificacion(error.message || 'Error al finalizar la recepción. Revisa la consola del servidor.', 'error');
     }
 }
 
@@ -1197,6 +1215,7 @@ function mostrarConfirmacionCancelar() {
         limpiarSesionCompleta();
         mostrarNotificacion('Recepción cancelada', 'success');
         if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
+        cargarSesionesActivas(); // Recargar lista
     }
 }
 
@@ -1214,6 +1233,7 @@ async function cargarSesionesActivas() {
         const data = await response.json();
         
         if (data.sesiones) {
+            // Filtrar solo sesiones activas
             const sesionesActivasFiltradas = data.sesiones.filter(s => s.estado === 'activa');
             renderSesionesActivas(sesionesActivasFiltradas);
         }
@@ -1224,7 +1244,10 @@ async function cargarSesionesActivas() {
 
 function renderSesionesActivas(sesiones) {
     if (!sesionesList) return;
+    
+    // Filtrar explícitamente solo sesiones activas
     const activas = sesiones.filter(s => s.estado === 'activa');
+    
     if (sesionesCount) sesionesCount.textContent = activas.length;
     
     if (activas.length === 0) {
@@ -1237,10 +1260,13 @@ function renderSesionesActivas(sesiones) {
         const estaCompleta = colaboradoresCount >= 2;
         const esActiva = codigoSesion === s.codigo;
         
+        // Verificar que la sesión no esté finalizada
+        if (s.estado !== 'activa') return '';
+        
         return `
             <div class="sesion-item ${esActiva ? 'active' : ''} ${estaCompleta ? 'full' : ''}">
                 <div class="sesion-info">
-                    <span class="sesion-codigo">${s.codigo}</span>
+                    <span class="sesion-codigo">${escapeHtml(s.codigo)}</span>
                     <div class="sesion-colaboradores"><i class="fas fa-users"></i><span>${colaboradoresCount}/2</span></div>
                 </div>
                 <div class="sesion-actions">
@@ -1267,6 +1293,7 @@ async function unirseSesionConCodigo(codigo) {
             localStorage.setItem('sesion_actual', codigo);
             activarSesion();
             mostrarNotificacion(`Te has unido a ${codigoSesion}`, 'success');
+            await cargarSesionesActivas(); // Recargar lista
         }
     } catch (error) {
         mostrarNotificacion(error.message, 'error');
@@ -1309,6 +1336,7 @@ async function cargarDatosSesionLigero() {
         
         if (!data.sesion || data.sesion.estado === 'finalizada') {
             limpiarSesionCompleta();
+            mostrarNotificacion('La sesión fue finalizada por otro usuario', 'info');
             return;
         }
         
@@ -1420,7 +1448,7 @@ function filtrarYMostrarRecepciones() {
     listDiv.innerHTML = paginadas.map(rec => `
         <div class="recepcion-card estado-${rec.estado_global || 'EnRecepcion'}">
             <div class="recepcion-header">
-                <span class="recepcion-codigo">${rec.codigo_unico || 'N/A'}</span>
+                <span class="recepcion-codigo">${escapeHtml(rec.codigo_unico || 'N/A')}</span>
                 <span class="recepcion-estado ${rec.estado_global || 'EnRecepcion'}">${rec.estado_global || 'En Recepción'}</span>
                 <span class="recepcion-fecha"><i class="far fa-calendar-alt"></i>${new Date(rec.fecha_ingreso).toLocaleDateString()}</span>
             </div>
@@ -1438,7 +1466,7 @@ function filtrarYMostrarRecepciones() {
 }
 
 // =====================================================
-// LEAFLET MAPA
+// LEAFLET MAPA (FUNCIONES BÁSICAS)
 // =====================================================
 function initLeafletMap() {
     if (leafletInicializado) return;
@@ -2222,4 +2250,4 @@ window.logout = () => {
     window.location.href = `${window.API_BASE_URL}/`;
 };
 
-console.log('✅ recepcion.js cargado - Versión con compresión de imágenes y barra de progreso');
+console.log('✅ recepcion.js cargado - Versión con compresión de imágenes, barra de progreso y manejo de sesiones finalizadas');

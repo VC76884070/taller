@@ -1,6 +1,6 @@
 # =====================================================
 # RECEPCION.PY - JEFE OPERATIVO
-# VERSIÓN CORREGIDA - CON MANEJO DE CÓDIGOS ÚNICOS
+# VERSIÓN CORREGIDA - CON MANEJO DE SESIONES FINALIZADAS
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -57,6 +57,7 @@ def guardar_sesion_en_db(sesion):
                     'datos': sesion.get('datos', {}),
                     'secciones_completadas': sesion.get('secciones_completadas', {}),
                     'secciones_editando': sesion.get('secciones_editando', {}),
+                    'estado': sesion.get('estado', 'activa'),
                     'ultima_actividad': datetime.datetime.now().isoformat()
                 }) \
                 .eq('codigo', sesion['codigo']) \
@@ -83,13 +84,15 @@ def guardar_sesion_en_db(sesion):
 
 def cargar_sesiones_activas_db():
     try:
-        limite = datetime.datetime.now() - datetime.timedelta(hours=24)
+        # Marcar como inactivas las sesiones que llevan más de 1 hora sin actividad
+        limite = datetime.datetime.now() - datetime.timedelta(hours=1)
         supabase.table('sesion_colaborativa') \
             .update({'estado': 'inactiva'}) \
             .eq('estado', 'activa') \
             .lt('ultima_actividad', limite.isoformat()) \
             .execute()
         
+        # Cargar solo sesiones activas
         resultado = supabase.table('sesion_colaborativa') \
             .select('*') \
             .eq('estado', 'activa') \
@@ -107,7 +110,8 @@ def cargar_sesiones_activas_db():
                 'secciones_completadas': s['secciones_completadas'],
                 'secciones_editando': s.get('secciones_editando', {}),
                 'estado': s['estado'],
-                'fecha_creacion': s['fecha_creacion']
+                'fecha_creacion': s['fecha_creacion'],
+                'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion'])
             }
         logger.info(f"📋 Cargadas {len(sesiones)} sesiones activas")
         return sesiones
@@ -388,7 +392,6 @@ def crear_orden_desde_sesion(datos, current_user, sesion_codigo=None, reintentos
             orden_result = supabase.table('ordentrabajo').insert(orden_data).execute()
             
             if not orden_result.data:
-                # Si hay error de duplicado, reintentar con nuevo código
                 if intento < reintentos - 1:
                     logger.warning(f"⚠️ Intento {intento + 1} falló, reintentando...")
                     continue
@@ -524,7 +527,8 @@ def iniciar_sesion(current_user):
             'secciones_completadas': {'cliente': False, 'vehiculo': False, 'fotos': False, 'descripcion': False},
             'secciones_editando': {},
             'estado': 'activa',
-            'fecha_creacion': datetime.datetime.now().isoformat()
+            'fecha_creacion': datetime.datetime.now().isoformat(),
+            'ultima_actividad': datetime.datetime.now().isoformat()
         }
         
         guardar_sesion_en_db(sesion)
@@ -546,24 +550,44 @@ def unirse_sesion(current_user):
         if not codigo_sesion:
             return jsonify({'error': 'Código requerido'}), 400
         
+        # Buscar en memoria o base de datos
         if codigo_sesion not in sesiones_activas:
-            sesiones_recuperadas = cargar_sesiones_activas_db()
-            if codigo_sesion in sesiones_recuperadas:
-                sesiones_activas[codigo_sesion] = sesiones_recuperadas[codigo_sesion]
+            sesion_db = supabase.table('sesion_colaborativa') \
+                .select('*') \
+                .eq('codigo', codigo_sesion) \
+                .eq('estado', 'activa') \
+                .execute()
+            
+            if sesion_db.data:
+                s = sesion_db.data[0]
+                sesiones_activas[codigo_sesion] = {
+                    'codigo': s['codigo'],
+                    'creador': s['creador_id'],
+                    'creador_nombre': s['creador_nombre'],
+                    'colaboradores': s['colaboradores_ids'],
+                    'colaboradores_nombres': s['colaboradores_nombres'],
+                    'datos': s['datos'],
+                    'secciones_completadas': s['secciones_completadas'],
+                    'secciones_editando': s.get('secciones_editando', {}),
+                    'estado': s['estado'],
+                    'fecha_creacion': s['fecha_creacion'],
+                    'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion'])
+                }
             else:
-                return jsonify({'error': 'Sesión no encontrada'}), 404
+                return jsonify({'error': 'Sesión no encontrada o finalizada'}), 404
         
         sesion = sesiones_activas[codigo_sesion]
         
-        if sesion['estado'] != 'activa':
-            return jsonify({'error': 'Sesión finalizada'}), 400
+        if sesion.get('estado') != 'activa':
+            return jsonify({'error': 'Sesión no activa'}), 400
         
-        if len(sesion['colaboradores']) >= 2:
+        if len(sesion.get('colaboradores', [])) >= 2:
             return jsonify({'error': 'Máximo 2 colaboradores'}), 400
         
-        if current_user['id'] not in sesion['colaboradores']:
+        if current_user['id'] not in sesion.get('colaboradores', []):
             sesion['colaboradores'].append(current_user['id'])
             sesion['colaboradores_nombres'].append(current_user.get('nombre', 'Técnico'))
+            sesion['ultima_actividad'] = datetime.datetime.now().isoformat()
             guardar_sesion_en_db(sesion)
         
         return jsonify({'success': True, 'sesion': sesion}), 200
@@ -585,15 +609,33 @@ def guardar_seccion(current_user):
             return jsonify({'error': 'Código requerido'}), 400
         
         if codigo_sesion not in sesiones_activas:
-            sesiones_recuperadas = cargar_sesiones_activas_db()
-            if codigo_sesion in sesiones_recuperadas:
-                sesiones_activas[codigo_sesion] = sesiones_recuperadas[codigo_sesion]
+            sesion_db = supabase.table('sesion_colaborativa') \
+                .select('*') \
+                .eq('codigo', codigo_sesion) \
+                .eq('estado', 'activa') \
+                .execute()
+            
+            if sesion_db.data:
+                s = sesion_db.data[0]
+                sesiones_activas[codigo_sesion] = {
+                    'codigo': s['codigo'],
+                    'creador': s['creador_id'],
+                    'creador_nombre': s['creador_nombre'],
+                    'colaboradores': s['colaboradores_ids'],
+                    'colaboradores_nombres': s['colaboradores_nombres'],
+                    'datos': s['datos'],
+                    'secciones_completadas': s['secciones_completadas'],
+                    'secciones_editando': s.get('secciones_editando', {}),
+                    'estado': s['estado'],
+                    'fecha_creacion': s['fecha_creacion'],
+                    'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion'])
+                }
             else:
                 return jsonify({'error': 'Sesión no encontrada'}), 404
         
         sesion = sesiones_activas[codigo_sesion]
         
-        if sesion['estado'] != 'activa':
+        if sesion.get('estado') != 'activa':
             return jsonify({'error': 'Sesión finalizada'}), 400
         
         if seccion == 'cliente':
@@ -667,7 +709,8 @@ def obtener_sesion(current_user, codigo):
                 'secciones_completadas': s['secciones_completadas'],
                 'secciones_editando': s.get('secciones_editando', {}),
                 'estado': s['estado'],
-                'fecha_creacion': s['fecha_creacion']
+                'fecha_creacion': s['fecha_creacion'],
+                'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion'])
             }
             sesiones_activas[codigo] = sesion
             return jsonify({'success': True, 'sesion': sesion}), 200
@@ -691,37 +734,69 @@ def finalizar_sesion(current_user):
         if not codigo_sesion:
             return jsonify({'error': 'Código requerido'}), 400
         
-        if codigo_sesion not in sesiones_activas:
-            sesiones_recuperadas = cargar_sesiones_activas_db()
-            if codigo_sesion in sesiones_recuperadas:
-                sesiones_activas[codigo_sesion] = sesiones_recuperadas[codigo_sesion]
+        # Buscar en memoria o base de datos
+        sesion = None
+        if codigo_sesion in sesiones_activas:
+            sesion = sesiones_activas[codigo_sesion]
+        else:
+            sesion_db = supabase.table('sesion_colaborativa') \
+                .select('*') \
+                .eq('codigo', codigo_sesion) \
+                .execute()
+            
+            if sesion_db.data:
+                s = sesion_db.data[0]
+                # Si ya está finalizada, solo limpiar
+                if s.get('estado') == 'finalizada':
+                    if codigo_sesion in sesiones_activas:
+                        del sesiones_activas[codigo_sesion]
+                    return jsonify({'error': 'La sesión ya fue finalizada'}), 400
+                
+                sesion = {
+                    'codigo': s['codigo'],
+                    'creador': s['creador_id'],
+                    'creador_nombre': s['creador_nombre'],
+                    'colaboradores': s['colaboradores_ids'],
+                    'colaboradores_nombres': s['colaboradores_nombres'],
+                    'datos': s['datos'],
+                    'secciones_completadas': s['secciones_completadas'],
+                    'secciones_editando': s.get('secciones_editando', {}),
+                    'estado': s['estado'],
+                    'fecha_creacion': s['fecha_creacion'],
+                    'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion'])
+                }
             else:
                 return jsonify({'error': 'Sesión no encontrada'}), 404
         
-        sesion = sesiones_activas[codigo_sesion]
+        if sesion.get('estado') != 'activa':
+            return jsonify({'error': 'La sesión no está activa'}), 400
         
         if datos_directos:
             sesion['datos'] = datos_directos
         
+        # Validar secciones completadas
         secciones_faltantes = [s for s, c in sesion['secciones_completadas'].items() if not c]
         if secciones_faltantes:
             return jsonify({'error': f'Faltan: {", ".join(secciones_faltantes)}'}), 400
         
+        # Crear orden de trabajo
         resultado = crear_orden_desde_sesion(sesion['datos'], current_user, codigo_sesion, reintentos=3)
         
         if not resultado['success']:
             logger.error(f"❌ Error creando orden: {resultado.get('error')}")
             return jsonify({'error': resultado.get('error', 'Error desconocido')}), 500
         
-        # Cambiar estado a 'finalizada'
-        sesion['estado'] = 'finalizada'
-        guardar_sesion_en_db(sesion)
+        # Cambiar estado a 'finalizada' en base de datos
+        supabase.table('sesion_colaborativa') \
+            .update({'estado': 'finalizada'}) \
+            .eq('codigo', codigo_sesion) \
+            .execute()
         
-        # Eliminar de memoria
+        # Eliminar de la memoria (sesiones_activas)
         if codigo_sesion in sesiones_activas:
             del sesiones_activas[codigo_sesion]
         
-        logger.info(f"✅ Sesión {codigo_sesion} finalizada. Orden: {resultado['codigo']}")
+        logger.info(f"✅ Sesión {codigo_sesion} finalizada y eliminada de activas. Orden: {resultado['codigo']}")
         
         return jsonify({
             'success': True,
@@ -798,18 +873,30 @@ def ping_sesion(current_user, codigo):
 @jefe_operativo_required
 def listar_sesiones_activas(current_user):
     try:
+        # Limpiar sesiones finalizadas de memoria
+        sesiones_a_eliminar = []
+        for codigo, s in sesiones_activas.items():
+            if s.get('estado') == 'finalizada':
+                sesiones_a_eliminar.append(codigo)
+        
+        for codigo in sesiones_a_eliminar:
+            if codigo in sesiones_activas:
+                del sesiones_activas[codigo]
+        
+        # Construir lista de sesiones activas (solo estado 'activa')
         sesiones = []
         for codigo, s in sesiones_activas.items():
             if s.get('estado') == 'activa':
                 sesiones.append({
                     'codigo': s['codigo'],
                     'creador_nombre': s['creador_nombre'],
-                    'colaboradores': s['colaboradores'],
-                    'colaboradores_nombres': s['colaboradores_nombres'],
-                    'secciones_completadas': s['secciones_completadas'],
-                    'fecha_creacion': s['fecha_creacion'],
-                    'estado': s['estado']
+                    'colaboradores': s.get('colaboradores', []),
+                    'colaboradores_nombres': s.get('colaboradores_nombres', []),
+                    'secciones_completadas': s.get('secciones_completadas', {}),
+                    'fecha_creacion': s.get('fecha_creacion'),
+                    'estado': s.get('estado', 'activa')
                 })
+        
         return jsonify({'success': True, 'sesiones': sesiones}), 200
     except Exception as e:
         logger.error(f"Error listando sesiones: {str(e)}")

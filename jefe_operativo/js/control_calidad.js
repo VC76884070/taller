@@ -1,16 +1,14 @@
 // =====================================================
 // CONTROL_CALIDAD.JS - JEFE OPERATIVO
 // GESTIÓN DE TRABAJOS COMPLETADOS POR TÉCNICOS
-// VERSIÓN CORREGIDA - USA window.API_BASE_URL
+// VERSIÓN COMPLETA CON FUNCIONALIDAD DE ENTREGA
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - USA LA VARIABLE GLOBAL
+// CONFIGURACIÓN DE API
 // =====================================================
-// NOTA: window.API_BASE_URL ya está declarada en include.js
-// No declarar const API_BASE_URL aquí
 
-const API_URL = `${window.API_BASE_URL}/api/jefe-operativo`;
+const API_URL = `${window.API_BASE_URL}/api/jefe-operativo/control-calidad`;
 let currentUser = null;
 let ordenesPendientes = [];
 let ordenesFinalizadas = [];
@@ -128,7 +126,7 @@ async function cargarOrdenesPendientes() {
         const estado = document.getElementById('filtroEstado')?.value || 'all';
         const search = document.getElementById('searchInput')?.value.toLowerCase() || '';
         
-        let url = `${API_URL}/control-calidad/ordenes-pendientes`;
+        let url = `${API_URL}/ordenes-pendientes`;
         if (estado !== 'all') url += `?estado=${estado}`;
         
         const response = await fetch(url, { headers: getAuthHeaders() });
@@ -165,7 +163,7 @@ async function cargarOrdenesFinalizadas() {
         const estado = document.getElementById('filtroEstadoFinalizadas')?.value || 'all';
         const search = document.getElementById('searchFinalizadasInput')?.value.toLowerCase() || '';
         
-        let url = `${API_URL}/control-calidad/ordenes-finalizadas`;
+        let url = `${API_URL}/ordenes-finalizadas`;
         if (estado !== 'all') url += `?estado=${estado}`;
         
         const response = await fetch(url, { headers: getAuthHeaders() });
@@ -268,8 +266,11 @@ function renderizarOrdenesFinalizadas() {
         return;
     }
     
-    container.innerHTML = ordenesFinalizadas.map(orden => `
-        <div class="orden-card">
+    container.innerHTML = ordenesFinalizadas.map(orden => {
+        const isEntregado = orden.estado_global === 'Entregado';
+        
+        return `
+        <div class="orden-card ${isEntregado ? 'entregado-card' : ''}">
             <div class="orden-header">
                 <div>
                     <span class="orden-codigo"><i class="fas fa-tag"></i> ${escapeHtml(orden.codigo_unico)}</span>
@@ -300,9 +301,18 @@ function renderizarOrdenesFinalizadas() {
                 <button class="action-btn view" onclick="verDetalleOrden(${orden.id_orden})">
                     <i class="fas fa-eye"></i> Ver Detalle
                 </button>
+                ${orden.estado_global === 'Finalizado' ? `
+                    <button class="action-btn entregado" onclick="abrirModalEntregar(${orden.id_orden})">
+                        <i class="fas fa-truck"></i> Marcar como Entregado
+                    </button>
+                ` : orden.estado_global === 'Entregado' ? `
+                    <button class="action-btn entregado" disabled style="opacity:0.6; cursor:not-allowed;">
+                        <i class="fas fa-check-circle"></i> Vehículo Entregado
+                    </button>
+                ` : ''}
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 // =====================================================
@@ -312,7 +322,7 @@ function renderizarOrdenesFinalizadas() {
 window.verDetalleOrden = async function(ordenId) {
     mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/control-calidad/detalle-orden/${ordenId}`, {
+        const response = await fetch(`${API_URL}/detalle-orden/${ordenId}`, {
             headers: getAuthHeaders()
         });
         const data = await response.json();
@@ -358,13 +368,11 @@ window.verDetalleOrden = async function(ordenId) {
                     </div>
                 </div>
                 
-                ${detalle.diagnostico?.informe ? `
+                ${detalle.recepcion?.transcripcion_problema ? `
                     <div class="orden-info-card">
-                        <h3><i class="fas fa-stethoscope"></i> Diagnóstico Técnico</h3>
-                        <div class="detalle-grid" style="margin-top: 0.5rem;">
-                            <div><strong>Informe:</strong> ${escapeHtml(detalle.diagnostico.informe)}</div>
-                            ${detalle.diagnostico.audio_url ? `<div><strong>Audio:</strong> <audio controls src="${detalle.diagnostico.audio_url}" style="max-width: 100%;"></audio></div>` : ''}
-                        </div>
+                        <h3><i class="fas fa-clipboard-list"></i> Descripción del Problema</h3>
+                        <div style="margin-top: 0.5rem;">${escapeHtml(detalle.recepcion.transcripcion_problema)}</div>
+                        ${detalle.recepcion?.audio_url ? `<div style="margin-top: 0.5rem;"><audio controls src="${detalle.recepcion.audio_url}" style="width: 100%;"></audio></div>` : ''}
                     </div>
                 ` : ''}
                 
@@ -445,7 +453,7 @@ window.confirmarFinalizar = async function() {
     
     mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/control-calidad/finalizar-orden/${currentOrdenId}`, {
+        const response = await fetch(`${API_URL}/finalizar-orden/${currentOrdenId}`, {
             method: 'PUT',
             headers: getAuthHeaders(),
             body: JSON.stringify({ comentarios: comentarios })
@@ -501,7 +509,7 @@ window.confirmarRechazar = async function() {
     
     mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/control-calidad/rechazar-orden/${currentOrdenId}`, {
+        const response = await fetch(`${API_URL}/rechazar-orden/${currentOrdenId}`, {
             method: 'PUT',
             headers: getAuthHeaders(),
             body: JSON.stringify({ instrucciones: instrucciones })
@@ -516,6 +524,58 @@ window.confirmarRechazar = async function() {
             await cargarOrdenesFinalizadas();
         } else {
             showToast(data.error || 'Error al enviar a revisión', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+};
+
+// =====================================================
+// ENTREGAR VEHÍCULO (NUEVA FUNCIONALIDAD)
+// =====================================================
+
+let currentEntregarOrdenId = null;
+
+window.abrirModalEntregar = async function(ordenId) {
+    const orden = ordenesFinalizadas.find(o => o.id_orden === ordenId);
+    if (!orden) return;
+    
+    currentEntregarOrdenId = ordenId;
+    
+    const infoContainer = document.getElementById('entregarInfo');
+    infoContainer.innerHTML = `
+        <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(orden.codigo_unico)}</p>
+        <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(orden.vehiculo)}</p>
+        <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}</p>
+        <p><strong><i class="fas fa-check-circle"></i> Estado actual:</strong> ${statusBadge(orden.estado_global)}</p>
+    `;
+    
+    document.getElementById('comentariosEntregar').value = '';
+    abrirModal('modalEntregar');
+};
+
+window.confirmarEntregar = async function() {
+    const comentarios = document.getElementById('comentariosEntregar')?.value || '';
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/entregar-orden/${currentEntregarOrdenId}`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ comentarios: comentarios })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('🚗 Vehículo marcado como ENTREGADO correctamente', 'success');
+            cerrarModal('modalEntregar');
+            await cargarOrdenesFinalizadas();
+        } else {
+            showToast(data.error || 'Error al marcar como entregado', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -584,6 +644,11 @@ function setupEventListeners() {
     const btnConfirmarRechazar = document.getElementById('btnConfirmarRechazar');
     if (btnConfirmarRechazar) {
         btnConfirmarRechazar.addEventListener('click', confirmarRechazar);
+    }
+    
+    const btnConfirmarEntregar = document.getElementById('btnConfirmarEntregar');
+    if (btnConfirmarEntregar) {
+        btnConfirmarEntregar.addEventListener('click', confirmarEntregar);
     }
     
     document.querySelectorAll('.modal').forEach(modal => {
@@ -663,6 +728,8 @@ window.abrirModalFinalizar = abrirModalFinalizar;
 window.confirmarFinalizar = confirmarFinalizar;
 window.abrirModalRechazar = abrirModalRechazar;
 window.confirmarRechazar = confirmarRechazar;
+window.abrirModalEntregar = abrirModalEntregar;
+window.confirmarEntregar = confirmarEntregar;
 window.cerrarModal = cerrarModal;
 window.logout = logout;
 

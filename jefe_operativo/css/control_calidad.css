@@ -1,16 +1,20 @@
 /* =====================================================
    CONTROL_CALIDAD.CSS - CONTROL DE CALIDAD
    TEMA OSCURO - FURIA MOTOR
-   VERSIÓN COMPLETA CON HAMBURGUESA Y RESPONSIVE
+   VERSIÓN COMPLETA CON FUNCIONALIDAD DE ENTREGA
    ===================================================== */
 
 /* Variables globales */
 :root {
     --rojo-primario: #C1121F;
     --rojo-oscuro: #8B0F1A;
+    --rojo-acento: #FF4D4D;
     --verde-exito: #10B981;
+    --verde-oscuro: #059669;
     --ambar-alerta: #F59E0B;
+    --ambar-oscuro: #D97706;
     --azul-acento: #3B82F6;
+    --morado-acento: #8B5CF6;
     --negro: #0F0F10;
     --gris-oscuro: #1A1A1C;
     --gris-medio: #2C2C2E;
@@ -20,6 +24,7 @@
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
     --shadow-md: 0 4px 6px rgba(0,0,0,0.4);
     --shadow-lg: 0 10px 25px rgba(0,0,0,0.5);
+    --shadow-red: 0 4px 12px rgba(193,18,31,0.25);
     --radius-sm: 6px;
     --radius-md: 10px;
     --radius-lg: 16px;
@@ -50,6 +55,67 @@ body {
 
 body.sidebar-open {
     overflow: hidden;
+}
+
+/* Main Content */
+.main-content {
+    margin-left: 280px;
+    transition: margin-left 0.3s ease;
+    min-height: 100vh;
+    padding: 1.5rem;
+}
+
+/* Top Bar */
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.page-title h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.page-title h1 i {
+    color: var(--rojo-primario);
+}
+
+.page-title p {
+    color: var(--gris-texto);
+    font-size: 0.8rem;
+    margin: 0.25rem 0 0 0;
+}
+
+.top-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.date-display {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-md);
+    font-size: 0.8rem;
+    color: var(--gris-texto);
+}
+
+/* Content */
+.content {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
 }
 
 /* =====================================================
@@ -254,7 +320,27 @@ body.sidebar-open {
 }
 
 .btn-warning:hover {
-    background: #D97706;
+    background: var(--ambar-oscuro);
+    transform: translateY(-1px);
+}
+
+.btn-success {
+    background: var(--verde-exito);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.btn-success:hover {
+    background: var(--verde-oscuro);
     transform: translateY(-1px);
 }
 
@@ -286,7 +372,6 @@ body.sidebar-open {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
-    margin-bottom: 1rem;
     overflow: hidden;
     transition: var(--transition);
 }
@@ -295,6 +380,11 @@ body.sidebar-open {
     border-color: var(--rojo-primario);
     box-shadow: var(--shadow-md);
     transform: translateY(-2px);
+}
+
+.orden-card.entregado-card {
+    opacity: 0.85;
+    border-left: 3px solid var(--verde-exito);
 }
 
 .orden-header {
@@ -402,7 +492,7 @@ body.sidebar-open {
 }
 
 .action-btn.approve:hover {
-    background: #059669;
+    background: var(--verde-oscuro);
     transform: translateY(-1px);
 }
 
@@ -412,8 +502,24 @@ body.sidebar-open {
 }
 
 .action-btn.reject:hover {
-    background: #D97706;
+    background: var(--ambar-oscuro);
     transform: translateY(-1px);
+}
+
+.action-btn.entregado {
+    background: linear-gradient(135deg, var(--verde-exito), var(--verde-oscuro));
+    color: white;
+}
+
+.action-btn.entregado:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.action-btn.entregado:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
 }
 
 /* =====================================================
@@ -441,7 +547,7 @@ body.sidebar-open {
 
 .status-Finalizado {
     background: rgba(139, 92, 246, 0.15);
-    color: #8B5CF6;
+    color: var(--morado-acento);
 }
 
 .status-Entregado {
@@ -500,14 +606,14 @@ body.sidebar-open {
     background: var(--gris-oscuro);
 }
 
-.modal-header h2, .modal-header h3 {
+.modal-header h2 {
     font-size: 1rem;
     font-weight: 600;
     margin: 0;
     color: var(--blanco);
 }
 
-.modal-header h2 i, .modal-header h3 i {
+.modal-header h2 i {
     color: var(--rojo-primario);
     margin-right: 0.5rem;
 }
@@ -727,54 +833,6 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   TOP BAR
-   ===================================================== */
-.top-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-    gap: 1rem;
-}
-
-.page-title h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.page-title h1 i {
-    color: var(--rojo-primario);
-}
-
-.page-title p {
-    color: var(--gris-texto);
-    font-size: 0.8rem;
-    margin: 0.25rem 0 0 0;
-}
-
-.top-actions {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.date-display {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
-    background: var(--gris-oscuro);
-    border-radius: var(--radius-md);
-    font-size: 0.8rem;
-    color: var(--gris-texto);
-}
-
-/* =====================================================
    LOADING OVERLAY
    ===================================================== */
 .loading-overlay {
@@ -833,9 +891,13 @@ body.sidebar-open {
 }
 
 .toast-notification.success { border-left-color: var(--verde-exito); }
+.toast-notification.success i { color: var(--verde-exito); }
 .toast-notification.error { border-left-color: var(--rojo-primario); }
+.toast-notification.error i { color: var(--rojo-primario); }
 .toast-notification.warning { border-left-color: var(--ambar-alerta); }
-.toast-notification.info { border-left-color: var(--rojo-primario); }
+.toast-notification.warning i { color: var(--ambar-alerta); }
+.toast-notification.info { border-left-color: var(--azul-acento); }
+.toast-notification.info i { color: var(--azul-acento); }
 
 @keyframes slideInToast {
     from { transform: translateX(100%); opacity: 0; }
@@ -865,24 +927,23 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   ========== RESPONSIVE ADICIONAL PARA HAMBURGUESA ==========
+   RESPONSIVE PARA MÓVIL (BOTÓN HAMBURGUESA)
    ===================================================== */
 
 /* Ajustes para cuando el sidebar está oculto en móvil/tablet */
 @media (max-width: 1024px) {
-    /* Main content ocupa todo el ancho */
     .main-content {
         margin-left: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
         padding: 1rem !important;
+        padding-top: 70px !important;
     }
     
     .content {
         padding: 1rem !important;
     }
     
-    /* Top bar responsivo */
     .top-bar {
         flex-direction: column;
         align-items: flex-start;
@@ -1036,6 +1097,12 @@ body.sidebar-open {
         justify-content: center;
     }
     
+    /* Alertas */
+    .alert-success ul,
+    .alert-warning ul {
+        margin-left: 1rem;
+    }
+    
     /* Fotos grid */
     .fotos-grid {
         grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
@@ -1149,6 +1216,14 @@ body.sidebar-open {
     .action-btn {
         width: auto;
     }
+    
+    .modal-footer {
+        flex-direction: row;
+    }
+    
+    .modal-footer button {
+        width: auto;
+    }
 }
 
 /* Mejoras para touch */
@@ -1159,7 +1234,8 @@ body.sidebar-open {
     .modal-close,
     .btn-secondary,
     .btn-primary,
-    .btn-warning {
+    .btn-warning,
+    .btn-success {
         min-height: 44px;
     }
     

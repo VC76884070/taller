@@ -1,6 +1,6 @@
 # =====================================================
 # CONTROL_CALIDAD.PY - JEFE DE TALLER
-# VERSIÓN CORREGIDA - USANDO TABLAS REALES DE LA BD
+# VERSIÓN COMPLETA CON FUNCIONALIDAD DE ENTREGA
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -17,6 +17,7 @@ control_calidad_bp = Blueprint('control_calidad', __name__, url_prefix='/api/jef
 
 SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
+
 
 # =====================================================
 # FUNCIONES AUXILIARES
@@ -56,6 +57,7 @@ def obtener_tecnicos_orden(id_orden: int) -> str:
         logger.error(f"Error obteniendo técnicos para orden {id_orden}: {e}")
         return 'No asignado'
 
+
 def formatear_vehiculo(vehiculo_data: Optional[Dict]) -> str:
     """Formatear datos del vehículo para mostrar"""
     if not vehiculo_data:
@@ -68,6 +70,7 @@ def formatear_vehiculo(vehiculo_data: Optional[Dict]) -> str:
     if marca or modelo:
         return f"{marca} {modelo} ({placa})".strip()
     return f"Vehículo ({placa})" if placa else 'Vehículo no registrado'
+
 
 def obtener_cliente_nombre(id_cliente: int) -> str:
     """Obtener nombre del cliente por ID de cliente"""
@@ -94,8 +97,9 @@ def obtener_cliente_nombre(id_cliente: int) -> str:
         logger.error(f"Error obteniendo cliente: {e}")
         return 'Cliente no registrado'
 
+
 def obtener_diagnostico_tecnico(id_orden: int) -> Dict:
-    """Obtener diagnóstico técnico de una orden (tabla diagnostico_tecnico)"""
+    """Obtener diagnóstico técnico de una orden"""
     try:
         diagnostico = supabase.table('diagnostico_tecnico') \
             .select('informe, url_grabacion_informe, fecha_envio, estado, version') \
@@ -118,8 +122,9 @@ def obtener_diagnostico_tecnico(id_orden: int) -> Dict:
         logger.error(f"Error obteniendo diagnóstico: {e}")
         return {}
 
+
 def obtener_servicios_orden(id_orden: int) -> List[Dict]:
-    """Obtener servicios de una orden (tabla servicio_tecnico)"""
+    """Obtener servicios de una orden"""
     try:
         # Primero obtener diagnóstico de la orden
         diagnostico = supabase.table('diagnostico_tecnico') \
@@ -144,15 +149,16 @@ def obtener_servicios_orden(id_orden: int) -> List[Dict]:
         return [{
             'descripcion': s.get('descripcion', 'Servicio no especificado'),
             'cantidad': 1,
-            'precio': 0  # No tenemos precio directo en servicio_tecnico
+            'precio': 0
         } for s in (servicios.data or [])]
     
     except Exception as e:
         logger.error(f"Error obteniendo servicios: {e}")
         return []
 
+
 def obtener_recepcion(id_orden: int) -> Dict:
-    """Obtener datos de recepción (tabla recepcion)"""
+    """Obtener datos de recepción"""
     try:
         recepcion = supabase.table('recepcion') \
             .select('transcripcion_problema, url_grabacion_problema, url_foto_frontal, url_foto_trasera, url_foto_superior, url_foto_inferior, url_foto_tablero, url_lateral_izquierda, url_lateral_derecha') \
@@ -161,7 +167,6 @@ def obtener_recepcion(id_orden: int) -> Dict:
         
         if recepcion.data:
             r = recepcion.data[0]
-            # Organizar fotos en un diccionario
             fotos = {}
             for key in ['url_foto_frontal', 'url_foto_trasera', 'url_foto_superior', 'url_foto_inferior', 'url_foto_tablero', 'url_lateral_izquierda', 'url_lateral_derecha']:
                 if r.get(key):
@@ -178,8 +183,9 @@ def obtener_recepcion(id_orden: int) -> Dict:
         logger.error(f"Error obteniendo recepción: {e}")
         return {}
 
+
 def obtener_historial_orden(id_orden: int) -> List[Dict]:
-    """Obtener historial de cambios (tabla seguimientoorden)"""
+    """Obtener historial de cambios"""
     try:
         historial = supabase.table('seguimientoorden') \
             .select('estado, motivo_pausa, fecha_hora_cambio, notificaciones_enviadas') \
@@ -199,6 +205,46 @@ def obtener_historial_orden(id_orden: int) -> List[Dict]:
         logger.error(f"Error obteniendo historial: {e}")
         return []
 
+
+def liberar_bahia(id_orden: int) -> bool:
+    """Liberar la bahía asignada a una orden"""
+    try:
+        planificacion = supabase.table('planificacion') \
+            .select('id, bahia_asignada') \
+            .eq('id_orden_trabajo', id_orden) \
+            .is_('fecha_hora_fin_real', 'null') \
+            .execute()
+        
+        if planificacion.data:
+            ahora = datetime.datetime.now().isoformat()
+            for p in planificacion.data:
+                supabase.table('planificacion') \
+                    .update({'fecha_hora_fin_real': ahora}) \
+                    .eq('id', p['id']) \
+                    .execute()
+                logger.info(f"✅ Bahía {p.get('bahia_asignada')} liberada para orden {id_orden}")
+            return True
+        return False
+    except Exception as e:
+        logger.warning(f"Error liberando bahía: {e}")
+        return False
+
+
+def enviar_notificacion(id_usuario_destino: int, tipo: str, mensaje: str, id_referencia: int = None):
+    """Enviar notificación a un usuario"""
+    try:
+        supabase.table('notificacion').insert({
+            'id_usuario_destino': id_usuario_destino,
+            'tipo': tipo,
+            'mensaje': mensaje,
+            'fecha_envio': datetime.datetime.now().isoformat(),
+            'leida': False,
+            'id_referencia': id_referencia
+        }).execute()
+    except Exception as e:
+        logger.warning(f"Error enviando notificación: {e}")
+
+
 # =====================================================
 # ENDPOINTS DE PRUEBA
 # =====================================================
@@ -212,16 +258,15 @@ def test_endpoint():
         'timestamp': datetime.datetime.now().isoformat()
     }), 200
 
+
 # =====================================================
-# ENDPOINTS PRINCIPALES (CORREGIDOS)
+# ENDPOINTS PRINCIPALES
 # =====================================================
 
 @control_calidad_bp.route('/ordenes-pendientes', methods=['GET'])
 @jefe_taller_required
 def obtener_ordenes_pendientes(current_user):
-    """
-    Obtener ÚLTIMAS 10 órdenes pendientes de revisión
-    """
+    """Obtener ÚLTIMAS 10 órdenes pendientes de revisión"""
     try:
         estado = request.args.get('estado', 'all')
         limit = request.args.get('limit', 10, type=int)
@@ -244,21 +289,18 @@ def obtener_ordenes_pendientes(current_user):
         
         logger.info(f"📊 Se encontraron {len(ordenes)} órdenes pendientes")
         
-        # Filtrar por búsqueda si es necesario
         if search:
             ordenes = [o for o in ordenes if 
                 search in (o.get('codigo_unico', '') or '').lower() or
-                search in (o.get('id_vehiculo', '') or '').lower()
+                search in (str(o.get('id_vehiculo', ''))).lower()
             ]
         
-        # Para cada orden, obtener datos relacionados
         ordenes_formateadas = []
         for orden in ordenes:
             orden_id = orden.get('id')
             if not orden_id:
                 continue
             
-            # Obtener datos del vehículo
             vehiculo_texto = 'Vehículo no registrado'
             if orden.get('id_vehiculo'):
                 try:
@@ -271,12 +313,10 @@ def obtener_ordenes_pendientes(current_user):
                 except Exception as e:
                     logger.error(f"Error obteniendo vehículo: {e}")
             
-            # Obtener nombre del cliente
             cliente_nombre = 'Cliente no registrado'
             if orden.get('id_cliente'):
                 cliente_nombre = obtener_cliente_nombre(orden['id_cliente'])
             
-            # Obtener técnicos
             tecnicos_nombres = obtener_tecnicos_orden(orden_id)
             
             ordenes_formateadas.append({
@@ -302,12 +342,11 @@ def obtener_ordenes_pendientes(current_user):
         logger.error(f"❌ Error en obtener_ordenes_pendientes: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
 @control_calidad_bp.route('/ordenes-finalizadas', methods=['GET'])
 @jefe_taller_required
 def obtener_ordenes_finalizadas(current_user):
-    """
-    Obtener ÚLTIMAS 10 órdenes finalizadas o entregadas
-    """
+    """Obtener ÚLTIMAS 10 órdenes finalizadas o entregadas"""
     try:
         estado = request.args.get('estado', 'all')
         limit = request.args.get('limit', 10, type=int)
@@ -333,7 +372,7 @@ def obtener_ordenes_finalizadas(current_user):
         if search:
             ordenes = [o for o in ordenes if 
                 search in (o.get('codigo_unico', '') or '').lower() or
-                search in (o.get('id_vehiculo', '') or '').lower()
+                search in (str(o.get('id_vehiculo', ''))).lower()
             ]
         
         ordenes_formateadas = []
@@ -382,6 +421,7 @@ def obtener_ordenes_finalizadas(current_user):
         logger.error(f"❌ Error en obtener_ordenes_finalizadas: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
 @control_calidad_bp.route('/detalle-orden/<int:id_orden>', methods=['GET'])
 @jefe_taller_required
 def obtener_detalle_orden(current_user, id_orden):
@@ -389,7 +429,6 @@ def obtener_detalle_orden(current_user, id_orden):
     try:
         logger.info(f"🔍 Usuario {current_user.get('id')} consultando detalle de orden {id_orden}")
         
-        # Obtener datos de la orden
         orden_result = supabase.table('ordentrabajo') \
             .select('*') \
             .eq('id', id_orden) \
@@ -400,7 +439,6 @@ def obtener_detalle_orden(current_user, id_orden):
         
         orden_data = orden_result.data[0]
         
-        # Obtener datos del vehículo
         vehiculo_data = {}
         if orden_data.get('id_vehiculo'):
             vehiculo_result = supabase.table('vehiculo') \
@@ -410,7 +448,6 @@ def obtener_detalle_orden(current_user, id_orden):
             if vehiculo_result.data:
                 vehiculo_data = vehiculo_result.data[0]
         
-        # Obtener nombre del cliente
         cliente_nombre = 'No registrado'
         if orden_data.get('id_cliente'):
             cliente_nombre = obtener_cliente_nombre(orden_data['id_cliente'])
@@ -436,7 +473,7 @@ def obtener_detalle_orden(current_user, id_orden):
                 'nombre': cliente_nombre,
                 'telefono': 'No registrado',
                 'email': 'No registrado'
-            } if cliente_nombre else None,
+            },
             'vehiculo': {
                 'id': vehiculo_data.get('id'),
                 'placa': vehiculo_data.get('placa'),
@@ -461,6 +498,7 @@ def obtener_detalle_orden(current_user, id_orden):
         logger.error(f"❌ Error en obtener_detalle_orden {id_orden}: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
 @control_calidad_bp.route('/finalizar-orden/<int:id_orden>', methods=['PUT'])
 @jefe_taller_required
 def finalizar_orden(current_user, id_orden):
@@ -471,9 +509,8 @@ def finalizar_orden(current_user, id_orden):
         
         logger.info(f"✅ Usuario {current_user.get('id')} finalizando orden {id_orden}")
         
-        # Verificar que la orden existe
         orden_result = supabase.table('ordentrabajo') \
-            .select('id, estado_global') \
+            .select('id, estado_global, codigo_unico') \
             .eq('id', id_orden) \
             .execute()
         
@@ -488,8 +525,8 @@ def finalizar_orden(current_user, id_orden):
             }), 400
         
         ahora = datetime.datetime.now().isoformat()
+        codigo_orden = orden_result.data[0].get('codigo_unico', str(id_orden))
         
-        # Actualizar la orden
         update_data = {
             'estado_global': 'Finalizado',
             'fecha_salida': ahora
@@ -503,13 +540,33 @@ def finalizar_orden(current_user, id_orden):
             .eq('id', id_orden) \
             .execute()
         
-        # Registrar en seguimientoorden
         supabase.table('seguimientoorden').insert({
             'id_orden_trabajo': id_orden,
             'estado': 'Finalizado',
             'fecha_hora_cambio': ahora,
             'notificaciones_enviadas': 0
         }).execute()
+        
+        supabase.table('avancetrabajo').insert({
+            'id_orden_trabajo': id_orden,
+            'id_tecnico': current_user['id'],
+            'descripcion': f"Orden finalizada por Control de Calidad. {comentarios}" if comentarios else "Orden finalizada por Control de Calidad",
+            'tipo_avance': 'control_calidad_aprobado',
+            'fecha_hora': ahora
+        }).execute()
+        
+        tecnicos = supabase.table('asignaciontecnico') \
+            .select('id_tecnico') \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
+        for t in (tecnicos.data or []):
+            enviar_notificacion(
+                t['id_tecnico'],
+                'trabajo_aprobado',
+                f"✅ Tu trabajo en la orden #{codigo_orden} ha sido APROBADO por Control de Calidad. El vehículo está listo para entrega.",
+                id_orden
+            )
         
         logger.info(f"✅ Orden {id_orden} finalizada exitosamente")
         
@@ -522,6 +579,7 @@ def finalizar_orden(current_user, id_orden):
     except Exception as e:
         logger.error(f"❌ Error en finalizar_orden {id_orden}: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @control_calidad_bp.route('/rechazar-orden/<int:id_orden>', methods=['PUT'])
 @jefe_taller_required
@@ -539,9 +597,8 @@ def rechazar_orden(current_user, id_orden):
         
         logger.info(f"❌ Usuario {current_user.get('id')} rechazando orden {id_orden}")
         
-        # Verificar que la orden existe
         orden_result = supabase.table('ordentrabajo') \
-            .select('id, estado_global') \
+            .select('id, estado_global, codigo_unico') \
             .eq('id', id_orden) \
             .execute()
         
@@ -556,8 +613,8 @@ def rechazar_orden(current_user, id_orden):
             }), 400
         
         ahora = datetime.datetime.now().isoformat()
+        codigo_orden = orden_result.data[0].get('codigo_unico', str(id_orden))
         
-        # Actualizar la orden
         supabase.table('ordentrabajo') \
             .update({
                 'estado_global': 'EnReparacion',
@@ -566,13 +623,56 @@ def rechazar_orden(current_user, id_orden):
             .eq('id', id_orden) \
             .execute()
         
-        # Registrar en seguimientoorden
+        tecnicos = supabase.table('asignaciontecnico') \
+            .select('id_tecnico') \
+            .eq('id_orden_trabajo', id_orden) \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
+        for t in (tecnicos.data or []):
+            supabase.table('asignaciontecnico') \
+                .update({'fecha_hora_final': ahora}) \
+                .eq('id_orden_trabajo', id_orden) \
+                .eq('id_tecnico', t['id_tecnico']) \
+                .is_('fecha_hora_final', 'null') \
+                .execute()
+            
+            supabase.table('asignaciontecnico').insert({
+                'id_orden_trabajo': id_orden,
+                'id_tecnico': t['id_tecnico'],
+                'tipo_asignacion': 'reparacion',
+                'fecha_hora_inicio': ahora
+            }).execute()
+            
+            enviar_notificacion(
+                t['id_tecnico'],
+                'trabajo_rechazado',
+                f"⚠️ Tu trabajo en la orden #{codigo_orden} necesita CORRECCIONES.\n\nInstrucciones:\n{instrucciones}\n\nPor favor, realiza las correcciones indicadas.",
+                id_orden
+            )
+        
+        supabase.table('instrucciones_tecnico_historial').insert({
+            'id_orden_trabajo': id_orden,
+            'id_jefe_taller': current_user['id'],
+            'instrucciones': f"[REVISIÓN NECESARIA - JEFE DE TALLER]\n\n{instrucciones}",
+            'fecha_envio': ahora,
+            'leida': False
+        }).execute()
+        
         supabase.table('seguimientoorden').insert({
             'id_orden_trabajo': id_orden,
             'estado': 'EnReparacion',
             'motivo_pausa': instrucciones,
             'fecha_hora_cambio': ahora,
             'notificaciones_enviadas': 1
+        }).execute()
+        
+        supabase.table('avancetrabajo').insert({
+            'id_orden_trabajo': id_orden,
+            'id_tecnico': current_user['id'],
+            'descripcion': f"Orden enviada a revisión por Control de Calidad. Motivo: {instrucciones[:200]}",
+            'tipo_avance': 'control_calidad_rechazado',
+            'fecha_hora': ahora
         }).execute()
         
         logger.info(f"❌ Orden {id_orden} enviada a revisión")
@@ -587,6 +687,117 @@ def rechazar_orden(current_user, id_orden):
     except Exception as e:
         logger.error(f"❌ Error en rechazar_orden {id_orden}: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =====================================================
+# NUEVO ENDPOINT: ENTREGAR VEHÍCULO
+# =====================================================
+
+@control_calidad_bp.route('/entregar-orden/<int:id_orden>', methods=['PUT'])
+@jefe_taller_required
+def entregar_orden(current_user, id_orden):
+    """Marcar orden como Entregada (liberar bahía y técnicos)"""
+    try:
+        data = request.get_json() or {}
+        comentarios = data.get('comentarios', '')
+        
+        logger.info(f"🚗 Usuario {current_user.get('id')} entregando orden {id_orden}")
+        
+        # Verificar orden
+        orden_result = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, estado_global, id_vehiculo') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if not orden_result.data:
+            return jsonify({'success': False, 'error': 'Orden no encontrada'}), 404
+        
+        estado_actual = orden_result.data[0]['estado_global']
+        codigo_orden = orden_result.data[0].get('codigo_unico', str(id_orden))
+        
+        # Solo se puede entregar si está en Finalizado
+        if estado_actual != 'Finalizado':
+            return jsonify({
+                'success': False, 
+                'error': f'La orden debe estar en estado Finalizado para entregar. Estado actual: {estado_actual}'
+            }), 400
+        
+        ahora = datetime.datetime.now().isoformat()
+        
+        # 1. Cambiar estado a Entregado y registrar fecha de salida
+        supabase.table('ordentrabajo') \
+            .update({
+                'estado_global': 'Entregado',
+                'fecha_salida': ahora
+            }) \
+            .eq('id', id_orden) \
+            .execute()
+        
+        # 2. Cerrar todas las asignaciones de técnicos activas
+        asignaciones_activas = supabase.table('asignaciontecnico') \
+            .select('id_tecnico') \
+            .eq('id_orden_trabajo', id_orden) \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
+        for asignacion in (asignaciones_activas.data or []):
+            supabase.table('asignaciontecnico') \
+                .update({'fecha_hora_final': ahora}) \
+                .eq('id_orden_trabajo', id_orden) \
+                .eq('id_tecnico', asignacion['id_tecnico']) \
+                .is_('fecha_hora_final', 'null') \
+                .execute()
+        
+        # 3. Liberar la bahía
+        liberar_bahia(id_orden)
+        
+        # 4. Registrar avance de entrega
+        supabase.table('avancetrabajo').insert({
+            'id_orden_trabajo': id_orden,
+            'id_tecnico': current_user['id'],
+            'descripcion': f"✅ VEHÍCULO ENTREGADO AL CLIENTE. {comentarios}" if comentarios else "✅ VEHÍCULO ENTREGADO AL CLIENTE",
+            'tipo_avance': 'vehiculo_entregado',
+            'fecha_hora': ahora
+        }).execute()
+        
+        # 5. Registrar en seguimientoorden
+        supabase.table('seguimientoorden').insert({
+            'id_orden_trabajo': id_orden,
+            'estado': 'Entregado',
+            'fecha_hora_cambio': ahora,
+            'notificaciones_enviadas': 1
+        }).execute()
+        
+        # 6. Notificar a los técnicos
+        tecnicos = supabase.table('asignaciontecnico') \
+            .select('id_tecnico') \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
+        tecnicos_ids = set()
+        for t in (tecnicos.data or []):
+            tecnicos_ids.add(t['id_tecnico'])
+        
+        for id_tecnico in tecnicos_ids:
+            enviar_notificacion(
+                id_tecnico,
+                'vehiculo_entregado',
+                f"🚗 El vehículo de la orden #{codigo_orden} ha sido ENTREGADO al cliente. ¡Trabajo completado!",
+                id_orden
+            )
+        
+        logger.info(f"✅ Orden {codigo_orden} marcada como ENTREGADA por {current_user.get('nombre')}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Orden marcada como Entregada correctamente',
+            'nuevo_estado': 'Entregado'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error en entregar_orden {id_orden}: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @control_calidad_bp.route('/contadores', methods=['GET'])
 @jefe_taller_required

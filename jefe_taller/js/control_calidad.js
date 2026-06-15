@@ -1,29 +1,27 @@
 // =====================================================
 // CONTROL_CALIDAD.JS - JEFE DE TALLER
 // GESTIÓN DE TRABAJOS COMPLETADOS POR TÉCNICOS
-// VERSIÓN: ÚLTIMAS 10 ÓRDENES POR PESTAÑA
-// VERSIÓN CORREGIDA - USA VARIABLE GLOBAL DE INCLUDE.JS
+// VERSIÓN COMPLETA CON FUNCIONALIDAD DE ENTREGA
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - USA VARIABLE GLOBAL
+// CONFIGURACIÓN DE API
 // =====================================================
-// La variable API_BASE_URL ya está declarada en include.js como window.API_BASE_URL
-// Si por alguna razón no existe (página cargada sola), la creamos
+
 if (typeof window.API_BASE_URL === 'undefined') {
     window.API_BASE_URL = (() => {
         if (window.location.hostname === 'localhost' || 
             window.location.hostname === '127.0.0.1' ||
             window.location.hostname.includes('192.168.')) {
-            console.log('📡 control_calidad.js - Modo DESARROLLO (fallback)');
+            console.log('📡 control_calidad.js - Modo DESARROLLO');
             return 'http://localhost:5000';
         }
-        console.log('📡 control_calidad.js - Modo PRODUCCIÓN (fallback)');
+        console.log('📡 control_calidad.js - Modo PRODUCCIÓN');
         return '';
     })();
 }
 
-const API_URL = window.API_BASE_URL + '/api/jefe-taller';
+const API_URL = `${window.API_BASE_URL}/api/jefe-taller`;
 let currentUser = null;
 let ordenesPendientes = [];
 let ordenesFinalizadas = [];
@@ -143,11 +141,9 @@ function statusBadge(estado) {
 }
 
 function mostrarMensajeLimite(container, limite, total) {
-    // Eliminar mensaje existente
     const existingMsg = document.querySelector('.info-message');
     if (existingMsg) existingMsg.remove();
     
-    // Si hay más órdenes que el límite, mostrar mensaje
     if (total >= limite) {
         const infoMsg = document.createElement('div');
         infoMsg.className = 'info-message';
@@ -174,7 +170,6 @@ async function cargarOrdenesPendientes() {
         const estado = document.getElementById('filtroEstado')?.value || 'all';
         const search = document.getElementById('searchInput')?.value.toLowerCase() || '';
         
-        // Construir URL con límite de 10 órdenes
         let url = `${API_URL}/control-calidad/ordenes-pendientes?limit=10`;
         if (estado !== 'all') url += `&estado=${encodeURIComponent(estado)}`;
         if (search) url += `&search=${encodeURIComponent(search)}`;
@@ -188,17 +183,13 @@ async function cargarOrdenesPendientes() {
             ordenesPendientes = data.ordenes || [];
             renderizarOrdenesPendientes();
             
-            // Actualizar contador
             const badge = document.getElementById('pendientesCount');
             if (badge) {
                 const totalOrdenes = data.total || ordenesPendientes.length;
                 badge.textContent = totalOrdenes;
-                
-                // Mostrar tooltip con información
                 badge.title = `Mostrando ${ordenesPendientes.length} de ${totalOrdenes} órdenes`;
             }
             
-            // Mostrar mensaje de límite
             const container = document.getElementById('ordenesContainer');
             if (container) {
                 mostrarMensajeLimite(container, data.limite || 10, data.total || ordenesPendientes.length);
@@ -222,7 +213,6 @@ async function cargarOrdenesFinalizadas() {
         const estado = document.getElementById('filtroEstadoFinalizadas')?.value || 'all';
         const search = document.getElementById('searchFinalizadasInput')?.value.toLowerCase() || '';
         
-        // Construir URL con límite de 10 órdenes
         let url = `${API_URL}/control-calidad/ordenes-finalizadas?limit=10`;
         if (estado !== 'all') url += `&estado=${encodeURIComponent(estado)}`;
         if (search) url += `&search=${encodeURIComponent(search)}`;
@@ -236,7 +226,6 @@ async function cargarOrdenesFinalizadas() {
             ordenesFinalizadas = data.ordenes || [];
             renderizarOrdenesFinalizadas();
             
-            // Mostrar mensaje de límite
             const container = document.getElementById('ordenesFinalizadasContainer');
             if (container) {
                 mostrarMensajeLimite(container, data.limite || 10, data.total || ordenesFinalizadas.length);
@@ -344,8 +333,11 @@ function renderizarOrdenesFinalizadas() {
         return;
     }
     
-    container.innerHTML = ordenesFinalizadas.map(orden => `
-        <div class="orden-card" data-orden-id="${orden.id_orden}">
+    container.innerHTML = ordenesFinalizadas.map(orden => {
+        const isEntregado = orden.estado_global === 'Entregado';
+        
+        return `
+        <div class="orden-card ${isEntregado ? 'entregado-card' : ''}" data-orden-id="${orden.id_orden}">
             <div class="orden-header">
                 <div class="orden-header-left">
                     <span class="orden-codigo">
@@ -391,9 +383,18 @@ function renderizarOrdenesFinalizadas() {
                 <button class="action-btn view" onclick="verDetalleOrden(${orden.id_orden})">
                     <i class="fas fa-eye"></i> Ver Detalle
                 </button>
+                ${orden.estado_global === 'Finalizado' ? `
+                    <button class="action-btn entregado" onclick="abrirModalEntregar(${orden.id_orden})">
+                        <i class="fas fa-truck"></i> Marcar como Entregado
+                    </button>
+                ` : orden.estado_global === 'Entregado' ? `
+                    <button class="action-btn entregado" disabled style="opacity:0.6; cursor:not-allowed;">
+                        <i class="fas fa-check-circle"></i> Vehículo Entregado
+                    </button>
+                ` : ''}
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 // =====================================================
@@ -417,113 +418,64 @@ window.verDetalleOrden = async function(ordenId) {
         
         const detalle = data.detalle;
         
-        // Procesar fotos
         const fotos = detalle.recepcion?.fotos || {};
         const fotosArray = Object.entries(fotos).filter(([_, url]) => url && url !== '');
         
+        const kilometraje = detalle.vehiculo?.kilometraje ? `${parseInt(detalle.vehiculo.kilometraje).toLocaleString()} km` : 'N/A';
+        const anio = detalle.vehiculo?.anio && detalle.vehiculo.anio !== 'N/A' ? detalle.vehiculo.anio : 'No especificado';
+        const marcaModelo = `${detalle.vehiculo?.marca || ''} ${detalle.vehiculo?.modelo || ''}`.trim() || 'No especificado';
+        
         const detalleHtml = `
             <div style="display: grid; gap: 1rem;">
-                <!-- Información de la Orden -->
                 <div class="orden-info-card">
                     <h3><i class="fas fa-clipboard-list"></i> Información de la Orden</h3>
                     <div class="detalle-grid">
                         <div><strong>Código:</strong> ${escapeHtml(detalle.orden?.codigo_unico || 'N/A')}</div>
                         <div><strong>Estado:</strong> ${statusBadge(detalle.orden?.estado_global)}</div>
-                        <div><strong>Prioridad:</strong> ${escapeHtml(detalle.orden?.prioridad || 'Normal')}</div>
                         <div><strong>Fecha Ingreso:</strong> ${formatDate(detalle.orden?.fecha_ingreso)}</div>
-                        <div><strong>Fecha Inicio:</strong> ${formatDate(detalle.orden?.fecha_inicio)}</div>
-                        <div><strong>Fecha Fin:</strong> ${formatDate(detalle.orden?.fecha_fin)}</div>
                         <div><strong>Técnico(s):</strong> ${escapeHtml(detalle.tecnicos_nombres || 'N/A')}</div>
-                        <div><strong>Kilometraje Ingreso:</strong> ${detalle.orden?.kilometraje_ingreso?.toLocaleString() || '0'} km</div>
+                        <div><strong>Kilometraje:</strong> ${kilometraje}</div>
                     </div>
-                    ${detalle.orden?.comentarios ? `
-                        <div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm);">
-                            <strong><i class="fas fa-comment"></i> Comentarios adicionales:</strong><br>
-                            ${escapeHtml(detalle.orden.comentarios)}
-                        </div>
-                    ` : ''}
                 </div>
                 
-                <!-- Datos del Vehículo -->
-                ${detalle.vehiculo ? `
+                <div class="orden-info-card">
+                    <h3><i class="fas fa-car"></i> Datos del Vehículo</h3>
+                    <div class="detalle-grid">
+                        <div><strong>Placa:</strong> ${escapeHtml(detalle.vehiculo?.placa || 'No registrada')}</div>
+                        <div><strong>Marca/Modelo:</strong> ${escapeHtml(marcaModelo)}</div>
+                        <div><strong>Año:</strong> ${escapeHtml(anio)}</div>
+                    </div>
+                </div>
+                
+                <div class="orden-info-card">
+                    <h3><i class="fas fa-user"></i> Datos del Cliente</h3>
+                    <div class="detalle-grid">
+                        <div><strong>Nombre:</strong> ${escapeHtml(detalle.cliente?.nombre || 'No registrado')}</div>
+                        <div><strong>Teléfono:</strong> ${escapeHtml(detalle.cliente?.telefono || 'No registrado')}</div>
+                        <div><strong>Email:</strong> ${escapeHtml(detalle.cliente?.email || 'No registrado')}</div>
+                    </div>
+                </div>
+                
+                ${detalle.recepcion?.transcripcion_problema ? `
                     <div class="orden-info-card">
-                        <h3><i class="fas fa-car"></i> Datos del Vehículo</h3>
-                        <div class="detalle-grid">
-                            <div><strong>Placa:</strong> ${escapeHtml(detalle.vehiculo.placa || 'No registrada')}</div>
-                            <div><strong>Marca:</strong> ${escapeHtml(detalle.vehiculo.marca || 'N/A')}</div>
-                            <div><strong>Modelo:</strong> ${escapeHtml(detalle.vehiculo.modelo || 'N/A')}</div>
-                            <div><strong>Año:</strong> ${detalle.vehiculo.anio || 'N/A'}</div>
-                            <div><strong>Color:</strong> ${escapeHtml(detalle.vehiculo.color || 'N/A')}</div>
-                            <div><strong>Kilometraje:</strong> ${detalle.vehiculo.kilometraje?.toLocaleString() || '0'} km</div>
-                        </div>
+                        <h3><i class="fas fa-clipboard-list"></i> Problema Reportado</h3>
+                        <div>${escapeHtml(detalle.recepcion.transcripcion_problema)}</div>
+                        ${detalle.recepcion?.audio_url ? `<audio controls src="${detalle.recepcion.audio_url}" style="width: 100%; margin-top: 0.5rem;"></audio>` : ''}
                     </div>
                 ` : ''}
                 
-                <!-- Datos del Cliente -->
-                ${detalle.cliente ? `
-                    <div class="orden-info-card">
-                        <h3><i class="fas fa-user"></i> Datos del Cliente</h3>
-                        <div class="detalle-grid">
-                            <div><strong>Nombre:</strong> ${escapeHtml(detalle.cliente.nombre || 'No registrado')}</div>
-                            <div><strong>Teléfono:</strong> ${escapeHtml(detalle.cliente.telefono || 'No registrado')}</div>
-                            <div><strong>Email:</strong> ${escapeHtml(detalle.cliente.email || 'No registrado')}</div>
-                            <div><strong>Dirección:</strong> ${escapeHtml(detalle.cliente.direccion || 'No registrada')}</div>
-                        </div>
-                    </div>
-                ` : ''}
-                
-                <!-- Diagnóstico Técnico -->
-                ${detalle.diagnostico?.informe ? `
-                    <div class="orden-info-card">
-                        <h3><i class="fas fa-stethoscope"></i> Diagnóstico Técnico</h3>
-                        <div><strong>Informe:</strong> ${escapeHtml(detalle.diagnostico.informe)}</div>
-                        ${detalle.diagnostico.audio_url ? `
-                            <div style="margin-top: 0.5rem;">
-                                <strong>Audio:</strong><br>
-                                <audio controls src="${detalle.diagnostico.audio_url}" style="max-width: 100%; margin-top: 0.5rem;"></audio>
-                            </div>
-                        ` : ''}
-                        ${detalle.diagnostico.fecha_diagnostico ? `
-                            <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">
-                                <i class="fas fa-calendar"></i> ${formatDate(detalle.diagnostico.fecha_diagnostico)}
-                            </div>
-                        ` : ''}
-                    </div>
-                ` : ''}
-                
-                <!-- Servicios Realizados -->
                 ${detalle.servicios && detalle.servicios.length > 0 ? `
                     <div class="orden-info-card">
                         <h3><i class="fas fa-tools"></i> Servicios Realizados</h3>
                         ${detalle.servicios.map(s => `
-                            <div class="servicio-item">
-                                <div class="servicio-descripcion">
-                                    <strong>${escapeHtml(s.descripcion)}</strong>
-                                </div>
-                                <div class="servicio-detalles">
-                                    <span>Cantidad: ${s.cantidad}</span>
-                                    ${s.precio ? `<span>Total: Bs. ${s.precio.toFixed(2)}</span>` : ''}
-                                </div>
+                            <div style="padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm); margin-bottom: 0.5rem;">
+                                <strong>${escapeHtml(s.descripcion)}</strong>
+                                ${s.precio ? `<span style="float: right;">Bs. ${s.precio.toFixed(2)}</span>` : ''}
                             </div>
                         `).join('')}
                     </div>
                 ` : ''}
                 
-                <!-- Recepción y Problema -->
-                ${detalle.recepcion?.transcripcion_problema ? `
-                    <div class="orden-info-card">
-                        <h3><i class="fas fa-clipboard-list"></i> Problema Reportado</h3>
-                        <div>${escapeHtml(detalle.recepcion.transcripcion_problema)}</div>
-                        ${detalle.recepcion.audio_url ? `
-                            <div style="margin-top: 0.5rem;">
-                                <strong>Audio de recepción:</strong><br>
-                                <audio controls src="${detalle.recepcion.audio_url}" style="max-width: 100%; margin-top: 0.5rem;"></audio>
-                            </div>
-                        ` : ''}
-                    </div>
-                ` : ''}
-                
-                <!-- Fotos del Vehículo -->
                 ${fotosArray.length > 0 ? `
                     <div class="orden-info-card">
                         <h3><i class="fas fa-images"></i> Fotos del Vehículo (${fotosArray.length})</h3>
@@ -532,26 +484,6 @@ window.verDetalleOrden = async function(ordenId) {
                                 <div class="foto-item" onclick="verFotoAmpliada('${url}')" title="${escapeHtml(nombre)}">
                                     <img src="${url}" alt="${escapeHtml(nombre)}" loading="lazy">
                                     <div class="foto-nombre">${escapeHtml(nombre.length > 20 ? nombre.substring(0, 20) + '...' : nombre)}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                ` : ''}
-                
-                <!-- Historial de Cambios -->
-                ${detalle.historial && detalle.historial.length > 0 ? `
-                    <div class="orden-info-card">
-                        <h3><i class="fas fa-history"></i> Historial de Cambios</h3>
-                        <div class="historial-list">
-                            ${detalle.historial.map(h => `
-                                <div class="historial-item">
-                                    <div class="historial-fecha">${formatDate(h.fecha_cambio)}</div>
-                                    <div class="historial-cambio">
-                                        <span class="estado-anterior">${escapeHtml(h.estado_anterior || '?')}</span>
-                                        <i class="fas fa-arrow-right"></i>
-                                        <span class="estado-nuevo">${escapeHtml(h.estado_nuevo || '?')}</span>
-                                    </div>
-                                    ${h.comentarios ? `<div class="historial-comentario">${escapeHtml(h.comentarios)}</div>` : ''}
                                 </div>
                             `).join('')}
                         </div>
@@ -573,10 +505,6 @@ window.verDetalleOrden = async function(ordenId) {
         mostrarLoading(false);
     }
 };
-
-// =====================================================
-// FUNCIONES DE FOTOS
-// =====================================================
 
 window.verFotoAmpliada = function(url) {
     const fotoModal = document.getElementById('fotoModal');
@@ -651,11 +579,8 @@ window.confirmarFinalizar = async function() {
         if (data.success) {
             showToast('✅ Orden finalizada correctamente', 'success');
             cerrarModal('modalFinalizar');
-            
-            // Recargar ambas listas
             await cargarOrdenesPendientes();
             await cargarOrdenesFinalizadas();
-            
             currentOrdenId = null;
         } else {
             showToast(data.error || 'Error al finalizar la orden', 'error');
@@ -728,11 +653,8 @@ window.confirmarRechazar = async function() {
         if (data.success) {
             showToast('✅ Orden enviada a revisión. El técnico ha sido notificado.', 'success');
             cerrarModal('modalRechazar');
-            
-            // Recargar ambas listas
             await cargarOrdenesPendientes();
             await cargarOrdenesFinalizadas();
-            
             currentOrdenId = null;
         } else {
             showToast(data.error || 'Error al enviar a revisión', 'error');
@@ -740,6 +662,77 @@ window.confirmarRechazar = async function() {
     } catch (error) {
         console.error('❌ Error en confirmarRechazar:', error);
         showToast('Error de conexión al rechazar la orden', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+};
+
+// =====================================================
+// ENTREGAR VEHÍCULO
+// =====================================================
+
+let currentEntregarOrdenId = null;
+
+window.abrirModalEntregar = async function(ordenId) {
+    const orden = ordenesFinalizadas.find(o => o.id_orden === ordenId);
+    if (!orden) {
+        showToast('No se encontró la orden', 'error');
+        return;
+    }
+    
+    currentEntregarOrdenId = ordenId;
+    
+    const infoContainer = document.getElementById('entregarInfo');
+    if (infoContainer) {
+        infoContainer.innerHTML = `
+            <div class="orden-info-compact">
+                <p><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(orden.codigo_unico)}</p>
+                <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(orden.vehiculo)}</p>
+                <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}</p>
+                <p><strong><i class="fas fa-users"></i> Técnico(s):</strong> ${escapeHtml(orden.tecnicos_nombres || 'No asignado')}</p>
+                <p><strong><i class="fas fa-check-circle"></i> Estado actual:</strong> ${statusBadge(orden.estado_global)}</p>
+            </div>
+        `;
+    }
+    
+    const comentariosInput = document.getElementById('comentariosEntregar');
+    if (comentariosInput) comentariosInput.value = '';
+    
+    abrirModal('modalEntregar');
+};
+
+window.confirmarEntregar = async function() {
+    const comentarios = document.getElementById('comentariosEntregar')?.value || '';
+    
+    if (!currentEntregarOrdenId) {
+        showToast('Error: No se seleccionó ninguna orden', 'error');
+        return;
+    }
+    
+    mostrarLoading(true);
+    try {
+        console.log(`🚗 Entregando orden ${currentEntregarOrdenId}`);
+        
+        const response = await fetch(`${API_URL}/control-calidad/entregar-orden/${currentEntregarOrdenId}`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ comentarios: comentarios })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('🚗 Vehículo marcado como ENTREGADO correctamente', 'success');
+            cerrarModal('modalEntregar');
+            await cargarOrdenesFinalizadas();
+            await cargarOrdenesPendientes();
+            currentEntregarOrdenId = null;
+        } else {
+            showToast(data.error || 'Error al marcar como entregado', 'error');
+        }
+    } catch (error) {
+        console.error('❌ Error en confirmarEntregar:', error);
+        showToast('Error de conexión al marcar como entregado', 'error');
     } finally {
         mostrarLoading(false);
     }
@@ -756,11 +749,9 @@ function setupTabs() {
         btn.addEventListener('click', function() {
             const tabId = this.getAttribute('data-tab');
             
-            // Cambiar clase active en tabs
             tabs.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             
-            // Cambiar contenido
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.remove('active');
             });
@@ -768,7 +759,6 @@ function setupTabs() {
             const activeTab = document.getElementById(tabId);
             if (activeTab) activeTab.classList.add('active');
             
-            // Recargar datos según la pestaña activa
             if (tabId === 'tab-finalizadas') {
                 cargarOrdenesFinalizadas();
             } else if (tabId === 'tab-pendientes') {
@@ -779,7 +769,6 @@ function setupTabs() {
 }
 
 function setupEventListeners() {
-    // Botones de actualización
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', () => cargarOrdenesPendientes());
@@ -790,7 +779,6 @@ function setupEventListeners() {
         refreshFinalizadasBtn.addEventListener('click', () => cargarOrdenesFinalizadas());
     }
     
-    // Filtros de estado
     const filtroEstado = document.getElementById('filtroEstado');
     if (filtroEstado) {
         filtroEstado.addEventListener('change', () => cargarOrdenesPendientes());
@@ -801,7 +789,6 @@ function setupEventListeners() {
         filtroEstadoFinalizadas.addEventListener('change', () => cargarOrdenesFinalizadas());
     }
     
-    // Búsquedas con debounce
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
         let debounceTimer;
@@ -820,7 +807,6 @@ function setupEventListeners() {
         });
     }
     
-    // Botones de confirmación de modales
     const btnConfirmarFinalizar = document.getElementById('btnConfirmarFinalizar');
     if (btnConfirmarFinalizar) {
         btnConfirmarFinalizar.addEventListener('click', confirmarFinalizar);
@@ -831,7 +817,11 @@ function setupEventListeners() {
         btnConfirmarRechazar.addEventListener('click', confirmarRechazar);
     }
     
-    // Cerrar modales al hacer clic fuera
+    const btnConfirmarEntregar = document.getElementById('btnConfirmarEntregar');
+    if (btnConfirmarEntregar) {
+        btnConfirmarEntregar.addEventListener('click', confirmarEntregar);
+    }
+    
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
@@ -840,7 +830,6 @@ function setupEventListeners() {
         });
     });
     
-    // Cerrar modales con tecla ESC
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             document.querySelectorAll('.modal.active').forEach(modal => {
@@ -864,7 +853,6 @@ async function cargarUsuarioActual() {
             return null;
         }
         
-        // Decodificar token JWT
         const payload = JSON.parse(atob(token.split('.')[1]));
         const userData = JSON.parse(localStorage.getItem('furia_user') || '{}');
         
@@ -877,7 +865,6 @@ async function cargarUsuarioActual() {
         
         console.log('✅ Usuario autenticado:', currentUser.nombre);
         
-        // Actualizar fecha actual
         const fechaElement = document.getElementById('currentDate');
         if (fechaElement) {
             const options = { year: 'numeric', month: 'long', day: 'numeric' };
@@ -904,26 +891,24 @@ function logout() {
 // =====================================================
 
 async function inicializar() {
-    console.log('🚀 Inicializando Control de Calidad v2.0 - Últimas 10 órdenes');
+    console.log('🚀 Inicializando Control de Calidad - Jefe Taller');
     console.log('📡 API_URL:', API_URL);
     
     const user = await cargarUsuarioActual();
     if (!user) return;
     
-    // Cargar datos iniciales
     await Promise.all([
         cargarOrdenesPendientes(),
         cargarOrdenesFinalizadas()
     ]);
     
-    // Configurar UI
     setupTabs();
     setupEventListeners();
     
     console.log('✅ Control de Calidad inicializado correctamente');
 }
 
-// Exponer funciones globales necesarias
+// Exponer funciones globales
 window.verDetalleOrden = verDetalleOrden;
 window.verFotoAmpliada = verFotoAmpliada;
 window.cerrarFotoModal = cerrarFotoModal;
@@ -931,10 +916,11 @@ window.abrirModalFinalizar = abrirModalFinalizar;
 window.confirmarFinalizar = confirmarFinalizar;
 window.abrirModalRechazar = abrirModalRechazar;
 window.confirmarRechazar = confirmarRechazar;
+window.abrirModalEntregar = abrirModalEntregar;
+window.confirmarEntregar = confirmarEntregar;
 window.cerrarModal = cerrarModal;
 window.logout = logout;
 
-// Inicializar cuando el DOM esté listo
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', inicializar);
 } else {

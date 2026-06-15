@@ -2,6 +2,7 @@
 # MIS VEHÍCULOS - TÉCNICO MECÁNICO
 # FLUJO: EMPEZAR TRABAJO → DIAGNÓSTICO → APROBACIÓN → REPARACIÓN
 # VERSIÓN COMPLETA CON SOLICITUD DE REPUESTOS SIN PAUSA
+# CORREGIDO: DEDUPLICACIÓN DE VEHÍCULOS Y EXCLUSIÓN DE ENTREGADOS
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
@@ -189,7 +190,7 @@ def test_token():
 
 
 # =====================================================
-# API: OBTENER VEHÍCULOS ASIGNADOS
+# API: OBTENER VEHÍCULOS ASIGNADOS (CORREGIDO)
 # =====================================================
 @mis_vehiculos_bp.route('/get-mis-vehiculos', methods=['GET'])
 @tecnico_required
@@ -197,47 +198,55 @@ def obtener_mis_vehiculos(current_user):
     try:
         tecnico_id = current_user['id']
         
-        # Asignaciones de DIAGNÓSTICO
-        asignaciones_diagnostico = supabase.table('asignaciontecnico') \
-            .select('*') \
+        # =====================================================
+        # Obtener asignaciones activas (diagnostico, reparacion, armado)
+        # =====================================================
+        asignaciones_activas = supabase.table('asignaciontecnico') \
+            .select('id_orden_trabajo, tipo_asignacion') \
             .eq('id_tecnico', tecnico_id) \
-            .eq('tipo_asignacion', 'diagnostico') \
             .is_('fecha_hora_final', 'null') \
+            .in_('tipo_asignacion', ['diagnostico', 'reparacion', 'armado']) \
             .execute()
         
-        # Asignaciones de REPARACIÓN
-        asignaciones_reparacion = supabase.table('asignaciontecnico') \
-            .select('*') \
+        # =====================================================
+        # También incluir asignaciones de visualización (para órdenes finalizadas)
+        # pero EXCLUYENDO las que ya están en activas
+        # =====================================================
+        ordenes_activas_ids = set([a['id_orden_trabajo'] for a in (asignaciones_activas.data or [])])
+        
+        asignaciones_visualizacion = supabase.table('asignaciontecnico') \
+            .select('id_orden_trabajo, tipo_asignacion') \
             .eq('id_tecnico', tecnico_id) \
-            .eq('tipo_asignacion', 'reparacion') \
-            .is_('fecha_hora_final', 'null') \
+            .eq('tipo_asignacion', 'visualizacion') \
             .execute()
         
-        # Asignaciones de ARMADO
-        asignaciones_armado = supabase.table('asignaciontecnico') \
-            .select('*') \
-            .eq('id_tecnico', tecnico_id) \
-            .eq('tipo_asignacion', 'armado') \
-            .is_('fecha_hora_final', 'null') \
-            .execute()
+        # Combinar todas las asignaciones (deduplicar por id_orden_trabajo)
+        ordenes_unicas = {}
         
-        todas_asignaciones = []
-        if asignaciones_diagnostico.data:
-            todas_asignaciones.extend(asignaciones_diagnostico.data)
-        if asignaciones_reparacion.data:
-            todas_asignaciones.extend(asignaciones_reparacion.data)
-        if asignaciones_armado.data:
-            todas_asignaciones.extend(asignaciones_armado.data)
+        # Primero agregar asignaciones activas (prioridad)
+        for a in (asignaciones_activas.data or []):
+            orden_id = a['id_orden_trabajo']
+            if orden_id not in ordenes_unicas:
+                ordenes_unicas[orden_id] = a['tipo_asignacion']
         
-        if not todas_asignaciones:
+        # Luego agregar asignaciones de visualización (solo si no están ya activas)
+        for a in (asignaciones_visualizacion.data or []):
+            orden_id = a['id_orden_trabajo']
+            if orden_id not in ordenes_unicas:
+                ordenes_unicas[orden_id] = a['tipo_asignacion']
+        
+        if not ordenes_unicas:
             return jsonify({'success': True, 'vehiculos': []}), 200
         
-        orden_ids = [a['id_orden_trabajo'] for a in todas_asignaciones]
+        orden_ids = list(ordenes_unicas.keys())
         
-        # Órdenes
+        # =====================================================
+        # Obtener órdenes (excluyendo estado 'Entregado')
+        # =====================================================
         ordenes = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
             .in_('id', orden_ids) \
+            .not_.eq('estado_global', 'Entregado') \
             .execute()
         
         if not ordenes.data:
@@ -333,40 +342,39 @@ def obtener_mis_vehiculos(current_user):
                 solicitudes_pendientes[sol['id_orden_trabajo']] = 0
             solicitudes_pendientes[sol['id_orden_trabajo']] += 1
         
-        # Construir respuesta
+        # =====================================================
+        # Construir respuesta (DEDUPLICADA por orden_id)
+        # =====================================================
         vehiculos_resultado = []
-        for a in todas_asignaciones:
-            orden = next((o for o in ordenes.data if o['id'] == a['id_orden_trabajo']), None)
-            if not orden:
+        ordenes_procesadas = set()  # Para evitar duplicados
+        
+        for orden in ordenes.data:
+            orden_id = orden['id']
+            
+            # Saltar si ya procesamos esta orden
+            if orden_id in ordenes_procesadas:
                 continue
+            ordenes_procesadas.add(orden_id)
+            
+            # Obtener el tipo de asignación (priorizar activa sobre visualización)
+            tipo_asignacion = ordenes_unicas.get(orden_id, 'diagnostico')
             
             vehiculo = vehiculos_map.get(orden['id_vehiculo'], {})
             cliente_info = clientes_map.get(vehiculo.get('id_cliente'), {})
             usuario_cliente = usuarios_map.get(cliente_info.get('id_usuario'), {})
-            diagnostico_info = diagnostico_map.get(orden['id'], {})
-            planificacion_info = planificacion_map.get(orden['id'], {})
-            instruccion_info = instrucciones_map.get(orden['id'], {})
+            diagnostico_info = diagnostico_map.get(orden_id, {})
+            planificacion_info = planificacion_map.get(orden_id, {})
+            instruccion_info = instrucciones_map.get(orden_id, {})
             
-            trabajo_iniciado = trabajos_iniciados.get(orden['id'], False)
-            
-            # Priorizar el estado_global
+            trabajo_iniciado = trabajos_iniciados.get(orden_id, False)
             estado_global = orden['estado_global']
             
-            if estado_global == 'EnReparacion':
-                tipo_real = 'reparacion'
-            elif estado_global == 'EnPausa':
-                tipo_real = 'reparacion'
-            elif estado_global == 'EnArmadoVehiculo':
-                tipo_real = 'armado'
-            else:
-                tipo_real = a.get('tipo_asignacion', 'diagnostico')
-            
             vehiculos_resultado.append({
-                'orden_id': orden['id'],
-                'codigo_unico': orden['codigo_unico'],
-                'fecha_ingreso': orden['fecha_ingreso'],
+                'orden_id': orden_id,
+                'codigo_unico': orden.get('codigo_unico'),
+                'fecha_ingreso': orden.get('fecha_ingreso'),
                 'estado_global': estado_global,
-                'tipo_asignacion': tipo_real,
+                'tipo_asignacion': tipo_asignacion,
                 'diagnostico_estado': diagnostico_info.get('estado'),
                 'diagnostico_version': diagnostico_info.get('version', 1),
                 'diagnostico_enviado': diagnostico_info.get('estado') is not None,
@@ -375,7 +383,7 @@ def obtener_mis_vehiculos(current_user):
                 'trabajo_iniciado': trabajo_iniciado,
                 'bahia_asignada': planificacion_info.get('bahia_asignada'),
                 'instrucciones_armado': instruccion_info.get('instrucciones'),
-                'solicitudes_repuestos_pendientes': solicitudes_pendientes.get(orden['id'], 0) > 0,
+                'solicitudes_repuestos_pendientes': solicitudes_pendientes.get(orden_id, 0) > 0,
                 'vehiculo': {
                     'placa': vehiculo.get('placa', ''),
                     'marca': vehiculo.get('marca', ''),
@@ -389,6 +397,8 @@ def obtener_mis_vehiculos(current_user):
                     'email': usuario_cliente.get('email', '')
                 }
             })
+        
+        logger.info(f"✅ {len(vehiculos_resultado)} vehículos únicos devueltos para técnico {tecnico_id}")
         
         return jsonify({'success': True, 'vehiculos': vehiculos_resultado}), 200
         
@@ -646,7 +656,7 @@ def pausar_reparacion_manual(current_user):
 
 
 # =====================================================
-# API: SOLICITAR REPUESTOS SIN PAUSA (USANDO TABLA NUEVA)
+# API: SOLICITAR REPUESTOS SIN PAUSA
 # =====================================================
 @mis_vehiculos_bp.route('/solicitar-repuestos-sin-pausa', methods=['POST'])
 @tecnico_required
@@ -913,10 +923,7 @@ def finalizar_reparacion(current_user):
             'estado_global': 'ReparacionCompletada'
         }).eq('id', id_orden).execute()
         
-        # =====================================================
-        # CREAR ASIGNACIÓN DE VISUALIZACIÓN
-        # Para que el técnico pueda seguir viendo la orden
-        # =====================================================
+        # Crear asignación de visualización para que el técnico pueda seguir viendo la orden
         supabase.table('asignaciontecnico').insert({
             'id_orden_trabajo': id_orden,
             'id_tecnico': tecnico_id,
@@ -1028,10 +1035,7 @@ def marcar_armado_completado(current_user):
             'estado_global': 'VehiculoArmado'
         }).eq('id', id_orden).execute()
         
-        # =====================================================
-        # CREAR ASIGNACIÓN DE VISUALIZACIÓN
-        # Para que el técnico pueda seguir viendo la orden
-        # =====================================================
+        # Crear asignación de visualización
         supabase.table('asignaciontecnico').insert({
             'id_orden_trabajo': id_orden,
             'id_tecnico': tecnico_id,
@@ -1039,7 +1043,7 @@ def marcar_armado_completado(current_user):
             'fecha_hora_inicio': ahora
         }).execute()
         
-        # Liberar bahía SOLO si estamos en armado
+        # Liberar bahía
         planificacion = supabase.table('planificacion') \
             .select('id') \
             .eq('id_orden_trabajo', id_orden) \
@@ -1221,12 +1225,9 @@ def obtener_detalle_orden(current_user, orden_id):
         
         instrucciones_data = instrucciones.data[0] if instrucciones.data else {}
         
-        # =====================================================
-        # OBTENER INSTRUCCIONES PENDIENTES DE REVISIÓN (Control de Calidad)
-        # =====================================================
+        # Obtener instrucciones pendientes de revisión
         instrucciones_pendientes = []
         try:
-            # Buscar instrucciones no leídas
             instrucciones_no_leidas = supabase.table('instrucciones_tecnico_historial') \
                 .select('id, instrucciones, fecha_envio, leida') \
                 .eq('id_orden_trabajo', orden_id) \
@@ -1242,7 +1243,6 @@ def obtener_detalle_orden(current_user, orden_id):
                     'leida': inst.get('leida', False)
                 })
             
-            # También obtener instrucciones recientes (últimas 24h) aunque estén leídas
             hace_24h = (datetime.datetime.now() - datetime.timedelta(days=1)).isoformat()
             instrucciones_recientes = supabase.table('instrucciones_tecnico_historial') \
                 .select('id, instrucciones, fecha_envio, leida') \
@@ -1336,6 +1336,8 @@ def obtener_detalle_orden(current_user, orden_id):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # =====================================================
 # API: HISTORIAL DE SOLICITUDES DE REPUESTOS
 # =====================================================
@@ -1365,7 +1367,7 @@ def obtener_historial_solicitudes(current_user, orden_id):
         vehiculo_info = orden.data[0].get('vehiculo', {}) if orden.data else {}
         vehiculo_texto = f"{vehiculo_info.get('marca', '')} {vehiculo_info.get('modelo', '')} ({vehiculo_info.get('placa', '')})".strip() or 'N/A'
         
-        # Obtener solicitudes de repuestos del técnico (desde su tabla)
+        # Obtener solicitudes de repuestos del técnico
         solicitudes_tecnico = supabase.table('solicitud_repuestos_tecnico') \
             .select('*') \
             .eq('id_orden_trabajo', orden_id) \
@@ -1373,7 +1375,7 @@ def obtener_historial_solicitudes(current_user, orden_id):
             .order('fecha_solicitud', desc=True) \
             .execute()
         
-        # También obtener solicitudes de compra relacionadas (para mostrar más detalles)
+        # También obtener solicitudes de compra relacionadas
         solicitudes_compra = supabase.table('solicitud_compra') \
             .select('*') \
             .eq('id_orden_trabajo', orden_id) \
@@ -1404,7 +1406,7 @@ def obtener_historial_solicitudes(current_user, orden_id):
                 'tipo': 'tecnico'
             })
         
-        # Agregar solicitudes de compra (para mostrar comprobantes si los hay)
+        # Agregar solicitudes de compra
         for sc in (solicitudes_compra.data or []):
             items = sc.get('items', [])
             if isinstance(items, str):
@@ -1413,7 +1415,6 @@ def obtener_historial_solicitudes(current_user, orden_id):
                 except:
                     items = []
             
-            # Solo agregar si tiene comprobante o si está entregado
             if sc.get('comprobante_url') or sc.get('estado') == 'entregado':
                 resultado.append({
                     'id': sc.get('id'),
@@ -1433,7 +1434,7 @@ def obtener_historial_solicitudes(current_user, orden_id):
         # Ordenar por fecha descendente
         resultado.sort(key=lambda x: x.get('fecha_solicitud', ''), reverse=True)
         
-        print(f"📊 Historial para orden {orden_id}: {len(resultado)} solicitudes encontradas")
+        logger.info(f"📊 Historial para orden {orden_id}: {len(resultado)} solicitudes encontradas")
         
         return jsonify({
             'success': True,
@@ -1447,7 +1448,11 @@ def obtener_historial_solicitudes(current_user, orden_id):
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-    
+
+
+# =====================================================
+# API: MARCAR INSTRUCCIÓN COMO LEÍDA
+# =====================================================
 @mis_vehiculos_bp.route('/marcar-instruccion-leida/<int:instruccion_id>', methods=['PUT'])
 @tecnico_required
 def marcar_instruccion_leida(current_user, instruccion_id):

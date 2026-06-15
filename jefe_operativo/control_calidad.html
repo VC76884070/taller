@@ -55,7 +55,6 @@
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
                     </div>
-                    <!-- 🔴 BOTÓN DE LOGOUT ELIMINADO - Está en el sidebar -->
                 </div>
             </header>
 
@@ -68,7 +67,7 @@
                             <span id="pendientesCount" class="tab-badge">0</span>
                         </button>
                         <button class="tab-btn" data-tab="tab-finalizadas">
-                            <i class="fas fa-check-circle"></i> Finalizadas
+                            <i class="fas fa-check-circle"></i> Finalizadas / Entregadas
                         </button>
                     </div>
                 </div>
@@ -95,7 +94,7 @@
                     <div id="ordenesContainer" class="ordenes-container"></div>
                 </div>
 
-                <!-- TAB: FINALIZADAS -->
+                <!-- TAB: FINALIZADAS / ENTREGADAS -->
                 <div id="tab-finalizadas" class="tab-content">
                     <div class="filters-bar">
                         <div class="filter-group">
@@ -178,6 +177,43 @@
                 <button class="btn-secondary" onclick="cerrarModal('modalRechazar')">Cancelar</button>
                 <button class="btn-warning" id="btnConfirmarRechazar">
                     <i class="fas fa-paper-plane"></i> Enviar a Revisión
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: ENTREGAR VEHÍCULO -->
+    <div class="modal" id="modalEntregar">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <h2><i class="fas fa-truck"></i> Marcar como Entregado</h2>
+                <button class="modal-close" onclick="cerrarModal('modalEntregar')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert-success" style="padding: 1rem; margin-bottom: 1rem; border-radius: 8px; background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10B981;">
+                    <i class="fas fa-check-circle" style="color: #10B981;"></i>
+                    <strong>Confirmar Entrega del Vehículo</strong>
+                    <p style="margin-top: 0.5rem; font-size: 0.8rem;">Al marcar como entregado:</p>
+                    <ul style="margin-top: 0.5rem; font-size: 0.8rem; margin-left: 1.5rem;">
+                        <li>✅ La orden pasará a estado <strong>ENTREGADO</strong></li>
+                        <li>✅ La bahía quedará <strong>LIBRE</strong> para nuevos trabajos</li>
+                        <li>✅ Los técnicos serán <strong>LIBERADOS</strong> para nuevas asignaciones</li>
+                        <li>✅ El cliente podrá retirar su vehículo</li>
+                    </ul>
+                </div>
+
+                <div id="entregarInfo" class="orden-info-card" style="margin-bottom: 1rem;"></div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-comment-dots"></i> Comentarios de entrega (opcional)</label>
+                    <textarea id="comentariosEntregar" class="form-textarea" rows="3"
+                        placeholder="Ej: Cliente satisfecho, todo en orden..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModal('modalEntregar')">Cancelar</button>
+                <button class="btn-success" id="btnConfirmarEntregar">
+                    <i class="fas fa-truck"></i> Confirmar Entrega
                 </button>
             </div>
         </div>
@@ -271,7 +307,6 @@
             }
         }
         
-        // Función global de logout (por si acaso, aunque está en el sidebar)
         function logout() {
             if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
                 localStorage.removeItem('furia_token');

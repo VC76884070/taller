@@ -88,6 +88,9 @@ let seccionesCompletadasLocal = {
 // Fotos subidas localmente
 let fotosSubidasLocal = {};
 
+// Control de subidas activas
+let subidasActivas = {};
+
 // Elementos DOM
 const sesionesActivasPanel = document.getElementById('sesionesActivasPanel');
 const sesionesList = document.getElementById('sesionesList');
@@ -162,6 +165,36 @@ async function fetchWithToken(url, options = {}) {
 }
 
 // =====================================================
+// NOTIFICACIONES
+// =====================================================
+function mostrarNotificacion(mensaje, tipo = 'info') {
+    const existingToasts = document.querySelectorAll('.toast-notification');
+    existingToasts.forEach(toast => toast.remove());
+    
+    const toast = document.createElement('div');
+    toast.className = `toast-notification ${tipo}`;
+    const iconos = {
+        success: 'fa-check-circle',
+        error: 'fa-exclamation-circle',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
+    };
+    toast.innerHTML = `<i class="fas ${iconos[tipo] || iconos.info}"></i><span>${escapeHtml(mensaje)}</span>`;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        if (toast && document.body.contains(toast)) toast.remove();
+    }, 3000);
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// =====================================================
 // ACTUALIZAR ESTADO DEL BOTÓN FINALIZAR
 // =====================================================
 function actualizarBotonFinalizar() {
@@ -181,16 +214,11 @@ function actualizarBotonFinalizar() {
         if (!seccionesCompletadasLocal.fotos) faltantes.push('Fotos (7)');
         if (!seccionesCompletadasLocal.descripcion) faltantes.push('Descripción');
         btnFinalizar.title = `Completa: ${faltantes.join(', ')}`;
-        console.log('⏳ Botón deshabilitado - Faltan:', faltantes);
     } else {
         btnFinalizar.title = 'Finalizar recepción';
-        console.log('✅ Botón habilitado - Todas las secciones completas');
     }
 }
 
-// =====================================================
-// ACTUALIZAR ESTADO VISUAL DE SECCIONES
-// =====================================================
 function actualizarEstadoVisualSeccion(seccion, completada) {
     const badge = document.getElementById(`status${seccion.charAt(0).toUpperCase() + seccion.slice(1)}`);
     if (badge) {
@@ -231,8 +259,6 @@ function validarCompletadoVehiculo() {
     const marca = document.getElementById('vehiculoMarca')?.value.trim();
     const modelo = document.getElementById('vehiculoModelo')?.value.trim();
     const completada = !!(placa && marca && modelo);
-    
-    console.log('🚗 Validando vehículo - Completo:', completada);
     
     if (seccionesCompletadasLocal.vehiculo !== completada) {
         seccionesCompletadasLocal.vehiculo = completada;
@@ -292,118 +318,8 @@ function validarCompletadoDescripcion() {
 }
 
 // =====================================================
-// INICIALIZACIÓN
+// SUBIR FOTO A CLOUDINARY
 // =====================================================
-window.addEventListener('beforeunload', () => {
-    if (codigoSesion && sesionActual && sesionActual.estado === 'activa') {
-        localStorage.setItem('sesion_abandonada', codigoSesion);
-    }
-});
-
-async function verificarSesionAbandonada() {
-    const sesionAbandonada = localStorage.getItem('sesion_abandonada');
-    if (sesionAbandonada) {
-        localStorage.removeItem('sesion_abandonada');
-        logger.info(`Sesión ${sesionAbandonada} abandonada`);
-    }
-}
-
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('========================================');
-    console.log('🚀 INICIANDO RECEPCION.JS');
-    console.log('========================================');
-    
-    const autenticado = await checkAuth();
-    if (!autenticado) return;
-    
-    await verificarSesionAbandonada();
-    
-    initPage();
-    generatePhotoUploads();
-    setupPhotoUploads();
-    setupAudioRecording();
-    setupEventListeners();
-    setupPlacaValidation();
-    setupInputTracking();
-    setupUnirsePorCodigo();
-    setupModalUbicacionLeaflet();
-    
-    await recuperarSesionActiva();
-    
-    iniciarPollingSesiones();
-    initRecepcionesPanel();
-    
-    console.log('✅ Recepcion.js inicializado correctamente');
-});
-
-// =====================================================
-// CHECK AUTH
-// =====================================================
-async function checkAuth() {
-    const token = localStorage.getItem('furia_token');
-    const userInfoRaw = localStorage.getItem('furia_user');
-    
-    if (!token) {
-        window.location.href = `${window.API_BASE_URL}/`;
-        return false;
-    }
-    
-    try {
-        userInfo = JSON.parse(userInfoRaw || '{}');
-        
-        const verifyResponse = await fetch(`${window.API_BASE_URL}/api/verify-token`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (!verifyResponse.ok) {
-            localStorage.clear();
-            window.location.href = `${window.API_BASE_URL}/`;
-            return false;
-        }
-        
-        const verifyData = await verifyResponse.json();
-        if (verifyData.user) {
-            userInfo = verifyData.user;
-            localStorage.setItem('furia_user', JSON.stringify(userInfo));
-        }
-        
-        const tieneRolJefeOperativo = (userInfo.roles && userInfo.roles.includes('jefe_operativo')) || userInfo.rol === 'jefe_operativo';
-        
-        if (!tieneRolJefeOperativo) {
-            window.location.href = `${window.API_BASE_URL}/`;
-            return false;
-        }
-        
-        return true;
-    } catch (error) {
-        console.error('Error en checkAuth:', error);
-        window.location.href = `${window.API_BASE_URL}/`;
-        return false;
-    }
-}
-
-function initPage() {
-    const now = new Date();
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    const dateStr = now.toLocaleDateString('es-ES', options);
-    if (currentDateSpan) currentDateSpan.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
-}
-
-// =====================================================
-// GENERAR FOTOS
-// =====================================================
-function generatePhotoUploads() {
-    if (!photoGrid) return;
-    photoGrid.innerHTML = FOTOS_CONFIG.map(foto => `
-        <div class="photo-upload" id="upload-${foto.id}" data-campo="${foto.campo}">
-            <input type="file" id="${foto.id}" accept="image/*" capture="environment">
-            <div class="upload-placeholder"><i class="fas ${foto.icono}"></i><span>${foto.label}</span></div>
-            <div class="upload-preview"></div>
-            <button type="button" class="remove-photo" style="display: none;"><i class="fas fa-times"></i></button>
-        </div>
-    `).join('');
-}
-
 async function subirFotoCloudinary(file, carpeta, campo) {
     return new Promise((resolve, reject) => {
         const formData = new FormData();
@@ -413,109 +329,148 @@ async function subirFotoCloudinary(file, carpeta, campo) {
         
         const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
         
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        
         fetch(url, {
             method: 'POST',
-            body: formData
+            body: formData,
+            signal: controller.signal
         })
         .then(response => response.json())
         .then(data => {
+            clearTimeout(timeoutId);
             if (data.secure_url) {
                 resolve(data.secure_url);
             } else {
                 reject(new Error(data.error?.message || 'Error subiendo foto'));
             }
         })
-        .catch(reject);
+        .catch(error => {
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') {
+                reject(new Error('Timeout: La subida tardó demasiado'));
+            } else {
+                reject(error);
+            }
+        });
     });
 }
 
-function procesarFoto(input, foto) {
+// =====================================================
+// PROCESAR FOTO CON COMPRESIÓN
+// =====================================================
+async function procesarFoto(input, foto) {
     const file = input.files[0];
     if (!file) return;
-    
-    if (file.size > 5 * 1024 * 1024) {
-        mostrarNotificacion(`La foto ${foto.label} no debe superar los 5MB`, 'warning');
-        input.value = '';
-        return;
-    }
     
     const uploadDiv = document.getElementById(`upload-${foto.id}`);
     const preview = uploadDiv?.querySelector('.upload-preview');
     const removeBtn = uploadDiv?.querySelector('.remove-photo');
     
+    // Mostrar loading
     if (preview) {
-        const objectUrl = URL.createObjectURL(file);
-        preview.style.backgroundImage = `url('${objectUrl}')`;
-        preview.style.backgroundSize = 'cover';
-        preview.style.backgroundPosition = 'center';
+        preview.style.backgroundImage = '';
+        preview.style.display = 'flex';
+        preview.style.alignItems = 'center';
+        preview.style.justifyContent = 'center';
+        preview.style.backgroundColor = '#f0f0f0';
+        preview.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size: 24px; color: #C1121F;"></i>';
         uploadDiv.classList.add('has-image');
-        uploadDiv.dataset.objectUrl = objectUrl;
-        if (removeBtn) removeBtn.style.display = 'flex';
-        
-        mostrarNotificacion(`Subiendo ${foto.label}...`, 'info');
-        subirFotoCloudinary(file, codigoSesion || 'temp', foto.campo)
-            .then(url => {
-                uploadDiv.dataset.cloudinaryUrl = url;
-                fotosSubidasLocal[foto.campo] = url;
-                mostrarNotificacion(`✅ ${foto.label} subida`, 'success');
-                validarCompletadoFotos();
-                if (codigoSesion && seccionesCompletadasLocal.fotos) {
-                    guardarSeccion('fotos');
-                }
-            })
-            .catch(error => {
-                console.error('Error subiendo foto:', error);
-                mostrarNotificacion(`Error al subir ${foto.label}`, 'error');
-                preview.style.backgroundImage = '';
-                uploadDiv.classList.remove('has-image');
-                if (removeBtn) removeBtn.style.display = 'none';
-            });
     }
-}
-
-function setupPhotoUploads() {
-    for (const foto of FOTOS_CONFIG) {
-        const input = document.getElementById(foto.id);
-        if (input) {
-            input.addEventListener('change', () => procesarFoto(input, foto));
+    
+    try {
+        let fileToUpload = file;
+        const originalSize = file.size / 1024 / 1024;
+        
+        // Comprimir si es necesario
+        if (originalSize > 2 || file.type === 'image/jpeg' || file.type === 'image/jpg') {
+            mostrarNotificacion(`🔄 Comprimiendo ${foto.label}...`, 'info');
+            
+            try {
+                fileToUpload = await imageCompressor.compress(file, {
+                    maxWidth: 1920,
+                    maxHeight: 1920,
+                    quality: 0.85,
+                    maxSizeMB: 2.5
+                });
+                
+                const compressedSize = fileToUpload.size / 1024 / 1024;
+                const reduction = Math.round((1 - fileToUpload.size / file.size) * 100);
+                
+                if (compressedSize < originalSize) {
+                    mostrarNotificacion(`📸 ${foto.label}: ${compressedSize.toFixed(1)} MB (${reduction}% menos)`, 'success');
+                }
+            } catch (compressError) {
+                console.warn('⚠️ Falló compresión, usando original:', compressError);
+                mostrarNotificacion(`⚠️ Usando imagen original para ${foto.label}`, 'warning');
+                fileToUpload = file;
+            }
         }
         
-        const uploadDiv = document.getElementById(`upload-${foto.id}`);
-        const removeBtn = uploadDiv?.querySelector('.remove-photo');
-        if (removeBtn) {
-            removeBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const inputEl = document.getElementById(foto.id);
-                if (inputEl) inputEl.value = '';
-                const preview = uploadDiv.querySelector('.upload-preview');
-                if (preview) preview.style.backgroundImage = '';
-                uploadDiv.classList.remove('has-image');
-                removeBtn.style.display = 'none';
-                delete uploadDiv.dataset.cloudinaryUrl;
-                delete fotosSubidasLocal[foto.campo];
-                if (uploadDiv.dataset.objectUrl) {
-                    URL.revokeObjectURL(uploadDiv.dataset.objectUrl);
-                    delete uploadDiv.dataset.objectUrl;
-                }
-                validarCompletadoFotos();
-                if (codigoSesion) guardarSeccion('fotos');
-            });
+        // Validación final
+        const finalSizeMB = fileToUpload.size / 1024 / 1024;
+        if (finalSizeMB > 8) {
+            throw new Error(`Imagen muy grande (${finalSizeMB.toFixed(1)} MB). Máximo 8MB.`);
         }
+        
+        // Prevenir subidas duplicadas
+        if (subidasActivas[foto.id]) {
+            return;
+        }
+        subidasActivas[foto.id] = true;
+        
+        mostrarNotificacion(`📤 Subiendo ${foto.label}...`, 'info');
+        const url = await subirFotoCloudinary(fileToUpload, codigoSesion || 'temp', foto.campo);
+        
+        // Actualizar UI
+        if (preview) {
+            const objectUrl = URL.createObjectURL(fileToUpload);
+            preview.style.backgroundImage = `url('${objectUrl}')`;
+            preview.style.backgroundSize = 'cover';
+            preview.style.backgroundPosition = 'center';
+            preview.innerHTML = '';
+            preview.style.display = 'block';
+            uploadDiv.classList.add('has-image');
+            uploadDiv.dataset.cloudinaryUrl = url;
+            
+            if (uploadDiv.dataset.objectUrl) {
+                URL.revokeObjectURL(uploadDiv.dataset.objectUrl);
+            }
+            uploadDiv.dataset.objectUrl = objectUrl;
+            
+            if (removeBtn) removeBtn.style.display = 'flex';
+        }
+        
+        fotosSubidasLocal[foto.campo] = url;
+        mostrarNotificacion(`✅ ${foto.label} subida`, 'success');
+        validarCompletadoFotos();
+        
+        if (codigoSesion && seccionesCompletadasLocal.fotos) {
+            await guardarSeccion('fotos');
+        }
+        
+    } catch (error) {
+        console.error(`❌ Error en ${foto.label}:`, error);
+        mostrarNotificacion(`Error: ${error.message || `No se pudo procesar ${foto.label}`}`, 'error');
+        
+        if (preview) {
+            preview.style.backgroundImage = '';
+            preview.innerHTML = '';
+            preview.style.display = '';
+            uploadDiv.classList.remove('has-image');
+        }
+        if (removeBtn) removeBtn.style.display = 'none';
+        input.value = '';
+        
+    } finally {
+        delete subidasActivas[foto.id];
     }
 }
 
 // =====================================================
 // FUNCIONES DE AUDIO
 // =====================================================
-function setupAudioRecording() {
-    if (!btnGrabarAudio) return;
-    btnGrabarAudio.addEventListener('click', async () => {
-        if (!isRecording) await startRecording();
-        else stopRecording();
-    });
-    if (btnEliminarAudio) btnEliminarAudio.addEventListener('click', eliminarGrabacion);
-}
-
 async function subirAudioCloudinary(audioBlob, carpeta) {
     return new Promise((resolve, reject) => {
         const formData = new FormData();
@@ -542,6 +497,17 @@ async function subirAudioCloudinary(audioBlob, carpeta) {
     });
 }
 
+function setupAudioRecording() {
+    if (!btnGrabarAudio) return;
+    
+    btnGrabarAudio.addEventListener('click', async () => {
+        if (!isRecording) await startRecording();
+        else stopRecording();
+    });
+    
+    if (btnEliminarAudio) btnEliminarAudio.addEventListener('click', eliminarGrabacion);
+}
+
 async function startRecording() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -553,25 +519,27 @@ async function startRecording() {
         mediaRecorder.onstop = async () => {
             audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
             const audioUrl = URL.createObjectURL(audioBlob);
-            audioPreview.src = audioUrl;
-            audioPreview.style.display = 'block';
-            audioStatus.textContent = 'Audio grabado - Subiendo...';
+            if (audioPreview) {
+                audioPreview.src = audioUrl;
+                audioPreview.style.display = 'block';
+            }
+            if (audioStatus) audioStatus.textContent = 'Audio grabado - Subiendo...';
             
             mostrarNotificacion('Subiendo audio...', 'info');
             try {
                 const cloudinaryUrl = await subirAudioCloudinary(audioBlob, codigoSesion || 'temp');
                 audioCloudinaryUrl = cloudinaryUrl;
-                audioStatus.textContent = 'Audio guardado';
+                if (audioStatus) audioStatus.textContent = 'Audio guardado';
                 if (btnEliminarAudio) btnEliminarAudio.style.display = 'flex';
                 mostrarNotificacion('✅ Audio subido', 'success');
                 
-                if (codigoSesion && descripcionProblema.value.trim()) {
+                if (codigoSesion && descripcionProblema?.value.trim()) {
                     await guardarSeccion('descripcion');
                 }
                 validarCompletadoDescripcion();
             } catch (error) {
                 console.error('Error subiendo audio:', error);
-                audioStatus.textContent = 'Error al subir audio';
+                if (audioStatus) audioStatus.textContent = 'Error al subir audio';
                 mostrarNotificacion('Error al subir audio', 'error');
             }
             stream.getTracks().forEach(track => track.stop());
@@ -581,12 +549,14 @@ async function startRecording() {
         isRecording = true;
         btnGrabarAudio.classList.add('recording');
         btnGrabarAudio.innerHTML = '<i class="fas fa-stop"></i> Detener Grabación';
-        audioStatus.textContent = 'Grabando...';
-        audioStatus.style.color = 'var(--rojo-acento)';
+        if (audioStatus) {
+            audioStatus.textContent = 'Grabando...';
+            audioStatus.style.color = 'var(--rojo-acento)';
+        }
         if (btnEliminarAudio) btnEliminarAudio.style.display = 'none';
     } catch (error) {
         logger.error('Error al acceder al micrófono:', error);
-        audioStatus.textContent = 'Error: No se pudo acceder al micrófono';
+        if (audioStatus) audioStatus.textContent = 'Error: No se pudo acceder al micrófono';
     }
 }
 
@@ -608,15 +578,64 @@ function eliminarGrabacion() {
         audioPreview.src = '';
         audioPreview.style.display = 'none';
     }
-    audioStatus.textContent = 'Grabación eliminada';
+    if (audioStatus) audioStatus.textContent = 'Grabación eliminada';
     if (btnEliminarAudio) btnEliminarAudio.style.display = 'none';
     btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
     isRecording = false;
     
-    if (codigoSesion && descripcionProblema.value.trim()) {
+    if (codigoSesion && descripcionProblema?.value.trim()) {
         guardarSeccion('descripcion');
     }
     validarCompletadoDescripcion();
+}
+
+// =====================================================
+// GENERAR FOTOS
+// =====================================================
+function generatePhotoUploads() {
+    if (!photoGrid) return;
+    photoGrid.innerHTML = FOTOS_CONFIG.map(foto => `
+        <div class="photo-upload" id="upload-${foto.id}" data-campo="${foto.campo}">
+            <input type="file" id="${foto.id}" accept="image/*" capture="environment">
+            <div class="upload-placeholder"><i class="fas ${foto.icono}"></i><span>${foto.label}</span></div>
+            <div class="upload-preview"></div>
+            <button type="button" class="remove-photo" style="display: none;"><i class="fas fa-times"></i></button>
+        </div>
+    `).join('');
+}
+
+function setupPhotoUploads() {
+    for (const foto of FOTOS_CONFIG) {
+        const input = document.getElementById(foto.id);
+        if (input) {
+            input.addEventListener('change', () => procesarFoto(input, foto));
+        }
+        
+        const uploadDiv = document.getElementById(`upload-${foto.id}`);
+        const removeBtn = uploadDiv?.querySelector('.remove-photo');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const inputEl = document.getElementById(foto.id);
+                if (inputEl) inputEl.value = '';
+                const preview = uploadDiv.querySelector('.upload-preview');
+                if (preview) {
+                    preview.style.backgroundImage = '';
+                    preview.innerHTML = '';
+                }
+                uploadDiv.classList.remove('has-image');
+                removeBtn.style.display = 'none';
+                delete uploadDiv.dataset.cloudinaryUrl;
+                delete fotosSubidasLocal[foto.campo];
+                if (uploadDiv.dataset.objectUrl) {
+                    URL.revokeObjectURL(uploadDiv.dataset.objectUrl);
+                    delete uploadDiv.dataset.objectUrl;
+                }
+                validarCompletadoFotos();
+                if (codigoSesion) guardarSeccion('fotos');
+            });
+        }
+    }
 }
 
 // =====================================================
@@ -822,6 +841,7 @@ async function cargarDatosSesionInicial() {
                         preview.style.backgroundImage = `url('${url}')`;
                         preview.style.backgroundSize = 'cover';
                         preview.style.backgroundPosition = 'center';
+                        preview.innerHTML = '';
                         uploadDiv.classList.add('has-image');
                         uploadDiv.dataset.cloudinaryUrl = url;
                         const removeBtn = uploadDiv.querySelector('.remove-photo');
@@ -955,7 +975,10 @@ function limpiarSesionCompleta() {
     document.querySelectorAll('.photo-upload').forEach(upload => {
         upload.classList.remove('has-image');
         const preview = upload.querySelector('.upload-preview');
-        if (preview) preview.style.backgroundImage = '';
+        if (preview) {
+            preview.style.backgroundImage = '';
+            preview.innerHTML = '';
+        }
         const removeBtn = upload.querySelector('.remove-photo');
         if (removeBtn) removeBtn.style.display = 'none';
         delete upload.dataset.cloudinaryUrl;
@@ -980,7 +1003,6 @@ function limpiarSesionCompleta() {
     }
     
     actualizarBotonFinalizar();
-    console.log('✅ Sesión limpiada correctamente');
 }
 
 function mostrarConfirmacionCancelar() {
@@ -1421,11 +1443,9 @@ function mostrarModalDetalle(detalle) {
     const body = document.getElementById('detalleRecepcionBody');
     if (!modal || !body) return;
     
-    // Contar fotos
     const fotosArray = Object.values(detalle.fotos || {}).filter(url => url && url !== 'null' && url !== 'None');
     const fotosCount = fotosArray.length;
     
-    // HTML con tabs
     const tabsHtml = `
         <div class="detalle-tabs">
             <button class="detalle-tab active" data-tab="info">📋 Información</button>
@@ -1524,7 +1544,6 @@ function mostrarModalDetalle(detalle) {
     body.innerHTML = tabsHtml;
     modal.classList.add('show');
     
-    // Configurar eventos de tabs
     const tabs = document.querySelectorAll('.detalle-tab');
     const panes = document.querySelectorAll('.detalle-pane');
     
@@ -1539,7 +1558,6 @@ function mostrarModalDetalle(detalle) {
         });
     });
     
-    // Configurar botones de exportación
     const btnWord = document.getElementById('btnExportarWord');
     const btnPDF = document.getElementById('btnExportarPDF');
     if (btnWord) btnWord.onclick = () => exportarAWord(detalle);
@@ -1643,17 +1661,19 @@ function exportarAWord(detalle) {
     </body></html>`;
     
     const blob = new Blob([contenido], { type: 'application/msword' });
-    saveAs(blob, `Recepcion_${detalle.codigo_unico}.doc`);
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Recepcion_${detalle.codigo_unico}.doc`;
+    link.click();
+    URL.revokeObjectURL(link.href);
     mostrarNotificacion('Documento Word generado', 'success');
 }
 
 function exportarAPDF() {
-    const modal = document.getElementById('modalDetalleRecepcion');
-    const contenido = document.getElementById('detalleRecepcionBody');
-    if (!contenido) return;
+    const elemento = document.getElementById('detalleRecepcionBody');
+    if (!elemento) return;
     
-    const originalDisplay = contenido.style.display;
-    contenido.style.display = 'block';
+    mostrarNotificacion('Generando PDF...', 'info');
     
     const opt = {
         margin: [0.5, 0.5, 0.5, 0.5],
@@ -1663,9 +1683,9 @@ function exportarAPDF() {
         jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
     };
     
-    html2pdf().set(opt).from(contenido).save()
-        .then(() => { contenido.style.display = originalDisplay; mostrarNotificacion('PDF generado', 'success'); })
-        .catch(err => { contenido.style.display = originalDisplay; mostrarNotificacion('Error generando PDF', 'error'); });
+    html2pdf().set(opt).from(elemento).save()
+        .then(() => mostrarNotificacion('PDF generado', 'success'))
+        .catch(() => mostrarNotificacion('Error generando PDF', 'error'));
 }
 
 async function editarRecepcion(id) {
@@ -1881,8 +1901,22 @@ function setupUnirsePorCodigo() {
 }
 
 // =====================================================
-// UTILIDADES
+// INICIALIZACIÓN
 // =====================================================
+window.addEventListener('beforeunload', () => {
+    if (codigoSesion && sesionActual && sesionActual.estado === 'activa') {
+        localStorage.setItem('sesion_abandonada', codigoSesion);
+    }
+});
+
+async function verificarSesionAbandonada() {
+    const sesionAbandonada = localStorage.getItem('sesion_abandonada');
+    if (sesionAbandonada) {
+        localStorage.removeItem('sesion_abandonada');
+        logger.info(`Sesión ${sesionAbandonada} abandonada`);
+    }
+}
+
 function mostrarModalCodigo(codigo) {
     const modal = document.getElementById('codigoModal');
     const span = document.getElementById('codigoSesionModal');
@@ -1898,25 +1932,86 @@ function mostrarCodigoGenerado(codigo) {
     if (modal) modal.classList.add('show');
 }
 
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+async function checkAuth() {
+    const token = localStorage.getItem('furia_token');
+    const userInfoRaw = localStorage.getItem('furia_user');
+    
+    if (!token) {
+        window.location.href = `${window.API_BASE_URL}/`;
+        return false;
+    }
+    
+    try {
+        userInfo = JSON.parse(userInfoRaw || '{}');
+        
+        const verifyResponse = await fetch(`${window.API_BASE_URL}/api/verify-token`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!verifyResponse.ok) {
+            localStorage.clear();
+            window.location.href = `${window.API_BASE_URL}/`;
+            return false;
+        }
+        
+        const verifyData = await verifyResponse.json();
+        if (verifyData.user) {
+            userInfo = verifyData.user;
+            localStorage.setItem('furia_user', JSON.stringify(userInfo));
+        }
+        
+        const tieneRolJefeOperativo = (userInfo.roles && userInfo.roles.includes('jefe_operativo')) || userInfo.rol === 'jefe_operativo';
+        
+        if (!tieneRolJefeOperativo) {
+            window.location.href = `${window.API_BASE_URL}/`;
+            return false;
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Error en checkAuth:', error);
+        window.location.href = `${window.API_BASE_URL}/`;
+        return false;
+    }
 }
 
-function mostrarNotificacion(mensaje, tipo = 'info') {
-    const existingToasts = document.querySelectorAll('.toast-notification');
-    existingToasts.forEach(toast => toast.remove());
-    const toast = document.createElement('div');
-    toast.className = `toast-notification ${tipo}`;
-    const iconos = { success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
-    toast.innerHTML = `<i class="fas ${iconos[tipo] || iconos.info}"></i><span>${escapeHtml(mensaje)}</span>`;
-    document.body.appendChild(toast);
-    setTimeout(() => {
-        if (toast && document.body.contains(toast)) toast.remove();
-    }, 3000);
+function initPage() {
+    const now = new Date();
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const dateStr = now.toLocaleDateString('es-ES', options);
+    if (currentDateSpan) currentDateSpan.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 }
+
+// =====================================================
+// DOM CONTENT LOADED
+// =====================================================
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('========================================');
+    console.log('🚀 INICIANDO RECEPCION.JS');
+    console.log('========================================');
+    
+    const autenticado = await checkAuth();
+    if (!autenticado) return;
+    
+    await verificarSesionAbandonada();
+    
+    initPage();
+    generatePhotoUploads();
+    setupPhotoUploads();
+    setupAudioRecording();
+    setupEventListeners();
+    setupPlacaValidation();
+    setupInputTracking();
+    setupUnirsePorCodigo();
+    setupModalUbicacionLeaflet();
+    
+    await recuperarSesionActiva();
+    
+    iniciarPollingSesiones();
+    initRecepcionesPanel();
+    
+    console.log('✅ Recepcion.js inicializado correctamente');
+});
 
 // =====================================================
 // FUNCIONES GLOBALES
@@ -1929,6 +2024,7 @@ window.cerrarModal = () => document.getElementById('codigoModal')?.classList.rem
 window.cerrarModalOrden = () => document.getElementById('codigoOrdenModal')?.classList.remove('show');
 window.cerrarModalDetalle = () => document.getElementById('modalDetalleRecepcion')?.classList.remove('show');
 window.cerrarModalEliminar = () => document.getElementById('modalConfirmarEliminar')?.classList.remove('show');
+window.verImagenAmpliada = verImagenAmpliada;
 window.imprimirCodigo = () => {
     const codigo = document.getElementById('codigoGenerado')?.textContent || 'OT-0000';
     const ventana = window.open('', '_blank');
@@ -1944,4 +2040,4 @@ window.logout = () => {
     window.location.href = `${window.API_BASE_URL}/`;
 };
 
-console.log('✅ recepcion.js cargado - Versión completa con tabs');
+console.log('✅ recepcion.js cargado - Versión con compresión de imágenes');

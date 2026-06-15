@@ -241,7 +241,7 @@
                         </div>
                         <div class="card-body">
                             <div class="photo-grid" id="photoGrid"></div>
-                            <p class="photo-hint">* Selecciona las fotos y presiona "Guardar Fotos"</p>
+                            <p class="photo-hint">* Las imágenes se comprimirán automáticamente antes de subir (máx 2.5MB)</p>
                             <div class="form-actions-seccion">
                                 <button type="button" class="btn-guardar-seccion" data-seccion="fotos">
                                     <i class="fas fa-save"></i> Guardar Fotos
@@ -491,11 +491,22 @@
         </div>
     </div>
 
+    <!-- ===================================================== -->
+    <!-- SCRIPTS - ORDEN CORRECTO -->
+    <!-- ===================================================== -->
+    
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    
+    <!-- Sidebar include -->
     <script src="/jefe_operativo/js/include.js"></script>
+    
+    <!-- COMPRESOR DE IMÁGENES (DEBE IR ANTES QUE recepcion.js) -->
+    <script src="/jefe_operativo/js/imageCompressor.js"></script>
+    
+    <!-- RECEPCION.JS (VERSIÓN CON COMPRESIÓN) -->
     <script src="/jefe_operativo/js/recepcion.js"></script>
 
     <!-- Sidebar responsive -->

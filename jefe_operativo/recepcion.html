@@ -490,6 +490,36 @@
             </div>
         </div>
     </div>
+    <!-- ===================================================== -->
+    <!-- BARRA DE PROGRESO PARA OPERACIONES -->
+    <!-- ===================================================== -->
+    <div class="progress-overlay" id="progressOverlay">
+        <div class="progress-container">
+            <div class="progress-icon" id="progressIcon">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <h3 class="progress-title" id="progressTitle">Procesando...</h3>
+            <p class="progress-message" id="progressMessage">Por favor espera</p>
+            <div class="progress-bar-wrapper">
+                <div class="progress-bar-fill" id="progressBarFill"></div>
+            </div>
+            <div class="progress-percentage" id="progressPercentage">0%</div>
+            <div class="progress-steps" id="progressSteps">
+                <div class="progress-step" data-step="1">
+                    <span class="progress-step-icon"><i class="far fa-circle"></i></span>
+                    <span>Validando datos</span>
+                </div>
+                <div class="progress-step" data-step="2">
+                    <span class="progress-step-icon"><i class="far fa-circle"></i></span>
+                    <span>Guardando información</span>
+                </div>
+                <div class="progress-step" data-step="3">
+                    <span class="progress-step-icon"><i class="far fa-circle"></i></span>
+                    <span>Generando orden de trabajo</span>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- ===================================================== -->
     <!-- SCRIPTS - ORDEN CORRECTO -->

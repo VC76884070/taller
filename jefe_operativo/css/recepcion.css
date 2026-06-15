@@ -1,6 +1,7 @@
 /* =====================================================
    RECEPCIÓN DE VEHÍCULO - ESTILOS MODERNOS
    VERSIÓN COMPLETA - LIMPIA Y RESPONSIVA
+   CORREGIDA CON TEMA OSCURO CONSISTENTE
    ===================================================== */
 
 /* =====================================================
@@ -508,6 +509,26 @@ body.sidebar-open {
     box-shadow: 0 4px 12px rgba(220,38,38,0.4);
 }
 
+.btn-transcribir {
+    background: linear-gradient(135deg, var(--azul-profundo), #0f2b3d);
+    border: none;
+    color: white;
+    padding: 0.7rem 1.5rem;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-transcribir:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(30,58,95,0.4);
+}
+
 .audio-status-container {
     display: flex;
     flex-direction: column;
@@ -573,16 +594,16 @@ body.sidebar-open {
 .btn-limpiar {
     background: rgba(245,158,11,0.15);
     border: 1px solid rgba(245,158,11,0.3);
-    padding: 0.5rem 1rem;
-    border-radius: var(--radius-sm);
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-md);
     color: var(--ambar-alerta);
     font-weight: 500;
     cursor: pointer;
     transition: var(--transition);
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    font-size: 0.8rem;
+    gap: 0.5rem;
+    font-size: 0.85rem;
 }
 
 .btn-limpiar:hover {
@@ -1558,18 +1579,24 @@ body.sidebar-open {
 }
 
 .btn-danger {
-    background: #dc3545;
+    background: linear-gradient(135deg, #dc3545, #c82333);
     color: white;
     border: none;
-    padding: 0.5rem 1rem;
-    border-radius: var(--radius-sm);
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    font-weight: 500;
     cursor: pointer;
-    font-size: 0.8rem;
     transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .btn-danger:hover {
-    background: #c82333;
+    background: linear-gradient(135deg, #c82333, #bd2130);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(220,53,69,0.3);
 }
 
 .codigo-sesion {
@@ -1688,147 +1715,14 @@ body.sidebar-open {
     font-size: 0.85rem;
 }
 
-/* Modal de confirmación */
-.modal-confirmacion {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.8);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2500;
-    backdrop-filter: blur(5px);
-}
-
-.modal-confirmacion-content {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    max-width: 400px;
-    width: 90%;
-    padding: 1.5rem;
-    text-align: center;
-    border: 1px solid var(--border-color);
-    animation: modalIn 0.3s ease;
-}
-
-.modal-confirmacion-content i {
-    font-size: 3rem;
-    color: var(--rojo-acento);
-    margin-bottom: 1rem;
-}
-
-.modal-confirmacion-content h3 {
-    font-size: 1.2rem;
-    margin-bottom: 0.5rem;
-}
-
-.modal-confirmacion-content p {
-    color: var(--gris-texto);
-    margin-bottom: 1.5rem;
-}
-
-.modal-confirmacion-buttons {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-}
-
-.btn-confirmar-cancelar {
-    background: var(--rojo-acento);
-    color: white;
-    border: none;
-    padding: 0.6rem 1.2rem;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.btn-confirmar-cancelar:hover {
-    background: var(--rojo-oscuro);
-    transform: translateY(-1px);
-}
-
-.btn-cancelar-cancelar {
-    background: transparent;
-    border: 2px solid var(--border-color);
-    color: var(--gris-texto);
-    padding: 0.6rem 1.2rem;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.btn-cancelar-cancelar:hover {
-    border-color: var(--rojo-primario);
-    color: var(--rojo-primario);
-}
-
-/* =====================================================
-   NOTIFICACIONES TOAST
-   ===================================================== */
-.toast-notification {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    min-width: 260px;
-    max-width: 340px;
-    background: rgba(28,28,30,0.95);
-    backdrop-filter: blur(10px);
-    padding: 12px 18px;
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-lg);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    z-index: 10000;
-    animation: slideIn 0.3s ease;
-    border-left: 4px solid transparent;
-    color: var(--blanco);
-    font-size: 13px;
-    line-height: 1.4;
-}
-
-.toast-notification.success {
-    border-left-color: var(--verde-exito);
-}
-
-.toast-notification.success i {
-    color: var(--verde-exito);
-}
-
-.toast-notification.error {
-    border-left-color: var(--rojo-primario);
-}
-
-.toast-notification.error i {
-    color: var(--rojo-primario);
-}
-
-.toast-notification.warning {
-    border-left-color: var(--ambar-alerta);
-}
-
-.toast-notification.warning i {
-    color: var(--ambar-alerta);
-}
-
-.toast-notification.info {
-    border-left-color: var(--azul-acento);
-}
-
-.toast-notification.info i {
-    color: var(--azul-acento);
-}
-
 /* =====================================================
    MODAL UBICACIÓN LEAFLET
    ===================================================== */
 .modal-ubicacion .modal-content {
     max-width: 800px;
     width: 90%;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
 }
 
 .search-container {
@@ -1907,6 +1801,217 @@ body.sidebar-open {
 .info-card span {
     font-size: 0.8rem;
     color: var(--blanco);
+}
+
+/* =====================================================
+   BARRA DE PROGRESO PARA OPERACIONES
+   ===================================================== */
+.progress-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(8px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.progress-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.progress-container {
+    background: var(--bg-card);
+    border-radius: 24px;
+    padding: 32px;
+    width: 90%;
+    max-width: 500px;
+    text-align: center;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+    border: 1px solid var(--border-color);
+}
+
+.progress-overlay.active .progress-container {
+    transform: scale(1);
+}
+
+.progress-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 20px;
+    background: var(--gris-oscuro);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 40px;
+    color: var(--rojo-primario);
+}
+
+.progress-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--blanco);
+}
+
+.progress-message {
+    font-size: 0.9rem;
+    color: var(--gris-texto);
+    margin-bottom: 24px;
+}
+
+.progress-bar-wrapper {
+    background: var(--gris-oscuro);
+    border-radius: 100px;
+    height: 8px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+
+.progress-bar-fill {
+    background: linear-gradient(90deg, var(--rojo-primario), var(--rojo-acento));
+    width: 0%;
+    height: 100%;
+    border-radius: 100px;
+    transition: width 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, 
+        transparent, 
+        rgba(255, 255, 255, 0.15), 
+        transparent);
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.progress-percentage {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--rojo-primario);
+    margin-bottom: 20px;
+}
+
+.progress-steps {
+    text-align: left;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.progress-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    color: var(--gris-texto);
+    font-size: 0.85rem;
+}
+
+.progress-step.active {
+    color: var(--rojo-primario);
+}
+
+.progress-step.completed {
+    color: var(--verde-exito);
+}
+
+.progress-step-icon {
+    width: 24px;
+    font-size: 14px;
+    text-align: center;
+}
+
+/* =====================================================
+   NOTIFICACIONES TOAST
+   ===================================================== */
+.toast-notification {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    min-width: 260px;
+    max-width: 340px;
+    background: var(--bg-card);
+    backdrop-filter: blur(10px);
+    padding: 12px 18px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 10000;
+    animation: slideInRight 0.3s ease;
+    border-left: 4px solid transparent;
+    color: var(--blanco);
+    font-size: 13px;
+    line-height: 1.4;
+    border: 1px solid var(--border-color);
+}
+
+.toast-notification.success {
+    border-left-color: var(--verde-exito);
+}
+
+.toast-notification.success i {
+    color: var(--verde-exito);
+}
+
+.toast-notification.error {
+    border-left-color: var(--rojo-primario);
+}
+
+.toast-notification.error i {
+    color: var(--rojo-primario);
+}
+
+.toast-notification.warning {
+    border-left-color: var(--ambar-alerta);
+}
+
+.toast-notification.warning i {
+    color: var(--ambar-alerta);
+}
+
+.toast-notification.info {
+    border-left-color: var(--azul-acento);
+}
+
+.toast-notification.info i {
+    color: var(--azul-acento);
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }
 
 /* =====================================================
@@ -2041,7 +2146,8 @@ body.sidebar-open {
     }
     
     .btn-audio,
-    .btn-eliminar-audio {
+    .btn-eliminar-audio,
+    .btn-transcribir {
         width: 100%;
         justify-content: center;
     }
@@ -2124,6 +2230,22 @@ body.sidebar-open {
     
     .btn-buscar {
         justify-content: center;
+    }
+    
+    .progress-container {
+        padding: 24px;
+        width: 85%;
+    }
+    
+    .progress-title {
+        font-size: 1.2rem;
+    }
+    
+    .toast-notification {
+        bottom: 20px;
+        right: 20px;
+        left: 20px;
+        padding: 10px 16px;
     }
 }
 

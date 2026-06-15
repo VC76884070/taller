@@ -91,6 +91,11 @@ let fotosSubidasLocal = {};
 // Control de subidas activas
 let subidasActivas = {};
 
+// Variables para barra de progreso
+let progressOverlay = null;
+let currentProgress = 0;
+let progressInterval = null;
+
 // Elementos DOM
 const sesionesActivasPanel = document.getElementById('sesionesActivasPanel');
 const sesionesList = document.getElementById('sesionesList');
@@ -192,6 +197,150 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// =====================================================
+// BARRA DE PROGRESO
+// =====================================================
+
+function initProgressElements() {
+    progressOverlay = document.getElementById('progressOverlay');
+}
+
+function showProgress(title, message, steps = 3) {
+    if (!progressOverlay) initProgressElements();
+    if (!progressOverlay) return;
+    
+    currentProgress = 0;
+    const progressBarFill = document.getElementById('progressBarFill');
+    const progressPercentage = document.getElementById('progressPercentage');
+    const progressTitle = document.getElementById('progressTitle');
+    const progressMessage = document.getElementById('progressMessage');
+    const progressIcon = document.getElementById('progressIcon');
+    const progressStepsContainer = document.getElementById('progressSteps');
+    
+    if (progressBarFill) progressBarFill.style.width = '0%';
+    if (progressPercentage) progressPercentage.textContent = '0%';
+    if (progressTitle) progressTitle.textContent = title;
+    if (progressMessage) progressMessage.textContent = message;
+    if (progressIcon) {
+        progressIcon.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    }
+    
+    if (progressStepsContainer) {
+        const stepsEl = progressStepsContainer.querySelectorAll('.progress-step');
+        stepsEl.forEach((step, index) => {
+            step.classList.remove('active', 'completed');
+            const iconSpan = step.querySelector('.progress-step-icon i');
+            if (iconSpan) {
+                iconSpan.className = 'far fa-circle';
+            }
+        });
+        if (stepsEl[0]) {
+            stepsEl[0].classList.add('active');
+            const iconSpan = stepsEl[0].querySelector('.progress-step-icon i');
+            if (iconSpan) iconSpan.className = 'fas fa-spinner fa-pulse';
+        }
+    }
+    
+    progressOverlay.classList.add('active');
+    
+    if (progressInterval) clearInterval(progressInterval);
+    progressInterval = setInterval(() => {
+        if (currentProgress < 90) {
+            currentProgress += Math.random() * 10;
+            if (currentProgress > 90) currentProgress = 90;
+            updateProgressBar(currentProgress);
+        }
+    }, 300);
+}
+
+function updateProgressBar(percent, step = null) {
+    const progressBarFill = document.getElementById('progressBarFill');
+    const progressPercentage = document.getElementById('progressPercentage');
+    
+    if (progressBarFill) progressBarFill.style.width = `${percent}%`;
+    if (progressPercentage) progressPercentage.textContent = `${Math.floor(percent)}%`;
+    
+    if (step !== null) {
+        const progressStepsContainer = document.getElementById('progressSteps');
+        if (progressStepsContainer) {
+            const steps = progressStepsContainer.querySelectorAll('.progress-step');
+            steps.forEach((s, idx) => {
+                if (idx + 1 === step) {
+                    s.classList.add('active');
+                    const iconSpan = s.querySelector('.progress-step-icon i');
+                    if (iconSpan) iconSpan.className = 'fas fa-spinner fa-pulse';
+                } else if (idx + 1 < step) {
+                    s.classList.remove('active');
+                    s.classList.add('completed');
+                    const iconSpan = s.querySelector('.progress-step-icon i');
+                    if (iconSpan) iconSpan.className = 'fas fa-check-circle';
+                } else {
+                    s.classList.remove('active', 'completed');
+                    const iconSpan = s.querySelector('.progress-step-icon i');
+                    if (iconSpan) iconSpan.className = 'far fa-circle';
+                }
+            });
+        }
+    }
+}
+
+function updateProgressMessage(message) {
+    const progressMessage = document.getElementById('progressMessage');
+    if (progressMessage) progressMessage.textContent = message;
+}
+
+function completeProgress(success = true) {
+    if (progressInterval) clearInterval(progressInterval);
+    
+    const progressBarFill = document.getElementById('progressBarFill');
+    const progressPercentage = document.getElementById('progressPercentage');
+    const progressIcon = document.getElementById('progressIcon');
+    const progressTitle = document.getElementById('progressTitle');
+    
+    if (success) {
+        if (progressBarFill) progressBarFill.style.width = '100%';
+        if (progressPercentage) progressPercentage.textContent = '100%';
+        if (progressIcon) {
+            progressIcon.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i>';
+        }
+        if (progressTitle) progressTitle.textContent = '¡Completado!';
+        
+        const progressStepsContainer = document.getElementById('progressSteps');
+        if (progressStepsContainer) {
+            const steps = progressStepsContainer.querySelectorAll('.progress-step');
+            steps.forEach(step => {
+                step.classList.remove('active');
+                step.classList.add('completed');
+                const iconSpan = step.querySelector('.progress-step-icon i');
+                if (iconSpan) iconSpan.className = 'fas fa-check-circle';
+            });
+        }
+        
+        setTimeout(() => {
+            hideProgress();
+        }, 1500);
+    } else {
+        if (progressIcon) {
+            progressIcon.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>';
+        }
+        if (progressTitle) progressTitle.textContent = 'Error';
+        
+        setTimeout(() => {
+            hideProgress();
+        }, 2000);
+    }
+}
+
+function hideProgress() {
+    if (progressOverlay) {
+        progressOverlay.classList.remove('active');
+    }
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+    }
 }
 
 // =====================================================
@@ -368,7 +517,6 @@ async function procesarFoto(input, foto) {
     const preview = uploadDiv?.querySelector('.upload-preview');
     const removeBtn = uploadDiv?.querySelector('.remove-photo');
     
-    // Mostrar loading
     if (preview) {
         preview.style.backgroundImage = '';
         preview.style.display = 'flex';
@@ -383,23 +531,24 @@ async function procesarFoto(input, foto) {
         let fileToUpload = file;
         const originalSize = file.size / 1024 / 1024;
         
-        // Comprimir si es necesario
         if (originalSize > 2 || file.type === 'image/jpeg' || file.type === 'image/jpg') {
             mostrarNotificacion(`🔄 Comprimiendo ${foto.label}...`, 'info');
             
             try {
-                fileToUpload = await imageCompressor.compress(file, {
-                    maxWidth: 1920,
-                    maxHeight: 1920,
-                    quality: 0.85,
-                    maxSizeMB: 2.5
-                });
-                
-                const compressedSize = fileToUpload.size / 1024 / 1024;
-                const reduction = Math.round((1 - fileToUpload.size / file.size) * 100);
-                
-                if (compressedSize < originalSize) {
-                    mostrarNotificacion(`📸 ${foto.label}: ${compressedSize.toFixed(1)} MB (${reduction}% menos)`, 'success');
+                if (typeof imageCompressor !== 'undefined') {
+                    fileToUpload = await imageCompressor.compress(file, {
+                        maxWidth: 1920,
+                        maxHeight: 1920,
+                        quality: 0.85,
+                        maxSizeMB: 2.5
+                    });
+                    
+                    const compressedSize = fileToUpload.size / 1024 / 1024;
+                    const reduction = Math.round((1 - fileToUpload.size / file.size) * 100);
+                    
+                    if (compressedSize < originalSize) {
+                        mostrarNotificacion(`📸 ${foto.label}: ${compressedSize.toFixed(1)} MB (${reduction}% menos)`, 'success');
+                    }
                 }
             } catch (compressError) {
                 console.warn('⚠️ Falló compresión, usando original:', compressError);
@@ -408,13 +557,11 @@ async function procesarFoto(input, foto) {
             }
         }
         
-        // Validación final
         const finalSizeMB = fileToUpload.size / 1024 / 1024;
         if (finalSizeMB > 8) {
             throw new Error(`Imagen muy grande (${finalSizeMB.toFixed(1)} MB). Máximo 8MB.`);
         }
         
-        // Prevenir subidas duplicadas
         if (subidasActivas[foto.id]) {
             return;
         }
@@ -423,7 +570,6 @@ async function procesarFoto(input, foto) {
         mostrarNotificacion(`📤 Subiendo ${foto.label}...`, 'info');
         const url = await subirFotoCloudinary(fileToUpload, codigoSesion || 'temp', foto.campo);
         
-        // Actualizar UI
         if (preview) {
             const objectUrl = URL.createObjectURL(fileToUpload);
             preview.style.backgroundImage = `url('${objectUrl}')`;
@@ -911,35 +1057,70 @@ async function recuperarSesionActiva() {
 async function finalizarSesion() {
     if (!codigoSesion) return;
     
+    showProgress('Finalizando Recepción', 'Preparando datos...', 3);
+    updateProgressBar(10, 1);
+    updateProgressMessage('Validando secciones completadas...');
+    
     validarCompletadoCliente();
     validarCompletadoVehiculo();
     validarCompletadoFotos();
     validarCompletadoDescripcion();
     
+    await new Promise(resolve => setTimeout(resolve, 300));
+    updateProgressBar(30, 1);
+    
     if (!seccionesCompletadasLocal.cliente || !seccionesCompletadasLocal.vehiculo || 
         !seccionesCompletadasLocal.fotos || !seccionesCompletadasLocal.descripcion) {
+        completeProgress(false);
         mostrarNotificacion('Completa todas las secciones antes de finalizar', 'warning');
         return;
     }
     
-    if (!confirm('¿Finalizar recepción? Los datos se guardarán permanentemente.')) return;
+    if (!confirm('¿Finalizar recepción? Los datos se guardarán permanentemente.')) {
+        hideProgress();
+        return;
+    }
+    
+    updateProgressBar(50, 2);
+    updateProgressMessage('Guardando información del vehículo...');
+    await new Promise(resolve => setTimeout(resolve, 300));
     
     try {
+        updateProgressBar(70, 2);
+        updateProgressMessage('Generando orden de trabajo...');
+        
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/finalizar-sesion`, {
             method: 'POST',
             body: JSON.stringify({ codigo: codigoSesion, datos: sesionActual?.datos })
         });
         
+        updateProgressBar(90, 3);
+        updateProgressMessage('Creando código de seguimiento...');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
         const data = await response.json();
+        
         if (data.success) {
+            updateProgressBar(100, 3);
+            updateProgressMessage('¡Recepción finalizada con éxito!');
+            
             mostrarCodigoGenerado(data.codigo);
             limpiarSesionCompleta();
-            mostrarNotificacion('Recepción finalizada', 'success');
+            
+            setTimeout(() => {
+                completeProgress(true);
+                mostrarNotificacion('Recepción finalizada exitosamente', 'success');
+            }, 500);
+            
             if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
             await cargarRecepciones();
+        } else {
+            throw new Error(data.message || 'Error al finalizar');
         }
     } catch (error) {
-        mostrarNotificacion(error.message, 'error');
+        console.error('Error finalizando:', error);
+        completeProgress(false);
+        mostrarNotificacion(error.message || 'Error al finalizar la recepción', 'error');
     }
 }
 
@@ -2004,6 +2185,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupInputTracking();
     setupUnirsePorCodigo();
     setupModalUbicacionLeaflet();
+    initProgressElements();
     
     await recuperarSesionActiva();
     
@@ -2040,4 +2222,4 @@ window.logout = () => {
     window.location.href = `${window.API_BASE_URL}/`;
 };
 
-console.log('✅ recepcion.js cargado - Versión con compresión de imágenes');
+console.log('✅ recepcion.js cargado - Versión con compresión de imágenes y barra de progreso');

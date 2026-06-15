@@ -1,5 +1,5 @@
 // =====================================================
-// HISTORIAL.JS - VERSIÓN COMPLETA CON GOOGLE MAPS
+// HISTORIAL.JS - VERSIÓN COMPLETA CON GOOGLE MAPS (UN SOLO BOTÓN)
 // =====================================================
 
 // Verificar si existe la variable global, si no, crearla
@@ -128,39 +128,25 @@ function mostrarFechaActual() {
 }
 
 // =====================================================
-// FUNCIONES PARA GOOGLE MAPS
+// FUNCIÓN PARA GOOGLE MAPS (UN SOLO BOTÓN)
 // =====================================================
 
-function abrirGoogleMapsCoordenadas(lat, lng) {
-    if (!lat || !lng) {
-        mostrarNotificacion('No hay coordenadas disponibles', 'warning');
+function abrirGoogleMaps(lat, lng, direccion) {
+    let url;
+    
+    if (lat && lng) {
+        // Si tenemos coordenadas, usar coordenadas (más preciso)
+        url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    } else if (direccion && direccion !== 'No especificada' && direccion !== 'No registrada') {
+        // Si solo tenemos dirección, buscar por dirección
+        url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccion)}`;
+    } else {
+        mostrarNotificacion('No hay ubicación disponible para mostrar en el mapa', 'warning');
         return;
     }
-    const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    
     window.open(url, '_blank');
     mostrarNotificacion('Abriendo Google Maps...', 'info');
-}
-
-function abrirGoogleMapsBusqueda(direccion) {
-    if (!direccion || direccion === 'No especificada' || direccion === 'No registrada') {
-        mostrarNotificacion('No hay dirección disponible para buscar', 'warning');
-        return;
-    }
-    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccion)}`;
-    window.open(url, '_blank');
-    mostrarNotificacion('Buscando dirección en Google Maps...', 'info');
-}
-
-function abrirRutaGoogleMaps(lat, lng) {
-    if (!lat || !lng) {
-        mostrarNotificacion('No hay coordenadas disponibles para la ruta', 'warning');
-        return;
-    }
-    const tallerLat = -17.3895;
-    const tallerLng = -66.1568;
-    const url = `https://www.google.com/maps/dir/${tallerLat},${tallerLng}/${lat},${lng}/`;
-    window.open(url, '_blank');
-    mostrarNotificacion('Abriendo ruta desde el taller...', 'info');
 }
 
 // =====================================================
@@ -469,30 +455,8 @@ function mostrarHistorialVehiculo(data) {
 }
 
 // =====================================================
-// VER DETALLE COMPLETO DE ORDEN CON UBICACIÓN Y MAPA
+// RENDER DETALLE ORDEN COMPLETO (CON UN SOLO BOTÓN)
 // =====================================================
-
-window.verDetalleOrden = async function(idOrden) {
-    const modal = document.getElementById('modalDetalleOrden');
-    const modalBody = document.getElementById('modalDetalleBody');
-    
-    try {
-        modal.style.display = 'flex';
-        modalBody.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i><p>Cargando detalle completo de la orden...</p></div>`;
-        
-        const response = await fetchWithToken(`${window.API_BASE_URL}/api/jefe-operativo/detalle-completo-orden/${idOrden}`);
-        const data = await response.json();
-        
-        if (data.success) {
-            modalBody.innerHTML = renderDetalleOrdenCompleto(data.detalle);
-        } else {
-            modalBody.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>${data.error || 'Error al cargar el detalle'}</p></div>`;
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        modalBody.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Error de conexión al servidor</p></div>`;
-    }
-};
 
 function renderDetalleOrdenCompleto(detalle) {
     let html = '';
@@ -510,7 +474,7 @@ function renderDetalleOrdenCompleto(detalle) {
         </div>
     `;
     
-    // Vehículo y Cliente (con ubicación y mapa)
+    // Vehículo y Cliente (con un solo botón de Google Maps)
     html += `
         <div class="detalle-seccion">
             <h4><i class="fas fa-car"></i> Vehículo y Cliente</h4>
@@ -528,20 +492,11 @@ function renderDetalleOrdenCompleto(detalle) {
                             <i class="fas fa-location-dot"></i>
                             <span>${escapeHtml(detalle.cliente_ubicacion || 'No especificada')}</span>
                         </div>
-                        <div class="maps-buttons-group">
-                            ${detalle.latitud && detalle.longitud ? `
-                                <button class="btn-maps-historial" onclick="abrirGoogleMapsCoordenadas(${detalle.latitud}, ${detalle.longitud})">
-                                    <i class="fas fa-map-pin"></i> Ver en Google Maps
-                                </button>
-                                <button class="btn-ruta-historial" onclick="abrirRutaGoogleMaps(${detalle.latitud}, ${detalle.longitud})">
-                                    <i class="fas fa-directions"></i> Cómo llegar
-                                </button>
-                            ` : detalle.cliente_ubicacion && detalle.cliente_ubicacion !== 'No especificada' && detalle.cliente_ubicacion !== 'No registrada' ? `
-                                <button class="btn-maps-historial" onclick="abrirGoogleMapsBusqueda('${escapeHtml(detalle.cliente_ubicacion)}')">
-                                    <i class="fas fa-search-location"></i> Buscar en Google Maps
-                                </button>
-                            ` : ''}
-                        </div>
+                        ${(detalle.latitud && detalle.longitud) || (detalle.cliente_ubicacion && detalle.cliente_ubicacion !== 'No especificada' && detalle.cliente_ubicacion !== 'No registrada') ? `
+                            <button class="btn-maps-historial" onclick="abrirGoogleMaps(${detalle.latitud || 'null'}, ${detalle.longitud || 'null'}, '${escapeHtml(detalle.cliente_ubicacion || '')}')">
+                                <i class="fas fa-map-marker-alt"></i> Ver en Google Maps
+                            </button>
+                        ` : ''}
                     </div>
                 </div>
             </div>
@@ -637,6 +592,32 @@ function renderDetalleOrdenCompleto(detalle) {
 }
 
 // =====================================================
+// VER DETALLE COMPLETO DE ORDEN
+// =====================================================
+
+window.verDetalleOrden = async function(idOrden) {
+    const modal = document.getElementById('modalDetalleOrden');
+    const modalBody = document.getElementById('modalDetalleBody');
+    
+    try {
+        modal.style.display = 'flex';
+        modalBody.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i><p>Cargando detalle completo de la orden...</p></div>`;
+        
+        const response = await fetchWithToken(`${window.API_BASE_URL}/api/jefe-operativo/detalle-completo-orden/${idOrden}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            modalBody.innerHTML = renderDetalleOrdenCompleto(data.detalle);
+        } else {
+            modalBody.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>${data.error || 'Error al cargar el detalle'}</p></div>`;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        modalBody.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Error de conexión al servidor</p></div>`;
+    }
+};
+
+// =====================================================
 // VER FOTOS DE ORDEN
 // =====================================================
 
@@ -667,6 +648,10 @@ window.verFotosOrden = async function(idOrden) {
     }
 };
 
+// =====================================================
+// VER IMAGEN AMPLIADA
+// =====================================================
+
 window.verImagenAmpliada = function(url, titulo) {
     const modal = document.getElementById('modalImagen');
     const imgElement = document.getElementById('imagenAmpliada');
@@ -675,6 +660,10 @@ window.verImagenAmpliada = function(url, titulo) {
     imgElement.src = url;
     modal.style.display = 'flex';
 };
+
+// =====================================================
+// CERRAR MODALES
+// =====================================================
 
 window.cerrarModalDetalle = function() {
     const modal = document.getElementById('modalDetalleOrden');
@@ -685,6 +674,10 @@ window.cerrarModalImagen = function() {
     const modal = document.getElementById('modalImagen');
     if (modal) modal.style.display = 'none';
 };
+
+// =====================================================
+// CONFIGURAR EVENTOS
+// =====================================================
 
 function configurarEventListeners() {
     const btnBuscar = document.getElementById('btnBuscar');
@@ -708,10 +701,13 @@ function configurarEventListeners() {
     }
 }
 
+// Cerrar modales con ESC
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        document.getElementById('modalDetalleOrden')?.style.setProperty('display', 'none');
-        document.getElementById('modalImagen')?.style.setProperty('display', 'none');
+        const modalDetalle = document.getElementById('modalDetalleOrden');
+        const modalImagen = document.getElementById('modalImagen');
+        if (modalDetalle && modalDetalle.style.display === 'flex') modalDetalle.style.display = 'none';
+        if (modalImagen && modalImagen.style.display === 'flex') modalImagen.style.display = 'none';
     }
 });
 
@@ -733,12 +729,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('✅ Historial inicializado correctamente');
 });
 
-// Funciones globales
+// =====================================================
+// FUNCIONES GLOBALES
+// =====================================================
 window.cargarUltimasOrdenes = cargarUltimasOrdenes;
 window.buscarPorPlaca = buscarPorPlaca;
 window.verDetalleOrden = verDetalleOrden;
 window.verFotosOrden = verFotosOrden;
 window.verImagenAmpliada = verImagenAmpliada;
-window.abrirGoogleMapsCoordenadas = abrirGoogleMapsCoordenadas;
-window.abrirGoogleMapsBusqueda = abrirGoogleMapsBusqueda;
-window.abrirRutaGoogleMaps = abrirRutaGoogleMaps;
+window.abrirGoogleMaps = abrirGoogleMaps;
+window.cerrarModalDetalle = cerrarModalDetalle;
+window.cerrarModalImagen = cerrarModalImagen;

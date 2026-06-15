@@ -1,6 +1,6 @@
 # =====================================================
 # RECEPCION.PY - JEFE OPERATIVO
-# VERSIÓN CORREGIDA - SIN PROCESAMIENTO DE FOTOS/AUDIO
+# VERSIÓN CORREGIDA - CON MANEJO DE CÓDIGOS ÚNICOS
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -145,27 +145,55 @@ except Exception as e:
 # =====================================================
 
 def generar_codigo_unico():
+    """
+    Genera un código único para orden de trabajo
+    Maneja correctamente los reintentos y evita duplicados
+    """
     try:
         fecha = datetime.datetime.now()
         año = fecha.strftime('%y')
         mes = fecha.strftime('%m')
         dia = fecha.strftime('%d')
         
+        # Buscar el máximo número de secuencia para hoy
         inicio_dia = datetime.datetime.combine(fecha.date(), datetime.time.min)
         fin_dia = datetime.datetime.combine(fecha.date(), datetime.time.max)
         
-        ultimos = supabase.table('ordentrabajo') \
+        # Obtener todas las órdenes de hoy
+        ordenes_hoy = supabase.table('ordentrabajo') \
             .select('codigo_unico') \
             .gte('fecha_ingreso', inicio_dia.isoformat()) \
             .lte('fecha_ingreso', fin_dia.isoformat()) \
             .execute()
         
-        contador = len(ultimos.data) if ultimos.data else 0
-        secuencia = str(contador + 1).zfill(3)
+        # Extraer los números de secuencia existentes
+        secuencias_existentes = []
+        for orden in (ordenes_hoy.data or []):
+            codigo = orden.get('codigo_unico', '')
+            try:
+                # Formato esperado: OT-YYMMDD-XXX
+                partes = codigo.split('-')
+                if len(partes) == 3:
+                    secuencia = int(partes[2])
+                    secuencias_existentes.append(secuencia)
+            except (ValueError, IndexError):
+                pass
         
-        return f"OT-{año}{mes}{dia}-{secuencia}"
+        # Determinar la siguiente secuencia disponible
+        siguiente = 1
+        while siguiente in secuencias_existentes:
+            siguiente += 1
+        
+        secuencia = str(siguiente).zfill(3)
+        nuevo_codigo = f"OT-{año}{mes}{dia}-{secuencia}"
+        
+        logger.info(f"📝 Código generado: {nuevo_codigo}")
+        return nuevo_codigo
+        
     except Exception as e:
-        timestamp = datetime.datetime.now().strftime('%y%m%d%H%M%S')
+        logger.error(f"Error generando código: {str(e)}")
+        # Fallback con timestamp
+        timestamp = datetime.datetime.now().strftime('%y%m%d%H%M%S%f')
         return f"OT-{timestamp}"
 
 def generar_codigo_sesion():
@@ -273,114 +301,131 @@ def obtener_o_crear_cliente(nombre, telefono, ubicacion, latitud=None, longitud=
         logger.error(f"Error en obtener_o_crear_cliente: {str(e)}")
         return None, None
 
-def crear_orden_desde_sesion(datos, current_user, sesion_codigo=None):
-    try:
-        cliente_data = datos.get('cliente', {})
-        vehiculo_data = datos.get('vehiculo', {})
-        descripcion_data = datos.get('descripcion', {})
-        fotos = datos.get('fotos', {})
-        
-        telefono_cliente = cliente_data.get('telefono', '')
-        nombre_cliente = cliente_data.get('nombre', '')
-        ubicacion_cliente = cliente_data.get('ubicacion', '')
-        latitud = cliente_data.get('latitud')
-        longitud = cliente_data.get('longitud')
-        
-        id_cliente, id_usuario = obtener_o_crear_cliente(
-            nombre_cliente, telefono_cliente, ubicacion_cliente, latitud, longitud
-        )
-        
-        if not id_cliente:
-            return {'success': False, 'error': 'Error creando cliente'}
-        
-        placa = vehiculo_data.get('placa', '').upper()
-        id_vehiculo = None
-        
-        if placa:
-            vehiculo_existente = supabase.table('vehiculo') \
-                .select('id') \
-                .eq('placa', placa) \
-                .execute()
+def crear_orden_desde_sesion(datos, current_user, sesion_codigo=None, reintentos=3):
+    """
+    Crea una orden de trabajo desde los datos de la sesión
+    Con manejo de reintentos para evitar conflictos de código único
+    """
+    ultimo_error = None
+    
+    for intento in range(reintentos):
+        try:
+            cliente_data = datos.get('cliente', {})
+            vehiculo_data = datos.get('vehiculo', {})
+            descripcion_data = datos.get('descripcion', {})
+            fotos = datos.get('fotos', {})
             
-            if vehiculo_existente.data and len(vehiculo_existente.data) > 0:
-                id_vehiculo = vehiculo_existente.data[0]['id']
-                supabase.table('vehiculo') \
-                    .update({
+            telefono_cliente = cliente_data.get('telefono', '')
+            nombre_cliente = cliente_data.get('nombre', '')
+            ubicacion_cliente = cliente_data.get('ubicacion', '')
+            latitud = cliente_data.get('latitud')
+            longitud = cliente_data.get('longitud')
+            
+            id_cliente, id_usuario = obtener_o_crear_cliente(
+                nombre_cliente, telefono_cliente, ubicacion_cliente, latitud, longitud
+            )
+            
+            if not id_cliente:
+                return {'success': False, 'error': 'Error creando cliente'}
+            
+            placa = vehiculo_data.get('placa', '').upper()
+            id_vehiculo = None
+            
+            if placa:
+                vehiculo_existente = supabase.table('vehiculo') \
+                    .select('id') \
+                    .eq('placa', placa) \
+                    .execute()
+                
+                if vehiculo_existente.data and len(vehiculo_existente.data) > 0:
+                    id_vehiculo = vehiculo_existente.data[0]['id']
+                    supabase.table('vehiculo') \
+                        .update({
+                            'marca': vehiculo_data.get('marca', ''),
+                            'modelo': vehiculo_data.get('modelo', ''),
+                            'anio': vehiculo_data.get('anio'),
+                            'kilometraje': vehiculo_data.get('kilometraje', 0)
+                        }) \
+                        .eq('id', id_vehiculo) \
+                        .execute()
+                else:
+                    vehiculo_result = supabase.table('vehiculo').insert({
+                        'id_cliente': id_cliente,
+                        'placa': placa,
                         'marca': vehiculo_data.get('marca', ''),
                         'modelo': vehiculo_data.get('modelo', ''),
                         'anio': vehiculo_data.get('anio'),
                         'kilometraje': vehiculo_data.get('kilometraje', 0)
-                    }) \
-                    .eq('id', id_vehiculo) \
-                    .execute()
-            else:
-                vehiculo_result = supabase.table('vehiculo').insert({
-                    'id_cliente': id_cliente,
-                    'placa': placa,
-                    'marca': vehiculo_data.get('marca', ''),
-                    'modelo': vehiculo_data.get('modelo', ''),
-                    'anio': vehiculo_data.get('anio'),
-                    'kilometraje': vehiculo_data.get('kilometraje', 0)
-                }).execute()
-                
-                if not vehiculo_result.data:
-                    return {'success': False, 'error': 'Error creando vehículo'}
-                id_vehiculo = vehiculo_result.data[0]['id']
-        
-        codigo_unico = generar_codigo_unico()
-        
-        segundo_jefe_id = None
-        if sesion_codigo and sesion_codigo in sesiones_activas:
-            sesion = sesiones_activas[sesion_codigo]
-            if len(sesion.get('colaboradores', [])) > 1:
-                for colab_id in sesion.get('colaboradores', []):
-                    if colab_id != current_user['id']:
-                        segundo_jefe_id = colab_id
-                        break
-        
-        orden_data = {
-            'codigo_unico': codigo_unico,
-            'id_vehiculo': id_vehiculo,
-            'id_jefe_operativo': current_user['id'],
-            'fecha_ingreso': datetime.datetime.now().isoformat(),
-            'estado_global': 'EnRecepcion'
-        }
-        
-        if segundo_jefe_id:
-            orden_data['id_jefe_operativo_2'] = segundo_jefe_id
-        
-        orden_result = supabase.table('ordentrabajo').insert(orden_data).execute()
-        
-        if not orden_result.data:
-            return {'success': False, 'error': 'Error creando orden de trabajo'}
-        
-        id_orden = orden_result.data[0]['id']
-        
-        # Guardar recepción - LAS URLs YA VIENEN DE CLOUDINARY (frontend)
-        recepcion_data = {
-            'id_orden_trabajo': id_orden,
-            'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
-            'url_lateral_derecha': fotos.get('url_lateral_derecha'),
-            'url_foto_frontal': fotos.get('url_foto_frontal'),
-            'url_foto_trasera': fotos.get('url_foto_trasera'),
-            'url_foto_superior': fotos.get('url_foto_superior'),
-            'url_foto_inferior': fotos.get('url_foto_inferior'),
-            'url_foto_tablero': fotos.get('url_foto_tablero'),
-            'url_grabacion_problema': descripcion_data.get('audio_url'),
-            'transcripcion_problema': descripcion_data.get('texto', '')
-        }
-        
-        recepcion_result = supabase.table('recepcion').insert(recepcion_data).execute()
-        
-        if not recepcion_result.data:
-            supabase.table('ordentrabajo').delete().eq('id', id_orden).execute()
-            return {'success': False, 'error': 'Error guardando recepción'}
-        
-        return {'success': True, 'codigo': codigo_unico, 'id_orden': id_orden}
-        
-    except Exception as e:
-        logger.error(f"Error creando orden: {str(e)}")
-        return {'success': False, 'error': str(e)}
+                    }).execute()
+                    
+                    if not vehiculo_result.data:
+                        return {'success': False, 'error': 'Error creando vehículo'}
+                    id_vehiculo = vehiculo_result.data[0]['id']
+            
+            # Generar código único (con reintento si falla)
+            codigo_unico = generar_codigo_unico()
+            
+            segundo_jefe_id = None
+            if sesion_codigo and sesion_codigo in sesiones_activas:
+                sesion = sesiones_activas[sesion_codigo]
+                if len(sesion.get('colaboradores', [])) > 1:
+                    for colab_id in sesion.get('colaboradores', []):
+                        if colab_id != current_user['id']:
+                            segundo_jefe_id = colab_id
+                            break
+            
+            orden_data = {
+                'codigo_unico': codigo_unico,
+                'id_vehiculo': id_vehiculo,
+                'id_jefe_operativo': current_user['id'],
+                'fecha_ingreso': datetime.datetime.now().isoformat(),
+                'estado_global': 'EnRecepcion'
+            }
+            
+            if segundo_jefe_id:
+                orden_data['id_jefe_operativo_2'] = segundo_jefe_id
+            
+            orden_result = supabase.table('ordentrabajo').insert(orden_data).execute()
+            
+            if not orden_result.data:
+                # Si hay error de duplicado, reintentar con nuevo código
+                if intento < reintentos - 1:
+                    logger.warning(f"⚠️ Intento {intento + 1} falló, reintentando...")
+                    continue
+                return {'success': False, 'error': 'Error creando orden de trabajo'}
+            
+            id_orden = orden_result.data[0]['id']
+            
+            # Guardar recepción
+            recepcion_data = {
+                'id_orden_trabajo': id_orden,
+                'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
+                'url_lateral_derecha': fotos.get('url_lateral_derecha'),
+                'url_foto_frontal': fotos.get('url_foto_frontal'),
+                'url_foto_trasera': fotos.get('url_foto_trasera'),
+                'url_foto_superior': fotos.get('url_foto_superior'),
+                'url_foto_inferior': fotos.get('url_foto_inferior'),
+                'url_foto_tablero': fotos.get('url_foto_tablero'),
+                'url_grabacion_problema': descripcion_data.get('audio_url'),
+                'transcripcion_problema': descripcion_data.get('texto', '')
+            }
+            
+            recepcion_result = supabase.table('recepcion').insert(recepcion_data).execute()
+            
+            if not recepcion_result.data:
+                supabase.table('ordentrabajo').delete().eq('id', id_orden).execute()
+                return {'success': False, 'error': 'Error guardando recepción'}
+            
+            logger.info(f"✅ Orden creada: {codigo_unico}")
+            return {'success': True, 'codigo': codigo_unico, 'id_orden': id_orden}
+            
+        except Exception as e:
+            ultimo_error = str(e)
+            logger.error(f"Error en intento {intento + 1}: {ultimo_error}")
+            if intento < reintentos - 1:
+                continue
+    
+    return {'success': False, 'error': ultimo_error or 'Error desconocido'}
 
 # =====================================================
 # DECORADOR DE AUTENTICACIÓN
@@ -417,7 +462,7 @@ def jefe_operativo_required(f):
             
             usuario = user_result.data[0]
             
-            # Obtener roles usando id_rol
+            # Obtener roles
             roles_result = supabase.table('usuario_rol') \
                 .select('id_rol, rol!inner(nombre_rol)') \
                 .eq('id_usuario', user_id) \
@@ -576,7 +621,6 @@ def guardar_seccion(current_user):
             )
             
         elif seccion == 'fotos':
-            # Solo guardamos las URLs que vienen del frontend (ya subidas a Cloudinary)
             sesion['datos']['fotos'] = datos_seccion
             fotos_validas = sum(1 for url in datos_seccion.values() if url and url != 'null')
             sesion['secciones_completadas']['fotos'] = fotos_validas == 7
@@ -642,6 +686,8 @@ def finalizar_sesion(current_user):
         codigo_sesion = data.get('codigo')
         datos_directos = data.get('datos')
         
+        logger.info(f"📝 Finalizando sesión: {codigo_sesion}")
+        
         if not codigo_sesion:
             return jsonify({'error': 'Código requerido'}), 400
         
@@ -661,10 +707,11 @@ def finalizar_sesion(current_user):
         if secciones_faltantes:
             return jsonify({'error': f'Faltan: {", ".join(secciones_faltantes)}'}), 400
         
-        resultado = crear_orden_desde_sesion(sesion['datos'], current_user, codigo_sesion)
+        resultado = crear_orden_desde_sesion(sesion['datos'], current_user, codigo_sesion, reintentos=3)
         
         if not resultado['success']:
-            return jsonify({'error': resultado['error']}), 500
+            logger.error(f"❌ Error creando orden: {resultado.get('error')}")
+            return jsonify({'error': resultado.get('error', 'Error desconocido')}), 500
         
         # Cambiar estado a 'finalizada'
         sesion['estado'] = 'finalizada'
@@ -674,7 +721,7 @@ def finalizar_sesion(current_user):
         if codigo_sesion in sesiones_activas:
             del sesiones_activas[codigo_sesion]
         
-        logger.info(f"✅ Sesión {codigo_sesion} finalizada y eliminada de activas")
+        logger.info(f"✅ Sesión {codigo_sesion} finalizada. Orden: {resultado['codigo']}")
         
         return jsonify({
             'success': True,
@@ -753,7 +800,6 @@ def listar_sesiones_activas(current_user):
     try:
         sesiones = []
         for codigo, s in sesiones_activas.items():
-            # Solo incluir sesiones con estado 'activa'
             if s.get('estado') == 'activa':
                 sesiones.append({
                     'codigo': s['codigo'],
@@ -777,7 +823,7 @@ def listar_recepciones(current_user):
         resultado = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo, vehiculo!inner(placa, marca, modelo, cliente!inner(id_usuario, usuario!inner(nombre, contacto, ubicacion)))') \
             .order('fecha_ingreso', desc=True) \
-            .limit(10) \
+            .limit(50) \
             .execute()
         
         recepciones = []

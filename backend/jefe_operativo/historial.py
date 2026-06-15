@@ -1,5 +1,6 @@
 # =====================================================
 # HISTORIAL DE VEHÍCULOS - JEFE OPERATIVO
+# VERSIÓN CORREGIDA CON COORDENADAS
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -52,22 +53,28 @@ def obtener_historial_vehiculo(current_user):
         # 2. Obtener cliente
         cliente_nombre = 'No registrado'
         cliente_telefono = 'No registrado'
+        cliente_latitud = None
+        cliente_longitud = None
         
         if vehiculo.get('id_cliente'):
             cliente_result = supabase.table('cliente') \
-                .select('id_usuario') \
+                .select('id_usuario, latitud, longitud') \
                 .eq('id', vehiculo['id_cliente']) \
                 .execute()
             
-            if cliente_result.data and cliente_result.data[0].get('id_usuario'):
-                id_usuario = cliente_result.data[0]['id_usuario']
-                usuario_result = supabase.table('usuario') \
-                    .select('nombre, contacto') \
-                    .eq('id', id_usuario) \
-                    .execute()
-                if usuario_result.data:
-                    cliente_nombre = usuario_result.data[0].get('nombre', 'No registrado')
-                    cliente_telefono = usuario_result.data[0].get('contacto', 'No registrado')
+            if cliente_result.data:
+                cliente_latitud = cliente_result.data[0].get('latitud')
+                cliente_longitud = cliente_result.data[0].get('longitud')
+                
+                if cliente_result.data[0].get('id_usuario'):
+                    id_usuario = cliente_result.data[0]['id_usuario']
+                    usuario_result = supabase.table('usuario') \
+                        .select('nombre, contacto') \
+                        .eq('id', id_usuario) \
+                        .execute()
+                    if usuario_result.data:
+                        cliente_nombre = usuario_result.data[0].get('nombre', 'No registrado')
+                        cliente_telefono = usuario_result.data[0].get('contacto', 'No registrado')
         
         # 3. Obtener órdenes del vehículo
         ordenes_result = supabase.table('ordentrabajo') \
@@ -87,7 +94,9 @@ def obtener_historial_vehiculo(current_user):
                     'anio': vehiculo.get('anio'),
                     'kilometraje': vehiculo.get('kilometraje'),
                     'cliente_nombre': cliente_nombre,
-                    'cliente_telefono': cliente_telefono
+                    'cliente_telefono': cliente_telefono,
+                    'latitud': cliente_latitud,
+                    'longitud': cliente_longitud
                 },
                 'ordenes': [],
                 'resumen': {}
@@ -199,7 +208,9 @@ def obtener_historial_vehiculo(current_user):
                 'anio': vehiculo.get('anio'),
                 'kilometraje': vehiculo.get('kilometraje'),
                 'cliente_nombre': cliente_nombre,
-                'cliente_telefono': cliente_telefono
+                'cliente_telefono': cliente_telefono,
+                'latitud': cliente_latitud,
+                'longitud': cliente_longitud
             },
             'ordenes': ordenes_resultado,
             'resumen': resumen
@@ -260,11 +271,9 @@ def obtener_ultimas_ordenes(current_user):
     """Obtener las últimas 10 órdenes de trabajo"""
     try:
         limite = request.args.get('limite', 10, type=int)
-        # Limitar a máximo 10
         if limite > 10:
             limite = 10
         
-        # Obtener las últimas órdenes
         ordenes_result = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_salida, id_vehiculo, id_jefe_operativo') \
             .order('fecha_ingreso', desc=True) \
@@ -275,18 +284,11 @@ def obtener_ultimas_ordenes(current_user):
             return jsonify({
                 'success': True, 
                 'ordenes': [], 
-                'resumen': {
-                    'total': 0, 
-                    'entregados': 0, 
-                    'en_proceso': 0, 
-                    'en_pausa': 0, 
-                    'en_recepcion': 0
-                }
+                'resumen': {'total': 0, 'entregados': 0, 'en_proceso': 0, 'en_pausa': 0, 'en_recepcion': 0}
             }), 200
         
         ordenes = ordenes_result.data
         
-        # Obtener vehículos
         vehiculos_ids = list(set([o['id_vehiculo'] for o in ordenes if o.get('id_vehiculo')]))
         vehiculos_map = {}
         if vehiculos_ids:
@@ -297,7 +299,6 @@ def obtener_ultimas_ordenes(current_user):
             for v in (vehiculos.data or []):
                 vehiculos_map[v['id']] = v
         
-        # Obtener jefes
         jefes_ids = list(set([o['id_jefe_operativo'] for o in ordenes if o.get('id_jefe_operativo')]))
         jefes_map = {}
         if jefes_ids:
@@ -308,7 +309,6 @@ def obtener_ultimas_ordenes(current_user):
             for j in (jefes.data or []):
                 jefes_map[j['id']] = j['nombre']
         
-        # Obtener diagnósticos
         ordenes_ids = [o['id'] for o in ordenes]
         diagnosticos_map = {}
         if ordenes_ids:
@@ -322,7 +322,6 @@ def obtener_ultimas_ordenes(current_user):
         ordenes_resultado = []
         for orden in ordenes:
             v = vehiculos_map.get(orden['id_vehiculo'], {})
-            
             ordenes_resultado.append({
                 'id': orden['id'],
                 'codigo_unico': orden['codigo_unico'],
@@ -344,11 +343,7 @@ def obtener_ultimas_ordenes(current_user):
             'en_recepcion': len([o for o in ordenes_resultado if o['estado_global'] == 'EnRecepcion'])
         }
         
-        return jsonify({
-            'success': True,
-            'ordenes': ordenes_resultado,
-            'resumen': resumen
-        }), 200
+        return jsonify({'success': True, 'ordenes': ordenes_resultado, 'resumen': resumen}), 200
         
     except Exception as e:
         logger.error(f"Error obteniendo últimas órdenes: {str(e)}")
@@ -374,7 +369,6 @@ def obtener_detalle_orden(current_user, id_orden):
         
         orden = orden_result.data[0]
         
-        # Obtener vehículo
         vehiculo = {}
         if orden.get('id_vehiculo'):
             v_result = supabase.table('vehiculo') \
@@ -384,82 +378,36 @@ def obtener_detalle_orden(current_user, id_orden):
             if v_result.data:
                 vehiculo = v_result.data[0]
         
-        # Obtener cliente
         cliente_nombre = 'No registrado'
         cliente_telefono = 'No registrado'
+        cliente_latitud = None
+        cliente_longitud = None
+        
         if vehiculo.get('id_cliente'):
             cliente_result = supabase.table('cliente') \
-                .select('id_usuario') \
+                .select('id_usuario, latitud, longitud') \
                 .eq('id', vehiculo['id_cliente']) \
                 .execute()
-            if cliente_result.data and cliente_result.data[0].get('id_usuario'):
-                usuario_result = supabase.table('usuario') \
-                    .select('nombre, contacto') \
-                    .eq('id', cliente_result.data[0]['id_usuario']) \
-                    .execute()
-                if usuario_result.data:
-                    cliente_nombre = usuario_result.data[0].get('nombre', 'No registrado')
-                    cliente_telefono = usuario_result.data[0].get('contacto', 'No registrado')
+            
+            if cliente_result.data:
+                cliente_latitud = cliente_result.data[0].get('latitud')
+                cliente_longitud = cliente_result.data[0].get('longitud')
+                
+                if cliente_result.data[0].get('id_usuario'):
+                    usuario_result = supabase.table('usuario') \
+                        .select('nombre, contacto') \
+                        .eq('id', cliente_result.data[0]['id_usuario']) \
+                        .execute()
+                    if usuario_result.data:
+                        cliente_nombre = usuario_result.data[0].get('nombre', 'No registrado')
+                        cliente_telefono = usuario_result.data[0].get('contacto', 'No registrado')
         
-        # Obtener recepción
         recepcion = supabase.table('recepcion') \
             .select('*') \
             .eq('id_orden_trabajo', id_orden) \
             .execute()
         
         recepcion_data = recepcion.data[0] if recepcion.data else {}
-        
-        # Obtener planificación
-        planificacion = supabase.table('planificacion') \
-            .select('bahia_asignada, horas_estimadas, fecha_hora_inicio_estimado, fecha_hora_fin_estimado') \
-            .eq('id_orden_trabajo', id_orden) \
-            .execute()
-        
-        # Obtener técnicos asignados
-        tecnicos = []
-        asignaciones = supabase.table('asignaciontecnico') \
-            .select('id_tecnico') \
-            .eq('id_orden_trabajo', id_orden) \
-            .is_('fecha_hora_final', 'null') \
-            .execute()
-        
-        tecnicos_ids = [a['id_tecnico'] for a in (asignaciones.data or [])]
-        if tecnicos_ids:
-            tecnicos_nombres = supabase.table('usuario') \
-                .select('id, nombre') \
-                .in_('id', tecnicos_ids) \
-                .execute()
-            tecnicos_nombres_map = {t['id']: t['nombre'] for t in (tecnicos_nombres.data or [])}
-            
-            for a in (asignaciones.data or []):
-                if a['id_tecnico'] in tecnicos_nombres_map:
-                    tecnicos.append({
-                        'id': a['id_tecnico'],
-                        'nombre': tecnicos_nombres_map[a['id_tecnico']]
-                    })
-        
-        # Obtener diagnóstico inicial
-        diagnostico_inicial = None
-        diagnostico_result = supabase.table('diagnostigoinicial') \
-            .select('diagnostigo') \
-            .eq('id_orden_trabajo', id_orden) \
-            .order('fecha_hora', desc=True) \
-            .limit(1) \
-            .execute()
-        
-        if diagnostico_result.data:
-            diagnostico_inicial = diagnostico_result.data[0].get('diagnostigo')
-        
-        # Obtener fotos de recepción
-        fotos = {}
-        if recepcion_data:
-            campos_fotos = [
-                'url_lateral_izquierda', 'url_lateral_derecha', 'url_foto_frontal',
-                'url_foto_trasera', 'url_foto_superior', 'url_foto_inferior', 'url_foto_tablero'
-            ]
-            for campo in campos_fotos:
-                if recepcion_data.get(campo):
-                    fotos[campo] = recepcion_data.get(campo)
         
         resultado = {
             'id': orden['id'],
@@ -472,17 +420,22 @@ def obtener_detalle_orden(current_user, id_orden):
             'modelo': vehiculo.get('modelo', ''),
             'anio': vehiculo.get('anio'),
             'kilometraje': vehiculo.get('kilometraje'),
-            'cliente': {
-                'nombre': cliente_nombre,
-                'telefono': cliente_telefono
-            },
-            'planificacion': planificacion.data[0] if planificacion.data else None,
-            'tecnicos': tecnicos,
-            'diagnostico_inicial': diagnostico_inicial,
+            'cliente_nombre': cliente_nombre,
+            'cliente_telefono': cliente_telefono,
+            'latitud': cliente_latitud,
+            'longitud': cliente_longitud,
             'transcripcion_problema': recepcion_data.get('transcripcion_problema', ''),
             'audio_url': recepcion_data.get('url_grabacion_problema'),
-            'fotos': fotos
+            'fotos': {}
         }
+        
+        campos_fotos = [
+            'url_lateral_izquierda', 'url_lateral_derecha', 'url_foto_frontal',
+            'url_foto_trasera', 'url_foto_superior', 'url_foto_inferior', 'url_foto_tablero'
+        ]
+        for campo in campos_fotos:
+            if recepcion_data.get(campo):
+                resultado['fotos'][campo] = recepcion_data.get(campo)
         
         return jsonify({'success': True, 'detalle': resultado}), 200
         
@@ -496,7 +449,7 @@ def obtener_detalle_orden(current_user, id_orden):
 @jefe_operativo_historial_bp.route('/detalle-completo-orden/<int:id_orden>', methods=['GET'])
 @jefe_operativo_required
 def obtener_detalle_completo_orden(current_user, id_orden):
-    """Obtener detalle COMPLETO de una orden incluyendo diagnósticos técnicos"""
+    """Obtener detalle COMPLETO de una orden incluyendo diagnósticos técnicos y coordenadas del cliente"""
     try:
         logger.info(f"🔍 Obteniendo detalle COMPLETO de orden {id_orden}")
         
@@ -541,29 +494,34 @@ def obtener_detalle_completo_orden(current_user, id_orden):
             if v_result.data:
                 vehiculo = v_result.data[0]
         
-        # 4. OBTENER CLIENTE
+        # 4. OBTENER CLIENTE (incluyendo coordenadas)
         cliente_nombre = 'No registrado'
         cliente_telefono = 'No registrado'
         cliente_ubicacion = 'No registrada'
+        cliente_latitud = None
+        cliente_longitud = None
         
         if vehiculo.get('id_cliente'):
             cliente_result = supabase.table('cliente') \
-                .select('id_usuario') \
+                .select('id_usuario, latitud, longitud') \
                 .eq('id', vehiculo['id_cliente']) \
                 .execute()
             
-            if cliente_result.data and cliente_result.data[0].get('id_usuario'):
-                id_usuario = cliente_result.data[0]['id_usuario']
+            if cliente_result.data:
+                cliente_latitud = cliente_result.data[0].get('latitud')
+                cliente_longitud = cliente_result.data[0].get('longitud')
                 
-                usuario_result = supabase.table('usuario') \
-                    .select('nombre, contacto, ubicacion') \
-                    .eq('id', id_usuario) \
-                    .execute()
-                
-                if usuario_result.data:
-                    cliente_nombre = usuario_result.data[0].get('nombre', 'No registrado')
-                    cliente_telefono = usuario_result.data[0].get('contacto', 'No registrado')
-                    cliente_ubicacion = usuario_result.data[0].get('ubicacion', 'No registrada')
+                if cliente_result.data[0].get('id_usuario'):
+                    id_usuario = cliente_result.data[0]['id_usuario']
+                    usuario_result = supabase.table('usuario') \
+                        .select('nombre, contacto, ubicacion') \
+                        .eq('id', id_usuario) \
+                        .execute()
+                    
+                    if usuario_result.data:
+                        cliente_nombre = usuario_result.data[0].get('nombre', 'No registrado')
+                        cliente_telefono = usuario_result.data[0].get('contacto', 'No registrado')
+                        cliente_ubicacion = usuario_result.data[0].get('ubicacion', 'No registrada')
         
         # 5. OBTENER RECEPCIÓN
         recepcion = supabase.table('recepcion') \
@@ -715,7 +673,7 @@ def obtener_detalle_completo_orden(current_user, id_orden):
         if planif_result.data:
             planificacion = planif_result.data[0]
         
-        # 12. CONSTRUIR RESPUESTA
+        # 12. CONSTRUIR RESPUESTA CON COORDENADAS
         resultado = {
             'id': orden['id'],
             'codigo_unico': orden['codigo_unico'],
@@ -732,6 +690,8 @@ def obtener_detalle_completo_orden(current_user, id_orden):
             'cliente_nombre': cliente_nombre,
             'cliente_telefono': cliente_telefono,
             'cliente_ubicacion': cliente_ubicacion,
+            'latitud': cliente_latitud,
+            'longitud': cliente_longitud,
             'descripcion_problema': recepcion_data.get('transcripcion_problema', ''),
             'audio_recepcion': recepcion_data.get('url_grabacion_problema'),
             'fotos': fotos_recepcion,

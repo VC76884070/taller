@@ -72,6 +72,7 @@ body {
     margin-left: 280px;
     padding: 1.5rem;
     overflow-x: auto;
+    transition: margin-left 0.3s ease;
 }
 
 /* Top Bar */
@@ -434,6 +435,92 @@ body {
 }
 
 /* =====================================================
+   UBICACIÓN Y MAPAS - ESTILOS (PARA DETALLE)
+   ===================================================== */
+
+.ubicacion-item-full {
+    grid-column: span 2;
+}
+
+.ubicacion-detalle-historial {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    margin-top: 0.3rem;
+    width: 100%;
+}
+
+.ubicacion-texto-historial {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    background: var(--gris-oscuro);
+    padding: 0.7rem 0.9rem;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    line-height: 1.4;
+    border-left: 3px solid var(--rojo-primario);
+    word-break: break-word;
+}
+
+.ubicacion-texto-historial i {
+    color: var(--rojo-primario);
+    font-size: 1rem;
+    margin-top: 0.1rem;
+    flex-shrink: 0;
+}
+
+.ubicacion-texto-historial span {
+    flex: 1;
+}
+
+.maps-buttons-group {
+    display: flex;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+}
+
+.btn-maps-historial {
+    background: linear-gradient(135deg, #4285F4, #34A853);
+    color: white;
+    border: none;
+    padding: 0.55rem 1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.btn-maps-historial:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(66, 133, 244, 0.4);
+}
+
+.btn-ruta-historial {
+    background: linear-gradient(135deg, #EA4335, #FBBC05);
+    color: white;
+    border: none;
+    padding: 0.55rem 1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.btn-ruta-historial:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(234, 67, 53, 0.4);
+}
+
+/* =====================================================
    MODAL DE DETALLE - ESTILOS
    ===================================================== */
 .modal {
@@ -462,7 +549,7 @@ body {
     display: flex;
     flex-direction: column;
     border: 1px solid var(--border-color);
-    box-shadow: var(--shadow-xl);
+    box-shadow: var(--shadow-lg);
 }
 
 .modal-xl {
@@ -728,11 +815,6 @@ body {
     to { transform: translateX(0); opacity: 1; }
 }
 
-@keyframes slideOut {
-    from { transform: translateX(0); opacity: 1; }
-    to { transform: translateX(100%); opacity: 0; }
-}
-
 /* Scrollbar */
 ::-webkit-scrollbar {
     width: 8px;
@@ -782,77 +864,24 @@ body {
     margin-left: auto;
 }
 
-/* Responsive */
-@media (max-width: 1024px) {
-    .main-content {
-        margin-left: 0;
-    }
-}
-
-@media (max-width: 768px) {
-    .busqueda-grid {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .busqueda-grid .form-group {
-        min-width: auto;
-    }
-    
-    .btn-buscar, .btn-limpiar {
-        width: 100%;
-        justify-content: center;
-    }
-    
-    .orden-card-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .vehiculo-info-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .resumen-stats {
-        flex-direction: column;
-    }
-    
-    .top-bar {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .detalle-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .fotos-grid {
-        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-    }
-    
-    .modal-xl, .modal-lg {
-        width: 95%;
-    }
-}
 /* =====================================================
-   ========== RESPONSIVE ADICIONAL PARA HAMBURGUESA ==========
+   RESPONSIVE PARA MÓVIL (BOTÓN HAMBURGUESA)
    ===================================================== */
 
 /* Ajustes para cuando el sidebar está oculto en móvil/tablet */
 @media (max-width: 1024px) {
-    /* Main content ocupa todo el ancho */
     .main-content {
         margin-left: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
         padding: 1rem !important;
+        padding-top: 70px !important;
     }
     
     .content {
         padding: 1rem !important;
     }
     
-    /* Top bar responsivo */
     .top-bar {
         flex-direction: column;
         align-items: flex-start;
@@ -965,6 +994,9 @@ body {
     .btn-accion {
         padding: 0.35rem 0.8rem;
         font-size: 0.7rem;
+        flex: 1;
+        text-align: center;
+        justify-content: center;
     }
     
     /* Modales */
@@ -1013,6 +1045,27 @@ body {
     .detalle-grid {
         grid-template-columns: 1fr;
         gap: 0.5rem;
+    }
+    
+    /* Ubicación en móvil */
+    .ubicacion-item-full {
+        grid-column: span 1;
+    }
+    
+    .maps-buttons-group {
+        flex-direction: column;
+    }
+    
+    .btn-maps-historial,
+    .btn-ruta-historial {
+        width: 100%;
+        justify-content: center;
+        padding: 0.6rem 1rem;
+    }
+    
+    .ubicacion-texto-historial {
+        font-size: 0.8rem;
+        padding: 0.6rem 0.8rem;
     }
     
     .detalle-descripcion {
@@ -1097,6 +1150,12 @@ body {
     .foto-item img {
         height: 65px;
     }
+    
+    .btn-maps-historial,
+    .btn-ruta-historial {
+        font-size: 0.75rem;
+        padding: 0.5rem 0.8rem;
+    }
 }
 
 /* Orientación landscape */
@@ -1128,6 +1187,17 @@ body {
         flex-direction: row;
         flex-wrap: wrap;
     }
+    
+    .maps-buttons-group {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+    
+    .btn-maps-historial,
+    .btn-ruta-historial {
+        flex: 1;
+        justify-content: center;
+    }
 }
 
 /* Mejoras para touch */
@@ -1136,7 +1206,9 @@ body {
     .btn-limpiar,
     .btn-accion,
     .modal-close,
-    .btn-secondary {
+    .btn-secondary,
+    .btn-maps-historial,
+    .btn-ruta-historial {
         min-height: 44px;
     }
     
@@ -1148,3 +1220,7 @@ body {
         -webkit-overflow-scrolling: touch;
     }
 }
+
+/* =====================================================
+   FIN DEL CSS
+   ===================================================== */

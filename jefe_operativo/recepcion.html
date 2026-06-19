@@ -8,7 +8,9 @@
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
 
     <!-- Leaflet CSS (para mapa gratuito) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -32,6 +34,7 @@
         integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/jefe_operativo/css/dashboard.css">
@@ -396,29 +399,27 @@
     </div>
 
     <!-- ===================================================== -->
-    <!-- MODAL DE ORDEN FINALIZADA CON REPORTE COMPLETO -->
+    <!-- MODAL DE ORDEN FINALIZADA - SOLO BOTÓN DESCARGAR PDF (SIN VISTA PREVIA) -->
     <!-- ===================================================== -->
     <div class="modal" id="codigoOrdenModal">
-        <div class="modal-content modal-detalle-content" style="max-width: 900px;">
+        <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
                 <h2><i class="fas fa-check-circle" style="color: var(--verde-exito);"></i> ✅ ¡Recepción Finalizada!</h2>
                 <button class="modal-close" onclick="cerrarModalOrden()">&times;</button>
             </div>
             <div class="modal-body" id="ordenCompletadaBody">
                 <!-- Contenido dinámico generado por JS -->
-                <div class="loading-preview">
-                    <i class="fas fa-spinner fa-spin"></i>
-                    <p>Generando reporte...</p>
+                <div style="text-align: center; padding: 40px 20px;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 48px; color: #C1121F; margin-bottom: 20px;"></i>
+                    <h3 style="color: white; margin-bottom: 10px;">Generando reporte...</h3>
+                    <p style="color: #8E8E93;">Por favor espera, estamos preparando tu documento</p>
                 </div>
             </div>
             <div class="modal-footer" style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
                 <button class="btn-secondary" onclick="cerrarModalOrden()">
                     <i class="fas fa-times"></i> Cerrar
                 </button>
-                <button class="btn-primary" id="btnImprimirReporteFinal" onclick="imprimirReporteFinal()" style="display: inline-flex;">
-                    <i class="fas fa-print"></i> 📄 Imprimir Reporte
-                </button>
-                <button class="btn-primary" id="btnDescargarPDFFinal" onclick="descargarPDFFinal()" style="display: inline-flex;">
+                <button class="btn-primary" id="btnDescargarPDFFinal" style="display: inline-flex; background: linear-gradient(135deg, #C1121F, #8B0F1A);">
                     <i class="fas fa-file-pdf"></i> 📥 Descargar PDF
                 </button>
             </div>
@@ -535,7 +536,6 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     
     <!-- Sidebar include -->
     <script src="/jefe_operativo/js/include.js"></script>
@@ -543,7 +543,7 @@
     <!-- COMPRESOR DE IMÁGENES (DEBE IR ANTES QUE recepcion.js) -->
     <script src="/jefe_operativo/js/imageCompressor.js"></script>
     
-    <!-- RECEPCION.JS (VERSIÓN CON COMPRESIÓN Y REPORTE) -->
+    <!-- RECEPCION.JS -->
     <script src="/jefe_operativo/js/recepcion.js"></script>
 
     <!-- Sidebar responsive -->

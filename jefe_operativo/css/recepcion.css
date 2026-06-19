@@ -2603,6 +2603,92 @@ body.sidebar-open {
 }
 
 /* =====================================================
+   ESTILOS PARA EL MODAL DE ORDEN FINALIZADA
+   ===================================================== */
+#codigoOrdenModal .modal-content {
+    max-width: 900px;
+    width: 95%;
+}
+
+#codigoOrdenModal .modal-body {
+    padding: 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+#codigoOrdenModal .modal-footer {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+#codigoOrdenModal .btn-primary {
+    background: linear-gradient(135deg, #C1121F, #8B0F1A);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.5rem;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+#codigoOrdenModal .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(193,18,31,0.4);
+}
+
+#codigoOrdenModal .btn-primary i {
+    font-size: 1rem;
+}
+
+#codigoOrdenModal .btn-secondary {
+    background: transparent;
+    border: 2px solid var(--border-color);
+    padding: 0.6rem 1.5rem;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: var(--transition);
+    color: var(--gris-texto);
+}
+
+#codigoOrdenModal .btn-secondary:hover {
+    border-color: var(--rojo-primario);
+    color: var(--rojo-primario);
+}
+
+/* Asegurar que el contenido del reporte sea visible */
+#codigoOrdenModal .reporte-container {
+    background: white;
+    color: #1a1a1a;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+/* Scroll suave para el modal */
+#codigoOrdenModal .modal-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+#codigoOrdenModal .modal-body::-webkit-scrollbar-track {
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-full);
+}
+
+#codigoOrdenModal .modal-body::-webkit-scrollbar-thumb {
+    background: var(--rojo-primario);
+    border-radius: var(--radius-full);
+}
+
+/* =====================================================
    MEDIA QUERY PARA IMPRESIÓN DEL REPORTE
    ===================================================== */
 @media print {

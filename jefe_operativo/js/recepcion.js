@@ -96,10 +96,11 @@ let progressOverlay = null;
 let currentProgress = 0;
 let progressInterval = null;
 
-// =====================================================
-// VARIABLE PARA ALMACENAR DATOS DEL REPORTE
-// =====================================================
+// Variable para almacenar datos del reporte
 let datosReporteFinal = null;
+
+// Variable para controlar si ya se está descargando
+let descargandoPDF = false;
 
 // Elementos DOM
 const sesionesActivasPanel = document.getElementById('sesionesActivasPanel');
@@ -1133,8 +1134,7 @@ async function finalizarSesionConReporte() {
             if (data.id_orden) {
                 await mostrarReporteFinal(data.id_orden);
             } else {
-                // Fallback: mostrar solo el código
-                mostrarCodigoGenerado(data.codigo);
+                mostrarNotificacion('Error: No se recibió el ID de la orden', 'error');
             }
             
             limpiarSesionCompleta();
@@ -2221,409 +2221,315 @@ function generarHTMLReporte(detalle) {
     `;
 }
 
-// Función para imprimir el reporte
-function imprimirReporteFinal() {
-    if (!datosReporteFinal) {
-        mostrarNotificacion('⚠️ No hay datos para imprimir', 'warning');
-        return;
-    }
-    
-    const reporteHTML = generarHTMLReporte(datosReporteFinal);
-    
-    const ventana = window.open('', '_blank', 'width=1024,height=768');
-    if (!ventana) {
-        mostrarNotificacion('❌ Por favor, permite las ventanas emergentes para imprimir', 'error');
-        return;
-    }
-    
-    ventana.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Reporte - ${datosReporteFinal.codigo_unico || 'Orden'}</title>
-            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
-            <style>
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                body { 
-                    font-family: 'Plus Jakarta Sans', Arial, sans-serif;
-                    background: white;
-                    padding: 20px;
-                }
-                .reporte-container {
-                    max-width: 1000px;
-                    margin: 0 auto;
-                    background: white;
-                }
-                .reporte-header {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    border-bottom: 3px solid #C1121F;
-                    padding-bottom: 20px;
-                    margin-bottom: 25px;
-                }
-                .reporte-header .logo-area {
-                    display: flex;
-                    align-items: center;
-                    gap: 15px;
-                }
-                .reporte-header .logo-area img {
-                    height: 60px;
-                    width: auto;
-                }
-                .reporte-header .logo-area h1 {
-                    font-size: 28px;
-                    color: #1a1a1a;
-                    margin: 0;
-                    font-weight: 800;
-                }
-                .reporte-header .logo-area h1 span {
-                    color: #C1121F;
-                }
-                .reporte-header .info-empresa {
-                    text-align: right;
-                    font-size: 13px;
-                    color: #666;
-                    line-height: 1.6;
-                }
-                .reporte-header .info-empresa strong {
-                    color: #1a1a1a;
-                }
-                .reporte-titulo {
-                    text-align: center;
-                    margin: 20px 0 30px 0;
-                }
-                .reporte-titulo h2 {
-                    font-size: 24px;
-                    color: #C1121F;
-                    margin: 0;
-                    font-weight: 700;
-                }
-                .reporte-titulo .codigo-orden {
-                    font-size: 18px;
-                    color: #333;
-                    background: #f5f5f5;
-                    padding: 8px 20px;
-                    border-radius: 8px;
-                    display: inline-block;
-                    margin-top: 5px;
-                    font-weight: 600;
-                }
-                .reporte-seccion {
-                    margin: 25px 0;
-                    page-break-inside: avoid;
-                }
-                .reporte-seccion h3 {
-                    font-size: 16px;
-                    color: #C1121F;
-                    border-bottom: 2px solid #e0e0e0;
-                    padding-bottom: 8px;
-                    margin-bottom: 15px;
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                }
-                .reporte-grid {
-                    display: grid;
-                    grid-template-columns: repeat(2, 1fr);
-                    gap: 12px;
-                    padding: 0 5px;
-                }
-                .reporte-item {
-                    display: flex;
-                    flex-direction: column;
-                    padding: 8px 12px;
-                    background: #f9f9f9;
-                    border-radius: 6px;
-                    border-left: 3px solid #C1121F;
-                }
-                .reporte-item .label {
-                    font-size: 11px;
-                    color: #888;
-                    text-transform: uppercase;
-                    font-weight: 600;
-                    letter-spacing: 0.5px;
-                }
-                .reporte-item .value {
-                    font-size: 15px;
-                    color: #1a1a1a;
-                    font-weight: 500;
-                    margin-top: 2px;
-                }
-                .reporte-item.full-width {
-                    grid-column: 1 / -1;
-                }
-                .reporte-fotos-grid {
-                    display: grid;
-                    grid-template-columns: repeat(3, 1fr);
-                    gap: 15px;
-                    margin-top: 10px;
-                }
-                .reporte-foto {
-                    border: 1px solid #e0e0e0;
-                    border-radius: 8px;
-                    overflow: hidden;
-                    background: #f5f5f5;
-                }
-                .reporte-foto img {
-                    width: 100%;
-                    height: 180px;
-                    object-fit: cover;
-                    display: block;
-                }
-                .reporte-foto .foto-label {
-                    text-align: center;
-                    padding: 6px;
-                    font-size: 12px;
-                    color: #555;
-                    background: #f5f5f5;
-                    font-weight: 500;
-                }
-                .reporte-descripcion {
-                    background: #f9f9f9;
-                    padding: 15px 20px;
-                    border-radius: 8px;
-                    border-left: 4px solid #C1121F;
-                    margin: 10px 0;
-                }
-                .reporte-descripcion p {
-                    margin: 0;
-                    font-size: 14px;
-                    line-height: 1.6;
-                    color: #333;
-                }
-                .reporte-firmas {
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 40px;
-                    margin-top: 40px;
-                    padding-top: 20px;
-                    border-top: 2px dashed #ccc;
-                }
-                .reporte-firma {
-                    text-align: center;
-                }
-                .reporte-firma .firma-linea {
-                    width: 100%;
-                    height: 1px;
-                    border-top: 1px solid #333;
-                    margin: 30px 0 5px 0;
-                }
-                .reporte-firma .firma-label {
-                    font-size: 12px;
-                    color: #666;
-                }
-                .reporte-firma .firma-nombre {
-                    font-size: 14px;
-                    font-weight: 600;
-                    color: #1a1a1a;
-                    margin-top: 5px;
-                }
-                .reporte-firma .firma-fecha {
-                    font-size: 11px;
-                    color: #999;
-                }
-                .reporte-footer {
-                    margin-top: 40px;
-                    padding-top: 20px;
-                    border-top: 1px solid #e0e0e0;
-                    text-align: center;
-                    font-size: 11px;
-                    color: #999;
-                }
-                .reporte-footer .footer-info {
-                    display: flex;
-                    justify-content: center;
-                    gap: 30px;
-                    flex-wrap: wrap;
-                }
-                .estado-badge-reporte {
-                    display: inline-block;
-                    padding: 4px 16px;
-                    border-radius: 20px;
-                    font-size: 13px;
-                    font-weight: 600;
-                }
-                .estado-badge-reporte.EnRecepcion {
-                    background: #FFF3E0;
-                    color: #E65100;
-                }
-                .estado-badge-reporte.EnTaller {
-                    background: #E3F2FD;
-                    color: #0D47A1;
-                }
-                .estado-badge-reporte.Finalizado {
-                    background: #E8F5E9;
-                    color: #1B5E20;
-                }
-                .loading-preview {
-                    text-align: center;
-                    padding: 40px;
-                    color: #666;
-                }
-                .loading-preview i {
-                    font-size: 40px;
-                    color: #C1121F;
-                    margin-bottom: 15px;
-                }
-                .loading-preview p {
-                    font-size: 16px;
-                    margin: 0;
-                }
-                @media print {
-                    body { padding: 0; }
-                    .reporte-container { padding: 20px; }
-                    .reporte-foto img { height: 150px !important; }
-                    .no-print { display: none !important; }
-                }
-                @media (max-width: 768px) {
-                    .reporte-grid { grid-template-columns: 1fr; }
-                    .reporte-fotos-grid { grid-template-columns: repeat(2, 1fr); }
-                    .reporte-header { flex-direction: column; text-align: center; }
-                    .reporte-header .info-empresa { text-align: center; }
-                    .reporte-firmas { grid-template-columns: 1fr; gap: 20px; }
-                }
-                @media (max-width: 480px) {
-                    .reporte-fotos-grid { grid-template-columns: 1fr; }
-                }
-            </style>
-        </head>
-        <body>
-            ${reporteHTML}
-            <script>
-                window.onload = function() {
-                    setTimeout(function() {
-                        window.print();
-                    }, 500);
-                }
-            <\/script>
-        </body>
-        </html>
-    `);
-    ventana.document.close();
-}
-
-// Función para descargar PDF
+// =====================================================
+// FUNCIÓN PARA DESCARGAR PDF - SIN VISTA PREVIA
+// =====================================================
 async function descargarPDFFinal() {
+    // Evitar descargas múltiples
+    if (descargandoPDF) {
+        mostrarNotificacion('⏳ Ya se está generando el PDF, espera un momento...', 'warning');
+        return;
+    }
+    
     if (!datosReporteFinal) {
         mostrarNotificacion('⚠️ No hay datos para generar PDF', 'warning');
         return;
     }
+
+    descargandoPDF = true;
     
-    showProgress('Generando PDF', 'Preparando el reporte...', 3);
+    // Cambiar estado del botón
+    const btnDescargar = document.getElementById('btnDescargarPDFFinal');
+    if (btnDescargar) {
+        btnDescargar.disabled = true;
+        btnDescargar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
+    }
+
+    // Mostrar progreso
+    showProgress('Generando PDF', 'Preparando el documento...', 3);
     updateProgressBar(10, 1);
     updateProgressMessage('Generando contenido del reporte...');
-    
-    const reporteHTML = generarHTMLReporte(datosReporteFinal);
-    
-    const container = document.createElement('div');
-    container.id = 'pdfContainer';
-    container.style.cssText = `
-        position: fixed;
-        left: -9999px;
-        top: 0;
-        width: 1024px;
-        padding: 20px;
-        background: white;
-        font-family: 'Plus Jakarta Sans', Arial, sans-serif;
-    `;
-    container.innerHTML = reporteHTML;
-    document.body.appendChild(container);
-    
-    updateProgressBar(40, 2);
-    updateProgressMessage('Generando archivo PDF...');
-    
+
     try {
-        if (typeof html2pdf === 'undefined') {
-            throw new Error('La librería html2pdf no está cargada');
+        // Generar HTML del reporte
+        const reporteHTML = generarHTMLReporte(datosReporteFinal);
+
+        // Crear un contenedor temporal - OCULTO para el usuario
+        const container = document.createElement('div');
+        container.id = 'pdfContainer';
+        container.style.cssText = `
+            position: absolute;
+            left: -9999px;
+            top: -9999px;
+            width: 1024px;
+            padding: 30px;
+            background: white;
+            font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+            opacity: 0;
+            pointer-events: none;
+            overflow: visible;
+            z-index: -1;
+        `;
+        container.innerHTML = reporteHTML;
+        document.body.appendChild(container);
+
+        updateProgressBar(30, 1);
+        updateProgressMessage('Renderizando contenido...');
+
+        // Esperar a que el DOM se actualice
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Esperar a que las imágenes se carguen
+        const imagenes = container.querySelectorAll('img');
+        const promesasImagenes = Array.from(imagenes).map(img => {
+            return new Promise((resolve) => {
+                if (img.complete && img.naturalHeight > 0) {
+                    resolve();
+                } else {
+                    img.onload = () => resolve();
+                    img.onerror = () => resolve();
+                    setTimeout(resolve, 5000);
+                }
+            });
+        });
+
+        await Promise.race([
+            Promise.all(promesasImagenes),
+            new Promise(resolve => setTimeout(resolve, 10000))
+        ]);
+
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        updateProgressBar(50, 2);
+        updateProgressMessage('Generando archivo PDF...');
+
+        const contenido = container.querySelector('.reporte-container');
+        if (!contenido) {
+            throw new Error('No se encontró el contenido del reporte');
         }
+
+        if (typeof html2canvas === 'undefined') {
+            throw new Error('La librería html2canvas no está cargada');
+        }
+
+        updateProgressBar(60, 2);
+        updateProgressMessage('Capturando contenido...');
+
+        // Capturar con html2canvas
+        const canvas = await html2canvas(contenido, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            width: 1024,
+            height: contenido.scrollHeight || 1500,
+            logging: false,
+            allowTaint: true,
+            onclone: function(doc) {
+                const imgs = doc.querySelectorAll('img');
+                imgs.forEach(img => {
+                    if (!img.complete) {
+                        img.style.display = 'block';
+                        img.style.minHeight = '100px';
+                        img.style.background = '#f0f0f0';
+                    }
+                });
+            }
+        });
+
+        updateProgressBar(80, 3);
+        updateProgressMessage('Creando archivo PDF...');
+
+        // Asegurar jsPDF
+        if (typeof window.jspdf === 'undefined') {
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        const imgWidth = 210;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
         
-        const opt = {
-            margin: [10, 10, 10, 10],
-            filename: `Reporte_${datosReporteFinal.codigo_unico || 'orden'}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { 
-                scale: 2, 
-                useCORS: true,
-                logging: false,
-                letterRendering: true
-            },
-            jsPDF: { 
-                unit: 'mm', 
-                format: 'a4', 
-                orientation: 'portrait' 
-            },
-            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-        };
-        
-        updateProgressBar(70, 2);
-        updateProgressMessage('Procesando imágenes y datos...');
-        
-        const pdf = await html2pdf()
-            .set(opt)
-            .from(container)
-            .outputPdf('blob');
-        
-        updateProgressBar(90, 3);
-        updateProgressMessage('Finalizando descarga...');
-        
+        let heightLeft = imgHeight;
+        let position = 0;
+        const pageHeight = 297;
+
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft > 0) {
+            position = heightLeft - imgHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+        }
+
+        updateProgressBar(95, 3);
+        updateProgressMessage('Descargando PDF...');
+
+        // Descargar directamente - sin abrir ventana
+        const pdfBlob = pdf.output('blob');
         const link = document.createElement('a');
-        link.href = URL.createObjectURL(pdf);
+        link.href = URL.createObjectURL(pdfBlob);
         link.download = `Reporte_${datosReporteFinal.codigo_unico || 'orden'}.pdf`;
+        link.style.display = 'none';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        
+
         setTimeout(() => {
             URL.revokeObjectURL(link.href);
         }, 10000);
-        
+
         updateProgressBar(100, 3);
         setTimeout(() => {
             completeProgress(true);
             mostrarNotificacion('✅ PDF descargado exitosamente', 'success');
         }, 500);
-        
+
+        // Limpiar el contenedor temporal
+        setTimeout(() => {
+            if (container && document.body.contains(container)) {
+                document.body.removeChild(container);
+            }
+        }, 5000);
+
     } catch (error) {
         console.error('❌ Error generando PDF:', error);
         completeProgress(false);
         mostrarNotificacion('❌ Error al generar PDF: ' + error.message, 'error');
-        
-        if (confirm('No se pudo generar el PDF. ¿Deseas imprimir el reporte directamente?')) {
-            imprimirReporteFinal();
+
+        // Fallback
+        try {
+            mostrarNotificacion('Intentando método alternativo...', 'info');
+            await descargarPDFAlternativo();
+        } catch (fallbackError) {
+            console.error('❌ Error en fallback:', fallbackError);
+            mostrarNotificacion('No se pudo generar el PDF. Intenta de nuevo.', 'error');
         }
     }
+
+    // Restaurar botón
+    if (btnDescargar) {
+        btnDescargar.disabled = false;
+        btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
+    }
     
-    setTimeout(() => {
-        if (container && document.body.contains(container)) {
-            document.body.removeChild(container);
-        }
-    }, 60000);
+    descargandoPDF = false;
 }
 
-// Función para mostrar el modal con el reporte
+// =====================================================
+// FUNCIÓN ALTERNATIVA PARA DESCARGAR PDF (FALLBACK)
+// =====================================================
+async function descargarPDFAlternativo() {
+    return new Promise(async (resolve, reject) => {
+        try {
+            // Crear un contenedor temporal
+            const reporteHTML = generarHTMLReporte(datosReporteFinal);
+            
+            const container = document.createElement('div');
+            container.style.cssText = `
+                position: absolute;
+                left: -9999px;
+                top: -9999px;
+                width: 1024px;
+                padding: 30px;
+                background: white;
+                font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+                opacity: 0;
+                pointer-events: none;
+                overflow: visible;
+                z-index: -1;
+            `;
+            container.innerHTML = reporteHTML;
+            document.body.appendChild(container);
+
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            const contenido = container.querySelector('.reporte-container');
+            if (!contenido) {
+                throw new Error('No se encontró el contenido del reporte');
+            }
+
+            if (typeof html2pdf === 'undefined') {
+                throw new Error('html2pdf no está disponible');
+            }
+
+            const opt = {
+                margin: [10, 10, 10, 10],
+                filename: `Reporte_${datosReporteFinal.codigo_unico || 'orden'}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    letterRendering: true,
+                    allowTaint: true,
+                    backgroundColor: '#ffffff'
+                },
+                jsPDF: {
+                    unit: 'mm',
+                    format: 'a4',
+                    orientation: 'portrait'
+                },
+                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+            };
+
+            await html2pdf()
+                .set(opt)
+                .from(contenido)
+                .save();
+
+            mostrarNotificacion('✅ PDF descargado (método alternativo)', 'success');
+            
+            setTimeout(() => {
+                if (container && document.body.contains(container)) {
+                    document.body.removeChild(container);
+                }
+            }, 5000);
+            
+            resolve();
+        } catch (error) {
+            reject(error);
+        }
+    });
+}
+
+// =====================================================
+// FUNCIÓN PARA MOSTRAR EL MODAL CON EL REPORTE - SIN VISTA PREVIA
+// =====================================================
 async function mostrarReporteFinal(idOrden) {
     const modal = document.getElementById('codigoOrdenModal');
     const body = document.getElementById('ordenCompletadaBody');
+    const btnDescargar = document.getElementById('btnDescargarPDFFinal');
     
     if (!modal || !body) return;
     
+    // Ocultar botón mientras carga
+    if (btnDescargar) btnDescargar.style.display = 'none';
+    
+    // Mostrar solo un mensaje de carga en el modal
     body.innerHTML = `
-        <div class="loading-preview">
-            <i class="fas fa-spinner fa-spin"></i>
-            <p>Cargando datos de la orden...</p>
+        <div style="text-align: center; padding: 40px 20px;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 48px; color: #C1121F; margin-bottom: 20px;"></i>
+            <h3 style="color: white; margin-bottom: 10px;">Generando reporte...</h3>
+            <p style="color: #8E8E93;">Por favor espera, estamos preparando tu documento</p>
         </div>
     `;
     
     modal.classList.add('show');
     
+    // Cargar datos
     const detalle = await cargarDatosOrdenCompleta(idOrden);
     
     if (detalle) {
-        body.innerHTML = generarHTMLReporte(detalle);
-        
+        // Actualizar título del modal
         const modalHeader = modal.querySelector('.modal-header h2');
         if (modalHeader) {
             modalHeader.innerHTML = `
@@ -2632,19 +2538,43 @@ async function mostrarReporteFinal(idOrden) {
             `;
         }
         
-        document.getElementById('btnImprimirReporteFinal').style.display = 'inline-flex';
-        document.getElementById('btnDescargarPDFFinal').style.display = 'inline-flex';
+        // Mostrar mensaje de éxito (sin vista previa del documento)
+        body.innerHTML = `
+            <div style="text-align: center; padding: 30px 20px;">
+                <i class="fas fa-check-circle" style="font-size: 48px; color: #10B981; margin-bottom: 20px;"></i>
+                <h3 style="color: white; margin-bottom: 10px;">¡Recepción finalizada!</h3>
+                <p style="color: #8E8E93; margin-bottom: 20px;">
+                    El vehículo ha sido registrado con el código:<br>
+                    <strong style="color: #C1121F; font-size: 20px; font-family: monospace;">${detalle.codigo_unico || 'OT-N/A'}</strong>
+                </p>
+                <p style="color: #8E8E93; font-size: 14px;">Haz clic en "Descargar PDF" para obtener el reporte completo.</p>
+            </div>
+        `;
+        
+        // Mostrar botón de descarga
+        if (btnDescargar) {
+            btnDescargar.style.display = 'inline-flex';
+            btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
+            btnDescargar.onclick = function(e) {
+                e.preventDefault();
+                descargarPDFFinal();
+            };
+        }
+        
+        // Almacenar datos para la descarga
+        datosReporteFinal = detalle;
+        
+        mostrarNotificacion('✅ Reporte listo para descargar', 'success');
         
     } else {
         body.innerHTML = `
-            <div class="loading-preview" style="color: #dc3545;">
-                <i class="fas fa-exclamation-triangle"></i>
-                <p>Error al cargar los datos de la orden</p>
-                <p style="font-size: 14px; color: #666;">Intenta nuevamente o revisa la consola</p>
+            <div style="text-align: center; padding: 40px 20px; color: #dc3545;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 20px;"></i>
+                <h3>Error al cargar los datos</h3>
+                <p>Intenta nuevamente o revisa la consola</p>
             </div>
         `;
-        document.getElementById('btnImprimirReporteFinal').style.display = 'none';
-        document.getElementById('btnDescargarPDFFinal').style.display = 'none';
+        if (btnDescargar) btnDescargar.style.display = 'none';
     }
 }
 
@@ -2836,7 +2766,6 @@ function mostrarModalCodigo(codigo) {
 }
 
 function mostrarCodigoGenerado(codigo) {
-    // Función legacy - ahora usamos mostrarReporteFinal
     console.log('Código generado (legacy):', codigo);
 }
 
@@ -2934,7 +2863,6 @@ window.cerrarModalOrden = () => document.getElementById('codigoOrdenModal')?.cla
 window.cerrarModalDetalle = () => document.getElementById('modalDetalleRecepcion')?.classList.remove('show');
 window.cerrarModalEliminar = () => document.getElementById('modalConfirmarEliminar')?.classList.remove('show');
 window.verImagenAmpliada = verImagenAmpliada;
-window.imprimirReporteFinal = imprimirReporteFinal;
 window.descargarPDFFinal = descargarPDFFinal;
 window.mostrarReporteFinal = mostrarReporteFinal;
 window.cargarDatosOrdenCompleta = cargarDatosOrdenCompleta;
@@ -2947,4 +2875,4 @@ window.logout = () => {
     window.location.href = `${window.API_BASE_URL}/`;
 };
 
-console.log('✅ recepcion.js cargado - Versión con reporte de impresión completo y firma digital');
+console.log('✅ recepcion.js cargado - Versión con reporte de impresión completo y firma digital (sin vista previa)');

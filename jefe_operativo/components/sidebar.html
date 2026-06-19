@@ -1,54 +1,49 @@
-<!-- SIDEBAR - Componente reutilizable -->
+<!-- SIDEBAR - TÉCNICO MECÁNICO (SIN SELECTOR DE ROLES) -->
 <aside class="sidebar">
     <div class="sidebar-header">
-        <img src="../img/logoblanco.jpeg" alt="FURIA MOTOR" class="sidebar-logo">
+        <img src="../../img/logoblanco.jpeg" alt="FURIA MOTOR" class="sidebar-logo">
         <span class="sidebar-brand">FURIA MOTOR</span>
     </div>
 
     <div class="sidebar-user">
         <div class="user-avatar">
-            <i class="fas fa-user-tie"></i>
+            <i class="fas fa-user-cog"></i>
         </div>
         <div class="user-info">
-            <span class="user-name" id="userName">María González</span>
-            <span class="user-role">Jefe Operativo</span>
+            <span class="user-name" id="userName">Cargando...</span>
+            <span class="user-role">Técnico Mecánico</span>
         </div>
     </div>
 
     <nav class="sidebar-nav">
         <ul>
-            <li class="nav-item" data-page="dashboard">
-                <a href="dashboard.html" class="nav-link">
-                    <i class="fas fa-chart-pie"></i>
-                    <span>Dashboard</span>
-                </a>
-            </li>
-            <li class="nav-item" data-page="recepcion">
-                <a href="recepcion.html" class="nav-link">
+            <li class="nav-item" data-page="misvehiculos">
+                <a href="misvehiculos.html" class="nav-link" onclick="navegarPagina(event, 'misvehiculos')">
                     <i class="fas fa-car"></i>
-                    <span>Recepción de Vehículos</span>
+                    <span>Mis Vehículos</span>
+                    <span class="badge" id="vehiculosBadge">0</span>
                 </a>
             </li>
-            <li class="nav-item" data-page="control_calidad"> 
-                <a href="control_calidad.html" class="nav-link">
-                    <i class="fas fa-check-circle"></i>
-                    <span>Control de Calidad</span>
+            <li class="nav-item" data-page="diagnostico">
+                <a href="diagnostico.html" class="nav-link" onclick="navegarPagina(event, 'diagnostico')">
+                    <i class="fas fa-stethoscope"></i>
+                    <span>Diagnóstico</span>
                 </a>
             </li>
-            <li class="nav-item" data-page="comunicados">
-                <a href="comunicados.html" class="nav-link">
-                    <i class="fas fa-bullhorn"></i>
-                    <span>Comunicados</span>
+            <li class="nav-item" data-page="avance">
+                <a href="avance.html" class="nav-link" onclick="navegarPagina(event, 'avance')">
+                    <i class="fas fa-tasks"></i>
+                    <span>Avance de Trabajo</span>
                 </a>
             </li>
             <li class="nav-item" data-page="historial">
-                <a href="historial.html" class="nav-link">
+                <a href="historial.html" class="nav-link" onclick="navegarPagina(event, 'historial')">
                     <i class="fas fa-history"></i>
                     <span>Historial</span>
                 </a>
             </li>
             <li class="nav-item" data-page="perfil">
-                <a href="perfil.html" class="nav-link">
+                <a href="perfil.html" class="nav-link" onclick="navegarPagina(event, 'perfil')">
                     <i class="fas fa-user-circle"></i>
                     <span>Perfil</span>
                 </a>
@@ -57,7 +52,7 @@
 
         <ul class="sidebar-bottom">
             <li class="nav-item">
-                <a href="#" onclick="logout()" class="nav-link">
+                <a href="#" onclick="cerrarSesion()" class="nav-link">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Cerrar Sesión</span>
                 </a>

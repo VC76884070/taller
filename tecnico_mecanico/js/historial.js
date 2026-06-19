@@ -1,15 +1,10 @@
 // =====================================================
 // HISTORIAL DE TRABAJOS - TÉCNICO MECÁNICO (OPTIMIZADO)
 // SOLO ÚLTIMOS 10 TRABAJOS
-// VERSIÓN CORREGIDA - USA DIRECTAMENTE window.API_BASE_URL
+// VERSIÓN CORREGIDA - SIN CARGA MANUAL DEL SIDEBAR
 // =====================================================
 
-// =====================================================
-// NOTA: API_BASE_URL ya está definida globalmente por include.js
-// como window.API_BASE_URL. NO redeclarar como const aquí.
-// =====================================================
-
-// Verificar si existe la variable global, si no, crearla (solo por si acaso)
+// Verificar si existe la variable global, si no, crearla
 if (typeof window.API_BASE_URL === 'undefined') {
     window.API_BASE_URL = (() => {
         if (window.location.hostname === 'localhost' || 
@@ -27,7 +22,7 @@ let token = null;
 let trabajos = [];
 let trabajosFiltrados = [];
 let paginaActual = 1;
-let itemsPorPagina = 5; // Mostrar 5 por página para mejor UX
+let itemsPorPagina = 5;
 let trabajoSeleccionado = null;
 
 // =====================================================
@@ -56,6 +51,15 @@ function showToast(message, type = 'success') {
     if (!container) {
         container = document.createElement('div');
         container.id = 'toast-container';
+        container.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        `;
         document.body.appendChild(container);
     }
     
@@ -67,6 +71,19 @@ function showToast(message, type = 'success') {
                  type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
     
     toast.innerHTML = `<i class="fas ${icon}"></i><span>${message}</span>`;
+    toast.style.cssText = `
+        background: var(--bg-card);
+        color: var(--blanco);
+        padding: 0.75rem 1.25rem;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-left: 4px solid ${type === 'success' ? '#10B981' : type === 'error' ? '#C1121F' : type === 'warning' ? '#F59E0B' : '#1E3A5F'};
+        animation: slideIn 0.3s ease;
+        margin-bottom: 0.5rem;
+    `;
     container.appendChild(toast);
     
     setTimeout(() => {
@@ -149,7 +166,9 @@ async function cargarHistorial() {
             renderizarTrabajos();
             actualizarEstadisticas();
             actualizarPaginacion();
-            showToast(`${trabajos.length} trabajos encontrados (últimos 10)`, 'success');
+            if (trabajos.length > 0) {
+                showToast(`${trabajos.length} trabajos encontrados`, 'success');
+            }
         } else {
             showToast(data.error || 'Error al cargar historial', 'error');
         }
@@ -163,6 +182,7 @@ async function cargarHistorial() {
                 <div class="empty-state">
                     <i class="fas fa-exclamation-triangle"></i>
                     <p>Error al cargar el historial</p>
+                    <button onclick="cargarHistorial()" class="btn-retry">Reintentar</button>
                 </div>
             `;
         }
@@ -610,6 +630,10 @@ function verImagenAmpliada(url, titulo) {
 function cerrarSesion() {
     localStorage.removeItem('furia_token');
     localStorage.removeItem('furia_user');
+    localStorage.removeItem('furia_remembered');
+    localStorage.removeItem('furia_remembered_type');
+    localStorage.removeItem('furia_selected_role');
+    localStorage.removeItem('furia_selected_role_user');
     window.location.href = `${window.API_BASE_URL}/`;
 }
 
@@ -650,18 +674,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnAnterior) btnAnterior.addEventListener('click', () => cambiarPagina(-1));
     if (btnSiguiente) btnSiguiente.addEventListener('click', () => cambiarPagina(1));
     
-    // Cargar sidebar
-    const sidebarContainer = document.getElementById('sidebar-container');
-    if (sidebarContainer) {
-        try {
-            const response = await fetch(`${window.API_BASE_URL}/tecnico_mecanico/components/sidebar.html`);
-            if (response.ok) {
-                sidebarContainer.innerHTML = await response.text();
-            }
-        } catch (error) {
-            console.error('Error cargando sidebar:', error);
-        }
-    }
+    // IMPORTANTE: NO cargamos el sidebar manualmente aquí
+    // El sidebar se carga automáticamente desde include.js
     
     // Exponer funciones globales
     window.verDetalle = verDetalle;

@@ -96,6 +96,11 @@ let progressOverlay = null;
 let currentProgress = 0;
 let progressInterval = null;
 
+// =====================================================
+// VARIABLE PARA ALMACENAR DATOS DEL REPORTE
+// =====================================================
+let datosReporteFinal = null;
+
 // Elementos DOM
 const sesionesActivasPanel = document.getElementById('sesionesActivasPanel');
 const sesionesList = document.getElementById('sesionesList');
@@ -1058,7 +1063,10 @@ async function recuperarSesionActiva() {
     }
 }
 
-async function finalizarSesion() {
+// =====================================================
+// FUNCIÓN PARA FINALIZAR SESIÓN CON REPORTE
+// =====================================================
+async function finalizarSesionConReporte() {
     if (!codigoSesion) return;
     
     showProgress('Finalizando Recepción', 'Preparando datos...', 3);
@@ -1121,7 +1129,14 @@ async function finalizarSesion() {
             updateProgressBar(100, 3);
             updateProgressMessage('¡Recepción finalizada con éxito!');
             
-            mostrarCodigoGenerado(data.codigo);
+            // Mostrar el reporte con el ID de la orden
+            if (data.id_orden) {
+                await mostrarReporteFinal(data.id_orden);
+            } else {
+                // Fallback: mostrar solo el código
+                mostrarCodigoGenerado(data.codigo);
+            }
+            
             limpiarSesionCompleta();
             
             setTimeout(() => {
@@ -1131,7 +1146,7 @@ async function finalizarSesion() {
             
             if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
             await cargarRecepciones();
-            await cargarSesionesActivas(); // Recargar lista de sesiones activas
+            await cargarSesionesActivas();
         } else {
             throw new Error(data.message || 'Error al finalizar');
         }
@@ -1215,7 +1230,7 @@ function mostrarConfirmacionCancelar() {
         limpiarSesionCompleta();
         mostrarNotificacion('Recepción cancelada', 'success');
         if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
-        cargarSesionesActivas(); // Recargar lista
+        cargarSesionesActivas();
     }
 }
 
@@ -1233,7 +1248,6 @@ async function cargarSesionesActivas() {
         const data = await response.json();
         
         if (data.sesiones) {
-            // Filtrar solo sesiones activas
             const sesionesActivasFiltradas = data.sesiones.filter(s => s.estado === 'activa');
             renderSesionesActivas(sesionesActivasFiltradas);
         }
@@ -1245,7 +1259,6 @@ async function cargarSesionesActivas() {
 function renderSesionesActivas(sesiones) {
     if (!sesionesList) return;
     
-    // Filtrar explícitamente solo sesiones activas
     const activas = sesiones.filter(s => s.estado === 'activa');
     
     if (sesionesCount) sesionesCount.textContent = activas.length;
@@ -1260,7 +1273,6 @@ function renderSesionesActivas(sesiones) {
         const estaCompleta = colaboradoresCount >= 2;
         const esActiva = codigoSesion === s.codigo;
         
-        // Verificar que la sesión no esté finalizada
         if (s.estado !== 'activa') return '';
         
         return `
@@ -1293,7 +1305,7 @@ async function unirseSesionConCodigo(codigo) {
             localStorage.setItem('sesion_actual', codigo);
             activarSesion();
             mostrarNotificacion(`Te has unido a ${codigoSesion}`, 'success');
-            await cargarSesionesActivas(); // Recargar lista
+            await cargarSesionesActivas();
         }
     } catch (error) {
         mostrarNotificacion(error.message, 'error');
@@ -1948,12 +1960,701 @@ async function eliminarRecepcion(id) {
 }
 
 // =====================================================
+// FUNCIONES DEL REPORTE DE IMPRESIÓN
+// =====================================================
+
+// Función para cargar datos completos de la orden
+async function cargarDatosOrdenCompleta(idOrden) {
+    try {
+        mostrarNotificacion('📊 Cargando datos de la orden...', 'info');
+        
+        const response = await fetchWithToken(`${API_URL}/jefe-operativo/detalle-recepcion/${idOrden}`, { 
+            method: 'GET' 
+        });
+        
+        if (!response.ok) {
+            throw new Error('Error al cargar los datos de la orden');
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.detalle) {
+            datosReporteFinal = data.detalle;
+            datosReporteFinal.id_orden = idOrden;
+            return data.detalle;
+        } else {
+            throw new Error(data.error || 'No se pudieron obtener los datos');
+        }
+    } catch (error) {
+        console.error('❌ Error cargando orden:', error);
+        mostrarNotificacion('Error cargando datos: ' + error.message, 'error');
+        return null;
+    }
+}
+
+// Función para generar el HTML del reporte
+function generarHTMLReporte(detalle) {
+    if (!detalle) {
+        return '<div class="loading-preview"><i class="fas fa-exclamation-triangle"></i><p>No hay datos para mostrar</p></div>';
+    }
+    
+    // Procesar fotos
+    const fotos = detalle.fotos || {};
+    const fotosArray = Object.entries(fotos)
+        .filter(([key, url]) => url && url !== 'null' && url !== 'None' && url !== '')
+        .map(([key, url]) => ({
+            campo: key,
+            label: key.replace(/url_/g, '').replace(/_/g, ' ').toUpperCase(),
+            url: url
+        }));
+    
+    const fotosHTML = fotosArray.length > 0 ? `
+        <div class="reporte-fotos-grid">
+            ${fotosArray.map(f => `
+                <div class="reporte-foto">
+                    <img src="${f.url}" alt="${f.label}" loading="lazy" onerror="this.style.display='none'">
+                    <div class="foto-label">${f.label}</div>
+                </div>
+            `).join('')}
+        </div>
+    ` : '<p style="color: #999; font-style: italic;">No se registraron fotos</p>';
+    
+    // Datos del cliente
+    const clienteNombre = detalle.cliente_nombre || 'No registrado';
+    const clienteTelefono = detalle.cliente_telefono || 'No registrado';
+    const clienteUbicacion = detalle.cliente_ubicacion || 'No especificada';
+    const coordenadas = (detalle.latitud && detalle.longitud) ? 
+        `${detalle.latitud}, ${detalle.longitud}` : 'No especificadas';
+    
+    // Datos del vehículo
+    const placa = detalle.placa || 'No registrada';
+    const marca = detalle.marca || 'No registrada';
+    const modelo = detalle.modelo || 'No registrado';
+    const anio = detalle.anio || 'No especificado';
+    const kilometraje = detalle.kilometraje ? 
+        `${Number(detalle.kilometraje).toLocaleString()} km` : '0 km';
+    
+    // Estado
+    const estado = detalle.estado_global || 'EnRecepcion';
+    const estadoLabels = {
+        'EnRecepcion': 'En Recepción',
+        'EnTaller': 'En Taller',
+        'Finalizado': 'Finalizado'
+    };
+    const estadoLabel = estadoLabels[estado] || estado;
+    
+    // Jefes operativos
+    const jefePrincipal = detalle.jefe_operativo?.nombre || 'No asignado';
+    const jefeSecundario = detalle.jefe_operativo_2?.nombre || null;
+    const jefePrincipalContacto = detalle.jefe_operativo?.contacto || '';
+    const jefePrincipalEmail = detalle.jefe_operativo?.email || '';
+    
+    // Fecha
+    const fechaIngreso = detalle.fecha_ingreso ? 
+        new Date(detalle.fecha_ingreso).toLocaleString('es-ES', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        }) : 'No registrada';
+    
+    // Audio
+    const audioHTML = detalle.audio_url ? `
+        <div style="margin-top: 10px;">
+            <audio controls src="${detalle.audio_url}" style="width: 100%; max-width: 400px; border-radius: 8px;"></audio>
+        </div>
+    ` : '';
+    
+    // Fecha actual para firmas
+    const fechaActual = new Date().toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+    
+    return `
+        <div class="reporte-container" id="reporteImprimible">
+            <!-- ENCABEZADO -->
+            <div class="reporte-header">
+                <div class="logo-area">
+                    <img src="/icono.png" alt="FURIA MOTOR" onerror="this.style.display='none'">
+                    <h1>FURIA <span>MOTOR</span></h1>
+                </div>
+                <div class="info-empresa">
+                    <strong>FURIA MOTOR COMPANY</strong><br>
+                    Taller Automotriz Especializado<br>
+                    <i class="fas fa-phone"></i> +591 77712345<br>
+                    <i class="fas fa-map-marker-alt"></i> Cochabamba, Bolivia
+                </div>
+            </div>
+            
+            <!-- TÍTULO -->
+            <div class="reporte-titulo">
+                <h2>📋 ORDEN DE TRABAJO - RECEPCIÓN</h2>
+                <div class="codigo-orden">
+                    <i class="fas fa-hashtag"></i> ${detalle.codigo_unico || 'OT-N/A'}
+                </div>
+            </div>
+            
+            <!-- INFORMACIÓN GENERAL -->
+            <div class="reporte-seccion">
+                <h3><i class="fas fa-info-circle"></i> Información General</h3>
+                <div class="reporte-grid">
+                    <div class="reporte-item">
+                        <span class="label">Fecha de Ingreso</span>
+                        <span class="value">${fechaIngreso}</span>
+                    </div>
+                    <div class="reporte-item">
+                        <span class="label">Estado</span>
+                        <span class="value"><span class="estado-badge-reporte ${estado}">${estadoLabel}</span></span>
+                    </div>
+                    <div class="reporte-item">
+                        <span class="label">ID Orden</span>
+                        <span class="value">#${detalle.id || 'N/A'}</span>
+                    </div>
+                    <div class="reporte-item">
+                        <span class="label">Jefe Operativo</span>
+                        <span class="value">${jefePrincipal}</span>
+                    </div>
+                    ${jefeSecundario ? `
+                    <div class="reporte-item">
+                        <span class="label">Jefe Operativo 2</span>
+                        <span class="value">${jefeSecundario}</span>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+            
+            <!-- DATOS DEL CLIENTE -->
+            <div class="reporte-seccion">
+                <h3><i class="fas fa-user"></i> Datos del Cliente</h3>
+                <div class="reporte-grid">
+                    <div class="reporte-item">
+                        <span class="label">Nombre Completo</span>
+                        <span class="value">${clienteNombre}</span>
+                    </div>
+                    <div class="reporte-item">
+                        <span class="label">Teléfono</span>
+                        <span class="value">${clienteTelefono}</span>
+                    </div>
+                    <div class="reporte-item full-width">
+                        <span class="label">Ubicación</span>
+                        <span class="value">${clienteUbicacion}</span>
+                    </div>
+                    <div class="reporte-item">
+                        <span class="label">Coordenadas</span>
+                        <span class="value">${coordenadas}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- DATOS DEL VEHÍCULO -->
+            <div class="reporte-seccion">
+                <h3><i class="fas fa-car"></i> Datos del Vehículo</h3>
+                <div class="reporte-grid">
+                    <div class="reporte-item">
+                        <span class="label">Placa</span>
+                        <span class="value"><strong>${placa}</strong></span>
+                    </div>
+                    <div class="reporte-item">
+                        <span class="label">Marca</span>
+                        <span class="value">${marca}</span>
+                    </div>
+                    <div class="reporte-item">
+                        <span class="label">Modelo</span>
+                        <span class="value">${modelo}</span>
+                    </div>
+                    <div class="reporte-item">
+                        <span class="label">Año</span>
+                        <span class="value">${anio}</span>
+                    </div>
+                    <div class="reporte-item">
+                        <span class="label">Kilometraje</span>
+                        <span class="value">${kilometraje}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- FOTOS -->
+            <div class="reporte-seccion">
+                <h3><i class="fas fa-camera"></i> Registro Fotográfico (${fotosArray.length}/7)</h3>
+                ${fotosHTML}
+            </div>
+            
+            <!-- DESCRIPCIÓN -->
+            <div class="reporte-seccion">
+                <h3><i class="fas fa-pencil-alt"></i> Descripción del Problema</h3>
+                <div class="reporte-descripcion">
+                    <p>${detalle.transcripcion_problema || 'No se registró descripción'}</p>
+                </div>
+                ${audioHTML}
+            </div>
+            
+            <!-- FIRMAS -->
+            <div class="reporte-firmas">
+                <div class="reporte-firma">
+                    <p style="font-weight: 600; color: #C1121F; margin-bottom: 5px;">FIRMA DEL CLIENTE</p>
+                    <div class="firma-linea"></div>
+                    <div class="firma-nombre">${clienteNombre}</div>
+                    <div class="firma-fecha">Fecha: ${fechaActual}</div>
+                </div>
+                <div class="reporte-firma">
+                    <p style="font-weight: 600; color: #C1121F; margin-bottom: 5px;">FIRMA DEL JEFE OPERATIVO</p>
+                    <div class="firma-linea"></div>
+                    <div class="firma-nombre">${jefePrincipal}</div>
+                    <div class="firma-fecha">Fecha: ${fechaActual}</div>
+                    ${jefePrincipalContacto ? `<div class="firma-fecha">Contacto: ${jefePrincipalContacto}</div>` : ''}
+                </div>
+            </div>
+            
+            <!-- FOOTER -->
+            <div class="reporte-footer">
+                <div class="footer-info">
+                    <span><i class="fas fa-file-alt"></i> Documento generado automáticamente</span>
+                    <span><i class="fas fa-qrcode"></i> Código: ${detalle.codigo_unico || 'N/A'}</span>
+                    <span><i class="fas fa-clock"></i> ${new Date().toLocaleString('es-ES')}</span>
+                </div>
+                <p style="margin-top: 10px; color: #bbb;">FURIA MOTOR COMPANY - Todos los derechos reservados</p>
+            </div>
+        </div>
+    `;
+}
+
+// Función para imprimir el reporte
+function imprimirReporteFinal() {
+    if (!datosReporteFinal) {
+        mostrarNotificacion('⚠️ No hay datos para imprimir', 'warning');
+        return;
+    }
+    
+    const reporteHTML = generarHTMLReporte(datosReporteFinal);
+    
+    const ventana = window.open('', '_blank', 'width=1024,height=768');
+    if (!ventana) {
+        mostrarNotificacion('❌ Por favor, permite las ventanas emergentes para imprimir', 'error');
+        return;
+    }
+    
+    ventana.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Reporte - ${datosReporteFinal.codigo_unico || 'Orden'}</title>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { 
+                    font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+                    background: white;
+                    padding: 20px;
+                }
+                .reporte-container {
+                    max-width: 1000px;
+                    margin: 0 auto;
+                    background: white;
+                }
+                .reporte-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    border-bottom: 3px solid #C1121F;
+                    padding-bottom: 20px;
+                    margin-bottom: 25px;
+                }
+                .reporte-header .logo-area {
+                    display: flex;
+                    align-items: center;
+                    gap: 15px;
+                }
+                .reporte-header .logo-area img {
+                    height: 60px;
+                    width: auto;
+                }
+                .reporte-header .logo-area h1 {
+                    font-size: 28px;
+                    color: #1a1a1a;
+                    margin: 0;
+                    font-weight: 800;
+                }
+                .reporte-header .logo-area h1 span {
+                    color: #C1121F;
+                }
+                .reporte-header .info-empresa {
+                    text-align: right;
+                    font-size: 13px;
+                    color: #666;
+                    line-height: 1.6;
+                }
+                .reporte-header .info-empresa strong {
+                    color: #1a1a1a;
+                }
+                .reporte-titulo {
+                    text-align: center;
+                    margin: 20px 0 30px 0;
+                }
+                .reporte-titulo h2 {
+                    font-size: 24px;
+                    color: #C1121F;
+                    margin: 0;
+                    font-weight: 700;
+                }
+                .reporte-titulo .codigo-orden {
+                    font-size: 18px;
+                    color: #333;
+                    background: #f5f5f5;
+                    padding: 8px 20px;
+                    border-radius: 8px;
+                    display: inline-block;
+                    margin-top: 5px;
+                    font-weight: 600;
+                }
+                .reporte-seccion {
+                    margin: 25px 0;
+                    page-break-inside: avoid;
+                }
+                .reporte-seccion h3 {
+                    font-size: 16px;
+                    color: #C1121F;
+                    border-bottom: 2px solid #e0e0e0;
+                    padding-bottom: 8px;
+                    margin-bottom: 15px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }
+                .reporte-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 12px;
+                    padding: 0 5px;
+                }
+                .reporte-item {
+                    display: flex;
+                    flex-direction: column;
+                    padding: 8px 12px;
+                    background: #f9f9f9;
+                    border-radius: 6px;
+                    border-left: 3px solid #C1121F;
+                }
+                .reporte-item .label {
+                    font-size: 11px;
+                    color: #888;
+                    text-transform: uppercase;
+                    font-weight: 600;
+                    letter-spacing: 0.5px;
+                }
+                .reporte-item .value {
+                    font-size: 15px;
+                    color: #1a1a1a;
+                    font-weight: 500;
+                    margin-top: 2px;
+                }
+                .reporte-item.full-width {
+                    grid-column: 1 / -1;
+                }
+                .reporte-fotos-grid {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 15px;
+                    margin-top: 10px;
+                }
+                .reporte-foto {
+                    border: 1px solid #e0e0e0;
+                    border-radius: 8px;
+                    overflow: hidden;
+                    background: #f5f5f5;
+                }
+                .reporte-foto img {
+                    width: 100%;
+                    height: 180px;
+                    object-fit: cover;
+                    display: block;
+                }
+                .reporte-foto .foto-label {
+                    text-align: center;
+                    padding: 6px;
+                    font-size: 12px;
+                    color: #555;
+                    background: #f5f5f5;
+                    font-weight: 500;
+                }
+                .reporte-descripcion {
+                    background: #f9f9f9;
+                    padding: 15px 20px;
+                    border-radius: 8px;
+                    border-left: 4px solid #C1121F;
+                    margin: 10px 0;
+                }
+                .reporte-descripcion p {
+                    margin: 0;
+                    font-size: 14px;
+                    line-height: 1.6;
+                    color: #333;
+                }
+                .reporte-firmas {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 40px;
+                    margin-top: 40px;
+                    padding-top: 20px;
+                    border-top: 2px dashed #ccc;
+                }
+                .reporte-firma {
+                    text-align: center;
+                }
+                .reporte-firma .firma-linea {
+                    width: 100%;
+                    height: 1px;
+                    border-top: 1px solid #333;
+                    margin: 30px 0 5px 0;
+                }
+                .reporte-firma .firma-label {
+                    font-size: 12px;
+                    color: #666;
+                }
+                .reporte-firma .firma-nombre {
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #1a1a1a;
+                    margin-top: 5px;
+                }
+                .reporte-firma .firma-fecha {
+                    font-size: 11px;
+                    color: #999;
+                }
+                .reporte-footer {
+                    margin-top: 40px;
+                    padding-top: 20px;
+                    border-top: 1px solid #e0e0e0;
+                    text-align: center;
+                    font-size: 11px;
+                    color: #999;
+                }
+                .reporte-footer .footer-info {
+                    display: flex;
+                    justify-content: center;
+                    gap: 30px;
+                    flex-wrap: wrap;
+                }
+                .estado-badge-reporte {
+                    display: inline-block;
+                    padding: 4px 16px;
+                    border-radius: 20px;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+                .estado-badge-reporte.EnRecepcion {
+                    background: #FFF3E0;
+                    color: #E65100;
+                }
+                .estado-badge-reporte.EnTaller {
+                    background: #E3F2FD;
+                    color: #0D47A1;
+                }
+                .estado-badge-reporte.Finalizado {
+                    background: #E8F5E9;
+                    color: #1B5E20;
+                }
+                .loading-preview {
+                    text-align: center;
+                    padding: 40px;
+                    color: #666;
+                }
+                .loading-preview i {
+                    font-size: 40px;
+                    color: #C1121F;
+                    margin-bottom: 15px;
+                }
+                .loading-preview p {
+                    font-size: 16px;
+                    margin: 0;
+                }
+                @media print {
+                    body { padding: 0; }
+                    .reporte-container { padding: 20px; }
+                    .reporte-foto img { height: 150px !important; }
+                    .no-print { display: none !important; }
+                }
+                @media (max-width: 768px) {
+                    .reporte-grid { grid-template-columns: 1fr; }
+                    .reporte-fotos-grid { grid-template-columns: repeat(2, 1fr); }
+                    .reporte-header { flex-direction: column; text-align: center; }
+                    .reporte-header .info-empresa { text-align: center; }
+                    .reporte-firmas { grid-template-columns: 1fr; gap: 20px; }
+                }
+                @media (max-width: 480px) {
+                    .reporte-fotos-grid { grid-template-columns: 1fr; }
+                }
+            </style>
+        </head>
+        <body>
+            ${reporteHTML}
+            <script>
+                window.onload = function() {
+                    setTimeout(function() {
+                        window.print();
+                    }, 500);
+                }
+            <\/script>
+        </body>
+        </html>
+    `);
+    ventana.document.close();
+}
+
+// Función para descargar PDF
+async function descargarPDFFinal() {
+    if (!datosReporteFinal) {
+        mostrarNotificacion('⚠️ No hay datos para generar PDF', 'warning');
+        return;
+    }
+    
+    showProgress('Generando PDF', 'Preparando el reporte...', 3);
+    updateProgressBar(10, 1);
+    updateProgressMessage('Generando contenido del reporte...');
+    
+    const reporteHTML = generarHTMLReporte(datosReporteFinal);
+    
+    const container = document.createElement('div');
+    container.id = 'pdfContainer';
+    container.style.cssText = `
+        position: fixed;
+        left: -9999px;
+        top: 0;
+        width: 1024px;
+        padding: 20px;
+        background: white;
+        font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+    `;
+    container.innerHTML = reporteHTML;
+    document.body.appendChild(container);
+    
+    updateProgressBar(40, 2);
+    updateProgressMessage('Generando archivo PDF...');
+    
+    try {
+        if (typeof html2pdf === 'undefined') {
+            throw new Error('La librería html2pdf no está cargada');
+        }
+        
+        const opt = {
+            margin: [10, 10, 10, 10],
+            filename: `Reporte_${datosReporteFinal.codigo_unico || 'orden'}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { 
+                scale: 2, 
+                useCORS: true,
+                logging: false,
+                letterRendering: true
+            },
+            jsPDF: { 
+                unit: 'mm', 
+                format: 'a4', 
+                orientation: 'portrait' 
+            },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+        
+        updateProgressBar(70, 2);
+        updateProgressMessage('Procesando imágenes y datos...');
+        
+        const pdf = await html2pdf()
+            .set(opt)
+            .from(container)
+            .outputPdf('blob');
+        
+        updateProgressBar(90, 3);
+        updateProgressMessage('Finalizando descarga...');
+        
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(pdf);
+        link.download = `Reporte_${datosReporteFinal.codigo_unico || 'orden'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setTimeout(() => {
+            URL.revokeObjectURL(link.href);
+        }, 10000);
+        
+        updateProgressBar(100, 3);
+        setTimeout(() => {
+            completeProgress(true);
+            mostrarNotificacion('✅ PDF descargado exitosamente', 'success');
+        }, 500);
+        
+    } catch (error) {
+        console.error('❌ Error generando PDF:', error);
+        completeProgress(false);
+        mostrarNotificacion('❌ Error al generar PDF: ' + error.message, 'error');
+        
+        if (confirm('No se pudo generar el PDF. ¿Deseas imprimir el reporte directamente?')) {
+            imprimirReporteFinal();
+        }
+    }
+    
+    setTimeout(() => {
+        if (container && document.body.contains(container)) {
+            document.body.removeChild(container);
+        }
+    }, 60000);
+}
+
+// Función para mostrar el modal con el reporte
+async function mostrarReporteFinal(idOrden) {
+    const modal = document.getElementById('codigoOrdenModal');
+    const body = document.getElementById('ordenCompletadaBody');
+    
+    if (!modal || !body) return;
+    
+    body.innerHTML = `
+        <div class="loading-preview">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Cargando datos de la orden...</p>
+        </div>
+    `;
+    
+    modal.classList.add('show');
+    
+    const detalle = await cargarDatosOrdenCompleta(idOrden);
+    
+    if (detalle) {
+        body.innerHTML = generarHTMLReporte(detalle);
+        
+        const modalHeader = modal.querySelector('.modal-header h2');
+        if (modalHeader) {
+            modalHeader.innerHTML = `
+                <i class="fas fa-check-circle" style="color: var(--verde-exito);"></i> 
+                ✅ ¡Recepción Finalizada! - ${detalle.codigo_unico || 'OT-N/A'}
+            `;
+        }
+        
+        document.getElementById('btnImprimirReporteFinal').style.display = 'inline-flex';
+        document.getElementById('btnDescargarPDFFinal').style.display = 'inline-flex';
+        
+    } else {
+        body.innerHTML = `
+            <div class="loading-preview" style="color: #dc3545;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Error al cargar los datos de la orden</p>
+                <p style="font-size: 14px; color: #666;">Intenta nuevamente o revisa la consola</p>
+            </div>
+        `;
+        document.getElementById('btnImprimirReporteFinal').style.display = 'none';
+        document.getElementById('btnDescargarPDFFinal').style.display = 'none';
+    }
+}
+
+// =====================================================
 // FUNCIONES DE EVENTOS Y VALIDACIÓN
 // =====================================================
 function setupEventListeners() {
     if (btnCrearSesion) btnCrearSesion.addEventListener('click', iniciarSesion);
     if (btnCancelarSesion) btnCancelarSesion.addEventListener('click', mostrarConfirmacionCancelar);
-    if (btnFinalizar) btnFinalizar.addEventListener('click', finalizarSesion);
+    if (btnFinalizar) btnFinalizar.addEventListener('click', finalizarSesionConReporte);
     if (btnCopiarCodigoSesion) {
         btnCopiarCodigoSesion.addEventListener('click', () => {
             if (codigoSesion) {
@@ -2135,10 +2836,8 @@ function mostrarModalCodigo(codigo) {
 }
 
 function mostrarCodigoGenerado(codigo) {
-    const modal = document.getElementById('codigoOrdenModal');
-    const span = document.getElementById('codigoGenerado');
-    if (span) span.textContent = codigo;
-    if (modal) modal.classList.add('show');
+    // Función legacy - ahora usamos mostrarReporteFinal
+    console.log('Código generado (legacy):', codigo);
 }
 
 async function checkAuth() {
@@ -2235,13 +2934,11 @@ window.cerrarModalOrden = () => document.getElementById('codigoOrdenModal')?.cla
 window.cerrarModalDetalle = () => document.getElementById('modalDetalleRecepcion')?.classList.remove('show');
 window.cerrarModalEliminar = () => document.getElementById('modalConfirmarEliminar')?.classList.remove('show');
 window.verImagenAmpliada = verImagenAmpliada;
-window.imprimirCodigo = () => {
-    const codigo = document.getElementById('codigoGenerado')?.textContent || 'OT-0000';
-    const ventana = window.open('', '_blank');
-    ventana.document.write(`<html><head><title>Código de Trabajo</title><style>body{font-family:Arial;padding:30px;text-align:center;}.codigo{font-size:32px;color:#C1121F;margin:20px;font-weight:bold;}</style></head><body><h1>FURIA MOTOR COMPANY</h1><h2>Código de Trabajo</h2><div class="codigo">${codigo}</div><p>Fecha: ${new Date().toLocaleString()}</p></body></html>`);
-    ventana.document.close();
-    ventana.print();
-};
+window.imprimirReporteFinal = imprimirReporteFinal;
+window.descargarPDFFinal = descargarPDFFinal;
+window.mostrarReporteFinal = mostrarReporteFinal;
+window.cargarDatosOrdenCompleta = cargarDatosOrdenCompleta;
+window.finalizarSesionConReporte = finalizarSesionConReporte;
 window.logout = () => {
     detenerPolling();
     detenerKeepAlive();
@@ -2250,4 +2947,4 @@ window.logout = () => {
     window.location.href = `${window.API_BASE_URL}/`;
 };
 
-console.log('✅ recepcion.js cargado - Versión con compresión de imágenes, barra de progreso y manejo de sesiones finalizadas');
+console.log('✅ recepcion.js cargado - Versión con reporte de impresión completo y firma digital');

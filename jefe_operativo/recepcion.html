@@ -8,9 +8,7 @@
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- Leaflet CSS (para mapa gratuito) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -397,24 +395,32 @@
         </div>
     </div>
 
-    <!-- Modal de código generado (orden finalizada) -->
+    <!-- ===================================================== -->
+    <!-- MODAL DE ORDEN FINALIZADA CON REPORTE COMPLETO -->
+    <!-- ===================================================== -->
     <div class="modal" id="codigoOrdenModal">
-        <div class="modal-content">
+        <div class="modal-content modal-detalle-content" style="max-width: 900px;">
             <div class="modal-header">
-                <h2><i class="fas fa-check-circle" style="color: var(--verde-exito);"></i> Vehículo Registrado</h2>
+                <h2><i class="fas fa-check-circle" style="color: var(--verde-exito);"></i> ✅ ¡Recepción Finalizada!</h2>
                 <button class="modal-close" onclick="cerrarModalOrden()">&times;</button>
             </div>
-            <div class="modal-body">
-                <p>El vehículo ha sido registrado exitosamente.</p>
-                <div class="codigo-card">
-                    <div class="codigo-label">Código de Trabajo</div>
-                    <div class="codigo-valor" id="codigoGenerado">OT-2024-0001</div>
+            <div class="modal-body" id="ordenCompletadaBody">
+                <!-- Contenido dinámico generado por JS -->
+                <div class="loading-preview">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Generando reporte...</p>
                 </div>
-                <div class="resumen-datos" id="resumenDatos"></div>
             </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalOrden()"><i class="fas fa-times"></i> Cerrar</button>
-                <button class="btn-primary" onclick="imprimirCodigo()"><i class="fas fa-print"></i> Imprimir</button>
+            <div class="modal-footer" style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+                <button class="btn-secondary" onclick="cerrarModalOrden()">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+                <button class="btn-primary" id="btnImprimirReporteFinal" onclick="imprimirReporteFinal()" style="display: inline-flex;">
+                    <i class="fas fa-print"></i> 📄 Imprimir Reporte
+                </button>
+                <button class="btn-primary" id="btnDescargarPDFFinal" onclick="descargarPDFFinal()" style="display: inline-flex;">
+                    <i class="fas fa-file-pdf"></i> 📥 Descargar PDF
+                </button>
             </div>
         </div>
     </div>
@@ -490,6 +496,7 @@
             </div>
         </div>
     </div>
+
     <!-- ===================================================== -->
     <!-- BARRA DE PROGRESO PARA OPERACIONES -->
     <!-- ===================================================== -->
@@ -536,7 +543,7 @@
     <!-- COMPRESOR DE IMÁGENES (DEBE IR ANTES QUE recepcion.js) -->
     <script src="/jefe_operativo/js/imageCompressor.js"></script>
     
-    <!-- RECEPCION.JS (VERSIÓN CON COMPRESIÓN) -->
+    <!-- RECEPCION.JS (VERSIÓN CON COMPRESIÓN Y REPORTE) -->
     <script src="/jefe_operativo/js/recepcion.js"></script>
 
     <!-- Sidebar responsive -->

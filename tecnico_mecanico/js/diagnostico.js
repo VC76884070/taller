@@ -18,7 +18,7 @@ if (typeof window.API_BASE_URL === 'undefined') {
 // DIAGNÓSTICO TÉCNICO - TÉCNICO MECÁNICO
 // FURIA MOTOR COMPANY SRL - VERSIÓN COMPLETA
 // INCLUYE: DIAGNÓSTICO + ARMADO DE VEHÍCULOS + DETALLES
-// VERSIÓN CORREGIDA CON URL DINÁMICA PARA PRODUCCIÓN
+// VERSIÓN CORREGIDA - SIN CARGA MANUAL DEL SIDEBAR
 // =====================================================
 
 let token = null;
@@ -178,7 +178,7 @@ async function verificarToken() {
         }
         
         const roles = userInfo.roles || [];
-        const tieneRolTecnico = roles.includes('tecnico');
+        const tieneRolTecnico = roles.includes('tecnico') || roles.includes('tecnico_mecanico');
         
         if (!tieneRolTecnico) {
             console.error('No tiene rol de técnico');
@@ -1490,6 +1490,10 @@ function cerrarConfirmModal() {
 function cerrarSesion() {
     localStorage.removeItem('furia_token');
     localStorage.removeItem('furia_user');
+    localStorage.removeItem('furia_remembered');
+    localStorage.removeItem('furia_remembered_type');
+    localStorage.removeItem('furia_selected_role');
+    localStorage.removeItem('furia_selected_role_user');
     window.location.href = '/';
 }
 
@@ -1558,17 +1562,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         confirmarBtn.addEventListener('click', () => guardarDiagnostico(true));
     }
     
-    const sidebarContainer = document.getElementById('sidebar-container');
-    if (sidebarContainer) {
-        try {
-            const response = await fetch(`${window.API_BASE_URL}/tecnico_mecanico/components/sidebar.html`);
-            if (response.ok) {
-                sidebarContainer.innerHTML = await response.text();
-            }
-        } catch (error) {
-            console.error('Error cargando sidebar:', error);
-        }
-    }
+    // IMPORTANTE: NO cargamos el sidebar manualmente aquí
+    // El sidebar se carga automáticamente desde include.js
     
     window.agregarServicio = agregarServicio;
     window.eliminarServicio = eliminarServicio;

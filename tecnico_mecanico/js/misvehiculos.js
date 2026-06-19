@@ -1,6 +1,6 @@
 // =====================================================
 // MIS VEHÍCULOS - TÉCNICO MECÁNICO
-// VERSIÓN COMPLETA CON BOTONES SEPARADOS Y HISTORIAL
+// VERSIÓN CORREGIDA - SIN SELECTOR DE ROLES
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
@@ -191,23 +191,10 @@ async function verificarToken() {
     }
 }
 
-function mostrarIndicadorRoles() {
-    const headerUserInfo = document.querySelector('.user-info');
-    if (headerUserInfo && rolesUsuario && rolesUsuario.length > 1) {
-        if (headerUserInfo.querySelector('.roles-badge')) return;
-        const rolesBadge = document.createElement('div');
-        rolesBadge.className = 'roles-badge';
-        rolesBadge.style.cssText = `font-size: 0.7rem; background: var(--gris-200); padding: 0.2rem 0.5rem; border-radius: 12px; margin-top: 0.25rem; display: inline-block; color: var(--blanco); cursor: pointer;`;
-        const nombresRoles = rolesUsuario.map(r => {
-            const nombres = { 'jefe_taller': 'Jefe Taller', 'jefe_operativo': 'Jefe Operativo', 'tecnico': 'Técnico', 'encargado_repuestos': 'Repuestos', 'cliente': 'Cliente' };
-            return nombres[r] || r;
-        }).join(' • ');
-        rolesBadge.innerHTML = `<i class="fas fa-exchange-alt" style="margin-right: 0.3rem;"></i>${nombresRoles}`;
-        rolesBadge.title = 'Tienes múltiples roles. Haz clic para cambiar de rol.';
-        rolesBadge.onclick = () => { if (confirm('¿Cambiar de rol?')) cerrarSesion(); };
-        headerUserInfo.appendChild(rolesBadge);
-    }
-}
+// =====================================================
+// FUNCIÓN ELIMINADA: mostrarIndicadorRoles()
+// Ya no se muestra el selector de roles
+// =====================================================
 
 function mostrarNombreUsuario() {
     const userNameSpan = document.getElementById('userName');
@@ -1309,7 +1296,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     mostrarFechaActual();
     mostrarNombreUsuario();
-    mostrarIndicadorRoles();
+    // ELIMINADO: mostrarIndicadorRoles() - Ya no se muestra el selector de roles
     await cargarVehiculos();
     await cargarComunicados();
     

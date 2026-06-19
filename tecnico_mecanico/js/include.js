@@ -1,6 +1,6 @@
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA TÉCNICO MECÁNICO
-// VERSIÓN CORREGIDA - RESPETA EL ROL SELECCIONADO
+// VERSIÓN CORREGIDA - SOLO SE EJECUTA EN SU ÁREA
 // =====================================================
 
 // =====================================================
@@ -23,7 +23,7 @@ window.API_BASE_URL = API_BASE_URL;
 const CONFIG = {
     sidebarPath: `${API_BASE_URL}/tecnico_mecanico/components/sidebar.html`,
     logoPath: `${API_BASE_URL}/img/logoblanco.jpeg`,
-    defaultUserName: 'Usuario',
+    defaultUserName: 'Técnico',
     userRole: 'Técnico Mecánico'
 };
 
@@ -37,64 +37,14 @@ const PAGE_FILES = {
 };
 
 // =====================================================
-// MAPEO DE ROLES A RUTAS
+// FUNCIÓN PARA VERIFICAR SI ESTAMOS EN EL ÁREA DE TÉCNICO
 // =====================================================
-const ROLES_REDIRECT = {
-    'tecnico': '/tecnico_mecanico/misvehiculos.html',
-    'tecnico_mecanico': '/tecnico_mecanico/misvehiculos.html',
-    'jefe_taller': '/jefe_taller/dashboard.html',
-    'jefe_operativo': '/jefe_operativo/dashboard.html',
-    'encargado_repuestos': '/encargado_rep_almacen/dashboard.html',
-    'cliente': '/cliente/dashboard.html'
-};
-
-const ROLES_NOMBRES = {
-    'tecnico': 'Técnico Mecánico',
-    'tecnico_mecanico': 'Técnico Mecánico',
-    'jefe_taller': 'Jefe de Taller',
-    'jefe_operativo': 'Jefe Operativo',
-    'encargado_repuestos': 'Encargado de Repuestos',
-    'cliente': 'Cliente'
-};
-
-// =====================================================
-// FUNCIÓN PARA OBTENER EL ROL SELECCIONADO POR EL USUARIO
-// =====================================================
-function obtenerRolSeleccionado() {
-    try {
-        // Primero verificar si hay un rol seleccionado manualmente
-        const selectedRole = localStorage.getItem('furia_selected_role');
-        if (selectedRole) {
-            // Verificar que el usuario realmente tiene ese rol
-            const userStr = localStorage.getItem('furia_user');
-            if (userStr) {
-                const user = JSON.parse(userStr);
-                let roles = user.roles || [];
-                if (typeof roles === 'string') roles = [roles];
-                
-                if (roles.includes(selectedRole)) {
-                    console.log('🔍 Rol seleccionado por usuario:', selectedRole);
-                    return selectedRole;
-                }
-            }
-        }
-        
-        // Si no hay rol seleccionado, obtener el primer rol del usuario
-        const userStr = localStorage.getItem('furia_user');
-        if (userStr) {
-            const user = JSON.parse(userStr);
-            let roles = user.roles || [];
-            if (typeof roles === 'string') roles = [roles];
-            
-            if (roles.length > 0) {
-                console.log('🔍 Primer rol del usuario:', roles[0]);
-                return roles[0];
-            }
-        }
-    } catch (error) {
-        console.error('Error obteniendo rol seleccionado:', error);
-    }
-    return null;
+function estaEnAreaTecnico() {
+    const path = window.location.pathname;
+    return path.includes('/tecnico_mecanico/') || 
+           path.includes('tecnico_mecanico') ||
+           // Si estamos en la raíz y el usuario tiene rol técnico
+           (path === '/' || path === '' || path === '/index.html');
 }
 
 // =====================================================
@@ -109,19 +59,13 @@ function obtenerUsuarioActual() {
             let roles = user.roles || [];
             if (typeof roles === 'string') roles = [roles];
             
-            // Obtener el rol activo del usuario
-            const rolActivo = obtenerRolSeleccionado() || roles[0] || 'tecnico';
-            
             console.log('🔍 Include.js - Usuario:', user.nombre);
             console.log('🔍 Include.js - Roles:', roles);
-            console.log('🔍 Include.js - Rol Activo:', rolActivo);
             
             return {
                 nombre: user.nombre || CONFIG.defaultUserName,
                 roles: roles,
-                rolActivo: rolActivo,
-                id: user.id || null,
-                tieneAcceso: true
+                id: user.id || null
             };
         }
     } catch (error) {
@@ -131,34 +75,8 @@ function obtenerUsuarioActual() {
     return {
         nombre: CONFIG.defaultUserName,
         roles: ['tecnico'],
-        rolActivo: 'tecnico',
-        id: null,
-        tieneAcceso: true
+        id: null
     };
-}
-
-// =====================================================
-// FUNCIÓN PARA REDIRIGIR SEGÚN ROL SELECCIONADO
-// =====================================================
-function redirigirSegunRol(rol) {
-    if (!rol) return;
-    
-    const redirectPath = ROLES_REDIRECT[rol];
-    if (redirectPath) {
-        console.log('🔄 Redirigiendo a:', redirectPath, 'para rol:', rol);
-        
-        // Verificar si ya estamos en la ruta correcta
-        const currentPath = window.location.pathname;
-        // Si la ruta actual ya es la correcta, no redirigir
-        if (currentPath.includes(redirectPath)) {
-            console.log('✅ Ya estamos en la ruta correcta');
-            return;
-        }
-        
-        window.location.href = `${API_BASE_URL}${redirectPath}`;
-    } else {
-        console.warn('⚠️ No hay redirección definida para el rol:', rol);
-    }
 }
 
 // =====================================================
@@ -223,21 +141,22 @@ async function includeSidebar() {
         return;
     }
     
+    // 🔴 IMPORTANTE: Solo cargar si estamos en el área de técnico
+    if (!estaEnAreaTecnico()) {
+        console.log('ℹ️ No estamos en el área de Técnico Mecánico. No se carga este sidebar.');
+        return;
+    }
+    
+    // Verificar que el usuario tenga rol técnico
     const user = obtenerUsuarioActual();
+    const tieneRolTecnico = user.roles.some(r => {
+        const rolLower = String(r).toLowerCase();
+        return rolLower === 'tecnico' || rolLower === 'tecnico_mecanico';
+    });
     
-    // Si el usuario está en una página que no coincide con su rol activo, redirigir
-    const currentPath = window.location.pathname;
-    const rolActivo = user.rolActivo;
-    
-    // Verificar si estamos en la página correcta para el rol
-    if (rolActivo && !currentPath.includes('login')) {
-        const redirectPath = ROLES_REDIRECT[rolActivo];
-        if (redirectPath && !currentPath.includes(redirectPath.replace('/', ''))) {
-            // Si no estamos en la ruta correcta, redirigir
-            console.log(`🔄 Redirigiendo a ${redirectPath} (rol activo: ${rolActivo})`);
-            window.location.href = `${API_BASE_URL}${redirectPath}`;
-            return;
-        }
+    if (!tieneRolTecnico) {
+        console.warn('⚠️ Usuario no tiene rol técnico. No se carga el sidebar.');
+        return;
     }
     
     mostrarLoader(sidebarContainer);
@@ -258,7 +177,7 @@ async function includeSidebar() {
         }
         
         sidebarContainer.innerHTML = html;
-        console.log('✅ Sidebar cargado correctamente');
+        console.log('✅ Sidebar de Técnico Mecánico cargado correctamente');
         
         inicializarSidebar();
         
@@ -288,7 +207,7 @@ function mostrarLoader(container) {
 }
 
 // =====================================================
-// SIDEBAR DE RESPALDO (SIN SELECTOR DE ROLES)
+// SIDEBAR DE RESPALDO
 // =====================================================
 function crearSidebarRespaldo(container) {
     const user = obtenerUsuarioActual();
@@ -310,7 +229,7 @@ function crearSidebarRespaldo(container) {
                 </div>
                 <div class="user-info">
                     <span class="user-name" id="userName">${user.nombre}</span>
-                    <span class="user-role">${ROLES_NOMBRES[user.rolActivo] || CONFIG.userRole}</span>
+                    <span class="user-role">${CONFIG.userRole}</span>
                 </div>
             </div>
 
@@ -368,7 +287,6 @@ function inicializarSidebar() {
         
         marcarItemActivo(currentPage);
         actualizarNombreUsuario();
-        actualizarRolUsuario();
         corregirBotonCerrarSesion();
         
         console.log('✅ Sidebar inicializado correctamente');
@@ -469,21 +387,6 @@ function actualizarNombreUsuario() {
 }
 
 // =====================================================
-// ACTUALIZAR ROL DE USUARIO EN EL SIDEBAR
-// =====================================================
-function actualizarRolUsuario() {
-    setTimeout(() => {
-        const userRoleSpan = document.querySelector('.user-role');
-        if (!userRoleSpan) return;
-        
-        const user = obtenerUsuarioActual();
-        const nombreRol = ROLES_NOMBRES[user.rolActivo] || CONFIG.userRole;
-        userRoleSpan.textContent = nombreRol;
-        console.log('✅ Rol actualizado:', nombreRol);
-    }, 100);
-}
-
-// =====================================================
 // CIERRE DE SESIÓN
 // =====================================================
 window.cerrarSesion = function() {
@@ -558,7 +461,7 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
 }
 
 // =====================================================
-// AGREGAR ESTILOS - SIDEBAR COMPLETO
+// AGREGAR ESTILOS - VERSIÓN CORREGIDA
 // =====================================================
 function agregarEstilosSidebar() {
     if (document.getElementById('sidebar-adicional-styles')) return;
@@ -575,7 +478,6 @@ function agregarEstilosSidebar() {
             to { transform: translateX(100%); opacity: 0; }
         }
         
-        /* ESTILOS DEL SIDEBAR */
         .sidebar {
             background: #121212;
             color: #FFFFFF;
@@ -709,55 +611,6 @@ function agregarEstilosSidebar() {
             margin-left: auto;
         }
         
-        /* =====================================================
-           RESPONSIVE
-           ===================================================== */
-        .hamburger-menu {
-            display: none;
-            position: fixed;
-            top: 15px;
-            left: 15px;
-            z-index: 1001;
-            background: #C1121F;
-            border: none;
-            border-radius: 8px;
-            color: white;
-            width: 45px;
-            height: 45px;
-            font-size: 1.2rem;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(193, 18, 31, 0.3);
-            transition: all 0.3s ease;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .hamburger-menu:hover {
-            background: #8B0F1A;
-            transform: scale(1.05);
-        }
-        
-        .hamburger-menu.active {
-            left: 275px;
-            background: #8B0F1A;
-        }
-        
-        .sidebar-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.6);
-            z-index: 999;
-            backdrop-filter: blur(4px);
-        }
-        
-        .sidebar-overlay.active {
-            display: block;
-        }
-        
         @media (max-width: 1024px) {
             .hamburger-menu {
                 display: flex !important;
@@ -790,10 +643,6 @@ function agregarEstilosSidebar() {
             .sidebar.open .nav-link {
                 justify-content: flex-start;
             }
-            
-            .sidebar-overlay.active {
-                display: block;
-            }
         }
         
         @media (min-width: 1025px) {
@@ -816,6 +665,23 @@ function agregarEstilosSidebar() {
 // =====================================================
 // FUNCIONES RESPONSIVE
 // =====================================================
+function ajustarSidebarResponsive() {
+    const sidebar = document.querySelector('.sidebar');
+    const hamburgerMenu = document.getElementById('hamburgerMenu');
+    
+    if (!sidebar) return;
+    
+    if (window.innerWidth > 1024) {
+        sidebar.classList.remove('open');
+        if (hamburgerMenu) hamburgerMenu.classList.remove('active');
+        document.body.classList.remove('sidebar-open');
+    } else {
+        sidebar.classList.remove('open');
+        if (hamburgerMenu) hamburgerMenu.classList.remove('active');
+        document.body.classList.remove('sidebar-open');
+    }
+}
+
 function toggleSidebar() {
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.querySelector('.sidebar-overlay');
@@ -826,7 +692,6 @@ function toggleSidebar() {
     sidebar.classList.toggle('open');
     if (overlay) overlay.classList.toggle('active');
     if (hamburger) hamburger.classList.toggle('active');
-    
     document.body.classList.toggle('sidebar-open');
 }
 
@@ -841,21 +706,6 @@ function cerrarSidebar() {
     document.body.classList.remove('sidebar-open');
 }
 
-function ajustarSidebarResponsive() {
-    const sidebar = document.querySelector('.sidebar');
-    const hamburger = document.getElementById('hamburgerMenu');
-    const overlay = document.querySelector('.sidebar-overlay');
-    
-    if (!sidebar) return;
-    
-    if (window.innerWidth > 1024) {
-        sidebar.classList.remove('open');
-        if (overlay) overlay.classList.remove('active');
-        if (hamburger) hamburger.classList.remove('active');
-        document.body.classList.remove('sidebar-open');
-    }
-}
-
 // Exponer funciones globales
 window.toggleSidebar = toggleSidebar;
 window.cerrarSidebar = cerrarSidebar;
@@ -864,29 +714,14 @@ window.cerrarSidebar = cerrarSidebar;
 // INICIALIZAR - PUNTO DE ENTRADA PRINCIPAL
 // =====================================================
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Inicializando sidebar');
-    
-    agregarEstilosSidebar();
-    
-    // Verificar si el usuario tiene un rol seleccionado
-    const user = obtenerUsuarioActual();
-    const rolActivo = user.rolActivo;
-    const currentPath = window.location.pathname;
-    
-    // Si estamos en una página de técnico y el usuario no tiene rol técnico, redirigir
-    if (rolActivo && !currentPath.includes('login')) {
-        const redirectPath = ROLES_REDIRECT[rolActivo];
-        if (redirectPath) {
-            // Verificar si la URL actual contiene la ruta de redirección
-            const pathPart = redirectPath.replace('/', '');
-            if (!currentPath.includes(pathPart) && !currentPath.includes('login')) {
-                console.log(`🔄 Redirigiendo a ${redirectPath} (rol: ${rolActivo})`);
-                window.location.href = `${API_BASE_URL}${redirectPath}`;
-                return;
-            }
-        }
+    // Verificar si estamos en el área de técnico
+    if (!estaEnAreaTecnico()) {
+        console.log('ℹ️ No estamos en el área de Técnico Mecánico. No se inicializa el sidebar.');
+        return;
     }
     
+    console.log('🚀 Inicializando sidebar para Técnico Mecánico');
+    agregarEstilosSidebar();
     includeSidebar();
     ajustarSidebarResponsive();
     
@@ -908,5 +743,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 500);
 });
 
-window.addEventListener('resize', ajustarSidebarResponsive);
+window.addEventListener('resize', () => ajustarSidebarResponsive());
 window.ajustarSidebarResponsive = ajustarSidebarResponsive;

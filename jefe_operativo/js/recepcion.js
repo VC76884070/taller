@@ -791,13 +791,10 @@ function setupPhotoUploads() {
 }
 
 // =====================================================
-// GUARDAR SECCIÓN - CORREGIDO
+// GUARDAR SECCIÓN
 // =====================================================
 async function guardarSeccion(seccion) {
-    if (!codigoSesion) {
-        console.warn('⚠️ No hay sesión activa para guardar');
-        return;
-    }
+    if (!codigoSesion) return;
     
     let datos = {};
     
@@ -845,17 +842,8 @@ async function guardarSeccion(seccion) {
     }
     
     try {
-        const token = localStorage.getItem('furia_token');
-        if (!token) {
-            throw new Error('No hay token de autenticación');
-        }
-        
-        const response = await fetch(`${API_URL}/jefe-operativo/guardar-seccion`, {
+        const response = await fetchWithToken(`${API_URL}/jefe-operativo/guardar-seccion`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
             body: JSON.stringify({ 
                 codigo: codigoSesion, 
                 seccion: seccion, 
@@ -864,17 +852,6 @@ async function guardarSeccion(seccion) {
                 usuario_nombre: userInfo?.nombre
             })
         });
-        
-        if (response.status === 401) {
-            localStorage.clear();
-            window.location.href = `${window.API_BASE_URL}/`;
-            throw new Error('Sesión expirada');
-        }
-        
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `Error del servidor: ${response.status}`);
-        }
         
         const data = await response.json();
         
@@ -916,18 +893,14 @@ async function guardarSeccion(seccion) {
             }
             
             mostrarNotificacion(`✓ ${seccion} guardado`, 'success');
-        } else {
-            throw new Error(data.message || 'Error al guardar');
         }
     } catch (error) {
-        console.error('❌ Error guardando sección:', error);
-        if (!error.message.includes('Sesión expirada')) {
-            mostrarNotificacion('Error al guardar: ' + error.message, 'error');
-        }
+        logger.error('Error guardando:', error);
+        mostrarNotificacion('Error al guardar', 'error');
     } finally {
         if (btnGuardar) {
             btnGuardar.disabled = false;
-            btnGuardar.innerHTML = `<i class="fas fa-save"></i> Guardar ${seccion.charAt(0).toUpperCase() + seccion.slice(1)}`;
+            btnGuardar.innerHTML = `<i class="fas fa-save"></i> Guardar`;
         }
     }
 }
@@ -1157,6 +1130,7 @@ async function finalizarSesionConReporte() {
             updateProgressBar(100, 3);
             updateProgressMessage('¡Recepción finalizada con éxito!');
             
+            // Mostrar el reporte con el ID de la orden
             if (data.id_orden) {
                 await mostrarReporteFinal(data.id_orden);
             } else {
@@ -1986,7 +1960,7 @@ async function eliminarRecepcion(id) {
 }
 
 // =====================================================
-// FUNCIONES DEL REPORTE DE IMPRESIÓN - CORREGIDAS
+// FUNCIONES DEL REPORTE DE IMPRESIÓN
 // =====================================================
 
 // Función para cargar datos completos de la orden
@@ -2018,7 +1992,7 @@ async function cargarDatosOrdenCompleta(idOrden) {
     }
 }
 
-// Función para generar el HTML del reporte - CORREGIDA
+// Función para generar el HTML del reporte
 function generarHTMLReporte(detalle) {
     if (!detalle) {
         return '<div class="loading-preview"><i class="fas fa-exclamation-triangle"></i><p>No hay datos para mostrar</p></div>';
@@ -2034,12 +2008,11 @@ function generarHTMLReporte(detalle) {
             url: url
         }));
     
-    // Si no hay fotos, mostrar placeholder
     const fotosHTML = fotosArray.length > 0 ? `
         <div class="reporte-fotos-grid">
             ${fotosArray.map(f => `
                 <div class="reporte-foto">
-                    <img src="${f.url}" alt="${f.label}" crossorigin="anonymous" referrerpolicy="no-referrer" style="width:100%; height:180px; object-fit:cover; display:block; background:#f0f0f0;">
+                    <img src="${f.url}" alt="${f.label}" loading="lazy" onerror="this.style.display='none'">
                     <div class="foto-label">${f.label}</div>
                 </div>
             `).join('')}
@@ -2074,6 +2047,7 @@ function generarHTMLReporte(detalle) {
     const jefePrincipal = detalle.jefe_operativo?.nombre || 'No asignado';
     const jefeSecundario = detalle.jefe_operativo_2?.nombre || null;
     const jefePrincipalContacto = detalle.jefe_operativo?.contacto || '';
+    const jefePrincipalEmail = detalle.jefe_operativo?.email || '';
     
     // Fecha
     const fechaIngreso = detalle.fecha_ingreso ? 
@@ -2100,15 +2074,15 @@ function generarHTMLReporte(detalle) {
     });
     
     return `
-        <div class="reporte-container" id="reporteImprimible" style="font-family:'Plus Jakarta Sans',Arial,sans-serif;padding:20px;background:white;max-width:1000px;margin:0 auto;color:#1a1a1a;">
+        <div class="reporte-container" id="reporteImprimible">
             <!-- ENCABEZADO -->
-            <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #C1121F;padding-bottom:20px;margin-bottom:25px;">
-                <div style="display:flex;align-items:center;gap:15px;">
-                    <div style="width:60px;height:60px;background:#C1121F;border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:28px;">F</div>
-                    <h1 style="font-size:28px;color:#1a1a1a;margin:0;font-weight:800;">FURIA <span style="color:#C1121F;">MOTOR</span></h1>
+            <div class="reporte-header">
+                <div class="logo-area">
+                    <img src="/icono.png" alt="FURIA MOTOR" onerror="this.style.display='none'">
+                    <h1>FURIA <span>MOTOR</span></h1>
                 </div>
-                <div style="text-align:right;font-size:13px;color:#666;line-height:1.6;">
-                    <strong style="color:#1a1a1a;">FURIA MOTOR COMPANY</strong><br>
+                <div class="info-empresa">
+                    <strong>FURIA MOTOR COMPANY</strong><br>
                     Taller Automotriz Especializado<br>
                     <i class="fas fa-phone"></i> +591 77712345<br>
                     <i class="fas fa-map-marker-alt"></i> Cochabamba, Bolivia
@@ -2116,144 +2090,132 @@ function generarHTMLReporte(detalle) {
             </div>
             
             <!-- TÍTULO -->
-            <div style="text-align:center;margin:20px 0 30px 0;">
-                <h2 style="font-size:24px;color:#C1121F;margin:0;font-weight:700;">📋 ORDEN DE TRABAJO - RECEPCIÓN</h2>
-                <div style="font-size:18px;color:#333;background:#f5f5f5;padding:8px 20px;border-radius:8px;display:inline-block;margin-top:5px;font-weight:600;">
+            <div class="reporte-titulo">
+                <h2>📋 ORDEN DE TRABAJO - RECEPCIÓN</h2>
+                <div class="codigo-orden">
                     <i class="fas fa-hashtag"></i> ${detalle.codigo_unico || 'OT-N/A'}
                 </div>
             </div>
             
             <!-- INFORMACIÓN GENERAL -->
-            <div style="margin:25px 0;page-break-inside:avoid;">
-                <h3 style="font-size:16px;color:#C1121F;border-bottom:2px solid #e0e0e0;padding-bottom:8px;margin-bottom:15px;display:flex;align-items:center;gap:10px;">
-                    <i class="fas fa-info-circle"></i> Información General
-                </h3>
-                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:0 5px;">
-                    <div style="display:flex;flex-direction:column;padding:8px 12px;background:#f9f9f9;border-radius:6px;border-left:3px solid #C1121F;">
-                        <span style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Fecha de Ingreso</span>
-                        <span style="font-size:15px;color:#1a1a1a;font-weight:500;margin-top:2px;">${fechaIngreso}</span>
+            <div class="reporte-seccion">
+                <h3><i class="fas fa-info-circle"></i> Información General</h3>
+                <div class="reporte-grid">
+                    <div class="reporte-item">
+                        <span class="label">Fecha de Ingreso</span>
+                        <span class="value">${fechaIngreso}</span>
                     </div>
-                    <div style="display:flex;flex-direction:column;padding:8px 12px;background:#f9f9f9;border-radius:6px;border-left:3px solid #C1121F;">
-                        <span style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Estado</span>
-                        <span style="font-size:15px;color:#1a1a1a;font-weight:500;margin-top:2px;">
-                            <span style="display:inline-block;padding:4px 16px;border-radius:20px;font-size:13px;font-weight:600;background:#FFF3E0;color:#E65100;">${estadoLabel}</span>
-                        </span>
+                    <div class="reporte-item">
+                        <span class="label">Estado</span>
+                        <span class="value"><span class="estado-badge-reporte ${estado}">${estadoLabel}</span></span>
                     </div>
-                    <div style="display:flex;flex-direction:column;padding:8px 12px;background:#f9f9f9;border-radius:6px;border-left:3px solid #C1121F;">
-                        <span style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">ID Orden</span>
-                        <span style="font-size:15px;color:#1a1a1a;font-weight:500;margin-top:2px;">#${detalle.id || 'N/A'}</span>
+                    <div class="reporte-item">
+                        <span class="label">ID Orden</span>
+                        <span class="value">#${detalle.id || 'N/A'}</span>
                     </div>
-                    <div style="display:flex;flex-direction:column;padding:8px 12px;background:#f9f9f9;border-radius:6px;border-left:3px solid #C1121F;">
-                        <span style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Jefe Operativo</span>
-                        <span style="font-size:15px;color:#1a1a1a;font-weight:500;margin-top:2px;">${jefePrincipal}</span>
+                    <div class="reporte-item">
+                        <span class="label">Jefe Operativo</span>
+                        <span class="value">${jefePrincipal}</span>
                     </div>
                     ${jefeSecundario ? `
-                    <div style="display:flex;flex-direction:column;padding:8px 12px;background:#f9f9f9;border-radius:6px;border-left:3px solid #C1121F;">
-                        <span style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Jefe Operativo 2</span>
-                        <span style="font-size:15px;color:#1a1a1a;font-weight:500;margin-top:2px;">${jefeSecundario}</span>
+                    <div class="reporte-item">
+                        <span class="label">Jefe Operativo 2</span>
+                        <span class="value">${jefeSecundario}</span>
                     </div>
                     ` : ''}
                 </div>
             </div>
             
             <!-- DATOS DEL CLIENTE -->
-            <div style="margin:25px 0;page-break-inside:avoid;">
-                <h3 style="font-size:16px;color:#C1121F;border-bottom:2px solid #e0e0e0;padding-bottom:8px;margin-bottom:15px;display:flex;align-items:center;gap:10px;">
-                    <i class="fas fa-user"></i> Datos del Cliente
-                </h3>
-                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:0 5px;">
-                    <div style="display:flex;flex-direction:column;padding:8px 12px;background:#f9f9f9;border-radius:6px;border-left:3px solid #C1121F;">
-                        <span style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Nombre Completo</span>
-                        <span style="font-size:15px;color:#1a1a1a;font-weight:500;margin-top:2px;">${clienteNombre}</span>
+            <div class="reporte-seccion">
+                <h3><i class="fas fa-user"></i> Datos del Cliente</h3>
+                <div class="reporte-grid">
+                    <div class="reporte-item">
+                        <span class="label">Nombre Completo</span>
+                        <span class="value">${clienteNombre}</span>
                     </div>
-                    <div style="display:flex;flex-direction:column;padding:8px 12px;background:#f9f9f9;border-radius:6px;border-left:3px solid #C1121F;">
-                        <span style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Teléfono</span>
-                        <span style="font-size:15px;color:#1a1a1a;font-weight:500;margin-top:2px;">${clienteTelefono}</span>
+                    <div class="reporte-item">
+                        <span class="label">Teléfono</span>
+                        <span class="value">${clienteTelefono}</span>
                     </div>
-                    <div style="display:flex;flex-direction:column;padding:8px 12px;background:#f9f9f9;border-radius:6px;border-left:3px solid #C1121F;grid-column:1/-1;">
-                        <span style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Ubicación</span>
-                        <span style="font-size:15px;color:#1a1a1a;font-weight:500;margin-top:2px;">${clienteUbicacion}</span>
+                    <div class="reporte-item full-width">
+                        <span class="label">Ubicación</span>
+                        <span class="value">${clienteUbicacion}</span>
                     </div>
-                    <div style="display:flex;flex-direction:column;padding:8px 12px;background:#f9f9f9;border-radius:6px;border-left:3px solid #C1121F;">
-                        <span style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Coordenadas</span>
-                        <span style="font-size:15px;color:#1a1a1a;font-weight:500;margin-top:2px;">${coordenadas}</span>
+                    <div class="reporte-item">
+                        <span class="label">Coordenadas</span>
+                        <span class="value">${coordenadas}</span>
                     </div>
                 </div>
             </div>
             
             <!-- DATOS DEL VEHÍCULO -->
-            <div style="margin:25px 0;page-break-inside:avoid;">
-                <h3 style="font-size:16px;color:#C1121F;border-bottom:2px solid #e0e0e0;padding-bottom:8px;margin-bottom:15px;display:flex;align-items:center;gap:10px;">
-                    <i class="fas fa-car"></i> Datos del Vehículo
-                </h3>
-                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:0 5px;">
-                    <div style="display:flex;flex-direction:column;padding:8px 12px;background:#f9f9f9;border-radius:6px;border-left:3px solid #C1121F;">
-                        <span style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Placa</span>
-                        <span style="font-size:15px;color:#1a1a1a;font-weight:700;margin-top:2px;">${placa}</span>
+            <div class="reporte-seccion">
+                <h3><i class="fas fa-car"></i> Datos del Vehículo</h3>
+                <div class="reporte-grid">
+                    <div class="reporte-item">
+                        <span class="label">Placa</span>
+                        <span class="value"><strong>${placa}</strong></span>
                     </div>
-                    <div style="display:flex;flex-direction:column;padding:8px 12px;background:#f9f9f9;border-radius:6px;border-left:3px solid #C1121F;">
-                        <span style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Marca</span>
-                        <span style="font-size:15px;color:#1a1a1a;font-weight:500;margin-top:2px;">${marca}</span>
+                    <div class="reporte-item">
+                        <span class="label">Marca</span>
+                        <span class="value">${marca}</span>
                     </div>
-                    <div style="display:flex;flex-direction:column;padding:8px 12px;background:#f9f9f9;border-radius:6px;border-left:3px solid #C1121F;">
-                        <span style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Modelo</span>
-                        <span style="font-size:15px;color:#1a1a1a;font-weight:500;margin-top:2px;">${modelo}</span>
+                    <div class="reporte-item">
+                        <span class="label">Modelo</span>
+                        <span class="value">${modelo}</span>
                     </div>
-                    <div style="display:flex;flex-direction:column;padding:8px 12px;background:#f9f9f9;border-radius:6px;border-left:3px solid #C1121F;">
-                        <span style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Año</span>
-                        <span style="font-size:15px;color:#1a1a1a;font-weight:500;margin-top:2px;">${anio}</span>
+                    <div class="reporte-item">
+                        <span class="label">Año</span>
+                        <span class="value">${anio}</span>
                     </div>
-                    <div style="display:flex;flex-direction:column;padding:8px 12px;background:#f9f9f9;border-radius:6px;border-left:3px solid #C1121F;">
-                        <span style="font-size:11px;color:#888;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Kilometraje</span>
-                        <span style="font-size:15px;color:#1a1a1a;font-weight:500;margin-top:2px;">${kilometraje}</span>
+                    <div class="reporte-item">
+                        <span class="label">Kilometraje</span>
+                        <span class="value">${kilometraje}</span>
                     </div>
                 </div>
             </div>
             
             <!-- FOTOS -->
-            <div style="margin:25px 0;page-break-inside:avoid;">
-                <h3 style="font-size:16px;color:#C1121F;border-bottom:2px solid #e0e0e0;padding-bottom:8px;margin-bottom:15px;display:flex;align-items:center;gap:10px;">
-                    <i class="fas fa-camera"></i> Registro Fotográfico (${fotosArray.length}/7)
-                </h3>
+            <div class="reporte-seccion">
+                <h3><i class="fas fa-camera"></i> Registro Fotográfico (${fotosArray.length}/7)</h3>
                 ${fotosHTML}
             </div>
             
             <!-- DESCRIPCIÓN -->
-            <div style="margin:25px 0;page-break-inside:avoid;">
-                <h3 style="font-size:16px;color:#C1121F;border-bottom:2px solid #e0e0e0;padding-bottom:8px;margin-bottom:15px;display:flex;align-items:center;gap:10px;">
-                    <i class="fas fa-pencil-alt"></i> Descripción del Problema
-                </h3>
-                <div style="background:#f9f9f9;padding:15px 20px;border-radius:8px;border-left:4px solid #C1121F;margin:10px 0;">
-                    <p style="margin:0;font-size:14px;line-height:1.6;color:#333;">${detalle.transcripcion_problema || 'No se registró descripción'}</p>
+            <div class="reporte-seccion">
+                <h3><i class="fas fa-pencil-alt"></i> Descripción del Problema</h3>
+                <div class="reporte-descripcion">
+                    <p>${detalle.transcripcion_problema || 'No se registró descripción'}</p>
                 </div>
                 ${audioHTML}
             </div>
             
             <!-- FIRMAS -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px;padding-top:20px;border-top:2px dashed #ccc;">
-                <div style="text-align:center;">
-                    <p style="font-weight:600;color:#C1121F;margin-bottom:5px;">FIRMA DEL CLIENTE</p>
-                    <div style="width:100%;height:1px;border-top:1px solid #333;margin:30px 0 5px 0;"></div>
-                    <div style="font-size:14px;font-weight:600;color:#1a1a1a;margin-top:5px;">${clienteNombre}</div>
-                    <div style="font-size:11px;color:#999;">Fecha: ${fechaActual}</div>
+            <div class="reporte-firmas">
+                <div class="reporte-firma">
+                    <p style="font-weight: 600; color: #C1121F; margin-bottom: 5px;">FIRMA DEL CLIENTE</p>
+                    <div class="firma-linea"></div>
+                    <div class="firma-nombre">${clienteNombre}</div>
+                    <div class="firma-fecha">Fecha: ${fechaActual}</div>
                 </div>
-                <div style="text-align:center;">
-                    <p style="font-weight:600;color:#C1121F;margin-bottom:5px;">FIRMA DEL JEFE OPERATIVO</p>
-                    <div style="width:100%;height:1px;border-top:1px solid #333;margin:30px 0 5px 0;"></div>
-                    <div style="font-size:14px;font-weight:600;color:#1a1a1a;margin-top:5px;">${jefePrincipal}</div>
-                    <div style="font-size:11px;color:#999;">Fecha: ${fechaActual}</div>
-                    ${jefePrincipalContacto ? `<div style="font-size:11px;color:#999;">Contacto: ${jefePrincipalContacto}</div>` : ''}
+                <div class="reporte-firma">
+                    <p style="font-weight: 600; color: #C1121F; margin-bottom: 5px;">FIRMA DEL JEFE OPERATIVO</p>
+                    <div class="firma-linea"></div>
+                    <div class="firma-nombre">${jefePrincipal}</div>
+                    <div class="firma-fecha">Fecha: ${fechaActual}</div>
+                    ${jefePrincipalContacto ? `<div class="firma-fecha">Contacto: ${jefePrincipalContacto}</div>` : ''}
                 </div>
             </div>
             
             <!-- FOOTER -->
-            <div style="margin-top:40px;padding-top:20px;border-top:1px solid #e0e0e0;text-align:center;font-size:11px;color:#999;">
-                <div style="display:flex;justify-content:center;gap:30px;flex-wrap:wrap;">
+            <div class="reporte-footer">
+                <div class="footer-info">
                     <span><i class="fas fa-file-alt"></i> Documento generado automáticamente</span>
                     <span><i class="fas fa-qrcode"></i> Código: ${detalle.codigo_unico || 'N/A'}</span>
                     <span><i class="fas fa-clock"></i> ${new Date().toLocaleString('es-ES')}</span>
                 </div>
-                <p style="margin-top:10px;color:#bbb;">FURIA MOTOR COMPANY - Todos los derechos reservados</p>
+                <p style="margin-top: 10px; color: #bbb;">FURIA MOTOR COMPANY - Todos los derechos reservados</p>
             </div>
         </div>
     `;
@@ -2292,18 +2254,18 @@ async function descargarPDFFinal() {
         // Generar HTML del reporte
         const reporteHTML = generarHTMLReporte(datosReporteFinal);
 
-        // Crear un contenedor temporal - VISIBLE PARA CAPTURA pero oculto visualmente
+        // Crear un contenedor temporal - OCULTO para el usuario
         const container = document.createElement('div');
         container.id = 'pdfContainer';
         container.style.cssText = `
             position: absolute;
             left: -9999px;
-            top: 0;
+            top: -9999px;
             width: 1024px;
             padding: 30px;
             background: white;
             font-family: 'Plus Jakarta Sans', Arial, sans-serif;
-            opacity: 1;
+            opacity: 0;
             pointer-events: none;
             overflow: visible;
             z-index: -1;
@@ -2315,51 +2277,28 @@ async function descargarPDFFinal() {
         updateProgressMessage('Renderizando contenido...');
 
         // Esperar a que el DOM se actualice
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 300));
 
-        // CARGAR IMÁGENES MANUALMENTE - forzar carga
+        // Esperar a que las imágenes se carguen
         const imagenes = container.querySelectorAll('img');
         const promesasImagenes = Array.from(imagenes).map(img => {
             return new Promise((resolve) => {
-                // Si la imagen ya está cargada
                 if (img.complete && img.naturalHeight > 0) {
                     resolve();
-                    return;
+                } else {
+                    img.onload = () => resolve();
+                    img.onerror = () => resolve();
+                    setTimeout(resolve, 5000);
                 }
-                
-                // Forzar recarga de la imagen
-                const src = img.src;
-                img.src = '';
-                img.src = src;
-                
-                img.onload = () => {
-                    console.log('✅ Imagen cargada:', src);
-                    resolve();
-                };
-                img.onerror = () => {
-                    console.warn('⚠️ Error cargando imagen:', src);
-                    // Intentar con crossorigin
-                    if (!img.crossOrigin) {
-                        img.crossOrigin = 'anonymous';
-                        img.src = src;
-                        setTimeout(resolve, 3000);
-                    } else {
-                        resolve();
-                    }
-                };
-                // Timeout por si la imagen no carga
-                setTimeout(resolve, 5000);
             });
         });
 
-        // Esperar a que todas las imágenes carguen (máximo 15 segundos)
         await Promise.race([
             Promise.all(promesasImagenes),
-            new Promise(resolve => setTimeout(resolve, 15000))
+            new Promise(resolve => setTimeout(resolve, 10000))
         ]);
 
-        // Esperar un poco más para que todo se estabilice
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         updateProgressBar(50, 2);
         updateProgressMessage('Generando archivo PDF...');
@@ -2369,11 +2308,6 @@ async function descargarPDFFinal() {
             throw new Error('No se encontró el contenido del reporte');
         }
 
-        // Asegurar que el contenedor tenga un tamaño fijo
-        contenido.style.width = '100%';
-        contenido.style.maxWidth = '1000px';
-        contenido.style.margin = '0 auto';
-
         if (typeof html2canvas === 'undefined') {
             throw new Error('La librería html2canvas no está cargada');
         }
@@ -2381,35 +2315,24 @@ async function descargarPDFFinal() {
         updateProgressBar(60, 2);
         updateProgressMessage('Capturando contenido...');
 
-        // Capturar con html2canvas - con opciones mejoradas
+        // Capturar con html2canvas
         const canvas = await html2canvas(contenido, {
-            scale: 2.5,
+            scale: 2,
             useCORS: true,
             backgroundColor: '#ffffff',
             width: 1024,
             height: contenido.scrollHeight || 1500,
-            logging: true,
+            logging: false,
             allowTaint: true,
-            foreignObjectRendering: false,
             onclone: function(doc) {
-                // Asegurar que todas las imágenes se muestren
                 const imgs = doc.querySelectorAll('img');
                 imgs.forEach(img => {
-                    // Forzar que las imágenes se muestren
-                    img.style.display = 'block';
-                    img.style.maxWidth = '100%';
-                    img.style.height = 'auto';
-                    // Si la imagen no tiene src, asignar un placeholder
-                    if (!img.src || img.src === '') {
-                        img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="150" viewBox="0 0 200 150"%3E%3Crect width="200" height="150" fill="%23f0f0f0"/%3E%3Ctext x="100" y="75" font-family="Arial" font-size="14" fill="%23999" text-anchor="middle" dy=".3em"%3ESin imagen%3C/text%3E%3C/svg%3E';
+                    if (!img.complete) {
+                        img.style.display = 'block';
+                        img.style.minHeight = '100px';
+                        img.style.background = '#f0f0f0';
                     }
                 });
-                // Asegurar que el contenedor sea visible
-                const containerClone = doc.getElementById('reporteImprimible');
-                if (containerClone) {
-                    containerClone.style.visibility = 'visible';
-                    containerClone.style.opacity = '1';
-                }
             }
         });
 
@@ -2435,26 +2358,22 @@ async function descargarPDFFinal() {
         
         let heightLeft = imgHeight;
         let position = 0;
-        const pageHeight = 277;
+        const pageHeight = 297;
 
-        // Añadir primera página
         pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
 
-        // Añadir páginas adicionales si es necesario
-        let pageNum = 1;
         while (heightLeft > 0) {
             position = heightLeft - imgHeight;
             pdf.addPage();
             pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
             heightLeft -= pageHeight;
-            pageNum++;
         }
 
         updateProgressBar(95, 3);
         updateProgressMessage('Descargando PDF...');
 
-        // Descargar directamente
+        // Descargar directamente - sin abrir ventana
         const pdfBlob = pdf.output('blob');
         const link = document.createElement('a');
         link.href = URL.createObjectURL(pdfBlob);
@@ -2518,12 +2437,12 @@ async function descargarPDFAlternativo() {
             container.style.cssText = `
                 position: absolute;
                 left: -9999px;
-                top: 0;
+                top: -9999px;
                 width: 1024px;
                 padding: 30px;
                 background: white;
                 font-family: 'Plus Jakarta Sans', Arial, sans-serif;
-                opacity: 1;
+                opacity: 0;
                 pointer-events: none;
                 overflow: visible;
                 z-index: -1;
@@ -2531,7 +2450,7 @@ async function descargarPDFAlternativo() {
             container.innerHTML = reporteHTML;
             document.body.appendChild(container);
 
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 500));
 
             const contenido = container.querySelector('.reporte-container');
             if (!contenido) {
@@ -2547,13 +2466,12 @@ async function descargarPDFAlternativo() {
                 filename: `Reporte_${datosReporteFinal.codigo_unico || 'orden'}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: {
-                    scale: 2.5,
+                    scale: 2,
                     useCORS: true,
-                    logging: true,
+                    logging: false,
                     letterRendering: true,
                     allowTaint: true,
-                    backgroundColor: '#ffffff',
-                    foreignObjectRendering: false
+                    backgroundColor: '#ffffff'
                 },
                 jsPDF: {
                     unit: 'mm',

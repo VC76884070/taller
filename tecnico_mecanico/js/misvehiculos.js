@@ -1,6 +1,7 @@
 // =====================================================
 // MIS VEHÍCULOS - TÉCNICO MECÁNICO
 // VERSIÓN CORREGIDA - CON INSTRUCCIONES DEL JEFE DE TALLER
+// CORREGIDO: AÑO, KILOMETRAJE, AUDIO PROBLEMA, AUDIO DIAGNÓSTICO
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
@@ -190,11 +191,6 @@ async function verificarToken() {
         return false;
     }
 }
-
-// =====================================================
-// FUNCIÓN ELIMINADA: mostrarIndicadorRoles()
-// Ya no se muestra el selector de roles
-// =====================================================
 
 function mostrarNombreUsuario() {
     const userNameSpan = document.getElementById('userName');
@@ -983,8 +979,9 @@ function cerrarHistorialModal() {
     if (modal) modal.classList.remove('show');
 }
 
-// backend/tecnico_mecanico/js/misvehiculos.js
-
+// =====================================================
+// DETALLE DE ORDEN (CORREGIDO CON AÑO, KM Y AUDIOS)
+// =====================================================
 window.verDetalle = async function(ordenId) {
     showToast('Cargando detalles...', 'info');
     
@@ -1009,7 +1006,7 @@ window.verDetalle = async function(ordenId) {
         const detalle = data.detalle;
         
         // =====================================================
-        // 🔧 OBTENER DATOS DEL VEHÍCULO (AÑO Y KILOMETRAJE)
+        // OBTENER DATOS DEL VEHÍCULO (AÑO Y KILOMETRAJE)
         // =====================================================
         const vehiculo = detalle.vehiculo || {};
         const kilometraje = vehiculo.kilometraje ? `${parseInt(vehiculo.kilometraje).toLocaleString()} km` : 'N/A';
@@ -1017,39 +1014,128 @@ window.verDetalle = async function(ordenId) {
         const marcaModelo = `${vehiculo.marca || ''} ${vehiculo.modelo || ''}`.trim() || 'No especificado';
         const placa = vehiculo.placa || 'No registrada';
         
-        // Obtener instrucciones
+        // =====================================================
+        // OBTENER INSTRUCCIONES
+        // =====================================================
         const instruccionesTecnico = detalle.orden?.instrucciones_tecnico || 'No hay instrucciones del Jefe de Taller';
         const instruccionesArmado = detalle.orden?.instrucciones_armado || '';
         
+        // =====================================================
+        // OBTENER FOTOS
+        // =====================================================
         const fotos = detalle.recepcion?.fotos || {};
         const fotosArray = Object.entries(fotos).filter(([_, url]) => url && url !== '');
+        
+        // =====================================================
+        // OBTENER AUDIOS (DOS GRABACIONES)
+        // =====================================================
+        // Audio 1: Grabación del problema (recepción)
+        const audioProblemaUrl = detalle.recepcion?.audio_url || '';
+        const transcripcionProblema = detalle.recepcion?.transcripcion_problema || 'No hay descripción del problema';
+        
+        // Audio 2: Grabación del diagnóstico (Jefe de Taller)
+        const audioDiagnosticoUrl = detalle.diagnostico_taller?.audio_url || '';
+        const diagnosticoTexto = detalle.diagnostico_taller?.diagnostigo || '';
         
         const bahiaInfo = detalle.planificacion?.bahia_asignada ? 
             `<div><strong>Bahía asignada:</strong> ${detalle.planificacion.bahia_asignada}</div>` : '';
         
-        const detalleHtml = `
-            <div style="display: grid; gap: 1rem;">
-                <!-- ===================================================== -->
-                <!-- INSTRUCCIONES DEL JEFE DE TALLER (DESTACADA) -->
-                <!-- ===================================================== -->
-                <div class="modal-section" style="border: 2px solid var(--ambar-alerta); border-radius: var(--radius-md); padding: 1rem; background: rgba(245, 158, 11, 0.05);">
-                    <h3 style="color: var(--ambar-alerta); display: flex; align-items: center; gap: 0.5rem;">
-                        <i class="fas fa-clipboard-list"></i> Instrucciones del Jefe de Taller
-                        <span style="font-size: 0.6rem; background: var(--ambar-alerta); color: white; padding: 0.1rem 0.5rem; border-radius: 20px; margin-left: auto;">IMPORTANTE</span>
-                    </h3>
-                    <div class="instrucciones-box" style="background: var(--gris-oscuro); padding: 0.75rem; border-radius: var(--radius-md);">
-                        <p style="white-space: pre-wrap; font-size: 0.9rem; margin: 0;">
-                            ${escapeHtml(instruccionesTecnico)}
-                        </p>
-                        ${instruccionesArmado ? `
-                            <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
-                                <strong style="color: var(--ambar-alerta);"><i class="fas fa-tools"></i> Instrucciones de Armado:</strong>
-                                <p style="white-space: pre-wrap; font-size: 0.9rem; margin-top: 0.5rem;">${escapeHtml(instruccionesArmado)}</p>
+        // =====================================================
+        // FUNCIÓN PARA CREAR HTML DE AUDIO
+        // =====================================================
+        function crearAudioHtml(url, titulo, icono, color) {
+            if (!url || url === '') return '';
+            return `
+                <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(59, 130, 246, 0.05); border-radius: var(--radius-md); border-left: 3px solid ${color};">
+                    <div style="font-size: 0.75rem; color: ${color}; margin-bottom: 0.5rem;">
+                        <i class="fas ${icono}"></i> ${titulo}:
+                    </div>
+                    <audio controls preload="metadata" style="width: 100%;">
+                        <source src="${url}" type="audio/mpeg">
+                        <source src="${url}" type="audio/wav">
+                        <source src="${url}" type="audio/webm">
+                        Tu navegador no soporta el elemento de audio.
+                    </audio>
+                </div>
+            `;
+        }
+        
+        // =====================================================
+        // CONSTRUIR HTML DEL PROBLEMA REPORTADO CON AUDIO
+        // =====================================================
+        const audioProblemaHtml = crearAudioHtml(
+            audioProblemaUrl,
+            'Grabación del problema (Cliente)',
+            'fa-microphone',
+            '#3B82F6'  // Azul
+        );
+        
+        const problemaHtml = `
+            <div class="modal-section">
+                <h3><i class="fas fa-comment"></i> Problema Reportado</h3>
+                <div class="diagnostico-box" style="background: var(--gris-oscuro); padding: 0.75rem; border-radius: var(--radius-md);">
+                    <p style="margin: 0 0 0.5rem 0;">${escapeHtml(transcripcionProblema)}</p>
+                    ${audioProblemaHtml}
+                </div>
+            </div>
+        `;
+        
+        // =====================================================
+        // CONSTRUIR HTML DEL DIAGNÓSTICO DEL JEFE TALLER CON AUDIO
+        // =====================================================
+        const audioDiagnosticoHtml = crearAudioHtml(
+            audioDiagnosticoUrl,
+            'Grabación del diagnóstico (Jefe de Taller)',
+            'fa-clipboard-list',
+            '#F59E0B'  // Amarillo
+        );
+        
+        const diagnosticoTallerHtml = `
+            <div class="modal-section" style="border: 2px solid var(--ambar-alerta); border-radius: var(--radius-md); padding: 1rem; background: rgba(245, 158, 11, 0.05);">
+                <h3 style="color: var(--ambar-alerta); display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-stethoscope"></i> Diagnóstico e Instrucciones del Jefe de Taller
+                    <span style="font-size: 0.6rem; background: var(--ambar-alerta); color: white; padding: 0.1rem 0.5rem; border-radius: 20px; margin-left: auto;">INSTRUCCIONES</span>
+                </h3>
+                <div class="diagnostico-box" style="background: var(--gris-oscuro); padding: 0.75rem; border-radius: var(--radius-md);">
+                    <p style="white-space: pre-wrap; font-size: 0.9rem; margin: 0 0 0.5rem 0;">
+                        ${escapeHtml(diagnosticoTexto) || 'No hay diagnóstico del Jefe de Taller'}
+                    </p>
+                    ${audioDiagnosticoHtml}
+                </div>
+                ${instruccionesArmado ? `
+                    <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                        <strong style="color: var(--ambar-alerta);"><i class="fas fa-tools"></i> Instrucciones de Armado:</strong>
+                        <p style="white-space: pre-wrap; font-size: 0.9rem; margin-top: 0.5rem;">${escapeHtml(instruccionesArmado)}</p>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        
+        // =====================================================
+        // CONSTRUIR HTML DE FOTOS
+        // =====================================================
+        let fotosHtml = '';
+        if (fotosArray.length > 0) {
+            fotosHtml = `
+                <div class="modal-section">
+                    <h3><i class="fas fa-images"></i> Fotos del Vehículo (${fotosArray.length})</h3>
+                    <div class="fotos-grid">
+                        ${fotosArray.map(([nombre, url]) => `
+                            <div class="foto-item" onclick="verFoto('${url}')" style="cursor: pointer;">
+                                <img src="${url}" alt="${nombre}" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%22%20height%3D%22100%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%238E8E93%22%20stroke-width%3D%222%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%2218%22%20height%3D%2218%22%20rx%3D%222%22%2F%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%221.5%22%2F%3E%3Cpolyline%20points%3D%2221%2015%2016%2010%205%2021%22%2F%3E%3C%2Fsvg%3E'">
+                                <div style="font-size: 0.6rem; text-align: center; padding: 0.25rem;">${escapeHtml(nombre)}</div>
                             </div>
-                        ` : ''}
+                        `).join('')}
                     </div>
                 </div>
-                
+            `;
+        }
+        
+        // =====================================================
+        // CONSTRUIR HTML COMPLETO
+        // =====================================================
+        const detalleHtml = `
+            <div style="display: grid; gap: 1rem;">
                 <!-- Información de la Orden -->
                 <div class="modal-section">
                     <h3><i class="fas fa-clipboard-list"></i> Información de la Orden</h3>
@@ -1061,9 +1147,7 @@ window.verDetalle = async function(ordenId) {
                     </div>
                 </div>
                 
-                <!-- ===================================================== -->
-                <!-- 🔧 DATOS DEL VEHÍCULO (CON AÑO Y KILOMETRAJE) -->
-                <!-- ===================================================== -->
+                <!-- Datos del Vehículo -->
                 <div class="modal-section">
                     <h3><i class="fas fa-car"></i> Datos del Vehículo</h3>
                     <div class="detalle-grid">
@@ -1084,29 +1168,14 @@ window.verDetalle = async function(ordenId) {
                     </div>
                 </div>
                 
-                <!-- Problema Reportado -->
-                <div class="modal-section">
-                    <h3><i class="fas fa-comment"></i> Problema Reportado</h3>
-                    <div class="diagnostico-box" style="background: var(--gris-oscuro); padding: 0.75rem; border-radius: var(--radius-md);">
-                        <p>${escapeHtml(detalle.recepcion?.transcripcion_problema || 'No hay descripción del problema')}</p>
-                        ${detalle.recepcion?.audio_url ? `<audio controls preload="none" style="width: 100%; margin-top: 0.5rem;"><source src="${detalle.recepcion.audio_url}" type="audio/mpeg"></audio>` : ''}
-                    </div>
-                </div>
+                <!-- Problema Reportado (con audio del cliente) -->
+                ${problemaHtml}
+                
+                <!-- Diagnóstico del Jefe Taller (con audio del jefe) -->
+                ${diagnosticoTallerHtml}
                 
                 <!-- Fotos -->
-                ${fotosArray.length > 0 ? `
-                    <div class="modal-section">
-                        <h3><i class="fas fa-images"></i> Fotos del Vehículo (${fotosArray.length})</h3>
-                        <div class="fotos-grid">
-                            ${fotosArray.map(([nombre, url]) => `
-                                <div class="foto-item" onclick="verFoto('${url}')" style="cursor: pointer;">
-                                    <img src="${url}" alt="${nombre}" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%22%20height%3D%22100%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%238E8E93%22%20stroke-width%3D%222%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%2218%22%20height%3D%2218%22%20rx%3D%222%22%2F%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%221.5%22%2F%3E%3Cpolyline%20points%3D%2221%2015%2016%2010%205%2021%22%2F%3E%3C%2Fsvg%3E'">
-                                    <div style="font-size: 0.6rem; text-align: center; padding: 0.25rem;">${escapeHtml(nombre)}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                ` : ''}
+                ${fotosHtml}
             </div>
         `;
         

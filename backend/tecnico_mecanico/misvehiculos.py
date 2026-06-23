@@ -3,6 +3,8 @@
 # FLUJO: EMPEZAR TRABAJO → DIAGNÓSTICO → APROBACIÓN → REPARACIÓN
 # VERSIÓN COMPLETA CON INSTRUCCIONES DEL JEFE DE TALLER
 # CORREGIDO: DEDUPLICACIÓN DE VEHÍCULOS Y EXCLUSIÓN DE ENTREGADOS
+# CORREGIDO: AÑO Y KILOMETRAJE EN DETALLE
+# CORREGIDO: AUDIO DEL PROBLEMA Y AUDIO DEL DIAGNÓSTICO
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
@@ -383,7 +385,7 @@ def obtener_mis_vehiculos(current_user):
                 'trabajo_iniciado': trabajo_iniciado,
                 'bahia_asignada': planificacion_info.get('bahia_asignada'),
                 'instrucciones_armado': instruccion_info.get('instrucciones'),
-                'instrucciones_tecnico': orden.get('instrucciones_tecnico'),  # 🔧 NUEVO
+                'instrucciones_tecnico': orden.get('instrucciones_tecnico'),
                 'solicitudes_repuestos_pendientes': solicitudes_pendientes.get(orden_id, 0) > 0,
                 'vehiculo': {
                     'placa': vehiculo.get('placa', ''),
@@ -1114,8 +1116,9 @@ def notificar_jefe_taller_armado_completado(id_orden, tecnico_nombre, codigo_ord
         logger.error(f"Error notificando: {str(e)}")
 
 
-# backend/tecnico_mecanico/misvehiculos.py
-
+# =====================================================
+# API: DETALLE DE ORDEN (CORREGIDO CON TODOS LOS DATOS)
+# =====================================================
 @mis_vehiculos_bp.route('/detalle-orden/<int:orden_id>', methods=['GET'])
 @tecnico_required
 def obtener_detalle_orden(current_user, orden_id):
@@ -1148,7 +1151,7 @@ def obtener_detalle_orden(current_user, orden_id):
         orden_data = orden.data[0]
         
         # =====================================================
-        # 🔧 OBTENER VEHÍCULO COMPLETO (con año y kilometraje)
+        # OBTENER VEHÍCULO COMPLETO (con año y kilometraje)
         # =====================================================
         vehiculo = supabase.table('vehiculo') \
             .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
@@ -1180,9 +1183,11 @@ def obtener_detalle_orden(current_user, orden_id):
                         cliente_info['nombre'] = usuario.data[0].get('nombre', 'No registrado')
                         cliente_info['telefono'] = usuario.data[0].get('contacto', 'No registrado')
         
-        # Obtener recepción
+        # =====================================================
+        # OBTENER RECEPCIÓN (incluyendo audio del problema)
+        # =====================================================
         recepcion = supabase.table('recepcion') \
-            .select('*') \
+            .select('transcripcion_problema, url_grabacion_problema, url_lateral_izquierda, url_lateral_derecha, url_foto_frontal, url_foto_trasera, url_foto_superior, url_foto_inferior, url_foto_tablero') \
             .eq('id_orden_trabajo', orden_id) \
             .execute()
         
@@ -1201,7 +1206,19 @@ def obtener_detalle_orden(current_user, orden_id):
                 'url_foto_tablero': recepcion_data.get('url_foto_tablero')
             }
         
-        # Obtener diagnóstico
+        # =====================================================
+        # OBTENER DIAGNÓSTICO DEL JEFE DE TALLER (con audio)
+        # =====================================================
+        diagnostico_taller = supabase.table('diagnostigoinicial') \
+            .select('diagnostigo, url_grabacion') \
+            .eq('id_orden_trabajo', orden_id) \
+            .order('fecha_hora', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        diagnostico_taller_data = diagnostico_taller.data[0] if diagnostico_taller.data else {}
+        
+        # Obtener diagnóstico técnico
         diagnostico = supabase.table('diagnostico_tecnico') \
             .select('*') \
             .eq('id_orden_trabajo', orden_id) \
@@ -1291,7 +1308,7 @@ def obtener_detalle_orden(current_user, orden_id):
                 })
         
         # =====================================================
-        # 🔧 CONSTRUIR RESPUESTA CON AÑO Y KILOMETRAJE
+        # CONSTRUIR RESPUESTA COMPLETA
         # =====================================================
         return jsonify({
             'success': True,
@@ -1308,14 +1325,18 @@ def obtener_detalle_orden(current_user, orden_id):
                     'placa': vehiculo_data.get('placa', ''),
                     'marca': vehiculo_data.get('marca', ''),
                     'modelo': vehiculo_data.get('modelo', ''),
-                    'anio': vehiculo_data.get('anio'),  # 🔧 AÑO
-                    'kilometraje': vehiculo_data.get('kilometraje', 0)  # 🔧 KILOMETRAJE
+                    'anio': vehiculo_data.get('anio'),
+                    'kilometraje': vehiculo_data.get('kilometraje', 0)
                 },
                 'cliente': cliente_info,
                 'recepcion': {
                     'transcripcion_problema': recepcion_data.get('transcripcion_problema', 'No hay descripción'),
-                    'audio_url': recepcion_data.get('url_grabacion_problema', ''),
+                    'audio_url': recepcion_data.get('url_grabacion_problema', ''),  # Audio del problema
                     'fotos': fotos
+                },
+                'diagnostico_taller': {
+                    'diagnostigo': diagnostico_taller_data.get('diagnostigo', ''),
+                    'audio_url': diagnostico_taller_data.get('url_grabacion', '')  # Audio del diagnóstico
                 },
                 'diagnostico_tecnico': {
                     'informe': diagnostico_data.get('informe') if diagnostico_data else None,

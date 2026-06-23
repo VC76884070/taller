@@ -1,7 +1,7 @@
 # =====================================================
 # MIS VEHÍCULOS - TÉCNICO MECÁNICO
 # FLUJO: EMPEZAR TRABAJO → DIAGNÓSTICO → APROBACIÓN → REPARACIÓN
-# VERSIÓN COMPLETA CON SOLICITUD DE REPUESTOS SIN PAUSA
+# VERSIÓN COMPLETA CON INSTRUCCIONES DEL JEFE DE TALLER
 # CORREGIDO: DEDUPLICACIÓN DE VEHÍCULOS Y EXCLUSIÓN DE ENTREGADOS
 # FURIA MOTOR COMPANY SRL
 # =====================================================
@@ -244,7 +244,7 @@ def obtener_mis_vehiculos(current_user):
         # Obtener órdenes (excluyendo estado 'Entregado')
         # =====================================================
         ordenes = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
+            .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo, instrucciones_tecnico') \
             .in_('id', orden_ids) \
             .not_.eq('estado_global', 'Entregado') \
             .execute()
@@ -383,6 +383,7 @@ def obtener_mis_vehiculos(current_user):
                 'trabajo_iniciado': trabajo_iniciado,
                 'bahia_asignada': planificacion_info.get('bahia_asignada'),
                 'instrucciones_armado': instruccion_info.get('instrucciones'),
+                'instrucciones_tecnico': orden.get('instrucciones_tecnico'),  # 🔧 NUEVO
                 'solicitudes_repuestos_pendientes': solicitudes_pendientes.get(orden_id, 0) > 0,
                 'vehiculo': {
                     'placa': vehiculo.get('placa', ''),
@@ -1113,9 +1114,8 @@ def notificar_jefe_taller_armado_completado(id_orden, tecnico_nombre, codigo_ord
         logger.error(f"Error notificando: {str(e)}")
 
 
-# =====================================================
-# API: DETALLE DE ORDEN
-# =====================================================
+# backend/tecnico_mecanico/misvehiculos.py
+
 @mis_vehiculos_bp.route('/detalle-orden/<int:orden_id>', methods=['GET'])
 @tecnico_required
 def obtener_detalle_orden(current_user, orden_id):
@@ -1134,7 +1134,9 @@ def obtener_detalle_orden(current_user, orden_id):
         
         tipo_asignacion = asignacion.data[0].get('tipo_asignacion', 'diagnostico')
         
-        # Obtener orden
+        # =====================================================
+        # Obtener TODOS los campos de la orden
+        # =====================================================
         orden = supabase.table('ordentrabajo') \
             .select('*') \
             .eq('id', orden_id) \
@@ -1145,9 +1147,11 @@ def obtener_detalle_orden(current_user, orden_id):
         
         orden_data = orden.data[0]
         
-        # Obtener vehículo
+        # =====================================================
+        # 🔧 OBTENER VEHÍCULO COMPLETO (con año y kilometraje)
+        # =====================================================
         vehiculo = supabase.table('vehiculo') \
-            .select('*') \
+            .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
             .eq('id', orden_data.get('id_vehiculo')) \
             .execute()
         
@@ -1286,6 +1290,9 @@ def obtener_detalle_orden(current_user, orden_id):
                     'fecha_respuesta': sol.get('fecha_respuesta')
                 })
         
+        # =====================================================
+        # 🔧 CONSTRUIR RESPUESTA CON AÑO Y KILOMETRAJE
+        # =====================================================
         return jsonify({
             'success': True,
             'detalle': {
@@ -1293,14 +1300,16 @@ def obtener_detalle_orden(current_user, orden_id):
                     'id': orden_data['id'],
                     'codigo_unico': orden_data.get('codigo_unico', ''),
                     'fecha_ingreso': orden_data.get('fecha_ingreso'),
-                    'estado_global': orden_data.get('estado_global', '')
+                    'estado_global': orden_data.get('estado_global', ''),
+                    'instrucciones_tecnico': orden_data.get('instrucciones_tecnico', ''),
+                    'instrucciones_armado': orden_data.get('instrucciones_armado', '')
                 },
                 'vehiculo': {
                     'placa': vehiculo_data.get('placa', ''),
                     'marca': vehiculo_data.get('marca', ''),
                     'modelo': vehiculo_data.get('modelo', ''),
-                    'anio': vehiculo_data.get('anio', ''),
-                    'kilometraje': vehiculo_data.get('kilometraje', 0)
+                    'anio': vehiculo_data.get('anio'),  # 🔧 AÑO
+                    'kilometraje': vehiculo_data.get('kilometraje', 0)  # 🔧 KILOMETRAJE
                 },
                 'cliente': cliente_info,
                 'recepcion': {
@@ -1324,7 +1333,7 @@ def obtener_detalle_orden(current_user, orden_id):
                     'fecha_hora_fin_real': planificacion_data.get('fecha_hora_fin_real')
                 },
                 'tipo_asignacion': tipo_asignacion,
-                'instrucciones_armado': instrucciones_data.get('instrucciones'),
+                'instrucciones_armado_historial': instrucciones_data.get('instrucciones'),
                 'fecha_instrucciones': instrucciones_data.get('fecha_envio'),
                 'instrucciones_pendientes': instrucciones_pendientes,
                 'solicitudes_repuestos_pendientes': solicitudes_pendientes

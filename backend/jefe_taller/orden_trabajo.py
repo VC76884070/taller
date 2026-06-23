@@ -1,6 +1,7 @@
 # =====================================================
 # ÓRDENES DE TRABAJO - JEFE TALLER (VERSIÓN COMPLETA CORREGIDA)
 # CORREGIDO: Usa el nombre real de la tabla 'diagnostigoinicial'
+# AGREGADO: Endpoint para guardar instrucciones al técnico
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -615,7 +616,7 @@ def detalle_orden(current_user, id_orden):
 
 
 # =====================================================
-# ENDPOINT 6: ASIGNAR TÉCNICOS
+# ENDPOINT 6: ASIGNAR TÉCNICOS (CORREGIDO CON INSTRUCCIONES)
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/asignar-tecnicos', methods=['POST'])
@@ -626,12 +627,39 @@ def asignar_tecnicos(current_user):
         id_orden = data.get('id_orden')
         tecnicos_ids = data.get('tecnicos', [])
         tipo_asignacion = data.get('tipo_asignacion', 'diagnostico')
+        instrucciones = data.get('instrucciones', '')  # 🔧 NUEVO: Obtener instrucciones
         
         if not id_orden:
             return jsonify({'error': 'ID de orden requerido'}), 400
         
         if len(tecnicos_ids) > 2:
             return jsonify({'error': 'Máximo 2 técnicos por orden'}), 400
+        
+        # =====================================================
+        # 🔧 NUEVO: Guardar instrucciones del jefe de taller
+        # =====================================================
+        if instrucciones:
+            ahora = datetime.datetime.now().isoformat()
+            
+            # 1. Guardar en ordentrabajo
+            supabase.table('ordentrabajo') \
+                .update({
+                    'instrucciones_tecnico': instrucciones,
+                    'fecha_instrucciones': ahora
+                }) \
+                .eq('id', id_orden) \
+                .execute()
+            
+            # 2. Guardar en historial
+            supabase.table('instrucciones_tecnico_historial').insert({
+                'id_orden_trabajo': id_orden,
+                'id_jefe_taller': current_user['id'],
+                'instrucciones': instrucciones,
+                'fecha_envio': ahora,
+                'leida': False
+            }).execute()
+            
+            logger.info(f"✅ Instrucciones guardadas para orden {id_orden}")
         
         MAX_ORDENES_POR_TECNICO = 2
         
@@ -678,6 +706,29 @@ def asignar_tecnicos(current_user):
                 'fecha_hora_inicio': datetime.datetime.now().isoformat()
             }).execute()
         
+        # =====================================================
+        # 🔧 NOTIFICAR A TÉCNICOS SI HAY INSTRUCCIONES
+        # =====================================================
+        if instrucciones and tecnicos_ids:
+            orden = supabase.table('ordentrabajo') \
+                .select('codigo_unico') \
+                .eq('id', id_orden) \
+                .execute()
+            codigo_orden = orden.data[0]['codigo_unico'] if orden.data else str(id_orden)
+            
+            for tecnico_id in tecnicos_ids:
+                try:
+                    supabase.table('notificacion').insert({
+                        'id_usuario_destino': tecnico_id,
+                        'tipo': 'nuevas_instrucciones',
+                        'mensaje': f"📋 El Jefe de Taller ha enviado instrucciones para la orden #{codigo_orden}",
+                        'fecha_envio': datetime.datetime.now().isoformat(),
+                        'leida': False,
+                        'id_referencia': id_orden
+                    }).execute()
+                except Exception as e:
+                    logger.warning(f"Error enviando notificación: {e}")
+        
         cache.clear('tecnicos_list')
         cache.clear('ultimas_ordenes')
         
@@ -685,6 +736,123 @@ def asignar_tecnicos(current_user):
         
     except Exception as e:
         logger.error(f"Error asignando técnicos: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# 🆕 ENDPOINT 16: GUARDAR INSTRUCCIONES AL TÉCNICO
+# =====================================================
+
+@jefe_taller_ordenes_bp.route('/guardar-instrucciones', methods=['POST'])
+@jefe_taller_required
+def guardar_instrucciones_tecnico(current_user):
+    """
+    Guarda las instrucciones del jefe de taller para el técnico
+    """
+    try:
+        data = request.get_json()
+        id_orden = data.get('id_orden')
+        instrucciones = data.get('instrucciones', '')
+        tipo = data.get('tipo', 'reparacion')  # 'reparacion' o 'armado'
+        
+        if not id_orden:
+            return jsonify({'error': 'ID de orden requerido'}), 400
+        
+        if not instrucciones:
+            return jsonify({'error': 'Las instrucciones son obligatorias'}), 400
+        
+        ahora = datetime.datetime.now().isoformat()
+        
+        # =====================================================
+        # 1. GUARDAR EN TABLA ordentrabajo (CAMPO PRINCIPAL)
+        # =====================================================
+        update_data = {}
+        if tipo == 'armado':
+            update_data['instrucciones_armado'] = instrucciones
+        else:
+            update_data['instrucciones_tecnico'] = instrucciones
+        
+        update_data['fecha_instrucciones'] = ahora
+        
+        # Actualizar la orden
+        result = supabase.table('ordentrabajo') \
+            .update(update_data) \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if not result.data:
+            return jsonify({'error': 'No se pudo actualizar la orden'}), 500
+        
+        # =====================================================
+        # 2. GUARDAR EN HISTORIAL (para tracking)
+        # =====================================================
+        supabase.table('instrucciones_tecnico_historial').insert({
+            'id_orden_trabajo': id_orden,
+            'id_jefe_taller': current_user['id'],
+            'instrucciones': instrucciones,
+            'fecha_envio': ahora,
+            'leida': False
+        }).execute()
+        
+        # =====================================================
+        # 3. OBTENER CÓDIGO DE ORDEN PARA NOTIFICACIÓN
+        # =====================================================
+        orden = supabase.table('ordentrabajo') \
+            .select('codigo_unico') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        codigo_orden = orden.data[0]['codigo_unico'] if orden.data else str(id_orden)
+        
+        # =====================================================
+        # 4. NOTIFICAR A LOS TÉCNICOS ASIGNADOS
+        # =====================================================
+        tecnicos = supabase.table('asignaciontecnico') \
+            .select('id_tecnico') \
+            .eq('id_orden_trabajo', id_orden) \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
+        for t in (tecnicos.data or []):
+            try:
+                supabase.table('notificacion').insert({
+                    'id_usuario_destino': t['id_tecnico'],
+                    'tipo': 'nuevas_instrucciones',
+                    'mensaje': f"📋 El Jefe de Taller ha enviado nuevas instrucciones para la orden #{codigo_orden}",
+                    'fecha_envio': ahora,
+                    'leida': False,
+                    'id_referencia': id_orden
+                }).execute()
+            except Exception as e:
+                logger.warning(f"Error enviando notificación a técnico {t['id_tecnico']}: {e}")
+        
+        # =====================================================
+        # 5. REGISTRAR AVANCE
+        # =====================================================
+        supabase.table('avancetrabajo').insert({
+            'id_orden_trabajo': id_orden,
+            'id_tecnico': current_user['id'],
+            'descripcion': f"📝 Instrucciones enviadas al técnico: {instrucciones[:100]}...",
+            'tipo_avance': 'instrucciones_enviadas',
+            'fecha_hora': ahora
+        }).execute()
+        
+        logger.info(f"✅ Instrucciones guardadas para orden {id_orden} por {current_user.get('nombre')}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Instrucciones guardadas correctamente',
+            'data': {
+                'instrucciones': instrucciones,
+                'tipo': tipo,
+                'fecha': ahora
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error guardando instrucciones: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 

@@ -1,6 +1,6 @@
 // =====================================================
 // ÓRDENES DE TRABAJO - JEFE TALLER
-// VERSIÓN COMPLETA Y CORREGIDA CON BAHÍAS Y DIAGNÓSTICOS
+// VERSIÓN COMPLETA Y CORREGIDA CON INSTRUCCIONES
 // =====================================================
 
 if (typeof window.API_BASE_URL === 'undefined') {
@@ -802,7 +802,47 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
 }
 
 // =====================================================
-// FUNCIONES DE GESTIÓN DE ORDEN
+// 🆕 GUARDAR INSTRUCCIONES AL TÉCNICO
+// =====================================================
+
+async function guardarInstruccionesTecnico(idOrden, instrucciones, tipo = 'reparacion') {
+    try {
+        if (!instrucciones || instrucciones.trim() === '') {
+            mostrarNotificacion('⚠️ No hay instrucciones para guardar', 'warning');
+            return false;
+        }
+        
+        const response = await fetch(`${API_URL}/jefe-taller/guardar-instrucciones`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            },
+            body: JSON.stringify({
+                id_orden: idOrden,
+                instrucciones: instrucciones.trim(),
+                tipo: tipo
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            mostrarNotificacion('✅ Instrucciones guardadas correctamente', 'success');
+            return true;
+        } else {
+            mostrarNotificacion('❌ Error: ' + (data.error || 'No se pudieron guardar'), 'error');
+            return false;
+        }
+    } catch (error) {
+        console.error('Error guardando instrucciones:', error);
+        mostrarNotificacion('Error de conexión al guardar instrucciones', 'error');
+        return false;
+    }
+}
+
+// =====================================================
+// FUNCIONES DE GESTIÓN DE ORDEN (CORREGIDO CON INSTRUCCIONES)
 // =====================================================
 
 async function abrirModalGestionOrden(idOrden) {
@@ -916,7 +956,7 @@ function renderModalGestionOrden() {
                 <div class="gestion-section-body">
                     <div class="alert-warning" style="background: rgba(245,158,11,0.1); padding: 0.75rem; border-radius: var(--radius-md); margin-bottom: 1rem;">
                         <i class="fas fa-edit"></i>
-                        <small>Este diagnóstico será visible para los técnicos. <strong>Puede editarlo</strong> para dar instrucciones específicas.</small>
+                        <small>Este diagnóstico será visible para los técnicos como <strong>INSTRUCCIONES</strong>. <strong>Puede editarlo</strong> para dar instrucciones específicas.</small>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Diagnóstico e instrucciones para el técnico</label>
@@ -1161,13 +1201,35 @@ function detenerGrabacionAudioTaller() {
     }
 }
 
+// =====================================================
+// 🆕 GUARDAR GESTIÓN DE ORDEN (CORREGIDO CON INSTRUCCIONES)
+// =====================================================
+
 async function guardarGestionOrden() {
     if (!ordenEnGestion) return;
     
     mostrarNotificacion('Guardando cambios...', 'info');
     
     try {
-        // 1. Guardar técnicos seleccionados
+        // 1. Obtener diagnóstico del taller (instrucciones)
+        const diagnosticoTaller = document.getElementById('diagnosticoTaller')?.value;
+        
+        // =====================================================
+        // 🔧 GUARDAR INSTRUCCIONES EN LA TABLA ordentrabajo
+        // =====================================================
+        if (diagnosticoTaller && diagnosticoTaller.trim() !== '') {
+            const instruccionesGuardadas = await guardarInstruccionesTecnico(
+                ordenEnGestion.id,
+                diagnosticoTaller,
+                'reparacion'
+            );
+            
+            if (!instruccionesGuardadas) {
+                mostrarNotificacion('⚠️ Las instrucciones no se guardaron correctamente', 'warning');
+            }
+        }
+        
+        // 2. Guardar técnicos seleccionados
         const tecnicosSeleccionados = Array.from(document.querySelectorAll('input[name="tecnico"]:checked'))
             .map(cb => parseInt(cb.value));
         
@@ -1181,7 +1243,8 @@ async function guardarGestionOrden() {
                 body: JSON.stringify({
                     id_orden: ordenEnGestion.id,
                     tecnicos: tecnicosSeleccionados,
-                    tipo_asignacion: 'diagnostico'
+                    tipo_asignacion: 'diagnostico',
+                    instrucciones: diagnosticoTaller || ''  // 🔧 Enviar instrucciones también aquí
                 })
             });
             
@@ -1191,7 +1254,7 @@ async function guardarGestionOrden() {
             }
         }
         
-        // 2. Obtener bahía seleccionada
+        // 3. Obtener bahía seleccionada
         let bahia = null;
         const bahiaSeleccionada = document.querySelector('#bahiasGridSeleccion .bahia-item.selected');
         if (bahiaSeleccionada) {
@@ -1222,8 +1285,7 @@ async function guardarGestionOrden() {
             }
         }
         
-        // 3. Guardar diagnóstico del taller (EDITABLE)
-        const diagnosticoTaller = document.getElementById('diagnosticoTaller')?.value;
+        // 4. Guardar diagnóstico del taller (en diagnostigoinicial)
         let audioBase64 = null;
         
         if (audioBlob) {
@@ -1254,7 +1316,7 @@ async function guardarGestionOrden() {
             }
         }
         
-        mostrarNotificacion('Cambios guardados correctamente', 'success');
+        mostrarNotificacion('✅ Cambios guardados correctamente', 'success');
         
         // Limpiar caché y recargar datos
         dataCache.clear('tecnicos');
@@ -1452,6 +1514,7 @@ window.cerrarModalHistorialDiagnostico = cerrarModalHistorialDiagnostico;
 window.abrirModalGestionOrden = abrirModalGestionOrden;
 window.cerrarModalGestionOrden = cerrarModalGestionOrden;
 window.guardarGestionOrden = guardarGestionOrden;
+window.guardarInstruccionesTecnico = guardarInstruccionesTecnico;
 window.cargarUltimasOrdenesActivas = cargarUltimasOrdenesActivas;
 window.cargarTodasOrdenesActivas = cargarTodasOrdenesActivas;
 window.cargarOrdenesFinalizadas = cargarOrdenesFinalizadas;
@@ -1459,4 +1522,4 @@ window.verDiagnosticoPendiente = verDiagnosticoPendiente;
 window.verOrdenEnBahia = verOrdenEnBahia;
 window.cargarEstadoBahias = cargarEstadoBahias;
 
-console.log('✅ orden_trabajo.js cargado - Versión completa con bahías y diagnósticos');
+console.log('✅ orden_trabajo.js cargado - Versión completa con instrucciones');

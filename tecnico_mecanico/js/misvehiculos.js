@@ -1,6 +1,6 @@
 // =====================================================
 // MIS VEHÍCULOS - TÉCNICO MECÁNICO
-// VERSIÓN CORREGIDA - SIN SELECTOR DE ROLES
+// VERSIÓN CORREGIDA - CON INSTRUCCIONES DEL JEFE DE TALLER
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
@@ -983,9 +983,8 @@ function cerrarHistorialModal() {
     if (modal) modal.classList.remove('show');
 }
 
-// =====================================================
-// DETALLE DE ORDEN
-// =====================================================
+// backend/tecnico_mecanico/js/misvehiculos.js
+
 window.verDetalle = async function(ordenId) {
     showToast('Cargando detalles...', 'info');
     
@@ -1009,17 +1008,49 @@ window.verDetalle = async function(ordenId) {
         
         const detalle = data.detalle;
         
+        // =====================================================
+        // 🔧 OBTENER DATOS DEL VEHÍCULO (AÑO Y KILOMETRAJE)
+        // =====================================================
+        const vehiculo = detalle.vehiculo || {};
+        const kilometraje = vehiculo.kilometraje ? `${parseInt(vehiculo.kilometraje).toLocaleString()} km` : 'N/A';
+        const anio = vehiculo.anio && vehiculo.anio !== 'N/A' && vehiculo.anio !== null ? vehiculo.anio : 'No especificado';
+        const marcaModelo = `${vehiculo.marca || ''} ${vehiculo.modelo || ''}`.trim() || 'No especificado';
+        const placa = vehiculo.placa || 'No registrada';
+        
+        // Obtener instrucciones
+        const instruccionesTecnico = detalle.orden?.instrucciones_tecnico || 'No hay instrucciones del Jefe de Taller';
+        const instruccionesArmado = detalle.orden?.instrucciones_armado || '';
+        
         const fotos = detalle.recepcion?.fotos || {};
         const fotosArray = Object.entries(fotos).filter(([_, url]) => url && url !== '');
         
-        const kilometraje = detalle.vehiculo?.kilometraje ? `${parseInt(detalle.vehiculo.kilometraje).toLocaleString()} km` : 'N/A';
-        const anio = detalle.vehiculo?.anio && detalle.vehiculo.anio !== 'N/A' ? detalle.vehiculo.anio : 'No especificado';
-        const marcaModelo = `${detalle.vehiculo?.marca || ''} ${detalle.vehiculo?.modelo || ''}`.trim() || 'No especificado';
-        
-        const bahiaInfo = detalle.planificacion?.bahia_asignada ? `<div><strong>Bahía asignada:</strong> ${detalle.planificacion.bahia_asignada}</div>` : '';
+        const bahiaInfo = detalle.planificacion?.bahia_asignada ? 
+            `<div><strong>Bahía asignada:</strong> ${detalle.planificacion.bahia_asignada}</div>` : '';
         
         const detalleHtml = `
             <div style="display: grid; gap: 1rem;">
+                <!-- ===================================================== -->
+                <!-- INSTRUCCIONES DEL JEFE DE TALLER (DESTACADA) -->
+                <!-- ===================================================== -->
+                <div class="modal-section" style="border: 2px solid var(--ambar-alerta); border-radius: var(--radius-md); padding: 1rem; background: rgba(245, 158, 11, 0.05);">
+                    <h3 style="color: var(--ambar-alerta); display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas fa-clipboard-list"></i> Instrucciones del Jefe de Taller
+                        <span style="font-size: 0.6rem; background: var(--ambar-alerta); color: white; padding: 0.1rem 0.5rem; border-radius: 20px; margin-left: auto;">IMPORTANTE</span>
+                    </h3>
+                    <div class="instrucciones-box" style="background: var(--gris-oscuro); padding: 0.75rem; border-radius: var(--radius-md);">
+                        <p style="white-space: pre-wrap; font-size: 0.9rem; margin: 0;">
+                            ${escapeHtml(instruccionesTecnico)}
+                        </p>
+                        ${instruccionesArmado ? `
+                            <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                                <strong style="color: var(--ambar-alerta);"><i class="fas fa-tools"></i> Instrucciones de Armado:</strong>
+                                <p style="white-space: pre-wrap; font-size: 0.9rem; margin-top: 0.5rem;">${escapeHtml(instruccionesArmado)}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                
+                <!-- Información de la Orden -->
                 <div class="modal-section">
                     <h3><i class="fas fa-clipboard-list"></i> Información de la Orden</h3>
                     <div class="detalle-grid">
@@ -1030,16 +1061,20 @@ window.verDetalle = async function(ordenId) {
                     </div>
                 </div>
                 
+                <!-- ===================================================== -->
+                <!-- 🔧 DATOS DEL VEHÍCULO (CON AÑO Y KILOMETRAJE) -->
+                <!-- ===================================================== -->
                 <div class="modal-section">
                     <h3><i class="fas fa-car"></i> Datos del Vehículo</h3>
                     <div class="detalle-grid">
-                        <div><strong>Placa:</strong> ${escapeHtml(detalle.vehiculo?.placa || 'No registrada')}</div>
+                        <div><strong>Placa:</strong> ${escapeHtml(placa)}</div>
                         <div><strong>Marca/Modelo:</strong> ${escapeHtml(marcaModelo)}</div>
                         <div><strong>Año:</strong> ${escapeHtml(anio)}</div>
                         <div><strong>Kilometraje:</strong> ${kilometraje}</div>
                     </div>
                 </div>
                 
+                <!-- Datos del Cliente -->
                 <div class="modal-section">
                     <h3><i class="fas fa-user"></i> Datos del Cliente</h3>
                     <div class="detalle-grid">
@@ -1049,6 +1084,7 @@ window.verDetalle = async function(ordenId) {
                     </div>
                 </div>
                 
+                <!-- Problema Reportado -->
                 <div class="modal-section">
                     <h3><i class="fas fa-comment"></i> Problema Reportado</h3>
                     <div class="diagnostico-box" style="background: var(--gris-oscuro); padding: 0.75rem; border-radius: var(--radius-md);">
@@ -1057,6 +1093,7 @@ window.verDetalle = async function(ordenId) {
                     </div>
                 </div>
                 
+                <!-- Fotos -->
                 ${fotosArray.length > 0 ? `
                     <div class="modal-section">
                         <h3><i class="fas fa-images"></i> Fotos del Vehículo (${fotosArray.length})</h3>
@@ -1296,7 +1333,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     mostrarFechaActual();
     mostrarNombreUsuario();
-    // ELIMINADO: mostrarIndicadorRoles() - Ya no se muestra el selector de roles
     await cargarVehiculos();
     await cargarComunicados();
     

@@ -5,6 +5,7 @@
 # CORREGIDO: DEDUPLICACIÓN DE VEHÍCULOS Y EXCLUSIÓN DE ENTREGADOS
 # CORREGIDO: AÑO Y KILOMETRAJE EN DETALLE
 # CORREGIDO: AUDIO DEL PROBLEMA Y AUDIO DEL DIAGNÓSTICO
+# CORREGIDO: SOPORTE PARA FOTOS EN SOLICITUDES DE REPUESTOS
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
@@ -659,13 +660,15 @@ def pausar_reparacion_manual(current_user):
 
 
 # =====================================================
-# API: SOLICITAR REPUESTOS SIN PAUSA
+# API: SOLICITAR REPUESTOS SIN PAUSA (CORREGIDO CON FOTOS)
 # =====================================================
 @mis_vehiculos_bp.route('/solicitar-repuestos-sin-pausa', methods=['POST'])
 @tecnico_required
 def solicitar_repuestos_sin_pausa(current_user):
     try:
         data = request.get_json()
+        logger.info(f"📥 Datos recibidos en solicitar-repuestos-sin-pausa: {data}")
+        
         id_orden = data.get('id_orden')
         observaciones = data.get('observaciones', '')
         items = data.get('items', [])
@@ -692,24 +695,41 @@ def solicitar_repuestos_sin_pausa(current_user):
         if estado_actual not in ['EnReparacion', 'EnPausa']:
             return jsonify({'error': f'No se pueden solicitar repuestos. Estado actual: {estado_actual}'}), 400
         
-        # Validar items
+        # =====================================================
+        # 🔧 PROCESAR ITEMS CON FOTOS (CORREGIDO)
+        # =====================================================
         items_validos = []
         for item in items:
             if item.get('descripcion') and item.get('descripcion').strip():
-                items_validos.append({
+                # Crear el item base
+                item_data = {
                     'descripcion': item['descripcion'].strip(),
                     'cantidad': item.get('cantidad', 1),
                     'detalle': item.get('detalle', '').strip()
-                })
+                }
+                
+                # ✅ GUARDAR FOTO SI EXISTE
+                if item.get('foto_url'):
+                    item_data['foto_url'] = item.get('foto_url')
+                    logger.info(f"✅ Foto URL guardada: {item_data['foto_url']}")
+                
+                if item.get('foto_public_id'):
+                    item_data['foto_public_id'] = item.get('foto_public_id')
+                    logger.info(f"✅ Public ID guardado: {item_data['foto_public_id']}")
+                
+                items_validos.append(item_data)
         
         if not items_validos:
             return jsonify({'error': 'Debes agregar al menos un repuesto válido'}), 400
+        
+        # 🔍 LOG PARA VERIFICAR QUÉ SE VA A GUARDAR
+        logger.info(f"📦 Items a guardar en BD: {json.dumps(items_validos, indent=2)}")
         
         # Crear solicitud
         solicitud = {
             'id_orden_trabajo': id_orden,
             'id_tecnico': tecnico_id,
-            'items': json.dumps(items_validos),
+            'items': json.dumps(items_validos),  # ✅ Guarda los items con fotos
             'observaciones': observaciones,
             'estado': 'pendiente',
             'fecha_solicitud': ahora
@@ -746,7 +766,7 @@ def solicitar_repuestos_sin_pausa(current_user):
         }), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        logger.error(f"❌ Error en solicitar_repuestos_sin_pausa: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
@@ -765,7 +785,17 @@ def notificar_jefe_taller_solicitud(id_orden, items, observaciones, tecnico_nomb
             logger.warning("No se encontraron jefes de taller")
             return
         
-        items_texto = "\n".join([f"- {item['descripcion']} x{item['cantidad']}" + (f" ({item['detalle']})" if item.get('detalle') else "") for item in items])
+        # Construir mensaje con fotos
+        items_texto = []
+        for item in items:
+            linea = f"- {item['descripcion']} x{item['cantidad']}"
+            if item.get('detalle'):
+                linea += f" ({item['detalle']})"
+            if item.get('foto_url'):
+                linea += f" 📷 [Ver foto: {item['foto_url']}]"
+            items_texto.append(linea)
+        
+        items_texto_str = "\n".join(items_texto)
         
         mensaje = f"""📋 NUEVA SOLICITUD DE REPUESTOS
 
@@ -773,7 +803,7 @@ Técnico: {tecnico_nombre}
 Orden: {codigo_orden}
 
 Repuestos solicitados:
-{items_texto}
+{items_texto_str}
 
 Observaciones: {observaciones or 'Sin observaciones'}
 
@@ -1369,7 +1399,7 @@ def obtener_detalle_orden(current_user, orden_id):
 
 
 # =====================================================
-# API: HISTORIAL DE SOLICITUDES DE REPUESTOS
+# API: HISTORIAL DE SOLICITUDES DE REPUESTOS (CON FOTOS)
 # =====================================================
 @mis_vehiculos_bp.route('/historial-solicitudes/<int:orden_id>', methods=['GET'])
 @tecnico_required

@@ -1,7 +1,6 @@
 // =====================================================
 // MIS VEHÍCULOS - TÉCNICO MECÁNICO
-// VERSIÓN CORREGIDA - CON INSTRUCCIONES DEL JEFE DE TALLER
-// CORREGIDO: AÑO, KILOMETRAJE, AUDIO PROBLEMA, AUDIO DIAGNÓSTICO
+// VERSIÓN CORREGIDA - CON FOTOS EN SOLICITUD DE REPUESTOS
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
@@ -637,7 +636,102 @@ async function confirmarPausaManual() {
 }
 
 // =====================================================
-// SOLICITAR REPUESTOS SIN PAUSA
+// 🆕 FUNCIONES PARA SUBIR FOTO EN SOLICITUD DE REPUESTOS
+// =====================================================
+
+async function subirFotoItemSolicitudTecnico(index, input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+        showToast('Solo se permiten imágenes', 'error');
+        input.value = '';
+        return;
+    }
+    
+    if (file.size > 5 * 1024 * 1024) {
+        showToast('La imagen no debe superar los 5MB', 'error');
+        input.value = '';
+        return;
+    }
+    
+    showToast('Subiendo foto...', 'info');
+    
+    try {
+        const formData = new FormData();
+        formData.append('foto', file);
+        
+        const response = await fetch('/api/jefe-taller/subir-foto-item', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        // 🔧 VERIFICAR: Debe actualizar itemsSolicitud con la URL
+        if (data.success && data.url) {
+            if (itemsSolicitud[index]) {
+                itemsSolicitud[index].foto_url = data.url;
+                itemsSolicitud[index].foto_public_id = data.public_id;
+            }
+            
+            renderItemsSolicitud();
+            showToast('✅ Foto subida correctamente', 'success');
+        } else {
+            showToast(data.error || 'Error al subir foto', 'error');
+        }
+    } catch (error) {
+        console.error('Error subiendo foto:', error);
+        showToast('Error de conexión al subir foto', 'error');
+    } finally {
+        input.value = '';
+    }
+}
+
+async function eliminarFotoItemSolicitudTecnico(index) {
+    if (!itemsSolicitud[index] || !itemsSolicitud[index].foto_public_id) {
+        showToast('No hay foto para eliminar', 'warning');
+        return;
+    }
+    
+    if (!confirm('¿Eliminar esta foto?')) return;
+    
+    showToast('Eliminando foto...', 'info');
+    
+    try {
+        const response = await fetch('/api/jefe-taller/eliminar-foto-item', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                public_id: itemsSolicitud[index].foto_public_id
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            delete itemsSolicitud[index].foto_url;
+            delete itemsSolicitud[index].foto_public_id;
+            
+            renderItemsSolicitud();
+            showToast('✅ Foto eliminada', 'success');
+        } else {
+            showToast(data.error || 'Error al eliminar foto', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    }
+}
+
+// =====================================================
+// SOLICITAR REPUESTOS SIN PAUSA (CON FOTOS)
 // =====================================================
 window.solicitarRepuestosSinPausa = function(ordenId) {
     limpiarItemsSolicitud();
@@ -656,12 +750,16 @@ async function confirmarSolicitarRepuestos() {
     const ordenId = document.getElementById('ordenIdSolicitud').value;
     const motivo = document.getElementById('motivoSolicitud').value.trim();
     
+    // 🔧 VERIFICAR: Los items deben incluir foto_url
     const itemsValidos = itemsSolicitud.filter(item => item.descripcion && item.descripcion.trim() !== '');
     
     if (itemsValidos.length === 0) {
         showToast('Debes agregar al menos un repuesto a solicitar', 'warning');
         return;
     }
+    
+    // 🔧 LOG: Ver qué se está enviando
+    console.log('📤 Enviando items:', itemsValidos);
     
     cerrarSolicitarRepuestosModal();
     showToast('Enviando solicitud de repuestos...', 'info');
@@ -676,6 +774,7 @@ async function confirmarSolicitarRepuestos() {
                 items: itemsValidos
             })
         });
+        
         const data = await response.json();
         
         if (data.success) {
@@ -835,7 +934,89 @@ window.marcarArmadoCompletado = async function(ordenId) {
 };
 
 // =====================================================
-// HISTORIAL DE SOLICITUDES DE REPUESTOS
+// 🆕 FUNCIÓN PARA VER FOTO AMPLIADA DESDE EL HISTORIAL
+// =====================================================
+function verFotoAmpliadaTecnico(url) {
+    if (!url) {
+        showToast('No hay foto para mostrar', 'warning');
+        return;
+    }
+    
+    // Crear modal de foto si no existe
+    let modalFoto = document.getElementById('modalFotoAmpliadaTecnico');
+    if (!modalFoto) {
+        const modalHtml = `
+            <div class="modal" id="modalFotoAmpliadaTecnico" onclick="cerrarFotoAmpliadaTecnico()">
+                <div class="modal-content" style="max-width: 800px; background: var(--bg-card);" onclick="event.stopPropagation()">
+                    <div class="modal-header" style="border-bottom: 2px solid var(--rojo-primario);">
+                        <h3><i class="fas fa-image"></i> Foto del Repuesto</h3>
+                        <button class="modal-close" onclick="cerrarFotoAmpliadaTecnico()" style="font-size:1.8rem;">&times;</button>
+                    </div>
+                    <div class="modal-body" style="display:flex;justify-content:center;align-items:center;padding:1.5rem;background:var(--negro);min-height:300px;">
+                        <img id="fotoAmpliadaTecnicoImg" src="" alt="Foto ampliada" loading="lazy" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:var(--radius-md);">
+                    </div>
+                    <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:1rem;padding:1rem;border-top:1px solid var(--border-color);">
+                        <button class="btn-secondary" onclick="cerrarFotoAmpliadaTecnico()">Cerrar</button>
+                        <button class="btn-primary" onclick="descargarFotoAmpliadaTecnico()">
+                            <i class="fas fa-download"></i> Descargar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    // Actualizar imagen
+    const img = document.getElementById('fotoAmpliadaTecnicoImg');
+    if (img) {
+        img.src = url;
+        img.alt = 'Foto ampliada';
+        img.onerror = function() {
+            this.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="%238E8E93" stroke-width="2"%3E%3Crect x="3" y="3" width="18" height="18" rx="2"/%3E%3Ccircle cx="8.5" cy="8.5" r="1.5"/%3E%3Cpolyline points="21 15 16 10 5 21"/%3E%3C/svg%3E';
+            this.style.objectFit = 'contain';
+        };
+    }
+    
+    // Guardar URL para descarga
+    window._fotoAmpliadaTecnicoUrl = url;
+    
+    // Abrir modal
+    const modal = document.getElementById('modalFotoAmpliadaTecnico');
+    if (modal) {
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function cerrarFotoAmpliadaTecnico() {
+    const modal = document.getElementById('modalFotoAmpliadaTecnico');
+    if (modal) {
+        modal.classList.remove('show');
+        document.body.style.overflow = '';
+    }
+}
+
+function descargarFotoAmpliadaTecnico() {
+    const url = window._fotoAmpliadaTecnicoUrl;
+    if (!url) {
+        showToast('No hay foto para descargar', 'warning');
+        return;
+    }
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.download = `repuesto_${Date.now()}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('✅ Descargando foto...', 'success');
+}
+
+// =====================================================
+// HISTORIAL DE SOLICITUDES DE REPUESTOS (CON FOTOS)
 // =====================================================
 window.verHistorialSolicitudes = async function(ordenId) {
     showToast('Cargando historial de solicitudes...', 'info');
@@ -877,10 +1058,29 @@ window.verHistorialSolicitudes = async function(ordenId) {
                 try { items = JSON.parse(items); } catch(e) { items = []; }
             }
             
+            // =====================================================
+            // 🔧 RENDERIZAR ITEMS CON FOTOS EN EL HISTORIAL
+            // =====================================================
             if (items && items.length > 0) {
-                itemsHtml = '<ul style="margin: 0.5rem 0 0 1rem;">' + 
-                    items.map(item => `<li><strong>${escapeHtml(item.descripcion)}</strong> x${item.cantidad}${item.detalle ? ` (${escapeHtml(item.detalle)})` : ''}</li>`).join('') + 
+                itemsHtml = '<ul style="margin: 0.5rem 0 0 1rem; list-style: none; padding: 0;">' + 
+                    items.map(item => {
+                        const fotoUrl = item.foto_url;
+                        const fotoHtml = fotoUrl 
+                            ? `<img src="${fotoUrl}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);margin-right:8px;vertical-align:middle;cursor:pointer;" onclick="verFotoAmpliadaTecnico('${fotoUrl}')" onerror="this.style.display='none'">`
+                            : '<span style="display:inline-block;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;border:1px dashed var(--border-color);text-align:center;line-height:40px;color:var(--gris-texto);font-size:0.8rem;margin-right:8px;vertical-align:middle;"><i class="fas fa-camera"></i></span>';
+                        
+                        return `<li style="display:flex;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--border-color);">
+                            ${fotoHtml}
+                            <div style="flex:1;">
+                                <strong>${escapeHtml(item.descripcion)}</strong>
+                                <span style="color:var(--gris-texto);font-size:0.8rem;margin-left:0.5rem;">x${item.cantidad}</span>
+                                ${item.detalle ? `<br><small style="color:var(--gris-texto);">${escapeHtml(item.detalle)}</small>` : ''}
+                            </div>
+                        </li>`;
+                    }).join('') + 
                     '</ul>';
+            } else {
+                itemsHtml = '<p style="color:var(--gris-texto);font-size:0.85rem;">No hay items especificados</p>';
             }
             
             let estadoBadge = '';
@@ -932,14 +1132,17 @@ window.verHistorialSolicitudes = async function(ordenId) {
                         <div>
                             <strong><i class="fas fa-ticket-alt"></i> Solicitud #${sol.id}</strong>
                             <span style="font-size: 0.7rem; color: var(--gris-texto); margin-left: 0.5rem;">${formatFecha(sol.fecha_solicitud)}</span>
+                            ${sol.tipo === 'tecnico' ? '<span style="font-size:0.6rem;background:var(--azul-acento);color:white;padding:0.1rem 0.5rem;border-radius:20px;margin-left:0.5rem;">Técnico</span>' : ''}
+                            ${sol.tipo === 'compra' ? '<span style="font-size:0.6rem;background:var(--verde-exito);color:white;padding:0.1rem 0.5rem;border-radius:20px;margin-left:0.5rem;">Compra</span>' : ''}
                         </div>
                         <span style="background: ${estadoColor}20; color: ${estadoColor}; padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.7rem; font-weight: 500;">
                             <i class="fas ${estadoIcon}"></i> ${estadoTexto}
                         </span>
                     </div>
                     <div style="padding: 1rem;">
-                        <div><strong>Repuestos solicitados:</strong>${itemsHtml}</div>
-                        ${sol.observaciones ? `<div style="margin-top: 0.5rem;"><strong>Observaciones:</strong> ${escapeHtml(sol.observaciones)}</div>` : ''}
+                        <div style="margin-bottom:0.5rem;"><strong>Repuestos solicitados:</strong></div>
+                        ${itemsHtml}
+                        ${sol.observaciones ? `<div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);"><strong>Observaciones:</strong> ${escapeHtml(sol.observaciones)}</div>` : ''}
                         ${sol.respuesta ? `<div style="margin-top: 0.5rem; background: var(--gris-oscuro); padding: 0.5rem; border-radius: var(--radius-sm);"><strong>Respuesta del Jefe de Taller:</strong><br>${escapeHtml(sol.respuesta)}</div>` : ''}
                         ${sol.fecha_respuesta ? `<div style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--gris-texto);">Respondido: ${formatFecha(sol.fecha_respuesta)}</div>` : ''}
                         
@@ -955,6 +1158,14 @@ window.verHistorialSolicitudes = async function(ordenId) {
                                 <strong style="color: var(--verde-exito);"><i class="fas fa-truck"></i> Estado: Repuestos entregados</strong>
                                 <div style="font-size: 0.8rem; margin-top: 0.25rem;">Los repuestos han sido entregados y están disponibles para usar.</div>
                                 ${sol.fecha_entrega ? `<div style="font-size: 0.7rem; margin-top: 0.25rem;">Fecha de entrega: ${formatFecha(sol.fecha_entrega)}</div>` : ''}
+                            </div>
+                        ` : ''}
+                        
+                        ${sol.comprobante_url ? `
+                            <div style="margin-top: 0.75rem;">
+                                <button class="btn-outline btn-sm" onclick="window.open('${sol.comprobante_url}', '_blank')" style="padding:0.3rem 0.8rem;font-size:0.7rem;">
+                                    <i class="fas fa-image"></i> Ver Comprobante
+                                </button>
                             </div>
                         ` : ''}
                     </div>
@@ -1331,7 +1542,7 @@ function verComunicadoCompleto(id) {
 }
 
 // =====================================================
-// MANEJO DE ÍTEMS DE SOLICITUD DE REPUESTOS
+// 🆕 MANEJO DE ÍTEMS DE SOLICITUD DE REPUESTOS (CON FOTOS)
 // =====================================================
 
 function renderItemsSolicitud() {
@@ -1343,22 +1554,38 @@ function renderItemsSolicitud() {
         return;
     }
 
-    container.innerHTML = itemsSolicitud.map((item, index) => `
-        <div class="item-row" data-index="${index}">
-            <div class="item-fields">
-                <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Nombre del repuesto" onchange="actualizarItemSolicitud(${index}, 'descripcion', this.value)">
-                <input type="number" class="item-cantidad" value="${item.cantidad}" min="1" onchange="actualizarItemSolicitud(${index}, 'cantidad', parseInt(this.value))">
-                <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle (marca, especificaciones...)" onchange="actualizarItemSolicitud(${index}, 'detalle', this.value)">
+    container.innerHTML = itemsSolicitud.map((item, index) => {
+        // 🔧 VERIFICAR: La foto debe mostrarse si existe
+        const fotoPreview = item.foto_url ? 
+            `<img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);">` : '';
+        
+        return `
+            <div class="item-row" data-index="${index}">
+                <div class="item-fields">
+                    <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Nombre del repuesto" onchange="actualizarItemSolicitud(${index}, 'descripcion', this.value)">
+                    <input type="number" class="item-cantidad" value="${item.cantidad}" min="1" onchange="actualizarItemSolicitud(${index}, 'cantidad', parseInt(this.value))">
+                    <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle (marca, especificaciones...)" onchange="actualizarItemSolicitud(${index}, 'detalle', this.value)">
+                </div>
+                <div class="item-foto-upload">
+                    <!-- 🔧 VERIFICAR: El input file debe tener el onchange correcto -->
+                    <input type="file" class="item-foto-input-solicitud-tecnico" accept="image/*" onchange="subirFotoItemSolicitudTecnico(${index}, this)" style="display:none;">
+                    <button type="button" class="btn-foto-item" onclick="event.preventDefault(); document.querySelectorAll('.item-foto-input-solicitud-tecnico')[${index}]?.click()">
+                        <i class="fas fa-camera"></i> Foto
+                    </button>
+                    <span class="item-foto-preview" id="fotoPreviewSolicitudTecnico_${index}">
+                        ${fotoPreview ? `<div class="foto-preview-container"><img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);"><button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemSolicitudTecnico(${index})" style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;">×</button></div>` : ''}
+                    </span>
+                </div>
+                <div class="item-actions">
+                    <button type="button" class="btn-remove-item" onclick="event.preventDefault(); eliminarItemSolicitud(${index})"><i class="fas fa-trash-alt"></i></button>
+                </div>
             </div>
-            <div class="item-actions">
-                <button class="btn-remove-item" onclick="eliminarItemSolicitud(${index})"><i class="fas fa-trash-alt"></i></button>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function agregarItemSolicitud() {
-    itemsSolicitud.push({ descripcion: '', cantidad: 1, detalle: '' });
+    itemsSolicitud.push({ descripcion: '', cantidad: 1, detalle: '', foto_url: null, foto_public_id: null });
     renderItemsSolicitud();
     setTimeout(() => {
         const lastInput = document.querySelector('#itemsListSolicitud .item-row:last-child .item-descripcion');
@@ -1418,5 +1645,46 @@ document.addEventListener('DOMContentLoaded', async () => {
         modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
     });
     
-    console.log('✅ misvehiculos.js cargado correctamente');
+    // =====================================================
+    // EXPORTAR FUNCIONES GLOBALES PARA EL HTML
+    // =====================================================
+
+    // Funciones de solicitud de repuestos
+    window.subirFotoItemSolicitudTecnico = subirFotoItemSolicitudTecnico;
+    window.eliminarFotoItemSolicitudTecnico = eliminarFotoItemSolicitudTecnico;
+    window.solicitarRepuestosSinPausa = solicitarRepuestosSinPausa;
+    window.cerrarSolicitarRepuestosModal = cerrarSolicitarRepuestosModal;
+    window.confirmarSolicitarRepuestos = confirmarSolicitarRepuestos;
+
+    // Historial y detalle
+    window.verHistorialSolicitudes = verHistorialSolicitudes;
+    window.cerrarHistorialModal = cerrarHistorialModal;
+    window.verDetalle = verDetalle;
+    window.cerrarDetalleModal = cerrarDetalleModal;
+
+    // Fotos ampliadas
+    window.verFotoAmpliadaTecnico = verFotoAmpliadaTecnico;
+    window.cerrarFotoAmpliadaTecnico = cerrarFotoAmpliadaTecnico;
+    window.descargarFotoAmpliadaTecnico = descargarFotoAmpliadaTecnico;
+    window.verFoto = verFoto;
+    window.cerrarFotoModal = cerrarFotoModal;
+
+    // Diagnóstico y reparación
+    window.empezarTrabajoDiagnostico = empezarTrabajoDiagnostico;
+    window.cerrarEmpezarModal = cerrarEmpezarModal;
+    window.iniciarReparacion = iniciarReparacion;
+    window.cerrarIniciarModal = cerrarIniciarModal;
+    window.pausarReparacionManual = pausarReparacionManual;
+    window.cerrarPausaManualModal = cerrarPausaManualModal;
+    window.reanudarReparacion = reanudarReparacion;
+    window.cerrarReanudarModal = cerrarReanudarModal;
+    window.mostrarFinalizarModal = mostrarFinalizarModal;
+    window.cerrarFinalizarModal = cerrarFinalizarModal;
+    window.marcarArmadoCompletado = marcarArmadoCompletado;
+
+    // Otras utilidades
+    window.recargarDatos = recargarDatos;
+    window.cerrarSesion = cerrarSesion;
+
+    console.log('✅ misvehiculos.js - Funciones exportadas correctamente');
 });

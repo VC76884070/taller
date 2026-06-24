@@ -26,81 +26,6 @@
     <link rel="apple-touch-icon" href="/icono.png">
     <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
-
-    <style>
-        /* Estilos adicionales para validación de días */
-        .form-input.error {
-            border-color: #dc3545 !important;
-            background-color: rgba(220, 53, 69, 0.05);
-        }
-
-        .error-message {
-            color: #dc3545;
-            font-size: 0.75rem;
-            margin-top: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            animation: fadeInError 0.3s ease;
-        }
-
-        @keyframes fadeInError {
-            from {
-                opacity: 0;
-                transform: translateY(-5px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .required-field {
-            color: #dc3545;
-            margin-left: 0.25rem;
-        }
-
-        .campo-obligatorio {
-            border-left: 3px solid var(--rojo-primario);
-            background: rgba(193, 18, 31, 0.05);
-        }
-
-        .loading-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(8px);
-            z-index: 9999;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-        }
-
-        .loading-spinner {
-            width: 50px;
-            height: 50px;
-            border: 3px solid var(--gris-medio);
-            border-top-color: var(--rojo-primario);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        .loading-overlay p {
-            margin-top: 1rem;
-            color: var(--blanco);
-        }
-    </style>
 </head>
 
 <body>
@@ -363,7 +288,9 @@
 
     <!-- ==================== MODALES ==================== -->
 
-    <!-- Modal: Nueva Solicitud de Cotización -->
+    <!-- ===================================================== -->
+    <!-- MODAL: NUEVA SOLICITUD DE COTIZACIÓN (REDISEÑADO)    -->
+    <!-- ===================================================== -->
     <div class="modal" id="modalSolicitudCotizacion">
         <div class="modal-content modal-lg">
             <div class="modal-header">
@@ -371,49 +298,57 @@
                 <button class="modal-close" onclick="cerrarModal('modalSolicitudCotizacion')">&times;</button>
             </div>
             <div class="modal-body">
-                <form id="formSolicitudCotizacion">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Orden de Trabajo <span class="required">*</span></label>
-                            <select id="solicitud_id_orden_trabajo" class="form-select" required>
-                                <option value="">Seleccionar orden</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Servicio <span class="required">*</span></label>
-                            <select id="solicitud_id_servicio" class="form-select" required>
-                                <option value="">Seleccionar servicio</option>
-                            </select>
-                        </div>
+                <!-- ========================================= -->
+                <!-- INFORMACIÓN DE LA ORDEN -->
+                <!-- ========================================= -->
+                <div id="ordenInfoSolicitud" class="orden-info-card" style="margin-bottom: 1.5rem;">
+                    <p><strong>Orden:</strong> <span id="solicitudOrdenCodigo">-</span></p>
+                    <p><strong>Vehículo:</strong> <span id="solicitudVehiculo">-</span></p>
+                    <p><strong>Cliente:</strong> <span id="solicitudCliente">-</span></p>
+                </div>
+
+                <!-- ========================================= -->
+                <!-- SERVICIOS CON SUS ITEMS (ACORDEÓN) -->
+                <!-- ========================================= -->
+                <div id="serviciosItemsContainer">
+                    <!-- Se genera dinámicamente con JS -->
+                    <div class="loading-state" style="text-align:center; padding: 2rem;">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Cargando servicios...</p>
                     </div>
-                    <div class="form-group">
-                        <label>Encargado de Repuestos <span class="required">*</span></label>
-                        <select id="solicitud_id_encargado" class="form-select" required>
-                            <option value="">Seleccionar encargado</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label><i class="fas fa-list"></i> Items a cotizar</label>
-                        <div class="items-list-container">
-                            <div class="items-list" id="itemsListSolicitud">
-                                <div class="item-empty"><i class="fas fa-box-open"></i>
-                                    <p>No hay items agregados</p><small>Haz clic en "Agregar item" para comenzar</small>
-                                </div>
-                            </div>
-                            <button type="button" class="btn-add-item" id="btnAgregarItemSolicitud"><i
-                                    class="fas fa-plus-circle"></i> Agregar item</button>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Observaciones</label>
-                        <textarea id="solicitud_observacion" class="form-textarea" rows="2"></textarea>
-                    </div>
-                </form>
+                </div>
+
+                <!-- ========================================= -->
+                <!-- ENCARGADO DE REPUESTOS (ÚNICO SELECT) -->
+                <!-- ========================================= -->
+                <div class="form-group" style="margin-top: 1.5rem;">
+                    <label>Encargado de Repuestos <span class="required">*</span></label>
+                    <select id="solicitud_id_encargado" class="form-select" required>
+                        <option value="">Seleccionar encargado</option>
+                    </select>
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle"></i> El encargado recibirá las solicitudes de todos los servicios de esta orden
+                    </small>
+                </div>
+
+                <!-- ========================================= -->
+                <!-- OBSERVACIONES GLOBALES -->
+                <!-- ========================================= -->
+                <div class="form-group">
+                    <label><i class="fas fa-comment-dots"></i> Observaciones Generales</label>
+                    <textarea id="solicitud_observacion" class="form-textarea" rows="2" 
+                        placeholder="Observaciones adicionales para el encargado de repuestos..."></textarea>
+                </div>
+
+                <!-- Campos ocultos -->
+                <input type="hidden" id="solicitud_id_orden_trabajo" value="">
+                <input type="hidden" id="solicitud_id_servicio_seleccionado" value="">
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalSolicitudCotizacion')">Cancelar</button>
-                <button class="btn-primary" id="saveSolicitudModal"><i class="fas fa-paper-plane"></i> Enviar
-                    Solicitud</button>
+                <button class="btn-primary" id="saveSolicitudModal">
+                    <i class="fas fa-paper-plane"></i> Enviar Solicitudes
+                </button>
             </div>
         </div>
     </div>
@@ -708,7 +643,9 @@
         </div>
     </div>
 
-    <!-- Modal: Nueva Solicitud de Compra Directa -->
+    <!-- ===================================================== -->
+    <!-- MODAL: NUEVA SOLICITUD DE COMPRA DIRECTA CON FOTOS   -->
+    <!-- ===================================================== -->
     <div class="modal" id="modalNuevaSolicitudCompraDirecta">
         <div class="modal-content modal-lg">
             <div class="modal-header">
@@ -724,12 +661,17 @@
                         <option value="">Seleccionar orden</option>
                     </select>
                 </div>
+
                 <div class="form-group">
                     <label>Encargado de Repuestos <span class="required">*</span></label>
                     <select id="compraDirecta_id_encargado" class="form-select" required>
                         <option value="">Seleccionar encargado</option>
                     </select>
                 </div>
+
+                <!-- ===================================================== -->
+                <!-- ITEMS A COMPRAR CON FOTO                          -->
+                <!-- ===================================================== -->
                 <div class="form-group">
                     <label><i class="fas fa-list"></i> Items a comprar</label>
                     <div class="items-list-container">
@@ -743,6 +685,7 @@
                         </button>
                     </div>
                 </div>
+
                 <div class="form-group">
                     <label><i class="fas fa-comment-dots"></i> Instrucciones / Observaciones</label>
                     <textarea id="compraDirecta_observaciones" class="form-textarea" rows="3"

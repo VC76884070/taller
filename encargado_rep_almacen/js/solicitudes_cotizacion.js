@@ -1,20 +1,17 @@
 // =====================================================
 // SOLICITUDES_COTIZACION.JS - ENCARGADO DE REPUESTOS
-// VERSIÓN OPTIMIZADA - USA window.API_BASE_URL
+// VERSIÓN OPTIMIZADA - CON FOTOS DE ITEMS Y AMPLIACIÓN
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
 // =====================================================
 // CONFIGURACIÓN DE API - USA LA VARIABLE GLOBAL
 // =====================================================
-// NOTA: window.API_BASE_URL ya está declarada en include.js
-// No declarar const API_BASE_URL aquí
-
 const API_URL = `${window.API_BASE_URL}/api/encargado-repuestos`;
 
 // Configuración de paginación
-const PAGE_SIZE = 10;  // ← SOLO 10 POR PÁGINA
-const MAX_CACHE_AGE = 30000; // 30 segundos de caché
+const PAGE_SIZE = 10;
+const MAX_CACHE_AGE = 30000;
 
 // Estado global
 let currentUser = null;
@@ -144,7 +141,7 @@ function statusBadge(estado) {
     return `<span class="status-badge ${map[estado] || 'status-pendiente'}">${texto[estado] || estado}</span>`;
 }
 
-// Debounce para búsqueda (evita muchas peticiones)
+// Debounce para búsqueda
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -158,7 +155,118 @@ function debounce(func, wait) {
 }
 
 // =====================================================
-// CARGA OPTIMIZADA DE SOLICITUDES (SOLO ÚLTIMAS 10)
+// 🆕 FUNCIÓN PARA VER FOTO AMPLIADA
+// =====================================================
+
+function verFotoAmpliada(url) {
+    if (!url) {
+        showToast('No hay foto para mostrar', 'warning');
+        return;
+    }
+    
+    // Crear modal de foto si no existe
+    let modalFoto = document.getElementById('modalFotoAmpliada');
+    if (!modalFoto) {
+        const modalHtml = `
+            <div class="modal" id="modalFotoAmpliada" onclick="cerrarFotoAmpliada()">
+                <div class="modal-content foto-ampliada-content" onclick="event.stopPropagation()">
+                    <div class="modal-header foto-ampliada-header">
+                        <h3><i class="fas fa-image"></i> Foto del Item</h3>
+                        <button class="close-modal" onclick="cerrarFotoAmpliada()">&times;</button>
+                    </div>
+                    <div class="modal-body foto-ampliada-body">
+                        <img id="fotoAmpliadaImg" src="" alt="Foto ampliada" loading="lazy">
+                    </div>
+                    <div class="modal-footer foto-ampliada-footer">
+                        <button class="btn-secondary" onclick="cerrarFotoAmpliada()">Cerrar</button>
+                        <button class="btn-cotizar" onclick="descargarFotoAmpliada()" id="btnDescargarFoto">
+                            <i class="fas fa-download"></i> Descargar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    // Actualizar imagen
+    const img = document.getElementById('fotoAmpliadaImg');
+    if (img) {
+        img.src = url;
+        img.alt = 'Foto ampliada';
+        img.onerror = function() {
+            this.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="%238E8E93" stroke-width="2"%3E%3Crect x="3" y="3" width="18" height="18" rx="2"/%3E%3Ccircle cx="8.5" cy="8.5" r="1.5"/%3E%3Cpolyline points="21 15 16 10 5 21"/%3E%3C/svg%3E';
+            this.style.objectFit = 'contain';
+        };
+    }
+    
+    // Guardar URL para descarga
+    window._fotoAmpliadaUrl = url;
+    
+    // Abrir modal
+    const modal = document.getElementById('modalFotoAmpliada');
+    if (modal) {
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function cerrarFotoAmpliada() {
+    const modal = document.getElementById('modalFotoAmpliada');
+    if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+}
+
+function descargarFotoAmpliada() {
+    const url = window._fotoAmpliadaUrl;
+    if (!url) {
+        showToast('No hay foto para descargar', 'warning');
+        return;
+    }
+    
+    // Crear link de descarga
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.download = `foto_item_${Date.now()}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('✅ Descargando foto...', 'success');
+}
+
+// =====================================================
+// 🆕 FUNCIÓN PARA RENDERIZAR ITEMS CON FOTOS
+// =====================================================
+
+function renderItemsConFotos(items, maxItems = 3) {
+    if (!items || items.length === 0) {
+        return '<div class="text-muted">No hay items</div>';
+    }
+    
+    const itemsToShow = items.slice(0, maxItems);
+    
+    return itemsToShow.map(item => {
+        const fotoUrl = item.foto_url;
+        const fotoHtml = fotoUrl 
+            ? `<img src="${fotoUrl}" class="item-foto-miniatura" alt="Foto" loading="lazy" onclick="verFotoAmpliada('${fotoUrl}')" style="cursor:pointer;" onerror="this.style.display='none'">`
+            : '<div class="item-foto-placeholder"><i class="fas fa-camera"></i></div>';
+        
+        return `
+            <div class="item-row-solicitud">
+                <div class="item-foto">${fotoHtml}</div>
+                <div class="item-desc">${escapeHtml(item.descripcion)}</div>
+                <div class="item-cant">${item.cantidad} uds</div>
+            </div>
+        `;
+    }).join('');
+}
+
+// =====================================================
+// CARGA OPTIMIZADA DE SOLICITUDES
 // =====================================================
 
 async function cargarSolicitudes(resetPage = true) {
@@ -174,18 +282,15 @@ async function cargarSolicitudes(resetPage = true) {
         const estado = document.getElementById('filtroEstado')?.value || 'all';
         const search = document.getElementById('searchInput')?.value.toLowerCase() || '';
         
-        // Actualizar filtros actuales
         currentFilters.estado = estado;
         currentFilters.search = search;
         
-        // Construir URL con parámetros de paginación
         let url = `${API_URL}/solicitudes-cotizacion?page=${currentFilters.page}&limit=${PAGE_SIZE}`;
         if (estado !== 'all') url += `&estado=${estado}`;
         if (search) url += `&search=${encodeURIComponent(search)}`;
         
         const response = await fetch(url, {
             headers: getAuthHeaders(),
-            // Cache: fuerza a no usar caché del navegador
             cache: 'no-cache'
         });
         
@@ -198,7 +303,6 @@ async function cargarSolicitudes(resetPage = true) {
         const data = await response.json();
         
         if (data.success) {
-            // Actualizar caché
             solicitudesCache = {
                 data: data.solicitudes || [],
                 timestamp: Date.now(),
@@ -210,7 +314,6 @@ async function cargarSolicitudes(resetPage = true) {
             renderizarSolicitudes(solicitudesCache.data);
             renderizarPaginacion();
             
-            // Mostrar info de cantidad
             const container = document.getElementById('solicitudesContainer');
             if (container && solicitudesCache.totalItems > 0) {
                 const infoHtml = `
@@ -220,7 +323,6 @@ async function cargarSolicitudes(resetPage = true) {
                         ${solicitudesCache.totalItems > PAGE_SIZE ? ` (Página ${solicitudesCache.currentPage} de ${solicitudesCache.totalPages})` : ''}
                     </div>
                 `;
-                // Insertar al inicio del container
                 const firstChild = container.firstChild;
                 if (firstChild && firstChild.classList?.contains('pagination-info')) {
                     firstChild.innerHTML = infoHtml;
@@ -255,19 +357,13 @@ function renderizarSolicitudes(solicitudes) {
     }
     
     container.innerHTML = solicitudes.map((solicitud, index) => {
-        // Parsear items
         let items = solicitud.items || [];
         if (typeof items === 'string') {
             try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
         }
         
-        const itemsHtml = items.slice(0, 3).map(item => `  
-            <div class="item-row-solicitud">
-                <div class="item-desc">${escapeHtml(item.descripcion)}</div>
-                <div class="item-cant">${item.cantidad} uds</div>
-            </div>
-        `).join('');
-        
+        // Renderizar items con fotos
+        const itemsHtml = renderItemsConFotos(items, 3);
         const tieneMasItems = items.length > 3;
         
         const puedeCotizar = solicitud.estado === 'pendiente';
@@ -353,20 +449,18 @@ function cambiarPagina(page) {
     if (page === solicitudesCache.currentPage) return;
     
     currentFilters.page = page;
-    cargarSolicitudes(false); // No resetear página
+    cargarSolicitudes(false);
 }
 
 // =====================================================
-// COTIZAR SOLICITUD (OPTIMIZADO)
+// COTIZAR SOLICITUD
 // =====================================================
 
 let currentSolicitudId = null;
 
 async function abrirModalCotizar(idSolicitud) {
-    // Buscar en caché primero
     let solicitud = solicitudesCache.data?.find(s => s.id === idSolicitud);
     
-    // Si no está en caché, cargar individualmente
     if (!solicitud) {
         mostrarLoading(true);
         try {
@@ -395,26 +489,36 @@ async function abrirModalCotizar(idSolicitud) {
     
     currentSolicitudId = idSolicitud;
     
-    // Parsear items
     let items = solicitud.items || [];
     if (typeof items === 'string') {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
     
-    // Limitar a mostrar solo los items (no hay problema, es un modal)
-    const itemsHtml = items.map((item, idx) => `
-        <div class="precio-item-row">
-            <div class="precio-item-desc">
-                <strong>${escapeHtml(item.descripcion)}</strong>
-                <small>(x${item.cantidad} uds)</small>
+    // Mostrar items con fotos en el modal de cotización
+    const itemsHtml = items.map((item, idx) => {
+        const fotoUrl = item.foto_url;
+        const fotoHtml = fotoUrl 
+            ? `<img src="${fotoUrl}" class="item-foto-modal" alt="Foto" loading="lazy" onclick="verFotoAmpliada('${fotoUrl}')" style="cursor:pointer;" onerror="this.style.display='none'">`
+            : '<div class="item-foto-placeholder-modal"><i class="fas fa-camera"></i></div>';
+        
+        return `
+            <div class="precio-item-row">
+                <div class="precio-item-info">
+                    <div class="precio-item-foto">${fotoHtml}</div>
+                    <div class="precio-item-desc">
+                        <strong>${escapeHtml(item.descripcion)}</strong>
+                        <small>(x${item.cantidad} uds)</small>
+                        ${item.detalle ? `<br><small class="text-muted">${escapeHtml(item.detalle)}</small>` : ''}
+                    </div>
+                </div>
+                <div class="precio-item-input">
+                    <label>Precio unitario (Bs.):</label>
+                    <input type="number" id="precio_item_${idx}" class="precio-input" step="0.01" min="0" placeholder="0.00">
+                    <span class="total-hint">Total: Bs. <span id="total_item_${idx}" class="total-item">0.00</span></span>
+                </div>
             </div>
-            <div class="precio-item-input">
-                <label>Precio unitario (Bs.):</label>
-                <input type="number" id="precio_item_${idx}" class="precio-input" step="0.01" min="0" placeholder="0.00">
-                <span class="total-hint">Total: Bs. <span id="total_item_${idx}" class="total-item">0.00</span></span>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
     
     const modalBody = document.getElementById('modalCotizarBody');
     modalBody.innerHTML = `
@@ -426,6 +530,10 @@ async function abrirModalCotizar(idSolicitud) {
             <div class="orden-info-item">
                 <label><i class="fas fa-car"></i> Vehículo</label>
                 <span>${escapeHtml(solicitud.vehiculo || 'N/A')}</span>
+            </div>
+            <div class="orden-info-item">
+                <label><i class="fas fa-calendar"></i> Fecha</label>
+                <span>${formatDate(solicitud.fecha_solicitud)}</span>
             </div>
         </div>
         
@@ -450,7 +558,6 @@ async function abrirModalCotizar(idSolicitud) {
         </div>
     `;
     
-    // Agregar eventos de cálculo
     setTimeout(() => {
         items.forEach((item, idx) => {
             const precioInput = document.getElementById(`precio_item_${idx}`);
@@ -475,14 +582,12 @@ async function abrirModalCotizar(idSolicitud) {
 }
 
 async function enviarCotizacion() {
-    // Buscar solicitud en caché
     const solicitud = solicitudesCache.data?.find(s => s.id === currentSolicitudId);
     if (!solicitud) {
         showToast('Error: No se encontró la solicitud', 'error');
         return;
     }
     
-    // Parsear items
     let items = solicitud.items || [];
     if (typeof items === 'string') {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
@@ -537,7 +642,6 @@ async function enviarCotizacion() {
         if (data.success) {
             showToast(`Cotización enviada - Total: Bs. ${precioTotal.toFixed(2)}`, 'success');
             cerrarModal('modalCotizar');
-            // Recargar solicitudes (resetear caché)
             solicitudesCache.timestamp = 0;
             await cargarSolicitudes(true);
         } else {
@@ -552,7 +656,7 @@ async function enviarCotizacion() {
 }
 
 // =====================================================
-// VER DETALLE
+// VER DETALLE (CON FOTOS)
 // =====================================================
 
 async function verDetalle(idSolicitud) {
@@ -586,12 +690,24 @@ async function verDetalle(idSolicitud) {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
     
-    const itemsHtml = items.map(item => `
-        <div class="item-row-solicitud">
-            <div class="item-desc">${escapeHtml(item.descripcion)}</div>
-            <div class="item-cant">${item.cantidad} uds</div>
-        </div>
-    `).join('');
+    // Renderizar items con fotos en el detalle
+    const itemsHtml = items.map(item => {
+        const fotoUrl = item.foto_url;
+        const fotoHtml = fotoUrl 
+            ? `<img src="${fotoUrl}" class="item-foto-detalle" alt="Foto" loading="lazy" onclick="verFotoAmpliada('${fotoUrl}')" style="cursor:pointer;" onerror="this.style.display='none'">`
+            : '<div class="item-foto-placeholder-detalle"><i class="fas fa-camera"></i></div>';
+        
+        return `
+            <div class="item-row-detalle">
+                <div class="item-foto-detalle-container">${fotoHtml}</div>
+                <div class="item-desc-detalle">
+                    <strong>${escapeHtml(item.descripcion)}</strong>
+                    <span class="item-cant-detalle">${item.cantidad} uds</span>
+                    ${item.detalle ? `<br><small class="text-muted">${escapeHtml(item.detalle)}</small>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
     
     const modalBody = document.getElementById('modalDetalleBody');
     modalBody.innerHTML = `
@@ -614,7 +730,7 @@ async function verDetalle(idSolicitud) {
             </div>
         </div>
         
-        <div class="items-list">
+        <div class="items-list-detalle">
             <h4>Items solicitados (${items.length}):</h4>
             ${itemsHtml}
         </div>
@@ -699,7 +815,7 @@ function setupEventListeners() {
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', () => {
-            solicitudesCache.timestamp = 0; // Invalidar caché
+            solicitudesCache.timestamp = 0;
             cargarSolicitudes(true);
             showToast('Actualizando lista...', 'info');
         });
@@ -716,7 +832,6 @@ function setupEventListeners() {
         searchInput.addEventListener('input', debouncedSearch);
     }
     
-    // Cerrar modales al hacer click fuera
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) cerrarModal(modal.id);
@@ -728,18 +843,18 @@ function setupEventListeners() {
             document.querySelectorAll('.modal.active').forEach(modal => {
                 cerrarModal(modal.id);
             });
+            cerrarFotoAmpliada();
         }
     });
 }
 
 async function inicializar() {
-    console.log('🚀 Inicializando solicitudes_cotizacion.js (Optimizado)');
+    console.log('🚀 Inicializando solicitudes_cotizacion.js (Con fotos ampliadas)');
     console.log('📡 window.API_BASE_URL:', window.API_BASE_URL);
     
     const user = await cargarUsuarioActual();
     if (!user) return;
     
-    // Mostrar fecha
     const fechaElement = document.getElementById('currentDate');
     if (fechaElement) {
         const hoy = new Date();
@@ -753,24 +868,28 @@ async function inicializar() {
     await cargarSolicitudes(true);
     setupEventListeners();
     
-    // Refresh automático cada 60 segundos (menos frecuente)
     setInterval(() => {
         if (!document.querySelector('.modal.active') && !isLoading) {
-            // Solo refrescar si la caché tiene más de 60 segundos
             if (Date.now() - solicitudesCache.timestamp > 60000) {
                 cargarSolicitudes(true);
             }
         }
     }, 60000);
     
-    console.log('✅ solicitudes_cotizacion.js optimizado cargado');
+    console.log('✅ solicitudes_cotizacion.js con fotos ampliadas cargado');
 }
 
-// Exponer funciones globales
+// =====================================================
+// EXPORTAR FUNCIONES GLOBALES
+// =====================================================
+
 window.verDetalle = verDetalle;
 window.abrirModalCotizar = abrirModalCotizar;
 window.enviarCotizacion = enviarCotizacion;
 window.cerrarModal = cerrarModal;
 window.cambiarPagina = cambiarPagina;
+window.verFotoAmpliada = verFotoAmpliada;
+window.cerrarFotoAmpliada = cerrarFotoAmpliada;
+window.descargarFotoAmpliada = descargarFotoAmpliada;
 
 document.addEventListener('DOMContentLoaded', inicializar);

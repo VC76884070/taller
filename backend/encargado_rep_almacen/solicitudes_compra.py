@@ -180,7 +180,7 @@ def marcar_como_comprado(current_user, id_solicitud):
         notas_compra = data.get('notas_compra', '')
         numero_factura = data.get('numero_factura', '')
         proveedor_nombre = data.get('proveedor_nombre', '')
-        monto_compra = data.get('monto_compra')
+        monto_compra = data.get('monto_compra')  # Este viene del frontend
         comprobante_url = data.get('comprobante_url')
         
         # Verificar que la solicitud existe
@@ -198,6 +198,9 @@ def marcar_como_comprado(current_user, id_solicitud):
         
         ahora = datetime.datetime.now().isoformat()
         
+        # =====================================================
+        # 🔧 CORREGIDO: Usar precio_cotizado en lugar de monto_compra
+        # =====================================================
         update_data = {
             'estado': 'comprado',
             'fecha_compra': fecha_compra or ahora,
@@ -205,12 +208,14 @@ def marcar_como_comprado(current_user, id_solicitud):
             'respuesta_encargado': f"Compra realizada el {fecha_compra or ahora.split('T')[0]}"
         }
         
+        # ✅ Usar precio_cotizado (que sí existe) en lugar de monto_compra
+        if monto_compra:
+            update_data['precio_cotizado'] = float(monto_compra)
+        
         if numero_factura:
             update_data['numero_factura'] = numero_factura
         if proveedor_nombre:
             update_data['proveedor_nombre'] = proveedor_nombre
-        if monto_compra:
-            update_data['monto_compra'] = monto_compra
         if comprobante_url:
             update_data['comprobante_url'] = comprobante_url
         

@@ -1,6 +1,7 @@
 /* =====================================================
    COTIZACIONES CSS - FURIA MOTOR
    JEFE DE TALLER - VERSIÓN COMPLETA Y RESPONSIVE
+   CON ESTILOS PARA FOTOS DE ITEMS Y SERVICIOS
    SIGUIENDO LA PALETA DEL DASHBOARD
    ===================================================== */
 
@@ -481,6 +482,119 @@
 }
 
 /* =====================================================
+   🆕 ESTILOS PARA SERVICIOS EN ACORDEÓN (MODAL COTIZACIÓN)
+   ===================================================== */
+.servicio-acordeon {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    overflow: hidden;
+    transition: var(--transition);
+}
+
+.servicio-acordeon:hover {
+    border-color: var(--gris-claro);
+}
+
+.servicio-acordeon-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--gris-oscuro);
+    cursor: pointer;
+    transition: var(--transition);
+    user-select: none;
+}
+
+.servicio-acordeon-header:hover {
+    background: rgba(193, 18, 31, 0.08);
+}
+
+.servicio-acordeon-header .servicio-info-acordeon {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+}
+
+.servicio-acordeon-header .servicio-icono {
+    color: var(--rojo-primario);
+    font-size: 1.1rem;
+}
+
+.servicio-acordeon-header .servicio-nombre-acordeon {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--blanco);
+}
+
+.servicio-acordeon-header .servicio-badge {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-full);
+    background: var(--gris-medio);
+    color: var(--gris-texto);
+}
+
+.servicio-acordeon-header .servicio-badge.activo {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--verde-exito);
+}
+
+.servicio-acordeon-header .servicio-badge.pendiente {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--ambar-alerta);
+}
+
+.servicio-acordeon-header .servicio-toggle {
+    color: var(--gris-texto);
+    transition: var(--transition);
+    font-size: 0.9rem;
+}
+
+.servicio-acordeon-header .servicio-toggle.rotated {
+    transform: rotate(180deg);
+}
+
+.servicio-acordeon-body {
+    padding: 1rem;
+    display: none;
+    background: var(--bg-secondary);
+}
+
+.servicio-acordeon-body.open {
+    display: block;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        max-height: 500px;
+        transform: translateY(0);
+    }
+}
+
+.servicio-acordeon-body .items-list-container {
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    padding: 0.75rem;
+}
+
+.servicio-acordeon-body .items-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* =====================================================
    LISTA DINÁMICA DE ITEMS (Solicitudes)
    ===================================================== */
 .items-list-container {
@@ -506,12 +620,16 @@
     margin-bottom: 0.75rem;
     border: 1px solid var(--border-color);
     transition: var(--transition);
+    flex-wrap: wrap;
 }
 
 .item-row:hover {
     border-color: var(--rojo-primario);
 }
 
+/* =====================================================
+   🆕 ESTILOS PARA FOTOS DE ITEMS
+   ===================================================== */
 .item-fields {
     flex: 1;
     display: grid;
@@ -534,6 +652,78 @@
 
 .item-cantidad {
     text-align: center;
+}
+
+.item-foto-upload {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.btn-foto-item {
+    background: var(--gris-oscuro);
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.3rem 0.8rem;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--gris-texto);
+}
+
+.btn-foto-item:hover {
+    background: var(--bg-card);
+    border-color: var(--rojo-primario);
+    color: var(--rojo-primario);
+}
+
+.item-foto-preview {
+    display: inline-block;
+}
+
+.foto-preview-container {
+    position: relative;
+    display: inline-block;
+}
+
+.foto-preview-container img {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 2px solid var(--verde-exito);
+}
+
+.btn-remove-foto {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: var(--rojo-primario);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    font-size: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+}
+
+.btn-remove-foto:hover {
+    transform: scale(1.2);
+}
+
+.item-foto-input-solicitud,
+.item-foto-input-compra {
+    display: none;
 }
 
 .item-actions {
@@ -579,9 +769,15 @@
     background: rgba(193, 18, 31, 0.05);
 }
 
+.btn-add-item.btn-sm {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.7rem;
+    width: auto;
+}
+
 .item-empty {
     text-align: center;
-    padding: 2rem;
+    padding: 1.5rem;
     color: var(--gris-texto);
     font-size: 0.85rem;
 }
@@ -853,6 +1049,7 @@
 .action-buttons {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .action-btn {
@@ -1028,6 +1225,7 @@
     justify-content: flex-end;
     gap: 0.75rem;
     background: var(--gris-oscuro);
+    flex-wrap: wrap;
 }
 
 /* Scrollbar personalizado */
@@ -1184,6 +1382,18 @@
 .empty-state small {
     font-size: 0.7rem;
     opacity: 0.7;
+}
+
+.loading-state {
+    text-align: center;
+    padding: 2rem;
+    color: var(--gris-texto);
+}
+
+.loading-state i {
+    font-size: 2rem;
+    color: var(--rojo-primario);
+    margin-bottom: 0.75rem;
 }
 
 /* =====================================================
@@ -1527,6 +1737,7 @@
     gap: 0.75rem;
     padding-top: 0.75rem;
     border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
 }
 
 /* =====================================================
@@ -1577,6 +1788,11 @@
     .item-actions {
         justify-content: flex-end;
         width: 100%;
+    }
+    
+    .item-foto-upload {
+        width: 100%;
+        justify-content: flex-start;
     }
     
     .modal-lg,
@@ -1725,6 +1941,20 @@
     .comprobante-actions button {
         width: 100%;
     }
+
+    .servicio-acordeon-header {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .servicio-acordeon-header .servicio-info-acordeon {
+        flex-wrap: wrap;
+    }
+
+    .servicio-acordeon-header .servicio-badge {
+        font-size: 0.55rem;
+        padding: 0.1rem 0.4rem;
+    }
 }
 
 /* RESPONSIVE MÓVIL PEQUEÑO (max 480px) */
@@ -1777,6 +2007,16 @@
     
     .servicio-cotizable-precio input {
         width: 80px !important;
+    }
+    
+    .foto-preview-container img {
+        width: 40px !important;
+        height: 40px !important;
+    }
+    
+    .btn-foto-item {
+        font-size: 0.6rem;
+        padding: 0.2rem 0.5rem;
     }
 }
 
@@ -1952,9 +2192,4 @@
     font-size: 0.75rem;
     margin-top: 0.25rem;
     animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-5px); }
-    to { opacity: 1; transform: translateY(0); }
 }

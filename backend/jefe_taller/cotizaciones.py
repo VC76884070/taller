@@ -1,7 +1,7 @@
 # =====================================================
 # COTIZACIONES - JEFE DE TALLER
 # FURIA MOTOR COMPANY SRL
-# VERSIÓN 6.0 - COMPLETAMENTE CORREGIDA CON DETALLE DE COTIZACIÓN
+# VERSIÓN 6.0 - COMPLETAMENTE CORREGIDA CON FOTOS DE ITEMS
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -167,6 +167,91 @@ def obtener_encargados_repuestos():
         import traceback
         traceback.print_exc()
         return []
+
+# =====================================================
+# 🆕 APARTADO 23: SUBIR FOTO DE ITEM
+# =====================================================
+
+@cotizaciones_bp.route('/subir-foto-item', methods=['POST'])
+@jefe_taller_required
+def subir_foto_item(current_user):
+    """Subir foto de un item a Cloudinary"""
+    try:
+        import cloudinary.uploader
+        import cloudinary
+        
+        # Verificar si hay archivo
+        if 'foto' not in request.files:
+            return jsonify({'error': 'No se envió ninguna foto'}), 400
+        
+        file = request.files['foto']
+        if file.filename == '':
+            return jsonify({'error': 'Nombre de archivo vacío'}), 400
+        
+        # Validar tipo de archivo
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({'error': f'Formato no permitido. Use: {", ".join(allowed_extensions)}'}), 400
+        
+        # Subir a Cloudinary
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        public_id = f"furia_motor/items_fotos/{current_user['id']}_{timestamp}_{file_ext}"
+        
+        upload_result = cloudinary.uploader.upload(
+            file,
+            folder="furia_motor/items_fotos",
+            public_id=public_id,
+            resource_type="image",
+            transformation=[
+                {'width': 500, 'height': 500, 'crop': 'limit', 'quality': 'auto'}
+            ]
+        )
+        
+        foto_url = upload_result.get('secure_url', '')
+        
+        return jsonify({
+            'success': True,
+            'url': foto_url,
+            'public_id': upload_result.get('public_id')
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error subiendo foto de item: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# 🆕 APARTADO 24: ELIMINAR FOTO DE ITEM
+# =====================================================
+
+@cotizaciones_bp.route('/eliminar-foto-item', methods=['POST'])
+@jefe_taller_required
+def eliminar_foto_item(current_user):
+    """Eliminar foto de un item de Cloudinary"""
+    try:
+        import cloudinary.uploader
+        
+        data = request.get_json()
+        public_id = data.get('public_id')
+        
+        if not public_id:
+            return jsonify({'error': 'public_id requerido'}), 400
+        
+        result = cloudinary.uploader.destroy(public_id, resource_type="image")
+        
+        if result.get('result') == 'ok':
+            return jsonify({'success': True, 'message': 'Foto eliminada'}), 200
+        else:
+            return jsonify({'error': 'Error al eliminar foto'}), 500
+        
+    except Exception as e:
+        logger.error(f"Error eliminando foto: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 
 # =====================================================
 # APARTADO 1: ÓRDENES CON DIAGNÓSTICO APROBADO
@@ -484,6 +569,102 @@ def obtener_encargados_repuestos_endpoint(current_user):
         return jsonify({'success': True, 'encargados': []}), 200
 
 # =====================================================
+# 🆕 ENDPOINT: OBTENER SERVICIOS CON ITEMS
+# =====================================================
+
+@cotizaciones_bp.route('/servicios-con-items/<int:id_orden>', methods=['GET'])
+@jefe_taller_required
+def obtener_servicios_con_items(current_user, id_orden):
+    """
+    Obtener servicios de una orden con sus items (para el modal de solicitud de cotización)
+    """
+    try:
+        print(f"🔍 Obteniendo servicios con items para orden {id_orden}")
+        
+        # 1. Verificar que la orden existe
+        orden = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, estado_global, id_vehiculo') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if not orden.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        orden_data = orden.data[0]
+        
+        # 2. Obtener diagnóstico aprobado
+        diagnostico = supabase.table('diagnostico_tecnico') \
+            .select('id') \
+            .eq('id_orden_trabajo', id_orden) \
+            .in_('estado', ['aprobado', 'DiagnosticoAprobado']) \
+            .order('version', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if not diagnostico.data:
+            return jsonify({'error': 'No hay diagnóstico aprobado para esta orden'}), 404
+        
+        diagnostico_id = diagnostico.data[0]['id']
+        
+        # 3. Obtener servicios del diagnóstico
+        servicios = supabase.table('servicio_tecnico') \
+            .select('id, descripcion, orden') \
+            .eq('id_diagnostico_tecnico', diagnostico_id) \
+            .order('orden') \
+            .execute()
+        
+        if not servicios.data:
+            return jsonify({'servicios': []}), 200
+        
+        # 4. Para cada servicio, obtener sus items de solicitudes de cotización
+        servicios_con_items = []
+        for serv in servicios.data:
+            # Buscar solicitudes de cotización para este servicio
+            solicitudes = supabase.table('solicitud_cotizacion_repuesto') \
+                .select('items, estado, precio_cotizado') \
+                .eq('id_orden_trabajo', id_orden) \
+                .eq('id_servicio', serv['id']) \
+                .execute()
+            
+            items = []
+            estado = 'pendiente'
+            
+            for sol in (solicitudes.data or []):
+                if sol.get('items'):
+                    try:
+                        items_parsed = json.loads(sol['items']) if isinstance(sol['items'], str) else sol['items']
+                        items.extend(items_parsed)
+                    except:
+                        pass
+                
+                # Si alguna solicitud está en estado 'pendiente' o 'solicitado'
+                if sol.get('estado') in ['pendiente', 'solicitado']:
+                    estado = 'solicitado'
+                elif sol.get('estado') == 'cotizado':
+                    estado = 'cotizado'
+            
+            servicios_con_items.append({
+                'id_servicio': serv['id'],
+                'descripcion': serv['descripcion'],
+                'orden': serv.get('orden', 0),
+                'items': items,
+                'estado': estado
+            })
+        
+        print(f"✅ {len(servicios_con_items)} servicios encontrados para orden {id_orden}")
+        
+        return jsonify({
+            'success': True,
+            'servicios': servicios_con_items
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo servicios con items: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+# =====================================================
 # APARTADO 6: SOLICITUDES DE COTIZACIÓN
 # =====================================================
 
@@ -788,13 +969,13 @@ def actualizar_estado_solicitud_tecnico(current_user, id_solicitud):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# APARTADO 8: SOLICITUDES DE COMPRA DIRECTA
+# APARTADO 8: SOLICITUDES DE COMPRA DIRECTA (CORREGIDO CON FOTOS)
 # =====================================================
 
 @cotizaciones_bp.route('/solicitudes-compra-directa', methods=['POST'])
 @jefe_taller_required
 def crear_solicitud_compra_directa(current_user):
-    """Crear una solicitud de compra directa (sin pasar por cotización)"""
+    """Crear una solicitud de compra directa (sin pasar por cotización) - CON FOTOS"""
     try:
         data = request.get_json()
         
@@ -816,13 +997,37 @@ def crear_solicitud_compra_directa(current_user):
         
         ahora = datetime.datetime.now().isoformat()
         
+        # =====================================================
+        # 🔧 PROCESAR ITEMS CON FOTOS
+        # =====================================================
+        items_con_fotos = []
+        for item in items:
+            item_data = {
+                'descripcion': item.get('descripcion', ''),
+                'cantidad': item.get('cantidad', 1),
+                'detalle': item.get('detalle', '')
+            }
+            
+            # ✅ TRANSFERIR FOTO SI EXISTE
+            if item.get('foto_url'):
+                item_data['foto_url'] = item.get('foto_url')
+                logger.info(f"📸 Foto transferida a solicitud de compra: {item_data['foto_url']}")
+            
+            if item.get('foto_public_id'):
+                item_data['foto_public_id'] = item.get('foto_public_id')
+            
+            items_con_fotos.append(item_data)
+        
+        logger.info(f"📦 Items con fotos: {len(items_con_fotos)} items, {sum(1 for i in items_con_fotos if i.get('foto_url'))} con foto")
+        
+        # Crear la solicitud de compra con los items que incluyen fotos
         nueva_solicitud = {
             'id_orden_trabajo': id_orden_trabajo,
             'id_jefe_taller': current_user['id'],
             'id_encargado_repuestos': id_encargado_repuestos,
-            'items': json.dumps(items),
-            'descripcion_pieza': items[0].get('descripcion', '') if items else '',
-            'cantidad': sum(item.get('cantidad', 1) for item in items),
+            'items': json.dumps(items_con_fotos),  # ✅ Guardar items con fotos
+            'descripcion_pieza': items_con_fotos[0].get('descripcion', '') if items_con_fotos else '',
+            'cantidad': sum(item.get('cantidad', 1) for item in items_con_fotos),
             'mensaje_jefe_taller': observaciones,
             'estado': 'pendiente',
             'fecha_solicitud': ahora
@@ -835,29 +1040,33 @@ def crear_solicitud_compra_directa(current_user):
         if not result.data:
             return jsonify({'error': 'No se pudo crear la solicitud'}), 500
         
+        # Notificar al encargado de repuestos
         enviar_notificacion(
             id_encargado_repuestos,
             'nueva_solicitud_compra',
-            f"🛒 Nueva solicitud de compra para la orden #{id_orden_trabajo}. {len(items)} item(s) solicitados.",
+            f"🛒 Nueva solicitud de compra para la orden #{id_orden_trabajo}. {len(items_con_fotos)} item(s) solicitados. {sum(1 for i in items_con_fotos if i.get('foto_url'))} con foto.",
             result.data[0]['id']
         )
         
         supabase.table('avancetrabajo').insert({
             'id_orden_trabajo': id_orden_trabajo,
             'id_tecnico': current_user['id'],
-            'descripcion': f"Solicitud de compra directa creada por jefe de taller. Items: {len(items)}",
+            'descripcion': f"Solicitud de compra directa creada por jefe de taller. Items: {len(items_con_fotos)}, con fotos: {sum(1 for i in items_con_fotos if i.get('foto_url'))}",
             'tipo_avance': 'solicitud_compra_directa',
             'fecha_hora': ahora
         }).execute()
         
         return jsonify({
             'success': True,
-            'message': f'Solicitud de compra creada exitosamente para {len(items)} item(s)',
-            'id': result.data[0]['id']
+            'message': f'Solicitud de compra creada exitosamente para {len(items_con_fotos)} item(s)',
+            'id': result.data[0]['id'],
+            'items_con_fotos': len([i for i in items_con_fotos if i.get('foto_url')])
         }), 201
         
     except Exception as e:
         logger.error(f"Error creando solicitud de compra directa: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
@@ -990,13 +1199,18 @@ def gestionar_solicitudes_compra(current_user):
             return jsonify({'error': str(e)}), 500
 
 
+# =====================================================
+# 🔧 APARTADO 9B: APROBAR COMPRA (CON GUARDADO DE FOTO EN COMPRADETALLE)
+# =====================================================
+
 @cotizaciones_bp.route('/solicitudes-compra/<int:id_solicitud>/aprobar', methods=['PUT'])
 @jefe_taller_required
 def aprobar_solicitud_compra(current_user, id_solicitud):
-    """Aprobar solicitud de compra (marcar como comprado)"""
+    """Aprobar solicitud de compra (marcar como comprado) y guardar fotos en compradetalle"""
     try:
+        # 1. Obtener la solicitud de compra
         check = supabase.table('solicitud_compra') \
-            .select('id, estado, id_encargado_repuestos, id_orden_trabajo, items') \
+            .select('id, estado, id_encargado_repuestos, id_orden_trabajo, items, precio_cotizado') \
             .eq('id', id_solicitud) \
             .eq('id_jefe_taller', current_user['id']) \
             .execute()
@@ -1008,7 +1222,66 @@ def aprobar_solicitud_compra(current_user, id_solicitud):
             return jsonify({'error': f'La solicitud ya está en estado {check.data[0]["estado"]}'}), 400
         
         ahora = datetime.datetime.now().isoformat()
+        solicitud = check.data[0]
         
+        # 2. Parsear items
+        items = []
+        if solicitud.get('items'):
+            items = json.loads(solicitud['items']) if isinstance(solicitud['items'], str) else solicitud['items']
+        
+        # 3. Crear registro en comprarepuesto
+        compra_result = supabase.table('comprarepuesto').insert({
+            'id_orden_trabajo': solicitud['id_orden_trabajo'],
+            'id_encargado_repuestos': solicitud.get('id_encargado_repuestos'),
+            'id_proveedor': None,
+            'fecha_compra': ahora,
+            'total': float(solicitud.get('precio_cotizado', 0) or sum(item.get('precio', 0) for item in items)),
+            'url_foto_comprobante': None
+        }).execute()
+        
+        compra_id = compra_result.data[0]['id'] if compra_result.data else None
+        
+        # 4. 🔧 GUARDAR CADA ITEM EN compradetalle CON SU FOTO
+        items_guardados = 0
+        fotos_guardadas = 0
+        
+        if compra_id:
+            for item in items:
+                # Buscar repuesto por nombre
+                repuesto_result = supabase.table('repuesto') \
+                    .select('id') \
+                    .eq('nombre', item.get('descripcion', '')) \
+                    .limit(1) \
+                    .execute()
+                
+                repuesto_id = repuesto_result.data[0]['id'] if repuesto_result.data else None
+                
+                # Obtener la foto del item
+                foto_url = item.get('foto_url')
+                
+                # Insertar en compradetalle (CON FOTO)
+                detalle_result = supabase.table('compradetalle').insert({
+                    'id_compra': compra_id,
+                    'id_repuesto': repuesto_id,
+                    'cantidad': item.get('cantidad', 1),
+                    'precio_compra': item.get('precio', 0),
+                    'url_foto_repuesto': foto_url  # 🔧 GUARDAR FOTO
+                }).execute()
+                
+                if detalle_result.data:
+                    items_guardados += 1
+                    if foto_url:
+                        fotos_guardadas += 1
+                
+                # Registrar en usorepuesto
+                supabase.table('usorepuesto').insert({
+                    'id_orden_trabajo': solicitud['id_orden_trabajo'],
+                    'id_repuesto': repuesto_id,
+                    'cantidad': item.get('cantidad', 1),
+                    'fecha_uso': ahora
+                }).execute()
+        
+        # 5. Actualizar estado de la solicitud de compra
         supabase.table('solicitud_compra') \
             .update({
                 'estado': 'comprado',
@@ -1018,34 +1291,124 @@ def aprobar_solicitud_compra(current_user, id_solicitud):
             .eq('id', id_solicitud) \
             .execute()
         
-        try:
-            solicitud = check.data[0]
-            items = []
-            if solicitud.get('items'):
-                items = json.loads(solicitud['items']) if isinstance(solicitud['items'], str) else solicitud['items']
-            
-            for item in items:
-                supabase.table('usorepuesto').insert({
-                    'id_orden_trabajo': solicitud['id_orden_trabajo'],
-                    'descripcion_repuesto': item.get('descripcion', ''),
-                    'cantidad': item.get('cantidad', 1),
-                    'detalle': item.get('detalle', ''),
-                    'fecha_uso': ahora
-                }).execute()
-        except Exception as e:
-            logger.warning(f"Error registrando uso de repuestos: {e}")
-        
+        # 6. Notificar al encargado
         enviar_notificacion(
             solicitud.get('id_encargado_repuestos'),
             'compra_aprobada',
-            f"✅ La compra #{id_solicitud} ha sido registrada como COMPRADA",
+            f"✅ La compra #{id_solicitud} ha sido registrada como COMPRADA. {items_guardados} items guardados.",
             id_solicitud
         )
         
-        return jsonify({'success': True, 'message': 'Compra registrada'}), 200
+        logger.info(f"✅ Compra #{id_solicitud} aprobada. Items: {items_guardados}, Fotos: {fotos_guardadas}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Compra registrada. {items_guardados} items guardados.',
+            'compra_id': compra_id,
+            'items_guardados': items_guardados,
+            'fotos_guardadas': fotos_guardadas
+        }), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        logger.error(f"Error aprobando compra: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# 🆕 APARTADO: OBTENER FOTOS DE REPUESTOS POR ORDEN
+# =====================================================
+
+@cotizaciones_bp.route('/orden/<int:id_orden>/fotos-repuestos', methods=['GET'])
+@jefe_taller_required
+def obtener_fotos_repuestos_por_orden(current_user, id_orden):
+    """
+    Obtener todas las fotos de repuestos asociadas a una orden
+    """
+    try:
+        # Buscar compras de la orden
+        compras = supabase.table('comprarepuesto') \
+            .select('id') \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
+        if not compras.data:
+            return jsonify({'success': True, 'fotos': [], 'total_fotos': 0}), 200
+        
+        compra_ids = [c['id'] for c in compras.data]
+        
+        # Obtener todos los detalles de compra con fotos
+        detalles = supabase.table('compradetalle') \
+            .select('''
+                id, 
+                url_foto_repuesto, 
+                cantidad, 
+                precio_compra,
+                id_repuesto,
+                repuesto!left(nombre, descripcion)
+            ''') \
+            .in_('id_compra', compra_ids) \
+            .not_.is_('url_foto_repuesto', 'null') \
+            .neq('url_foto_repuesto', '') \
+            .execute()
+        
+        fotos = []
+        for d in (detalles.data or []):
+            repuesto = d.get('repuesto', {})
+            fotos.append({
+                'id': d['id'],
+                'url': d.get('url_foto_repuesto'),
+                'nombre': repuesto.get('nombre', 'Repuesto'),
+                'descripcion': repuesto.get('descripcion', ''),
+                'cantidad': d.get('cantidad', 1),
+                'precio': d.get('precio_compra', 0)
+            })
+        
+        return jsonify({
+            'success': True,
+            'orden_id': id_orden,
+            'total_fotos': len(fotos),
+            'fotos': fotos
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo fotos de repuestos: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# 🆕 APARTADO: OBTENER UNA FOTO DE REPUESTO ESPECÍFICA
+# =====================================================
+
+@cotizaciones_bp.route('/compradetalle/<int:id_detalle>/foto', methods=['GET'])
+@jefe_taller_required
+def obtener_foto_repuesto(current_user, id_detalle):
+    """
+    Obtener la foto de un repuesto específico
+    """
+    try:
+        detalle = supabase.table('compradetalle') \
+            .select('id, url_foto_repuesto') \
+            .eq('id', id_detalle) \
+            .execute()
+        
+        if not detalle.data:
+            return jsonify({'error': 'Detalle no encontrado'}), 404
+        
+        url = detalle.data[0].get('url_foto_repuesto')
+        
+        if not url:
+            return jsonify({'error': 'No hay foto para este repuesto'}), 404
+        
+        return jsonify({
+            'success': True,
+            'url': url,
+            'id': id_detalle
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo foto: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # =====================================================

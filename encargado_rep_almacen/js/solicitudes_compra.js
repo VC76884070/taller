@@ -1,7 +1,6 @@
 // =====================================================
 // SOLICITUDES_COMPRA.JS - ENCARGADO DE REPUESTOS
-// FURIA MOTOR COMPANY SRL - VERSIÓN COMPLETA
-// VERSIÓN CORREGIDA - USA DIRECTAMENTE window.API_BASE_URL
+// FURIA MOTOR COMPANY SRL - VERSIÓN COMPLETA CON FOTOS
 // =====================================================
 
 // =====================================================
@@ -147,6 +146,89 @@ function statusBadge(estado) {
 }
 
 // =====================================================
+// 🆕 FUNCIONES PARA VER FOTOS AMPLIADAS
+// =====================================================
+
+function verFotoAmpliadaEncargado(url) {
+    if (!url) {
+        showToast('No hay foto para mostrar', 'warning');
+        return;
+    }
+    
+    // Crear modal de foto si no existe
+    let modalFoto = document.getElementById('modalFotoAmpliadaEncargado');
+    if (!modalFoto) {
+        const modalHtml = `
+            <div class="modal" id="modalFotoAmpliadaEncargado" onclick="cerrarFotoAmpliadaEncargado()">
+                <div class="modal-content" style="max-width: 800px; background: var(--bg-card);" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-image"></i> Foto del Repuesto</h3>
+                        <button class="modal-close" onclick="cerrarFotoAmpliadaEncargado()">&times;</button>
+                    </div>
+                    <div class="modal-body" style="display:flex;justify-content:center;align-items:center;padding:1.5rem;background:var(--negro);min-height:300px;">
+                        <img id="fotoAmpliadaEncargadoImg" src="" alt="Foto ampliada" loading="lazy" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:var(--radius-md);">
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="cerrarFotoAmpliadaEncargado()">Cerrar</button>
+                        <button class="btn-primary" onclick="descargarFotoAmpliadaEncargado()">
+                            <i class="fas fa-download"></i> Descargar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    // Actualizar imagen
+    const img = document.getElementById('fotoAmpliadaEncargadoImg');
+    if (img) {
+        img.src = url;
+        img.alt = 'Foto ampliada';
+        img.onerror = function() {
+            this.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="%238E8E93" stroke-width="2"%3E%3Crect x="3" y="3" width="18" height="18" rx="2"/%3E%3Ccircle cx="8.5" cy="8.5" r="1.5"/%3E%3Cpolyline points="21 15 16 10 5 21"/%3E%3C/svg%3E';
+            this.style.objectFit = 'contain';
+        };
+    }
+    
+    // Guardar URL para descarga
+    window._fotoAmpliadaEncargadoUrl = url;
+    
+    // Abrir modal
+    const modal = document.getElementById('modalFotoAmpliadaEncargado');
+    if (modal) {
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function cerrarFotoAmpliadaEncargado() {
+    const modal = document.getElementById('modalFotoAmpliadaEncargado');
+    if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+}
+
+function descargarFotoAmpliadaEncargado() {
+    const url = window._fotoAmpliadaEncargadoUrl;
+    if (!url) {
+        showToast('No hay foto para descargar', 'warning');
+        return;
+    }
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.download = `repuesto_${Date.now()}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('✅ Descargando foto...', 'success');
+}
+
+// =====================================================
 // SUBIR A CLOUDINARY
 // =====================================================
 
@@ -257,6 +339,10 @@ async function cargarSolicitudes() {
     }
 }
 
+// =====================================================
+// 🆕 RENDERIZAR SOLICITUDES CON FOTOS (CORREGIDO)
+// =====================================================
+
 function renderizarSolicitudes(solicitudes) {
     const container = document.getElementById('solicitudesContainer');
     if (!container) return;
@@ -278,9 +364,21 @@ function renderizarSolicitudes(solicitudes) {
             try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
         }
         
+        // =====================================================
+        // 🔧 RENDERIZAR ITEMS CON FOTOS
+        // =====================================================
         const itemsHtml = items.map(item => `
             <div class="item-row-solicitud">
-                <div class="item-desc">${escapeHtml(item.descripcion)}</div>
+                <div class="item-desc">
+                    ${item.foto_url ? `
+                        <img src="${item.foto_url}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;border:2px solid var(--verde-exito);margin-right:8px;vertical-align:middle;cursor:pointer;" 
+                             onclick="verFotoAmpliadaEncargado('${item.foto_url}')" 
+                             onerror="this.style.display='none'"
+                             title="Haz clic para ver ampliada">
+                        <span class="foto-badge"><i class="fas fa-camera"></i></span>
+                    ` : ''}
+                    ${escapeHtml(item.descripcion)}
+                </div>
                 <div class="item-cant">${item.cantidad} uds</div>
                 <div class="item-detalle">${escapeHtml(item.detalle || '')}</div>
             </div>
@@ -290,11 +388,16 @@ function renderizarSolicitudes(solicitudes) {
         const puedeEntregar = solicitud.estado === 'comprado';
         const tieneComprobante = solicitud.comprobante_url;
         
+        const tieneFotos = items.some(item => item.foto_url);
+        
         return `
             <div class="solicitud-card" data-id="${solicitud.id}">
                 <div class="solicitud-header">
                     <h3><i class="fas fa-shopping-cart"></i> Solicitud #${solicitud.id}</h3>
-                    ${statusBadge(solicitud.estado)}
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        ${tieneFotos ? `<span class="fotos-badge"><i class="fas fa-camera"></i> ${items.filter(i => i.foto_url).length} foto(s)</span>` : ''}
+                        ${statusBadge(solicitud.estado)}
+                    </div>
                 </div>
                 <div class="solicitud-body">
                     <div class="orden-info">
@@ -370,7 +473,7 @@ function renderizarSolicitudes(solicitudes) {
 }
 
 // =====================================================
-// VER DETALLE
+// VER DETALLE (CON FOTOS)
 // =====================================================
 
 async function verDetalle(idSolicitud) {
@@ -382,9 +485,20 @@ async function verDetalle(idSolicitud) {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
     
+    // =====================================================
+    // 🔧 RENDERIZAR ITEMS CON FOTOS EN DETALLE
+    // =====================================================
     const itemsHtml = items.map(item => `
         <div class="item-row-solicitud">
-            <div class="item-desc">${escapeHtml(item.descripcion)}</div>
+            <div class="item-desc">
+                ${item.foto_url ? `
+                    <img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);margin-right:10px;vertical-align:middle;cursor:pointer;" 
+                         onclick="verFotoAmpliadaEncargado('${item.foto_url}')" 
+                         onerror="this.style.display='none'"
+                         title="Haz clic para ver ampliada">
+                ` : ''}
+                ${escapeHtml(item.descripcion)}
+            </div>
             <div class="item-cant">${item.cantidad} uds</div>
             <div class="item-detalle">${escapeHtml(item.detalle || '')}</div>
         </div>
@@ -578,9 +692,21 @@ function abrirModalComprar(idSolicitud) {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
     
+    // =====================================================
+    // 🔧 MOSTRAR FOTOS EN MODAL DE COMPRA
+    // =====================================================
     const itemsHtml = items.map(item => `
-        <div style="margin-bottom: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm);">
-            <strong>${escapeHtml(item.descripcion)}</strong> - ${item.cantidad} uds
+        <div style="margin-bottom: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm); display: flex; align-items: center; gap: 0.5rem;">
+            ${item.foto_url ? `
+                <img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);cursor:pointer;" 
+                     onclick="verFotoAmpliadaEncargado('${item.foto_url}')" 
+                     onerror="this.style.display='none'"
+                     title="Haz clic para ver ampliada">
+            ` : ''}
+            <div>
+                <strong>${escapeHtml(item.descripcion)}</strong> - ${item.cantidad} uds
+                ${item.detalle ? `<br><small style="color: var(--gris-texto);">${escapeHtml(item.detalle)}</small>` : ''}
+            </div>
         </div>
     `).join('');
     
@@ -736,8 +862,17 @@ function abrirModalEntregar(idSolicitud) {
     }
     
     const itemsHtml = items.map(item => `
-        <div style="margin-bottom: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm);">
-            <strong>${escapeHtml(item.descripcion)}</strong> - ${item.cantidad} uds
+        <div style="margin-bottom: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm); display: flex; align-items: center; gap: 0.5rem;">
+            ${item.foto_url ? `
+                <img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);cursor:pointer;" 
+                     onclick="verFotoAmpliadaEncargado('${item.foto_url}')" 
+                     onerror="this.style.display='none'"
+                     title="Haz clic para ver ampliada">
+            ` : ''}
+            <div>
+                <strong>${escapeHtml(item.descripcion)}</strong> - ${item.cantidad} uds
+                ${item.detalle ? `<br><small style="color: var(--gris-texto);">${escapeHtml(item.detalle)}</small>` : ''}
+            </div>
         </div>
     `).join('');
     
@@ -916,7 +1051,7 @@ function setupEventListeners() {
 }
 
 async function inicializar() {
-    console.log('🚀 Inicializando solicitudes_compra.js');
+    console.log('🚀 Inicializando solicitudes_compra.js - VERSIÓN CON FOTOS');
     console.log('📡 API_URL:', API_URL);
     
     const user = await cargarUsuarioActual();
@@ -937,5 +1072,8 @@ window.confirmarCompra = confirmarCompra;
 window.confirmarEntrega = confirmarEntrega;
 window.cerrarModal = cerrarModal;
 window.logout = logout;
+window.verFotoAmpliadaEncargado = verFotoAmpliadaEncargado;
+window.cerrarFotoAmpliadaEncargado = cerrarFotoAmpliadaEncargado;
+window.descargarFotoAmpliadaEncargado = descargarFotoAmpliadaEncargado;
 
 document.addEventListener('DOMContentLoaded', inicializar);

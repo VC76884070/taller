@@ -16,27 +16,22 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-    <!-- Custom CSS -->
+    <!-- ========== ESTILOS ========== -->
     <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/dashboard-mobile.css" media="(max-width: 1024px)">
     
-    <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
+    <!-- ========== CONFIGURACIÓN PWA ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TORQUE">
     
-    <!-- ICONO PARA LA PESTAÑA DEL NAVEGADOR -->
     <link rel="icon" type="image/png" href="/icono.png">
     <link rel="shortcut icon" type="image/png" href="/icono.png">
-    
-    <!-- ICONO PARA IPHONE / IPAD (pantalla de inicio) -->
     <link rel="apple-touch-icon" href="/icono.png">
-    
-    <!-- ICONO PARA ANDROID (chrome) -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
-    <!-- ===================================================== -->
 </head>
 
 <body>
@@ -52,6 +47,7 @@
         <div id="sidebar-container"></div>
 
         <main class="main-content">
+            <!-- ========== TOP BAR ========== -->
             <header class="top-bar">
                 <div class="page-title">
                     <h1><i class="fas fa-chart-line" style="color: var(--rojo-primario); margin-right: 0.5rem;"></i> Panel de Control</h1>
@@ -61,7 +57,7 @@
                     <button class="btn-secondary" id="refreshBtn">
                         <i class="fas fa-sync-alt"></i> Actualizar
                     </button>
-                    <div class="notification-icon" onclick="if(typeof cargarDashboard === 'function') cargarDashboard()">
+                    <div class="notification-icon" id="notificationIcon">
                         <i class="fas fa-bell"></i>
                         <span class="notification-badge" id="notificacionesBadge">0</span>
                     </div>
@@ -72,53 +68,65 @@
                 </div>
             </header>
 
-            <!-- KPIs -->
+            <!-- ========== KPIs ========== -->
             <div class="kpi-grid">
-                <div class="kpi-card">
+                <div class="kpi-card" id="kpiPendientes" onclick="if(window.irASolicitudesCompra) irASolicitudesCompra()">
                     <div class="kpi-icon"><i class="fas fa-clock"></i></div>
                     <div class="kpi-content">
                         <span class="kpi-label">Pendientes</span>
-                        <span class="kpi-value" id="solicitudesPendientes">--</span>
+                        <span class="kpi-value">
+                            <span class="kpi-number" id="solicitudesPendientes">--</span>
+                        </span>
                     </div>
                 </div>
-                <div class="kpi-card">
+                <div class="kpi-card" id="kpiCompradas" onclick="if(window.irASolicitudesCompra) irASolicitudesCompra()">
                     <div class="kpi-icon"><i class="fas fa-check-circle"></i></div>
                     <div class="kpi-content">
                         <span class="kpi-label">Compradas</span>
-                        <span class="kpi-value" id="solicitudesCompradas">--</span>
+                        <span class="kpi-value">
+                            <span class="kpi-number" id="solicitudesCompradas">--</span>
+                        </span>
                     </div>
                 </div>
-                <div class="kpi-card">
+                <div class="kpi-card" id="kpiEntregadas" onclick="if(window.irASolicitudesCompra) irASolicitudesCompra()">
                     <div class="kpi-icon"><i class="fas fa-truck"></i></div>
                     <div class="kpi-content">
                         <span class="kpi-label">Entregadas</span>
-                        <span class="kpi-value" id="solicitudesEntregadas">--</span>
+                        <span class="kpi-value">
+                            <span class="kpi-number" id="solicitudesEntregadas">--</span>
+                        </span>
                     </div>
                 </div>
-                <div class="kpi-card">
+                <div class="kpi-card" id="kpiTotal" onclick="if(window.irASolicitudesCompra) irASolicitudesCompra()">
                     <div class="kpi-icon"><i class="fas fa-chart-line"></i></div>
                     <div class="kpi-content">
                         <span class="kpi-label">Total Solicitudes</span>
-                        <span class="kpi-value" id="totalSolicitudes">--</span>
+                        <span class="kpi-value">
+                            <span class="kpi-number" id="totalSolicitudes">--</span>
+                        </span>
                     </div>
                 </div>
-                <div class="kpi-card">
+                <div class="kpi-card" id="kpiComprasMes">
                     <div class="kpi-icon"><i class="fas fa-dollar-sign"></i></div>
                     <div class="kpi-content">
                         <span class="kpi-label">Compras del Mes</span>
-                        <span class="kpi-value" id="comprasMes">--</span>
+                        <span class="kpi-value">
+                            <span class="kpi-number" id="comprasMes">--</span>
+                        </span>
                     </div>
                 </div>
-                <div class="kpi-card">
+                <div class="kpi-card" id="kpiOrdenesActivas" onclick="if(window.irASolicitudesCompra) irASolicitudesCompra()">
                     <div class="kpi-icon"><i class="fas fa-tools"></i></div>
                     <div class="kpi-content">
                         <span class="kpi-label">Órdenes Activas</span>
-                        <span class="kpi-value" id="ordenesActivas">--</span>
+                        <span class="kpi-value">
+                            <span class="kpi-number" id="ordenesActivas">--</span>
+                        </span>
                     </div>
                 </div>
             </div>
 
-            <!-- Dashboard Grid -->
+            <!-- ========== DASHBOARD GRID ========== -->
             <div class="dashboard-grid">
                 <!-- Columna Izquierda -->
                 <div class="left-column">
@@ -156,6 +164,7 @@
                     <div class="card">
                         <div class="card-header">
                             <h3><i class="fas fa-truck"></i> Proveedores Destacados</h3>
+                            <a href="proveedores.html" class="card-link">Ver todos →</a>
                         </div>
                         <div class="proveedores-list" id="proveedoresList">
                             <div class="loading-placeholder">
@@ -172,6 +181,11 @@
                     <div class="card">
                         <div class="card-header">
                             <h3><i class="fas fa-chart-line"></i> Compras por Mes</h3>
+                            <div class="chart-controls" id="chartControls">
+                                <button class="active" data-period="6">6M</button>
+                                <button data-period="12">12M</button>
+                                <button data-period="24">24M</button>
+                            </div>
                         </div>
                         <div class="chart-container">
                             <canvas id="comprasChart"></canvas>
@@ -217,7 +231,7 @@
         <p>Cargando datos...</p>
     </div>
 
-    <!-- Scripts -->
+    <!-- ========== SCRIPTS ========== -->
     <script src="js/include.js"></script>
     <script src="js/dashboard.js"></script>
     
@@ -228,7 +242,6 @@
         
         let sidebarOpen = false;
         
-        // Función para toggle sidebar en móvil
         function toggleSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
@@ -245,7 +258,6 @@
                 if (hamburger) hamburger.classList.add('active');
                 body.classList.add('sidebar-open');
                 
-                // Cambiar icono del hamburguesa
                 const icon = hamburger.querySelector('i');
                 if (icon) icon.className = 'fas fa-times';
             } else {
@@ -253,7 +265,6 @@
             }
         }
         
-        // Función para cerrar sidebar
         function closeSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
@@ -273,17 +284,34 @@
             sidebarOpen = false;
         }
         
-        // Función para marcar todas las notificaciones como leídas
+        // =====================================================
+        // FORZAR VISIBILIDAD DEL HAMBURGUESA EN MÓVIL
+        // =====================================================
+        function forzarHamburguesaMovil() {
+            const hamburger = document.getElementById('hamburgerMenu');
+            if (!hamburger) return;
+            
+            const isMobile = window.innerWidth <= 1024;
+            
+            if (isMobile) {
+                hamburger.style.display = 'flex';
+                hamburger.style.position = 'fixed';
+                hamburger.style.top = '12px';
+                hamburger.style.left = '12px';
+                hamburger.style.zIndex = '1002';
+            } else {
+                hamburger.style.display = 'none';
+            }
+        }
+        
         async function marcarTodasLeidas() {
             if (typeof marcarTodasNotificacionesLeidas === 'function') {
                 await marcarTodasNotificacionesLeidas();
-            } else if (typeof marcarNotificacionLeida !== 'undefined') {
-                console.log('Función no disponible aún');
+            } else {
                 mostrarToast('Función en desarrollo', 'info');
             }
         }
         
-        // Función para mostrar toast temporal
         function mostrarToast(mensaje, tipo = 'info') {
             let container = document.querySelector('.toast-container');
             if (!container) {
@@ -301,62 +329,72 @@
             setTimeout(() => toast.remove(), 3000);
         }
         
-        // Event Listeners
+        function initChartControls() {
+            const controls = document.getElementById('chartControls');
+            if (!controls) return;
+            
+            controls.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    controls.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    const period = parseInt(this.dataset.period);
+                    if (window.actualizarGraficoPeriodo) {
+                        window.actualizarGraficoPeriodo(period);
+                    }
+                });
+            });
+        }
+        
+        // =====================================================
+        // INICIALIZACIÓN
+        // =====================================================
         document.addEventListener('DOMContentLoaded', function() {
-            // Botón hamburguesa
+            // Forzar hamburguesa visible en móvil
+            forzarHamburguesaMovil();
+            
             const hamburgerBtn = document.getElementById('hamburgerMenu');
             if (hamburgerBtn) {
                 hamburgerBtn.addEventListener('click', toggleSidebar);
             }
             
-            // Overlay
             const overlay = document.getElementById('sidebarOverlay');
             if (overlay) {
                 overlay.addEventListener('click', closeSidebar);
             }
             
-            // Botón marcar todas leídas
             const marcarBtn = document.getElementById('marcarLeidasBtn');
             if (marcarBtn) {
                 marcarBtn.addEventListener('click', marcarTodasLeidas);
             }
             
-            // Cerrar sidebar al redimensionar a desktop
+            initChartControls();
+            
             window.addEventListener('resize', function() {
+                forzarHamburguesaMovil();
                 if (window.innerWidth > 768 && sidebarOpen) {
                     closeSidebar();
                 }
             });
             
-            // Cerrar sidebar al hacer click en enlaces (móvil)
             document.addEventListener('click', function(e) {
                 if (window.innerWidth <= 768 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
                     const hamburger = document.getElementById('hamburgerMenu');
                     
-                    // Si el click no fue en el sidebar ni en el botón hamburguesa
                     if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
                         closeSidebar();
                     }
                 }
             });
-            
-            // Prevenir scroll del body cuando sidebar está abierto
-            document.addEventListener('touchmove', function(e) {
-                if (window.innerWidth <= 768 && sidebarOpen) {
-                    const sidebar = document.querySelector('.sidebar');
-                    if (sidebar && !sidebar.contains(e.target)) {
-                        e.preventDefault();
-                    }
-                }
-            });
         });
         
-        // Exponer funciones globalmente
         window.toggleSidebar = toggleSidebar;
         window.closeSidebar = closeSidebar;
         window.marcarTodasLeidas = marcarTodasLeidas;
         window.mostrarToast = mostrarToast;
+        window.initChartControls = initChartControls;
+        window.forzarHamburguesaMovil = forzarHamburguesaMovil;
         
         console.log('✅ dashboard.html - Funciones responsive cargadas');
     </script>

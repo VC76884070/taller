@@ -15,10 +15,10 @@ if (typeof window.API_BASE_URL === 'undefined') {
 }
 
 // =====================================================
-// CONFIGURACIÓN DE CLOUDINARY
+// CONFIGURACIÓN DE GOOGLE DRIVE (YA NO USA CLOUDINARY)
 // =====================================================
-const CLOUDINARY_CLOUD_NAME = 'drpt6ztkd';
-const CLOUDINARY_UPLOAD_PRESET = 'furia_motor_unsigned';
+// Las funciones de subida ahora usan Google Drive
+// No se necesitan constantes de Cloudinary
 
 // =====================================================
 // CONFIGURACIÓN PRINCIPAL
@@ -52,12 +52,12 @@ let camposEnEdicion = {
 };
 let timeoutsEdicion = {};
 
-// Variables para manejo de fotos y audio
+// Variables para manejo de fotos y audio (Google Drive)
 let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
 let audioBlob = null;
-let audioCloudinaryUrl = null;
+let audioDriveUrl = null;
 
 // Variables para control de descripción
 let descripcionModificadaManualmente = false;
@@ -102,6 +102,12 @@ let datosReporteFinal = null;
 // Variable para controlar si ya se está descargando
 let descargandoPDF = false;
 
+// =====================================================
+// CONFIGURACIÓN DE REINTENTOS
+// =====================================================
+const MAX_UPLOAD_RETRIES = 3;
+const RETRY_DELAY = 2000; // 2 segundos
+
 // Elementos DOM
 const sesionesActivasPanel = document.getElementById('sesionesActivasPanel');
 const sesionesList = document.getElementById('sesionesList');
@@ -144,7 +150,74 @@ const FOTOS_CONFIG = [
 ];
 
 // =====================================================
-// FUNCIÓN PARA HACER PETICIONES CON TOKEN
+// FUNCIÓN PARA SUBIR CON REINTENTOS
+// =====================================================
+async function fetchWithRetry(url, options = {}, retries = MAX_UPLOAD_RETRIES) {
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 segundos
+            
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            // Si es 401, no reintentamos automáticamente (dejamos que fetchWithToken lo maneje)
+            if (response.status === 401) {
+                throw new Error('Sesión expirada');
+            }
+            
+            // Si es 500 o más, reintentamos
+            if (response.status >= 500) {
+                throw new Error(`Error del servidor: ${response.status}`);
+            }
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            return response;
+            
+        } catch (error) {
+            lastError = error;
+            
+            // Si es error de sesión, no reintentamos
+            if (error.message === 'Sesión expirada') {
+                logger.error('[fetchWithRetry] ❌ Sesión expirada, deteniendo reintentos');
+                throw error;
+            }
+            
+            // Si es error de red o SSL, reintentamos
+            const isNetworkError = error.name === 'TypeError' || 
+                                  error.message.includes('SSL') || 
+                                  error.message.includes('timeout') ||
+                                  error.message.includes('network') ||
+                                  error.message.includes('fetch');
+            
+            if (isNetworkError) {
+                logger.warn(`⚠️ Intento ${attempt}/${retries} falló (error de red): ${error.message}`);
+            } else {
+                logger.warn(`⚠️ Intento ${attempt}/${retries} falló: ${error.message}`);
+            }
+            
+            if (attempt < retries) {
+                const waitTime = RETRY_DELAY * attempt;
+                logger.info(`⏳ Esperando ${waitTime}ms antes de reintentar...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
+        }
+    }
+    
+    throw lastError || new Error('Error en la petición después de varios intentos');
+}
+
+// =====================================================
+// FUNCIÓN PARA HACER PETICIONES CON TOKEN (CORREGIDA)
 // =====================================================
 async function fetchWithToken(url, options = {}) {
     const token = localStorage.getItem('furia_token');
@@ -160,19 +233,78 @@ async function fetchWithToken(url, options = {}) {
         ...options.headers
     };
     
-    const response = await fetch(url, {
-        ...options,
-        headers
-    });
-    
-    if (response.status === 401) {
-        logger.error('[fetchWithToken] ❌ Error 401 - Token inválido');
-        localStorage.clear();
-        window.location.href = `${window.API_BASE_URL}/`;
-        throw new Error('Sesión expirada');
+    try {
+        const response = await fetch(url, {
+            ...options,
+            headers
+        });
+        
+        // Si es 401, intentamos refrescar el token
+        if (response.status === 401) {
+            logger.warn('[fetchWithToken] ⚠️ Token expirado, intentando refrescar...');
+            
+            try {
+                // Intentar refrescar el token
+                const refreshResponse = await fetch(`${API_URL}/refresh-token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        token: token
+                    })
+                });
+                
+                if (refreshResponse.ok) {
+                    const refreshData = await refreshResponse.json();
+                    if (refreshData.token) {
+                        // Guardar nuevo token
+                        localStorage.setItem('furia_token', refreshData.token);
+                        // Reintentar la petición original
+                        const newHeaders = {
+                            ...headers,
+                            'Authorization': `Bearer ${refreshData.token}`
+                        };
+                        const retryResponse = await fetch(url, {
+                            ...options,
+                            headers: newHeaders
+                        });
+                        if (retryResponse.ok) {
+                            return retryResponse;
+                        }
+                    }
+                }
+            } catch (refreshError) {
+                logger.error('[fetchWithToken] ❌ Error refrescando token:', refreshError);
+            }
+            
+            // Si falla el refresh, cerrar sesión
+            logger.error('[fetchWithToken] ❌ Error 401 - Token inválido o expirado');
+            mostrarNotificacion('⏳ Tu sesión expiró. Por favor, inicia sesión nuevamente.', 'warning');
+            localStorage.clear();
+            
+            // Redirigir al login después de un breve retraso
+            setTimeout(() => {
+                window.location.href = `${window.API_BASE_URL}/`;
+            }, 1500);
+            
+            throw new Error('Sesión expirada');
+        }
+        
+        return response;
+        
+    } catch (error) {
+        // Si es un error de red (timeout, SSL), no cerramos sesión
+        if (error.name === 'TypeError' || 
+            error.message.includes('SSL') || 
+            error.message.includes('timeout') ||
+            error.message.includes('network') ||
+            error.message.includes('fetch')) {
+            logger.warn('[fetchWithToken] ⚠️ Error de red: ' + error.message);
+            throw new Error('Error de red: ' + error.message);
+        }
+        throw error;
     }
-    
-    return response;
 }
 
 // =====================================================
@@ -195,7 +327,7 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
     
     setTimeout(() => {
         if (toast && document.body.contains(toast)) toast.remove();
-    }, 3000);
+    }, 4000);
 }
 
 function escapeHtml(text) {
@@ -473,42 +605,84 @@ function validarCompletadoDescripcion() {
 }
 
 // =====================================================
-// SUBIR FOTO A CLOUDINARY
+// SUBIR FOTO A GOOGLE DRIVE CON REINTENTOS (CORREGIDO)
 // =====================================================
-async function subirFotoCloudinary(file, carpeta, campo) {
-    return new Promise((resolve, reject) => {
+async function subirFotoGoogleDrive(file, carpeta, campo) {
+    return new Promise(async (resolve, reject) => {
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-        formData.append('folder', `furia_motor/recepcion/${carpeta}`);
+        formData.append('carpeta', carpeta || codigoSesion || 'temp');
+        formData.append('campo', campo);
+        formData.append('orden_id', codigoSesion || 'temp');
         
-        const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+        const url = `${API_URL}/jefe-operativo/upload-foto`;
         
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
-        
-        fetch(url, {
-            method: 'POST',
-            body: formData,
-            signal: controller.signal
-        })
-        .then(response => response.json())
-        .then(data => {
-            clearTimeout(timeoutId);
-            if (data.secure_url) {
-                resolve(data.secure_url);
+        try {
+            const response = await fetchWithRetry(url, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.url) {
+                resolve(data.url);
             } else {
-                reject(new Error(data.error?.message || 'Error subiendo foto'));
+                reject(new Error(data.error || 'Error subiendo foto'));
             }
-        })
-        .catch(error => {
-            clearTimeout(timeoutId);
-            if (error.name === 'AbortError') {
-                reject(new Error('Timeout: La subida tardó demasiado'));
+        } catch (error) {
+            // Si es error de sesión, mostramos notificación pero no cerramos sesión
+            if (error.message === 'Sesión expirada') {
+                mostrarNotificacion('⚠️ Tu sesión expiró. Por favor, inicia sesión nuevamente.', 'warning');
+                reject(new Error('Sesión expirada'));
             } else {
                 reject(error);
             }
-        });
+        }
+    });
+}
+
+// =====================================================
+// SUBIR AUDIO A GOOGLE DRIVE CON REINTENTOS (CORREGIDO)
+// =====================================================
+async function subirAudioGoogleDrive(audioBlob, carpeta) {
+    return new Promise(async (resolve, reject) => {
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'audio.wav');
+        formData.append('carpeta', carpeta || codigoSesion || 'temp');
+        formData.append('orden_id', codigoSesion || 'temp');
+        formData.append('tipo', 'audio');
+        
+        const url = `${API_URL}/jefe-operativo/upload-audio`;
+        
+        try {
+            const response = await fetchWithRetry(url, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.url) {
+                resolve(data.url);
+            } else {
+                reject(new Error(data.error || 'Error subiendo audio'));
+            }
+        } catch (error) {
+            // Si es error de sesión, mostramos notificación pero no cerramos sesión
+            if (error.message === 'Sesión expirada') {
+                mostrarNotificacion('⚠️ Tu sesión expiró. Por favor, inicia sesión nuevamente.', 'warning');
+                reject(new Error('Sesión expirada'));
+            } else {
+                reject(error);
+            }
+        }
     });
 }
 
@@ -573,8 +747,9 @@ async function procesarFoto(input, foto) {
         }
         subidasActivas[foto.id] = true;
         
-        mostrarNotificacion(`📤 Subiendo ${foto.label}...`, 'info');
-        const url = await subirFotoCloudinary(fileToUpload, codigoSesion || 'temp', foto.campo);
+        mostrarNotificacion(`📤 Subiendo ${foto.label} a Google Drive...`, 'info');
+        
+        const url = await subirFotoGoogleDrive(fileToUpload, codigoSesion || 'temp', foto.campo);
         
         if (preview) {
             const objectUrl = URL.createObjectURL(fileToUpload);
@@ -584,7 +759,7 @@ async function procesarFoto(input, foto) {
             preview.innerHTML = '';
             preview.style.display = 'block';
             uploadDiv.classList.add('has-image');
-            uploadDiv.dataset.cloudinaryUrl = url;
+            uploadDiv.dataset.driveUrl = url;
             
             if (uploadDiv.dataset.objectUrl) {
                 URL.revokeObjectURL(uploadDiv.dataset.objectUrl);
@@ -595,7 +770,7 @@ async function procesarFoto(input, foto) {
         }
         
         fotosSubidasLocal[foto.campo] = url;
-        mostrarNotificacion(`✅ ${foto.label} subida`, 'success');
+        mostrarNotificacion(`✅ ${foto.label} subida a Google Drive`, 'success');
         validarCompletadoFotos();
         
         if (codigoSesion && seccionesCompletadasLocal.fotos) {
@@ -623,31 +798,6 @@ async function procesarFoto(input, foto) {
 // =====================================================
 // FUNCIONES DE AUDIO
 // =====================================================
-async function subirAudioCloudinary(audioBlob, carpeta) {
-    return new Promise((resolve, reject) => {
-        const formData = new FormData();
-        formData.append('file', audioBlob, 'audio.wav');
-        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-        formData.append('folder', `furia_motor/audios/${carpeta}`);
-        formData.append('resource_type', 'video');
-        
-        const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`;
-        
-        fetch(url, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.secure_url) {
-                resolve(data.secure_url);
-            } else {
-                reject(new Error(data.error?.message || 'Error subiendo audio'));
-            }
-        })
-        .catch(reject);
-    });
-}
 
 function setupAudioRecording() {
     if (!btnGrabarAudio) return;
@@ -675,24 +825,24 @@ async function startRecording() {
                 audioPreview.src = audioUrl;
                 audioPreview.style.display = 'block';
             }
-            if (audioStatus) audioStatus.textContent = 'Audio grabado - Subiendo...';
+            if (audioStatus) audioStatus.textContent = 'Audio grabado - Subiendo a Google Drive...';
             
-            mostrarNotificacion('Subiendo audio...', 'info');
+            mostrarNotificacion('Subiendo audio a Google Drive...', 'info');
             try {
-                const cloudinaryUrl = await subirAudioCloudinary(audioBlob, codigoSesion || 'temp');
-                audioCloudinaryUrl = cloudinaryUrl;
-                if (audioStatus) audioStatus.textContent = 'Audio guardado';
+                const driveUrl = await subirAudioGoogleDrive(audioBlob, codigoSesion || 'temp');
+                audioDriveUrl = driveUrl;
+                if (audioStatus) audioStatus.textContent = 'Audio guardado en Google Drive';
                 if (btnEliminarAudio) btnEliminarAudio.style.display = 'flex';
-                mostrarNotificacion('✅ Audio subido', 'success');
+                mostrarNotificacion('✅ Audio subido a Google Drive', 'success');
                 
                 if (codigoSesion && descripcionProblema?.value.trim()) {
                     await guardarSeccion('descripcion');
                 }
                 validarCompletadoDescripcion();
             } catch (error) {
-                console.error('Error subiendo audio:', error);
+                console.error('Error subiendo audio a Google Drive:', error);
                 if (audioStatus) audioStatus.textContent = 'Error al subir audio';
-                mostrarNotificacion('Error al subir audio', 'error');
+                mostrarNotificacion('Error al subir audio a Google Drive', 'error');
             }
             stream.getTracks().forEach(track => track.stop());
         };
@@ -724,7 +874,7 @@ function stopRecording() {
 function eliminarGrabacion() {
     audioBlob = null;
     audioChunks = [];
-    audioCloudinaryUrl = null;
+    audioDriveUrl = null;
     if (audioPreview) {
         if (audioPreview.src && audioPreview.src.startsWith('blob:')) URL.revokeObjectURL(audioPreview.src);
         audioPreview.src = '';
@@ -777,7 +927,7 @@ function setupPhotoUploads() {
                 }
                 uploadDiv.classList.remove('has-image');
                 removeBtn.style.display = 'none';
-                delete uploadDiv.dataset.cloudinaryUrl;
+                delete uploadDiv.dataset.driveUrl;
                 delete fotosSubidasLocal[foto.campo];
                 if (uploadDiv.dataset.objectUrl) {
                     URL.revokeObjectURL(uploadDiv.dataset.objectUrl);
@@ -821,7 +971,7 @@ async function guardarSeccion(seccion) {
             const fotosData = {};
             for (const foto of FOTOS_CONFIG) {
                 const uploadDiv = document.getElementById(`upload-${foto.id}`);
-                const url = uploadDiv?.dataset.cloudinaryUrl;
+                const url = uploadDiv?.dataset.driveUrl;
                 fotosData[foto.campo] = url || null;
             }
             datos = fotosData;
@@ -829,7 +979,7 @@ async function guardarSeccion(seccion) {
         case 'descripcion':
             datos = {
                 texto: descripcionProblema?.value || '',
-                audio_url: audioCloudinaryUrl
+                audio_url: audioDriveUrl
             };
             descripcionOriginal = descripcionProblema?.value || '';
             break;
@@ -996,7 +1146,7 @@ async function cargarDatosSesionInicial() {
                         preview.style.backgroundPosition = 'center';
                         preview.innerHTML = '';
                         uploadDiv.classList.add('has-image');
-                        uploadDiv.dataset.cloudinaryUrl = url;
+                        uploadDiv.dataset.driveUrl = url;
                         const removeBtn = uploadDiv.querySelector('.remove-photo');
                         if (removeBtn) removeBtn.style.display = 'flex';
                     }
@@ -1008,9 +1158,9 @@ async function cargarDatosSesionInicial() {
         if (datos.descripcion) {
             if (descripcionProblema) descripcionProblema.value = datos.descripcion.texto || '';
             if (datos.descripcion.audio_url) {
-                audioCloudinaryUrl = datos.descripcion.audio_url;
+                audioDriveUrl = datos.descripcion.audio_url;
                 if (audioPreview) {
-                    audioPreview.src = audioCloudinaryUrl;
+                    audioPreview.src = audioDriveUrl;
                     audioPreview.style.display = 'block';
                 }
                 if (btnEliminarAudio) btnEliminarAudio.style.display = 'flex';
@@ -1130,7 +1280,6 @@ async function finalizarSesionConReporte() {
             updateProgressBar(100, 3);
             updateProgressMessage('¡Recepción finalizada con éxito!');
             
-            // Mostrar el reporte con el ID de la orden
             if (data.id_orden) {
                 await mostrarReporteFinal(data.id_orden);
             } else {
@@ -1163,7 +1312,7 @@ function limpiarSesionCompleta() {
     
     codigoSesion = null;
     sesionActual = null;
-    audioCloudinaryUrl = null;
+    audioDriveUrl = null;
     fotosSubidasLocal = {};
     seccionesCompletadasLocal = {
         cliente: false,
@@ -1195,7 +1344,7 @@ function limpiarSesionCompleta() {
         }
         const removeBtn = upload.querySelector('.remove-photo');
         if (removeBtn) removeBtn.style.display = 'none';
-        delete upload.dataset.cloudinaryUrl;
+        delete upload.dataset.driveUrl;
         if (upload.dataset.objectUrl) {
             URL.revokeObjectURL(upload.dataset.objectUrl);
             delete upload.dataset.objectUrl;
@@ -2824,7 +2973,7 @@ function initPage() {
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('========================================');
-    console.log('🚀 INICIANDO RECEPCION.JS');
+    console.log('🚀 INICIANDO RECEPCION.JS (GOOGLE DRIVE)');
     console.log('========================================');
     
     const autenticado = await checkAuth();
@@ -2848,7 +2997,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     iniciarPollingSesiones();
     initRecepcionesPanel();
     
-    console.log('✅ Recepcion.js inicializado correctamente');
+    console.log('✅ Recepcion.js inicializado correctamente (Google Drive)');
 });
 
 // =====================================================
@@ -2875,4 +3024,4 @@ window.logout = () => {
     window.location.href = `${window.API_BASE_URL}/`;
 };
 
-console.log('✅ recepcion.js cargado - Versión con reporte de impresión completo y firma digital (sin vista previa)');
+console.log('✅ recepcion.js cargado - Versión con Google Drive');

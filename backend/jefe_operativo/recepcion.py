@@ -1,6 +1,6 @@
 # =====================================================
 # RECEPCION.PY - JEFE OPERATIVO
-# VERSIÓN COMPLETA CON REPORTE DE IMPRESIÓN Y FIRMAS
+# VERSIÓN CON GOOGLE DRIVE (SIN CLOUDINARY)
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -13,6 +13,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import uuid
 import random
 import string
+import re
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -564,6 +565,25 @@ def obtener_detalle_completo_orden(id_orden):
         logger.error(f"Error obteniendo detalle de orden: {str(e)}")
         return None
 
+def extract_google_drive_id(url):
+    """Extrae el ID de Google Drive de una URL"""
+    if not url:
+        return None
+    
+    # Formato: https://drive.google.com/uc?export=view&id=XXX
+    if 'id=' in url:
+        return url.split('id=')[-1].split('&')[0]
+    
+    # Formato: https://drive.google.com/file/d/XXX/view
+    if '/d/' in url:
+        return url.split('/d/')[1].split('/')[0]
+    
+    # Formato: https://lh3.googleusercontent.com/d/XXX
+    if '/d/' in url:
+        return url.split('/d/')[1].split('/')[0]
+    
+    return None
+
 # =====================================================
 # DECORADOR DE AUTENTICACIÓN
 # =====================================================
@@ -634,7 +654,135 @@ def jefe_operativo_required(f):
     return decorated_function
 
 # =====================================================
-# ENDPOINTS
+# ENDPOINTS PARA GOOGLE DRIVE
+# =====================================================
+
+@jefe_operativo_recepcion_bp.route('/upload-foto', methods=['POST'])
+@jefe_operativo_required
+def upload_foto_drive(current_user):
+    """
+    Sube una foto a Google Drive
+    """
+    try:
+        from google_drive import google_drive
+        from datetime import datetime
+        
+        file = request.files.get('file')
+        carpeta = request.form.get('carpeta', 'recepcion')
+        campo = request.form.get('campo', 'general')
+        orden_id = request.form.get('orden_id')
+        
+        if not file:
+            return jsonify({'error': 'No se envió el archivo'}), 400
+        
+        # Generar nombre único
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        user_id = current_user['id']
+        filename = f"{campo}_{user_id}_{timestamp}.jpg"
+        
+        # Ruta en Google Drive
+        folder_path = f"recepcion/{carpeta}/fotos"
+        
+        # Subir a Google Drive
+        result = google_drive.upload_file(
+            file_data=file,
+            filename=filename,
+            folder_path=folder_path
+        )
+        
+        logger.info(f"📸 Foto subida: {result['url']}")
+        
+        return jsonify({
+            'success': True,
+            'url': result['url'],
+            'id': result['id'],
+            'web_view_link': result['web_view_link']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error subiendo foto: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@jefe_operativo_recepcion_bp.route('/upload-audio', methods=['POST'])
+@jefe_operativo_required
+def upload_audio_drive(current_user):
+    """
+    Sube un audio a Google Drive
+    """
+    try:
+        from google_drive import google_drive
+        from datetime import datetime
+        
+        file = request.files.get('file')
+        carpeta = request.form.get('carpeta', 'recepcion')
+        orden_id = request.form.get('orden_id')
+        
+        if not file:
+            return jsonify({'error': 'No se envió el archivo'}), 400
+        
+        # Generar nombre único
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        user_id = current_user['id']
+        filename = f"audio_{user_id}_{timestamp}.wav"
+        
+        # Ruta en Google Drive
+        folder_path = f"recepcion/{carpeta}/audios"
+        
+        # Subir a Google Drive
+        result = google_drive.upload_file(
+            file_data=file,
+            filename=filename,
+            folder_path=folder_path,
+            mime_type='audio/wav'
+        )
+        
+        logger.info(f"🎵 Audio subido: {result['url']}")
+        
+        return jsonify({
+            'success': True,
+            'url': result['url'],
+            'id': result['id'],
+            'web_view_link': result['web_view_link']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error subiendo audio: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@jefe_operativo_recepcion_bp.route('/eliminar-archivo-drive', methods=['DELETE'])
+@jefe_operativo_required
+def eliminar_archivo_drive(current_user):
+    """
+    Elimina un archivo de Google Drive usando su URL
+    """
+    try:
+        from google_drive import google_drive
+        
+        data = request.get_json()
+        url = data.get('url')
+        
+        if not url:
+            return jsonify({'error': 'URL requerida'}), 400
+        
+        file_id = extract_google_drive_id(url)
+        if not file_id:
+            return jsonify({'error': 'No se pudo extraer el ID de la URL'}), 400
+        
+        result = google_drive.delete_file(file_id)
+        
+        if result:
+            return jsonify({'success': True})
+        else:
+            return jsonify({'error': 'Error eliminando archivo'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error eliminando archivo: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# =====================================================
+# ENDPOINTS DE SESIONES
 # =====================================================
 
 @jefe_operativo_recepcion_bp.route('/iniciar-sesion', methods=['POST'])
@@ -675,6 +823,7 @@ def iniciar_sesion(current_user):
     except Exception as e:
         logger.error(f"Error iniciando sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @jefe_operativo_recepcion_bp.route('/unirse-sesion', methods=['POST'])
 @jefe_operativo_required
@@ -732,6 +881,7 @@ def unirse_sesion(current_user):
     except Exception as e:
         logger.error(f"Error uniéndose a sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @jefe_operativo_recepcion_bp.route('/guardar-seccion', methods=['POST'])
 @jefe_operativo_required
@@ -822,6 +972,7 @@ def guardar_seccion(current_user):
         logger.error(f"Error guardando sección: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 @jefe_operativo_recepcion_bp.route('/obtener-sesion/<codigo>', methods=['GET'])
 @jefe_operativo_required
 def obtener_sesion(current_user, codigo):
@@ -859,6 +1010,7 @@ def obtener_sesion(current_user, codigo):
     except Exception as e:
         logger.error(f"Error obteniendo sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @jefe_operativo_recepcion_bp.route('/finalizar-sesion', methods=['POST'])
 @jefe_operativo_required
@@ -951,6 +1103,7 @@ def finalizar_sesion(current_user):
         logger.error(f"Error finalizando: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 @jefe_operativo_recepcion_bp.route('/verificar-placa/<placa>', methods=['GET'])
 @jefe_operativo_required
 def verificar_placa(current_user, placa):
@@ -980,6 +1133,7 @@ def verificar_placa(current_user, placa):
         logger.error(f"Error verificando placa: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 @jefe_operativo_recepcion_bp.route('/cancelar-sesion', methods=['DELETE'])
 @jefe_operativo_required
 def cancelar_sesion(current_user):
@@ -1001,6 +1155,7 @@ def cancelar_sesion(current_user):
         logger.error(f"Error cancelando sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 @jefe_operativo_recepcion_bp.route('/ping-sesion/<codigo>', methods=['GET'])
 @jefe_operativo_required
 def ping_sesion(current_user, codigo):
@@ -1013,6 +1168,7 @@ def ping_sesion(current_user, codigo):
     except Exception as e:
         logger.error(f"Error en ping: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @jefe_operativo_recepcion_bp.route('/sesiones-activas', methods=['GET'])
 @jefe_operativo_required
@@ -1048,6 +1204,7 @@ def listar_sesiones_activas(current_user):
         logger.error(f"Error listando sesiones: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 @jefe_operativo_recepcion_bp.route('/listar-recepciones', methods=['GET'])
 @jefe_operativo_required
 def listar_recepciones(current_user):
@@ -1082,6 +1239,7 @@ def listar_recepciones(current_user):
         logger.error(f"Error listando recepciones: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 @jefe_operativo_recepcion_bp.route('/detalle-recepcion/<int:id_orden>', methods=['GET'])
 @jefe_operativo_required
 def detalle_recepcion(current_user, id_orden):
@@ -1100,6 +1258,7 @@ def detalle_recepcion(current_user, id_orden):
     except Exception as e:
         logger.error(f"Error obteniendo detalle: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @jefe_operativo_recepcion_bp.route('/eliminar-recepcion/<int:id_orden>', methods=['DELETE'])
 @jefe_operativo_required
@@ -1121,6 +1280,7 @@ def eliminar_recepcion(current_user, id_orden):
     except Exception as e:
         logger.error(f"Error eliminando recepción: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @jefe_operativo_recepcion_bp.route('/actualizar-recepcion/<int:id_orden>', methods=['PUT'])
 @jefe_operativo_required
@@ -1175,6 +1335,7 @@ def actualizar_recepcion(current_user, id_orden):
         logger.error(f"Error actualizando recepción: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 @jefe_operativo_recepcion_bp.route('/marcar-editando', methods=['POST'])
 @jefe_operativo_required
 def marcar_editando(current_user):
@@ -1194,6 +1355,7 @@ def marcar_editando(current_user):
     except Exception as e:
         logger.error(f"Error marcando edición: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @jefe_operativo_recepcion_bp.route('/liberar-edicion', methods=['POST'])
 @jefe_operativo_required
@@ -1215,11 +1377,13 @@ def liberar_edicion(current_user):
         logger.error(f"Error liberando edición: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 @jefe_operativo_recepcion_bp.route('/taller-coordenadas', methods=['GET'])
 @jefe_operativo_required
 def obtener_coordenadas_taller(current_user):
     """Devuelve las coordenadas del taller"""
     return jsonify({'success': True, 'lat': TALLER_LAT, 'lng': TALLER_LNG}), 200
+
 
 @jefe_operativo_recepcion_bp.route('/obtener-reporte/<int:id_orden>', methods=['GET'])
 @jefe_operativo_required

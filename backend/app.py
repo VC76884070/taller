@@ -40,8 +40,25 @@ app.config['SECRET_KEY'] = config.SECRET_KEY
 app.config['CORS_HEADERS'] = 'Content-Type'
 app.config['JSON_SORT_KEYS'] = False
 app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 app.config['JSON_AS_ASCII'] = False
+
+# =====================================================
+# GOOGLE DRIVE CONFIGURATION
+# =====================================================
+app.config['GOOGLE_DRIVE_CREDENTIALS_FILE'] = os.getenv('GOOGLE_DRIVE_CREDENTIALS_FILE')
+app.config['GOOGLE_DRIVE_FOLDER_ID'] = os.getenv('GOOGLE_DRIVE_FOLDER_ID')
+
+# Verificar configuración de Google Drive
+if app.config['GOOGLE_DRIVE_CREDENTIALS_FILE']:
+    logger.info(f"✅ Google Drive credentials configurado: {app.config['GOOGLE_DRIVE_CREDENTIALS_FILE']}")
+else:
+    logger.warning("⚠️ GOOGLE_DRIVE_CREDENTIALS_FILE no configurado")
+
+if app.config['GOOGLE_DRIVE_FOLDER_ID']:
+    logger.info(f"✅ Google Drive folder ID configurado: {app.config['GOOGLE_DRIVE_FOLDER_ID']}")
+else:
+    logger.warning("⚠️ GOOGLE_DRIVE_FOLDER_ID no configurado")
 
 CORS(app, 
      resources={r"/api/*": {"origins": "*"}}, 
@@ -147,6 +164,18 @@ def inject_config_script(response):
     return response
 
 # =====================================================
+# INICIALIZAR GOOGLE DRIVE
+# =====================================================
+try:
+    from google_drive import init_google_drive
+    init_google_drive(app)
+    logger.info("✅ Google Drive inicializado correctamente")
+except ImportError as e:
+    logger.warning(f"⚠️ No se pudo importar google_drive: {e}")
+except Exception as e:
+    logger.error(f"❌ Error inicializando Google Drive: {e}")
+
+# =====================================================
 # IMPORTAR BLUEPRINTS
 # =====================================================
 
@@ -241,10 +270,8 @@ try:
     from encargado_rep_almacen.proveedores import proveedores_bp
     from encargado_rep_almacen.historial import historial_repuestos_bp
     from encargado_rep_almacen.perfil import perfil_repuestos_bp
-    # Importar el blueprint del dashboard de encargado de repuestos
     from encargado_rep_almacen.dashboard import dashboard_bp
 
-    # Registrar el blueprint
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(solicitudes_cotizacion_bp, url_prefix='/api/encargado-repuestos')
     app.register_blueprint(solicitudes_compra_bp, url_prefix='/api/encargado-repuestos')
@@ -441,6 +468,54 @@ def serve_html(path):
     return send_from_directory(os.path.join(PROJECT_DIR, 'login'), 'index.html')
 
 # =====================================================
+# ENDPOINT DE PRUEBA PARA GOOGLE DRIVE
+# =====================================================
+
+@app.route('/test-drive', methods=['GET'])
+def test_drive():
+    """Endpoint para verificar conexión con Google Drive"""
+    try:
+        from google_drive import google_drive
+        from datetime import datetime
+        
+        # Crear un archivo de prueba
+        test_content = f"✅ Test desde Google Drive - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        test_data = test_content.encode('utf-8')
+        
+        # Subir archivo de prueba
+        result = google_drive.upload_file(
+            file_data=test_data,
+            filename=f"test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+            folder_path="pruebas"
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': '✅ Conexión exitosa a Google Drive',
+            'file_url': result['url'],
+            'web_view_link': result['web_view_link'],
+            'file_id': result['id'],
+            'filename': result['filename'],
+            'folder_path': result.get('folder_path')
+        })
+    except ImportError as e:
+        return jsonify({
+            'success': False,
+            'error': f'No se pudo importar google_drive: {str(e)}'
+        }), 500
+    except FileNotFoundError as e:
+        return jsonify({
+            'success': False,
+            'error': f'Archivo de credenciales no encontrado: {str(e)}'
+        }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': '❌ Error al conectar con Google Drive'
+        }), 500
+
+# =====================================================
 # API DE PRUEBA
 # =====================================================
 
@@ -450,7 +525,8 @@ def test_api():
         'status': 'ok',
         'message': 'API de FURIA MOTOR funcionando correctamente',
         'version': '2.0.0',
-        'environment': 'railway' if is_railway() else 'local'
+        'environment': 'railway' if is_railway() else 'local',
+        'google_drive_configured': bool(app.config.get('GOOGLE_DRIVE_CREDENTIALS_FILE') and app.config.get('GOOGLE_DRIVE_FOLDER_ID'))
     }), 200
 
 @app.route('/api/health', methods=['GET'])
@@ -510,6 +586,13 @@ if __name__ == '__main__':
     print(f"   • Encargado Repuestos: http://localhost:{port}/encargado_rep_almacen")
     print(f"   • Técnico Mecánico:   http://localhost:{port}/tecnico_mecanico")
     print(f"   • Cliente:            http://localhost:{port}/cliente")
+    print("="*60)
+    print("🔑 Google Drive:")
+    print(f"   • Credentials: {app.config.get('GOOGLE_DRIVE_CREDENTIALS_FILE', 'No configurado')}")
+    print(f"   • Folder ID: {app.config.get('GOOGLE_DRIVE_FOLDER_ID', 'No configurado')}")
+    print("="*60)
+    print("🧪 Prueba Google Drive:")
+    print(f"   • http://localhost:{port}/test-drive")
     print("="*60)
     
     app.run(debug=debug_mode, host='0.0.0.0', port=port, threaded=True)

@@ -106,7 +106,7 @@ class GoogleDriveService:
     
     def _verify_folder_access(self):
         """
-        Verifica que la carpeta existe y es accesible
+        Verifica que la carpeta existe y es accesible__
         """
         try:
             folder = self.service.files().get(

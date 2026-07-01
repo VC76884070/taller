@@ -158,7 +158,7 @@ async function fetchWithRetry(url, options = {}, retries = MAX_UPLOAD_RETRIES) {
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 segundos
+            const timeoutId = setTimeout(() => controller.abort(), 90000);
             
             const response = await fetch(url, {
                 ...options,
@@ -167,12 +167,10 @@ async function fetchWithRetry(url, options = {}, retries = MAX_UPLOAD_RETRIES) {
             
             clearTimeout(timeoutId);
             
-            // Si es 401, no reintentamos automáticamente (dejamos que fetchWithToken lo maneje)
             if (response.status === 401) {
                 throw new Error('Sesión expirada');
             }
             
-            // Si es 500 o más, reintentamos
             if (response.status >= 500) {
                 throw new Error(`Error del servidor: ${response.status}`);
             }
@@ -186,13 +184,11 @@ async function fetchWithRetry(url, options = {}, retries = MAX_UPLOAD_RETRIES) {
         } catch (error) {
             lastError = error;
             
-            // Si es error de sesión, no reintentamos
             if (error.message === 'Sesión expirada') {
                 logger.error('[fetchWithRetry] ❌ Sesión expirada, deteniendo reintentos');
                 throw error;
             }
             
-            // Si es error de red o SSL, reintentamos
             const isNetworkError = error.name === 'TypeError' || 
                                   error.message.includes('SSL') || 
                                   error.message.includes('timeout') ||
@@ -217,7 +213,7 @@ async function fetchWithRetry(url, options = {}, retries = MAX_UPLOAD_RETRIES) {
 }
 
 // =====================================================
-// FUNCIÓN PARA HACER PETICIONES CON TOKEN (CORREGIDA)
+// FUNCIÓN PARA HACER PETICIONES CON TOKEN
 // =====================================================
 async function fetchWithToken(url, options = {}) {
     const token = localStorage.getItem('furia_token');
@@ -239,12 +235,10 @@ async function fetchWithToken(url, options = {}) {
             headers
         });
         
-        // Si es 401, intentamos refrescar el token
         if (response.status === 401) {
             logger.warn('[fetchWithToken] ⚠️ Token expirado, intentando refrescar...');
             
             try {
-                // Intentar refrescar el token
                 const refreshResponse = await fetch(`${API_URL}/refresh-token`, {
                     method: 'POST',
                     headers: {
@@ -258,9 +252,7 @@ async function fetchWithToken(url, options = {}) {
                 if (refreshResponse.ok) {
                     const refreshData = await refreshResponse.json();
                     if (refreshData.token) {
-                        // Guardar nuevo token
                         localStorage.setItem('furia_token', refreshData.token);
-                        // Reintentar la petición original
                         const newHeaders = {
                             ...headers,
                             'Authorization': `Bearer ${refreshData.token}`
@@ -278,12 +270,10 @@ async function fetchWithToken(url, options = {}) {
                 logger.error('[fetchWithToken] ❌ Error refrescando token:', refreshError);
             }
             
-            // Si falla el refresh, cerrar sesión
             logger.error('[fetchWithToken] ❌ Error 401 - Token inválido o expirado');
             mostrarNotificacion('⏳ Tu sesión expiró. Por favor, inicia sesión nuevamente.', 'warning');
             localStorage.clear();
             
-            // Redirigir al login después de un breve retraso
             setTimeout(() => {
                 window.location.href = `${window.API_BASE_URL}/`;
             }, 1500);
@@ -294,7 +284,6 @@ async function fetchWithToken(url, options = {}) {
         return response;
         
     } catch (error) {
-        // Si es un error de red (timeout, SSL), no cerramos sesión
         if (error.name === 'TypeError' || 
             error.message.includes('SSL') || 
             error.message.includes('timeout') ||
@@ -618,11 +607,15 @@ async function subirFotoGoogleDrive(file, carpeta, campo) {
         const url = `${API_URL}/jefe-operativo/upload-foto`;
         
         try {
+            const token = localStorage.getItem('furia_token');
+            
             const response = await fetchWithRetry(url, {
                 method: 'POST',
                 body: formData,
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                    // ⚠️ IMPORTANTE: NO incluyas 'Content-Type' aquí
+                    // El navegador lo establecerá automáticamente con el boundary
+                    'Authorization': `Bearer ${token}`
                 }
             });
             
@@ -634,7 +627,6 @@ async function subirFotoGoogleDrive(file, carpeta, campo) {
                 reject(new Error(data.error || 'Error subiendo foto'));
             }
         } catch (error) {
-            // Si es error de sesión, mostramos notificación pero no cerramos sesión
             if (error.message === 'Sesión expirada') {
                 mostrarNotificacion('⚠️ Tu sesión expiró. Por favor, inicia sesión nuevamente.', 'warning');
                 reject(new Error('Sesión expirada'));
@@ -659,11 +651,14 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
         const url = `${API_URL}/jefe-operativo/upload-audio`;
         
         try {
+            const token = localStorage.getItem('furia_token');
+            
             const response = await fetchWithRetry(url, {
                 method: 'POST',
                 body: formData,
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                    // ⚠️ IMPORTANTE: NO incluyas 'Content-Type' aquí
+                    'Authorization': `Bearer ${token}`
                 }
             });
             
@@ -675,7 +670,6 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
                 reject(new Error(data.error || 'Error subiendo audio'));
             }
         } catch (error) {
-            // Si es error de sesión, mostramos notificación pero no cerramos sesión
             if (error.message === 'Sesión expirada') {
                 mostrarNotificacion('⚠️ Tu sesión expiró. Por favor, inicia sesión nuevamente.', 'warning');
                 reject(new Error('Sesión expirada'));

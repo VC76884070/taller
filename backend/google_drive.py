@@ -1,11 +1,9 @@
 # =====================================================
-# GOOGLE DRIVE - CON OAUTH 2.0 (CUENTA PERSONAL)
-# VERSIÓN CORREGIDA CON REINTENTOS Y TIMEOUTS
+# GOOGLE DRIVE - CON OAUTH 2.0 VÍA VARIABLES DE ENTORNO
 # =====================================================
 
 import os
 import io
-import pickle
 import mimetypes
 import time
 import socket
@@ -13,7 +11,6 @@ import ssl
 from datetime import datetime
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from googleapiclient.errors import HttpError
@@ -23,7 +20,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # =====================================================
-# DESACTIVAR SSL PARA PRUEBAS
+# DESACTIVAR SSL PARA PRUEBAS (OPCIONAL)
 # =====================================================
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -41,6 +38,7 @@ UPLOAD_TIMEOUT = 120
 class GoogleDriveService:
     """
     Servicio para interactuar con Google Drive
+    Usa OAuth 2.0 con variables de entorno
     """
     
     def __init__(self, app=None):
@@ -51,54 +49,54 @@ class GoogleDriveService:
     
     def init_app(self, app):
         """
-        Inicializa el servicio con la configuración de la app Flask
+        Inicializa el servicio con variables de entorno
         """
         try:
-            creds_file = app.config.get('GOOGLE_DRIVE_CREDENTIALS_FILE')
+            # =============================================
+            # OBTENER VARIABLES DE ENTORNO
+            # =============================================
+            token = os.getenv('GOOGLE_DRIVE_TOKEN')
+            refresh_token = os.getenv('GOOGLE_DRIVE_REFRESH_TOKEN')
+            client_id = os.getenv('GOOGLE_DRIVE_CLIENT_ID')
+            client_secret = os.getenv('GOOGLE_DRIVE_CLIENT_SECRET')
             self.folder_id = app.config.get('GOOGLE_DRIVE_FOLDER_ID')
             
-            if not creds_file:
-                raise ValueError("GOOGLE_DRIVE_CREDENTIALS_FILE no configurado")
-            
-            if not os.path.exists(creds_file):
-                raise FileNotFoundError(f"Archivo de credenciales no encontrado: {creds_file}")
+            # Verificar que todas las variables existen
+            if not all([token, refresh_token, client_id, client_secret]):
+                missing = []
+                if not token: missing.append('GOOGLE_DRIVE_TOKEN')
+                if not refresh_token: missing.append('GOOGLE_DRIVE_REFRESH_TOKEN')
+                if not client_id: missing.append('GOOGLE_DRIVE_CLIENT_ID')
+                if not client_secret: missing.append('GOOGLE_DRIVE_CLIENT_SECRET')
+                raise ValueError(f"Faltan variables de entorno: {', '.join(missing)}")
             
             if not self.folder_id:
                 raise ValueError("GOOGLE_DRIVE_FOLDER_ID no configurado")
             
             # =============================================
-            # AUTENTICACIÓN CON OAUTH 2.0
+            # CREAR CREDENCIALES DESDE VARIABLES
             # =============================================
-            SCOPES = ['https://www.googleapis.com/auth/drive.file']
+            creds = Credentials(
+                token=token,
+                refresh_token=refresh_token,
+                client_id=client_id,
+                client_secret=client_secret,
+                token_uri='https://oauth2.googleapis.com/token',
+                scopes=['https://www.googleapis.com/auth/drive.file']
+            )
             
-            creds = None
-            token_file = 'token.pickle'
-            
-            if os.path.exists(token_file):
-                with open(token_file, 'rb') as token:
-                    creds = pickle.load(token)
-                logger.info("✅ Token OAuth 2.0 cargado desde archivo")
-            
-            if not creds or not creds.valid:
-                if creds and creds.expired and creds.refresh_token:
-                    logger.info("🔄 Token expirado, refrescando...")
-                    creds.refresh(Request())
-                else:
-                    logger.info("🔐 Iniciando flujo OAuth 2.0...")
-                    flow = InstalledAppFlow.from_client_secrets_file(
-                        creds_file, SCOPES
-                    )
-                    creds = flow.run_local_server(port=0)
-                
-                with open(token_file, 'wb') as token:
-                    pickle.dump(creds, token)
-                logger.info(f"💾 Token guardado en {token_file}")
+            # Refrescar token si está expirado
+            if creds.expired and creds.refresh_token:
+                logger.info("🔄 Token expirado, refrescando...")
+                creds.refresh(Request())
+                logger.info("✅ Token refrescado correctamente")
             
             self.service = build('drive', 'v3', credentials=creds)
             
+            # Verificar carpeta
             self._verify_folder_access()
             
-            logger.info(f"✅ Google Drive inicializado correctamente")
+            logger.info(f"✅ Google Drive inicializado correctamente (OAuth 2.0 vía variables de entorno)")
             logger.info(f"📁 Carpeta ID: {self.folder_id}")
             
         except Exception as e:

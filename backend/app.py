@@ -468,44 +468,52 @@ def serve_html(path):
     return send_from_directory(os.path.join(PROJECT_DIR, 'login'), 'index.html')
 
 # =====================================================
-# ENDPOINT TEMPORAL PARA CREAR CARPETA EN GOOGLE DRIVE
+# ENDPOINT TEMPORAL PARA GENERAR TOKEN EN RENDER
 # =====================================================
 
-@app.route('/crear-carpeta-drive', methods=['GET'])
-def crear_carpeta_drive():
+@app.route('/generar-token', methods=['GET'])
+def generar_token_drive():
     """
-    Endpoint temporal para crear la carpeta en Google Drive.
+    Endpoint TEMPORAL para generar el token.pickle en Render usando el Secret File.
     DESPUÉS DE USARLO, ELIMINA ESTE ENDPOINT.
     """
     try:
-        from google_drive import google_drive
-        from googleapiclient.errors import HttpError
+        import os
+        import pickle
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        from googleapiclient.discovery import build
         
-        # Crear carpeta
-        folder_metadata = {
-            'name': 'TallerMecanico_Archivos',
-            'mimeType': 'application/vnd.google-apps.folder'
-        }
+        # === USAR EL SECRET FILE DE RENDER ===
+        creds_file = os.getenv('GOOGLE_DRIVE_CREDENTIALS_FILE', '/etc/secrets/oauth-credentials.json')
+        token_file = 'token.pickle'
         
-        folder = google_drive.service.files().create(
-            body=folder_metadata,
-            fields='id'
-        ).execute()
+        # Verificar que el Secret File existe
+        if not os.path.exists(creds_file):
+            return jsonify({
+                'success': False,
+                'error': f'Secret File no encontrado: {creds_file}'
+            }), 500
         
-        folder_id = folder.get('id')
+        # Configurar OAuth
+        SCOPES = ['https://www.googleapis.com/auth/drive.file']
+        
+        # Iniciar flujo OAuth
+        flow = InstalledAppFlow.from_client_secrets_file(creds_file, SCOPES)
+        
+        # Usar run_local_server (funciona en Render porque usa un puerto interno)
+        creds = flow.run_local_server(port=0)
+        
+        # Guardar token
+        with open(token_file, 'wb') as token:
+            pickle.dump(creds, token)
         
         return jsonify({
             'success': True,
-            'folder_id': folder_id,
-            'url': f'https://drive.google.com/drive/folders/{folder_id}',
-            'message': '✅ Carpeta creada correctamente. Copia el folder_id y actualiza GOOGLE_DRIVE_FOLDER_ID en Render.'
+            'message': f'✅ Token generado correctamente en {token_file}',
+            'token_exists': os.path.exists(token_file),
+            'token_file': token_file
         })
         
-    except HttpError as e:
-        return jsonify({
-            'success': False,
-            'error': f'Error de Google Drive: {str(e)}'
-        }), 500
     except Exception as e:
         return jsonify({
             'success': False,
@@ -603,47 +611,6 @@ def not_found(error):
 def internal_error(error):
     logger.error(f"Error 500: {error}")
     return jsonify({'error': 'Error interno del servidor'}), 500
-@app.route('/crear-carpeta-directa', methods=['GET'])
-def crear_carpeta_directa():
-    """
-    Endpoint TEMPORAL para crear carpeta en Drive sin depender del FOLDER_ID.
-    DESPUÉS DE USARLO, ELIMINA ESTE ENDPOINT.
-    """
-    try:
-        from google_drive import google_drive
-        from googleapiclient.errors import HttpError
-        
-        # Crear carpeta
-        folder_metadata = {
-            'name': 'TallerMecanico_Archivos',
-            'mimeType': 'application/vnd.google-apps.folder'
-        }
-        
-        # Usar el servicio directamente, sin pasar por upload_file que necesita folder_id
-        folder = google_drive.service.files().create(
-            body=folder_metadata,
-            fields='id'
-        ).execute()
-        
-        folder_id = folder.get('id')
-        
-        return jsonify({
-            'success': True,
-            'folder_id': folder_id,
-            'url': f'https://drive.google.com/drive/folders/{folder_id}',
-            'message': '✅ Carpeta creada correctamente. COPIA este folder_id y actualiza GOOGLE_DRIVE_FOLDER_ID en Render.'
-        })
-        
-    except HttpError as e:
-        return jsonify({
-            'success': False,
-            'error': f'Error de Google Drive: {str(e)}'
-        }), 500
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
 # =====================================================
 # INICIALIZACIÓN
@@ -680,8 +647,8 @@ if __name__ == '__main__':
     print("🧪 Prueba Google Drive:")
     print(f"   • http://localhost:{port}/test-drive")
     print("="*60)
-    print("📁 Crear carpeta en Drive:")
-    print(f"   • http://localhost:{port}/crear-carpeta-drive")
+    print("🔐 Generar token en Render:")
+    print(f"   • http://localhost:{port}/generar-token")
     print("="*60)
     
     app.run(debug=debug_mode, host='0.0.0.0', port=port, threaded=True)

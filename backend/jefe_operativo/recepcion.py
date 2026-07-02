@@ -62,7 +62,6 @@ def guardar_sesion_en_db(sesion):
                     'secciones_editando': sesion.get('secciones_editando', {}),
                     'estado': sesion.get('estado', 'activa'),
                     'ultima_actividad': datetime.datetime.now().isoformat()
-                    # ❌ ELIMINAR: 'folder_id': sesion.get('folder_id')
                 }) \
                 .eq('codigo', sesion['codigo']) \
                 .execute()
@@ -79,13 +78,12 @@ def guardar_sesion_en_db(sesion):
                     'secciones_editando': sesion.get('secciones_editando', {}),
                     'estado': sesion.get('estado', 'activa'),
                     'fecha_creacion': sesion.get('fecha_creacion', datetime.datetime.now().isoformat())
-                    # ❌ ELIMINAR: 'folder_id': sesion.get('folder_id')
                 }) \
                 .execute()
         return True
     except Exception as e:
         logger.error(f"Error guardando sesión: {str(e)}")
-        return False
+        return Falses
 
 def cargar_sesiones_activas_db():
     """Carga las sesiones activas desde la base de datos"""
@@ -118,7 +116,6 @@ def cargar_sesiones_activas_db():
                 'estado': s['estado'],
                 'fecha_creacion': s['fecha_creacion'],
                 'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion'])
-                # ❌ ELIMINAR: 'folder_id': s.get('folder_id')
             }
         logger.info(f"📋 Cargadas {len(sesiones)} sesiones activas")
         return sesiones
@@ -851,7 +848,6 @@ def iniciar_sesion(current_user):
             'estado': 'activa',
             'fecha_creacion': datetime.datetime.now().isoformat(),
             'ultima_actividad': datetime.datetime.now().isoformat()
-            # ❌ ELIMINAR: 'folder_id': None
         }
         
         guardar_sesion_en_db(sesion)
@@ -862,7 +858,6 @@ def iniciar_sesion(current_user):
     except Exception as e:
         logger.error(f"Error iniciando sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
 
 @jefe_operativo_recepcion_bp.route('/finalizar-sesion', methods=['POST'])
 @jefe_operativo_required
@@ -971,7 +966,6 @@ def finalizar_sesion(current_user):
         supabase.table('sesion_colaborativa') \
             .update({
                 'estado': 'finalizada',
-                'codigo_orden': codigo_orden
             }) \
             .eq('codigo', codigo_sesion) \
             .execute()

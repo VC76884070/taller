@@ -61,8 +61,8 @@ def guardar_sesion_en_db(sesion):
                     'secciones_completadas': sesion.get('secciones_completadas', {}),
                     'secciones_editando': sesion.get('secciones_editando', {}),
                     'estado': sesion.get('estado', 'activa'),
-                    'ultima_actividad': datetime.datetime.now().isoformat(),
-                    'folder_id': sesion.get('folder_id')  # ← NUEVO: guardar ID de carpeta
+                    'ultima_actividad': datetime.datetime.now().isoformat()
+                    # ❌ ELIMINAR: 'folder_id': sesion.get('folder_id')
                 }) \
                 .eq('codigo', sesion['codigo']) \
                 .execute()
@@ -78,8 +78,8 @@ def guardar_sesion_en_db(sesion):
                     'secciones_completadas': sesion.get('secciones_completadas', {}),
                     'secciones_editando': sesion.get('secciones_editando', {}),
                     'estado': sesion.get('estado', 'activa'),
-                    'fecha_creacion': sesion.get('fecha_creacion', datetime.datetime.now().isoformat()),
-                    'folder_id': sesion.get('folder_id')  # ← NUEVO
+                    'fecha_creacion': sesion.get('fecha_creacion', datetime.datetime.now().isoformat())
+                    # ❌ ELIMINAR: 'folder_id': sesion.get('folder_id')
                 }) \
                 .execute()
         return True
@@ -117,8 +117,8 @@ def cargar_sesiones_activas_db():
                 'secciones_editando': s.get('secciones_editando', {}),
                 'estado': s['estado'],
                 'fecha_creacion': s['fecha_creacion'],
-                'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion']),
-                'folder_id': s.get('folder_id')  # ← NUEVO
+                'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion'])
+                # ❌ ELIMINAR: 'folder_id': s.get('folder_id')
             }
         logger.info(f"📋 Cargadas {len(sesiones)} sesiones activas")
         return sesiones
@@ -850,8 +850,8 @@ def iniciar_sesion(current_user):
             'secciones_editando': {},
             'estado': 'activa',
             'fecha_creacion': datetime.datetime.now().isoformat(),
-            'ultima_actividad': datetime.datetime.now().isoformat(),
-            'folder_id': None  # ← Se guardará cuando se cree la carpeta
+            'ultima_actividad': datetime.datetime.now().isoformat()
+            # ❌ ELIMINAR: 'folder_id': None
         }
         
         guardar_sesion_en_db(sesion)

@@ -9,6 +9,7 @@ import pickle
 import mimetypes
 import time
 import socket
+import ssl
 from datetime import datetime
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -22,11 +23,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 # =====================================================
+# DESACTIVAR SSL PARA PRUEBAS
+# =====================================================
+ssl._create_default_https_context = ssl._create_unverified_context
+
+# =====================================================
 # CONFIGURACIÓN
 # =====================================================
 MAX_RETRIES = 3
-RETRY_DELAY = 2  # segundos entre reintentos
-UPLOAD_TIMEOUT = 120  # segundos
+RETRY_DELAY = 2
+UPLOAD_TIMEOUT = 120
 
 # =====================================================
 # CLASE PRINCIPAL
@@ -35,7 +41,6 @@ UPLOAD_TIMEOUT = 120  # segundos
 class GoogleDriveService:
     """
     Servicio para interactuar con Google Drive
-    Usa OAuth 2.0 con cuenta personal Gmail
     """
     
     def __init__(self, app=None):
@@ -69,13 +74,11 @@ class GoogleDriveService:
             creds = None
             token_file = 'token.pickle'
             
-            # Cargar token guardado (si existe)
             if os.path.exists(token_file):
                 with open(token_file, 'rb') as token:
                     creds = pickle.load(token)
                 logger.info("✅ Token OAuth 2.0 cargado desde archivo")
             
-            # Si no hay token válido, iniciar flujo OAuth
             if not creds or not creds.valid:
                 if creds and creds.expired and creds.refresh_token:
                     logger.info("🔄 Token expirado, refrescando...")
@@ -87,17 +90,15 @@ class GoogleDriveService:
                     )
                     creds = flow.run_local_server(port=0)
                 
-                # Guardar token para próximas veces
                 with open(token_file, 'wb') as token:
                     pickle.dump(creds, token)
                 logger.info(f"💾 Token guardado en {token_file}")
             
             self.service = build('drive', 'v3', credentials=creds)
             
-            # Verificar carpeta
             self._verify_folder_access()
             
-            logger.info(f"✅ Google Drive inicializado correctamente (OAuth 2.0)")
+            logger.info(f"✅ Google Drive inicializado correctamente")
             logger.info(f"📁 Carpeta ID: {self.folder_id}")
             
         except Exception as e:
@@ -105,9 +106,7 @@ class GoogleDriveService:
             raise
     
     def _verify_folder_access(self):
-        """
-        Verifica que la carpeta existe y es accesible__
-        """
+        """Verifica que la carpeta existe y es accesible"""
         try:
             folder = self.service.files().get(
                 fileId=self.folder_id,
@@ -128,100 +127,98 @@ class GoogleDriveService:
                 raise
     
     # =====================================================
-    # FUNCIÓN PARA SUBIR ARCHIVOS CON REINTENTOS
+    # FUNCIÓN PARA SUBIR ARCHIVOS
     # =====================================================
     
     def upload_file(self, file_data, filename, folder_path=None, mime_type=None, 
-                public=True, share_email=None):
-    """
-    Sube un archivo a Google Drive con reintentos automáticos
-    """
-    socket.setdefaulttimeout(UPLOAD_TIMEOUT)
-    
-    last_error = None
-    
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            logger.info(f"📤 Intento {attempt}/{MAX_RETRIES} - Subiendo {filename}")
-            
-            if not mime_type:
-                mime_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-            
-            file_metadata = {
-                'name': filename,
-                'parents': [self.folder_id]
-            }
-            
-            if folder_path:
-                folder_id = self._get_or_create_folder(folder_path)
-                file_metadata['parents'] = [folder_id]
-            
-            # =============================================
-            # MANEJAR FileStorage DE FLASK
-            # =============================================
-            if hasattr(file_data, 'read'):
-                # Es un FileStorage de Flask
-                file_data.seek(0)
-                media = MediaIoBaseUpload(file_data, mimetype=mime_type, resumable=True)
-            elif isinstance(file_data, bytes):
-                media = MediaIoBaseUpload(io.BytesIO(file_data), mimetype=mime_type, resumable=True)
-            elif isinstance(file_data, str):
-                with open(file_data, 'rb') as f:
-                    file_content = f.read()
-                media = MediaIoBaseUpload(io.BytesIO(file_content), mimetype=mime_type, resumable=True)
-            else:
-                raise ValueError(f"Tipo de archivo no soportado: {type(file_data)}")
-            
-            # Subir archivo
-            file = self.service.files().create(
-                body=file_metadata,
-                media_body=media,
-                fields='id, webViewLink, name, mimeType, parents'
-            ).execute()
-            
-            file_id = file.get('id')
-            
-            if public:
-                self._set_file_public(file_id)
-            
-            if share_email:
-                self._share_file_with_email(file_id, share_email)
-            
-            url = f"https://drive.google.com/uc?export=view&id={file_id}"
-            
-            logger.info(f"✅ Archivo subido: {filename} -> {file_id}")
-            
-            return {
-                'id': file_id,
-                'url': url,
-                'web_view_link': file.get('webViewLink'),
-                'filename': filename,
-                'folder_path': folder_path,
-                'mime_type': mime_type
-            }
-            
-        except (HttpError, socket.timeout, ConnectionError, TimeoutError) as e:
-            last_error = e
-            logger.warning(f"⚠️ Intento {attempt} falló: {str(e)}")
-            
-            if attempt < MAX_RETRIES:
-                wait_time = RETRY_DELAY * attempt
-                logger.info(f"⏳ Esperando {wait_time}s antes de reintentar...")
-                time.sleep(wait_time)
-            else:
-                logger.error(f"❌ Todos los intentos fallaron para {filename}")
-                raise
-    
-    raise last_error or Exception("Error desconocido al subir archivo")
+                    public=True, share_email=None):
+        """
+        Sube un archivo a Google Drive con reintentos automáticos
+        """
+        socket.setdefaulttimeout(UPLOAD_TIMEOUT)
+        
+        last_error = None
+        
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"📤 Intento {attempt}/{MAX_RETRIES} - Subiendo {filename}")
+                
+                if not mime_type:
+                    mime_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+                
+                file_metadata = {
+                    'name': filename,
+                    'parents': [self.folder_id]
+                }
+                
+                if folder_path:
+                    folder_id = self._get_or_create_folder(folder_path)
+                    file_metadata['parents'] = [folder_id]
+                
+                # =============================================
+                # MANEJAR DIFERENTES TIPOS DE ENTRADA
+                # =============================================
+                if hasattr(file_data, 'read'):
+                    # Es un FileStorage de Flask
+                    file_data.seek(0)
+                    media = MediaIoBaseUpload(file_data, mimetype=mime_type, resumable=True)
+                elif isinstance(file_data, bytes):
+                    media = MediaIoBaseUpload(io.BytesIO(file_data), mimetype=mime_type, resumable=True)
+                elif isinstance(file_data, str):
+                    with open(file_data, 'rb') as f:
+                        file_content = f.read()
+                    media = MediaIoBaseUpload(io.BytesIO(file_content), mimetype=mime_type, resumable=True)
+                else:
+                    raise ValueError(f"Tipo de archivo no soportado: {type(file_data)}")
+                
+                # Subir archivo
+                file = self.service.files().create(
+                    body=file_metadata,
+                    media_body=media,
+                    fields='id, webViewLink, name, mimeType, parents'
+                ).execute()
+                
+                file_id = file.get('id')
+                
+                if public:
+                    self._set_file_public(file_id)
+                
+                if share_email:
+                    self._share_file_with_email(file_id, share_email)
+                
+                url = f"https://drive.google.com/uc?export=view&id={file_id}"
+                
+                logger.info(f"✅ Archivo subido: {filename} -> {file_id}")
+                
+                return {
+                    'id': file_id,
+                    'url': url,
+                    'web_view_link': file.get('webViewLink'),
+                    'filename': filename,
+                    'folder_path': folder_path,
+                    'mime_type': mime_type
+                }
+                
+            except (HttpError, socket.timeout, ConnectionError, TimeoutError) as e:
+                last_error = e
+                logger.warning(f"⚠️ Intento {attempt} falló: {str(e)}")
+                
+                if attempt < MAX_RETRIES:
+                    wait_time = RETRY_DELAY * attempt
+                    logger.info(f"⏳ Esperando {wait_time}s antes de reintentar...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"❌ Todos los intentos fallaron para {filename}")
+                    raise
+        
+        raise last_error or Exception("Error desconocido al subir archivo")
     
     # =====================================================
     # FUNCIONES PARA MANEJAR CARPETAS
     # =====================================================
     
     def _get_or_create_folder(self, folder_path):
-        """
-        Obtiene o crea una carpeta por ruta con reintentos
-        """
+        """Obtiene o crea una carpeta por ruta con reintentos"""
         last_error = None
         
         for attempt in range(1, MAX_RETRIES + 1):
@@ -232,7 +229,6 @@ class GoogleDriveService:
                     if not folder_name:
                         continue
                     
-                    # Buscar si la carpeta ya existe
                     query = (
                         f"name='{self._escape_string(folder_name)}' and "
                         f"mimeType='application/vnd.google-apps.folder' and "
@@ -250,7 +246,6 @@ class GoogleDriveService:
                     if files:
                         folder_id = files[0]['id']
                     else:
-                        # Crear carpeta
                         folder_metadata = {
                             'name': folder_name,
                             'mimeType': 'application/vnd.google-apps.folder',
@@ -347,9 +342,7 @@ class GoogleDriveService:
     
     def generate_folder_path(self, modulo, referencia_id=None, fecha=None, 
                              subcarpeta=None, tipo=None):
-        """
-        Genera una ruta de carpeta consistente
-        """
+        """Genera una ruta de carpeta consistente"""
         if not fecha:
             fecha = datetime.now()
         

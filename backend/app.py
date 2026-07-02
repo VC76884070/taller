@@ -468,6 +468,51 @@ def serve_html(path):
     return send_from_directory(os.path.join(PROJECT_DIR, 'login'), 'index.html')
 
 # =====================================================
+# ENDPOINT TEMPORAL PARA CREAR CARPETA EN GOOGLE DRIVE
+# =====================================================
+
+@app.route('/crear-carpeta-drive', methods=['GET'])
+def crear_carpeta_drive():
+    """
+    Endpoint temporal para crear la carpeta en Google Drive.
+    DESPUÉS DE USARLO, ELIMINA ESTE ENDPOINT.
+    """
+    try:
+        from google_drive import google_drive
+        from googleapiclient.errors import HttpError
+        
+        # Crear carpeta
+        folder_metadata = {
+            'name': 'TallerMecanico_Archivos',
+            'mimeType': 'application/vnd.google-apps.folder'
+        }
+        
+        folder = google_drive.service.files().create(
+            body=folder_metadata,
+            fields='id'
+        ).execute()
+        
+        folder_id = folder.get('id')
+        
+        return jsonify({
+            'success': True,
+            'folder_id': folder_id,
+            'url': f'https://drive.google.com/drive/folders/{folder_id}',
+            'message': '✅ Carpeta creada correctamente. Copia el folder_id y actualiza GOOGLE_DRIVE_FOLDER_ID en Render.'
+        })
+        
+    except HttpError as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error de Google Drive: {str(e)}'
+        }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# =====================================================
 # ENDPOINT DE PRUEBA PARA GOOGLE DRIVE
 # =====================================================
 
@@ -593,6 +638,9 @@ if __name__ == '__main__':
     print("="*60)
     print("🧪 Prueba Google Drive:")
     print(f"   • http://localhost:{port}/test-drive")
+    print("="*60)
+    print("📁 Crear carpeta en Drive:")
+    print(f"   • http://localhost:{port}/crear-carpeta-drive")
     print("="*60)
     
     app.run(debug=debug_mode, host='0.0.0.0', port=port, threaded=True)

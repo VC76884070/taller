@@ -1,5 +1,6 @@
 # =====================================================
 # GOOGLE DRIVE - CON OAUTH 2.0 VÍA VARIABLES DE ENTORNO
+# ESTRUCTURA: OT-XXX/{modulo}/{subcarpeta}
 # =====================================================
 
 import os
@@ -132,6 +133,17 @@ class GoogleDriveService:
                     public=True, share_email=None):
         """
         Sube un archivo a Google Drive con reintentos automáticos
+        
+        Args:
+            file_data: bytes o FileStorage
+            filename: nombre del archivo
+            folder_path: ruta completa (ej: 'OT-260701-001/recepcion/fotos')
+            mime_type: tipo MIME
+            public: hacer público
+            share_email: compartir con email
+        
+        Returns:
+            dict: {id, url, web_view_link, filename, folder_path}
         """
         socket.setdefaulttimeout(UPLOAD_TIMEOUT)
         
@@ -216,7 +228,10 @@ class GoogleDriveService:
     # =====================================================
     
     def _get_or_create_folder(self, folder_path):
-        """Obtiene o crea una carpeta por ruta con reintentos"""
+        """
+        Obtiene o crea una carpeta por ruta con reintentos
+        Ejemplo: 'OT-260701-001/recepcion/fotos'
+        """
         last_error = None
         
         for attempt in range(1, MAX_RETRIES + 1):
@@ -227,6 +242,7 @@ class GoogleDriveService:
                     if not folder_name:
                         continue
                     
+                    # Buscar si la carpeta ya existe
                     query = (
                         f"name='{self._escape_string(folder_name)}' and "
                         f"mimeType='application/vnd.google-apps.folder' and "
@@ -244,6 +260,7 @@ class GoogleDriveService:
                     if files:
                         folder_id = files[0]['id']
                     else:
+                        # Crear carpeta
                         folder_metadata = {
                             'name': folder_name,
                             'mimeType': 'application/vnd.google-apps.folder',
@@ -276,6 +293,65 @@ class GoogleDriveService:
         value = value.replace("'", "\\'")
         value = value.replace('"', '\\"')
         return value
+    
+    # =====================================================
+    # FUNCIÓN PARA GENERAR RUTAS (NUEVA ESTRUCTURA)
+    # =====================================================
+    
+    def generate_folder_path(self, modulo, codigo_orden=None, referencia_id=None, 
+                             fecha=None, subcarpeta=None, tipo=None):
+        """
+        Genera una ruta de carpeta consistente para una orden de trabajo.
+        
+        ESTRUCTURA: OT-XXX/{modulo}/{subcarpeta}
+        
+        Args:
+            modulo: 'recepcion', 'diagnostico', 'avance', 'compras'
+            codigo_orden: código de la orden de trabajo (ej: 'OT-260701-001')
+            referencia_id: ID adicional (fallback si no hay codigo_orden)
+            fecha: fecha (opcional)
+            subcarpeta: 'fotos', 'audios', 'comprobantes', 'repuestos'
+            tipo: 'imagen', 'audio', 'pdf' (opcional)
+        
+        Returns:
+            str: ruta de carpetas
+        """
+        # =============================================
+        # ESTRUCTURA: OT-XXX/{modulo}/{subcarpeta}
+        # =============================================
+        path_parts = []
+        
+        # 1. Carpeta de la orden de trabajo
+        if codigo_orden:
+            path_parts.append(codigo_orden)
+        else:
+            # Fallback: usar referencia_id si no hay código de orden
+            if referencia_id:
+                path_parts.append(f"orden_{referencia_id}")
+            else:
+                # Último recurso: usar fecha
+                if not fecha:
+                    fecha = datetime.now()
+                path_parts.append(f"orden_{fecha.strftime('%Y%m%d_%H%M%S')}")
+        
+        # 2. Módulo
+        path_parts.append(modulo)
+        
+        # 3. Subcarpeta (fotos, audios, etc.)
+        if subcarpeta:
+            path_parts.append(subcarpeta)
+        
+        # 4. Tipo (opcional)
+        if tipo:
+            tipo_map = {
+                'imagen': 'imagenes',
+                'audio': 'audios',
+                'pdf': 'documentos',
+                'video': 'videos'
+            }
+            path_parts.append(tipo_map.get(tipo, tipo))
+        
+        return '/'.join(path_parts)
     
     # =====================================================
     # FUNCIONES PARA COMPARTIR
@@ -333,47 +409,6 @@ class GoogleDriveService:
         if not file_id:
             return False
         return self.delete_file(file_id)
-    
-    # =====================================================
-    # FUNCIONES PARA GENERAR RUTAS
-    # =====================================================
-    
-    def generate_folder_path(self, modulo, referencia_id=None, fecha=None, 
-                             subcarpeta=None, tipo=None):
-        """Genera una ruta de carpeta consistente"""
-        if not fecha:
-            fecha = datetime.now()
-        
-        año = fecha.strftime('%Y')
-        mes = fecha.strftime('%m')
-        dia = fecha.strftime('%d')
-        
-        path_parts = [modulo, año, mes, dia]
-        
-        if referencia_id:
-            if isinstance(referencia_id, int):
-                if modulo in ['recepcion', 'diagnostico', 'avance']:
-                    path_parts.append(f"orden_{referencia_id}")
-                elif modulo == 'compras':
-                    path_parts.append(f"compra_{referencia_id}")
-                else:
-                    path_parts.append(f"ref_{referencia_id}")
-            else:
-                path_parts.append(referencia_id)
-        
-        if subcarpeta:
-            path_parts.append(subcarpeta)
-        
-        if tipo:
-            tipo_map = {
-                'imagen': 'imagenes',
-                'audio': 'audios',
-                'pdf': 'documentos',
-                'video': 'videos'
-            }
-            path_parts.append(tipo_map.get(tipo, tipo))
-        
-        return '/'.join(path_parts)
     
     # =====================================================
     # FUNCIONES DE UTILIDAD

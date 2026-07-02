@@ -662,40 +662,37 @@ def jefe_operativo_required(f):
 def upload_foto_drive(current_user):
     """
     Sube una foto a Google Drive
+    ESTRUCTURA: OT-XXX/recepcion/fotos/
     """
     try:
         from google_drive import google_drive
         from datetime import datetime
         
-        # Obtener el archivo
         file = request.files.get('file')
-        
-        # Verificar que el archivo existe
-        if not file:
-            logger.error("❌ No se recibió ningún archivo en la petición")
-            return jsonify({'error': 'No se envió ningún archivo'}), 400
-        
-        # Verificar que el archivo tiene nombre
-        if file.filename == '':
-            logger.error("❌ El archivo no tiene nombre")
-            return jsonify({'error': 'Nombre de archivo vacío'}), 400
-        
-        # Obtener otros parámetros
         carpeta = request.form.get('carpeta', 'recepcion')
         campo = request.form.get('campo', 'general')
-        orden_id = request.form.get('orden_id')
+        codigo_orden = request.form.get('codigo_orden')  # ← NUEVO: código de la orden
+        
+        if not file:
+            return jsonify({'error': 'No se envió el archivo'}), 400
         
         # Generar nombre único
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         user_id = current_user['id']
         filename = f"{campo}_{user_id}_{timestamp}.jpg"
         
-        # Ruta en Google Drive
-        folder_path = f"recepcion/{carpeta}/fotos"
+        # =============================================
+        # NUEVA ESTRUCTURA: OT-XXX/recepcion/fotos
+        # =============================================
+        folder_path = google_drive.generate_folder_path(
+            modulo='recepcion',
+            codigo_orden=codigo_orden,  # ← Pasar el código de la orden
+            subcarpeta='fotos'
+        )
         
-        # Subir a Google Drive - PASAMOS EL ARCHIVO DIRECTAMENTE
+        # Subir a Google Drive
         result = google_drive.upload_file(
-            file_data=file,  # ← Esto es un FileStorage, NO un string
+            file_data=file,
             filename=filename,
             folder_path=folder_path
         )
@@ -711,8 +708,6 @@ def upload_foto_drive(current_user):
         
     except Exception as e:
         logger.error(f"❌ Error subiendo foto: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 
@@ -721,6 +716,7 @@ def upload_foto_drive(current_user):
 def upload_audio_drive(current_user):
     """
     Sube un audio a Google Drive
+    ESTRUCTURA: OT-XXX/recepcion/audios/
     """
     try:
         from google_drive import google_drive
@@ -728,7 +724,7 @@ def upload_audio_drive(current_user):
         
         file = request.files.get('file')
         carpeta = request.form.get('carpeta', 'recepcion')
-        orden_id = request.form.get('orden_id')
+        codigo_orden = request.form.get('codigo_orden')  # ← NUEVO: código de la orden
         
         if not file:
             return jsonify({'error': 'No se envió el archivo'}), 400
@@ -738,8 +734,14 @@ def upload_audio_drive(current_user):
         user_id = current_user['id']
         filename = f"audio_{user_id}_{timestamp}.wav"
         
-        # Ruta en Google Drive
-        folder_path = f"recepcion/{carpeta}/audios"
+        # =============================================
+        # NUEVA ESTRUCTURA: OT-XXX/recepcion/audios
+        # =============================================
+        folder_path = google_drive.generate_folder_path(
+            modulo='recepcion',
+            codigo_orden=codigo_orden,  # ← Pasar el código de la orden
+            subcarpeta='audios'
+        )
         
         # Subir a Google Drive
         result = google_drive.upload_file(
@@ -759,7 +761,7 @@ def upload_audio_drive(current_user):
         })
         
     except Exception as e:
-        logger.error(f"Error subiendo audio: {str(e)}")
+        logger.error(f"❌ Error subiendo audio: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

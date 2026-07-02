@@ -603,6 +603,47 @@ def not_found(error):
 def internal_error(error):
     logger.error(f"Error 500: {error}")
     return jsonify({'error': 'Error interno del servidor'}), 500
+@app.route('/crear-carpeta-directa', methods=['GET'])
+def crear_carpeta_directa():
+    """
+    Endpoint TEMPORAL para crear carpeta en Drive sin depender del FOLDER_ID.
+    DESPUÉS DE USARLO, ELIMINA ESTE ENDPOINT.
+    """
+    try:
+        from google_drive import google_drive
+        from googleapiclient.errors import HttpError
+        
+        # Crear carpeta
+        folder_metadata = {
+            'name': 'TallerMecanico_Archivos',
+            'mimeType': 'application/vnd.google-apps.folder'
+        }
+        
+        # Usar el servicio directamente, sin pasar por upload_file que necesita folder_id
+        folder = google_drive.service.files().create(
+            body=folder_metadata,
+            fields='id'
+        ).execute()
+        
+        folder_id = folder.get('id')
+        
+        return jsonify({
+            'success': True,
+            'folder_id': folder_id,
+            'url': f'https://drive.google.com/drive/folders/{folder_id}',
+            'message': '✅ Carpeta creada correctamente. COPIA este folder_id y actualiza GOOGLE_DRIVE_FOLDER_ID en Render.'
+        })
+        
+    except HttpError as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error de Google Drive: {str(e)}'
+        }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 # =====================================================
 # INICIALIZACIÓN

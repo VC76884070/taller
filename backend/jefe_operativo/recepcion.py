@@ -869,7 +869,7 @@ def iniciar_sesion(current_user):
 def finalizar_sesion(current_user):
     """
     Finaliza una sesión y crea la orden de trabajo
-    Devuelve el código y el ID de la orden para el reporte
+    Primero crea la orden, luego renombra la carpeta, y SOLO DESPUÉS marca la sesión como finalizada
     """
     try:
         data = request.get_json()
@@ -893,6 +893,7 @@ def finalizar_sesion(current_user):
             
             if sesion_db.data:
                 s = sesion_db.data[0]
+                # Si ya está finalizada, solo limpiar
                 if s.get('estado') == 'finalizada':
                     if codigo_sesion in sesiones_activas:
                         del sesiones_activas[codigo_sesion]
@@ -909,8 +910,7 @@ def finalizar_sesion(current_user):
                     'secciones_editando': s.get('secciones_editando', {}),
                     'estado': s['estado'],
                     'fecha_creacion': s['fecha_creacion'],
-                    'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion']),
-                    'folder_id': s.get('folder_id')
+                    'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion'])
                 }
             else:
                 return jsonify({'error': 'Sesión no encontrada'}), 404
@@ -926,20 +926,23 @@ def finalizar_sesion(current_user):
         if secciones_faltantes:
             return jsonify({'error': f'Faltan: {", ".join(secciones_faltantes)}'}), 400
         
-        # Crear orden de trabajo
+        # =============================================
+        # PASO 1: Crear orden de trabajo
+        # =============================================
         resultado = crear_orden_desde_sesion(sesion['datos'], current_user, codigo_sesion, reintentos=3)
         
         if not resultado['success']:
             logger.error(f"❌ Error creando orden: {resultado.get('error')}")
             return jsonify({'error': resultado.get('error', 'Error desconocido')}), 500
         
+        codigo_orden = resultado['codigo']
+        id_orden = resultado['id_orden']
+        
         # =============================================
-        # RENOMBRAR LA CARPETA DE S-XXXXX A OT-XXX
+        # PASO 2: Renombrar la carpeta (S-XXXXX → OT-XXX)
         # =============================================
         try:
             from google_drive import google_drive
-            
-            codigo_orden = resultado['codigo']  # OT-260701-001
             
             # Buscar la carpeta con el nombre de la sesión
             folder_id = google_drive.get_folder_id_by_name(codigo_sesion)
@@ -953,32 +956,37 @@ def finalizar_sesion(current_user):
                 
         except Exception as e:
             logger.error(f"❌ Error renombrando carpeta: {str(e)}")
+            # No fallamos la operación si el renombrado falla
         
-        # Cambiar estado a 'finalizada' en base de datos
+        # =============================================
+        # PASO 3: Eliminar la sesión de la memoria ANTES de actualizar la DB
+        # Esto evita que el polling detecte el cambio prematuramente
+        # =============================================
+        if codigo_sesion in sesiones_activas:
+            del sesiones_activas[codigo_sesion]
+        
+        # =============================================
+        # PASO 4: Actualizar la base de datos a 'finalizada'
+        # =============================================
         supabase.table('sesion_colaborativa') \
             .update({
                 'estado': 'finalizada',
-                'codigo_orden': resultado['codigo']  # ← Guardar código de orden
+                'codigo_orden': codigo_orden
             }) \
             .eq('codigo', codigo_sesion) \
             .execute()
         
-        # Eliminar de la memoria (sesiones_activas)
-        if codigo_sesion in sesiones_activas:
-            del sesiones_activas[codigo_sesion]
-        
-        logger.info(f"✅ Sesión {codigo_sesion} finalizada. Orden: {resultado['codigo']}")
+        logger.info(f"✅ Sesión {codigo_sesion} finalizada. Orden: {codigo_orden}")
         
         return jsonify({
             'success': True,
-            'codigo': resultado['codigo'],
-            'id_orden': resultado['id_orden']
+            'codigo': codigo_orden,
+            'id_orden': id_orden
         }), 200
         
     except Exception as e:
         logger.error(f"Error finalizando: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
 # =====================================================
 # RESTO DE ENDPOINTS (SIN CAMBIOS)
 # =====================================================

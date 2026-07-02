@@ -596,17 +596,16 @@ function validarCompletadoDescripcion() {
 // =====================================================
 // SUBIR FOTO A GOOGLE DRIVE (CON CÓDIGO DE ORDEN)
 // =====================================================
-async function subirFotoGoogleDrive(file, carpeta, campo, codigoOrden) {
+// =====================================================
+// SUBIR FOTO A GOOGLE DRIVE (CON CÓDIGO DE SESIÓN)
+// =====================================================
+async function subirFotoGoogleDrive(file, carpeta, campo) {
     return new Promise(async (resolve, reject) => {
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('carpeta', carpeta || codigoSesion || 'temp');
+        formData.append('carpeta', carpeta || 'recepcion');
         formData.append('campo', campo);
-        formData.append('orden_id', codigoSesion || 'temp');
-        // ← NUEVO: pasar el código de la orden si existe
-        if (codigoOrden) {
-            formData.append('codigo_orden', codigoOrden);
-        }
+        formData.append('codigo_sesion', codigoSesion);  // ← PASAR EL CÓDIGO DE SESIÓN
         
         const url = `${API_URL}/jefe-operativo/upload-foto`;
         const token = localStorage.getItem('furia_token');
@@ -638,19 +637,15 @@ async function subirFotoGoogleDrive(file, carpeta, campo, codigoOrden) {
 }
 
 // =====================================================
-// SUBIR AUDIO A GOOGLE DRIVE (CON CÓDIGO DE ORDEN)
+// SUBIR AUDIO A GOOGLE DRIVE (CON CÓDIGO DE SESIÓN)
 // =====================================================
-async function subirAudioGoogleDrive(audioBlob, carpeta, codigoOrden) {
+async function subirAudioGoogleDrive(audioBlob, carpeta) {
     return new Promise(async (resolve, reject) => {
         const formData = new FormData();
         formData.append('file', audioBlob, 'audio.wav');
-        formData.append('carpeta', carpeta || codigoSesion || 'temp');
-        formData.append('orden_id', codigoSesion || 'temp');
+        formData.append('carpeta', carpeta || 'recepcion');
         formData.append('tipo', 'audio');
-        // ← NUEVO: pasar el código de la orden si existe
-        if (codigoOrden) {
-            formData.append('codigo_orden', codigoOrden);
-        }
+        formData.append('codigo_sesion', codigoSesion);  // ← PASAR EL CÓDIGO DE SESIÓN
         
         const url = `${API_URL}/jefe-operativo/upload-audio`;
         const token = localStorage.getItem('furia_token');

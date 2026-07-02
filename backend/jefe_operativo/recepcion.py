@@ -661,33 +661,46 @@ def jefe_operativo_required(f):
 @jefe_operativo_recepcion_bp.route('/upload-foto', methods=['POST'])
 @jefe_operativo_required
 def upload_foto_drive(current_user):
+    """
+    Sube una foto a Google Drive
+    ESTRUCTURA: S-XXXXX/recepcion/fotos/
+    """
     try:
         from google_drive import google_drive
         from datetime import datetime
         
         file = request.files.get('file')
         campo = request.form.get('campo', 'general')
-        codigo_sesion = request.form.get('codigo_sesion')  # S-XXXXX
+        codigo_sesion = request.form.get('codigo_sesion')  # ← RECIBIR CÓDIGO DE SESIÓN
         
         if not file:
             return jsonify({'error': 'No se envió el archivo'}), 400
         
+        if not codigo_sesion:
+            return jsonify({'error': 'No se recibió el código de sesión'}), 400
+        
+        # Generar nombre único
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         user_id = current_user['id']
         filename = f"{campo}_{user_id}_{timestamp}.jpg"
         
-        # Usar el código de sesión como carpeta principal
+        # =============================================
+        # ESTRUCTURA: S-XXXXX/recepcion/fotos
+        # =============================================
         folder_path = google_drive.generate_folder_path(
             modulo='recepcion',
-            referencia_id=codigo_sesion,  # ← S-XXXXX
+            referencia_id=codigo_sesion,  # ← Usar S-XXXXX
             subcarpeta='fotos'
         )
         
+        # Subir a Google Drive
         result = google_drive.upload_file(
             file_data=file,
             filename=filename,
             folder_path=folder_path
         )
+        
+        logger.info(f"📸 Foto subida: {result['url']}")
         
         return jsonify({
             'success': True,
@@ -706,18 +719,20 @@ def upload_foto_drive(current_user):
 def upload_audio_drive(current_user):
     """
     Sube un audio a Google Drive
-    ESTRUCTURA: OT-XXX/recepcion/audios/
+    ESTRUCTURA: S-XXXXX/recepcion/audios/
     """
     try:
         from google_drive import google_drive
         from datetime import datetime
         
         file = request.files.get('file')
-        codigo_sesion = request.form.get('codigo_sesion')
-        codigo_orden = request.form.get('codigo_orden')
+        codigo_sesion = request.form.get('codigo_sesion')  # ← RECIBIR CÓDIGO DE SESIÓN
         
         if not file:
             return jsonify({'error': 'No se envió el archivo'}), 400
+        
+        if not codigo_sesion:
+            return jsonify({'error': 'No se recibió el código de sesión'}), 400
         
         # Generar nombre único
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -725,13 +740,11 @@ def upload_audio_drive(current_user):
         filename = f"audio_{user_id}_{timestamp}.wav"
         
         # =============================================
-        # USAR EL CÓDIGO DE SESIÓN (S-XXXXX) COMO NOMBRE TEMPORAL
+        # ESTRUCTURA: S-XXXXX/recepcion/audios
         # =============================================
-        nombre_carpeta = codigo_orden or codigo_sesion or f"orden_{timestamp}"
-        
         folder_path = google_drive.generate_folder_path(
             modulo='recepcion',
-            codigo_orden=nombre_carpeta,
+            referencia_id=codigo_sesion,  # ← Usar S-XXXXX
             subcarpeta='audios'
         )
         
@@ -749,8 +762,7 @@ def upload_audio_drive(current_user):
             'success': True,
             'url': result['url'],
             'id': result['id'],
-            'web_view_link': result['web_view_link'],
-            'folder_path': folder_path
+            'web_view_link': result['web_view_link']
         })
         
     except Exception as e:

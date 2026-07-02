@@ -666,6 +666,11 @@ def upload_foto_drive(current_user):
     try:
         from google_drive import google_drive
         from datetime import datetime
+        # === DEBUG: Ver qué está llegando ===
+        logger.info(f"📋 HEADERS: {request.headers}")
+        logger.info(f"📋 FILES: {request.files}")
+        logger.info(f"📋 FORM: {request.form}")
+        # ==================================
         
         file = request.files.get('file')
         carpeta = request.form.get('carpeta', 'recepcion')

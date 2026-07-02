@@ -605,19 +605,20 @@ async function subirFotoGoogleDrive(file, carpeta, campo) {
         formData.append('orden_id', codigoSesion || 'temp');
         
         const url = `${API_URL}/jefe-operativo/upload-foto`;
+        const token = localStorage.getItem('furia_token');
         
         try {
-            const token = localStorage.getItem('furia_token');
-            
-            const response = await fetchWithRetry(url, {
+            const response = await fetch(url, {
                 method: 'POST',
                 body: formData,
                 headers: {
-                    // ⚠️ IMPORTANTE: NO incluyas 'Content-Type' aquí
-                    // El navegador lo establecerá automáticamente con el boundary
                     'Authorization': `Bearer ${token}`
                 }
             });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
             
             const data = await response.json();
             
@@ -627,12 +628,7 @@ async function subirFotoGoogleDrive(file, carpeta, campo) {
                 reject(new Error(data.error || 'Error subiendo foto'));
             }
         } catch (error) {
-            if (error.message === 'Sesión expirada') {
-                mostrarNotificacion('⚠️ Tu sesión expiró. Por favor, inicia sesión nuevamente.', 'warning');
-                reject(new Error('Sesión expirada'));
-            } else {
-                reject(error);
-            }
+            reject(error);
         }
     });
 }
@@ -649,18 +645,20 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
         formData.append('tipo', 'audio');
         
         const url = `${API_URL}/jefe-operativo/upload-audio`;
+        const token = localStorage.getItem('furia_token');
         
         try {
-            const token = localStorage.getItem('furia_token');
-            
-            const response = await fetchWithRetry(url, {
+            const response = await fetch(url, {
                 method: 'POST',
                 body: formData,
                 headers: {
-                    // ⚠️ IMPORTANTE: NO incluyas 'Content-Type' aquí
                     'Authorization': `Bearer ${token}`
                 }
             });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
             
             const data = await response.json();
             
@@ -670,12 +668,7 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
                 reject(new Error(data.error || 'Error subiendo audio'));
             }
         } catch (error) {
-            if (error.message === 'Sesión expirada') {
-                mostrarNotificacion('⚠️ Tu sesión expiró. Por favor, inicia sesión nuevamente.', 'warning');
-                reject(new Error('Sesión expirada'));
-            } else {
-                reject(error);
-            }
+            reject(error);
         }
     });
 }

@@ -83,7 +83,7 @@ def guardar_sesion_en_db(sesion):
         return True
     except Exception as e:
         logger.error(f"Error guardando sesión: {str(e)}")
-        return Falses
+        return False
 
 def cargar_sesiones_activas_db():
     """Carga las sesiones activas desde la base de datos"""

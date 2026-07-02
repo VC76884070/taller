@@ -666,19 +666,24 @@ def upload_foto_drive(current_user):
     try:
         from google_drive import google_drive
         from datetime import datetime
-        # === DEBUG: Ver qué está llegando ===
-        logger.info(f"📋 HEADERS: {request.headers}")
-        logger.info(f"📋 FILES: {request.files}")
-        logger.info(f"📋 FORM: {request.form}")
-        # ==================================
         
+        # Obtener el archivo
         file = request.files.get('file')
+        
+        # Verificar que el archivo existe
+        if not file:
+            logger.error("❌ No se recibió ningún archivo en la petición")
+            return jsonify({'error': 'No se envió ningún archivo'}), 400
+        
+        # Verificar que el archivo tiene nombre
+        if file.filename == '':
+            logger.error("❌ El archivo no tiene nombre")
+            return jsonify({'error': 'Nombre de archivo vacío'}), 400
+        
+        # Obtener otros parámetros
         carpeta = request.form.get('carpeta', 'recepcion')
         campo = request.form.get('campo', 'general')
         orden_id = request.form.get('orden_id')
-        
-        if not file:
-            return jsonify({'error': 'No se envió el archivo'}), 400
         
         # Generar nombre único
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -688,9 +693,9 @@ def upload_foto_drive(current_user):
         # Ruta en Google Drive
         folder_path = f"recepcion/{carpeta}/fotos"
         
-        # Subir a Google Drive
+        # Subir a Google Drive - PASAMOS EL ARCHIVO DIRECTAMENTE
         result = google_drive.upload_file(
-            file_data=file,
+            file_data=file,  # ← Esto es un FileStorage, NO un string
             filename=filename,
             folder_path=folder_path
         )
@@ -705,7 +710,9 @@ def upload_foto_drive(current_user):
         })
         
     except Exception as e:
-        logger.error(f"Error subiendo foto: {str(e)}")
+        logger.error(f"❌ Error subiendo foto: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 

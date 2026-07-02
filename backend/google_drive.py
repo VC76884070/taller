@@ -132,107 +132,87 @@ class GoogleDriveService:
     # =====================================================
     
     def upload_file(self, file_data, filename, folder_path=None, mime_type=None, 
-                    public=True, share_email=None):
-        """
-        Sube un archivo a Google Drive con reintentos automáticos
-        
-        Args:
-            file_data: bytes, file object o ruta de archivo
-            filename: nombre del archivo
-            folder_path: ruta de carpetas
-            mime_type: tipo MIME (opcional)
-            public: si es True, el archivo será público
-            share_email: email para compartir específicamente (opcional)
-        
-        Returns:
-            dict: { id, url, web_view_link, filename, folder_path }
-        """
-        # Configurar timeout de socket
-        socket.setdefaulttimeout(UPLOAD_TIMEOUT)
-        
-        last_error = None
-        
-        for attempt in range(1, MAX_RETRIES + 1):
-            try:
-                logger.info(f"📤 Intento {attempt}/{MAX_RETRIES} - Subiendo {filename}")
-                
-                # Determinar MIME type
-                if not mime_type:
-                    mime_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-                
-                # Crear metadata
-                file_metadata = {
-                    'name': filename,
-                    'parents': [self.folder_id]
-                }
-                
-                # Si hay carpeta específica, crear o usar la ruta
-                if folder_path:
-                    folder_id = self._get_or_create_folder(folder_path)
-                    file_metadata['parents'] = [folder_id]
-                
-                # =============================================
-                # CORRECCIÓN: Manejar diferentes tipos de entrada
-                # =============================================
-                if isinstance(file_data, bytes):
-                    media = MediaIoBaseUpload(io.BytesIO(file_data), mimetype=mime_type, resumable=True)
-                elif hasattr(file_data, 'read'):
-                    # Es un objeto de archivo (FileStorage de Flask)
-                    file_data.seek(0)
-                    media = MediaIoBaseUpload(file_data, mimetype=mime_type, resumable=True)
-                elif isinstance(file_data, str):
-                    # Es una ruta de archivo o URL
-                    with open(file_data, 'rb') as f:
-                        file_content = f.read()
-                    media = MediaIoBaseUpload(io.BytesIO(file_content), mimetype=mime_type, resumable=True)
-                else:
-                    raise ValueError(f"Tipo de archivo no soportado: {type(file_data)}")
-                
-                # Subir archivo
-                file = self.service.files().create(
-                    body=file_metadata,
-                    media_body=media,
-                    fields='id, webViewLink, name, mimeType, parents'
-                ).execute()
-                
-                file_id = file.get('id')
-                
-                # Hacer público si se solicita
-                if public:
-                    self._set_file_public(file_id)
-                
-                # Compartir con email específico si se solicita
-                if share_email:
-                    self._share_file_with_email(file_id, share_email)
-                
-                # Construir URL de visualización
-                url = f"https://drive.google.com/uc?export=view&id={file_id}"
-                
-                logger.info(f"✅ Archivo subido: {filename} -> {file_id}")
-                
-                return {
-                    'id': file_id,
-                    'url': url,
-                    'web_view_link': file.get('webViewLink'),
-                    'filename': filename,
-                    'folder_path': folder_path,
-                    'mime_type': mime_type
-                }
-                
-            except (HttpError, socket.timeout, ConnectionError, TimeoutError) as e:
-                last_error = e
-                logger.warning(f"⚠️ Intento {attempt} falló: {str(e)}")
-                
-                if attempt < MAX_RETRIES:
-                    wait_time = RETRY_DELAY * attempt
-                    logger.info(f"⏳ Esperando {wait_time}s antes de reintentar...")
-                    time.sleep(wait_time)
-                else:
-                    logger.error(f"❌ Todos los intentos fallaron para {filename}")
-                    raise
-        
-        # Si llegamos aquí, todos los intentos fallaron
-        raise last_error or Exception("Error desconocido al subir archivo")
+                public=True, share_email=None):
+    """
+    Sube un archivo a Google Drive con reintentos automáticos
+    """
+    socket.setdefaulttimeout(UPLOAD_TIMEOUT)
+    
+    last_error = None
+    
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            logger.info(f"📤 Intento {attempt}/{MAX_RETRIES} - Subiendo {filename}")
+            
+            if not mime_type:
+                mime_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+            
+            file_metadata = {
+                'name': filename,
+                'parents': [self.folder_id]
+            }
+            
+            if folder_path:
+                folder_id = self._get_or_create_folder(folder_path)
+                file_metadata['parents'] = [folder_id]
+            
+            # =============================================
+            # MANEJAR FileStorage DE FLASK
+            # =============================================
+            if hasattr(file_data, 'read'):
+                # Es un FileStorage de Flask
+                file_data.seek(0)
+                media = MediaIoBaseUpload(file_data, mimetype=mime_type, resumable=True)
+            elif isinstance(file_data, bytes):
+                media = MediaIoBaseUpload(io.BytesIO(file_data), mimetype=mime_type, resumable=True)
+            elif isinstance(file_data, str):
+                with open(file_data, 'rb') as f:
+                    file_content = f.read()
+                media = MediaIoBaseUpload(io.BytesIO(file_content), mimetype=mime_type, resumable=True)
+            else:
+                raise ValueError(f"Tipo de archivo no soportado: {type(file_data)}")
+            
+            # Subir archivo
+            file = self.service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id, webViewLink, name, mimeType, parents'
+            ).execute()
+            
+            file_id = file.get('id')
+            
+            if public:
+                self._set_file_public(file_id)
+            
+            if share_email:
+                self._share_file_with_email(file_id, share_email)
+            
+            url = f"https://drive.google.com/uc?export=view&id={file_id}"
+            
+            logger.info(f"✅ Archivo subido: {filename} -> {file_id}")
+            
+            return {
+                'id': file_id,
+                'url': url,
+                'web_view_link': file.get('webViewLink'),
+                'filename': filename,
+                'folder_path': folder_path,
+                'mime_type': mime_type
+            }
+            
+        except (HttpError, socket.timeout, ConnectionError, TimeoutError) as e:
+            last_error = e
+            logger.warning(f"⚠️ Intento {attempt} falló: {str(e)}")
+            
+            if attempt < MAX_RETRIES:
+                wait_time = RETRY_DELAY * attempt
+                logger.info(f"⏳ Esperando {wait_time}s antes de reintentar...")
+                time.sleep(wait_time)
+            else:
+                logger.error(f"❌ Todos los intentos fallaron para {filename}")
+                raise
+    
+    raise last_error or Exception("Error desconocido al subir archivo")
     
     # =====================================================
     # FUNCIONES PARA MANEJAR CARPETAS

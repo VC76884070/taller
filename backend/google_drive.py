@@ -5,6 +5,7 @@
 
 import os
 import io
+import pickle
 import mimetypes
 import time
 import socket
@@ -12,6 +13,7 @@ import ssl
 from datetime import datetime
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from googleapiclient.errors import HttpError
@@ -352,6 +354,67 @@ class GoogleDriveService:
             path_parts.append(tipo_map.get(tipo, tipo))
         
         return '/'.join(path_parts)
+    
+    # =====================================================
+    # FUNCIÓN PARA RENOMBRAR CARPETAS
+    # =====================================================
+    
+    def rename_folder(self, folder_id, new_name):
+        """
+        Renombra una carpeta en Google Drive
+        
+        Args:
+            folder_id: ID de la carpeta
+            new_name: Nuevo nombre
+        
+        Returns:
+            bool: True si se renombró correctamente
+        """
+        try:
+            folder_metadata = {
+                'name': new_name
+            }
+            self.service.files().update(
+                fileId=folder_id,
+                body=folder_metadata,
+                fields='id, name'
+            ).execute()
+            logger.info(f"📁 Carpeta renombrada: {folder_id} -> {new_name}")
+            return True
+        except HttpError as e:
+            logger.error(f"❌ Error renombrando carpeta {folder_id}: {str(e)}")
+            return False
+    
+    def get_folder_id_by_name(self, folder_name, parent_id=None):
+        """
+        Busca una carpeta por nombre
+        
+        Args:
+            folder_name: nombre de la carpeta
+            parent_id: ID de la carpeta padre (opcional)
+        
+        Returns:
+            str: ID de la carpeta o None si no se encuentra
+        """
+        try:
+            if parent_id:
+                query = f"name='{self._escape_string(folder_name)}' and mimeType='application/vnd.google-apps.folder' and '{parent_id}' in parents and trashed=false"
+            else:
+                query = f"name='{self._escape_string(folder_name)}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            
+            results = self.service.files().list(
+                q=query,
+                fields="files(id, name)",
+                pageSize=1
+            ).execute()
+            
+            files = results.get('files', [])
+            if files:
+                return files[0]['id']
+            return None
+        except HttpError as e:
+            logger.error(f"❌ Error buscando carpeta: {str(e)}")
+            return None
     
     # =====================================================
     # FUNCIONES PARA COMPARTIR

@@ -1,6 +1,7 @@
 # =====================================================
 # RECEPCION.PY - JEFE OPERATIVO
 # VERSIÓN CON GOOGLE DRIVE (SIN CLOUDINARY)
+# ESTRUCTURA: OT-XXX/recepcion/fotos y OT-XXX/recepcion/audios
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -60,7 +61,8 @@ def guardar_sesion_en_db(sesion):
                     'secciones_completadas': sesion.get('secciones_completadas', {}),
                     'secciones_editando': sesion.get('secciones_editando', {}),
                     'estado': sesion.get('estado', 'activa'),
-                    'ultima_actividad': datetime.datetime.now().isoformat()
+                    'ultima_actividad': datetime.datetime.now().isoformat(),
+                    'folder_id': sesion.get('folder_id')  # ← NUEVO: guardar ID de carpeta
                 }) \
                 .eq('codigo', sesion['codigo']) \
                 .execute()
@@ -76,7 +78,8 @@ def guardar_sesion_en_db(sesion):
                     'secciones_completadas': sesion.get('secciones_completadas', {}),
                     'secciones_editando': sesion.get('secciones_editando', {}),
                     'estado': sesion.get('estado', 'activa'),
-                    'fecha_creacion': sesion.get('fecha_creacion', datetime.datetime.now().isoformat())
+                    'fecha_creacion': sesion.get('fecha_creacion', datetime.datetime.now().isoformat()),
+                    'folder_id': sesion.get('folder_id')  # ← NUEVO
                 }) \
                 .execute()
         return True
@@ -114,7 +117,8 @@ def cargar_sesiones_activas_db():
                 'secciones_editando': s.get('secciones_editando', {}),
                 'estado': s['estado'],
                 'fecha_creacion': s['fecha_creacion'],
-                'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion'])
+                'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion']),
+                'folder_id': s.get('folder_id')  # ← NUEVO
             }
         logger.info(f"📋 Cargadas {len(sesiones)} sesiones activas")
         return sesiones
@@ -654,7 +658,7 @@ def jefe_operativo_required(f):
     return decorated_function
 
 # =====================================================
-# ENDPOINTS PARA GOOGLE DRIVE
+# ENDPOINTS PARA GOOGLE DRIVE (CON NUEVA ESTRUCTURA)
 # =====================================================
 
 @jefe_operativo_recepcion_bp.route('/upload-foto', methods=['POST'])
@@ -669,9 +673,9 @@ def upload_foto_drive(current_user):
         from datetime import datetime
         
         file = request.files.get('file')
-        carpeta = request.form.get('carpeta', 'recepcion')
         campo = request.form.get('campo', 'general')
-        codigo_orden = request.form.get('codigo_orden')  # ← NUEVO: código de la orden
+        codigo_sesion = request.form.get('codigo_sesion')  # ← Código de sesión (S-XXXXX)
+        codigo_orden = request.form.get('codigo_orden')    # ← Código de orden (OT-XXX)
         
         if not file:
             return jsonify({'error': 'No se envió el archivo'}), 400
@@ -682,11 +686,13 @@ def upload_foto_drive(current_user):
         filename = f"{campo}_{user_id}_{timestamp}.jpg"
         
         # =============================================
-        # NUEVA ESTRUCTURA: OT-XXX/recepcion/fotos
+        # USAR EL CÓDIGO DE SESIÓN (S-XXXXX) COMO NOMBRE TEMPORAL
         # =============================================
+        nombre_carpeta = codigo_orden or codigo_sesion or f"orden_{timestamp}"
+        
         folder_path = google_drive.generate_folder_path(
             modulo='recepcion',
-            codigo_orden=codigo_orden,  # ← Pasar el código de la orden
+            codigo_orden=nombre_carpeta,
             subcarpeta='fotos'
         )
         
@@ -703,7 +709,8 @@ def upload_foto_drive(current_user):
             'success': True,
             'url': result['url'],
             'id': result['id'],
-            'web_view_link': result['web_view_link']
+            'web_view_link': result['web_view_link'],
+            'folder_path': folder_path
         })
         
     except Exception as e:
@@ -723,8 +730,8 @@ def upload_audio_drive(current_user):
         from datetime import datetime
         
         file = request.files.get('file')
-        carpeta = request.form.get('carpeta', 'recepcion')
-        codigo_orden = request.form.get('codigo_orden')  # ← NUEVO: código de la orden
+        codigo_sesion = request.form.get('codigo_sesion')
+        codigo_orden = request.form.get('codigo_orden')
         
         if not file:
             return jsonify({'error': 'No se envió el archivo'}), 400
@@ -735,11 +742,13 @@ def upload_audio_drive(current_user):
         filename = f"audio_{user_id}_{timestamp}.wav"
         
         # =============================================
-        # NUEVA ESTRUCTURA: OT-XXX/recepcion/audios
+        # USAR EL CÓDIGO DE SESIÓN (S-XXXXX) COMO NOMBRE TEMPORAL
         # =============================================
+        nombre_carpeta = codigo_orden or codigo_sesion or f"orden_{timestamp}"
+        
         folder_path = google_drive.generate_folder_path(
             modulo='recepcion',
-            codigo_orden=codigo_orden,  # ← Pasar el código de la orden
+            codigo_orden=nombre_carpeta,
             subcarpeta='audios'
         )
         
@@ -757,7 +766,8 @@ def upload_audio_drive(current_user):
             'success': True,
             'url': result['url'],
             'id': result['id'],
-            'web_view_link': result['web_view_link']
+            'web_view_link': result['web_view_link'],
+            'folder_path': folder_path
         })
         
     except Exception as e:
@@ -765,38 +775,52 @@ def upload_audio_drive(current_user):
         return jsonify({'error': str(e)}), 500
 
 
-@jefe_operativo_recepcion_bp.route('/eliminar-archivo-drive', methods=['DELETE'])
+@jefe_operativo_recepcion_bp.route('/renombrar-carpeta', methods=['POST'])
 @jefe_operativo_required
-def eliminar_archivo_drive(current_user):
+def renombrar_carpeta_drive(current_user):
     """
-    Elimina un archivo de Google Drive usando su URL
+    Renombra una carpeta en Google Drive
+    Usado para cambiar de S-XXXXX a OT-XXX
     """
     try:
         from google_drive import google_drive
         
         data = request.get_json()
-        url = data.get('url')
+        nombre_actual = data.get('nombre_actual')
+        nombre_nuevo = data.get('nombre_nuevo')
         
-        if not url:
-            return jsonify({'error': 'URL requerida'}), 400
+        if not nombre_actual or not nombre_nuevo:
+            return jsonify({'error': 'Se requieren nombre_actual y nombre_nuevo'}), 400
         
-        file_id = extract_google_drive_id(url)
-        if not file_id:
-            return jsonify({'error': 'No se pudo extraer el ID de la URL'}), 400
+        # Buscar la carpeta con el nombre actual
+        folder_id = google_drive.get_folder_id_by_name(nombre_actual)
         
-        result = google_drive.delete_file(file_id)
+        if not folder_id:
+            return jsonify({
+                'success': False,
+                'error': f'No se encontró la carpeta: {nombre_actual}'
+            }), 404
         
-        if result:
-            return jsonify({'success': True})
+        # Renombrar
+        resultado = google_drive.rename_folder(folder_id, nombre_nuevo)
+        
+        if resultado:
+            return jsonify({
+                'success': True,
+                'message': f'Carpeta renombrada: {nombre_actual} -> {nombre_nuevo}'
+            })
         else:
-            return jsonify({'error': 'Error eliminando archivo'}), 500
-            
+            return jsonify({
+                'success': False,
+                'error': 'Error al renombrar la carpeta'
+            }), 500
+        
     except Exception as e:
-        logger.error(f"Error eliminando archivo: {str(e)}")
+        logger.error(f"❌ Error renombrando carpeta: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# ENDPOINTS DE SESIONES
+# ENDPOINTS DE SESIONES (MODIFICADOS)
 # =====================================================
 
 @jefe_operativo_recepcion_bp.route('/iniciar-sesion', methods=['POST'])
@@ -826,7 +850,8 @@ def iniciar_sesion(current_user):
             'secciones_editando': {},
             'estado': 'activa',
             'fecha_creacion': datetime.datetime.now().isoformat(),
-            'ultima_actividad': datetime.datetime.now().isoformat()
+            'ultima_actividad': datetime.datetime.now().isoformat(),
+            'folder_id': None  # ← Se guardará cuando se cree la carpeta
         }
         
         guardar_sesion_en_db(sesion)
@@ -839,6 +864,125 @@ def iniciar_sesion(current_user):
         return jsonify({'error': str(e)}), 500
 
 
+@jefe_operativo_recepcion_bp.route('/finalizar-sesion', methods=['POST'])
+@jefe_operativo_required
+def finalizar_sesion(current_user):
+    """
+    Finaliza una sesión y crea la orden de trabajo
+    Devuelve el código y el ID de la orden para el reporte
+    """
+    try:
+        data = request.get_json()
+        codigo_sesion = data.get('codigo')
+        datos_directos = data.get('datos')
+        
+        logger.info(f"📝 Finalizando sesión: {codigo_sesion}")
+        
+        if not codigo_sesion:
+            return jsonify({'error': 'Código requerido'}), 400
+        
+        # Buscar en memoria o base de datos
+        sesion = None
+        if codigo_sesion in sesiones_activas:
+            sesion = sesiones_activas[codigo_sesion]
+        else:
+            sesion_db = supabase.table('sesion_colaborativa') \
+                .select('*') \
+                .eq('codigo', codigo_sesion) \
+                .execute()
+            
+            if sesion_db.data:
+                s = sesion_db.data[0]
+                if s.get('estado') == 'finalizada':
+                    if codigo_sesion in sesiones_activas:
+                        del sesiones_activas[codigo_sesion]
+                    return jsonify({'error': 'La sesión ya fue finalizada'}), 400
+                
+                sesion = {
+                    'codigo': s['codigo'],
+                    'creador': s['creador_id'],
+                    'creador_nombre': s['creador_nombre'],
+                    'colaboradores': s['colaboradores_ids'],
+                    'colaboradores_nombres': s['colaboradores_nombres'],
+                    'datos': s['datos'],
+                    'secciones_completadas': s['secciones_completadas'],
+                    'secciones_editando': s.get('secciones_editando', {}),
+                    'estado': s['estado'],
+                    'fecha_creacion': s['fecha_creacion'],
+                    'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion']),
+                    'folder_id': s.get('folder_id')
+                }
+            else:
+                return jsonify({'error': 'Sesión no encontrada'}), 404
+        
+        if sesion.get('estado') != 'activa':
+            return jsonify({'error': 'La sesión no está activa'}), 400
+        
+        if datos_directos:
+            sesion['datos'] = datos_directos
+        
+        # Validar secciones completadas
+        secciones_faltantes = [s for s, c in sesion['secciones_completadas'].items() if not c]
+        if secciones_faltantes:
+            return jsonify({'error': f'Faltan: {", ".join(secciones_faltantes)}'}), 400
+        
+        # Crear orden de trabajo
+        resultado = crear_orden_desde_sesion(sesion['datos'], current_user, codigo_sesion, reintentos=3)
+        
+        if not resultado['success']:
+            logger.error(f"❌ Error creando orden: {resultado.get('error')}")
+            return jsonify({'error': resultado.get('error', 'Error desconocido')}), 500
+        
+        # =============================================
+        # RENOMBRAR LA CARPETA DE S-XXXXX A OT-XXX
+        # =============================================
+        try:
+            from google_drive import google_drive
+            
+            codigo_orden = resultado['codigo']  # OT-260701-001
+            
+            # Buscar la carpeta con el nombre de la sesión
+            folder_id = google_drive.get_folder_id_by_name(codigo_sesion)
+            
+            if folder_id:
+                # Renombrar a OT-XXX
+                google_drive.rename_folder(folder_id, codigo_orden)
+                logger.info(f"📁 Carpeta renombrada: {codigo_sesion} -> {codigo_orden}")
+            else:
+                logger.warning(f"⚠️ No se encontró la carpeta para renombrar: {codigo_sesion}")
+                
+        except Exception as e:
+            logger.error(f"❌ Error renombrando carpeta: {str(e)}")
+        
+        # Cambiar estado a 'finalizada' en base de datos
+        supabase.table('sesion_colaborativa') \
+            .update({
+                'estado': 'finalizada',
+                'codigo_orden': resultado['codigo']  # ← Guardar código de orden
+            }) \
+            .eq('codigo', codigo_sesion) \
+            .execute()
+        
+        # Eliminar de la memoria (sesiones_activas)
+        if codigo_sesion in sesiones_activas:
+            del sesiones_activas[codigo_sesion]
+        
+        logger.info(f"✅ Sesión {codigo_sesion} finalizada. Orden: {resultado['codigo']}")
+        
+        return jsonify({
+            'success': True,
+            'codigo': resultado['codigo'],
+            'id_orden': resultado['id_orden']
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error finalizando: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# =====================================================
+# RESTO DE ENDPOINTS (SIN CAMBIOS)
+# =====================================================
+
 @jefe_operativo_recepcion_bp.route('/unirse-sesion', methods=['POST'])
 @jefe_operativo_required
 def unirse_sesion(current_user):
@@ -850,7 +994,6 @@ def unirse_sesion(current_user):
         if not codigo_sesion:
             return jsonify({'error': 'Código requerido'}), 400
         
-        # Buscar en memoria o base de datos
         if codigo_sesion not in sesiones_activas:
             sesion_db = supabase.table('sesion_colaborativa') \
                 .select('*') \
@@ -1026,98 +1169,6 @@ def obtener_sesion(current_user, codigo):
         return jsonify({'error': str(e)}), 500
 
 
-@jefe_operativo_recepcion_bp.route('/finalizar-sesion', methods=['POST'])
-@jefe_operativo_required
-def finalizar_sesion(current_user):
-    """
-    Finaliza una sesión y crea la orden de trabajo
-    Devuelve el código y el ID de la orden para el reporte
-    """
-    try:
-        data = request.get_json()
-        codigo_sesion = data.get('codigo')
-        datos_directos = data.get('datos')
-        
-        logger.info(f"📝 Finalizando sesión: {codigo_sesion}")
-        
-        if not codigo_sesion:
-            return jsonify({'error': 'Código requerido'}), 400
-        
-        # Buscar en memoria o base de datos
-        sesion = None
-        if codigo_sesion in sesiones_activas:
-            sesion = sesiones_activas[codigo_sesion]
-        else:
-            sesion_db = supabase.table('sesion_colaborativa') \
-                .select('*') \
-                .eq('codigo', codigo_sesion) \
-                .execute()
-            
-            if sesion_db.data:
-                s = sesion_db.data[0]
-                # Si ya está finalizada, solo limpiar
-                if s.get('estado') == 'finalizada':
-                    if codigo_sesion in sesiones_activas:
-                        del sesiones_activas[codigo_sesion]
-                    return jsonify({'error': 'La sesión ya fue finalizada'}), 400
-                
-                sesion = {
-                    'codigo': s['codigo'],
-                    'creador': s['creador_id'],
-                    'creador_nombre': s['creador_nombre'],
-                    'colaboradores': s['colaboradores_ids'],
-                    'colaboradores_nombres': s['colaboradores_nombres'],
-                    'datos': s['datos'],
-                    'secciones_completadas': s['secciones_completadas'],
-                    'secciones_editando': s.get('secciones_editando', {}),
-                    'estado': s['estado'],
-                    'fecha_creacion': s['fecha_creacion'],
-                    'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion'])
-                }
-            else:
-                return jsonify({'error': 'Sesión no encontrada'}), 404
-        
-        if sesion.get('estado') != 'activa':
-            return jsonify({'error': 'La sesión no está activa'}), 400
-        
-        if datos_directos:
-            sesion['datos'] = datos_directos
-        
-        # Validar secciones completadas
-        secciones_faltantes = [s for s, c in sesion['secciones_completadas'].items() if not c]
-        if secciones_faltantes:
-            return jsonify({'error': f'Faltan: {", ".join(secciones_faltantes)}'}), 400
-        
-        # Crear orden de trabajo
-        resultado = crear_orden_desde_sesion(sesion['datos'], current_user, codigo_sesion, reintentos=3)
-        
-        if not resultado['success']:
-            logger.error(f"❌ Error creando orden: {resultado.get('error')}")
-            return jsonify({'error': resultado.get('error', 'Error desconocido')}), 500
-        
-        # Cambiar estado a 'finalizada' en base de datos
-        supabase.table('sesion_colaborativa') \
-            .update({'estado': 'finalizada'}) \
-            .eq('codigo', codigo_sesion) \
-            .execute()
-        
-        # Eliminar de la memoria (sesiones_activas)
-        if codigo_sesion in sesiones_activas:
-            del sesiones_activas[codigo_sesion]
-        
-        logger.info(f"✅ Sesión {codigo_sesion} finalizada y eliminada de activas. Orden: {resultado['codigo']}")
-        
-        return jsonify({
-            'success': True,
-            'codigo': resultado['codigo'],
-            'id_orden': resultado['id_orden']
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error finalizando: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
 @jefe_operativo_recepcion_bp.route('/verificar-placa/<placa>', methods=['GET'])
 @jefe_operativo_required
 def verificar_placa(current_user, placa):
@@ -1257,10 +1308,7 @@ def listar_recepciones(current_user):
 @jefe_operativo_recepcion_bp.route('/detalle-recepcion/<int:id_orden>', methods=['GET'])
 @jefe_operativo_required
 def detalle_recepcion(current_user, id_orden):
-    """
-    Obtiene el detalle completo de una recepción
-    Usado para el reporte de impresión
-    """
+    """Obtiene el detalle completo de una recepción"""
     try:
         detalle = obtener_detalle_completo_orden(id_orden)
         
@@ -1402,17 +1450,13 @@ def obtener_coordenadas_taller(current_user):
 @jefe_operativo_recepcion_bp.route('/obtener-reporte/<int:id_orden>', methods=['GET'])
 @jefe_operativo_required
 def obtener_reporte(current_user, id_orden):
-    """
-    Endpoint específico para obtener los datos del reporte
-    Retorna todos los datos necesarios para el reporte de impresión
-    """
+    """Obtiene los datos del reporte"""
     try:
         detalle = obtener_detalle_completo_orden(id_orden)
         
         if not detalle:
             return jsonify({'error': 'Orden no encontrada'}), 404
         
-        # Formatear datos para el reporte
         reporte_data = {
             'success': True,
             'orden': {

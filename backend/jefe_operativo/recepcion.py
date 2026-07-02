@@ -661,53 +661,39 @@ def jefe_operativo_required(f):
 @jefe_operativo_recepcion_bp.route('/upload-foto', methods=['POST'])
 @jefe_operativo_required
 def upload_foto_drive(current_user):
-    """
-    Sube una foto a Google Drive
-    ESTRUCTURA: OT-XXX/recepcion/fotos/
-    """
     try:
         from google_drive import google_drive
         from datetime import datetime
         
         file = request.files.get('file')
         campo = request.form.get('campo', 'general')
-        codigo_sesion = request.form.get('codigo_sesion')  # ← Código de sesión (S-XXXXX)
-        codigo_orden = request.form.get('codigo_orden')    # ← Código de orden (OT-XXX)
+        codigo_sesion = request.form.get('codigo_sesion')  # S-XXXXX
         
         if not file:
             return jsonify({'error': 'No se envió el archivo'}), 400
         
-        # Generar nombre único
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         user_id = current_user['id']
         filename = f"{campo}_{user_id}_{timestamp}.jpg"
         
-        # =============================================
-        # USAR EL CÓDIGO DE SESIÓN (S-XXXXX) COMO NOMBRE TEMPORAL
-        # =============================================
-        nombre_carpeta = codigo_orden or codigo_sesion or f"orden_{timestamp}"
-        
+        # Usar el código de sesión como carpeta principal
         folder_path = google_drive.generate_folder_path(
             modulo='recepcion',
-            codigo_orden=nombre_carpeta,
+            referencia_id=codigo_sesion,  # ← S-XXXXX
             subcarpeta='fotos'
         )
         
-        # Subir a Google Drive
         result = google_drive.upload_file(
             file_data=file,
             filename=filename,
             folder_path=folder_path
         )
         
-        logger.info(f"📸 Foto subida: {result['url']}")
-        
         return jsonify({
             'success': True,
             'url': result['url'],
             'id': result['id'],
-            'web_view_link': result['web_view_link'],
-            'folder_path': folder_path
+            'web_view_link': result['web_view_link']
         })
         
     except Exception as e:
@@ -864,7 +850,6 @@ def iniciar_sesion(current_user):
 def finalizar_sesion(current_user):
     """
     Finaliza una sesión y crea la orden de trabajo
-    Primero crea la orden, luego renombra la carpeta, y SOLO DESPUÉS marca la sesión como finalizada
     """
     try:
         data = request.get_json()
@@ -888,7 +873,6 @@ def finalizar_sesion(current_user):
             
             if sesion_db.data:
                 s = sesion_db.data[0]
-                # Si ya está finalizada, solo limpiar
                 if s.get('estado') == 'finalizada':
                     if codigo_sesion in sesiones_activas:
                         del sesiones_activas[codigo_sesion]
@@ -934,12 +918,12 @@ def finalizar_sesion(current_user):
         id_orden = resultado['id_orden']
         
         # =============================================
-        # PASO 2: Renombrar la carpeta (S-XXXXX → OT-XXX)
+        # PASO 2: Renombrar la carpeta de S-XXXXX a OT-XXX
         # =============================================
         try:
             from google_drive import google_drive
             
-            # Buscar la carpeta con el nombre de la sesión
+            # Buscar la carpeta con el nombre de la sesión (S-XXXXX)
             folder_id = google_drive.get_folder_id_by_name(codigo_sesion)
             
             if folder_id:
@@ -954,8 +938,7 @@ def finalizar_sesion(current_user):
             # No fallamos la operación si el renombrado falla
         
         # =============================================
-        # PASO 3: Eliminar la sesión de la memoria ANTES de actualizar la DB
-        # Esto evita que el polling detecte el cambio prematuramente
+        # PASO 3: Eliminar la sesión de la memoria
         # =============================================
         if codigo_sesion in sesiones_activas:
             del sesiones_activas[codigo_sesion]
@@ -965,7 +948,7 @@ def finalizar_sesion(current_user):
         # =============================================
         supabase.table('sesion_colaborativa') \
             .update({
-                'estado': 'finalizada',
+                'estado': 'finalizada'
             }) \
             .eq('codigo', codigo_sesion) \
             .execute()

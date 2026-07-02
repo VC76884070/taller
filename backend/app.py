@@ -613,7 +613,7 @@ def internal_error(error):
     return jsonify({'error': 'Error interno del servidor'}), 500
 
 # =====================================================
-# INICIALIZACIÓN
+# INICIALIZACIÓN intento 4
 # =====================================================
 
 if __name__ == '__main__':

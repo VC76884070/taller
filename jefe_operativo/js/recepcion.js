@@ -594,15 +594,19 @@ function validarCompletadoDescripcion() {
 }
 
 // =====================================================
-// SUBIR FOTO A GOOGLE DRIVE CON REINTENTOS (CORREGIDO)
+// SUBIR FOTO A GOOGLE DRIVE (CON CÓDIGO DE ORDEN)
 // =====================================================
-async function subirFotoGoogleDrive(file, carpeta, campo) {
+async function subirFotoGoogleDrive(file, carpeta, campo, codigoOrden) {
     return new Promise(async (resolve, reject) => {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('carpeta', carpeta || codigoSesion || 'temp');
         formData.append('campo', campo);
         formData.append('orden_id', codigoSesion || 'temp');
+        // ← NUEVO: pasar el código de la orden si existe
+        if (codigoOrden) {
+            formData.append('codigo_orden', codigoOrden);
+        }
         
         const url = `${API_URL}/jefe-operativo/upload-foto`;
         const token = localStorage.getItem('furia_token');
@@ -634,15 +638,19 @@ async function subirFotoGoogleDrive(file, carpeta, campo) {
 }
 
 // =====================================================
-// SUBIR AUDIO A GOOGLE DRIVE CON REINTENTOS (CORREGIDO)
+// SUBIR AUDIO A GOOGLE DRIVE (CON CÓDIGO DE ORDEN)
 // =====================================================
-async function subirAudioGoogleDrive(audioBlob, carpeta) {
+async function subirAudioGoogleDrive(audioBlob, carpeta, codigoOrden) {
     return new Promise(async (resolve, reject) => {
         const formData = new FormData();
         formData.append('file', audioBlob, 'audio.wav');
         formData.append('carpeta', carpeta || codigoSesion || 'temp');
         formData.append('orden_id', codigoSesion || 'temp');
         formData.append('tipo', 'audio');
+        // ← NUEVO: pasar el código de la orden si existe
+        if (codigoOrden) {
+            formData.append('codigo_orden', codigoOrden);
+        }
         
         const url = `${API_URL}/jefe-operativo/upload-audio`;
         const token = localStorage.getItem('furia_token');
@@ -672,9 +680,8 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
         }
     });
 }
-
 // =====================================================
-// PROCESAR FOTO CON COMPRESIÓN
+// PROCESAR FOTO (MODIFICADO PARA PASAR CÓDIGO DE ORDEN)
 // =====================================================
 async function procesarFoto(input, foto) {
     const file = input.files[0];
@@ -736,7 +743,21 @@ async function procesarFoto(input, foto) {
         
         mostrarNotificacion(`📤 Subiendo ${foto.label} a Google Drive...`, 'info');
         
-        const url = await subirFotoGoogleDrive(fileToUpload, codigoSesion || 'temp', foto.campo);
+        // =============================================
+        // OBTENER CÓDIGO DE LA ORDEN (si existe)
+        // =============================================
+        let codigoOrden = null;
+        // Si la sesión tiene datos de la orden finalizada, usar el código
+        if (sesionActual && sesionActual.codigo_orden) {
+            codigoOrden = sesionActual.codigo_orden;
+        }
+        // También podemos obtenerlo del localStorage si se guardó
+        const codigoOrdenGuardado = localStorage.getItem('codigo_orden_actual');
+        if (codigoOrdenGuardado) {
+            codigoOrden = codigoOrdenGuardado;
+        }
+        
+        const url = await subirFotoGoogleDrive(fileToUpload, codigoSesion || 'temp', foto.campo, codigoOrden);
         
         if (preview) {
             const objectUrl = URL.createObjectURL(fileToUpload);

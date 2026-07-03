@@ -2178,7 +2178,7 @@ async function cargarDatosOrdenCompleta(idOrden) {
 }
 
 // =====================================================
-// GENERAR HTML DEL REPORTE (CON BASE64)
+// GENERAR HTML DEL REPORTE (CON BASE64 Y FORMATO CARTA)
 // =====================================================
 function generarHTMLReporte(detalle) {
     if (!detalle) {
@@ -2266,15 +2266,17 @@ function generarHTMLReporte(detalle) {
     
     return `
         <div class="reporte-container" id="reporteImprimible" style="
-            max-width: 800px;
+            max-width: 100%;
+            width: 210mm;
             margin: 0 auto;
-            padding: 15px;
-            font-family: Arial, sans-serif;
+            padding: 12mm 10mm 8mm 10mm;
+            font-family: 'Segoe UI', Arial, sans-serif;
             background: white;
             color: #222;
-            font-size: 11px;
-            line-height: 1.4;
+            font-size: 10px;
+            line-height: 1.35;
             box-sizing: border-box;
+            page-break-after: avoid;
         ">
             <!-- ENCABEZADO -->
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #C1121F; padding-bottom: 10px; margin-bottom: 10px;">
@@ -2346,25 +2348,25 @@ function generarHTMLReporte(detalle) {
                 ${audioHTML}
             </div>
             
-            <!-- FIRMAS -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; padding-top: 10px; border-top: 2px solid #ddd;">
-                <div style="text-align: center;">
-                    <p style="font-weight: 600; color: #C1121F; margin-bottom: 3px; font-size: 10px;">FIRMA DEL CLIENTE</p>
-                    <div style="border-bottom: 1px solid #222; height: 25px; margin-bottom: 3px;"></div>
-                    <div style="font-size: 9px; color: #555;">${clienteNombre}</div>
-                    <div style="font-size: 8px; color: #999;">${fechaActual}</div>
+            <!-- FIRMAS (CON ESPACIO MEJORADO) -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; padding-top: 18px; border-top: 2px solid #ddd;">
+                <div style="text-align: center; padding: 0 10px;">
+                    <p style="font-weight: 700; color: #C1121F; margin-bottom: 10px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase;">Firma del Cliente</p>
+                    <div style="border-bottom: 2px solid #333; height: 45px; margin-bottom: 6px;"></div>
+                    <div style="font-size: 10px; color: #555; font-weight: 500;">${clienteNombre}</div>
+                    <div style="font-size: 9px; color: #999; margin-top: 3px;">${fechaActual}</div>
                 </div>
-                <div style="text-align: center;">
-                    <p style="font-weight: 600; color: #C1121F; margin-bottom: 3px; font-size: 10px;">FIRMA DEL JEFE OPERATIVO</p>
-                    <div style="border-bottom: 1px solid #222; height: 25px; margin-bottom: 3px;"></div>
-                    <div style="font-size: 9px; color: #555;">${jefePrincipal}</div>
-                    <div style="font-size: 8px; color: #999;">${fechaActual}</div>
-                    ${jefePrincipalContacto ? `<div style="font-size: 8px; color: #999;">Contacto: ${jefePrincipalContacto}</div>` : ''}
+                <div style="text-align: center; padding: 0 10px;">
+                    <p style="font-weight: 700; color: #C1121F; margin-bottom: 10px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase;">Firma del Jefe Operativo</p>
+                    <div style="border-bottom: 2px solid #333; height: 45px; margin-bottom: 6px;"></div>
+                    <div style="font-size: 10px; color: #555; font-weight: 500;">${jefePrincipal}</div>
+                    <div style="font-size: 9px; color: #999; margin-top: 3px;">${fechaActual}</div>
+                    ${jefePrincipalContacto ? `<div style="font-size: 8px; color: #999; margin-top: 2px;">Contacto: ${jefePrincipalContacto}</div>` : ''}
                 </div>
             </div>
             
             <!-- FOOTER -->
-            <div style="text-align: center; margin-top: 10px; padding-top: 6px; border-top: 1px solid #eee; font-size: 8px; color: #bbb;">
+            <div style="text-align: center; margin-top: 15px; padding-top: 8px; border-top: 1px solid #eee; font-size: 8px; color: #bbb;">
                 <span>Documento generado automáticamente</span> | 
                 <span>Código: ${detalle.codigo_unico || 'N/A'}</span> | 
                 <span>${new Date().toLocaleString('es-ES')}</span>

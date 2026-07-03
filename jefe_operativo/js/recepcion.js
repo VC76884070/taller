@@ -2163,16 +2163,16 @@ function generarHTMLReporte(detalle) {
             url: url
         }));
     
-    // Generar HTML de fotos con tamaño fijo para carta
+    // En generarHTMLReporte, modifica la parte de las fotos:
     const fotosHTML = fotosArray.length > 0 ? `
-        <div class="reporte-fotos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin: 10px 0;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 10px 0;">
             ${fotosArray.map(f => `
-                <div class="reporte-foto" style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background: #f9f9f9; text-align: center;">
+                <div style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background: #f9f9f9; text-align: center;">
                     <img src="${f.url}" alt="${f.label}" 
-                         style="width: 100%; height: 150px; object-fit: cover; display: block;"
-                         loading="lazy" 
-                         onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\'padding:20px;color:#999;\'><i class=\'fas fa-image\'></i><br>${f.label}</div>'">
-                    <div style="padding: 4px; font-size: 10px; font-weight: bold; color: #555;">${f.label}</div>
+                        style="width: 100%; height: 120px; object-fit: cover; display: block; background: #eee;"
+                        crossorigin="anonymous"
+                        onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\\'padding:20px;color:#999;font-size:12px;\\'><i class=\\'fas fa-image\\'></i><br>${f.label}</div>'">
+                    <div style="padding: 4px; font-size: 9px; font-weight: bold; color: #555;">${f.label}</div>
                 </div>
             `).join('')}
         </div>
@@ -2349,6 +2349,9 @@ function generarHTMLReporte(detalle) {
 // =====================================================
 // FUNCIÓN PARA DESCARGAR PDF - CON ESPERA DE IMÁGENES
 // =====================================================
+// =====================================================
+// FUNCIÓN PARA DESCARGAR PDF - VERSIÓN CON html2pdf
+// =====================================================
 async function descargarPDFFinal() {
     if (descargandoPDF) {
         mostrarNotificacion('⏳ Ya se está generando el PDF, espera un momento...', 'warning');
@@ -2373,22 +2376,28 @@ async function descargarPDFFinal() {
     updateProgressMessage('Generando contenido del reporte...');
 
     try {
+        // =============================================
+        // 1. Generar el HTML del reporte
+        // =============================================
         const reporteHTML = generarHTMLReporte(datosReporteFinal);
 
+        // Crear contenedor TEMPORAL visible solo para html2pdf
         const container = document.createElement('div');
         container.id = 'pdfContainer';
         container.style.cssText = `
-            position: absolute;
-            left: -9999px;
-            top: -9999px;
-            width: 1024px;
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
             padding: 30px;
             background: white;
             font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+            z-index: -1;
             opacity: 0;
             pointer-events: none;
             overflow: visible;
-            z-index: -1;
         `;
         container.innerHTML = reporteHTML;
         document.body.appendChild(container);
@@ -2396,35 +2405,35 @@ async function descargarPDFFinal() {
         updateProgressBar(30, 1);
         updateProgressMessage('Renderizando contenido...');
 
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Esperar a que el DOM se actualice
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         // =============================================
-        // ESPERAR A QUE TODAS LAS IMÁGENES SE CARGUEN
+        // 2. Forzar carga de imágenes
         // =============================================
         const imagenes = container.querySelectorAll('img');
+        for (const img of imagenes) {
+            if (img.src && img.src.includes('googleusercontent.com')) {
+                // Forzar recarga con cache buster
+                const cleanUrl = img.src.split('?')[0];
+                const id = img.src.split('id=')[1]?.split('&')[0];
+                if (id) {
+                    img.src = `https://drive.google.com/uc?export=view&id=${id}&cache=${Date.now()}`;
+                    img.crossOrigin = 'anonymous';
+                }
+            }
+        }
+
+        // Esperar a que las imágenes carguen
         const promesasImagenes = Array.from(imagenes).map(img => {
             return new Promise((resolve) => {
-                // Si la imagen ya está cargada
                 if (img.complete && img.naturalHeight > 0) {
                     resolve();
                     return;
                 }
-                
-                // Forzar recarga de imágenes de Google Drive
-                if (img.src && img.src.includes('googleusercontent.com')) {
-                    const cleanUrl = img.src.split('?')[0];
-                    const id = img.src.split('id=')[1]?.split('&')[0];
-                    if (id) {
-                        img.src = `https://drive.google.com/uc?export=view&id=${id}&cache=${Date.now()}`;
-                    }
-                }
-                
-                // Esperar a que cargue
                 img.onload = () => resolve();
                 img.onerror = () => resolve();
-                
-                // Timeout por si la imagen no carga
-                setTimeout(resolve, 8000);
+                setTimeout(resolve, 10000);
             });
         });
 
@@ -2438,97 +2447,66 @@ async function descargarPDFFinal() {
         updateProgressBar(50, 2);
         updateProgressMessage('Generando archivo PDF...');
 
-        const contenido = container.querySelector('.reporte-container');
-        if (!contenido) {
+        const elemento = container.querySelector('.reporte-container');
+        if (!elemento) {
             throw new Error('No se encontró el contenido del reporte');
         }
 
-        if (typeof html2canvas === 'undefined') {
-            throw new Error('La librería html2canvas no está cargada');
-        }
-
-        updateProgressBar(60, 2);
-        updateProgressMessage('Capturando contenido...');
-
         // =============================================
-        // CAPTURAR CON html2canvas (CONFIGURACIÓN MEJORADA)
+        // 3. Verificar que html2pdf está disponible
         // =============================================
-        const canvas = await html2canvas(contenido, {
-            scale: 2,
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: '#ffffff',
-            width: 1024,
-            height: contenido.scrollHeight || 1500,
-            logging: false,
-            onclone: function(doc) {
-                const imgs = doc.querySelectorAll('img');
-                imgs.forEach(img => {
-                    if (img.src && img.src.includes('googleusercontent.com')) {
-                        const cleanUrl = img.src.split('?')[0];
-                        const id = img.src.split('id=')[1]?.split('&')[0];
-                        if (id) {
-                            img.src = `https://drive.google.com/uc?export=view&id=${id}&cache=${Date.now()}`;
-                            img.crossOrigin = 'anonymous';
-                        }
-                    }
-                    if (!img.complete) {
-                        img.style.display = 'block';
-                        img.style.minHeight = '100px';
-                        img.style.background = '#f0f0f0';
-                    }
-                });
-            }
-        });
-
-        updateProgressBar(80, 3);
-        updateProgressMessage('Creando archivo PDF...');
-
-        if (typeof window.jspdf === 'undefined') {
+        if (typeof html2pdf === 'undefined') {
+            // Cargar html2pdf si no está disponible
             await new Promise((resolve, reject) => {
                 const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
                 script.onload = resolve;
                 script.onerror = reject;
                 document.head.appendChild(script);
             });
         }
 
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        const imgWidth = 210;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        
-        let heightLeft = imgHeight;
-        let position = 0;
-        const pageHeight = 297;
+        // =============================================
+        // 4. Generar PDF con html2pdf
+        // =============================================
+        const opt = {
+            margin: [8, 8, 8, 8],
+            filename: `Reporte_${datosReporteFinal.codigo_unico || 'orden'}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                logging: false,
+                letterRendering: true,
+                onclone: function(doc) {
+                    const imgs = doc.querySelectorAll('img');
+                    imgs.forEach(img => {
+                        if (img.src && img.src.includes('googleusercontent.com')) {
+                            const cleanUrl = img.src.split('?')[0];
+                            const id = img.src.split('id=')[1]?.split('&')[0];
+                            if (id) {
+                                img.src = `https://drive.google.com/uc?export=view&id=${id}&cache=${Date.now()}`;
+                                img.crossOrigin = 'anonymous';
+                            }
+                        }
+                    });
+                }
+            },
+            jsPDF: {
+                unit: 'mm',
+                format: 'a4',
+                orientation: 'portrait'
+            },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
 
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+        updateProgressBar(70, 2);
+        updateProgressMessage('Generando PDF...');
 
-        while (heightLeft > 0) {
-            position = heightLeft - imgHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
-        }
-
-        updateProgressBar(95, 3);
-        updateProgressMessage('Descargando PDF...');
-
-        const pdfBlob = pdf.output('blob');
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(pdfBlob);
-        link.download = `Reporte_${datosReporteFinal.codigo_unico || 'orden'}.pdf`;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        setTimeout(() => {
-            URL.revokeObjectURL(link.href);
-        }, 10000);
+        // Usar html2pdf
+        await html2pdf().set(opt).from(elemento).save();
 
         updateProgressBar(100, 3);
         setTimeout(() => {
@@ -2536,24 +2514,17 @@ async function descargarPDFFinal() {
             mostrarNotificacion('✅ PDF descargado exitosamente', 'success');
         }, 500);
 
+        // Limpiar contenedor
         setTimeout(() => {
             if (container && document.body.contains(container)) {
                 document.body.removeChild(container);
             }
-        }, 5000);
+        }, 3000);
 
     } catch (error) {
         console.error('❌ Error generando PDF:', error);
         completeProgress(false);
         mostrarNotificacion('❌ Error al generar PDF: ' + error.message, 'error');
-
-        try {
-            mostrarNotificacion('Intentando método alternativo...', 'info');
-            await descargarPDFAlternativo();
-        } catch (fallbackError) {
-            console.error('❌ Error en fallback:', fallbackError);
-            mostrarNotificacion('No se pudo generar el PDF. Intenta de nuevo.', 'error');
-        }
     }
 
     if (btnDescargar) {

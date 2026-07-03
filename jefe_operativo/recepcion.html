@@ -242,7 +242,44 @@
                         </div>
                         <div class="card-body">
                             <div class="photo-grid" id="photoGrid"></div>
-                            <p class="photo-hint">* Las imágenes se comprimirán automáticamente antes de subir (máx 2.5MB)</p>
+                            <p class="photo-hint">* Las imágenes se comprimirán automáticamente (máx 1.2MB)</p>
+                            
+                            <!-- ============================================= -->
+                            <!-- BARRA DE PROGRESO DE SUBIDA DE FOTOS -->
+                            <!-- ============================================= -->
+                            <div id="uploadProgressContainer" style="display: none; margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-bottom: 6px;">
+                                    <span style="font-weight: 600; color: #333;">
+                                        <i class="fas fa-cloud-upload-alt" style="color: #C1121F;"></i> 
+                                        Subiendo fotos...
+                                    </span>
+                                    <span id="uploadProgressText" style="color: #666; font-weight: 500;">0 de 7</span>
+                                </div>
+                                <div style="background: #e9ecef; border-radius: 10px; height: 22px; overflow: hidden; position: relative;">
+                                    <div id="uploadProgressBar" style="
+                                        width: 0%; 
+                                        height: 100%; 
+                                        background: linear-gradient(90deg, #C1121F, #e63946); 
+                                        color: white; 
+                                        text-align: center; 
+                                        font-size: 11px; 
+                                        line-height: 22px; 
+                                        font-weight: 600;
+                                        transition: width 0.4s ease;
+                                        border-radius: 10px;
+                                    ">
+                                        0%
+                                    </div>
+                                    <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999; pointer-events: none;">
+                                        <span id="uploadProgressStatus" style="background: rgba(255,255,255,0.7); padding: 0 8px; border-radius: 4px;">Esperando...</span>
+                                    </div>
+                                </div>
+                                <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+                                    <span id="uploadProgressDetail" style="font-size: 10px; color: #999;"></span>
+                                </div>
+                            </div>
+                            <!-- FIN BARRA DE PROGRESO -->
+
                             <div class="form-actions-seccion">
                                 <button type="button" class="btn-guardar-seccion" data-seccion="fotos">
                                     <i class="fas fa-save"></i> Guardar Fotos

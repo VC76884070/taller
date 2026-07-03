@@ -102,6 +102,12 @@ let datosReporteFinal = null;
 // Variable para controlar si ya se está descargando
 let descargandoPDF = false;
 
+// Variables para barra de progreso de fotos
+let uploadProgressTotal = 0;
+let uploadProgressCompletadas = 0;
+let uploadProgressErrores = 0;
+let isUploadingFotos = false;
+
 // =====================================================
 // CONFIGURACIÓN DE REINTENTOS
 // =====================================================
@@ -327,7 +333,7 @@ function escapeHtml(text) {
 }
 
 // =====================================================
-// BARRA DE PROGRESO
+// BARRA DE PROGRESO PARA OPERACIONES
 // =====================================================
 
 function initProgressElements() {
@@ -471,6 +477,239 @@ function hideProgress() {
 }
 
 // =====================================================
+// BARRA DE PROGRESO PARA SUBIDA DE FOTOS
+// =====================================================
+
+function mostrarProgresoFotos(total, completadas, errores = 0) {
+    const container = document.getElementById('uploadProgressContainer');
+    const bar = document.getElementById('uploadProgressBar');
+    const text = document.getElementById('uploadProgressText');
+    const status = document.getElementById('uploadProgressStatus');
+    const detail = document.getElementById('uploadProgressDetail');
+    
+    if (!container || !bar) return;
+    
+    container.style.display = 'block';
+    
+    const percent = total > 0 ? Math.round((completadas / total) * 100) : 0;
+    
+    bar.style.width = `${Math.min(percent, 100)}%`;
+    bar.textContent = `${Math.min(percent, 100)}%`;
+    
+    if (text) {
+        text.textContent = `${completadas} de ${total}`;
+    }
+    
+    if (status) {
+        if (errores > 0 && completadas < total) {
+            status.textContent = `⚠️ ${errores} errores`;
+            status.style.color = '#dc3545';
+        } else if (completadas === total && errores === 0) {
+            status.textContent = '✅ ¡Completado!';
+            status.style.color = '#28a745';
+        } else if (completadas === total && errores > 0) {
+            status.textContent = `⚠️ Completado con ${errores} errores`;
+            status.style.color = '#ffc107';
+        } else {
+            status.textContent = `Subiendo... ${percent}%`;
+            status.style.color = '#666';
+        }
+    }
+    
+    if (detail) {
+        if (errores > 0) {
+            detail.textContent = `✅ ${completadas - errores} exitosas | ❌ ${errores} fallidas`;
+        } else {
+            detail.textContent = `${completadas} de ${total} fotos subidas exitosamente`;
+        }
+    }
+}
+
+function ocultarProgresoFotos() {
+    const container = document.getElementById('uploadProgressContainer');
+    if (container) {
+        setTimeout(() => {
+            container.style.display = 'none';
+        }, 3000);
+    }
+}
+
+function resetearProgresoFotos() {
+    uploadProgressTotal = 0;
+    uploadProgressCompletadas = 0;
+    uploadProgressErrores = 0;
+    isUploadingFotos = false;
+    
+    const container = document.getElementById('uploadProgressContainer');
+    const bar = document.getElementById('uploadProgressBar');
+    const text = document.getElementById('uploadProgressText');
+    const status = document.getElementById('uploadProgressStatus');
+    const detail = document.getElementById('uploadProgressDetail');
+    
+    if (bar) {
+        bar.style.width = '0%';
+        bar.textContent = '0%';
+    }
+    if (text) text.textContent = '0 de 0';
+    if (status) {
+        status.textContent = 'Esperando...';
+        status.style.color = '#999';
+    }
+    if (detail) detail.textContent = '';
+    if (container) container.style.display = 'none';
+}
+
+// =====================================================
+// SUBIR TODAS LAS FOTOS EN PARALELO CON PROGRESO
+// =====================================================
+async function subirTodasLasFotosEnParalelo() {
+    if (isUploadingFotos) return;
+    
+    // Obtener fotos pendientes (con imagen pero sin URL en Drive)
+    const fotosPendientes = FOTOS_CONFIG.filter(foto => {
+        const uploadDiv = document.getElementById(`upload-${foto.id}`);
+        return uploadDiv && 
+               uploadDiv.classList.contains('has-image') && 
+               !uploadDiv.dataset.driveUrl;
+    });
+    
+    if (fotosPendientes.length === 0) return;
+    
+    isUploadingFotos = true;
+    uploadProgressTotal = fotosPendientes.length;
+    uploadProgressCompletadas = 0;
+    uploadProgressErrores = 0;
+    
+    mostrarProgresoFotos(uploadProgressTotal, 0);
+    
+    mostrarNotificacion(`📤 Subiendo ${uploadProgressTotal} fotos en paralelo...`, 'info');
+    
+    const promesas = fotosPendientes.map(foto => {
+        const input = document.getElementById(foto.id);
+        const file = input?.files[0];
+        
+        if (!file) {
+            uploadProgressErrores++;
+            mostrarProgresoFotos(uploadProgressTotal, uploadProgressCompletadas, uploadProgressErrores);
+            return Promise.resolve({ foto, error: 'No hay archivo', success: false });
+        }
+        
+        return subirFotoGoogleDrive(file, codigoSesion || 'temp', foto.campo)
+            .then(url => {
+                const uploadDiv = document.getElementById(`upload-${foto.id}`);
+                if (uploadDiv) {
+                    uploadDiv.dataset.driveUrl = url;
+                    fotosSubidasLocal[foto.campo] = url;
+                }
+                uploadProgressCompletadas++;
+                mostrarProgresoFotos(uploadProgressTotal, uploadProgressCompletadas, uploadProgressErrores);
+                return { foto, url, success: true };
+            })
+            .catch(error => {
+                console.error(`❌ Error en ${foto.label}:`, error);
+                uploadProgressErrores++;
+                uploadProgressCompletadas++;
+                mostrarProgresoFotos(uploadProgressTotal, uploadProgressCompletadas, uploadProgressErrores);
+                
+                const uploadDiv = document.getElementById(`upload-${foto.id}`);
+                const preview = uploadDiv?.querySelector('.upload-preview');
+                if (preview) {
+                    preview.innerHTML = `<i class="fas fa-exclamation-circle" style="color: #dc3545; font-size: 20px;"></i>`;
+                    preview.style.display = 'flex';
+                    preview.style.alignItems = 'center';
+                    preview.style.justifyContent = 'center';
+                    preview.style.backgroundColor = '#fff5f5';
+                }
+                return { foto, error: error.message, success: false };
+            });
+    });
+    
+    const resultados = await Promise.all(promesas);
+    
+    const exitos = resultados.filter(r => r.success);
+    const errores = resultados.filter(r => !r.success);
+    
+    if (errores.length === 0) {
+        mostrarNotificacion(`✅ ${exitos.length} fotos subidas exitosamente`, 'success');
+    } else {
+        mostrarNotificacion(`⚠️ ${exitos.length} subidas, ${errores.length} errores`, 'warning');
+    }
+    
+    validarCompletadoFotos();
+    
+    if (codigoSesion && seccionesCompletadasLocal.fotos) {
+        await guardarSeccion('fotos');
+    }
+    
+    isUploadingFotos = false;
+    
+    setTimeout(() => {
+        ocultarProgresoFotos();
+        resetearProgresoFotos();
+    }, 3000);
+}
+
+// =====================================================
+// COMPRIMIR IMAGEN (VERSIÓN MEJORADA - MÁS RÁPIDA)
+// =====================================================
+async function comprimirImagen(file) {
+    try {
+        // Si la imagen ya es pequeña (< 500KB), no comprimir
+        if (file.size < 500 * 1024) {
+            return file;
+        }
+        
+        // Si el compresor está disponible
+        if (typeof imageCompressor !== 'undefined') {
+            return await imageCompressor.compress(file, {
+                maxWidth: 1280,
+                maxHeight: 1280,
+                quality: 0.75,
+                maxSizeMB: 1.2
+            });
+        }
+        
+        // Fallback: compresión manual con canvas
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    const maxSize = 1280;
+                    
+                    if (width > maxSize || height > maxSize) {
+                        if (width > height) {
+                            height = (height / width) * maxSize;
+                            width = maxSize;
+                        } else {
+                            width = (width / height) * maxSize;
+                            height = maxSize;
+                        }
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    canvas.toBlob(function(blob) {
+                        resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+                    }, 'image/jpeg', 0.75);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    } catch (error) {
+        console.warn('⚠️ Error comprimiendo imagen, usando original:', error);
+        return file;
+    }
+}
+
+// =====================================================
 // ACTUALIZAR ESTADO DEL BOTÓN FINALIZAR
 // =====================================================
 function actualizarBotonFinalizar() {
@@ -578,6 +817,20 @@ function validarCompletadoFotos() {
         actualizarBotonFinalizar();
     }
     
+    // Si todas las fotos tienen imagen pero falta alguna URL, subir en paralelo
+    if (fotosCompletas === 7) {
+        const fotosConUrl = FOTOS_CONFIG.filter(f => {
+            const div = document.getElementById(`upload-${f.id}`);
+            return div && div.dataset.driveUrl;
+        });
+        
+        if (fotosConUrl.length < 7 && !isUploadingFotos) {
+            setTimeout(() => {
+                subirTodasLasFotosEnParalelo();
+            }, 500);
+        }
+    }
+    
     return completada;
 }
 
@@ -674,7 +927,7 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
 }
 
 // =====================================================
-// PROCESAR FOTO
+// PROCESAR FOTO (CON COMPRESIÓN MEJORADA)
 // =====================================================
 async function procesarFoto(input, foto) {
     const file = input.files[0];
@@ -695,33 +948,16 @@ async function procesarFoto(input, foto) {
     }
     
     try {
-        let fileToUpload = file;
+        // =============================================
+        // COMPRIMIR IMAGEN (MÁS RÁPIDO)
+        // =============================================
         const originalSize = file.size / 1024 / 1024;
+        let fileToUpload = await comprimirImagen(file);
+        const compressedSize = fileToUpload.size / 1024 / 1024;
         
-        if (originalSize > 2 || file.type === 'image/jpeg' || file.type === 'image/jpg') {
-            mostrarNotificacion(`🔄 Comprimiendo ${foto.label}...`, 'info');
-            
-            try {
-                if (typeof imageCompressor !== 'undefined') {
-                    fileToUpload = await imageCompressor.compress(file, {
-                        maxWidth: 1920,
-                        maxHeight: 1920,
-                        quality: 0.85,
-                        maxSizeMB: 2.5
-                    });
-                    
-                    const compressedSize = fileToUpload.size / 1024 / 1024;
-                    const reduction = Math.round((1 - fileToUpload.size / file.size) * 100);
-                    
-                    if (compressedSize < originalSize) {
-                        mostrarNotificacion(`📸 ${foto.label}: ${compressedSize.toFixed(1)} MB (${reduction}% menos)`, 'success');
-                    }
-                }
-            } catch (compressError) {
-                console.warn('⚠️ Falló compresión, usando original:', compressError);
-                mostrarNotificacion(`⚠️ Usando imagen original para ${foto.label}`, 'warning');
-                fileToUpload = file;
-            }
+        if (compressedSize < originalSize) {
+            const reduction = Math.round((1 - fileToUpload.size / file.size) * 100);
+            mostrarNotificacion(`📸 ${foto.label}: ${compressedSize.toFixed(1)} MB (${reduction}% menos)`, 'success');
         }
         
         const finalSizeMB = fileToUpload.size / 1024 / 1024;
@@ -2439,7 +2675,6 @@ async function descargarPDFFinal() {
         const imagenes = container.querySelectorAll('img');
         for (const img of imagenes) {
             if (img.src && img.src.startsWith('data:image')) {
-                // Ya es base64, no hacer nada
                 continue;
             }
             if (img.src && img.src.includes('googleusercontent.com')) {
@@ -2452,7 +2687,6 @@ async function descargarPDFFinal() {
             }
         }
 
-        // Esperar a que las imágenes carguen
         const promesasImagenes = Array.from(imagenes).map(img => {
             return new Promise((resolve) => {
                 if (img.complete && img.naturalHeight > 0) {
@@ -2480,9 +2714,6 @@ async function descargarPDFFinal() {
             throw new Error('No se encontró el contenido del reporte');
         }
 
-        // =============================================
-        // 3. Verificar que html2pdf está disponible
-        // =============================================
         if (typeof html2pdf === 'undefined') {
             await new Promise((resolve, reject) => {
                 const script = document.createElement('script');
@@ -2493,9 +2724,6 @@ async function descargarPDFFinal() {
             });
         }
 
-        // =============================================
-        // 4. Generar PDF con html2pdf
-        // =============================================
         const opt = {
             margin: [8, 8, 8, 8],
             filename: `Reporte_${datosReporteFinal.codigo_unico || 'orden'}.pdf`,

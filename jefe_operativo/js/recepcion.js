@@ -1874,7 +1874,7 @@ function renderSesionesActivas(sesiones) {
         `;
     }).join('');
 }
-
+    
 async function unirseSesionConCodigo(codigo) {
     try {
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/unirse-sesion`, {

@@ -161,11 +161,56 @@ const FOTOS_CONFIG = [
 // FUNCIÓN PARA ACTUALIZAR PROGRESO INDIVIDUAL DE CADA FOTO
 // =====================================================
 function actualizarProgresoFoto(campo, progreso, estado = 'pending') {
+    // Buscar elementos por ID (se crearon en procesarFoto)
     const ring = document.getElementById(`ring-${campo}`);
     const percent = document.getElementById(`percent-${campo}`);
     const badge = document.getElementById(`badge-${campo}`);
     const bar = document.getElementById(`bar-${campo}`);
     const status = document.getElementById(`status-${campo}`);
+    
+    // Si no existen, intentar buscarlos dentro del preview
+    if (!ring || !percent || !badge || !bar || !status) {
+        const preview = document.querySelector(`#upload-${campo} .upload-preview`);
+        if (preview) {
+            // Recrear elementos si no existen
+            if (!ring) {
+                const ringContainer = document.createElement('div');
+                ringContainer.className = 'progress-ring-container';
+                ringContainer.innerHTML = `
+                    <svg viewBox="0 0 50 50">
+                        <circle class="ring-bg" cx="25" cy="25" r="22"/>
+                        <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-${campo}"/>
+                    </svg>
+                    <span class="progress-percent" id="percent-${campo}">0%</span>
+                `;
+                preview.appendChild(ringContainer);
+            }
+            if (!badge) {
+                const newBadge = document.createElement('div');
+                newBadge.className = 'status-badge-foto pending';
+                newBadge.id = `badge-${campo}`;
+                newBadge.innerHTML = '<i class="fas fa-circle"></i>';
+                preview.appendChild(newBadge);
+            }
+            if (!bar) {
+                const barContainer = document.createElement('div');
+                barContainer.className = 'progress-bar-foto';
+                barContainer.innerHTML = `<div class="fill" id="bar-${campo}"></div>`;
+                preview.appendChild(barContainer);
+            }
+            if (!status) {
+                const statusText = document.createElement('div');
+                statusText.className = 'uploading-status';
+                statusText.id = `status-${campo}`;
+                statusText.innerHTML = '<i class="fas fa-clock"></i> <span>Esperando...</span>';
+                preview.appendChild(statusText);
+            }
+            
+            // Volver a buscar los elementos
+            return actualizarProgresoFoto(campo, progreso, estado);
+        }
+        return;
+    }
     
     const radius = 22;
     const circumference = 2 * Math.PI * radius;
@@ -212,7 +257,7 @@ function actualizarProgresoFoto(campo, progreso, estado = 'pending') {
     
     // Actualizar barra lineal
     if (bar) {
-        bar.style.width = `${progreso}%`;
+        bar.style.width = `${Math.min(progreso, 100)}%`;
         bar.className = 'fill';
         if (estado === 'completed') bar.classList.add('completed');
         else if (estado === 'error') bar.classList.add('error');
@@ -690,6 +735,11 @@ async function procesarCola() {
             resetearProgresoFotos();
         }, 3000);
         
+        // =============================================
+        // ACTUALIZAR BADGE DE SECCIÓN
+        // =============================================
+        validarCompletadoFotos();
+        
         return;
     }
     
@@ -708,7 +758,7 @@ async function procesarCola() {
     mostrarProgresoFotos(total, completadas, errores);
     actualizarEstadoSubida(label, 'subiendo');
     
-    // Iniciar progreso individual
+    // Iniciar progreso individual - ESTADO SUBIENDO
     actualizarProgresoFoto(campo, 0, 'uploading');
     
     // Simular progreso mientras se sube
@@ -724,9 +774,9 @@ async function procesarCola() {
         const url = await subirFotoGoogleDrive(file, codigoSesion || 'temp', campo);
         
         clearInterval(interval);
-        actualizarProgresoFoto(campo, 100, 'completed');
         
-        // Éxito
+        // Éxito - ESTADO COMPLETADO
+        actualizarProgresoFoto(campo, 100, 'completed');
         uploadResults.push({ campo, label, success: true, url });
         
         // Actualizar UI
@@ -734,45 +784,17 @@ async function procesarCola() {
         if (uploadDiv) {
             uploadDiv.dataset.driveUrl = url;
             fotosSubidasLocal[campo] = url;
-            
-            // Mostrar check de éxito en el preview
-            const preview = uploadDiv.querySelector('.upload-preview');
-            if (preview) {
-                // Remover overlay de subida si existe
-                const existingOverlay = preview.querySelector('.uploading-status');
-                if (existingOverlay) existingOverlay.remove();
-                
-                // Añadir indicador de éxito
-                const check = document.createElement('div');
-                check.className = 'upload-success-indicator';
-                check.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981; font-size: 20px; position: absolute; top: 5px; right: 5px; background: white; border-radius: 50%; padding: 2px;"></i>';
-                preview.style.position = 'relative';
-                preview.appendChild(check);
-            }
         }
         
         actualizarEstadoSubida(label, 'completado');
         
     } catch (error) {
         clearInterval(interval);
-        actualizarProgresoFoto(campo, 100, 'error');
         
-        // Error
+        // Error - ESTADO ERROR
+        actualizarProgresoFoto(campo, 100, 'error');
         console.error(`❌ Error subiendo ${label}:`, error);
         uploadResults.push({ campo, label, success: false, error: error.message });
-        
-        // Mostrar error en la UI
-        const uploadDiv = document.getElementById(`upload-${campo}`);
-        if (uploadDiv) {
-            const preview = uploadDiv.querySelector('.upload-preview');
-            if (preview) {
-                preview.innerHTML = `
-                    <div style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; background: #fff5f5;">
-                        <i class="fas fa-exclamation-circle" style="color: #dc3545; font-size: 24px;"></i>
-                    </div>
-                `;
-            }
-        }
         
         actualizarEstadoSubida(label, 'error');
         mostrarNotificacion(`❌ Error en ${label}: ${error.message}`, 'error');
@@ -784,6 +806,11 @@ async function procesarCola() {
     const nuevoTotal = nuevasCompletadas + uploadQueue.length;
     
     mostrarProgresoFotos(nuevoTotal, nuevasCompletadas, nuevosErrores);
+    
+    // =============================================
+    // ACTUALIZAR BADGE DE SECCIÓN CADA VEZ
+    // =============================================
+    validarCompletadoFotos();
     
     // Verificar si todas las fotos están completadas
     const fotosConfig = ['lateral_izquierdo', 'lateral_derecho', 'frontal', 'trasera', 'superior', 'inferior', 'tablero'];
@@ -972,15 +999,19 @@ function validarCompletadoFotos() {
         }
     }
     
-    const completada = fotosConImagen === 7;
+    const todasTienenImagen = fotosConImagen === 7;
+    const todasEnDrive = fotosConUrl === 7;
     
+    // =============================================
+    // ACTUALIZAR BADGE DE LA SECCIÓN
+    // =============================================
     const fotosBadge = document.getElementById('statusFotos');
     if (fotosBadge) {
-        if (completada && fotosConUrl === 7) {
+        if (todasTienenImagen && todasEnDrive) {
             fotosBadge.textContent = '✓ Completado';
             fotosBadge.classList.add('completado');
             fotosBadge.classList.remove('en-proceso');
-        } else if (completada) {
+        } else if (todasTienenImagen) {
             fotosBadge.textContent = `⏳ ${fotosConUrl}/7 en Drive`;
             fotosBadge.classList.add('en-proceso');
             fotosBadge.classList.remove('completado');
@@ -991,7 +1022,7 @@ function validarCompletadoFotos() {
         }
     }
     
-    const todasEnDrive = fotosConUrl === 7;
+    // Solo marcar como completada cuando TODAS tienen URL en Drive
     if (seccionesCompletadasLocal.fotos !== todasEnDrive) {
         seccionesCompletadasLocal.fotos = todasEnDrive;
         actualizarBotonFinalizar();
@@ -1095,6 +1126,9 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
 // =====================================================
 // PROCESAR FOTO (CON COMPRESIÓN MEJORADA Y COLA)
 // =====================================================
+// =====================================================
+// PROCESAR FOTO (CON COMPRESIÓN MEJORADA Y COLA)
+// =====================================================
 async function procesarFoto(input, foto) {
     const file = input.files[0];
     if (!file) return;
@@ -1109,9 +1143,47 @@ async function procesarFoto(input, foto) {
         preview.style.backgroundImage = `url('${objectUrl}')`;
         preview.style.backgroundSize = 'cover';
         preview.style.backgroundPosition = 'center';
-        preview.innerHTML = '';
+        preview.innerHTML = ''; // Limpiar contenido previo
         preview.style.display = 'block';
         uploadDiv.classList.add('has-image');
+        
+        // =============================================
+        // RECREAR INDICADORES EN EL PREVIEW
+        // =============================================
+        // 1. Anillo de progreso
+        const ringContainer = document.createElement('div');
+        ringContainer.className = 'progress-ring-container';
+        ringContainer.innerHTML = `
+            <svg viewBox="0 0 50 50">
+                <circle class="ring-bg" cx="25" cy="25" r="22"/>
+                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-${foto.campo}"/>
+            </svg>
+            <span class="progress-percent" id="percent-${foto.campo}">0%</span>
+        `;
+        preview.appendChild(ringContainer);
+        
+        // 2. Badge en esquina
+        const badge = document.createElement('div');
+        badge.className = 'status-badge-foto pending';
+        badge.id = `badge-${foto.campo}`;
+        badge.innerHTML = '<i class="fas fa-circle"></i>';
+        preview.appendChild(badge);
+        
+        // 3. Barra lineal
+        const barContainer = document.createElement('div');
+        barContainer.className = 'progress-bar-foto';
+        barContainer.innerHTML = `<div class="fill" id="bar-${foto.campo}"></div>`;
+        preview.appendChild(barContainer);
+        
+        // 4. Texto de estado inferior
+        const statusText = document.createElement('div');
+        statusText.className = 'uploading-status';
+        statusText.id = `status-${foto.campo}`;
+        statusText.innerHTML = '<i class="fas fa-clock"></i> <span>Esperando...</span>';
+        preview.appendChild(statusText);
+        
+        // Guardar referencia al campo
+        preview.dataset.campo = foto.campo;
         
         if (uploadDiv.dataset.objectUrl) {
             URL.revokeObjectURL(uploadDiv.dataset.objectUrl);

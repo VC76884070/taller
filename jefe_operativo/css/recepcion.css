@@ -1981,290 +1981,6 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   =====================================================
-   ESTILOS PARA EL REPORTE IMPRIMIBLE
-   =====================================================
-   ===================================================== */
-
-/* Contenedor del reporte */
-.reporte-container {
-    font-family: 'Plus Jakarta Sans', Arial, sans-serif;
-    padding: 20px;
-    background: white;
-    max-width: 1000px;
-    margin: 0 auto;
-    color: #1a1a1a;
-}
-
-/* Encabezado del reporte */
-.reporte-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 3px solid #C1121F;
-    padding-bottom: 20px;
-    margin-bottom: 25px;
-}
-
-.reporte-header .logo-area {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.reporte-header .logo-area img {
-    height: 60px;
-    width: auto;
-}
-
-.reporte-header .logo-area h1 {
-    font-size: 28px;
-    color: #1a1a1a;
-    margin: 0;
-    font-weight: 800;
-}
-
-.reporte-header .logo-area h1 span {
-    color: #C1121F;
-}
-
-.reporte-header .info-empresa {
-    text-align: right;
-    font-size: 13px;
-    color: #666;
-    line-height: 1.6;
-}
-
-.reporte-header .info-empresa strong {
-    color: #1a1a1a;
-}
-
-/* Título del reporte */
-.reporte-titulo {
-    text-align: center;
-    margin: 20px 0 30px 0;
-}
-
-.reporte-titulo h2 {
-    font-size: 24px;
-    color: #C1121F;
-    margin: 0;
-    font-weight: 700;
-}
-
-.reporte-titulo .codigo-orden {
-    font-size: 18px;
-    color: #333;
-    background: #f5f5f5;
-    padding: 8px 20px;
-    border-radius: 8px;
-    display: inline-block;
-    margin-top: 5px;
-    font-weight: 600;
-}
-
-/* Secciones del reporte */
-.reporte-seccion {
-    margin: 25px 0;
-    page-break-inside: avoid;
-}
-
-.reporte-seccion h3 {
-    font-size: 16px;
-    color: #C1121F;
-    border-bottom: 2px solid #e0e0e0;
-    padding-bottom: 8px;
-    margin-bottom: 15px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.reporte-seccion h3 i {
-    font-size: 18px;
-}
-
-/* Grid de datos */
-.reporte-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    padding: 0 5px;
-}
-
-.reporte-item {
-    display: flex;
-    flex-direction: column;
-    padding: 8px 12px;
-    background: #f9f9f9;
-    border-radius: 6px;
-    border-left: 3px solid #C1121F;
-}
-
-.reporte-item .label {
-    font-size: 11px;
-    color: #888;
-    text-transform: uppercase;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-}
-
-.reporte-item .value {
-    font-size: 15px;
-    color: #1a1a1a;
-    font-weight: 500;
-    margin-top: 2px;
-}
-
-.reporte-item.full-width {
-    grid-column: 1 / -1;
-}
-
-/* Fotos en el reporte */
-.reporte-fotos-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 15px;
-    margin-top: 10px;
-}
-
-.reporte-foto {
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    overflow: hidden;
-    background: #f5f5f5;
-}
-
-.reporte-foto img {
-    width: 100%;
-    height: 180px;
-    object-fit: cover;
-    display: block;
-}
-
-.reporte-foto .foto-label {
-    text-align: center;
-    padding: 6px;
-    font-size: 12px;
-    color: #555;
-    background: #f5f5f5;
-    font-weight: 500;
-}
-
-/* Descripción del problema */
-.reporte-descripcion {
-    background: #f9f9f9;
-    padding: 15px 20px;
-    border-radius: 8px;
-    border-left: 4px solid #C1121F;
-    margin: 10px 0;
-}
-
-.reporte-descripcion p {
-    margin: 0;
-    font-size: 14px;
-    line-height: 1.6;
-    color: #333;
-}
-
-/* Área de firmas */
-.reporte-firmas {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 40px;
-    margin-top: 40px;
-    padding-top: 20px;
-    border-top: 2px dashed #ccc;
-}
-
-.reporte-firma {
-    text-align: center;
-}
-
-.reporte-firma .firma-linea {
-    width: 100%;
-    height: 1px;
-    border-top: 1px solid #333;
-    margin: 30px 0 5px 0;
-}
-
-.reporte-firma .firma-label {
-    font-size: 12px;
-    color: #666;
-}
-
-.reporte-firma .firma-nombre {
-    font-size: 14px;
-    font-weight: 600;
-    color: #1a1a1a;
-    margin-top: 5px;
-}
-
-.reporte-firma .firma-fecha {
-    font-size: 11px;
-    color: #999;
-}
-
-/* Footer del reporte */
-.reporte-footer {
-    margin-top: 40px;
-    padding-top: 20px;
-    border-top: 1px solid #e0e0e0;
-    text-align: center;
-    font-size: 11px;
-    color: #999;
-}
-
-.reporte-footer .footer-info {
-    display: flex;
-    justify-content: center;
-    gap: 30px;
-    flex-wrap: wrap;
-}
-
-/* Estado de la orden en el reporte */
-.estado-badge-reporte {
-    display: inline-block;
-    padding: 4px 16px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.estado-badge-reporte.EnRecepcion {
-    background: #FFF3E0;
-    color: #E65100;
-}
-
-.estado-badge-reporte.EnTaller {
-    background: #E3F2FD;
-    color: #0D47A1;
-}
-
-.estado-badge-reporte.Finalizado {
-    background: #E8F5E9;
-    color: #1B5E20;
-}
-
-/* Loading preview para el reporte */
-.loading-preview {
-    text-align: center;
-    padding: 40px;
-    color: #666;
-}
-
-.loading-preview i {
-    font-size: 40px;
-    color: #C1121F;
-    margin-bottom: 15px;
-}
-
-.loading-preview p {
-    font-size: 16px;
-    margin: 0;
-}
-
-/* =====================================================
    ANIMACIONES
    ===================================================== */
 @keyframes pulse {
@@ -2298,6 +2014,44 @@ body.sidebar-open {
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-badge {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+}
+
+@keyframes popIn {
+    0% { transform: scale(0); opacity: 0; }
+    70% { transform: scale(1.3); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes progressPulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
 }
 
 /* =====================================================
@@ -2495,29 +2249,6 @@ body.sidebar-open {
         left: 20px;
         padding: 10px 16px;
     }
-
-    /* Reporte responsive */
-    .reporte-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .reporte-fotos-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
-    .reporte-header {
-        flex-direction: column;
-        text-align: center;
-    }
-    
-    .reporte-header .info-empresa {
-        text-align: center;
-    }
-    
-    .reporte-firmas {
-        grid-template-columns: 1fr;
-        gap: 20px;
-    }
 }
 
 @media (max-width: 480px) {
@@ -2570,14 +2301,66 @@ body.sidebar-open {
         font-size: 0.6rem;
         padding: 0.15rem 0.5rem;
     }
-
-    /* Reporte responsive */
-    .reporte-fotos-grid {
-        grid-template-columns: 1fr;
+    
+    #uploadProgressContainer {
+        padding: 10px 10px;
+        border-radius: var(--radius-sm);
     }
     
-    .reporte-foto img {
-        height: 150px !important;
+    #uploadProgressContainer .progress-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+    }
+    
+    #uploadProgressContainer .progress-track {
+        height: 18px;
+    }
+    
+    #uploadProgressContainer .progress-bar {
+        font-size: 8px;
+        line-height: 18px;
+    }
+    
+    .upload-success-indicator {
+        top: 2px;
+        right: 2px;
+        padding: 2px;
+    }
+    
+    .upload-success-indicator i {
+        font-size: 12px;
+    }
+    
+    .photo-upload .upload-preview .progress-ring-container {
+        width: 32px;
+        height: 32px;
+    }
+    
+    .photo-upload .upload-preview .progress-ring-container svg {
+        width: 32px;
+        height: 32px;
+    }
+    
+    .photo-upload .upload-preview .progress-ring-container circle {
+        stroke-width: 3;
+    }
+    
+    .photo-upload .upload-preview .progress-ring-container .progress-percent {
+        font-size: 7px;
+    }
+    
+    .photo-upload .upload-preview .status-badge-foto {
+        width: 18px;
+        height: 18px;
+        font-size: 8px;
+        top: 2px;
+        right: 2px;
+    }
+    
+    .photo-upload .upload-preview .uploading-status {
+        font-size: 7px;
+        padding: 2px 4px;
     }
 }
 
@@ -2687,10 +2470,10 @@ body.sidebar-open {
     background: var(--rojo-primario);
     border-radius: var(--radius-full);
 }
-/* =====================================================
-   BARRA DE PROGRESO PARA SUBIDA DE FOTOS (NUEVA)
-   ===================================================== */
 
+/* =====================================================
+   BARRA DE PROGRESO PARA SUBIDA DE FOTOS (GLOBAL)
+   ===================================================== */
 #uploadProgressContainer {
     background: var(--bg-card);
     border-radius: var(--radius-md);
@@ -2700,17 +2483,6 @@ body.sidebar-open {
     box-shadow: var(--shadow-sm);
     animation: slideDown 0.3s ease-out;
     display: none;
-}
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 
 #uploadProgressContainer .progress-header {
@@ -2817,18 +2589,224 @@ body.sidebar-open {
     color: var(--rojo-primario);
 }
 
+#uploadProgressContainer.completed {
+    border-color: var(--verde-exito);
+    background: rgba(16,185,129,0.05);
+}
+
+#uploadProgressContainer.completed .progress-bar {
+    background: linear-gradient(90deg, var(--verde-exito), #059669);
+}
+
+#uploadProgressContainer.completed .progress-status span {
+    color: var(--verde-exito);
+    background: rgba(0,0,0,0.7);
+}
+
+#uploadProgressContainer.has-errors {
+    border-color: var(--rojo-primario);
+    background: rgba(193,18,31,0.05);
+}
+
+#uploadProgressContainer.has-errors .progress-bar {
+    background: linear-gradient(90deg, var(--rojo-primario), #dc2626);
+}
+
+#uploadProgressContainer .progress-bar.loading {
+    animation: progressPulse 1.2s ease-in-out infinite;
+}
+
 /* =====================================================
-   INDICADOR DE ÉXITO EN FOTOS (NUEVO)
+   INDICADORES VISIBLES SOBRE LA IMAGEN (POR FOTO)
    ===================================================== */
 
+.upload-preview {
+    position: relative;
+}
+
+/* Anillo de progreso - siempre visible cuando existe */
+.upload-preview .progress-ring-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 50px;
+    height: 50px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 50%;
+    padding: 4px;
+}
+
+.upload-preview .progress-ring-container svg {
+    transform: rotate(-90deg);
+    width: 100%;
+    height: 100%;
+}
+
+.upload-preview .progress-ring-container circle {
+    fill: none;
+    stroke-width: 4;
+    stroke-linecap: round;
+}
+
+.upload-preview .progress-ring-container .ring-bg {
+    stroke: rgba(255, 255, 255, 0.25);
+}
+
+.upload-preview .progress-ring-container .ring-fg {
+    stroke: var(--rojo-primario);
+    stroke-dasharray: 138.23;
+    stroke-dashoffset: 138.23;
+    transition: stroke-dashoffset 0.3s ease;
+}
+
+.upload-preview .progress-ring-container .ring-fg.completed {
+    stroke: var(--verde-exito);
+    stroke-dashoffset: 0;
+}
+
+.upload-preview .progress-ring-container .ring-fg.error {
+    stroke: #dc3545;
+}
+
+.upload-preview .progress-ring-container .progress-percent {
+    position: absolute;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.upload-preview .progress-ring-container .progress-percent.completed {
+    color: var(--verde-exito);
+    font-size: 16px;
+}
+
+.upload-preview .progress-ring-container .progress-percent.error {
+    color: #dc3545;
+    font-size: 16px;
+}
+
+/* Badge en esquina */
+.upload-preview .status-badge-foto {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 15;
+    font-size: 11px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    transition: all 0.3s ease;
+}
+
+.upload-preview .status-badge-foto.pending {
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.upload-preview .status-badge-foto.uploading {
+    background: var(--rojo-primario);
+    color: white;
+    animation: pulse-badge 0.8s ease-in-out infinite;
+}
+
+.upload-preview .status-badge-foto.completed {
+    background: var(--verde-exito);
+    color: white;
+    animation: popIn 0.3s ease;
+}
+
+.upload-preview .status-badge-foto.error {
+    background: #dc3545;
+    color: white;
+}
+
+/* Barra lineal inferior */
+.upload-preview .progress-bar-foto {
+    position: absolute;
+    bottom: 28px;
+    left: 10%;
+    right: 10%;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    overflow: hidden;
+    z-index: 12;
+}
+
+.upload-preview .progress-bar-foto .fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--rojo-primario), var(--rojo-acento));
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.upload-preview .progress-bar-foto .fill.completed {
+    background: var(--verde-exito);
+}
+
+.upload-preview .progress-bar-foto .fill.error {
+    background: #dc3545;
+}
+
+/* Texto de estado inferior */
+.upload-preview .uploading-status {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    color: white;
+    padding: 3px 8px;
+    font-size: 8px;
+    text-align: center;
+    z-index: 12;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
+.upload-preview .uploading-status i {
+    font-size: 10px;
+}
+
+.upload-preview .uploading-status .fa-spinner {
+    animation: spin 0.8s linear infinite;
+}
+
+.upload-preview .uploading-status.completed {
+    background: rgba(16, 185, 129, 0.85);
+}
+
+.upload-preview .uploading-status.error {
+    background: rgba(220, 53, 69, 0.85);
+}
+
+/* =====================================================
+   INDICADOR DE ÉXITO EN FOTOS
+   ===================================================== */
 .upload-success-indicator {
     position: absolute;
     top: 4px;
     right: 4px;
-    background: rgba(0,0,0,0.7);
+    background: rgba(0, 0, 0, 0.7);
     border-radius: 50%;
     padding: 3px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     z-index: 5;
     animation: popIn 0.3s ease;
 }
@@ -2839,46 +2817,9 @@ body.sidebar-open {
     display: block;
 }
 
-@keyframes popIn {
-    0% { transform: scale(0); opacity: 0; }
-    70% { transform: scale(1.3); }
-    100% { transform: scale(1); opacity: 1; }
-}
-
 /* =====================================================
-   ESTADO DE SUBIDA EN EL PREVIEW DE FOTO (NUEVO)
+   ESTADO DE ERROR EN FOTOS
    ===================================================== */
-
-.upload-preview .uploading-overlay {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: rgba(0,0,0,0.8);
-    color: white;
-    padding: 4px 8px;
-    font-size: 9px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    z-index: 4;
-}
-
-.upload-preview .uploading-overlay i {
-    animation: spin 1s linear infinite;
-    font-size: 12px;
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-/* =====================================================
-   ESTADO DE ERROR EN FOTOS (NUEVO)
-   ===================================================== */
-
 .photo-upload.error .upload-preview {
     border: 2px solid var(--rojo-primario);
 }
@@ -2891,7 +2832,7 @@ body.sidebar-open {
     transform: translate(-50%, -50%);
     font-size: 32px;
     color: var(--rojo-primario);
-    background: rgba(0,0,0,0.7);
+    background: rgba(0, 0, 0, 0.7);
     width: 50px;
     height: 50px;
     border-radius: 50%;
@@ -2902,9 +2843,8 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   RESPONSIVE PARA BARRA DE PROGRESO
+   RESPONSIVE PARA INDICADORES INDIVIDUALES
    ===================================================== */
-
 @media (max-width: 768px) {
     #uploadProgressContainer {
         padding: 12px 14px;
@@ -2942,120 +2882,38 @@ body.sidebar-open {
     .upload-success-indicator i {
         font-size: 14px;
     }
-}
-
-@media (max-width: 480px) {
-    #uploadProgressContainer {
-        padding: 10px 10px;
-        border-radius: var(--radius-sm);
+    
+    .photo-upload .upload-preview .progress-ring-container {
+        width: 40px;
+        height: 40px;
     }
     
-    #uploadProgressContainer .progress-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 2px;
+    .photo-upload .upload-preview .progress-ring-container svg {
+        width: 40px;
+        height: 40px;
     }
     
-    #uploadProgressContainer .progress-track {
-        height: 18px;
+    .photo-upload .upload-preview .progress-ring-container .progress-percent {
+        font-size: 9px;
     }
     
-    #uploadProgressContainer .progress-bar {
+    .photo-upload .upload-preview .uploading-status {
         font-size: 8px;
-        line-height: 18px;
+        padding: 3px 6px;
     }
     
-    .upload-success-indicator {
-        top: 2px;
-        right: 2px;
-        padding: 2px;
+    .photo-upload .upload-preview .status-badge-foto {
+        width: 20px;
+        height: 20px;
+        font-size: 10px;
+        top: 3px;
+        right: 3px;
     }
     
-    .upload-success-indicator i {
-        font-size: 12px;
+    .photo-upload .upload-preview .progress-bar-foto {
+        bottom: 22px;
+        height: 2px;
     }
-}
-
-/* =====================================================
-   ANIMACIÓN DE ONDA PARA LA BARRA DE PROGRESO
-   ===================================================== */
-
-@keyframes progressPulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.6; }
-    100% { opacity: 1; }
-}
-
-#uploadProgressContainer .progress-bar.loading {
-    animation: progressPulse 1.2s ease-in-out infinite;
-}
-
-/* =====================================================
-   ESTILO PARA EL CONTENEDOR DE PROGRESO CUANDO ESTÁ COMPLETO
-   ===================================================== */
-
-#uploadProgressContainer.completed {
-    border-color: var(--verde-exito);
-    background: rgba(16,185,129,0.05);
-}
-
-#uploadProgressContainer.completed .progress-bar {
-    background: linear-gradient(90deg, var(--verde-exito), #059669);
-}
-
-#uploadProgressContainer.completed .progress-status span {
-    color: var(--verde-exito);
-    background: rgba(0,0,0,0.7);
-}
-
-/* =====================================================
-   ESTILO PARA EL CONTENEDOR DE PROGRESO CON ERRORES
-   ===================================================== */
-
-#uploadProgressContainer.has-errors {
-    border-color: var(--rojo-primario);
-    background: rgba(193,18,31,0.05);
-}
-
-#uploadProgressContainer.has-errors .progress-bar {
-    background: linear-gradient(90deg, var(--rojo-primario), #dc2626);
-}
-
-/* =====================================================
-   MEJORA EN EL PREVIEW DE FOTOS PARA SUBIDA
-   ===================================================== */
-
-.photo-upload .upload-preview .upload-progress-ring {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 40px;
-    height: 40px;
-    z-index: 4;
-}
-
-.photo-upload .upload-preview .upload-progress-ring svg {
-    transform: rotate(-90deg);
-    width: 40px;
-    height: 40px;
-}
-
-.photo-upload .upload-preview .upload-progress-ring circle {
-    fill: none;
-    stroke-width: 3;
-    stroke-linecap: round;
-}
-
-.photo-upload .upload-preview .upload-progress-ring .bg {
-    stroke: rgba(255,255,255,0.2);
-}
-
-.photo-upload .upload-preview .upload-progress-ring .fg {
-    stroke: var(--rojo-primario);
-    stroke-dasharray: 113.097;
-    stroke-dashoffset: 113.097;
-    transition: stroke-dashoffset 0.4s ease;
 }
 
 /* =====================================================
@@ -3108,321 +2966,4 @@ body.sidebar-open {
 ::selection {
     background: var(--rojo-primario);
     color: var(--blanco);
-}
-/* =====================================================
-   INDICADOR DE PROGRESO INDIVIDUAL POR FOTO (NUEVO)
-   ===================================================== */
-
-/* Anillo de progreso circular en cada foto */
-.photo-upload .upload-preview .progress-ring-container {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 50px;
-    height: 50px;
-    z-index: 5;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.photo-upload .upload-preview .progress-ring-container svg {
-    transform: rotate(-90deg);
-    width: 50px;
-    height: 50px;
-}
-
-.photo-upload .upload-preview .progress-ring-container circle {
-    fill: none;
-    stroke-width: 4;
-    stroke-linecap: round;
-}
-
-.photo-upload .upload-preview .progress-ring-container .ring-bg {
-    stroke: rgba(255, 255, 255, 0.2);
-}
-
-.photo-upload .upload-preview .progress-ring-container .ring-fg {
-    stroke: var(--rojo-primario);
-    stroke-dasharray: 138.23;
-    stroke-dashoffset: 138.23;
-    transition: stroke-dashoffset 0.3s ease;
-}
-
-.photo-upload .upload-preview .progress-ring-container .ring-fg.completed {
-    stroke: var(--verde-exito);
-    stroke-dashoffset: 0;
-}
-
-.photo-upload .upload-preview .progress-ring-container .ring-fg.error {
-    stroke: var(--rojo-primario);
-}
-
-.photo-upload .upload-preview .progress-ring-container .progress-percent {
-    position: absolute;
-    color: white;
-    font-size: 11px;
-    font-weight: 700;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
-}
-
-.photo-upload .upload-preview .progress-ring-container .progress-percent.completed {
-    color: var(--verde-exito);
-}
-
-.photo-upload .upload-preview .progress-ring-container .progress-percent.error {
-    color: var(--rojo-primario);
-}
-
-/* Estado "Subiendo..." en la foto */
-.photo-upload .upload-preview .uploading-status {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(4px);
-    color: white;
-    padding: 4px 8px;
-    font-size: 9px;
-    text-align: center;
-    z-index: 6;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-weight: 500;
-    letter-spacing: 0.3px;
-}
-
-.photo-upload .upload-preview .uploading-status i {
-    font-size: 10px;
-    animation: spin 0.8s linear infinite;
-}
-
-.photo-upload .upload-preview .uploading-status.completed {
-    background: rgba(16, 185, 129, 0.85);
-    color: white;
-}
-
-.photo-upload .upload-preview .uploading-status.error {
-    background: rgba(193, 18, 31, 0.85);
-    color: white;
-}
-
-.photo-upload .upload-preview .uploading-status .status-icon {
-    font-size: 12px;
-}
-
-/* =====================================================
-   BADGE DE ESTADO EN LA ESQUINA DE LA FOTO
-   ===================================================== */
-
-.photo-upload .upload-preview .status-badge-foto {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 7;
-    font-size: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-    transition: all 0.3s ease;
-}
-
-.photo-upload .upload-preview .status-badge-foto.pending {
-    background: rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.5);
-}
-
-.photo-upload .upload-preview .status-badge-foto.uploading {
-    background: rgba(193, 18, 31, 0.85);
-    color: white;
-    animation: pulse-badge 0.8s ease-in-out infinite;
-}
-
-.photo-upload .upload-preview .status-badge-foto.completed {
-    background: rgba(16, 185, 129, 0.9);
-    color: white;
-    animation: popIn 0.3s ease;
-}
-
-.photo-upload .upload-preview .status-badge-foto.error {
-    background: rgba(193, 18, 31, 0.9);
-    color: white;
-}
-
-@keyframes pulse-badge {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.15); }
-}
-
-/* =====================================================
-   OVERLAY DE PROGRESO EN LA FOTO
-   ===================================================== */
-
-.photo-upload .upload-preview .progress-overlay-foto {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(2px);
-    z-index: 4;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.3s ease;
-}
-
-.photo-upload .upload-preview .progress-overlay-foto.active {
-    opacity: 1;
-    visibility: visible;
-}
-
-.photo-upload .upload-preview .progress-overlay-foto .spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid rgba(255,255,255,0.2);
-    border-top-color: var(--rojo-primario);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-}
-
-.photo-upload .upload-preview .progress-overlay-foto .texto {
-    color: white;
-    font-size: 10px;
-    font-weight: 500;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
-}
-
-.photo-upload .upload-preview .progress-overlay-foto .texto.completed {
-    color: var(--verde-exito);
-}
-
-.photo-upload .upload-preview .progress-overlay-foto .texto.error {
-    color: var(--rojo-primario);
-}
-
-/* =====================================================
-   BARRA DE PROGRESO LINEAL DENTRO DE LA FOTO (OPCIONAL)
-   ===================================================== */
-
-.photo-upload .upload-preview .progress-bar-foto {
-    position: absolute;
-    bottom: 28px;
-    left: 10%;
-    right: 10%;
-    height: 3px;
-    background: rgba(255,255,255,0.2);
-    border-radius: 4px;
-    overflow: hidden;
-    z-index: 6;
-}
-
-.photo-upload .upload-preview .progress-bar-foto .fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--rojo-primario), var(--rojo-acento));
-    border-radius: 4px;
-    width: 0%;
-    transition: width 0.3s ease;
-}
-
-.photo-upload .upload-preview .progress-bar-foto .fill.completed {
-    background: var(--verde-exito);
-}
-
-.photo-upload .upload-preview .progress-bar-foto .fill.error {
-    background: var(--rojo-primario);
-}
-
-/* =====================================================
-   RESPONSIVE PARA INDICADORES INDIVIDUALES
-   ===================================================== */
-
-@media (max-width: 768px) {
-    .photo-upload .upload-preview .progress-ring-container {
-        width: 40px;
-        height: 40px;
-    }
-    
-    .photo-upload .upload-preview .progress-ring-container svg {
-        width: 40px;
-        height: 40px;
-    }
-    
-    .photo-upload .upload-preview .progress-ring-container .progress-percent {
-        font-size: 9px;
-    }
-    
-    .photo-upload .upload-preview .uploading-status {
-        font-size: 8px;
-        padding: 3px 6px;
-    }
-    
-    .photo-upload .upload-preview .status-badge-foto {
-        width: 20px;
-        height: 20px;
-        font-size: 10px;
-        top: 3px;
-        right: 3px;
-    }
-    
-    .photo-upload .upload-preview .progress-overlay-foto .spinner {
-        width: 24px;
-        height: 24px;
-        border-width: 2px;
-    }
-    
-    .photo-upload .upload-preview .progress-overlay-foto .texto {
-        font-size: 9px;
-    }
-    
-    .photo-upload .upload-preview .progress-bar-foto {
-        bottom: 22px;
-        height: 2px;
-    }
-}
-
-@media (max-width: 480px) {
-    .photo-upload .upload-preview .progress-ring-container {
-        width: 32px;
-        height: 32px;
-    }
-    
-    .photo-upload .upload-preview .progress-ring-container svg {
-        width: 32px;
-        height: 32px;
-    }
-    
-    .photo-upload .upload-preview .progress-ring-container circle {
-        stroke-width: 3;
-    }
-    
-    .photo-upload .upload-preview .progress-ring-container .progress-percent {
-        font-size: 7px;
-    }
-    
-    .photo-upload .upload-preview .status-badge-foto {
-        width: 18px;
-        height: 18px;
-        font-size: 8px;
-        top: 2px;
-        right: 2px;
-    }
-    
-    .photo-upload .upload-preview .uploading-status {
-        font-size: 7px;
-        padding: 2px 4px;
-    }
 }

@@ -2346,8 +2346,10 @@ function generarHTMLReporte(detalle) {
 // =====================================================
 // FUNCIÓN PARA DESCARGAR PDF - SIN VISTA PREVIA
 // =====================================================
+// =====================================================
+// FUNCIÓN PARA DESCARGAR PDF - CON ESPERA DE IMÁGENES
+// =====================================================
 async function descargarPDFFinal() {
-    // Evitar descargas múltiples
     if (descargandoPDF) {
         mostrarNotificacion('⏳ Ya se está generando el PDF, espera un momento...', 'warning');
         return;
@@ -2360,23 +2362,19 @@ async function descargarPDFFinal() {
 
     descargandoPDF = true;
     
-    // Cambiar estado del botón
     const btnDescargar = document.getElementById('btnDescargarPDFFinal');
     if (btnDescargar) {
         btnDescargar.disabled = true;
         btnDescargar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
     }
 
-    // Mostrar progreso
     showProgress('Generando PDF', 'Preparando el documento...', 3);
     updateProgressBar(10, 1);
     updateProgressMessage('Generando contenido del reporte...');
 
     try {
-        // Generar HTML del reporte
         const reporteHTML = generarHTMLReporte(datosReporteFinal);
 
-        // Crear un contenedor temporal - OCULTO para el usuario
         const container = document.createElement('div');
         container.id = 'pdfContainer';
         container.style.cssText = `
@@ -2398,29 +2396,44 @@ async function descargarPDFFinal() {
         updateProgressBar(30, 1);
         updateProgressMessage('Renderizando contenido...');
 
-        // Esperar a que el DOM se actualice
         await new Promise(resolve => setTimeout(resolve, 300));
 
-        // Esperar a que las imágenes se carguen
+        // =============================================
+        // ESPERAR A QUE TODAS LAS IMÁGENES SE CARGUEN
+        // =============================================
         const imagenes = container.querySelectorAll('img');
         const promesasImagenes = Array.from(imagenes).map(img => {
             return new Promise((resolve) => {
+                // Si la imagen ya está cargada
                 if (img.complete && img.naturalHeight > 0) {
                     resolve();
-                } else {
-                    img.onload = () => resolve();
-                    img.onerror = () => resolve();
-                    setTimeout(resolve, 5000);
+                    return;
                 }
+                
+                // Forzar recarga de imágenes de Google Drive
+                if (img.src && img.src.includes('googleusercontent.com')) {
+                    const cleanUrl = img.src.split('?')[0];
+                    const id = img.src.split('id=')[1]?.split('&')[0];
+                    if (id) {
+                        img.src = `https://drive.google.com/uc?export=view&id=${id}&cache=${Date.now()}`;
+                    }
+                }
+                
+                // Esperar a que cargue
+                img.onload = () => resolve();
+                img.onerror = () => resolve();
+                
+                // Timeout por si la imagen no carga
+                setTimeout(resolve, 8000);
             });
         });
 
         await Promise.race([
             Promise.all(promesasImagenes),
-            new Promise(resolve => setTimeout(resolve, 10000))
+            new Promise(resolve => setTimeout(resolve, 15000))
         ]);
 
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         updateProgressBar(50, 2);
         updateProgressMessage('Generando archivo PDF...');
@@ -2437,23 +2450,27 @@ async function descargarPDFFinal() {
         updateProgressBar(60, 2);
         updateProgressMessage('Capturando contenido...');
 
-        // Capturar con html2canvas
-        // En descargarPDFFinal, dentro del html2canvas
+        // =============================================
+        // CAPTURAR CON html2canvas (CONFIGURACIÓN MEJORADA)
+        // =============================================
         const canvas = await html2canvas(contenido, {
-            scale: 2, 
-            allowTaint: true,  // ← Ya está
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
             backgroundColor: '#ffffff',
             width: 1024,
             height: contenido.scrollHeight || 1500,
             logging: false,
-            // Agregar onclone para asegurar que las imágenes se cargan
             onclone: function(doc) {
                 const imgs = doc.querySelectorAll('img');
                 imgs.forEach(img => {
-                    // Si la imagen es de Google Drive, asegurar que sea pública
                     if (img.src && img.src.includes('googleusercontent.com')) {
-                        // Forzar recarga con cache buster
-                        img.src = img.src.split('?')[0] + '?export=view&id=' + img.src.split('id=')[1];
+                        const cleanUrl = img.src.split('?')[0];
+                        const id = img.src.split('id=')[1]?.split('&')[0];
+                        if (id) {
+                            img.src = `https://drive.google.com/uc?export=view&id=${id}&cache=${Date.now()}`;
+                            img.crossOrigin = 'anonymous';
+                        }
                     }
                     if (!img.complete) {
                         img.style.display = 'block';
@@ -2467,7 +2484,6 @@ async function descargarPDFFinal() {
         updateProgressBar(80, 3);
         updateProgressMessage('Creando archivo PDF...');
 
-        // Asegurar jsPDF
         if (typeof window.jspdf === 'undefined') {
             await new Promise((resolve, reject) => {
                 const script = document.createElement('script');
@@ -2501,7 +2517,6 @@ async function descargarPDFFinal() {
         updateProgressBar(95, 3);
         updateProgressMessage('Descargando PDF...');
 
-        // Descargar directamente - sin abrir ventana
         const pdfBlob = pdf.output('blob');
         const link = document.createElement('a');
         link.href = URL.createObjectURL(pdfBlob);
@@ -2521,7 +2536,6 @@ async function descargarPDFFinal() {
             mostrarNotificacion('✅ PDF descargado exitosamente', 'success');
         }, 500);
 
-        // Limpiar el contenedor temporal
         setTimeout(() => {
             if (container && document.body.contains(container)) {
                 document.body.removeChild(container);
@@ -2533,7 +2547,6 @@ async function descargarPDFFinal() {
         completeProgress(false);
         mostrarNotificacion('❌ Error al generar PDF: ' + error.message, 'error');
 
-        // Fallback
         try {
             mostrarNotificacion('Intentando método alternativo...', 'info');
             await descargarPDFAlternativo();
@@ -2543,7 +2556,6 @@ async function descargarPDFFinal() {
         }
     }
 
-    // Restaurar botón
     if (btnDescargar) {
         btnDescargar.disabled = false;
         btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';

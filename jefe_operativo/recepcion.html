@@ -241,11 +241,247 @@
                             </div>
                         </div>
                         <div class="card-body">
-                            <div class="photo-grid" id="photoGrid"></div>
+                            <div class="photo-grid" id="photoGrid">
+                                <!-- ============================================= -->
+                                <!-- FOTO 1: LATERAL IZQUIERDO -->
+                                <!-- ============================================= -->
+                                <div class="photo-upload" id="upload-fotoLateralIzq" data-campo="url_lateral_izquierda">
+                                    <input type="file" id="fotoLateralIzq" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-car-side"></i>
+                                        <span>Lateral Izquierdo</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <!-- Anillo de progreso circular -->
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-fotoLateralIzq"/>
+                                            </svg>
+                                            <span class="progress-percent" id="percent-fotoLateralIzq">0%</span>
+                                        </div>
+                                        <!-- Badge de estado en esquina -->
+                                        <div class="status-badge-foto pending" id="badge-fotoLateralIzq">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <!-- Barra de progreso lineal -->
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-fotoLateralIzq"></div>
+                                        </div>
+                                        <!-- Estado inferior -->
+                                        <div class="uploading-status" id="status-fotoLateralIzq">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+
+                                <!-- ============================================= -->
+                                <!-- FOTO 2: LATERAL DERECHO -->
+                                <!-- ============================================= -->
+                                <div class="photo-upload" id="upload-fotoLateralDer" data-campo="url_lateral_derecha">
+                                    <input type="file" id="fotoLateralDer" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-car-side"></i>
+                                        <span>Lateral Derecho</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-fotoLateralDer"/>
+                                            </svg>
+                                            <span class="progress-percent" id="percent-fotoLateralDer">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-fotoLateralDer">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-fotoLateralDer"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-fotoLateralDer">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+
+                                <!-- ============================================= -->
+                                <!-- FOTO 3: FRONTAL -->
+                                <!-- ============================================= -->
+                                <div class="photo-upload" id="upload-fotoFrontal" data-campo="url_foto_frontal">
+                                    <input type="file" id="fotoFrontal" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-car"></i>
+                                        <span>Frontal</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-fotoFrontal"/>
+                                            </svg>
+                                            <span class="progress-percent" id="percent-fotoFrontal">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-fotoFrontal">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-fotoFrontal"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-fotoFrontal">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+
+                                <!-- ============================================= -->
+                                <!-- FOTO 4: TRASERA -->
+                                <!-- ============================================= -->
+                                <div class="photo-upload" id="upload-fotoTrasera" data-campo="url_foto_trasera">
+                                    <input type="file" id="fotoTrasera" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-car"></i>
+                                        <span>Trasera</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-fotoTrasera"/>
+                                            </svg>
+                                            <span class="progress-percent" id="percent-fotoTrasera">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-fotoTrasera">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-fotoTrasera"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-fotoTrasera">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+
+                                <!-- ============================================= -->
+                                <!-- FOTO 5: SUPERIOR -->
+                                <!-- ============================================= -->
+                                <div class="photo-upload" id="upload-fotoSuperior" data-campo="url_foto_superior">
+                                    <input type="file" id="fotoSuperior" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-arrow-up"></i>
+                                        <span>Superior</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-fotoSuperior"/>
+                                            </svg>
+                                            <span class="progress-percent" id="percent-fotoSuperior">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-fotoSuperior">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-fotoSuperior"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-fotoSuperior">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+
+                                <!-- ============================================= -->
+                                <!-- FOTO 6: INFERIOR -->
+                                <!-- ============================================= -->
+                                <div class="photo-upload" id="upload-fotoInferior" data-campo="url_foto_inferior">
+                                    <input type="file" id="fotoInferior" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-arrow-down"></i>
+                                        <span>Inferior</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-fotoInferior"/>
+                                            </svg>
+                                            <span class="progress-percent" id="percent-fotoInferior">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-fotoInferior">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-fotoInferior"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-fotoInferior">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+
+                                <!-- ============================================= -->
+                                <!-- FOTO 7: TABLERO -->
+                                <!-- ============================================= -->
+                                <div class="photo-upload" id="upload-fotoTablero" data-campo="url_foto_tablero">
+                                    <input type="file" id="fotoTablero" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-tachometer-alt"></i>
+                                        <span>Tablero</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-fotoTablero"/>
+                                            </svg>
+                                            <span class="progress-percent" id="percent-fotoTablero">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-fotoTablero">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-fotoTablero"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-fotoTablero">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+
                             <p class="photo-hint">* Las imágenes se comprimirán automáticamente (máx 1.2MB)</p>
                             
                             <!-- ============================================= -->
-                            <!-- BARRA DE PROGRESO DE SUBIDA DE FOTOS -->
+                            <!-- BARRA DE PROGRESO DE SUBIDA DE FOTOS (GLOBAL) -->
                             <!-- ============================================= -->
                             <div id="uploadProgressContainer" style="display: none; margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-bottom: 6px;">
@@ -337,7 +573,7 @@
                     </div>
                 </form>
 
-                <!-- PANEL DE RECEPCIONES GUARDADAS (se oculta cuando hay sesión activa) -->
+                <!-- PANEL DE RECEPCIONES GUARDADAS -->
                 <div class="recepciones-guardadas-panel" id="recepcionesGuardadasPanel">
                     <div class="panel-header">
                         <i class="fas fa-archive"></i>
@@ -435,9 +671,7 @@
         </div>
     </div>
 
-    <!-- ===================================================== -->
-    <!-- MODAL DE ORDEN FINALIZADA - SOLO BOTÓN DESCARGAR PDF (SIN VISTA PREVIA) -->
-    <!-- ===================================================== -->
+    <!-- Modal de orden finalizada -->
     <div class="modal" id="codigoOrdenModal">
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
@@ -445,7 +679,6 @@
                 <button class="modal-close" onclick="cerrarModalOrden()">&times;</button>
             </div>
             <div class="modal-body" id="ordenCompletadaBody">
-                <!-- Contenido dinámico generado por JS -->
                 <div style="text-align: center; padding: 40px 20px;">
                     <i class="fas fa-spinner fa-spin" style="font-size: 48px; color: #C1121F; margin-bottom: 20px;"></i>
                     <h3 style="color: white; margin-bottom: 10px;">Generando reporte...</h3>
@@ -463,16 +696,14 @@
         </div>
     </div>
 
-    <!-- Modal para ver detalles de recepción (con tabs) -->
+    <!-- Modal para ver detalles de recepción -->
     <div class="modal modal-detalle" id="modalDetalleRecepcion">
         <div class="modal-content modal-detalle-content">
             <div class="modal-header">
                 <h2><i class="fas fa-file-alt"></i> Detalle de Recepción</h2>
                 <button class="modal-close" onclick="cerrarModalDetalle()">&times;</button>
             </div>
-            <div class="modal-body" id="detalleRecepcionBody">
-                <!-- Contenido dinámico generado por JS -->
-            </div>
+            <div class="modal-body" id="detalleRecepcionBody"></div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModalDetalle()"><i class="fas fa-times"></i> Cerrar</button>
                 <button class="btn-primary" id="btnExportarWord"><i class="fas fa-file-word"></i> Word</button>
@@ -567,7 +798,7 @@
     </div>
 
     <!-- ===================================================== -->
-    <!-- SCRIPTS - ORDEN CORRECTO -->
+    <!-- SCRIPTS -->
     <!-- ===================================================== -->
     
     <!-- Leaflet JS -->
@@ -577,7 +808,7 @@
     <!-- Sidebar include -->
     <script src="/jefe_operativo/js/include.js"></script>
     
-    <!-- COMPRESOR DE IMÁGENES (DEBE IR ANTES QUE recepcion.js) -->
+    <!-- COMPRESOR DE IMÁGENES -->
     <script src="/jefe_operativo/js/imageCompressor.js"></script>
     
     <!-- RECEPCION.JS -->

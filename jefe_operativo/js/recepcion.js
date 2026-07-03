@@ -148,14 +148,90 @@ const clienteLongitudInput = document.getElementById('clienteLongitud');
 const btnAbrirModalUbicacion = document.getElementById('btnAbrirModalUbicacion');
 
 const FOTOS_CONFIG = [
-    { id: 'fotoLateralIzq', nombre: 'lateral_izquierdo', label: 'Lateral Izquierdo', icono: 'fa-car-side', campo: 'url_lateral_izquierda' },
-    { id: 'fotoLateralDer', nombre: 'lateral_derecho', label: 'Lateral Derecho', icono: 'fa-car-side', campo: 'url_lateral_derecha' },
-    { id: 'fotoFrontal', nombre: 'frontal', label: 'Frontal', icono: 'fa-car', campo: 'url_foto_frontal' },
-    { id: 'fotoTrasera', nombre: 'trasera', label: 'Trasera', icono: 'fa-car', campo: 'url_foto_trasera' },
-    { id: 'fotoSuperior', nombre: 'superior', label: 'Superior', icono: 'fa-arrow-up', campo: 'url_foto_superior' },
-    { id: 'fotoInferior', nombre: 'inferior', label: 'Inferior', icono: 'fa-arrow-down', campo: 'url_foto_inferior' },
-    { id: 'fotoTablero', nombre: 'tablero', label: 'Tablero', icono: 'fa-tachometer-alt', campo: 'url_foto_tablero' }
+    { id: 'fotoLateralIzq', nombre: 'lateral_izquierdo', label: 'Lateral Izquierdo', icono: 'fa-car-side', campo: 'lateral_izquierdo' },
+    { id: 'fotoLateralDer', nombre: 'lateral_derecho', label: 'Lateral Derecho', icono: 'fa-car-side', campo: 'lateral_derecho' },
+    { id: 'fotoFrontal', nombre: 'frontal', label: 'Frontal', icono: 'fa-car', campo: 'frontal' },
+    { id: 'fotoTrasera', nombre: 'trasera', label: 'Trasera', icono: 'fa-car', campo: 'trasera' },
+    { id: 'fotoSuperior', nombre: 'superior', label: 'Superior', icono: 'fa-arrow-up', campo: 'superior' },
+    { id: 'fotoInferior', nombre: 'inferior', label: 'Inferior', icono: 'fa-arrow-down', campo: 'inferior' },
+    { id: 'fotoTablero', nombre: 'tablero', label: 'Tablero', icono: 'fa-tachometer-alt', campo: 'tablero' }
 ];
+
+// =====================================================
+// FUNCIÓN PARA ACTUALIZAR PROGRESO INDIVIDUAL DE CADA FOTO
+// =====================================================
+function actualizarProgresoFoto(campo, progreso, estado = 'pending') {
+    const ring = document.getElementById(`ring-${campo}`);
+    const percent = document.getElementById(`percent-${campo}`);
+    const badge = document.getElementById(`badge-${campo}`);
+    const bar = document.getElementById(`bar-${campo}`);
+    const status = document.getElementById(`status-${campo}`);
+    
+    const radius = 22;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (progreso / 100) * circumference;
+    
+    // Actualizar anillo circular
+    if (ring) {
+        ring.style.strokeDasharray = circumference;
+        ring.style.strokeDashoffset = offset;
+        ring.className = 'ring-fg';
+        if (estado === 'completed') ring.classList.add('completed');
+        else if (estado === 'error') ring.classList.add('error');
+    }
+    
+    // Actualizar porcentaje
+    if (percent) {
+        if (estado === 'completed') {
+            percent.textContent = '✓';
+            percent.className = 'progress-percent completed';
+        } else if (estado === 'error') {
+            percent.textContent = '✕';
+            percent.className = 'progress-percent error';
+        } else {
+            percent.textContent = `${Math.round(progreso)}%`;
+            percent.className = 'progress-percent';
+        }
+    }
+    
+    // Actualizar badge en esquina
+    if (badge) {
+        badge.className = 'status-badge-foto';
+        const icons = {
+            pending: '<i class="fas fa-circle"></i>',
+            uploading: '<i class="fas fa-spinner fa-spin"></i>',
+            completed: '<i class="fas fa-check"></i>',
+            error: '<i class="fas fa-times"></i>'
+        };
+        badge.innerHTML = icons[estado] || icons.pending;
+        if (estado === 'uploading') badge.classList.add('uploading');
+        else if (estado === 'completed') badge.classList.add('completed');
+        else if (estado === 'error') badge.classList.add('error');
+        else badge.classList.add('pending');
+    }
+    
+    // Actualizar barra lineal
+    if (bar) {
+        bar.style.width = `${progreso}%`;
+        bar.className = 'fill';
+        if (estado === 'completed') bar.classList.add('completed');
+        else if (estado === 'error') bar.classList.add('error');
+    }
+    
+    // Actualizar texto de estado inferior
+    if (status) {
+        status.className = 'uploading-status';
+        const textos = {
+            pending: '<i class="fas fa-clock"></i> <span>Esperando...</span>',
+            uploading: '<i class="fas fa-spinner fa-spin"></i> <span>Subiendo...</span>',
+            completed: '<i class="fas fa-check-circle"></i> <span>Completado</span>',
+            error: '<i class="fas fa-exclamation-circle"></i> <span>Error</span>'
+        };
+        status.innerHTML = textos[estado] || textos.pending;
+        if (estado === 'completed') status.classList.add('completed');
+        else if (estado === 'error') status.classList.add('error');
+    }
+}
 
 // =====================================================
 // FUNCIÓN PARA SUBIR CON REINTENTOS
@@ -479,7 +555,7 @@ function hideProgress() {
 }
 
 // =====================================================
-// BARRA DE PROGRESO PARA SUBIDA DE FOTOS
+// BARRA DE PROGRESO PARA SUBIDA DE FOTOS (GLOBAL)
 // =====================================================
 
 function mostrarProgresoFotos(total, completadas, errores = 0) {
@@ -580,6 +656,9 @@ function encolarFoto(file, campo, label) {
         intentos: 0
     });
     
+    // Iniciar estado pendiente
+    actualizarProgresoFoto(campo, 0, 'pending');
+    
     // Si no está procesando, iniciar
     if (!isProcessingQueue) {
         procesarCola();
@@ -621,7 +700,7 @@ async function procesarCola() {
     const item = uploadQueue.shift();
     const { file, campo, label } = item;
     
-    // Actualizar barra de progreso
+    // Actualizar barra de progreso global
     const total = uploadResults.length + uploadQueue.length + 1;
     const completadas = uploadResults.length;
     const errores = uploadResults.filter(r => !r.success).length;
@@ -629,9 +708,23 @@ async function procesarCola() {
     mostrarProgresoFotos(total, completadas, errores);
     actualizarEstadoSubida(label, 'subiendo');
     
+    // Iniciar progreso individual
+    actualizarProgresoFoto(campo, 0, 'uploading');
+    
+    // Simular progreso mientras se sube
+    let progreso = 0;
+    const interval = setInterval(() => {
+        progreso += Math.random() * 15 + 5;
+        if (progreso > 90) progreso = 90;
+        actualizarProgresoFoto(campo, progreso, 'uploading');
+    }, 300);
+    
     try {
         // Subir la foto
         const url = await subirFotoGoogleDrive(file, codigoSesion || 'temp', campo);
+        
+        clearInterval(interval);
+        actualizarProgresoFoto(campo, 100, 'completed');
         
         // Éxito
         uploadResults.push({ campo, label, success: true, url });
@@ -642,10 +735,14 @@ async function procesarCola() {
             uploadDiv.dataset.driveUrl = url;
             fotosSubidasLocal[campo] = url;
             
-            // Mostrar check de éxito
+            // Mostrar check de éxito en el preview
             const preview = uploadDiv.querySelector('.upload-preview');
             if (preview) {
-                // Ya tiene la imagen, solo añadir indicador
+                // Remover overlay de subida si existe
+                const existingOverlay = preview.querySelector('.uploading-status');
+                if (existingOverlay) existingOverlay.remove();
+                
+                // Añadir indicador de éxito
                 const check = document.createElement('div');
                 check.className = 'upload-success-indicator';
                 check.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981; font-size: 20px; position: absolute; top: 5px; right: 5px; background: white; border-radius: 50%; padding: 2px;"></i>';
@@ -657,6 +754,9 @@ async function procesarCola() {
         actualizarEstadoSubida(label, 'completado');
         
     } catch (error) {
+        clearInterval(interval);
+        actualizarProgresoFoto(campo, 100, 'error');
+        
         // Error
         console.error(`❌ Error subiendo ${label}:`, error);
         uploadResults.push({ campo, label, success: false, error: error.message });
@@ -705,11 +805,11 @@ async function procesarCola() {
     // Procesar siguiente foto (recursivo)
     setTimeout(() => {
         procesarCola();
-    }, 300); // Pequeña pausa entre subidas
+    }, 300);
 }
 
 /**
- * Actualiza el estado visual de una subida
+ * Actualiza el estado visual de una subida en la barra global
  */
 function actualizarEstadoSubida(label, estado) {
     const statusSpan = document.getElementById('uploadProgressStatus');
@@ -728,12 +828,10 @@ function actualizarEstadoSubida(label, estado) {
 // =====================================================
 async function comprimirImagen(file) {
     try {
-        // Si la imagen ya es pequeña (< 500KB), no comprimir
         if (file.size < 500 * 1024) {
             return file;
         }
         
-        // Si el compresor está disponible
         if (typeof imageCompressor !== 'undefined') {
             return await imageCompressor.compress(file, {
                 maxWidth: 1280,
@@ -743,7 +841,6 @@ async function comprimirImagen(file) {
             });
         }
         
-        // Fallback: compresión manual con canvas
         return new Promise((resolve) => {
             const reader = new FileReader();
             reader.onload = function(e) {
@@ -894,7 +991,6 @@ function validarCompletadoFotos() {
         }
     }
     
-    // Solo marcar como completada cuando TODAS tienen URL en Drive
     const todasEnDrive = fotosConUrl === 7;
     if (seccionesCompletadasLocal.fotos !== todasEnDrive) {
         seccionesCompletadasLocal.fotos = todasEnDrive;
@@ -1013,11 +1109,7 @@ async function procesarFoto(input, foto) {
         preview.style.backgroundImage = `url('${objectUrl}')`;
         preview.style.backgroundSize = 'cover';
         preview.style.backgroundPosition = 'center';
-        preview.innerHTML = `
-            <div style="position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.7); color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px;">
-                <i class="fas fa-spinner fa-spin"></i> Subiendo...
-            </div>
-        `;
+        preview.innerHTML = '';
         preview.style.display = 'block';
         uploadDiv.classList.add('has-image');
         
@@ -1040,7 +1132,7 @@ async function procesarFoto(input, foto) {
         // =============================================
         encolarFoto(fileToUpload, foto.campo, foto.label);
         
-        // Mostrar barra de progreso
+        // Mostrar barra de progreso global
         const container = document.getElementById('uploadProgressContainer');
         if (container) {
             container.style.display = 'block';
@@ -1061,6 +1153,7 @@ async function procesarFoto(input, foto) {
         }
         if (removeBtn) removeBtn.style.display = 'none';
         input.value = '';
+        actualizarProgresoFoto(foto.campo, 100, 'error');
     }
 }
 
@@ -1161,18 +1254,12 @@ function eliminarGrabacion() {
 }
 
 // =====================================================
-// GENERAR FOTOS
+// GENERAR FOTOS (AHORA LAS FOTOS ESTÁN EN EL HTML)
 // =====================================================
 function generatePhotoUploads() {
-    if (!photoGrid) return;
-    photoGrid.innerHTML = FOTOS_CONFIG.map(foto => `
-        <div class="photo-upload" id="upload-${foto.id}" data-campo="${foto.campo}">
-            <input type="file" id="${foto.id}" accept="image/*" capture="environment">
-            <div class="upload-placeholder"><i class="fas ${foto.icono}"></i><span>${foto.label}</span></div>
-            <div class="upload-preview"></div>
-            <button type="button" class="remove-photo" style="display: none;"><i class="fas fa-times"></i></button>
-        </div>
-    `).join('');
+    // Ya no generamos las fotos desde JS porque están en el HTML
+    // Esta función se mantiene por compatibilidad
+    console.log('📸 Las fotos están definidas en el HTML');
 }
 
 function setupPhotoUploads() {
@@ -1202,6 +1289,8 @@ function setupPhotoUploads() {
                     URL.revokeObjectURL(uploadDiv.dataset.objectUrl);
                     delete uploadDiv.dataset.objectUrl;
                 }
+                // Resetear indicadores individuales
+                actualizarProgresoFoto(foto.campo, 0, 'pending');
                 validarCompletadoFotos();
                 if (codigoSesion) guardarSeccion('fotos');
             });
@@ -1418,6 +1507,8 @@ async function cargarDatosSesionInicial() {
                         uploadDiv.dataset.driveUrl = url;
                         const removeBtn = uploadDiv.querySelector('.remove-photo');
                         if (removeBtn) removeBtn.style.display = 'flex';
+                        // Marcar como completada
+                        actualizarProgresoFoto(foto.campo, 100, 'completed');
                     }
                 }
             }
@@ -1579,18 +1670,12 @@ function limpiarSesionCompleta() {
     detenerPolling();
     detenerKeepAlive();
     
-    // =============================================
-    // LIMPIAR BARRA DE PROGRESO
-    // =============================================
     resetearProgresoFotos();
     const container = document.getElementById('uploadProgressContainer');
     if (container) {
         container.style.display = 'none';
     }
     
-    // =============================================
-    // LIMPIAR COLA DE SUBIDA
-    // =============================================
     uploadQueue = [];
     uploadResults = [];
     isProcessingQueue = false;
@@ -1614,7 +1699,6 @@ function limpiarSesionCompleta() {
     if (recepcionForm) recepcionForm.style.display = 'none';
     if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
     
-    // Limpiar inputs
     const inputs = document.querySelectorAll('#recepcionForm input, #recepcionForm textarea');
     inputs.forEach(input => { 
         if (input.id !== 'clienteLatitud' && input.id !== 'clienteLongitud') {
@@ -1622,7 +1706,6 @@ function limpiarSesionCompleta() {
         }
     });
     
-    // Limpiar fotos
     document.querySelectorAll('.photo-upload').forEach(upload => {
         upload.classList.remove('has-image');
         const preview = upload.querySelector('.upload-preview');
@@ -1637,9 +1720,13 @@ function limpiarSesionCompleta() {
             URL.revokeObjectURL(upload.dataset.objectUrl);
             delete upload.dataset.objectUrl;
         }
+        // Resetear indicadores individuales
+        const campo = upload.dataset.campo;
+        if (campo) {
+            actualizarProgresoFoto(campo, 0, 'pending');
+        }
     });
     
-    // Limpiar audio
     if (audioPreview) {
         if (audioPreview.src && audioPreview.src.startsWith('blob:')) {
             URL.revokeObjectURL(audioPreview.src);
@@ -1654,7 +1741,6 @@ function limpiarSesionCompleta() {
         btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
     }
     
-    // Resetear badges
     ['Cliente', 'Vehiculo', 'Fotos', 'Descripcion'].forEach(seccion => {
         const badge = document.getElementById(`status${seccion}`);
         if (badge) {

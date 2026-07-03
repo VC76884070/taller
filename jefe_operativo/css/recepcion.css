@@ -2016,11 +2016,6 @@ body.sidebar-open {
     to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-}
-
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
@@ -2730,7 +2725,9 @@ body.sidebar-open {
     color: white;
 }
 
-/* Barra lineal inferior */
+/* =====================================================
+   BARRA LINEAL INFERIOR - OCULTA POR DEFECTO
+   ===================================================== */
 .upload-preview .progress-bar-foto {
     position: absolute;
     bottom: 28px;
@@ -2741,6 +2738,7 @@ body.sidebar-open {
     border-radius: 4px;
     overflow: hidden;
     z-index: 12;
+    display: none; /* ← OCULTA POR DEFECTO */
 }
 
 .upload-preview .progress-bar-foto .fill {
@@ -2759,7 +2757,9 @@ body.sidebar-open {
     background: #dc3545;
 }
 
-/* Texto de estado inferior */
+/* =====================================================
+   TEXTO DE ESTADO INFERIOR - OCULTO POR DEFECTO
+   ===================================================== */
 .upload-preview .uploading-status {
     position: absolute;
     bottom: 0;
@@ -2772,7 +2772,7 @@ body.sidebar-open {
     font-size: 8px;
     text-align: center;
     z-index: 12;
-    display: flex;
+    display: none; /* ← OCULTO POR DEFECTO */
     align-items: center;
     justify-content: center;
     gap: 6px;

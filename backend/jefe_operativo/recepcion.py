@@ -978,6 +978,7 @@ def cancelar_sesion(current_user):
     Cancela una sesión activa y elimina TODOS los datos asociados:
     - Archivos en Google Drive
     - Registros en Supabase
+    - Memoria (sesiones_activas)
     """
     try:
         from google_drive import google_drive
@@ -994,46 +995,44 @@ def cancelar_sesion(current_user):
         # 1. ELIMINAR CARPETA DE GOOGLE DRIVE
         # =============================================
         try:
+            logger.info(f"🔍 Buscando carpeta en Drive: {codigo_sesion}")
             folder_id = google_drive.get_folder_id_by_name(codigo_sesion)
             
             if folder_id:
+                logger.info(f"📁 Carpeta encontrada: {folder_id}")
                 google_drive.delete_folder(folder_id)
-                logger.info(f"📁 Carpeta eliminada de Drive: {codigo_sesion}")
+                logger.info(f"✅ Carpeta eliminada de Drive: {codigo_sesion}")
             else:
-                logger.warning(f"⚠️ Carpeta no encontrada en Drive: {codigo_sesion}")
+                logger.warning(f"⚠️ Carpeta NO encontrada en Drive: {codigo_sesion}")
                 
         except Exception as e:
             logger.error(f"❌ Error eliminando carpeta de Drive: {str(e)}")
-            # Continuamos aunque falle la eliminación de Drive
         
         # =============================================
         # 2. ELIMINAR REGISTROS DE SUPABASE
         # =============================================
-        sesion_db = supabase.table('sesion_colaborativa') \
-            .select('*') \
-            .eq('codigo', codigo_sesion) \
-            .execute()
-        
-        if sesion_db.data:
-            sesion = sesion_db.data[0]
-            
-            # Eliminar registros relacionados (si existen)
-            # Aquí puedes agregar más limpieza según tu modelo
-            
-            # Eliminar la sesión
+        try:
+            logger.info(f"🗄️ Eliminando sesión de Supabase: {codigo_sesion}")
             supabase.table('sesion_colaborativa') \
                 .delete() \
                 .eq('codigo', codigo_sesion) \
                 .execute()
-            
-            logger.info(f"🗑️ Sesión eliminada de Supabase: {codigo_sesion}")
+            logger.info(f"✅ Sesión eliminada de Supabase: {codigo_sesion}")
+                
+        except Exception as e:
+            logger.error(f"❌ Error eliminando de Supabase: {str(e)}")
         
         # =============================================
-        # 3. ELIMINAR DE MEMORIA
+        # 3. ELIMINAR DE MEMORIA (IMPORTANTE)
         # =============================================
         if codigo_sesion in sesiones_activas:
             del sesiones_activas[codigo_sesion]
-            logger.info(f"🗑️ Sesión eliminada de memoria: {codigo_sesion}")
+            logger.info(f"✅ Sesión eliminada de memoria: {codigo_sesion}")
+        else:
+            # Intentar cargar sesiones activas nuevamente para refrescar
+            global sesiones_activas
+            sesiones_activas = cargar_sesiones_activas_db()
+            logger.info(f"🔄 Sesiones recargadas: {len(sesiones_activas)} activas")
         
         return jsonify({
             'success': True,

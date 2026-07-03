@@ -1684,9 +1684,14 @@ function limpiarSesionCompleta() {
     
     localStorage.removeItem('sesion_actual');
     
+    // =============================================
+    // NO OCULTAR EL PANEL DE SESIONES ACTIVAS
+    // SOLO OCULTAR EL FORMULARIO Y LA SESIÓN ACTUAL
+    // =============================================
     if (sessionPanel) sessionPanel.style.display = 'none';
     if (colaboradoresPanel) colaboradoresPanel.style.display = 'none';
     if (recepcionForm) recepcionForm.style.display = 'none';
+    // NO ocultar sesionesActivasPanel - que se muestre
     if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
     
     // Limpiar inputs
@@ -1754,12 +1759,43 @@ function mostrarConfirmacionCancelar() {
             fetchWithToken(`${API_URL}/jefe-operativo/cancelar-sesion`, {
                 method: 'DELETE',
                 body: JSON.stringify({ codigo: codigoSesion })
-            }).catch(console.error);
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarNotificacion('✅ Sesión cancelada correctamente', 'success');
+                }
+            })
+            .catch(error => {
+                console.error('Error cancelando sesión:', error);
+            })
+            .finally(() => {
+                // =============================================
+                // LIMPIAR SESIÓN Y FORZAR ACTUALIZACIÓN
+                // =============================================
+                limpiarSesionCompleta();
+                mostrarNotificacion('Recepción cancelada', 'success');
+                
+                // FORZAR ACTUALIZACIÓN DE SESIONES ACTIVAS
+                if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
+                
+                // LIMPIAR LA LISTA DE SESIONES ANTES DE RECARGAR
+                if (sesionesList) {
+                    sesionesList.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><p>Actualizando...</p></div>';
+                }
+                
+                // RECARGAR SESIONES ACTIVAS CON FUERZA
+                setTimeout(() => {
+                    cargarSesionesActivas();
+                }, 300);
+            });
+        } else {
+            // Si no hay sesión, solo limpiar
+            limpiarSesionCompleta();
+            mostrarNotificacion('Recepción cancelada', 'success');
+            if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
+            cargarSesionesActivas();
         }
-        limpiarSesionCompleta();
-        mostrarNotificacion('Recepción cancelada', 'success');
-        if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
-        cargarSesionesActivas();
     }
 }
 
@@ -1777,23 +1813,40 @@ async function cargarSesionesActivas() {
         const data = await response.json();
         
         if (data.sesiones) {
+            // Filtrar solo sesiones activas
             const sesionesActivasFiltradas = data.sesiones.filter(s => s.estado === 'activa');
             renderSesionesActivas(sesionesActivasFiltradas);
+            
+            // Actualizar el contador
+            if (sesionesCount) {
+                sesionesCount.textContent = sesionesActivasFiltradas.length;
+            }
         }
     } catch (error) {
         console.error('Error cargando sesiones activas:', error);
+        // Mostrar mensaje de error
+        if (sesionesList) {
+            sesionesList.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>Error al cargar sesiones</p></div>';
+        }
     }
 }
 
 function renderSesionesActivas(sesiones) {
     if (!sesionesList) return;
     
+    // Filtrar solo sesiones activas
     const activas = sesiones.filter(s => s.estado === 'activa');
     
     if (sesionesCount) sesionesCount.textContent = activas.length;
     
     if (activas.length === 0) {
-        sesionesList.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>No hay sesiones activas</p></div>';
+        sesionesList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <p>No hay sesiones activas</p>
+                <small style="color: var(--gris-texto); font-size: 0.7rem;">Crea una nueva sesión para comenzar</small>
+            </div>
+        `;
         return;
     }
     
@@ -1802,13 +1855,15 @@ function renderSesionesActivas(sesiones) {
         const estaCompleta = colaboradoresCount >= 2;
         const esActiva = codigoSesion === s.codigo;
         
-        if (s.estado !== 'activa') return '';
-        
         return `
             <div class="sesion-item ${esActiva ? 'active' : ''} ${estaCompleta ? 'full' : ''}">
                 <div class="sesion-info">
                     <span class="sesion-codigo">${escapeHtml(s.codigo)}</span>
-                    <div class="sesion-colaboradores"><i class="fas fa-users"></i><span>${colaboradoresCount}/2</span></div>
+                    <div class="sesion-colaboradores">
+                        <i class="fas fa-users"></i>
+                        <span>${colaboradoresCount}/2</span>
+                    </div>
+                    ${s.creador_nombre ? `<span style="font-size: 0.6rem; color: var(--gris-texto);">Creada por: ${escapeHtml(s.creador_nombre)}</span>` : ''}
                 </div>
                 <div class="sesion-actions">
                     ${!esActiva && !estaCompleta ? 

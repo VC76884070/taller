@@ -301,24 +301,37 @@ class GoogleDriveService:
     # =====================================================
     
     def generate_folder_path(self, modulo, codigo_orden=None, referencia_id=None, 
-                         fecha=None, subcarpeta=None, tipo=None):
+                             fecha=None, subcarpeta=None, tipo=None):
         """
-        Genera una ruta de carpeta consistente.
+        Genera una ruta de carpeta consistente para una orden de trabajo.
         
-        ESTRUCTURA FINAL: OT-XXX/{modulo}/{subcarpeta}
+        ESTRUCTURA: OT-XXX/{modulo}/{subcarpeta}
         
-        Durante la recepción (sin OT-XXX): S-XXXXX/{modulo}/{subcarpeta}
+        Args:
+            modulo: 'recepcion', 'diagnostico', 'avance', 'compras'
+            codigo_orden: código de la orden de trabajo (ej: 'OT-260701-001')
+            referencia_id: ID adicional (fallback si no hay codigo_orden)
+            fecha: fecha (opcional)
+            subcarpeta: 'fotos', 'audios', 'comprobantes', 'repuestos'
+            tipo: 'imagen', 'audio', 'pdf' (opcional)
+        
+        Returns:
+            str: ruta de carpetas
         """
+        # =============================================
+        # ESTRUCTURA: OT-XXX/{modulo}/{subcarpeta}
+        # =============================================
         path_parts = []
         
-        # 1. Carpeta principal (OT-XXX o S-XXXXX)
+        # 1. Carpeta de la orden de trabajo
         if codigo_orden:
             path_parts.append(codigo_orden)
         else:
-            # Durante la recepción, usar el código de sesión (S-XXXXX)
+            # Fallback: usar referencia_id si no hay código de orden
             if referencia_id:
                 path_parts.append(referencia_id)
             else:
+                # Último recurso: usar fecha
                 if not fecha:
                     fecha = datetime.now()
                 path_parts.append(f"orden_{fecha.strftime('%Y%m%d_%H%M%S')}")
@@ -326,16 +339,26 @@ class GoogleDriveService:
         # 2. Módulo
         path_parts.append(modulo)
         
-        # 3. Subcarpeta
+        # 3. Subcarpeta (fotos, audios, etc.)
         if subcarpeta:
             path_parts.append(subcarpeta)
+        
+        # 4. Tipo (opcional)
+        if tipo:
+            tipo_map = {
+                'imagen': 'imagenes',
+                'audio': 'audios',
+                'pdf': 'documentos',
+                'video': 'videos'
+            }
+            path_parts.append(tipo_map.get(tipo, tipo))
         
         return '/'.join(path_parts)
     
     # =====================================================
     # FUNCIÓN PARA RENOMBRAR CARPETAS
     # =====================================================
-        
+    
     def rename_folder(self, folder_id, new_name):
         """
         Renombra una carpeta en Google Drive
@@ -361,7 +384,7 @@ class GoogleDriveService:
         except HttpError as e:
             logger.error(f"❌ Error renombrando carpeta {folder_id}: {str(e)}")
             return False
-
+    
     def get_folder_id_by_name(self, folder_name, parent_id=None):
         """
         Busca una carpeta por nombre
@@ -392,24 +415,25 @@ class GoogleDriveService:
         except HttpError as e:
             logger.error(f"❌ Error buscando carpeta: {str(e)}")
             return None
+    
     # =====================================================
     # FUNCIONES PARA COMPARTIR
     # =====================================================
     
     def _set_file_public(self, file_id):
-    """Hace un archivo público"""
-    try:
-        permission = {
-            'type': 'anyone',
-            'role': 'reader'
-        }
-        self.service.permissions().create(
-            fileId=file_id,
-            body=permission
-        ).execute()
-        logger.info(f"🔓 Archivo hecho público: {file_id}")
-    except HttpError as e:
-        logger.warning(f"⚠️ No se pudo hacer público el archivo {file_id}: {str(e)}")
+        """Hace un archivo público"""
+        try:
+            permission = {
+                'type': 'anyone',
+                'role': 'reader'
+            }
+            self.service.permissions().create(
+                fileId=file_id,
+                body=permission
+            ).execute()
+            logger.info(f"🔓 Archivo hecho público: {file_id}")
+        except HttpError as e:
+            logger.warning(f"⚠️ No se pudo hacer público el archivo {file_id}: {str(e)}")
     
     def _share_file_with_email(self, file_id, email):
         """Comparte un archivo con un email específico"""

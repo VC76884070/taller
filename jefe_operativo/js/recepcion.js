@@ -2145,6 +2145,9 @@ async function cargarDatosOrdenCompleta(idOrden) {
 }
 
 // Función para generar el HTML del reporte
+// =====================================================
+// GENERAR HTML DEL REPORTE (CON FORMATO CARTA)
+// =====================================================
 function generarHTMLReporte(detalle) {
     if (!detalle) {
         return '<div class="loading-preview"><i class="fas fa-exclamation-triangle"></i><p>No hay datos para mostrar</p></div>';
@@ -2160,12 +2163,16 @@ function generarHTMLReporte(detalle) {
             url: url
         }));
     
+    // Generar HTML de fotos con tamaño fijo para carta
     const fotosHTML = fotosArray.length > 0 ? `
-        <div class="reporte-fotos-grid">
+        <div class="reporte-fotos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin: 10px 0;">
             ${fotosArray.map(f => `
-                <div class="reporte-foto">
-                    <img src="${f.url}" alt="${f.label}" loading="lazy" onerror="this.style.display='none'">
-                    <div class="foto-label">${f.label}</div>
+                <div class="reporte-foto" style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background: #f9f9f9; text-align: center;">
+                    <img src="${f.url}" alt="${f.label}" 
+                         style="width: 100%; height: 150px; object-fit: cover; display: block;"
+                         loading="lazy" 
+                         onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\'padding:20px;color:#999;\'><i class=\'fas fa-image\'></i><br>${f.label}</div>'">
+                    <div style="padding: 4px; font-size: 10px; font-weight: bold; color: #555;">${f.label}</div>
                 </div>
             `).join('')}
         </div>
@@ -2199,7 +2206,6 @@ function generarHTMLReporte(detalle) {
     const jefePrincipal = detalle.jefe_operativo?.nombre || 'No asignado';
     const jefeSecundario = detalle.jefe_operativo_2?.nombre || null;
     const jefePrincipalContacto = detalle.jefe_operativo?.contacto || '';
-    const jefePrincipalEmail = detalle.jefe_operativo?.email || '';
     
     // Fecha
     const fechaIngreso = detalle.fecha_ingreso ? 
@@ -2226,14 +2232,24 @@ function generarHTMLReporte(detalle) {
     });
     
     return `
-        <div class="reporte-container" id="reporteImprimible">
+        <div class="reporte-container" id="reporteImprimible" style="
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+            background: white;
+            color: #222;
+            font-size: 12px;
+            line-height: 1.5;
+            box-sizing: border-box;
+        ">
             <!-- ENCABEZADO -->
-            <div class="reporte-header">
-                <div class="logo-area">
-                    <img src="/icono.png" alt="FURIA MOTOR" onerror="this.style.display='none'">
-                    <h1>FURIA <span>MOTOR</span></h1>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #C1121F; padding-bottom: 15px; margin-bottom: 15px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <img src="/icono.png" alt="FURIA MOTOR" style="height: 50px;" onerror="this.style.display='none'">
+                    <h1 style="font-size: 24px; color: #C1121F; margin: 0;">FURIA <span style="color: #222;">MOTOR</span></h1>
                 </div>
-                <div class="info-empresa">
+                <div style="text-align: right; font-size: 11px;">
                     <strong>FURIA MOTOR COMPANY</strong><br>
                     Taller Automotriz Especializado<br>
                     <i class="fas fa-phone"></i> +591 77712345<br>
@@ -2242,132 +2258,86 @@ function generarHTMLReporte(detalle) {
             </div>
             
             <!-- TÍTULO -->
-            <div class="reporte-titulo">
-                <h2>📋 ORDEN DE TRABAJO - RECEPCIÓN</h2>
-                <div class="codigo-orden">
+            <div style="text-align: center; margin-bottom: 15px;">
+                <h2 style="font-size: 16px; color: #C1121F; margin: 0;">📋 ORDEN DE TRABAJO - RECEPCIÓN</h2>
+                <div style="font-size: 14px; font-weight: bold; background: #f0f0f0; display: inline-block; padding: 4px 12px; border-radius: 4px; margin-top: 4px;">
                     <i class="fas fa-hashtag"></i> ${detalle.codigo_unico || 'OT-N/A'}
                 </div>
             </div>
             
             <!-- INFORMACIÓN GENERAL -->
-            <div class="reporte-seccion">
-                <h3><i class="fas fa-info-circle"></i> Información General</h3>
-                <div class="reporte-grid">
-                    <div class="reporte-item">
-                        <span class="label">Fecha de Ingreso</span>
-                        <span class="value">${fechaIngreso}</span>
-                    </div>
-                    <div class="reporte-item">
-                        <span class="label">Estado</span>
-                        <span class="value"><span class="estado-badge-reporte ${estado}">${estadoLabel}</span></span>
-                    </div>
-                    <div class="reporte-item">
-                        <span class="label">ID Orden</span>
-                        <span class="value">#${detalle.id || 'N/A'}</span>
-                    </div>
-                    <div class="reporte-item">
-                        <span class="label">Jefe Operativo</span>
-                        <span class="value">${jefePrincipal}</span>
-                    </div>
-                    ${jefeSecundario ? `
-                    <div class="reporte-item">
-                        <span class="label">Jefe Operativo 2</span>
-                        <span class="value">${jefeSecundario}</span>
-                    </div>
-                    ` : ''}
+            <div style="background: #f8f8f8; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
+                <h3 style="font-size: 12px; color: #C1121F; margin: 0 0 6px 0;"><i class="fas fa-info-circle"></i> Información General</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; font-size: 11px;">
+                    <div><strong>Fecha de Ingreso:</strong> ${fechaIngreso}</div>
+                    <div><strong>Estado:</strong> <span style="background: ${estado === 'EnRecepcion' ? '#ffc107' : estado === 'EnTaller' ? '#17a2b8' : '#28a745'}; color: white; padding: 1px 8px; border-radius: 10px; font-size: 10px;">${estadoLabel}</span></div>
+                    <div><strong>ID Orden:</strong> #${detalle.id || 'N/A'}</div>
+                    <div><strong>Jefe Operativo:</strong> ${jefePrincipal}</div>
+                    ${jefeSecundario ? `<div><strong>Jefe Operativo 2:</strong> ${jefeSecundario}</div>` : ''}
                 </div>
             </div>
             
             <!-- DATOS DEL CLIENTE -->
-            <div class="reporte-seccion">
-                <h3><i class="fas fa-user"></i> Datos del Cliente</h3>
-                <div class="reporte-grid">
-                    <div class="reporte-item">
-                        <span class="label">Nombre Completo</span>
-                        <span class="value">${clienteNombre}</span>
-                    </div>
-                    <div class="reporte-item">
-                        <span class="label">Teléfono</span>
-                        <span class="value">${clienteTelefono}</span>
-                    </div>
-                    <div class="reporte-item full-width">
-                        <span class="label">Ubicación</span>
-                        <span class="value">${clienteUbicacion}</span>
-                    </div>
-                    <div class="reporte-item">
-                        <span class="label">Coordenadas</span>
-                        <span class="value">${coordenadas}</span>
-                    </div>
+            <div style="background: #f8f8f8; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
+                <h3 style="font-size: 12px; color: #C1121F; margin: 0 0 6px 0;"><i class="fas fa-user"></i> Datos del Cliente</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; font-size: 11px;">
+                    <div><strong>Nombre:</strong> ${clienteNombre}</div>
+                    <div><strong>Teléfono:</strong> ${clienteTelefono}</div>
+                    <div style="grid-column: 1 / -1;"><strong>Ubicación:</strong> ${clienteUbicacion}</div>
+                    <div><strong>Coordenadas:</strong> ${coordenadas}</div>
                 </div>
             </div>
             
             <!-- DATOS DEL VEHÍCULO -->
-            <div class="reporte-seccion">
-                <h3><i class="fas fa-car"></i> Datos del Vehículo</h3>
-                <div class="reporte-grid">
-                    <div class="reporte-item">
-                        <span class="label">Placa</span>
-                        <span class="value"><strong>${placa}</strong></span>
-                    </div>
-                    <div class="reporte-item">
-                        <span class="label">Marca</span>
-                        <span class="value">${marca}</span>
-                    </div>
-                    <div class="reporte-item">
-                        <span class="label">Modelo</span>
-                        <span class="value">${modelo}</span>
-                    </div>
-                    <div class="reporte-item">
-                        <span class="label">Año</span>
-                        <span class="value">${anio}</span>
-                    </div>
-                    <div class="reporte-item">
-                        <span class="label">Kilometraje</span>
-                        <span class="value">${kilometraje}</span>
-                    </div>
+            <div style="background: #f8f8f8; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
+                <h3 style="font-size: 12px; color: #C1121F; margin: 0 0 6px 0;"><i class="fas fa-car"></i> Datos del Vehículo</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 15px; font-size: 11px;">
+                    <div><strong>Placa:</strong> <strong>${placa}</strong></div>
+                    <div><strong>Marca:</strong> ${marca}</div>
+                    <div><strong>Modelo:</strong> ${modelo}</div>
+                    <div><strong>Año:</strong> ${anio}</div>
+                    <div style="grid-column: span 2;"><strong>Kilometraje:</strong> ${kilometraje}</div>
                 </div>
             </div>
             
             <!-- FOTOS -->
-            <div class="reporte-seccion">
-                <h3><i class="fas fa-camera"></i> Registro Fotográfico (${fotosArray.length}/7)</h3>
+            <div style="background: #f8f8f8; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
+                <h3 style="font-size: 12px; color: #C1121F; margin: 0 0 6px 0;"><i class="fas fa-camera"></i> Registro Fotográfico (${fotosArray.length}/7)</h3>
                 ${fotosHTML}
             </div>
             
             <!-- DESCRIPCIÓN -->
-            <div class="reporte-seccion">
-                <h3><i class="fas fa-pencil-alt"></i> Descripción del Problema</h3>
-                <div class="reporte-descripcion">
-                    <p>${detalle.transcripcion_problema || 'No se registró descripción'}</p>
+            <div style="background: #f8f8f8; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
+                <h3 style="font-size: 12px; color: #C1121F; margin: 0 0 6px 0;"><i class="fas fa-pencil-alt"></i> Descripción del Problema</h3>
+                <div style="background: white; padding: 8px 10px; border-radius: 4px; font-size: 11px; min-height: 40px; border: 1px solid #eee;">
+                    ${detalle.transcripcion_problema || 'No se registró descripción'}
                 </div>
                 ${audioHTML}
             </div>
             
             <!-- FIRMAS -->
-            <div class="reporte-firmas">
-                <div class="reporte-firma">
-                    <p style="font-weight: 600; color: #C1121F; margin-bottom: 5px;">FIRMA DEL CLIENTE</p>
-                    <div class="firma-linea"></div>
-                    <div class="firma-nombre">${clienteNombre}</div>
-                    <div class="firma-fecha">Fecha: ${fechaActual}</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px; padding-top: 15px; border-top: 2px solid #ddd;">
+                <div style="text-align: center;">
+                    <p style="font-weight: 600; color: #C1121F; margin-bottom: 5px; font-size: 11px;">FIRMA DEL CLIENTE</p>
+                    <div style="border-bottom: 1px solid #222; height: 30px; margin-bottom: 4px;"></div>
+                    <div style="font-size: 10px; color: #555;">${clienteNombre}</div>
+                    <div style="font-size: 9px; color: #999;">Fecha: ${fechaActual}</div>
                 </div>
-                <div class="reporte-firma">
-                    <p style="font-weight: 600; color: #C1121F; margin-bottom: 5px;">FIRMA DEL JEFE OPERATIVO</p>
-                    <div class="firma-linea"></div>
-                    <div class="firma-nombre">${jefePrincipal}</div>
-                    <div class="firma-fecha">Fecha: ${fechaActual}</div>
-                    ${jefePrincipalContacto ? `<div class="firma-fecha">Contacto: ${jefePrincipalContacto}</div>` : ''}
+                <div style="text-align: center;">
+                    <p style="font-weight: 600; color: #C1121F; margin-bottom: 5px; font-size: 11px;">FIRMA DEL JEFE OPERATIVO</p>
+                    <div style="border-bottom: 1px solid #222; height: 30px; margin-bottom: 4px;"></div>
+                    <div style="font-size: 10px; color: #555;">${jefePrincipal}</div>
+                    <div style="font-size: 9px; color: #999;">Fecha: ${fechaActual}</div>
+                    ${jefePrincipalContacto ? `<div style="font-size: 9px; color: #999;">Contacto: ${jefePrincipalContacto}</div>` : ''}
                 </div>
             </div>
             
             <!-- FOOTER -->
-            <div class="reporte-footer">
-                <div class="footer-info">
-                    <span><i class="fas fa-file-alt"></i> Documento generado automáticamente</span>
-                    <span><i class="fas fa-qrcode"></i> Código: ${detalle.codigo_unico || 'N/A'}</span>
-                    <span><i class="fas fa-clock"></i> ${new Date().toLocaleString('es-ES')}</span>
-                </div>
-                <p style="margin-top: 10px; color: #bbb;">FURIA MOTOR COMPANY - Todos los derechos reservados</p>
+            <div style="text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee; font-size: 9px; color: #bbb;">
+                <span><i class="fas fa-file-alt"></i> Documento generado automáticamente</span> | 
+                <span><i class="fas fa-qrcode"></i> Código: ${detalle.codigo_unico || 'N/A'}</span> | 
+                <span><i class="fas fa-clock"></i> ${new Date().toLocaleString('es-ES')}</span>
+                <p style="margin: 4px 0 0 0; color: #bbb;">FURIA MOTOR COMPANY - Todos los derechos reservados</p>
             </div>
         </div>
     `;
@@ -2468,17 +2438,23 @@ async function descargarPDFFinal() {
         updateProgressMessage('Capturando contenido...');
 
         // Capturar con html2canvas
+        // En descargarPDFFinal, dentro del html2canvas
         const canvas = await html2canvas(contenido, {
-            scale: 2,
-            useCORS: true,
+            scale: 2, 
+            allowTaint: true,  // ← Ya está
             backgroundColor: '#ffffff',
             width: 1024,
             height: contenido.scrollHeight || 1500,
             logging: false,
-            allowTaint: true,
+            // Agregar onclone para asegurar que las imágenes se cargan
             onclone: function(doc) {
                 const imgs = doc.querySelectorAll('img');
                 imgs.forEach(img => {
+                    // Si la imagen es de Google Drive, asegurar que sea pública
+                    if (img.src && img.src.includes('googleusercontent.com')) {
+                        // Forzar recarga con cache buster
+                        img.src = img.src.split('?')[0] + '?export=view&id=' + img.src.split('id=')[1];
+                    }
                     if (!img.complete) {
                         img.style.display = 'block';
                         img.style.minHeight = '100px';

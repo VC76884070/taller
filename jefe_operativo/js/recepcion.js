@@ -594,9 +594,6 @@ function validarCompletadoDescripcion() {
 }
 
 // =====================================================
-// SUBIR FOTO A GOOGLE DRIVE (CON CÓDIGO DE ORDEN)
-// =====================================================
-// =====================================================
 // SUBIR FOTO A GOOGLE DRIVE (CON CÓDIGO DE SESIÓN)
 // =====================================================
 async function subirFotoGoogleDrive(file, carpeta, campo) {
@@ -605,7 +602,7 @@ async function subirFotoGoogleDrive(file, carpeta, campo) {
         formData.append('file', file);
         formData.append('carpeta', carpeta || 'recepcion');
         formData.append('campo', campo);
-        formData.append('codigo_sesion', codigoSesion);  // ← PASAR EL CÓDIGO DE SESIÓN
+        formData.append('codigo_sesion', codigoSesion);
         
         const url = `${API_URL}/jefe-operativo/upload-foto`;
         const token = localStorage.getItem('furia_token');
@@ -645,7 +642,7 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
         formData.append('file', audioBlob, 'audio.wav');
         formData.append('carpeta', carpeta || 'recepcion');
         formData.append('tipo', 'audio');
-        formData.append('codigo_sesion', codigoSesion);  // ← PASAR EL CÓDIGO DE SESIÓN
+        formData.append('codigo_sesion', codigoSesion);
         
         const url = `${API_URL}/jefe-operativo/upload-audio`;
         const token = localStorage.getItem('furia_token');
@@ -675,8 +672,9 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
         }
     });
 }
+
 // =====================================================
-// PROCESAR FOTO (MODIFICADO PARA PASAR CÓDIGO DE ORDEN)
+// PROCESAR FOTO
 // =====================================================
 async function procesarFoto(input, foto) {
     const file = input.files[0];
@@ -738,21 +736,7 @@ async function procesarFoto(input, foto) {
         
         mostrarNotificacion(`📤 Subiendo ${foto.label} a Google Drive...`, 'info');
         
-        // =============================================
-        // OBTENER CÓDIGO DE LA ORDEN (si existe)
-        // =============================================
-        let codigoOrden = null;
-        // Si la sesión tiene datos de la orden finalizada, usar el código
-        if (sesionActual && sesionActual.codigo_orden) {
-            codigoOrden = sesionActual.codigo_orden;
-        }
-        // También podemos obtenerlo del localStorage si se guardó
-        const codigoOrdenGuardado = localStorage.getItem('codigo_orden_actual');
-        if (codigoOrdenGuardado) {
-            codigoOrden = codigoOrdenGuardado;
-        }
-        
-        const url = await subirFotoGoogleDrive(fileToUpload, codigoSesion || 'temp', foto.campo, codigoOrden);
+        const url = await subirFotoGoogleDrive(fileToUpload, codigoSesion || 'temp', foto.campo);
         
         if (preview) {
             const objectUrl = URL.createObjectURL(fileToUpload);
@@ -2115,7 +2099,45 @@ async function eliminarRecepcion(id) {
 // FUNCIONES DEL REPORTE DE IMPRESIÓN
 // =====================================================
 
-// Función para cargar datos completos de la orden
+// =====================================================
+// CONVERTIR IMAGEN A BASE64
+// =====================================================
+function convertirImagenABase64(url) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.referrerPolicy = 'no-referrer';
+        
+        img.onload = function() {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth || img.width;
+                canvas.height = img.naturalHeight || img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                const base64 = canvas.toDataURL('image/jpeg', 0.85);
+                resolve(base64);
+            } catch (error) {
+                reject(error);
+            }
+        };
+        
+        img.onerror = function() {
+            reject(new Error('Error cargando imagen: ' + url));
+        };
+        
+        const separator = url.includes('?') ? '&' : '?';
+        img.src = url + separator + 'cache=' + Date.now();
+        
+        setTimeout(() => {
+            reject(new Error('Timeout cargando imagen'));
+        }, 15000);
+    });
+}
+
+// =====================================================
+// FUNCIÓN PARA CARGAR DATOS DE LA ORDEN (CON BASE64)
+// =====================================================
 async function cargarDatosOrdenCompleta(idOrden) {
     try {
         mostrarNotificacion('📊 Cargando datos de la orden...', 'info');
@@ -2133,7 +2155,31 @@ async function cargarDatosOrdenCompleta(idOrden) {
         if (data.success && data.detalle) {
             datosReporteFinal = data.detalle;
             datosReporteFinal.id_orden = idOrden;
-            return data.detalle;
+            
+            // =============================================
+            // CONVERTIR IMÁGENES A BASE64
+            // =============================================
+            const fotos = datosReporteFinal.fotos || {};
+            const fotosBase64 = {};
+            
+            for (const [key, url] of Object.entries(fotos)) {
+                if (url && url !== 'null' && url !== 'None' && url !== '') {
+                    try {
+                        const base64 = await convertirImagenABase64(url);
+                        fotosBase64[key] = base64;
+                        console.log(`✅ Imagen convertida: ${key}`);
+                    } catch (error) {
+                        console.warn(`⚠️ No se pudo convertir ${key}:`, error);
+                        fotosBase64[key] = url;
+                    }
+                } else {
+                    fotosBase64[key] = null;
+                }
+            }
+            
+            datosReporteFinal.fotos_base64 = fotosBase64;
+            
+            return datosReporteFinal;
         } else {
             throw new Error(data.error || 'No se pudieron obtener los datos');
         }
@@ -2144,17 +2190,18 @@ async function cargarDatosOrdenCompleta(idOrden) {
     }
 }
 
-// Función para generar el HTML del reporte
 // =====================================================
-// GENERAR HTML DEL REPORTE (CON FORMATO CARTA)
+// GENERAR HTML DEL REPORTE (CON BASE64)
 // =====================================================
 function generarHTMLReporte(detalle) {
     if (!detalle) {
         return '<div class="loading-preview"><i class="fas fa-exclamation-triangle"></i><p>No hay datos para mostrar</p></div>';
     }
     
-    // Procesar fotos
-    const fotos = detalle.fotos || {};
+    // =============================================
+    // USAR IMÁGENES EN BASE64 SI ESTÁN DISPONIBLES
+    // =============================================
+    const fotos = detalle.fotos_base64 || detalle.fotos || {};
     const fotosArray = Object.entries(fotos)
         .filter(([key, url]) => url && url !== 'null' && url !== 'None' && url !== '')
         .map(([key, url]) => ({
@@ -2163,20 +2210,19 @@ function generarHTMLReporte(detalle) {
             url: url
         }));
     
-    // En generarHTMLReporte, modifica la parte de las fotos:
+    // Si no hay fotos, mostrar mensaje
     const fotosHTML = fotosArray.length > 0 ? `
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 10px 0;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 8px 0;">
             ${fotosArray.map(f => `
-                <div style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background: #f9f9f9; text-align: center;">
+                <div style="border: 1px solid #ddd; border-radius: 4px; overflow: hidden; background: #f5f5f5; text-align: center;">
                     <img src="${f.url}" alt="${f.label}" 
-                        style="width: 100%; height: 120px; object-fit: cover; display: block; background: #eee;"
-                        crossorigin="anonymous"
-                        onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\\'padding:20px;color:#999;font-size:12px;\\'><i class=\\'fas fa-image\\'></i><br>${f.label}</div>'">
-                    <div style="padding: 4px; font-size: 9px; font-weight: bold; color: #555;">${f.label}</div>
+                         style="width: 100%; height: 100px; object-fit: cover; display: block; background: #eee;"
+                         onerror="this.style.display='none'">
+                    <div style="padding: 3px; font-size: 8px; font-weight: bold; color: #555;">${f.label}</div>
                 </div>
             `).join('')}
         </div>
-    ` : '<p style="color: #999; font-style: italic;">No se registraron fotos</p>';
+    ` : '<p style="color: #999; font-style: italic; font-size: 11px;">No se registraron fotos</p>';
     
     // Datos del cliente
     const clienteNombre = detalle.cliente_nombre || 'No registrado';
@@ -2219,8 +2265,8 @@ function generarHTMLReporte(detalle) {
     
     // Audio
     const audioHTML = detalle.audio_url ? `
-        <div style="margin-top: 10px;">
-            <audio controls src="${detalle.audio_url}" style="width: 100%; max-width: 400px; border-radius: 8px;"></audio>
+        <div style="margin-top: 6px;">
+            <audio controls src="${detalle.audio_url}" style="width: 100%; max-width: 300px; border-radius: 4px; height: 30px;"></audio>
         </div>
     ` : '';
     
@@ -2235,63 +2281,61 @@ function generarHTMLReporte(detalle) {
         <div class="reporte-container" id="reporteImprimible" style="
             max-width: 800px;
             margin: 0 auto;
-            padding: 20px;
-            font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+            padding: 15px;
+            font-family: Arial, sans-serif;
             background: white;
             color: #222;
-            font-size: 12px;
-            line-height: 1.5;
+            font-size: 11px;
+            line-height: 1.4;
             box-sizing: border-box;
         ">
             <!-- ENCABEZADO -->
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #C1121F; padding-bottom: 15px; margin-bottom: 15px;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <img src="/icono.png" alt="FURIA MOTOR" style="height: 50px;" onerror="this.style.display='none'">
-                    <h1 style="font-size: 24px; color: #C1121F; margin: 0;">FURIA <span style="color: #222;">MOTOR</span></h1>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #C1121F; padding-bottom: 10px; margin-bottom: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <h1 style="font-size: 20px; color: #C1121F; margin: 0;">FURIA <span style="color: #222;">MOTOR</span></h1>
                 </div>
-                <div style="text-align: right; font-size: 11px;">
+                <div style="text-align: right; font-size: 9px;">
                     <strong>FURIA MOTOR COMPANY</strong><br>
                     Taller Automotriz Especializado<br>
-                    <i class="fas fa-phone"></i> +591 77712345<br>
-                    <i class="fas fa-map-marker-alt"></i> Cochabamba, Bolivia
+                    Cochabamba, Bolivia
                 </div>
             </div>
             
             <!-- TÍTULO -->
-            <div style="text-align: center; margin-bottom: 15px;">
-                <h2 style="font-size: 16px; color: #C1121F; margin: 0;">📋 ORDEN DE TRABAJO - RECEPCIÓN</h2>
-                <div style="font-size: 14px; font-weight: bold; background: #f0f0f0; display: inline-block; padding: 4px 12px; border-radius: 4px; margin-top: 4px;">
-                    <i class="fas fa-hashtag"></i> ${detalle.codigo_unico || 'OT-N/A'}
+            <div style="text-align: center; margin-bottom: 10px;">
+                <h2 style="font-size: 14px; color: #C1121F; margin: 0;">ORDEN DE TRABAJO - RECEPCIÓN</h2>
+                <div style="font-size: 12px; font-weight: bold; background: #f0f0f0; display: inline-block; padding: 2px 10px; border-radius: 3px; margin-top: 3px;">
+                    # ${detalle.codigo_unico || 'OT-N/A'}
                 </div>
             </div>
             
             <!-- INFORMACIÓN GENERAL -->
-            <div style="background: #f8f8f8; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
-                <h3 style="font-size: 12px; color: #C1121F; margin: 0 0 6px 0;"><i class="fas fa-info-circle"></i> Información General</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; font-size: 11px;">
-                    <div><strong>Fecha de Ingreso:</strong> ${fechaIngreso}</div>
-                    <div><strong>Estado:</strong> <span style="background: ${estado === 'EnRecepcion' ? '#ffc107' : estado === 'EnTaller' ? '#17a2b8' : '#28a745'}; color: white; padding: 1px 8px; border-radius: 10px; font-size: 10px;">${estadoLabel}</span></div>
+            <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
+                <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">📋 Información General</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; font-size: 10px;">
+                    <div><strong>Fecha:</strong> ${fechaIngreso}</div>
+                    <div><strong>Estado:</strong> <span style="background: ${estado === 'EnRecepcion' ? '#ffc107' : estado === 'EnTaller' ? '#17a2b8' : '#28a745'}; color: white; padding: 1px 6px; border-radius: 8px; font-size: 9px;">${estadoLabel}</span></div>
                     <div><strong>ID Orden:</strong> #${detalle.id || 'N/A'}</div>
                     <div><strong>Jefe Operativo:</strong> ${jefePrincipal}</div>
-                    ${jefeSecundario ? `<div><strong>Jefe Operativo 2:</strong> ${jefeSecundario}</div>` : ''}
+                    ${jefeSecundario ? `<div><strong>Jefe Op. 2:</strong> ${jefeSecundario}</div>` : ''}
                 </div>
             </div>
             
             <!-- DATOS DEL CLIENTE -->
-            <div style="background: #f8f8f8; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
-                <h3 style="font-size: 12px; color: #C1121F; margin: 0 0 6px 0;"><i class="fas fa-user"></i> Datos del Cliente</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; font-size: 11px;">
+            <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
+                <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">👤 Datos del Cliente</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; font-size: 10px;">
                     <div><strong>Nombre:</strong> ${clienteNombre}</div>
                     <div><strong>Teléfono:</strong> ${clienteTelefono}</div>
                     <div style="grid-column: 1 / -1;"><strong>Ubicación:</strong> ${clienteUbicacion}</div>
-                    <div><strong>Coordenadas:</strong> ${coordenadas}</div>
+                    <div style="grid-column: 1 / -1;"><strong>Coordenadas:</strong> ${coordenadas}</div>
                 </div>
             </div>
             
             <!-- DATOS DEL VEHÍCULO -->
-            <div style="background: #f8f8f8; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
-                <h3 style="font-size: 12px; color: #C1121F; margin: 0 0 6px 0;"><i class="fas fa-car"></i> Datos del Vehículo</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 15px; font-size: 11px;">
+            <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
+                <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">🚗 Datos del Vehículo</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px 10px; font-size: 10px;">
                     <div><strong>Placa:</strong> <strong>${placa}</strong></div>
                     <div><strong>Marca:</strong> ${marca}</div>
                     <div><strong>Modelo:</strong> ${modelo}</div>
@@ -2301,54 +2345,48 @@ function generarHTMLReporte(detalle) {
             </div>
             
             <!-- FOTOS -->
-            <div style="background: #f8f8f8; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
-                <h3 style="font-size: 12px; color: #C1121F; margin: 0 0 6px 0;"><i class="fas fa-camera"></i> Registro Fotográfico (${fotosArray.length}/7)</h3>
+            <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
+                <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">📸 Fotos (${fotosArray.length}/7)</h3>
                 ${fotosHTML}
             </div>
             
             <!-- DESCRIPCIÓN -->
-            <div style="background: #f8f8f8; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
-                <h3 style="font-size: 12px; color: #C1121F; margin: 0 0 6px 0;"><i class="fas fa-pencil-alt"></i> Descripción del Problema</h3>
-                <div style="background: white; padding: 8px 10px; border-radius: 4px; font-size: 11px; min-height: 40px; border: 1px solid #eee;">
+            <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
+                <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">📝 Descripción</h3>
+                <div style="background: white; padding: 6px 8px; border-radius: 3px; font-size: 10px; min-height: 30px; border: 1px solid #eee;">
                     ${detalle.transcripcion_problema || 'No se registró descripción'}
                 </div>
                 ${audioHTML}
             </div>
             
             <!-- FIRMAS -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px; padding-top: 15px; border-top: 2px solid #ddd;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; padding-top: 10px; border-top: 2px solid #ddd;">
                 <div style="text-align: center;">
-                    <p style="font-weight: 600; color: #C1121F; margin-bottom: 5px; font-size: 11px;">FIRMA DEL CLIENTE</p>
-                    <div style="border-bottom: 1px solid #222; height: 30px; margin-bottom: 4px;"></div>
-                    <div style="font-size: 10px; color: #555;">${clienteNombre}</div>
-                    <div style="font-size: 9px; color: #999;">Fecha: ${fechaActual}</div>
+                    <p style="font-weight: 600; color: #C1121F; margin-bottom: 3px; font-size: 10px;">FIRMA DEL CLIENTE</p>
+                    <div style="border-bottom: 1px solid #222; height: 25px; margin-bottom: 3px;"></div>
+                    <div style="font-size: 9px; color: #555;">${clienteNombre}</div>
+                    <div style="font-size: 8px; color: #999;">${fechaActual}</div>
                 </div>
                 <div style="text-align: center;">
-                    <p style="font-weight: 600; color: #C1121F; margin-bottom: 5px; font-size: 11px;">FIRMA DEL JEFE OPERATIVO</p>
-                    <div style="border-bottom: 1px solid #222; height: 30px; margin-bottom: 4px;"></div>
-                    <div style="font-size: 10px; color: #555;">${jefePrincipal}</div>
-                    <div style="font-size: 9px; color: #999;">Fecha: ${fechaActual}</div>
-                    ${jefePrincipalContacto ? `<div style="font-size: 9px; color: #999;">Contacto: ${jefePrincipalContacto}</div>` : ''}
+                    <p style="font-weight: 600; color: #C1121F; margin-bottom: 3px; font-size: 10px;">FIRMA DEL JEFE OPERATIVO</p>
+                    <div style="border-bottom: 1px solid #222; height: 25px; margin-bottom: 3px;"></div>
+                    <div style="font-size: 9px; color: #555;">${jefePrincipal}</div>
+                    <div style="font-size: 8px; color: #999;">${fechaActual}</div>
+                    ${jefePrincipalContacto ? `<div style="font-size: 8px; color: #999;">Contacto: ${jefePrincipalContacto}</div>` : ''}
                 </div>
             </div>
             
             <!-- FOOTER -->
-            <div style="text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee; font-size: 9px; color: #bbb;">
-                <span><i class="fas fa-file-alt"></i> Documento generado automáticamente</span> | 
-                <span><i class="fas fa-qrcode"></i> Código: ${detalle.codigo_unico || 'N/A'}</span> | 
-                <span><i class="fas fa-clock"></i> ${new Date().toLocaleString('es-ES')}</span>
-                <p style="margin: 4px 0 0 0; color: #bbb;">FURIA MOTOR COMPANY - Todos los derechos reservados</p>
+            <div style="text-align: center; margin-top: 10px; padding-top: 6px; border-top: 1px solid #eee; font-size: 8px; color: #bbb;">
+                <span>Documento generado automáticamente</span> | 
+                <span>Código: ${detalle.codigo_unico || 'N/A'}</span> | 
+                <span>${new Date().toLocaleString('es-ES')}</span>
+                <p style="margin: 2px 0 0 0; color: #bbb;">FURIA MOTOR COMPANY - Todos los derechos reservados</p>
             </div>
         </div>
     `;
 }
 
-// =====================================================
-// FUNCIÓN PARA DESCARGAR PDF - SIN VISTA PREVIA
-// =====================================================
-// =====================================================
-// FUNCIÓN PARA DESCARGAR PDF - CON ESPERA DE IMÁGENES
-// =====================================================
 // =====================================================
 // FUNCIÓN PARA DESCARGAR PDF - VERSIÓN CON html2pdf
 // =====================================================
@@ -2381,7 +2419,6 @@ async function descargarPDFFinal() {
         // =============================================
         const reporteHTML = generarHTMLReporte(datosReporteFinal);
 
-        // Crear contenedor TEMPORAL visible solo para html2pdf
         const container = document.createElement('div');
         container.id = 'pdfContainer';
         container.style.cssText = `
@@ -2393,7 +2430,7 @@ async function descargarPDFFinal() {
             margin: 0 auto;
             padding: 30px;
             background: white;
-            font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+            font-family: Arial, sans-serif;
             z-index: -1;
             opacity: 0;
             pointer-events: none;
@@ -2405,7 +2442,6 @@ async function descargarPDFFinal() {
         updateProgressBar(30, 1);
         updateProgressMessage('Renderizando contenido...');
 
-        // Esperar a que el DOM se actualice
         await new Promise(resolve => setTimeout(resolve, 500));
 
         // =============================================
@@ -2413,8 +2449,11 @@ async function descargarPDFFinal() {
         // =============================================
         const imagenes = container.querySelectorAll('img');
         for (const img of imagenes) {
+            if (img.src && img.src.startsWith('data:image')) {
+                // Ya es base64, no hacer nada
+                continue;
+            }
             if (img.src && img.src.includes('googleusercontent.com')) {
-                // Forzar recarga con cache buster
                 const cleanUrl = img.src.split('?')[0];
                 const id = img.src.split('id=')[1]?.split('&')[0];
                 if (id) {
@@ -2456,7 +2495,6 @@ async function descargarPDFFinal() {
         // 3. Verificar que html2pdf está disponible
         // =============================================
         if (typeof html2pdf === 'undefined') {
-            // Cargar html2pdf si no está disponible
             await new Promise((resolve, reject) => {
                 const script = document.createElement('script');
                 script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
@@ -2505,7 +2543,6 @@ async function descargarPDFFinal() {
         updateProgressBar(70, 2);
         updateProgressMessage('Generando PDF...');
 
-        // Usar html2pdf
         await html2pdf().set(opt).from(elemento).save();
 
         updateProgressBar(100, 3);
@@ -2514,7 +2551,6 @@ async function descargarPDFFinal() {
             mostrarNotificacion('✅ PDF descargado exitosamente', 'success');
         }, 500);
 
-        // Limpiar contenedor
         setTimeout(() => {
             if (container && document.body.contains(container)) {
                 document.body.removeChild(container);
@@ -2541,22 +2577,23 @@ async function descargarPDFFinal() {
 async function descargarPDFAlternativo() {
     return new Promise(async (resolve, reject) => {
         try {
-            // Crear un contenedor temporal
             const reporteHTML = generarHTMLReporte(datosReporteFinal);
             
             const container = document.createElement('div');
             container.style.cssText = `
-                position: absolute;
-                left: -9999px;
-                top: -9999px;
-                width: 1024px;
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 100%;
+                max-width: 800px;
+                margin: 0 auto;
                 padding: 30px;
                 background: white;
-                font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+                font-family: Arial, sans-serif;
+                z-index: -1;
                 opacity: 0;
                 pointer-events: none;
                 overflow: visible;
-                z-index: -1;
             `;
             container.innerHTML = reporteHTML;
             document.body.appendChild(container);
@@ -2613,7 +2650,7 @@ async function descargarPDFAlternativo() {
 }
 
 // =====================================================
-// FUNCIÓN PARA MOSTRAR EL MODAL CON EL REPORTE - SIN VISTA PREVIA
+// FUNCIÓN PARA MOSTRAR EL MODAL CON EL REPORTE
 // =====================================================
 async function mostrarReporteFinal(idOrden) {
     const modal = document.getElementById('codigoOrdenModal');
@@ -2622,10 +2659,8 @@ async function mostrarReporteFinal(idOrden) {
     
     if (!modal || !body) return;
     
-    // Ocultar botón mientras carga
     if (btnDescargar) btnDescargar.style.display = 'none';
     
-    // Mostrar solo un mensaje de carga en el modal
     body.innerHTML = `
         <div style="text-align: center; padding: 40px 20px;">
             <i class="fas fa-spinner fa-spin" style="font-size: 48px; color: #C1121F; margin-bottom: 20px;"></i>
@@ -2636,11 +2671,9 @@ async function mostrarReporteFinal(idOrden) {
     
     modal.classList.add('show');
     
-    // Cargar datos
     const detalle = await cargarDatosOrdenCompleta(idOrden);
     
     if (detalle) {
-        // Actualizar título del modal
         const modalHeader = modal.querySelector('.modal-header h2');
         if (modalHeader) {
             modalHeader.innerHTML = `
@@ -2649,7 +2682,6 @@ async function mostrarReporteFinal(idOrden) {
             `;
         }
         
-        // Mostrar mensaje de éxito (sin vista previa del documento)
         body.innerHTML = `
             <div style="text-align: center; padding: 30px 20px;">
                 <i class="fas fa-check-circle" style="font-size: 48px; color: #10B981; margin-bottom: 20px;"></i>
@@ -2662,7 +2694,6 @@ async function mostrarReporteFinal(idOrden) {
             </div>
         `;
         
-        // Mostrar botón de descarga
         if (btnDescargar) {
             btnDescargar.style.display = 'inline-flex';
             btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
@@ -2672,7 +2703,6 @@ async function mostrarReporteFinal(idOrden) {
             };
         }
         
-        // Almacenar datos para la descarga
         datosReporteFinal = detalle;
         
         mostrarNotificacion('✅ Reporte listo para descargar', 'success');

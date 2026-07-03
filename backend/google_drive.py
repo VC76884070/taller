@@ -518,19 +518,21 @@ class GoogleDriveService:
         if not url:
             return None
         
+        # Formato: https://drive.google.com/uc?export=view&id=XXX
         if 'id=' in url:
             return url.split('id=')[-1].split('&')[0]
         
+        # Formato: https://drive.google.com/file/d/XXX/view
         if '/d/' in url:
             parts = url.split('/d/')
             if len(parts) > 1:
                 return parts[1].split('/')[0]
         
+        # Formato: https://drive.google.com/open?id=XXX
         if 'open?id=' in url:
             return url.split('open?id=')[-1].split('&')[0]
         
         return None
-
 # =====================================================
 # INSTANCIA GLOBAL
 # =====================================================

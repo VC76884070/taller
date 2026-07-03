@@ -1,6 +1,6 @@
 # =====================================================
 # GOOGLE DRIVE - CON OAUTH 2.0 VÍA VARIABLES DE ENTORNO
-# ESTRUCTURA: OT-XXX/{modulo}/{subcarpeta}
+# ESTRUCTURA: S-XXXXX/{modulo}/{subcarpeta}
 # =====================================================
 
 import os
@@ -139,7 +139,7 @@ class GoogleDriveService:
         Args:
             file_data: bytes o FileStorage
             filename: nombre del archivo
-            folder_path: ruta completa (ej: 'OT-260701-001/recepcion/fotos')
+            folder_path: ruta completa (ej: 'S-ABC123/recepcion/fotos')
             mime_type: tipo MIME
             public: hacer público
             share_email: compartir con email
@@ -232,7 +232,7 @@ class GoogleDriveService:
     def _get_or_create_folder(self, folder_path):
         """
         Obtiene o crea una carpeta por ruta con reintentos
-        Ejemplo: 'OT-260701-001/recepcion/fotos'
+        Ejemplo: 'S-ABC123/recepcion/fotos'
         """
         last_error = None
         
@@ -305,7 +305,7 @@ class GoogleDriveService:
         """
         Genera una ruta de carpeta consistente para una orden de trabajo.
         
-        ESTRUCTURA: OT-XXX/{modulo}/{subcarpeta}
+        ESTRUCTURA: S-XXXXX/{modulo}/{subcarpeta}
         
         Args:
             modulo: 'recepcion', 'diagnostico', 'avance', 'compras'
@@ -319,22 +319,19 @@ class GoogleDriveService:
             str: ruta de carpetas
         """
         # =============================================
-        # ESTRUCTURA: OT-XXX/{modulo}/{subcarpeta}
+        # ESTRUCTURA: S-XXXXX/{modulo}/{subcarpeta}
         # =============================================
         path_parts = []
         
-        # 1. Carpeta de la orden de trabajo
+        # 1. Carpeta de la sesión/orden de trabajo
         if codigo_orden:
             path_parts.append(codigo_orden)
+        elif referencia_id:
+            path_parts.append(referencia_id)
         else:
-            # Fallback: usar referencia_id si no hay código de orden
-            if referencia_id:
-                path_parts.append(referencia_id)
-            else:
-                # Último recurso: usar fecha
-                if not fecha:
-                    fecha = datetime.now()
-                path_parts.append(f"orden_{fecha.strftime('%Y%m%d_%H%M%S')}")
+            if not fecha:
+                fecha = datetime.now()
+            path_parts.append(f"orden_{fecha.strftime('%Y%m%d_%H%M%S')}")
         
         # 2. Módulo
         path_parts.append(modulo)
@@ -415,6 +412,44 @@ class GoogleDriveService:
         except HttpError as e:
             logger.error(f"❌ Error buscando carpeta: {str(e)}")
             return None
+    
+    # =====================================================
+    # FUNCIÓN PARA ELIMINAR CARPETAS (NUEVA)
+    # =====================================================
+    
+    def delete_folder(self, folder_id):
+        """
+        Elimina una carpeta y todo su contenido de Google Drive
+        
+        Args:
+            folder_id: ID de la carpeta
+        
+        Returns:
+            bool: True si se eliminó correctamente
+        """
+        try:
+            # Primero, listar todos los archivos en la carpeta
+            results = self.service.files().list(
+                q=f"'{folder_id}' in parents and trashed=false",
+                fields="files(id, name)",
+                pageSize=100
+            ).execute()
+            
+            files = results.get('files', [])
+            
+            # Eliminar cada archivo
+            for file in files:
+                self.service.files().delete(fileId=file['id']).execute()
+                logger.debug(f"🗑️ Archivo eliminado: {file['name']}")
+            
+            # Finalmente, eliminar la carpeta vacía
+            self.service.files().delete(fileId=folder_id).execute()
+            logger.info(f"🗑️ Carpeta eliminada: {folder_id}")
+            return True
+            
+        except HttpError as e:
+            logger.error(f"❌ Error eliminando carpeta {folder_id}: {str(e)}")
+            return False
     
     # =====================================================
     # FUNCIONES PARA COMPARTIR

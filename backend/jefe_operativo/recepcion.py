@@ -1,7 +1,7 @@
 # =====================================================
 # RECEPCION.PY - JEFE OPERATIVO
 # VERSIÓN CON GOOGLE DRIVE (SIN CLOUDINARY)
-# ESTRUCTURA: OT-XXX/recepcion/fotos y OT-XXX/recepcion/audios
+# ESTRUCTURA: S-XXXXX/recepcion/fotos y S-XXXXX/recepcion/audios
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -655,7 +655,7 @@ def jefe_operativo_required(f):
     return decorated_function
 
 # =====================================================
-# ENDPOINTS PARA GOOGLE DRIVE (CON NUEVA ESTRUCTURA)
+# ENDPOINTS PARA GOOGLE DRIVE
 # =====================================================
 
 @jefe_operativo_recepcion_bp.route('/upload-foto', methods=['POST'])
@@ -671,7 +671,7 @@ def upload_foto_drive(current_user):
         
         file = request.files.get('file')
         campo = request.form.get('campo', 'general')
-        codigo_sesion = request.form.get('codigo_sesion')  # ← RECIBIR CÓDIGO DE SESIÓN
+        codigo_sesion = request.form.get('codigo_sesion')
         
         if not file:
             return jsonify({'error': 'No se envió el archivo'}), 400
@@ -689,7 +689,7 @@ def upload_foto_drive(current_user):
         # =============================================
         folder_path = google_drive.generate_folder_path(
             modulo='recepcion',
-            referencia_id=codigo_sesion,  # ← Usar S-XXXXX
+            referencia_id=codigo_sesion,
             subcarpeta='fotos'
         )
         
@@ -713,7 +713,6 @@ def upload_foto_drive(current_user):
         logger.error(f"❌ Error subiendo foto: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
 @jefe_operativo_recepcion_bp.route('/upload-audio', methods=['POST'])
 @jefe_operativo_required
 def upload_audio_drive(current_user):
@@ -726,7 +725,7 @@ def upload_audio_drive(current_user):
         from datetime import datetime
         
         file = request.files.get('file')
-        codigo_sesion = request.form.get('codigo_sesion')  # ← RECIBIR CÓDIGO DE SESIÓN
+        codigo_sesion = request.form.get('codigo_sesion')
         
         if not file:
             return jsonify({'error': 'No se envió el archivo'}), 400
@@ -744,7 +743,7 @@ def upload_audio_drive(current_user):
         # =============================================
         folder_path = google_drive.generate_folder_path(
             modulo='recepcion',
-            referencia_id=codigo_sesion,  # ← Usar S-XXXXX
+            referencia_id=codigo_sesion,
             subcarpeta='audios'
         )
         
@@ -769,7 +768,6 @@ def upload_audio_drive(current_user):
         logger.error(f"❌ Error subiendo audio: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
 @jefe_operativo_recepcion_bp.route('/renombrar-carpeta', methods=['POST'])
 @jefe_operativo_required
 def renombrar_carpeta_drive(current_user):
@@ -787,7 +785,6 @@ def renombrar_carpeta_drive(current_user):
         if not nombre_actual or not nombre_nuevo:
             return jsonify({'error': 'Se requieren nombre_actual y nombre_nuevo'}), 400
         
-        # Buscar la carpeta con el nombre actual
         folder_id = google_drive.get_folder_id_by_name(nombre_actual)
         
         if not folder_id:
@@ -796,7 +793,6 @@ def renombrar_carpeta_drive(current_user):
                 'error': f'No se encontró la carpeta: {nombre_actual}'
             }), 404
         
-        # Renombrar
         resultado = google_drive.rename_folder(folder_id, nombre_nuevo)
         
         if resultado:
@@ -815,7 +811,7 @@ def renombrar_carpeta_drive(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# ENDPOINTS DE SESIONES (MODIFICADOS)
+# ENDPOINTS DE SESIONES
 # =====================================================
 
 @jefe_operativo_recepcion_bp.route('/iniciar-sesion', methods=['POST'])
@@ -935,11 +931,9 @@ def finalizar_sesion(current_user):
         try:
             from google_drive import google_drive
             
-            # Buscar la carpeta con el nombre de la sesión (S-XXXXX)
             folder_id = google_drive.get_folder_id_by_name(codigo_sesion)
             
             if folder_id:
-                # Renombrar a OT-XXX
                 google_drive.rename_folder(folder_id, codigo_orden)
                 logger.info(f"📁 Carpeta renombrada: {codigo_sesion} -> {codigo_orden}")
             else:
@@ -976,9 +970,79 @@ def finalizar_sesion(current_user):
     except Exception as e:
         logger.error(f"Error finalizando: {str(e)}")
         return jsonify({'error': str(e)}), 500
-# =====================================================
-# RESTO DE ENDPOINTS (SIN CAMBIOS)
-# =====================================================
+
+@jefe_operativo_recepcion_bp.route('/cancelar-sesion', methods=['DELETE'])
+@jefe_operativo_required
+def cancelar_sesion(current_user):
+    """
+    Cancela una sesión activa y elimina TODOS los datos asociados:
+    - Archivos en Google Drive
+    - Registros en Supabase
+    """
+    try:
+        from google_drive import google_drive
+        
+        data = request.get_json()
+        codigo_sesion = data.get('codigo')
+        
+        if not codigo_sesion:
+            return jsonify({'error': 'Código requerido'}), 400
+        
+        logger.info(f"🗑️ Cancelando sesión: {codigo_sesion}")
+        
+        # =============================================
+        # 1. ELIMINAR CARPETA DE GOOGLE DRIVE
+        # =============================================
+        try:
+            folder_id = google_drive.get_folder_id_by_name(codigo_sesion)
+            
+            if folder_id:
+                google_drive.delete_folder(folder_id)
+                logger.info(f"📁 Carpeta eliminada de Drive: {codigo_sesion}")
+            else:
+                logger.warning(f"⚠️ Carpeta no encontrada en Drive: {codigo_sesion}")
+                
+        except Exception as e:
+            logger.error(f"❌ Error eliminando carpeta de Drive: {str(e)}")
+            # Continuamos aunque falle la eliminación de Drive
+        
+        # =============================================
+        # 2. ELIMINAR REGISTROS DE SUPABASE
+        # =============================================
+        sesion_db = supabase.table('sesion_colaborativa') \
+            .select('*') \
+            .eq('codigo', codigo_sesion) \
+            .execute()
+        
+        if sesion_db.data:
+            sesion = sesion_db.data[0]
+            
+            # Eliminar registros relacionados (si existen)
+            # Aquí puedes agregar más limpieza según tu modelo
+            
+            # Eliminar la sesión
+            supabase.table('sesion_colaborativa') \
+                .delete() \
+                .eq('codigo', codigo_sesion) \
+                .execute()
+            
+            logger.info(f"🗑️ Sesión eliminada de Supabase: {codigo_sesion}")
+        
+        # =============================================
+        # 3. ELIMINAR DE MEMORIA
+        # =============================================
+        if codigo_sesion in sesiones_activas:
+            del sesiones_activas[codigo_sesion]
+            logger.info(f"🗑️ Sesión eliminada de memoria: {codigo_sesion}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Sesión {codigo_sesion} cancelada y datos eliminados'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error cancelando sesión: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @jefe_operativo_recepcion_bp.route('/unirse-sesion', methods=['POST'])
 @jefe_operativo_required
@@ -1035,7 +1099,6 @@ def unirse_sesion(current_user):
     except Exception as e:
         logger.error(f"Error uniéndose a sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
 
 @jefe_operativo_recepcion_bp.route('/guardar-seccion', methods=['POST'])
 @jefe_operativo_required
@@ -1126,7 +1189,6 @@ def guardar_seccion(current_user):
         logger.error(f"Error guardando sección: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
 @jefe_operativo_recepcion_bp.route('/obtener-sesion/<codigo>', methods=['GET'])
 @jefe_operativo_required
 def obtener_sesion(current_user, codigo):
@@ -1165,7 +1227,6 @@ def obtener_sesion(current_user, codigo):
         logger.error(f"Error obteniendo sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
 @jefe_operativo_recepcion_bp.route('/verificar-placa/<placa>', methods=['GET'])
 @jefe_operativo_required
 def verificar_placa(current_user, placa):
@@ -1195,29 +1256,6 @@ def verificar_placa(current_user, placa):
         logger.error(f"Error verificando placa: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
-@jefe_operativo_recepcion_bp.route('/cancelar-sesion', methods=['DELETE'])
-@jefe_operativo_required
-def cancelar_sesion(current_user):
-    """Cancela una sesión activa"""
-    try:
-        data = request.get_json()
-        codigo_sesion = data.get('codigo')
-        
-        if not codigo_sesion:
-            return jsonify({'error': 'Código requerido'}), 400
-        
-        if codigo_sesion in sesiones_activas:
-            del sesiones_activas[codigo_sesion]
-        
-        eliminar_sesion_db(codigo_sesion)
-        
-        return jsonify({'success': True}), 200
-    except Exception as e:
-        logger.error(f"Error cancelando sesión: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
 @jefe_operativo_recepcion_bp.route('/ping-sesion/<codigo>', methods=['GET'])
 @jefe_operativo_required
 def ping_sesion(current_user, codigo):
@@ -1230,7 +1268,6 @@ def ping_sesion(current_user, codigo):
     except Exception as e:
         logger.error(f"Error en ping: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
 
 @jefe_operativo_recepcion_bp.route('/sesiones-activas', methods=['GET'])
 @jefe_operativo_required
@@ -1266,7 +1303,6 @@ def listar_sesiones_activas(current_user):
         logger.error(f"Error listando sesiones: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
 @jefe_operativo_recepcion_bp.route('/listar-recepciones', methods=['GET'])
 @jefe_operativo_required
 def listar_recepciones(current_user):
@@ -1301,7 +1337,6 @@ def listar_recepciones(current_user):
         logger.error(f"Error listando recepciones: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
 @jefe_operativo_recepcion_bp.route('/detalle-recepcion/<int:id_orden>', methods=['GET'])
 @jefe_operativo_required
 def detalle_recepcion(current_user, id_orden):
@@ -1317,7 +1352,6 @@ def detalle_recepcion(current_user, id_orden):
     except Exception as e:
         logger.error(f"Error obteniendo detalle: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
 
 @jefe_operativo_recepcion_bp.route('/eliminar-recepcion/<int:id_orden>', methods=['DELETE'])
 @jefe_operativo_required
@@ -1339,7 +1373,6 @@ def eliminar_recepcion(current_user, id_orden):
     except Exception as e:
         logger.error(f"Error eliminando recepción: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
 
 @jefe_operativo_recepcion_bp.route('/actualizar-recepcion/<int:id_orden>', methods=['PUT'])
 @jefe_operativo_required
@@ -1394,7 +1427,6 @@ def actualizar_recepcion(current_user, id_orden):
         logger.error(f"Error actualizando recepción: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
 @jefe_operativo_recepcion_bp.route('/marcar-editando', methods=['POST'])
 @jefe_operativo_required
 def marcar_editando(current_user):
@@ -1414,7 +1446,6 @@ def marcar_editando(current_user):
     except Exception as e:
         logger.error(f"Error marcando edición: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
 
 @jefe_operativo_recepcion_bp.route('/liberar-edicion', methods=['POST'])
 @jefe_operativo_required
@@ -1436,13 +1467,11 @@ def liberar_edicion(current_user):
         logger.error(f"Error liberando edición: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
 @jefe_operativo_recepcion_bp.route('/taller-coordenadas', methods=['GET'])
 @jefe_operativo_required
 def obtener_coordenadas_taller(current_user):
     """Devuelve las coordenadas del taller"""
     return jsonify({'success': True, 'lat': TALLER_LAT, 'lng': TALLER_LNG}), 200
-
 
 @jefe_operativo_recepcion_bp.route('/obtener-reporte/<int:id_orden>', methods=['GET'])
 @jefe_operativo_required
@@ -1490,9 +1519,6 @@ def obtener_reporte(current_user, id_orden):
     except Exception as e:
         logger.error(f"Error generando reporte: {str(e)}")
         return jsonify({'error': str(e)}), 500
-# =====================================================
-# ENDPOINT PARA CONVERTIR IMAGEN A BASE64
-# =====================================================
 
 @jefe_operativo_recepcion_bp.route('/imagen-base64', methods=['POST'])
 @jefe_operativo_required

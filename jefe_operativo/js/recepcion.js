@@ -15,12 +15,6 @@ if (typeof window.API_BASE_URL === 'undefined') {
 }
 
 // =====================================================
-// CONFIGURACIÓN DE GOOGLE DRIVE (YA NO USA CLOUDINARY)
-// =====================================================
-// Las funciones de subida ahora usan Google Drive
-// No se necesitan constantes de Cloudinary
-
-// =====================================================
 // CONFIGURACIÓN PRINCIPAL
 // =====================================================
 const API_URL = `${window.API_BASE_URL}/api`;
@@ -101,6 +95,14 @@ let datosReporteFinal = null;
 
 // Variable para controlar si ya se está descargando
 let descargandoPDF = false;
+
+// =====================================================
+// COLA DE PROCESAMIENTO PARA SUBIR FOTOS (SECUENCIAL)
+// =====================================================
+let uploadQueue = [];
+let isProcessingQueue = false;
+let uploadResults = [];
+let colaActiva = false;
 
 // Variables para barra de progreso de fotos
 let uploadProgressTotal = 0;
@@ -539,6 +541,10 @@ function resetearProgresoFotos() {
     uploadProgressCompletadas = 0;
     uploadProgressErrores = 0;
     isUploadingFotos = false;
+    uploadQueue = [];
+    uploadResults = [];
+    isProcessingQueue = false;
+    colaActiva = false;
     
     const container = document.getElementById('uploadProgressContainer');
     const bar = document.getElementById('uploadProgressBar');
@@ -560,93 +566,161 @@ function resetearProgresoFotos() {
 }
 
 // =====================================================
-// SUBIR TODAS LAS FOTOS EN PARALELO CON PROGRESO
+// COLA DE PROCESAMIENTO PARA SUBIR FOTOS (SECUENCIAL)
 // =====================================================
-async function subirTodasLasFotosEnParalelo() {
-    if (isUploadingFotos) return;
-    
-    // Obtener fotos pendientes (con imagen pero sin URL en Drive)
-    const fotosPendientes = FOTOS_CONFIG.filter(foto => {
-        const uploadDiv = document.getElementById(`upload-${foto.id}`);
-        return uploadDiv && 
-               uploadDiv.classList.contains('has-image') && 
-               !uploadDiv.dataset.driveUrl;
+
+/**
+ * Agrega una foto a la cola de subida
+ */
+function encolarFoto(file, campo, label) {
+    uploadQueue.push({
+        file: file,
+        campo: campo,
+        label: label,
+        intentos: 0
     });
     
-    if (fotosPendientes.length === 0) return;
-    
-    isUploadingFotos = true;
-    uploadProgressTotal = fotosPendientes.length;
-    uploadProgressCompletadas = 0;
-    uploadProgressErrores = 0;
-    
-    mostrarProgresoFotos(uploadProgressTotal, 0);
-    
-    mostrarNotificacion(`📤 Subiendo ${uploadProgressTotal} fotos en paralelo...`, 'info');
-    
-    const promesas = fotosPendientes.map(foto => {
-        const input = document.getElementById(foto.id);
-        const file = input?.files[0];
+    // Si no está procesando, iniciar
+    if (!isProcessingQueue) {
+        procesarCola();
+    }
+}
+
+/**
+ * Procesa la cola de subida SECUENCIALMENTE (una por una)
+ */
+async function procesarCola() {
+    if (uploadQueue.length === 0) {
+        isProcessingQueue = false;
+        colaActiva = false;
         
-        if (!file) {
-            uploadProgressErrores++;
-            mostrarProgresoFotos(uploadProgressTotal, uploadProgressCompletadas, uploadProgressErrores);
-            return Promise.resolve({ foto, error: 'No hay archivo', success: false });
+        // Mostrar resumen final
+        const total = uploadResults.length;
+        const exitos = uploadResults.filter(r => r.success).length;
+        const errores = uploadResults.filter(r => !r.success).length;
+        
+        if (errores > 0) {
+            mostrarNotificacion(`⚠️ ${exitos} subidas exitosas, ${errores} errores`, 'warning');
+        } else {
+            mostrarNotificacion(`✅ ${exitos} fotos subidas exitosamente`, 'success');
         }
         
-        return subirFotoGoogleDrive(file, codigoSesion || 'temp', foto.campo)
-            .then(url => {
-                const uploadDiv = document.getElementById(`upload-${foto.id}`);
-                if (uploadDiv) {
-                    uploadDiv.dataset.driveUrl = url;
-                    fotosSubidasLocal[foto.campo] = url;
-                }
-                uploadProgressCompletadas++;
-                mostrarProgresoFotos(uploadProgressTotal, uploadProgressCompletadas, uploadProgressErrores);
-                return { foto, url, success: true };
-            })
-            .catch(error => {
-                console.error(`❌ Error en ${foto.label}:`, error);
-                uploadProgressErrores++;
-                uploadProgressCompletadas++;
-                mostrarProgresoFotos(uploadProgressTotal, uploadProgressCompletadas, uploadProgressErrores);
-                
-                const uploadDiv = document.getElementById(`upload-${foto.id}`);
-                const preview = uploadDiv?.querySelector('.upload-preview');
-                if (preview) {
-                    preview.innerHTML = `<i class="fas fa-exclamation-circle" style="color: #dc3545; font-size: 20px;"></i>`;
-                    preview.style.display = 'flex';
-                    preview.style.alignItems = 'center';
-                    preview.style.justifyContent = 'center';
-                    preview.style.backgroundColor = '#fff5f5';
-                }
-                return { foto, error: error.message, success: false };
-            });
+        // Ocultar barra después de 3 segundos
+        setTimeout(() => {
+            ocultarProgresoFotos();
+            resetearProgresoFotos();
+        }, 3000);
+        
+        return;
+    }
+    
+    isProcessingQueue = true;
+    colaActiva = true;
+    
+    // Tomar la PRIMERA foto de la cola
+    const item = uploadQueue.shift();
+    const { file, campo, label } = item;
+    
+    // Actualizar barra de progreso
+    const total = uploadResults.length + uploadQueue.length + 1;
+    const completadas = uploadResults.length;
+    const errores = uploadResults.filter(r => !r.success).length;
+    
+    mostrarProgresoFotos(total, completadas, errores);
+    actualizarEstadoSubida(label, 'subiendo');
+    
+    try {
+        // Subir la foto
+        const url = await subirFotoGoogleDrive(file, codigoSesion || 'temp', campo);
+        
+        // Éxito
+        uploadResults.push({ campo, label, success: true, url });
+        
+        // Actualizar UI
+        const uploadDiv = document.getElementById(`upload-${campo}`);
+        if (uploadDiv) {
+            uploadDiv.dataset.driveUrl = url;
+            fotosSubidasLocal[campo] = url;
+            
+            // Mostrar check de éxito
+            const preview = uploadDiv.querySelector('.upload-preview');
+            if (preview) {
+                // Ya tiene la imagen, solo añadir indicador
+                const check = document.createElement('div');
+                check.className = 'upload-success-indicator';
+                check.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981; font-size: 20px; position: absolute; top: 5px; right: 5px; background: white; border-radius: 50%; padding: 2px;"></i>';
+                preview.style.position = 'relative';
+                preview.appendChild(check);
+            }
+        }
+        
+        actualizarEstadoSubida(label, 'completado');
+        
+    } catch (error) {
+        // Error
+        console.error(`❌ Error subiendo ${label}:`, error);
+        uploadResults.push({ campo, label, success: false, error: error.message });
+        
+        // Mostrar error en la UI
+        const uploadDiv = document.getElementById(`upload-${campo}`);
+        if (uploadDiv) {
+            const preview = uploadDiv.querySelector('.upload-preview');
+            if (preview) {
+                preview.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; background: #fff5f5;">
+                        <i class="fas fa-exclamation-circle" style="color: #dc3545; font-size: 24px;"></i>
+                    </div>
+                `;
+            }
+        }
+        
+        actualizarEstadoSubida(label, 'error');
+        mostrarNotificacion(`❌ Error en ${label}: ${error.message}`, 'error');
+    }
+    
+    // Actualizar barra después de cada subida
+    const nuevasCompletadas = uploadResults.length;
+    const nuevosErrores = uploadResults.filter(r => !r.success).length;
+    const nuevoTotal = nuevasCompletadas + uploadQueue.length;
+    
+    mostrarProgresoFotos(nuevoTotal, nuevasCompletadas, nuevosErrores);
+    
+    // Verificar si todas las fotos están completadas
+    const fotosConfig = ['lateral_izquierdo', 'lateral_derecho', 'frontal', 'trasera', 'superior', 'inferior', 'tablero'];
+    const todasSubidas = fotosConfig.every(campo => {
+        const div = document.getElementById(`upload-${campo}`);
+        return div && div.dataset.driveUrl;
     });
     
-    const resultados = await Promise.all(promesas);
-    
-    const exitos = resultados.filter(r => r.success);
-    const errores = resultados.filter(r => !r.success);
-    
-    if (errores.length === 0) {
-        mostrarNotificacion(`✅ ${exitos.length} fotos subidas exitosamente`, 'success');
-    } else {
-        mostrarNotificacion(`⚠️ ${exitos.length} subidas, ${errores.length} errores`, 'warning');
+    if (todasSubidas) {
+        seccionesCompletadasLocal.fotos = true;
+        actualizarEstadoVisualSeccion('fotos', true);
+        actualizarBotonFinalizar();
+        
+        if (codigoSesion) {
+            await guardarSeccion('fotos');
+        }
     }
     
-    validarCompletadoFotos();
-    
-    if (codigoSesion && seccionesCompletadasLocal.fotos) {
-        await guardarSeccion('fotos');
-    }
-    
-    isUploadingFotos = false;
-    
+    // Procesar siguiente foto (recursivo)
     setTimeout(() => {
-        ocultarProgresoFotos();
-        resetearProgresoFotos();
-    }, 3000);
+        procesarCola();
+    }, 300); // Pequeña pausa entre subidas
+}
+
+/**
+ * Actualiza el estado visual de una subida
+ */
+function actualizarEstadoSubida(label, estado) {
+    const statusSpan = document.getElementById('uploadProgressStatus');
+    if (statusSpan) {
+        const estados = {
+            'subiendo': `📤 Subiendo ${label}...`,
+            'completado': `✅ ${label} completado`,
+            'error': `❌ ${label} falló`
+        };
+        statusSpan.textContent = estados[estado] || estado;
+    }
 }
 
 // =====================================================
@@ -788,50 +862,46 @@ function validarCompletadoVehiculo() {
 }
 
 function validarCompletadoFotos() {
-    let fotosCompletas = 0;
+    let fotosConImagen = 0;
+    let fotosConUrl = 0;
     
     for (const foto of FOTOS_CONFIG) {
         const uploadDiv = document.getElementById(`upload-${foto.id}`);
         if (uploadDiv && uploadDiv.classList.contains('has-image')) {
-            fotosCompletas++;
+            fotosConImagen++;
+            if (uploadDiv.dataset.driveUrl) {
+                fotosConUrl++;
+            }
         }
     }
     
-    const completada = fotosCompletas === 7;
+    const completada = fotosConImagen === 7;
     
     const fotosBadge = document.getElementById('statusFotos');
     if (fotosBadge) {
-        if (completada) {
+        if (completada && fotosConUrl === 7) {
             fotosBadge.textContent = '✓ Completado';
             fotosBadge.classList.add('completado');
             fotosBadge.classList.remove('en-proceso');
+        } else if (completada) {
+            fotosBadge.textContent = `⏳ ${fotosConUrl}/7 en Drive`;
+            fotosBadge.classList.add('en-proceso');
+            fotosBadge.classList.remove('completado');
         } else {
-            fotosBadge.textContent = `○ ${fotosCompletas}/7 fotos`;
+            fotosBadge.textContent = `○ ${fotosConImagen}/7 fotos`;
             fotosBadge.classList.add('en-proceso');
             fotosBadge.classList.remove('completado');
         }
     }
     
-    if (seccionesCompletadasLocal.fotos !== completada) {
-        seccionesCompletadasLocal.fotos = completada;
+    // Solo marcar como completada cuando TODAS tienen URL en Drive
+    const todasEnDrive = fotosConUrl === 7;
+    if (seccionesCompletadasLocal.fotos !== todasEnDrive) {
+        seccionesCompletadasLocal.fotos = todasEnDrive;
         actualizarBotonFinalizar();
     }
     
-    // Si todas las fotos tienen imagen pero falta alguna URL, subir en paralelo
-    if (fotosCompletas === 7) {
-        const fotosConUrl = FOTOS_CONFIG.filter(f => {
-            const div = document.getElementById(`upload-${f.id}`);
-            return div && div.dataset.driveUrl;
-        });
-        
-        if (fotosConUrl.length < 7 && !isUploadingFotos) {
-            setTimeout(() => {
-                subirTodasLasFotosEnParalelo();
-            }, 500);
-        }
-    }
-    
-    return completada;
+    return todasEnDrive;
 }
 
 function validarCompletadoDescripcion() {
@@ -927,7 +997,7 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
 }
 
 // =====================================================
-// PROCESAR FOTO (CON COMPRESIÓN MEJORADA)
+// PROCESAR FOTO (CON COMPRESIÓN MEJORADA Y COLA)
 // =====================================================
 async function procesarFoto(input, foto) {
     const file = input.files[0];
@@ -937,72 +1007,51 @@ async function procesarFoto(input, foto) {
     const preview = uploadDiv?.querySelector('.upload-preview');
     const removeBtn = uploadDiv?.querySelector('.remove-photo');
     
+    // Mostrar preview inmediatamente
     if (preview) {
-        preview.style.backgroundImage = '';
-        preview.style.display = 'flex';
-        preview.style.alignItems = 'center';
-        preview.style.justifyContent = 'center';
-        preview.style.backgroundColor = '#f0f0f0';
-        preview.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size: 24px; color: #C1121F;"></i>';
+        const objectUrl = URL.createObjectURL(file);
+        preview.style.backgroundImage = `url('${objectUrl}')`;
+        preview.style.backgroundSize = 'cover';
+        preview.style.backgroundPosition = 'center';
+        preview.innerHTML = `
+            <div style="position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.7); color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px;">
+                <i class="fas fa-spinner fa-spin"></i> Subiendo...
+            </div>
+        `;
+        preview.style.display = 'block';
         uploadDiv.classList.add('has-image');
+        
+        if (uploadDiv.dataset.objectUrl) {
+            URL.revokeObjectURL(uploadDiv.dataset.objectUrl);
+        }
+        uploadDiv.dataset.objectUrl = objectUrl;
+        
+        if (removeBtn) removeBtn.style.display = 'flex';
     }
     
     try {
         // =============================================
-        // COMPRIMIR IMAGEN (MÁS RÁPIDO)
+        // COMPRIMIR IMAGEN
         // =============================================
-        const originalSize = file.size / 1024 / 1024;
-        let fileToUpload = await comprimirImagen(file);
-        const compressedSize = fileToUpload.size / 1024 / 1024;
+        const fileToUpload = await comprimirImagen(file);
         
-        if (compressedSize < originalSize) {
-            const reduction = Math.round((1 - fileToUpload.size / file.size) * 100);
-            mostrarNotificacion(`📸 ${foto.label}: ${compressedSize.toFixed(1)} MB (${reduction}% menos)`, 'success');
+        // =============================================
+        // ENCOLAR PARA SUBIDA SECUENCIAL
+        // =============================================
+        encolarFoto(fileToUpload, foto.campo, foto.label);
+        
+        // Mostrar barra de progreso
+        const container = document.getElementById('uploadProgressContainer');
+        if (container) {
+            container.style.display = 'block';
         }
         
-        const finalSizeMB = fileToUpload.size / 1024 / 1024;
-        if (finalSizeMB > 8) {
-            throw new Error(`Imagen muy grande (${finalSizeMB.toFixed(1)} MB). Máximo 8MB.`);
-        }
-        
-        if (subidasActivas[foto.id]) {
-            return;
-        }
-        subidasActivas[foto.id] = true;
-        
-        mostrarNotificacion(`📤 Subiendo ${foto.label} a Google Drive...`, 'info');
-        
-        const url = await subirFotoGoogleDrive(fileToUpload, codigoSesion || 'temp', foto.campo);
-        
-        if (preview) {
-            const objectUrl = URL.createObjectURL(fileToUpload);
-            preview.style.backgroundImage = `url('${objectUrl}')`;
-            preview.style.backgroundSize = 'cover';
-            preview.style.backgroundPosition = 'center';
-            preview.innerHTML = '';
-            preview.style.display = 'block';
-            uploadDiv.classList.add('has-image');
-            uploadDiv.dataset.driveUrl = url;
-            
-            if (uploadDiv.dataset.objectUrl) {
-                URL.revokeObjectURL(uploadDiv.dataset.objectUrl);
-            }
-            uploadDiv.dataset.objectUrl = objectUrl;
-            
-            if (removeBtn) removeBtn.style.display = 'flex';
-        }
-        
-        fotosSubidasLocal[foto.campo] = url;
-        mostrarNotificacion(`✅ ${foto.label} subida a Google Drive`, 'success');
+        // Validar estado
         validarCompletadoFotos();
-        
-        if (codigoSesion && seccionesCompletadasLocal.fotos) {
-            await guardarSeccion('fotos');
-        }
         
     } catch (error) {
         console.error(`❌ Error en ${foto.label}:`, error);
-        mostrarNotificacion(`Error: ${error.message || `No se pudo procesar ${foto.label}`}`, 'error');
+        mostrarNotificacion(`Error: ${error.message || 'No se pudo procesar la foto'}`, 'error');
         
         if (preview) {
             preview.style.backgroundImage = '';
@@ -1012,9 +1061,6 @@ async function procesarFoto(input, foto) {
         }
         if (removeBtn) removeBtn.style.display = 'none';
         input.value = '';
-        
-    } finally {
-        delete subidasActivas[foto.id];
     }
 }
 
@@ -1533,6 +1579,23 @@ function limpiarSesionCompleta() {
     detenerPolling();
     detenerKeepAlive();
     
+    // =============================================
+    // LIMPIAR BARRA DE PROGRESO
+    // =============================================
+    resetearProgresoFotos();
+    const container = document.getElementById('uploadProgressContainer');
+    if (container) {
+        container.style.display = 'none';
+    }
+    
+    // =============================================
+    // LIMPIAR COLA DE SUBIDA
+    // =============================================
+    uploadQueue = [];
+    uploadResults = [];
+    isProcessingQueue = false;
+    colaActiva = false;
+    
     codigoSesion = null;
     sesionActual = null;
     audioDriveUrl = null;
@@ -1551,6 +1614,7 @@ function limpiarSesionCompleta() {
     if (recepcionForm) recepcionForm.style.display = 'none';
     if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
     
+    // Limpiar inputs
     const inputs = document.querySelectorAll('#recepcionForm input, #recepcionForm textarea');
     inputs.forEach(input => { 
         if (input.id !== 'clienteLatitud' && input.id !== 'clienteLongitud') {
@@ -1558,6 +1622,7 @@ function limpiarSesionCompleta() {
         }
     });
     
+    // Limpiar fotos
     document.querySelectorAll('.photo-upload').forEach(upload => {
         upload.classList.remove('has-image');
         const preview = upload.querySelector('.upload-preview');
@@ -1574,6 +1639,7 @@ function limpiarSesionCompleta() {
         }
     });
     
+    // Limpiar audio
     if (audioPreview) {
         if (audioPreview.src && audioPreview.src.startsWith('blob:')) {
             URL.revokeObjectURL(audioPreview.src);
@@ -1587,6 +1653,16 @@ function limpiarSesionCompleta() {
         btnGrabarAudio.classList.remove('recording');
         btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
     }
+    
+    // Resetear badges
+    ['Cliente', 'Vehiculo', 'Fotos', 'Descripcion'].forEach(seccion => {
+        const badge = document.getElementById(`status${seccion}`);
+        if (badge) {
+            badge.textContent = '○ Pendiente';
+            badge.classList.remove('completado');
+            badge.classList.add('en-proceso');
+        }
+    });
     
     actualizarBotonFinalizar();
 }
@@ -2332,10 +2408,6 @@ async function eliminarRecepcion(id) {
 }
 
 // =====================================================
-// FUNCIONES DEL REPORTE DE IMPRESIÓN
-// =====================================================
-
-// =====================================================
 // CONVERTIR IMAGEN A BASE64 (VÍA BACKEND)
 // =====================================================
 async function convertirImagenABase64(url) {
@@ -2354,7 +2426,7 @@ async function convertirImagenABase64(url) {
         }
     } catch (error) {
         console.error('❌ Error convirtiendo imagen:', error);
-        return url; // Fallback a la URL original
+        return url;
     }
 }
 
@@ -2379,9 +2451,6 @@ async function cargarDatosOrdenCompleta(idOrden) {
             datosReporteFinal = data.detalle;
             datosReporteFinal.id_orden = idOrden;
             
-            // =============================================
-            // CONVERTIR IMÁGENES A BASE64
-            // =============================================
             const fotos = datosReporteFinal.fotos || {};
             const fotosBase64 = {};
             
@@ -2421,9 +2490,6 @@ function generarHTMLReporte(detalle) {
         return '<div class="loading-preview"><i class="fas fa-exclamation-triangle"></i><p>No hay datos para mostrar</p></div>';
     }
     
-    // =============================================
-    // USAR IMÁGENES EN BASE64 SI ESTÁN DISPONIBLES
-    // =============================================
     const fotos = detalle.fotos_base64 || detalle.fotos || {};
     const fotosArray = Object.entries(fotos)
         .filter(([key, url]) => url && url !== 'null' && url !== 'None' && url !== '')
@@ -2433,7 +2499,6 @@ function generarHTMLReporte(detalle) {
             url: url
         }));
     
-    // Si no hay fotos, mostrar mensaje
     const fotosHTML = fotosArray.length > 0 ? `
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 8px 0;">
             ${fotosArray.map(f => `
@@ -2447,14 +2512,12 @@ function generarHTMLReporte(detalle) {
         </div>
     ` : '<p style="color: #999; font-style: italic; font-size: 11px;">No se registraron fotos</p>';
     
-    // Datos del cliente
     const clienteNombre = detalle.cliente_nombre || 'No registrado';
     const clienteTelefono = detalle.cliente_telefono || 'No registrado';
     const clienteUbicacion = detalle.cliente_ubicacion || 'No especificada';
     const coordenadas = (detalle.latitud && detalle.longitud) ? 
         `${detalle.latitud}, ${detalle.longitud}` : 'No especificadas';
     
-    // Datos del vehículo
     const placa = detalle.placa || 'No registrada';
     const marca = detalle.marca || 'No registrada';
     const modelo = detalle.modelo || 'No registrado';
@@ -2462,7 +2525,6 @@ function generarHTMLReporte(detalle) {
     const kilometraje = detalle.kilometraje ? 
         `${Number(detalle.kilometraje).toLocaleString()} km` : '0 km';
     
-    // Estado
     const estado = detalle.estado_global || 'EnRecepcion';
     const estadoLabels = {
         'EnRecepcion': 'En Recepción',
@@ -2471,12 +2533,10 @@ function generarHTMLReporte(detalle) {
     };
     const estadoLabel = estadoLabels[estado] || estado;
     
-    // Jefes operativos
     const jefePrincipal = detalle.jefe_operativo?.nombre || 'No asignado';
     const jefeSecundario = detalle.jefe_operativo_2?.nombre || null;
     const jefePrincipalContacto = detalle.jefe_operativo?.contacto || '';
     
-    // Fecha
     const fechaIngreso = detalle.fecha_ingreso ? 
         new Date(detalle.fecha_ingreso).toLocaleString('es-ES', {
             day: '2-digit',
@@ -2486,14 +2546,12 @@ function generarHTMLReporte(detalle) {
             minute: '2-digit'
         }) : 'No registrada';
     
-    // Audio
     const audioHTML = detalle.audio_url ? `
         <div style="margin-top: 6px;">
             <audio controls src="${detalle.audio_url}" style="width: 100%; max-width: 300px; border-radius: 4px; height: 30px;"></audio>
         </div>
     ` : '';
     
-    // Fecha actual para firmas
     const fechaActual = new Date().toLocaleDateString('es-ES', {
         day: '2-digit',
         month: '2-digit',
@@ -2514,7 +2572,6 @@ function generarHTMLReporte(detalle) {
             box-sizing: border-box;
             page-break-after: avoid;
         ">
-            <!-- ENCABEZADO -->
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #C1121F; padding-bottom: 10px; margin-bottom: 10px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <h1 style="font-size: 20px; color: #C1121F; margin: 0;">FURIA <span style="color: #222;">MOTOR</span></h1>
@@ -2526,7 +2583,6 @@ function generarHTMLReporte(detalle) {
                 </div>
             </div>
             
-            <!-- TÍTULO -->
             <div style="text-align: center; margin-bottom: 10px;">
                 <h2 style="font-size: 14px; color: #C1121F; margin: 0;">ORDEN DE TRABAJO - RECEPCIÓN</h2>
                 <div style="font-size: 12px; font-weight: bold; background: #f0f0f0; display: inline-block; padding: 2px 10px; border-radius: 3px; margin-top: 3px;">
@@ -2534,7 +2590,6 @@ function generarHTMLReporte(detalle) {
                 </div>
             </div>
             
-            <!-- INFORMACIÓN GENERAL -->
             <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
                 <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">📋 Información General</h3>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; font-size: 10px;">
@@ -2546,7 +2601,6 @@ function generarHTMLReporte(detalle) {
                 </div>
             </div>
             
-            <!-- DATOS DEL CLIENTE -->
             <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
                 <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">👤 Datos del Cliente</h3>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; font-size: 10px;">
@@ -2557,7 +2611,6 @@ function generarHTMLReporte(detalle) {
                 </div>
             </div>
             
-            <!-- DATOS DEL VEHÍCULO -->
             <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
                 <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">🚗 Datos del Vehículo</h3>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px 10px; font-size: 10px;">
@@ -2569,13 +2622,11 @@ function generarHTMLReporte(detalle) {
                 </div>
             </div>
             
-            <!-- FOTOS -->
             <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
                 <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">📸 Fotos (${fotosArray.length}/7)</h3>
                 ${fotosHTML}
             </div>
             
-            <!-- DESCRIPCIÓN -->
             <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
                 <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">📝 Descripción</h3>
                 <div style="background: white; padding: 6px 8px; border-radius: 3px; font-size: 10px; min-height: 30px; border: 1px solid #eee;">
@@ -2584,7 +2635,6 @@ function generarHTMLReporte(detalle) {
                 ${audioHTML}
             </div>
             
-            <!-- FIRMAS (CON ESPACIO MEJORADO) -->
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; padding-top: 18px; border-top: 2px solid #ddd;">
                 <div style="text-align: center; padding: 0 10px;">
                     <p style="font-weight: 700; color: #C1121F; margin-bottom: 10px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase;">Firma del Cliente</p>
@@ -2601,7 +2651,6 @@ function generarHTMLReporte(detalle) {
                 </div>
             </div>
             
-            <!-- FOOTER -->
             <div style="text-align: center; margin-top: 15px; padding-top: 8px; border-top: 1px solid #eee; font-size: 8px; color: #bbb;">
                 <span>Documento generado automáticamente</span> | 
                 <span>Código: ${detalle.codigo_unico || 'N/A'}</span> | 
@@ -2639,9 +2688,6 @@ async function descargarPDFFinal() {
     updateProgressMessage('Generando contenido del reporte...');
 
     try {
-        // =============================================
-        // 1. Generar el HTML del reporte
-        // =============================================
         const reporteHTML = generarHTMLReporte(datosReporteFinal);
 
         const container = document.createElement('div');
@@ -2669,9 +2715,6 @@ async function descargarPDFFinal() {
 
         await new Promise(resolve => setTimeout(resolve, 500));
 
-        // =============================================
-        // 2. Forzar carga de imágenes
-        // =============================================
         const imagenes = container.querySelectorAll('img');
         for (const img of imagenes) {
             if (img.src && img.src.startsWith('data:image')) {
@@ -2786,84 +2829,6 @@ async function descargarPDFFinal() {
     }
     
     descargandoPDF = false;
-}
-
-// =====================================================
-// FUNCIÓN ALTERNATIVA PARA DESCARGAR PDF (FALLBACK)
-// =====================================================
-async function descargarPDFAlternativo() {
-    return new Promise(async (resolve, reject) => {
-        try {
-            const reporteHTML = generarHTMLReporte(datosReporteFinal);
-            
-            const container = document.createElement('div');
-            container.style.cssText = `
-                position: fixed;
-                left: 0;
-                top: 0;
-                width: 100%;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 30px;
-                background: white;
-                font-family: Arial, sans-serif;
-                z-index: -1;
-                opacity: 0;
-                pointer-events: none;
-                overflow: visible;
-            `;
-            container.innerHTML = reporteHTML;
-            document.body.appendChild(container);
-
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            const contenido = container.querySelector('.reporte-container');
-            if (!contenido) {
-                throw new Error('No se encontró el contenido del reporte');
-            }
-
-            if (typeof html2pdf === 'undefined') {
-                throw new Error('html2pdf no está disponible');
-            }
-
-            const opt = {
-                margin: [10, 10, 10, 10],
-                filename: `Reporte_${datosReporteFinal.codigo_unico || 'orden'}.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: {
-                    scale: 2,
-                    useCORS: true,
-                    logging: false,
-                    letterRendering: true,
-                    allowTaint: true,
-                    backgroundColor: '#ffffff'
-                },
-                jsPDF: {
-                    unit: 'mm',
-                    format: 'a4',
-                    orientation: 'portrait'
-                },
-                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-            };
-
-            await html2pdf()
-                .set(opt)
-                .from(contenido)
-                .save();
-
-            mostrarNotificacion('✅ PDF descargado (método alternativo)', 'success');
-            
-            setTimeout(() => {
-                if (container && document.body.contains(container)) {
-                    document.body.removeChild(container);
-                }
-            }, 5000);
-            
-            resolve();
-        } catch (error) {
-            reject(error);
-        }
-    });
 }
 
 // =====================================================
@@ -3233,4 +3198,4 @@ window.logout = () => {
     window.location.href = `${window.API_BASE_URL}/`;
 };
 
-console.log('✅ recepcion.js cargado - Versión con Google Drive');
+console.log('✅ recepcion.js cargado - Versión con Google Drive y cola secuencial');

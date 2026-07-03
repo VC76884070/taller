@@ -2100,39 +2100,26 @@ async function eliminarRecepcion(id) {
 // =====================================================
 
 // =====================================================
-// CONVERTIR IMAGEN A BASE64
+// CONVERTIR IMAGEN A BASE64 (VÍA BACKEND)
 // =====================================================
-function convertirImagenABase64(url) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.referrerPolicy = 'no-referrer';
+async function convertirImagenABase64(url) {
+    try {
+        const response = await fetchWithToken(`${API_URL}/jefe-operativo/imagen-base64`, {
+            method: 'POST',
+            body: JSON.stringify({ url: url })
+        });
         
-        img.onload = function() {
-            try {
-                const canvas = document.createElement('canvas');
-                canvas.width = img.naturalWidth || img.width;
-                canvas.height = img.naturalHeight || img.height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0);
-                const base64 = canvas.toDataURL('image/jpeg', 0.85);
-                resolve(base64);
-            } catch (error) {
-                reject(error);
-            }
-        };
+        const data = await response.json();
         
-        img.onerror = function() {
-            reject(new Error('Error cargando imagen: ' + url));
-        };
-        
-        const separator = url.includes('?') ? '&' : '?';
-        img.src = url + separator + 'cache=' + Date.now();
-        
-        setTimeout(() => {
-            reject(new Error('Timeout cargando imagen'));
-        }, 15000);
-    });
+        if (data.success && data.base64) {
+            return data.base64;
+        } else {
+            throw new Error(data.error || 'Error convirtiendo imagen');
+        }
+    } catch (error) {
+        console.error('❌ Error convirtiendo imagen:', error);
+        return url; // Fallback a la URL original
+    }
 }
 
 // =====================================================

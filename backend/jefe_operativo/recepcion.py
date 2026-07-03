@@ -1490,3 +1490,52 @@ def obtener_reporte(current_user, id_orden):
     except Exception as e:
         logger.error(f"Error generando reporte: {str(e)}")
         return jsonify({'error': str(e)}), 500
+# =====================================================
+# ENDPOINT PARA CONVERTIR IMAGEN A BASE64
+# =====================================================
+
+@jefe_operativo_recepcion_bp.route('/imagen-base64', methods=['POST'])
+@jefe_operativo_required
+def obtener_imagen_base64(current_user):
+    """
+    Descarga una imagen de Google Drive y la convierte a base64
+    """
+    try:
+        import requests
+        import base64
+        
+        data = request.get_json()
+        url = data.get('url')
+        
+        if not url:
+            return jsonify({'error': 'URL requerida'}), 400
+        
+        logger.info(f"📥 Descargando imagen desde: {url[:50]}...")
+        
+        # Descargar la imagen con timeout
+        response = requests.get(url, timeout=30)
+        
+        if response.status_code != 200:
+            logger.error(f"❌ Error descargando imagen: {response.status_code}")
+            return jsonify({'error': f'Error descargando imagen: {response.status_code}'}), 400
+        
+        # Obtener el content-type
+        content_type = response.headers.get('content-type', 'image/jpeg')
+        
+        # Convertir a base64
+        img_base64 = base64.b64encode(response.content).decode('utf-8')
+        base64_data = f"data:{content_type};base64,{img_base64}"
+        
+        logger.info(f"✅ Imagen convertida a base64: {len(base64_data)} bytes")
+        
+        return jsonify({
+            'success': True,
+            'base64': base64_data
+        })
+        
+    except requests.exceptions.Timeout:
+        logger.error("❌ Timeout descargando imagen")
+        return jsonify({'error': 'Timeout descargando imagen'}), 500
+    except Exception as e:
+        logger.error(f"❌ Error obteniendo imagen base64: {str(e)}")
+        return jsonify({'error': str(e)}), 500

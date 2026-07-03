@@ -397,19 +397,19 @@ class GoogleDriveService:
     # =====================================================
     
     def _set_file_public(self, file_id):
-        """Hace un archivo público"""
-        try:
-            permission = {
-                'type': 'anyone',
-                'role': 'reader'
-            }
-            self.service.permissions().create(
-                fileId=file_id,
-                body=permission
-            ).execute()
-            logger.debug(f"🔓 Archivo hecho público: {file_id}")
-        except HttpError as e:
-            logger.warning(f"⚠️ No se pudo hacer público el archivo {file_id}: {str(e)}")
+    """Hace un archivo público"""
+    try:
+        permission = {
+            'type': 'anyone',
+            'role': 'reader'
+        }
+        self.service.permissions().create(
+            fileId=file_id,
+            body=permission
+        ).execute()
+        logger.info(f"🔓 Archivo hecho público: {file_id}")
+    except HttpError as e:
+        logger.warning(f"⚠️ No se pudo hacer público el archivo {file_id}: {str(e)}")
     
     def _share_file_with_email(self, file_id, email):
         """Comparte un archivo con un email específico"""

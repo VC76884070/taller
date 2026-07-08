@@ -159,7 +159,7 @@ def inject_config_script(response):
             
             response.set_data(html)
         except Exception as e:
-            print(f" ")
+            print(f"Error inyectando script: {e}")
     
     return response
 
@@ -207,7 +207,7 @@ except Exception as e:
     logger.error(f"❌ Error registrando blueprints de Técnico Mecánico: {e}")
 
 # =====================================================
-# JEFE OPERATIVO
+# JEFE OPERATIVO - CORREGIDO
 # =====================================================
 try:
     from jefe_operativo.recepcion import jefe_operativo_recepcion_bp
@@ -217,14 +217,23 @@ try:
     from jefe_operativo.control_calidad import control_calidad_operativo_bp 
     from jefe_operativo.dashboard_jefe_operativo import dashboard_op_bp
 
+    # 🔥 IMPORTANTE: Todos los blueprints ya tienen url_prefix='/api/jefe-operativo'
+    # NO les pases url_prefix de nuevo para evitar duplicados
     app.register_blueprint(dashboard_op_bp)
-    app.register_blueprint(jefe_operativo_recepcion_bp, url_prefix='/api/jefe-operativo')
-    app.register_blueprint(jefe_operativo_comunicados_bp, url_prefix='/api/jefe-operativo')
-    app.register_blueprint(jefe_operativo_historial_bp, url_prefix='/api/jefe-operativo')
-    app.register_blueprint(jefe_operativo_perfil_bp, url_prefix='/api/jefe-operativo')
+    app.register_blueprint(jefe_operativo_recepcion_bp)
+    app.register_blueprint(jefe_operativo_comunicados_bp)
+    app.register_blueprint(jefe_operativo_historial_bp)
+    app.register_blueprint(jefe_operativo_perfil_bp)
     app.register_blueprint(control_calidad_operativo_bp)
     
     logger.info("✅ Blueprints de Jefe Operativo registrados correctamente")
+    logger.info("   🔹 dashboard_op_bp registrado")
+    logger.info("   🔹 recepcion_bp registrado")
+    logger.info("   🔹 comunicados_bp registrado")
+    logger.info("   🔹 historial_bp registrado")
+    logger.info("   🔹 perfil_bp registrado")
+    logger.info("   🔹 control_calidad_bp registrado")
+    
 except Exception as e:
     logger.error(f"❌ Error registrando blueprints de Jefe Operativo: {e}")
 
@@ -595,6 +604,17 @@ def test_avances_directo():
     return jsonify({'success': True, 'message': 'Endpoint de prueba funcionando'}), 200
 
 # =====================================================
+# MOSTRAR TODOS LOS ENDPOINTS REGISTRADOS (DEBUG)
+# =====================================================
+
+print("="*60)
+print("📋 ENDPOINTS REGISTRADOS - JEFE OPERATIVO:")
+for rule in app.url_map.iter_rules():
+    if '/api/jefe-operativo' in str(rule):
+        print(f"   ✅ {rule}")
+print("="*60)
+
+# =====================================================
 # ERROR HANDLERS
 # =====================================================
 
@@ -613,7 +633,7 @@ def internal_error(error):
     return jsonify({'error': 'Error interno del servidor'}), 500
 
 # =====================================================
-# INICIALIZACIÓN intento 4
+# INICIALIZACIÓN
 # =====================================================
 
 if __name__ == '__main__':

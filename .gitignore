@@ -7,3 +7,4 @@ credentials/
 # Tokens de autenticación
 backend/token.pickle
 *.pickle
+backend/generar_token.py

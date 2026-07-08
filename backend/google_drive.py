@@ -1,6 +1,7 @@
 # =====================================================
 # GOOGLE DRIVE - CON OAUTH 2.0 VÍA VARIABLES DE ENTORNO
 # ESTRUCTURA: S-XXXXX/{modulo}/{subcarpeta}
+# VERSIÓN MEJORADA CON RENOVACIÓN AUTOMÁTICA DE TOKENS
 # =====================================================
 
 import os
@@ -11,6 +12,7 @@ import time
 import socket
 import ssl
 from datetime import datetime
+from pathlib import Path
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -42,13 +44,114 @@ class GoogleDriveService:
     """
     Servicio para interactuar con Google Drive
     Usa OAuth 2.0 con variables de entorno
+    INCLUYE RENOVACIÓN AUTOMÁTICA DE TOKENS
     """
     
     def __init__(self, app=None):
         self.service = None
         self.folder_id = None
+        self._creds = None  # Guardar credenciales internamente
+        self._token_file = Path(__file__).parent / 'token.pickle'
         if app:
             self.init_app(app)
+    
+    def _ensure_valid_token(self):
+        """
+        🔥 MÉTODO CLAVE: Verifica y renueva el token si es necesario
+        Este método se llama ANTES de cada operación con Drive
+        """
+        try:
+            if not self._creds:
+                logger.warning("⚠️ No hay credenciales, recargando...")
+                self._reload_credentials()
+                return
+            
+            # Si el token expiró Y tenemos refresh_token, renovar
+            if self._creds.expired and self._creds.refresh_token:
+                logger.info("🔄 Token expirado, renovando automáticamente...")
+                try:
+                    self._creds.refresh(Request())
+                    # Guardar token actualizado
+                    self._save_token()
+                    logger.info("✅ Token renovado exitosamente")
+                    
+                    # Reconstruir el servicio con las nuevas credenciales
+                    self.service = build('drive', 'v3', credentials=self._creds)
+                except Exception as e:
+                    logger.error(f"❌ Error renovando token: {str(e)}")
+                    # Si falla la renovación, recargar desde variables de entorno
+                    self._reload_credentials()
+            
+            # Verificar si el token está próximo a expirar (menos de 5 minutos)
+            if self._creds and hasattr(self._creds, 'expiry') and self._creds.expiry:
+                tiempo_restante = (self._creds.expiry - datetime.now()).total_seconds()
+                if tiempo_restante < 300:  # 5 minutos
+                    logger.info(f"⏰ Token expira en {tiempo_restante:.0f} segundos, renovando preventivamente...")
+                    try:
+                        self._creds.refresh(Request())
+                        self._save_token()
+                        self.service = build('drive', 'v3', credentials=self._creds)
+                        logger.info("✅ Token renovado preventivamente")
+                    except Exception as e:
+                        logger.warning(f"⚠️ No se pudo renovar preventivamente: {str(e)}")
+            
+        except Exception as e:
+            logger.error(f"❌ Error verificando token: {str(e)}")
+            # Intentar recuperación
+            self._reload_credentials()
+    
+    def _reload_credentials(self):
+        """Recarga credenciales desde variables de entorno"""
+        try:
+            logger.info("🔄 Recargando credenciales desde variables de entorno...")
+            
+            token = os.getenv('GOOGLE_DRIVE_TOKEN')
+            refresh_token = os.getenv('GOOGLE_DRIVE_REFRESH_TOKEN')
+            client_id = os.getenv('GOOGLE_DRIVE_CLIENT_ID')
+            client_secret = os.getenv('GOOGLE_DRIVE_CLIENT_SECRET')
+            
+            if not all([token, refresh_token, client_id, client_secret]):
+                missing = []
+                if not token: missing.append('GOOGLE_DRIVE_TOKEN')
+                if not refresh_token: missing.append('GOOGLE_DRIVE_REFRESH_TOKEN')
+                if not client_id: missing.append('GOOGLE_DRIVE_CLIENT_ID')
+                if not client_secret: missing.append('GOOGLE_DRIVE_CLIENT_SECRET')
+                raise ValueError(f"Faltan variables de entorno: {', '.join(missing)}")
+            
+            self._creds = Credentials(
+                token=token,
+                refresh_token=refresh_token,
+                client_id=client_id,
+                client_secret=client_secret,
+                token_uri='https://oauth2.googleapis.com/token',
+                scopes=['https://www.googleapis.com/auth/drive.file']
+            )
+            
+            # Si el token está expirado, refrescar
+            if self._creds.expired and self._creds.refresh_token:
+                logger.info("🔄 Token expirado, refrescando...")
+                self._creds.refresh(Request())
+                self._save_token()
+            
+            self.service = build('drive', 'v3', credentials=self._creds)
+            logger.info("✅ Credenciales recargadas correctamente")
+            
+            if self._creds and hasattr(self._creds, 'expiry'):
+                logger.info(f"📅 Token expira: {self._creds.expiry}")
+            
+        except Exception as e:
+            logger.error(f"❌ Error recargando credenciales: {str(e)}")
+            raise
+    
+    def _save_token(self):
+        """Guarda el token actualizado para persistencia"""
+        try:
+            if self._creds:
+                with open(self._token_file, 'wb') as token_file:
+                    pickle.dump(self._creds, token_file)
+                logger.debug("💾 Token guardado en archivo")
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudo guardar token: {str(e)}")
     
     def init_app(self, app):
         """
@@ -79,7 +182,7 @@ class GoogleDriveService:
             # =============================================
             # CREAR CREDENCIALES DESDE VARIABLES
             # =============================================
-            creds = Credentials(
+            self._creds = Credentials(
                 token=token,
                 refresh_token=refresh_token,
                 client_id=client_id,
@@ -89,18 +192,21 @@ class GoogleDriveService:
             )
             
             # Refrescar token si está expirado
-            if creds.expired and creds.refresh_token:
+            if self._creds.expired and self._creds.refresh_token:
                 logger.info("🔄 Token expirado, refrescando...")
-                creds.refresh(Request())
+                self._creds.refresh(Request())
+                self._save_token()
                 logger.info("✅ Token refrescado correctamente")
             
-            self.service = build('drive', 'v3', credentials=creds)
+            self.service = build('drive', 'v3', credentials=self._creds)
             
             # Verificar carpeta
             self._verify_folder_access()
             
             logger.info(f"✅ Google Drive inicializado correctamente (OAuth 2.0 vía variables de entorno)")
             logger.info(f"📁 Carpeta ID: {self.folder_id}")
+            if self._creds and hasattr(self._creds, 'expiry'):
+                logger.info(f"📅 Token expira: {self._creds.expiry}")
             
         except Exception as e:
             logger.error(f"❌ Error inicializando Google Drive: {str(e)}")
@@ -109,6 +215,9 @@ class GoogleDriveService:
     def _verify_folder_access(self):
         """Verifica que la carpeta existe y es accesible"""
         try:
+            # Asegurar token válido antes de verificar
+            self._ensure_valid_token()
+            
             folder = self.service.files().get(
                 fileId=self.folder_id,
                 fields='id, name, mimeType'
@@ -128,13 +237,14 @@ class GoogleDriveService:
                 raise
     
     # =====================================================
-    # FUNCIÓN PARA SUBIR ARCHIVOS
+    # FUNCIÓN PARA SUBIR ARCHIVOS (MEJORADA)
     # =====================================================
     
     def upload_file(self, file_data, filename, folder_path=None, mime_type=None, 
                     public=True, share_email=None):
         """
         Sube un archivo a Google Drive con reintentos automáticos
+        Y RENOVACIÓN AUTOMÁTICA DE TOKEN
         
         Args:
             file_data: bytes o FileStorage
@@ -147,6 +257,9 @@ class GoogleDriveService:
         Returns:
             dict: {id, url, web_view_link, filename, folder_path}
         """
+        # 🔥 Asegurar token válido ANTES de cualquier operación
+        self._ensure_valid_token()
+        
         socket.setdefaulttimeout(UPLOAD_TIMEOUT)
         
         last_error = None
@@ -215,6 +328,11 @@ class GoogleDriveService:
                 last_error = e
                 logger.warning(f"⚠️ Intento {attempt} falló: {str(e)}")
                 
+                # Si es error de autenticación, intentar renovar token
+                if isinstance(e, HttpError) and e.resp.status in [401, 403]:
+                    logger.info("🔄 Error de autenticación, renovando token...")
+                    self._ensure_valid_token()
+                
                 if attempt < MAX_RETRIES:
                     wait_time = RETRY_DELAY * attempt
                     logger.info(f"⏳ Esperando {wait_time}s antes de reintentar...")
@@ -234,6 +352,9 @@ class GoogleDriveService:
         Obtiene o crea una carpeta por ruta con reintentos
         Ejemplo: 'S-ABC123/recepcion/fotos'
         """
+        # 🔥 Asegurar token válido
+        self._ensure_valid_token()
+        
         last_error = None
         
         for attempt in range(1, MAX_RETRIES + 1):
@@ -282,6 +403,10 @@ class GoogleDriveService:
             except (HttpError, socket.timeout, ConnectionError) as e:
                 last_error = e
                 logger.warning(f"⚠️ Error creando carpeta (intento {attempt}): {str(e)}")
+                
+                # Si es error de autenticación, renovar token
+                if isinstance(e, HttpError) and e.resp.status in [401, 403]:
+                    self._ensure_valid_token()
                 
                 if attempt < MAX_RETRIES:
                     time.sleep(RETRY_DELAY * attempt)
@@ -368,6 +493,9 @@ class GoogleDriveService:
             bool: True si se renombró correctamente
         """
         try:
+            # 🔥 Asegurar token válido
+            self._ensure_valid_token()
+            
             folder_metadata = {
                 'name': new_name
             }
@@ -394,6 +522,9 @@ class GoogleDriveService:
             str: ID de la carpeta o None si no se encuentra
         """
         try:
+            # 🔥 Asegurar token válido
+            self._ensure_valid_token()
+            
             if parent_id:
                 query = f"name='{self._escape_string(folder_name)}' and mimeType='application/vnd.google-apps.folder' and '{parent_id}' in parents and trashed=false"
             else:
@@ -428,6 +559,9 @@ class GoogleDriveService:
             bool: True si se eliminó correctamente
         """
         try:
+            # 🔥 Asegurar token válido
+            self._ensure_valid_token()
+            
             # Primero, listar todos los archivos en la carpeta
             results = self.service.files().list(
                 q=f"'{folder_id}' in parents and trashed=false",
@@ -458,6 +592,9 @@ class GoogleDriveService:
     def _set_file_public(self, file_id):
         """Hace un archivo público"""
         try:
+            # 🔥 Asegurar token válido
+            self._ensure_valid_token()
+            
             permission = {
                 'type': 'anyone',
                 'role': 'reader'
@@ -473,6 +610,9 @@ class GoogleDriveService:
     def _share_file_with_email(self, file_id, email):
         """Comparte un archivo con un email específico"""
         try:
+            # 🔥 Asegurar token válido
+            self._ensure_valid_token()
+            
             permission = {
                 'type': 'user',
                 'role': 'reader',
@@ -494,6 +634,9 @@ class GoogleDriveService:
     def delete_file(self, file_id):
         """Elimina un archivo de Google Drive"""
         try:
+            # 🔥 Asegurar token válido
+            self._ensure_valid_token()
+            
             self.service.files().delete(fileId=file_id).execute()
             logger.info(f"🗑️ Archivo eliminado: {file_id}")
             return True
@@ -533,6 +676,33 @@ class GoogleDriveService:
             return url.split('open?id=')[-1].split('&')[0]
         
         return None
+    
+    # =====================================================
+    # MÉTODO PARA VERIFICAR ESTADO DEL TOKEN
+    # =====================================================
+    
+    def get_token_status(self):
+        """
+        Retorna el estado actual del token
+        
+        Returns:
+            dict: {valid, expiry, has_refresh_token}
+        """
+        if not self._creds:
+            return {
+                'valid': False,
+                'expiry': None,
+                'has_refresh_token': False,
+                'error': 'No hay credenciales'
+            }
+        
+        return {
+            'valid': self._creds.valid,
+            'expiry': self._creds.expiry.isoformat() if self._creds.expiry else None,
+            'has_refresh_token': bool(self._creds.refresh_token),
+            'expired': self._creds.expired
+        }
+
 # =====================================================
 # INSTANCIA GLOBAL
 # =====================================================

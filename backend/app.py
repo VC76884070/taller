@@ -210,7 +210,7 @@ except Exception as e:
 # JEFE OPERATIVO - CORREGIDO
 # =====================================================
 try:
-    from jefe_operativo.recepcion import jefe_operativo_recepcion_bp
+    from jefe_operativo.recepcion_jefeoperativo import recepcion_jefe_bp
     from jefe_operativo.comunicados import jefe_operativo_comunicados_bp
     from jefe_operativo.historial import jefe_operativo_historial_bp
     from jefe_operativo.perfil import jefe_operativo_perfil_bp
@@ -220,7 +220,7 @@ try:
     # 🔥 IMPORTANTE: Todos los blueprints ya tienen url_prefix='/api/jefe-operativo'
     # NO les pases url_prefix de nuevo para evitar duplicados
     app.register_blueprint(dashboard_op_bp)
-    app.register_blueprint(jefe_operativo_recepcion_bp)
+    app.register_blueprint(recepcion_jefe_bp)
     app.register_blueprint(jefe_operativo_comunicados_bp)
     app.register_blueprint(jefe_operativo_historial_bp)
     app.register_blueprint(jefe_operativo_perfil_bp)

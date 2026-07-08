@@ -510,6 +510,10 @@ class GoogleDriveService:
             logger.error(f"❌ Error renombrando carpeta {folder_id}: {str(e)}")
             return False
     
+    # =====================================================
+    # FUNCIÓN PARA BUSCAR CARPETA POR NOMBRE
+    # =====================================================
+    
     def get_folder_id_by_name(self, folder_name, parent_id=None):
         """
         Busca una carpeta por nombre
@@ -533,19 +537,32 @@ class GoogleDriveService:
             results = self.service.files().list(
                 q=query,
                 fields="files(id, name)",
-                pageSize=1
+                pageSize=10
             ).execute()
             
             files = results.get('files', [])
             if files:
                 return files[0]['id']
+            
+            # Si no se encontró, buscar recursivamente en todas las carpetas
+            if not parent_id:
+                all_folders = self.service.files().list(
+                    q="mimeType='application/vnd.google-apps.folder' and trashed=false",
+                    fields="files(id, name, parents)",
+                    pageSize=100
+                ).execute()
+                
+                for folder in all_folders.get('files', []):
+                    if folder.get('name') == folder_name:
+                        return folder.get('id')
+            
             return None
         except HttpError as e:
             logger.error(f"❌ Error buscando carpeta: {str(e)}")
             return None
     
     # =====================================================
-    # FUNCIÓN PARA ELIMINAR CARPETAS (NUEVA)
+    # FUNCIÓN PARA ELIMINAR CARPETAS (CORREGIDA)
     # =====================================================
     
     def delete_folder(self, folder_id):
@@ -573,8 +590,11 @@ class GoogleDriveService:
             
             # Eliminar cada archivo
             for file in files:
-                self.service.files().delete(fileId=file['id']).execute()
-                logger.debug(f"🗑️ Archivo eliminado: {file['name']}")
+                try:
+                    self.service.files().delete(fileId=file['id']).execute()
+                    logger.debug(f"🗑️ Archivo eliminado: {file['name']}")
+                except Exception as e:
+                    logger.warning(f"⚠️ No se pudo eliminar archivo {file['name']}: {str(e)}")
             
             # Finalmente, eliminar la carpeta vacía
             self.service.files().delete(fileId=folder_id).execute()

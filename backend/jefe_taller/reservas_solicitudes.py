@@ -257,55 +257,87 @@ def listar_sesiones_activas(current_user):
 def listar_recepciones(current_user):
     """Lista las recepciones guardadas con datos del cliente y vehículo"""
     try:
-        # 🔥 PRIMERO: Obtener todas las órdenes
+        print("🔍 INICIANDO listar-recepciones")
+        
+        # Obtener todas las órdenes
         ordenes_result = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
             .order('fecha_ingreso', desc=True) \
             .limit(50) \
             .execute()
         
+        print(f"📋 Órdenes encontradas: {len(ordenes_result.data) if ordenes_result.data else 0}")
+        
         recepciones = []
+        
         for orden in (ordenes_result.data or []):
-            # Obtener vehículo con sus relaciones
-            vehiculo_data = {}
-            cliente_nombre = 'N/A'
-            cliente_telefono = ''
-            cliente_ubicacion = ''
+            print(f"\n🔹 Procesando orden ID: {orden['id']} - Código: {orden.get('codigo_unico')}")
+            
+            # Inicializar variables
             placa = ''
             marca = ''
             modelo = ''
+            cliente_nombre = 'N/A'
+            cliente_telefono = ''
+            cliente_ubicacion = ''
+            id_vehiculo = orden.get('id_vehiculo')
             
-            if orden.get('id_vehiculo'):
-                # 🔥 Consulta separada para el vehículo con sus relaciones
+            if id_vehiculo:
+                print(f"   🔸 Vehículo ID: {id_vehiculo}")
+                
+                # 1. Obtener vehículo
                 vehiculo_result = supabase.table('vehiculo') \
-                    .select('''
-                        placa,
-                        marca,
-                        modelo,
-                        cliente(
-                            usuario(
-                                nombre,
-                                contacto,
-                                ubicacion
-                            )
-                        )
-                    ''') \
-                    .eq('id', orden['id_vehiculo']) \
-                    .single() \
+                    .select('placa, marca, modelo, id_cliente') \
+                    .eq('id', id_vehiculo) \
                     .execute()
                 
                 if vehiculo_result.data:
-                    vehiculo_data = vehiculo_result.data
-                    placa = vehiculo_data.get('placa', '')
-                    marca = vehiculo_data.get('marca', '')
-                    modelo = vehiculo_data.get('modelo', '')
+                    v = vehiculo_result.data[0]
+                    placa = v.get('placa', '')
+                    marca = v.get('marca', '')
+                    modelo = v.get('modelo', '')
+                    id_cliente = v.get('id_cliente')
                     
-                    # Obtener datos del cliente desde el vehículo
-                    cliente = vehiculo_data.get('cliente', {})
-                    usuario = cliente.get('usuario', {})
-                    cliente_nombre = usuario.get('nombre', 'N/A')
-                    cliente_telefono = usuario.get('contacto', '')
-                    cliente_ubicacion = usuario.get('ubicacion', '')
+                    print(f"   🔸 Vehículo: {marca} {modelo} ({placa})")
+                    print(f"   🔸 ID Cliente: {id_cliente}")
+                    
+                    if id_cliente:
+                        # 2. Obtener cliente
+                        cliente_result = supabase.table('cliente') \
+                            .select('id_usuario') \
+                            .eq('id', id_cliente) \
+                            .execute()
+                        
+                        if cliente_result.data:
+                            c = cliente_result.data[0]
+                            id_usuario = c.get('id_usuario')
+                            print(f"   🔸 ID Usuario: {id_usuario}")
+                            
+                            if id_usuario:
+                                # 3. Obtener usuario (NOMBRE DEL CLIENTE)
+                                usuario_result = supabase.table('usuario') \
+                                    .select('nombre, contacto, ubicacion') \
+                                    .eq('id', id_usuario) \
+                                    .execute()
+                                
+                                if usuario_result.data:
+                                    u = usuario_result.data[0]
+                                    cliente_nombre = u.get('nombre', 'N/A')
+                                    cliente_telefono = u.get('contacto', '')
+                                    cliente_ubicacion = u.get('ubicacion', '')
+                                    print(f"   ✅ Cliente encontrado: {cliente_nombre}")
+                                else:
+                                    print(f"   ❌ Usuario NO encontrado para id: {id_usuario}")
+                            else:
+                                print(f"   ❌ id_usuario es null")
+                        else:
+                            print(f"   ❌ Cliente NO encontrado para id: {id_cliente}")
+                    else:
+                        print(f"   ❌ id_cliente es null")
+                else:
+                    print(f"   ❌ Vehículo NO encontrado para id: {id_vehiculo}")
+            else:
+                print(f"   ❌ id_vehiculo es null")
             
             recepciones.append({
                 'id': orden['id'],
@@ -320,13 +352,14 @@ def listar_recepciones(current_user):
                 'cliente_ubicacion': cliente_ubicacion
             })
         
-        logger.info(f"✅ {len(recepciones)} recepciones encontradas")
+        print(f"\n✅ Total recepciones procesadas: {len(recepciones)}")
         return jsonify({'success': True, 'recepciones': recepciones}), 200
+        
     except Exception as e:
-        logger.error(f"Error listando recepciones: {str(e)}")
+        print(f"❌ ERROR en listar-recepciones: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': True, 'recepciones': []}), 200
+        return jsonify({'success': True, 'recepciones': []}), 500
 
 # =====================================================
 # ENDPOINT 4: DETALLE RECEPCIÓN (CORREGIDO - CON TODOS LOS DATOS)
@@ -1451,78 +1484,3 @@ def eliminar_recepcion(current_user, id_orden):
         logger.error(f"Error eliminando recepción: {str(e)}")
         return jsonify({'error': str(e)}), 500
     
-@recepcion_jefe_bp.route('/diagnostico-cliente', methods=['GET'])
-@jefe_operativo_required
-def diagnostico_cliente(current_user):
-    """Endpoint de diagnóstico para verificar datos del cliente"""
-    try:
-        # 1. Obtener todas las órdenes
-        ordenes = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, id_vehiculo') \
-            .limit(5) \
-            .execute()
-        
-        resultados = []
-        for orden in (ordenes.data or []):
-            info = {
-                'orden_id': orden['id'],
-                'codigo_unico': orden['codigo_unico'],
-                'id_vehiculo': orden.get('id_vehiculo')
-            }
-            
-            if orden.get('id_vehiculo'):
-                # Obtener vehículo
-                vehiculo = supabase.table('vehiculo') \
-                    .select('id, placa, marca, modelo, id_cliente') \
-                    .eq('id', orden['id_vehiculo']) \
-                    .execute()
-                
-                if vehiculo.data:
-                    v = vehiculo.data[0]
-                    info['vehiculo'] = v
-                    
-                    if v.get('id_cliente'):
-                        # Obtener cliente
-                        cliente = supabase.table('cliente') \
-                            .select('id, id_usuario') \
-                            .eq('id', v['id_cliente']) \
-                            .execute()
-                        
-                        if cliente.data:
-                            c = cliente.data[0]
-                            info['cliente'] = c
-                            
-                            if c.get('id_usuario'):
-                                # Obtener usuario
-                                usuario = supabase.table('usuario') \
-                                    .select('id, nombre, contacto, ubicacion') \
-                                    .eq('id', c['id_usuario']) \
-                                    .execute()
-                                
-                                if usuario.data:
-                                    info['usuario'] = usuario.data[0]
-                                else:
-                                    info['usuario'] = 'NO ENCONTRADO'
-                            else:
-                                info['usuario'] = 'id_usuario es null'
-                        else:
-                            info['cliente'] = 'NO ENCONTRADO'
-                    else:
-                        info['cliente'] = 'id_cliente es null'
-                else:
-                    info['vehiculo'] = 'NO ENCONTRADO'
-            else:
-                info['vehiculo'] = 'id_vehiculo es null'
-            
-            resultados.append(info)
-        
-        return jsonify({
-            'success': True,
-            'diagnostico': resultados
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error en diagnóstico: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500

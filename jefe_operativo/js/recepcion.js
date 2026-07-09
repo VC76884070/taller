@@ -108,7 +108,7 @@ let colaActiva = false;
 // CONFIGURACIÓN DE REINTENTOS
 // =====================================================
 const MAX_UPLOAD_RETRIES = 3;
-const RETRY_DELAY = 2000; // 2 segundos
+const RETRY_DELAY = 2000;
 
 // Elementos DOM
 const sesionesActivasPanel = document.getElementById('sesionesActivasPanel');
@@ -635,7 +635,6 @@ async function procesarCola() {
             uploadDiv.classList.remove('error');
         }
         
-        // 🔥 ACTUALIZAR LA SESIÓN CON LA URL DE LA FOTO
         try {
             await actualizarSesionFoto(campo, url);
         } catch (e) {
@@ -1156,14 +1155,11 @@ function validarCompletadoFotos() {
         }
     }
     
-    // También verificar en la sesión actual (para fotos cargadas al recuperar sesión)
     if (sesionActual?.datos?.fotos) {
         const fotosSesion = Object.values(sesionActual.datos.fotos).filter(v => v && v !== 'null' && v !== '');
         const fotosSesionValidas = fotosSesion.length;
-        // Si hay más fotos en la sesión que en el DOM, actualizar el DOM
         if (fotosSesionValidas > fotosConUrl) {
             fotosConUrl = fotosSesionValidas;
-            // Actualizar los elementos del DOM con las URLs de la sesión
             for (const foto of FOTOS_CONFIG) {
                 const uploadDiv = document.getElementById(`upload-${foto.id}`);
                 const url = sesionActual.datos.fotos[foto.campo];
@@ -1226,7 +1222,7 @@ function validarCompletadoDescripcion() {
 }
 
 // =====================================================
-// GUARDAR SECCIÓN (VERSIÓN CORREGIDA)
+// GUARDAR SECCIÓN
 // =====================================================
 async function guardarSeccion(seccion) {
     if (!codigoSesion) return;
@@ -1255,17 +1251,13 @@ async function guardarSeccion(seccion) {
             break;
             
         case 'fotos':
-            // 🔥 CORREGIDO: Enviar TODAS las fotos (las que están en Drive y las que están en la sesión)
             const fotosData = {};
             for (const foto of FOTOS_CONFIG) {
                 const uploadDiv = document.getElementById(`upload-${foto.id}`);
-                // PRIMERO: buscar en dataset.driveUrl (foto subida en esta sesión)
                 let url = uploadDiv?.dataset.driveUrl;
-                // SEGUNDO: si no está, buscar en la sesión actual (fotos cargadas al recuperar sesión)
                 if (!url && sesionActual?.datos?.fotos) {
                     url = sesionActual.datos.fotos[foto.campo];
                 }
-                // TERCERO: si aún no hay, usar null
                 fotosData[foto.campo] = url || null;
             }
             datos = fotosData;
@@ -1304,15 +1296,12 @@ async function guardarSeccion(seccion) {
         if (data.success) {
             sesionActual = data.sesion;
             
-            // Actualizar el estado de la sección según la respuesta
             if (data.sesion.secciones_completadas) {
-                // Para fotos, verificar el conteo específico
                 if (seccion === 'fotos') {
                     const fotos = data.sesion.datos?.fotos || {};
                     const fotos_validas = Object.values(fotos).filter(v => v && v !== 'null' && v !== '').length;
                     seccionesCompletadasLocal.fotos = fotos_validas === 7;
                     
-                    // Actualizar badge con el conteo
                     const fotosBadge = document.getElementById('statusFotos');
                     if (fotosBadge) {
                         if (fotos_validas === 7) {
@@ -1934,50 +1923,140 @@ async function cargarRecepciones() {
     }
 }
 
+// =====================================================
+// FILTRAR Y MOSTRAR RECEPCIONES - VERSIÓN MODERNA CON CARDS
+// =====================================================
+
 function filtrarYMostrarRecepciones() {
     const listDiv = document.getElementById('recepcionesList');
     if (!listDiv) return;
     
     let filtradas = [...recepcionesActuales];
+    
     const searchTerm = document.getElementById('searchRecepcion')?.value.toLowerCase() || '';
-    if (searchTerm) filtradas = filtradas.filter(r => 
-        r.codigo_unico?.toLowerCase().includes(searchTerm) || 
-        r.placa?.toLowerCase().includes(searchTerm) || 
-        (r.cliente_nombre && r.cliente_nombre.toLowerCase().includes(searchTerm))
-    );
+    if (searchTerm) {
+        filtradas = filtradas.filter(r => 
+            (r.codigo_unico && r.codigo_unico.toLowerCase().includes(searchTerm)) || 
+            (r.placa && r.placa.toLowerCase().includes(searchTerm)) || 
+            (r.cliente_nombre && r.cliente_nombre.toLowerCase().includes(searchTerm)) ||
+            (r.marca && r.marca.toLowerCase().includes(searchTerm)) ||
+            (r.modelo && r.modelo.toLowerCase().includes(searchTerm))
+        );
+    }
     
     const fechaDesde = document.getElementById('fechaDesde')?.value;
     const fechaHasta = document.getElementById('fechaHasta')?.value;
     if (fechaDesde) filtradas = filtradas.filter(r => r.fecha_ingreso >= fechaDesde);
     if (fechaHasta) filtradas = filtradas.filter(r => r.fecha_ingreso <= fechaHasta + 'T23:59:59');
+    
     const estadoFiltro = document.getElementById('estadoFiltro')?.value;
-    if (estadoFiltro && estadoFiltro !== 'todos') filtradas = filtradas.filter(r => r.estado_global === estadoFiltro);
+    if (estadoFiltro && estadoFiltro !== 'todos') {
+        filtradas = filtradas.filter(r => r.estado_global === estadoFiltro);
+    }
+    
+    const countSpan = document.getElementById('recepcionesCount');
+    if (countSpan) countSpan.textContent = filtradas.length;
     
     if (filtradas.length === 0) {
-        listDiv.innerHTML = '<div class="empty-state"><i class="fas fa-folder-open"></i><p>No hay recepciones</p></div>';
+        listDiv.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <p>No hay recepciones que coincidan con los filtros</p>
+                <small style="color: var(--gris-texto); font-size: 0.7rem;">Intenta cambiar los criterios de búsqueda</small>
+            </div>
+        `;
         return;
     }
     
-    const paginadas = filtradas.slice(0, 10);
+    const itemsPorPagina = 10;
+    const totalPaginas = Math.ceil(filtradas.length / itemsPorPagina);
+    if (paginaActual > totalPaginas) paginaActual = totalPaginas;
+    if (paginaActual < 1) paginaActual = 1;
     
-    listDiv.innerHTML = paginadas.map(rec => `
-        <div class="recepcion-card estado-${rec.estado_global || 'EnRecepcion'}">
-            <div class="recepcion-header">
-                <span class="recepcion-codigo">${escapeHtml(rec.codigo_unico || 'N/A')}</span>
-                <span class="recepcion-estado ${rec.estado_global || 'EnRecepcion'}">${rec.estado_global || 'En Recepción'}</span>
-                <span class="recepcion-fecha"><i class="far fa-calendar-alt"></i>${new Date(rec.fecha_ingreso).toLocaleDateString()}</span>
+    const inicio = (paginaActual - 1) * itemsPorPagina;
+    const fin = inicio + itemsPorPagina;
+    const paginadas = filtradas.slice(inicio, fin);
+    
+    listDiv.innerHTML = paginadas.map(rec => {
+        const estadoClass = rec.estado_global || 'EnRecepcion';
+        const estadoLabel = {
+            'EnRecepcion': 'En Recepción',
+            'EnTaller': 'En Taller',
+            'Finalizado': 'Finalizado'
+        }[estadoClass] || estadoClass;
+        
+        const fechaFormateada = rec.fecha_ingreso ? 
+            new Date(rec.fecha_ingreso).toLocaleDateString('es-ES', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            }) : 'Fecha N/A';
+        
+        const clienteNombre = rec.cliente_nombre || 'N/A';
+        const placa = rec.placa || 'N/A';
+        const vehiculoTexto = rec.marca && rec.modelo ? 
+            `${rec.marca} ${rec.modelo}` : 
+            (rec.marca || rec.modelo || 'Vehículo sin especificar');
+        
+        return `
+            <div class="recepcion-card estado-${estadoClass}">
+                <div class="recepcion-header">
+                    <span class="recepcion-codigo">${escapeHtml(rec.codigo_unico || 'N/A')}</span>
+                    <span class="recepcion-estado ${estadoClass}">${estadoLabel}</span>
+                </div>
+                
+                <div class="recepcion-body">
+                    <div class="recepcion-info-item">
+                        <div class="icon-wrapper">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div>
+                            <span class="info-label">Cliente</span>
+                            <span class="info-value" title="${escapeHtml(clienteNombre)}">${escapeHtml(clienteNombre)}</span>
+                        </div>
+                    </div>
+                    <div class="recepcion-info-item">
+                        <div class="icon-wrapper">
+                            <i class="fas fa-car"></i>
+                        </div>
+                        <div>
+                            <span class="info-label">Vehículo</span>
+                            <span class="info-value" title="${escapeHtml(vehiculoTexto)}">
+                                ${escapeHtml(vehiculoTexto)}
+                                <span class="placa-badge">${escapeHtml(placa)}</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="recepcion-footer">
+                    <span class="recepcion-fecha">
+                        <i class="far fa-calendar-alt"></i>
+                        ${fechaFormateada}
+                    </span>
+                    <div class="recepcion-actions">
+                        <button class="btn-action btn-ver" onclick="verDetalleRecepcion(${rec.id})" title="Ver detalles">
+                            <i class="fas fa-eye"></i> Ver
+                        </button>
+                        <button class="btn-action btn-editar" onclick="editarRecepcion(${rec.id})" title="Editar recepción">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="btn-action btn-eliminar" onclick="confirmarEliminarRecepcion(${rec.id})" title="Eliminar recepción">
+                            <i class="fas fa-trash-alt"></i> Eliminar
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="recepcion-info">
-                <div><i class="fas fa-user"></i><strong>Cliente:</strong> ${escapeHtml(rec.cliente_nombre || 'N/A')}</div>
-                <div><i class="fas fa-car"></i><strong>Vehículo:</strong> ${escapeHtml(rec.marca || '')} ${escapeHtml(rec.modelo || '')} (${rec.placa || 'N/A'})</div>
-            </div>
-            <div class="recepcion-actions">
-                <button class="btn-ver-detalle" onclick="verDetalleRecepcion(${rec.id})"><i class="fas fa-eye"></i> Ver</button>
-                <button class="btn-editar-recepcion" onclick="editarRecepcion(${rec.id})"><i class="fas fa-edit"></i> Editar</button>
-                <button class="btn-eliminar-recepcion" onclick="confirmarEliminarRecepcion(${rec.id})"><i class="fas fa-trash-alt"></i> Eliminar</button>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
+    
+    const paginaInfo = document.getElementById('paginaInfo');
+    if (paginaInfo) paginaInfo.textContent = `Página ${paginaActual} de ${totalPaginas}`;
+    
+    const btnAnterior = document.getElementById('btnPaginaAnterior');
+    const btnSiguiente = document.getElementById('btnPaginaSiguiente');
+    if (btnAnterior) btnAnterior.disabled = paginaActual <= 1;
+    if (btnSiguiente) btnSiguiente.disabled = paginaActual >= totalPaginas;
 }
 
 // =====================================================
@@ -2146,8 +2225,9 @@ function setupModalUbicacionLeaflet() {
 }
 
 // =====================================================
-// FUNCIONES DE DETALLE Y EDICIÓN
+// FUNCIONES DE DETALLE Y EDICIÓN - VERSIÓN SIMPLIFICADA Y CORREGIDA
 // =====================================================
+
 async function verDetalleRecepcion(id) {
     try {
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/detalle-recepcion/${id}`, { method: 'GET' });
@@ -2167,9 +2247,65 @@ function mostrarModalDetalle(detalle) {
     const body = document.getElementById('detalleRecepcionBody');
     if (!modal || !body) return;
     
-    const fotosArray = Object.values(detalle.fotos || {}).filter(url => url && url !== 'null' && url !== 'None');
-    const fotosCount = fotosArray.length;
+    console.log('📋 Detalle completo:', detalle);
+    console.log('📸 Fotos en detalle:', detalle.fotos);
     
+    const fotos = detalle.fotos || {};
+    const fotosValidas = Object.values(fotos).filter(url => 
+        url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined'
+    );
+    const fotosCount = fotosValidas.length;
+    
+    console.log(`📸 Fotos válidas: ${fotosCount}/7`);
+    
+    // 🔥 CONSTRUIR HTML DE FOTOS - DIRECTO Y SIMPLE
+    let fotosHtml = '';
+    
+    if (fotosCount === 0) {
+        fotosHtml = `
+            <div style="text-align: center; padding: 3rem 1.5rem; color: #8E8E93;">
+                <i class="fas fa-camera" style="font-size: 2.5rem; opacity: 0.3; margin-bottom: 0.5rem;"></i>
+                <p style="font-size: 1rem;">No se registraron fotos para esta recepción</p>
+                <small style="opacity: 0.6;">Las fotos se capturan durante el proceso de recepción</small>
+            </div>
+        `;
+    } else {
+        const camposFotos = [
+            { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo', icono: 'fa-car-side' },
+            { campo: 'url_lateral_derecha', label: 'Lateral Derecho', icono: 'fa-car-side' },
+            { campo: 'url_foto_frontal', label: 'Frontal', icono: 'fa-car' },
+            { campo: 'url_foto_trasera', label: 'Trasera', icono: 'fa-car' },
+            { campo: 'url_foto_superior', label: 'Superior', icono: 'fa-arrow-up' },
+            { campo: 'url_foto_inferior', label: 'Inferior', icono: 'fa-arrow-down' },
+            { campo: 'url_foto_tablero', label: 'Tablero', icono: 'fa-tachometer-alt' }
+        ];
+        
+        const fotosExistentes = camposFotos.filter(f => {
+            const url = fotos[f.campo];
+            return url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined';
+        });
+        
+        fotosHtml = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; padding: 0.5rem 0;">
+                ${fotosExistentes.map(f => `
+                    <div style="position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid #2C2C2E; transition: all 0.3s ease; background: #1A1A1C; min-height: 120px;"
+                         onclick="verImagenAmpliada('${fotos[f.campo]}', '${f.label}')"
+                         title="Haz clic para ampliar">
+                        <img src="${fotos[f.campo]}" 
+                             alt="${f.label}" 
+                             loading="lazy" 
+                             style="width: 100%; height: 100%; object-fit: cover; display: block;"
+                             onerror="this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#1A1A1C;color:#8E8E93;font-size:0.7rem;gap:0.5rem;\\'><i class=\\'${f.icono}\\' style=\\'font-size:1.5rem;opacity:0.3;\\'></i><span>${f.label}</span></div>'">
+                        <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.85)); color: white; font-size: 0.7rem; padding: 0.6rem 0.5rem 0.4rem; text-align: center; display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-weight: 500;">
+                            <i class="${f.icono}" style="font-size: 0.65rem; opacity: 0.7;"></i> ${f.label}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+    
+    // 🔥 CONSTRUIR EL MODAL COMPLETO
     const tabsHtml = `
         <div class="detalle-tabs">
             <button class="detalle-tab active" data-tab="info">📋 Información</button>
@@ -2185,7 +2321,7 @@ function mostrarModalDetalle(detalle) {
                     </div>
                     <div class="detalle-item">
                         <span class="detalle-label">Fecha de Ingreso</span>
-                        <span class="detalle-value">${new Date(detalle.fecha_ingreso).toLocaleString()}</span>
+                        <span class="detalle-value">${detalle.fecha_ingreso ? new Date(detalle.fecha_ingreso).toLocaleString() : 'N/A'}</span>
                     </div>
                     <div class="detalle-item">
                         <span class="detalle-label">Estado</span>
@@ -2203,7 +2339,7 @@ function mostrarModalDetalle(detalle) {
                     ` : ''}
                 </div>
                 
-                <h4 style="margin-top: 1.2rem; margin-bottom: 0.6rem; color: var(--rojo-primario); font-size: 0.9rem;">
+                <h4 style="margin-top: 1.2rem; margin-bottom: 0.6rem; color: #C1121F; font-size: 0.9rem;">
                     <i class="fas fa-user"></i> Datos del Cliente
                 </h4>
                 <div class="detalle-grid">
@@ -2227,7 +2363,7 @@ function mostrarModalDetalle(detalle) {
                     ` : ''}
                 </div>
                 
-                <h4 style="margin-top: 1.2rem; margin-bottom: 0.6rem; color: var(--rojo-primario); font-size: 0.9rem;">
+                <h4 style="margin-top: 1.2rem; margin-bottom: 0.6rem; color: #C1121F; font-size: 0.9rem;">
                     <i class="fas fa-car"></i> Datos del Vehículo
                 </h4>
                 <div class="detalle-grid">
@@ -2255,19 +2391,23 @@ function mostrarModalDetalle(detalle) {
             </div>
             
             <div class="detalle-pane" id="pane-fotos">
-                ${generarFotosHtmlDetalle(detalle.fotos)}
+                ${fotosHtml}
             </div>
             
             <div class="detalle-pane" id="pane-descripcion">
                 <div class="detalle-descripcion-texto">${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}</div>
-                ${detalle.audio_url ? `<div class="detalle-audio" style="margin-top: 1rem;"><audio controls src="${detalle.audio_url}" style="width: 100%; border-radius: 8px;"></audio></div>` : ''}
+                ${detalle.audio_url ? `<div class="detalle-audio"><audio controls src="${detalle.audio_url}" style="width: 100%; border-radius: 8px;"></audio></div>` : ''}
             </div>
         </div>
     `;
     
+    // 🔥 INSERTAR EN EL MODAL
     body.innerHTML = tabsHtml;
     modal.classList.add('show');
     
+    // =============================================
+    // EVENTOS DE TABS
+    // =============================================
     const tabs = document.querySelectorAll('.detalle-tab');
     const panes = document.querySelectorAll('.detalle-pane');
     
@@ -2279,47 +2419,32 @@ function mostrarModalDetalle(detalle) {
             panes.forEach(pane => pane.classList.remove('active'));
             const activePane = document.getElementById(`pane-${tabId}`);
             if (activePane) activePane.classList.add('active');
+            
+            // 🔥 FORZAR RECARGA DE IMÁGENES AL CAMBIAR A LA PESTAÑA DE FOTOS
+            if (tabId === 'fotos') {
+                setTimeout(() => {
+                    const fotosPane = document.getElementById('pane-fotos');
+                    if (fotosPane) {
+                        const imagenes = fotosPane.querySelectorAll('img');
+                        imagenes.forEach(img => {
+                            const src = img.src;
+                            if (src && src.includes('drive.google.com')) {
+                                img.src = src + '&cache=' + Date.now();
+                            }
+                        });
+                    }
+                }, 100);
+            }
         });
     });
     
+    // =============================================
+    // BOTONES DE EXPORTACIÓN
+    // =============================================
     const btnWord = document.getElementById('btnExportarWord');
     const btnPDF = document.getElementById('btnExportarPDF');
     if (btnWord) btnWord.onclick = () => exportarAWord(detalle);
     if (btnPDF) btnPDF.onclick = () => exportarAPDF();
-}
-
-function generarFotosHtmlDetalle(fotos) {
-    if (!fotos) return '<p class="detalle-value">No se registraron fotos</p>';
-    
-    const camposFotos = [
-        { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo' },
-        { campo: 'url_lateral_derecha', label: 'Lateral Derecho' },
-        { campo: 'url_foto_frontal', label: 'Frontal' },
-        { campo: 'url_foto_trasera', label: 'Trasera' },
-        { campo: 'url_foto_superior', label: 'Superior' },
-        { campo: 'url_foto_inferior', label: 'Inferior' },
-        { campo: 'url_foto_tablero', label: 'Tablero' }
-    ];
-    
-    const fotosExistentes = camposFotos.filter(f => {
-        const url = fotos[f.campo];
-        return url && url !== 'null' && url !== 'None' && url !== '' && url !== null;
-    });
-    
-    if (fotosExistentes.length === 0) {
-        return '<p class="detalle-value">No se registraron fotos</p>';
-    }
-    
-    return `
-        <div class="detalle-fotos-grid">
-            ${fotosExistentes.map(f => `
-                <div class="detalle-foto" onclick="verImagenAmpliada('${fotos[f.campo]}', '${f.label}')">
-                    <img src="${fotos[f.campo]}" alt="${f.label}" loading="lazy">
-                    <div class="detalle-foto-label">${f.label}</div>
-                </div>
-            `).join('')}
-        </div>
-    `;
 }
 
 function verImagenAmpliada(url, label) {

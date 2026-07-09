@@ -249,13 +249,166 @@ def listar_sesiones_activas(current_user):
         return jsonify({'success': True, 'sesiones': []}), 200
 
 # =====================================================
-# ENDPOINT 3: LISTAR RECEPCIONES
+# ENDPOINT 3: LISTAR RECEPCIONES (🔥 CORREGIDO)
 # =====================================================
 
 @recepcion_jefe_bp.route('/listar-recepciones', methods=['GET'])
 @jefe_operativo_required
 def listar_recepciones(current_user):
-    """Lista las recepciones guardadas"""
+    """
+    Lista las recepciones guardadas CON TODOS LOS DATOS DEL CLIENTE
+    Versión corregida usando SQL directo (la consulta que funcionó en la prueba)
+    """
+    try:
+        # =============================================
+        # 🔥 CONSULTA SQL DIRECTA (LA QUE PROBASTE Y FUNCIONÓ)
+        # =============================================
+        query = """
+            SELECT 
+                ot.id AS orden_id,
+                ot.codigo_unico,
+                ot.fecha_ingreso,
+                ot.estado_global,
+                v.placa,
+                v.marca,
+                v.modelo,
+                v.anio,
+                v.kilometraje,
+                u.id AS usuario_id,
+                u.nombre AS cliente_nombre,
+                u.contacto AS cliente_telefono,
+                u.email AS cliente_email,
+                u.ubicacion AS cliente_ubicacion,
+                c.id AS cliente_id,
+                c.latitud,
+                c.longitud,
+                c.ubicacion_confirmada
+            FROM ordentrabajo ot
+            LEFT JOIN vehiculo v ON ot.id_vehiculo = v.id
+            LEFT JOIN cliente c ON v.id_cliente = c.id
+            LEFT JOIN usuario u ON c.id_usuario = u.id
+            ORDER BY ot.fecha_ingreso DESC
+            LIMIT 50
+        """
+        
+        # Ejecutar la consulta SQL directa usando RPC
+        try:
+            resultado = supabase.rpc('execute_sql', {'query': query}).execute()
+        except Exception as e:
+            logger.warning(f"⚠️ RPC execute_sql falló, usando método alternativo: {e}")
+            resultado = None
+        
+        # Si el método RPC no funciona, usar el método alternativo con joins de Supabase
+        if not resultado or not resultado.data:
+            logger.info("📊 Usando método alternativo con joins de Supabase")
+            return listar_recepciones_join_supabase(current_user)
+        
+        # Procesar resultados de la consulta SQL directa
+        recepciones = []
+        for row in resultado.data:
+            recepciones.append({
+                'id': row.get('orden_id'),
+                'codigo_unico': row.get('codigo_unico'),
+                'fecha_ingreso': row.get('fecha_ingreso'),
+                'estado_global': row.get('estado_global'),
+                'placa': row.get('placa', ''),
+                'marca': row.get('marca', ''),
+                'modelo': row.get('modelo', ''),
+                'anio': row.get('anio'),
+                'kilometraje': row.get('kilometraje', 0),
+                'cliente_nombre': row.get('cliente_nombre', 'N/A'),
+                'cliente_telefono': row.get('cliente_telefono', 'N/A'),
+                'cliente_email': row.get('cliente_email', 'N/A'),
+                'cliente_ubicacion': row.get('cliente_ubicacion', ''),
+                'latitud': row.get('latitud'),
+                'longitud': row.get('longitud'),
+                'ubicacion_confirmada': row.get('ubicacion_confirmada', False)
+            })
+        
+        logger.info(f"✅ {len(recepciones)} recepciones listadas (SQL directo)")
+        return jsonify({'success': True, 'recepciones': recepciones}), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error listando recepciones: {str(e)}")
+        # Fallback al método alternativo
+        return listar_recepciones_join_supabase(current_user)
+
+
+def listar_recepciones_join_supabase(current_user):
+    """
+    Método alternativo con joins de Supabase
+    (fallback si el SQL directo no funciona)
+    """
+    try:
+        resultado = supabase.table('ordentrabajo') \
+            .select('''
+                id,
+                codigo_unico,
+                fecha_ingreso,
+                estado_global,
+                vehiculo!inner (
+                    placa,
+                    marca,
+                    modelo,
+                    anio,
+                    kilometraje,
+                    cliente!inner (
+                        id,
+                        latitud,
+                        longitud,
+                        ubicacion_confirmada,
+                        usuario!inner (
+                            id,
+                            nombre,
+                            contacto,
+                            email,
+                            ubicacion
+                        )
+                    )
+                )
+            ''') \
+            .order('fecha_ingreso', desc=True) \
+            .limit(50) \
+            .execute()
+        
+        recepciones = []
+        for orden in (resultado.data or []):
+            vehiculo_data = orden.get('vehiculo', {})
+            cliente_data = vehiculo_data.get('cliente', {})
+            usuario_data = cliente_data.get('usuario', {})
+            
+            recepciones.append({
+                'id': orden['id'],
+                'codigo_unico': orden['codigo_unico'],
+                'fecha_ingreso': orden['fecha_ingreso'],
+                'estado_global': orden['estado_global'],
+                'placa': vehiculo_data.get('placa', ''),
+                'marca': vehiculo_data.get('marca', ''),
+                'modelo': vehiculo_data.get('modelo', ''),
+                'anio': vehiculo_data.get('anio'),
+                'kilometraje': vehiculo_data.get('kilometraje', 0),
+                'cliente_nombre': usuario_data.get('nombre', 'N/A'),
+                'cliente_telefono': usuario_data.get('contacto', 'N/A'),
+                'cliente_email': usuario_data.get('email', 'N/A'),
+                'cliente_ubicacion': usuario_data.get('ubicacion', ''),
+                'latitud': cliente_data.get('latitud'),
+                'longitud': cliente_data.get('longitud'),
+                'ubicacion_confirmada': cliente_data.get('ubicacion_confirmada', False)
+            })
+        
+        logger.info(f"✅ {len(recepciones)} recepciones listadas (joins Supabase)")
+        return jsonify({'success': True, 'recepciones': recepciones}), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error en método alternativo: {str(e)}")
+        # Último fallback: método simple con consultas separadas
+        return listar_recepciones_simple(current_user)
+
+
+def listar_recepciones_simple(current_user):
+    """
+    Versión simple con consultas separadas (último fallback)
+    """
     try:
         resultado = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
@@ -265,28 +418,73 @@ def listar_recepciones(current_user):
         
         recepciones = []
         for orden in (resultado.data or []):
-            vehiculo = {}
-            if orden.get('id_vehiculo'):
-                v_result = supabase.table('vehiculo') \
-                    .select('placa, marca, modelo') \
-                    .eq('id', orden['id_vehiculo']) \
-                    .execute()
-                if v_result.data:
-                    vehiculo = v_result.data[0]
-            
-            recepciones.append({
+            recepcion = {
                 'id': orden['id'],
                 'codigo_unico': orden['codigo_unico'],
                 'fecha_ingreso': orden['fecha_ingreso'],
                 'estado_global': orden['estado_global'],
-                'placa': vehiculo.get('placa', ''),
-                'marca': vehiculo.get('marca', ''),
-                'modelo': vehiculo.get('modelo', '')
-            })
+                'cliente_nombre': 'N/A',
+                'cliente_telefono': 'N/A',
+                'cliente_email': 'N/A',
+                'cliente_ubicacion': '',
+                'latitud': None,
+                'longitud': None,
+                'placa': '',
+                'marca': '',
+                'modelo': '',
+                'anio': None,
+                'kilometraje': 0
+            }
+            
+            if orden.get('id_vehiculo'):
+                # Obtener vehículo
+                v_result = supabase.table('vehiculo') \
+                    .select('placa, marca, modelo, anio, kilometraje, id_cliente') \
+                    .eq('id', orden['id_vehiculo']) \
+                    .execute()
+                
+                if v_result.data:
+                    v = v_result.data[0]
+                    recepcion['placa'] = v.get('placa', '')
+                    recepcion['marca'] = v.get('marca', '')
+                    recepcion['modelo'] = v.get('modelo', '')
+                    recepcion['anio'] = v.get('anio')
+                    recepcion['kilometraje'] = v.get('kilometraje', 0)
+                    
+                    # Obtener cliente
+                    if v.get('id_cliente'):
+                        c_result = supabase.table('cliente') \
+                            .select('id_usuario, latitud, longitud, ubicacion_confirmada') \
+                            .eq('id', v['id_cliente']) \
+                            .execute()
+                        
+                        if c_result.data:
+                            c = c_result.data[0]
+                            recepcion['latitud'] = c.get('latitud')
+                            recepcion['longitud'] = c.get('longitud')
+                            recepcion['ubicacion_confirmada'] = c.get('ubicacion_confirmada', False)
+                            
+                            # Obtener usuario (cliente)
+                            if c.get('id_usuario'):
+                                u_result = supabase.table('usuario') \
+                                    .select('nombre, contacto, email, ubicacion') \
+                                    .eq('id', c['id_usuario']) \
+                                    .execute()
+                                
+                                if u_result.data:
+                                    u = u_result.data[0]
+                                    recepcion['cliente_nombre'] = u.get('nombre', 'N/A')
+                                    recepcion['cliente_telefono'] = u.get('contacto', 'N/A')
+                                    recepcion['cliente_email'] = u.get('email', 'N/A')
+                                    recepcion['cliente_ubicacion'] = u.get('ubicacion', '')
+            
+            recepciones.append(recepcion)
         
+        logger.info(f"✅ {len(recepciones)} recepciones listadas (fallback simple)")
         return jsonify({'success': True, 'recepciones': recepciones}), 200
+        
     except Exception as e:
-        logger.error(f"Error listando recepciones: {str(e)}")
+        logger.error(f"❌ Error en fallback simple: {str(e)}")
         return jsonify({'success': True, 'recepciones': []}), 200
 
 # =====================================================
@@ -412,13 +610,11 @@ def guardar_seccion(current_user):
             )
             
         elif seccion == 'fotos':
-            # 🔥 CORREGIDO: Actualizar SOLO los campos que vienen
             if 'datos' not in sesion:
                 sesion['datos'] = {}
             if 'fotos' not in sesion['datos']:
                 sesion['datos']['fotos'] = {}
             
-            # Guardar SOLO los campos que tienen valor
             fotos_actualizadas = 0
             for campo, valor in datos_seccion.items():
                 if valor and valor != 'null' and valor != '':
@@ -426,7 +622,6 @@ def guardar_seccion(current_user):
                     fotos_actualizadas += 1
                     logger.info(f"📸 Foto {campo} guardada en sesión")
             
-            # Contar fotos válidas (TODAS las fotos en la sesión)
             fotos = sesion['datos']['fotos']
             fotos_validas = sum(1 for v in fotos.values() if v and v != 'null' and v != '')
             sesion['secciones_completadas']['fotos'] = fotos_validas == 7
@@ -713,11 +908,9 @@ def finalizar_sesion(current_user):
             try:
                 logger.info(f"📁 Intentando renombrar carpeta {codigo_sesion} a {codigo_unico}")
                 
-                # Buscar la carpeta por nombre (S-XXXXX)
                 folder_id = google_drive.get_folder_id_by_name(codigo_sesion)
                 
                 if folder_id:
-                    # Renombrar la carpeta
                     rename_result = google_drive.rename_folder(folder_id, codigo_unico)
                     if rename_result:
                         carpeta_renombrada = True
@@ -729,7 +922,6 @@ def finalizar_sesion(current_user):
                     
             except Exception as e:
                 logger.error(f"❌ Error renombrando carpeta: {str(e)}")
-                # No fallamos la operación si el renombrado falla
             
             # 6. Marcar sesión como finalizada
             sesion['estado'] = 'finalizada'
@@ -757,10 +949,6 @@ def finalizar_sesion(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# ENDPOINT 9: CANCELAR SESIÓN
-# =====================================================
-
-# =====================================================
 # ENDPOINT 9: CANCELAR SESIÓN (CON ELIMINACIÓN DE CARPETA EN DRIVE)
 # =====================================================
 
@@ -785,9 +973,7 @@ def cancelar_sesion(current_user):
         
         logger.info(f"🗑️ Cancelando sesión: {codigo_sesion}")
         
-        # =============================================
         # 1. ELIMINAR CARPETA DE GOOGLE DRIVE
-        # =============================================
         carpeta_eliminada = False
         try:
             logger.info(f"🔍 Buscando carpeta en Drive: {codigo_sesion}")
@@ -795,7 +981,6 @@ def cancelar_sesion(current_user):
             
             if folder_id:
                 logger.info(f"📁 Carpeta encontrada: {folder_id}")
-                # Eliminar la carpeta y todo su contenido
                 delete_result = google_drive.delete_folder(folder_id)
                 if delete_result:
                     carpeta_eliminada = True
@@ -808,9 +993,7 @@ def cancelar_sesion(current_user):
         except Exception as e:
             logger.error(f"❌ Error eliminando carpeta de Drive: {str(e)}")
         
-        # =============================================
         # 2. ELIMINAR REGISTROS DE SUPABASE
-        # =============================================
         try:
             logger.info(f"🗄️ Eliminando sesión de Supabase: {codigo_sesion}")
             supabase.table('sesion_colaborativa') \
@@ -822,20 +1005,14 @@ def cancelar_sesion(current_user):
         except Exception as e:
             logger.error(f"❌ Error eliminando de Supabase: {str(e)}")
         
-        # =============================================
         # 3. ELIMINAR DE MEMORIA
-        # =============================================
         if codigo_sesion in sesiones_activas:
             del sesiones_activas[codigo_sesion]
             logger.info(f"✅ Sesión eliminada de memoria: {codigo_sesion}")
         else:
-            # Intentar cargar sesiones activas nuevamente para refrescar
             sesiones_activas = {}
             logger.info(f"🔄 Sesiones recargadas: {len(sesiones_activas)} activas")
         
-        # =============================================
-        # 4. RESPUESTA
-        # =============================================
         return jsonify({
             'success': True,
             'message': f'Sesión {codigo_sesion} cancelada y datos eliminados',
@@ -926,19 +1103,16 @@ def upload_foto_drive(current_user):
         if not codigo_sesion:
             return jsonify({'error': 'No se recibió el código de sesión'}), 400
         
-        # Generar nombre único
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         user_id = current_user['id']
         filename = f"{campo}_{user_id}_{timestamp}.jpg"
         
-        # Estructura: S-XXXXX/recepcion/fotos
         folder_path = google_drive.generate_folder_path(
             modulo='recepcion',
             referencia_id=codigo_sesion,
             subcarpeta='fotos'
         )
         
-        # Subir a Google Drive
         result = google_drive.upload_file(
             file_data=file,
             filename=filename,
@@ -947,9 +1121,6 @@ def upload_foto_drive(current_user):
         
         logger.info(f"📸 Foto subida: {result['url']}")
         
-        # =============================================
-        # ACTUALIZAR LA SESIÓN CON LA URL DE LA FOTO
-        # =============================================
         try:
             if codigo_sesion not in sesiones_activas:
                 sesion = cargar_sesion_de_db(codigo_sesion)
@@ -964,7 +1135,6 @@ def upload_foto_drive(current_user):
                 if 'fotos' not in sesion['datos']:
                     sesion['datos']['fotos'] = {}
                 
-                # Mapear campo del frontend al campo de la base de datos
                 campo_map = {
                     'lateral_izquierdo': 'url_lateral_izquierda',
                     'lateral_derecho': 'url_lateral_derecha',
@@ -978,7 +1148,6 @@ def upload_foto_drive(current_user):
                 
                 sesion['datos']['fotos'][campo_db] = result['url']
                 
-                # Contar fotos válidas
                 fotos = sesion['datos']['fotos']
                 fotos_validas = sum(1 for v in fotos.values() if v and v != 'null' and v != '')
                 fotos_completas = fotos_validas == 7
@@ -1085,7 +1254,6 @@ def actualizar_foto_sesion(current_user):
 def verificar_fotos(current_user, codigo):
     """
     Verifica el estado de las fotos de una sesión
-    Retorna cuántas fotos están subidas (0-7)
     """
     global sesiones_activas
     try:
@@ -1240,7 +1408,6 @@ def upload_audio_drive(current_user):
 def renombrar_carpeta_drive(current_user):
     """
     Renombra una carpeta en Google Drive
-    Usado para cambiar de S-XXXXX a OT-XXX
     """
     try:
         from google_drive import google_drive
@@ -1325,7 +1492,7 @@ def obtener_imagen_base64(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# ENDPOINT 19: DETALLE RECEPCIÓN
+# ENDPOINT 19: DETALLE RECEPCIÓN (CORREGIDO)
 # =====================================================
 
 @recepcion_jefe_bp.route('/detalle-recepcion/<int:id_orden>', methods=['GET'])
@@ -1346,6 +1513,7 @@ def detalle_recepcion(current_user, id_orden):
         
         orden = orden_result.data
         
+        # Obtener jefe principal
         jefe_principal = {}
         if orden.get('id_jefe_operativo'):
             j1 = supabase.table('usuario') \
@@ -1355,6 +1523,7 @@ def detalle_recepcion(current_user, id_orden):
             if j1.data:
                 jefe_principal = j1.data[0]
         
+        # Obtener jefe secundario
         jefe_secundario = {}
         if orden.get('id_jefe_operativo_2'):
             j2 = supabase.table('usuario') \
@@ -1364,6 +1533,7 @@ def detalle_recepcion(current_user, id_orden):
             if j2.data:
                 jefe_secundario = j2.data[0]
         
+        # Obtener vehículo
         vehiculo_result = supabase.table('vehiculo') \
             .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
             .eq('id', orden['id_vehiculo']) \
@@ -1372,11 +1542,12 @@ def detalle_recepcion(current_user, id_orden):
         
         vehiculo = vehiculo_result.data if vehiculo_result.data else {}
         
+        # Obtener cliente y usuario
         usuario = {}
         cliente_data = {}
         if vehiculo.get('id_cliente'):
             c_result = supabase.table('cliente') \
-                .select('id, id_usuario, latitud, longitud') \
+                .select('id, id_usuario, latitud, longitud, ubicacion_confirmada') \
                 .eq('id', vehiculo['id_cliente']) \
                 .single() \
                 .execute()
@@ -1384,19 +1555,51 @@ def detalle_recepcion(current_user, id_orden):
                 cliente_data = c_result.data
                 if cliente_data.get('id_usuario'):
                     u_result = supabase.table('usuario') \
-                        .select('nombre, contacto, ubicacion, email') \
+                        .select('id, nombre, contacto, ubicacion, email') \
                         .eq('id', cliente_data['id_usuario']) \
                         .single() \
                         .execute()
                     if u_result.data:
                         usuario = u_result.data
         
+        # 🔥 OBTENER RECEPCIÓN CON TODAS LAS FOTOS
         recepcion_result = supabase.table('recepcion') \
-            .select('*') \
+            .select('''
+                id,
+                url_lateral_izquierda,
+                url_lateral_derecha,
+                url_foto_frontal,
+                url_foto_trasera,
+                url_foto_superior,
+                url_foto_inferior,
+                url_foto_tablero,
+                url_grabacion_problema,
+                transcripcion_problema
+            ''') \
             .eq('id_orden_trabajo', id_orden) \
             .single() \
             .execute()
+        
         recepcion = recepcion_result.data if recepcion_result.data else {}
+        
+        # 🔥 CONSTRUIR OBJETO DE FOTOS CON TODAS LAS URLS
+        fotos = {
+            'url_lateral_izquierda': recepcion.get('url_lateral_izquierda'),
+            'url_lateral_derecha': recepcion.get('url_lateral_derecha'),
+            'url_foto_frontal': recepcion.get('url_foto_frontal'),
+            'url_foto_trasera': recepcion.get('url_foto_trasera'),
+            'url_foto_superior': recepcion.get('url_foto_superior'),
+            'url_foto_inferior': recepcion.get('url_foto_inferior'),
+            'url_foto_tablero': recepcion.get('url_foto_tablero')
+        }
+        
+        # 🔥 LIMPIAR URLs NULAS O VACÍAS PARA QUE EL FRONTEND LAS FILTRE
+        fotos_limpias = {}
+        for key, value in fotos.items():
+            if value and value != 'null' and value != 'None' and value != '':
+                fotos_limpias[key] = value
+            else:
+                fotos_limpias[key] = None
         
         detalle = {
             'id': orden['id'],
@@ -1409,21 +1612,15 @@ def detalle_recepcion(current_user, id_orden):
             'marca': vehiculo.get('marca', ''),
             'modelo': vehiculo.get('modelo', ''),
             'anio': vehiculo.get('anio'),
-            'kilometraje': vehiculo.get('kilometraje'),
+            'kilometraje': vehiculo.get('kilometraje', 0),
             'cliente_nombre': usuario.get('nombre', ''),
             'cliente_telefono': usuario.get('contacto', ''),
             'cliente_ubicacion': usuario.get('ubicacion', ''),
             'latitud': cliente_data.get('latitud'),
             'longitud': cliente_data.get('longitud'),
-            'fotos': {
-                'url_lateral_izquierda': recepcion.get('url_lateral_izquierda'),
-                'url_lateral_derecha': recepcion.get('url_lateral_derecha'),
-                'url_foto_frontal': recepcion.get('url_foto_frontal'),
-                'url_foto_trasera': recepcion.get('url_foto_trasera'),
-                'url_foto_superior': recepcion.get('url_foto_superior'),
-                'url_foto_inferior': recepcion.get('url_foto_inferior'),
-                'url_foto_tablero': recepcion.get('url_foto_tablero')
-            },
+            'ubicacion_confirmada': cliente_data.get('ubicacion_confirmada', False),
+            # 🔥 FOTOS LIMPIAS
+            'fotos': fotos_limpias,
             'audio_url': recepcion.get('url_grabacion_problema'),
             'transcripcion_problema': recepcion.get('transcripcion_problema', '')
         }

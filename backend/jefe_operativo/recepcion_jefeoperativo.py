@@ -1,6 +1,5 @@
 # =====================================================
-# RECEPCION_JEFEOPERATIVO.PY - VERSIÓN COMPLETA Y CORREGIDA
-# CON TODOS LOS ENDPOINTS - SESIONES + GOOGLE DRIVE + RENOMBRADO DE CARPETA
+# RECEPCION_JEFEOPERATIVO.PY - VERSIÓN SIMPLE QUE FUNCIONA
 # =====================================================
 
 from flask import Blueprint, request, jsonify, current_app
@@ -249,7 +248,7 @@ def listar_sesiones_activas(current_user):
         return jsonify({'success': True, 'sesiones': []}), 200
 
 # =====================================================
-# 🔥 ENDPOINT 3: LISTAR RECEPCIONES (CORREGIDO - SIEMPRE USA JOINS)
+# 🔥 ENDPOINT 3: LISTAR RECEPCIONES - VERSIÓN SIMPLE (FUNCIONA)
 # =====================================================
 
 @recepcion_jefe_bp.route('/listar-recepciones', methods=['GET'])
@@ -257,143 +256,42 @@ def listar_sesiones_activas(current_user):
 def listar_recepciones(current_user):
     """
     Lista las recepciones guardadas CON TODOS LOS DATOS DEL CLIENTE
-    Versión CORREGIDA que SIEMPRE usa el método con joins (funciona en todos los entornos)
+    Versión SIMPLE que FUNCIONA en todos los entornos
     """
     try:
         logger.info(f"📋 [listar_recepciones] Usuario: {current_user.get('nombre')}")
-        logger.info(f"📋 [listar_recepciones] Usando método con joins de Supabase")
+        logger.info(f"📋 [listar_recepciones] Usando método SIMPLE con consultas separadas")
         
-        # 🔥 SIEMPRE usar el método con joins (funciona en local y en producción)
-        return listar_recepciones_join_supabase(current_user)
+        # 🔥 SIEMPRE usar el método simple (funciona en local y en producción)
+        return listar_recepciones_simple(current_user)
         
     except Exception as e:
         logger.error(f"❌ [listar_recepciones] Error: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
-        return listar_recepciones_simple(current_user)
-
-
-def listar_recepciones_join_supabase(current_user):
-    """
-    Método con joins de Supabase - FUNCIONA EN TODOS LOS ENTORNOS
-    Usa LEFT JOIN para evitar perder registros si faltan relaciones
-    """
-    try:
-        logger.info("📊 [listar_recepciones_join_supabase] Iniciando consulta...")
-        
-        # 🔥 USAR LEFT JOIN en lugar de INNER JOIN para no perder registros
-        resultado = supabase.table('ordentrabajo') \
-            .select('''
-                id,
-                codigo_unico,
-                fecha_ingreso,
-                estado_global,
-                vehiculo!left (
-                    placa,
-                    marca,
-                    modelo,
-                    anio,
-                    kilometraje,
-                    cliente!left (
-                        id,
-                        latitud,
-                        longitud,
-                        ubicacion_confirmada,
-                        usuario!left (
-                            id,
-                            nombre,
-                            contacto,
-                            email,
-                            ubicacion
-                        )
-                    )
-                )
-            ''') \
-            .order('fecha_ingreso', desc=True) \
-            .limit(50) \
-            .execute()
-        
-        logger.info(f"📊 Resultado de la consulta: {len(resultado.data) if resultado.data else 0} registros")
-        
-        recepciones = []
-        for orden in (resultado.data or []):
-            # 🔥 OBTENER DATOS DE FORMA SEGURA CON VALIDACIONES
-            vehiculo_data = orden.get('vehiculo', {})
-            if vehiculo_data is None:
-                vehiculo_data = {}
-            
-            cliente_data = vehiculo_data.get('cliente', {})
-            if cliente_data is None:
-                cliente_data = {}
-            
-            usuario_data = cliente_data.get('usuario', {})
-            if usuario_data is None:
-                usuario_data = {}
-            
-            # 🔥 OBTENER NOMBRE DE FORMA SEGURA
-            nombre_cliente = usuario_data.get('nombre')
-            if nombre_cliente is None or nombre_cliente == '' or nombre_cliente == 'null':
-                nombre_cliente = 'N/A'
-            
-            placa = vehiculo_data.get('placa')
-            if placa is None or placa == '' or placa == 'null':
-                placa = 'N/A'
-            
-            marca = vehiculo_data.get('marca')
-            if marca is None or marca == '' or marca == 'null':
-                marca = ''
-            
-            modelo = vehiculo_data.get('modelo')
-            if modelo is None or modelo == '' or modelo == 'null':
-                modelo = ''
-            
-            recepcion = {
-                'id': orden.get('id'),
-                'codigo_unico': orden.get('codigo_unico', 'OT-N/A'),
-                'fecha_ingreso': orden.get('fecha_ingreso'),
-                'estado_global': orden.get('estado_global', 'EnRecepcion'),
-                'placa': placa,
-                'marca': marca,
-                'modelo': modelo,
-                'anio': vehiculo_data.get('anio'),
-                'kilometraje': vehiculo_data.get('kilometraje', 0),
-                'cliente_nombre': nombre_cliente,
-                'cliente_telefono': usuario_data.get('contacto', 'N/A'),
-                'cliente_email': usuario_data.get('email', 'N/A'),
-                'cliente_ubicacion': usuario_data.get('ubicacion', ''),
-                'latitud': cliente_data.get('latitud'),
-                'longitud': cliente_data.get('longitud'),
-                'ubicacion_confirmada': cliente_data.get('ubicacion_confirmada', False)
-            }
-            
-            recepciones.append(recepcion)
-        
-        logger.info(f"✅ {len(recepciones)} recepciones listadas (joins Supabase)")
-        return jsonify({'success': True, 'recepciones': recepciones}), 200
-        
-    except Exception as e:
-        logger.error(f"❌ Error en método con joins: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-        # Usar el método simple como último recurso
-        return listar_recepciones_simple(current_user)
+        return jsonify({'success': True, 'recepciones': []}), 200
 
 
 def listar_recepciones_simple(current_user):
     """
-    Versión simple con consultas separadas (último fallback)
+    Versión simple con consultas separadas - FUNCIONA EN TODOS LOS ENTORNOS
     """
     try:
-        logger.info("📊 [listar_recepciones_simple] Usando método simple (consultas separadas)")
+        logger.info("📊 [listar_recepciones_simple] Iniciando consultas separadas...")
         
+        # Paso 1: Obtener todas las órdenes de trabajo
         resultado = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
             .order('fecha_ingreso', desc=True) \
             .limit(50) \
             .execute()
         
+        logger.info(f"📊 Órdenes encontradas: {len(resultado.data) if resultado.data else 0}")
+        
         recepciones = []
+        
         for orden in (resultado.data or []):
+            # Datos base de la orden
             recepcion = {
                 'id': orden.get('id'),
                 'codigo_unico': orden.get('codigo_unico', 'OT-N/A'),
@@ -412,12 +310,14 @@ def listar_recepciones_simple(current_user):
                 'kilometraje': 0
             }
             
-            if orden.get('id_vehiculo'):
+            id_vehiculo = orden.get('id_vehiculo')
+            
+            if id_vehiculo:
                 try:
-                    # Obtener vehículo
+                    # Paso 2: Obtener vehículo
                     v_result = supabase.table('vehiculo') \
                         .select('placa, marca, modelo, anio, kilometraje, id_cliente') \
-                        .eq('id', orden['id_vehiculo']) \
+                        .eq('id', id_vehiculo) \
                         .execute()
                     
                     if v_result.data:
@@ -426,44 +326,56 @@ def listar_recepciones_simple(current_user):
                         recepcion['marca'] = v.get('marca') or ''
                         recepcion['modelo'] = v.get('modelo') or ''
                         recepcion['anio'] = v.get('anio')
-                        recepcion['kilometraje'] = v.get('kilometraje', 0)
+                        recepcion['kilometraje'] = v.get('kilometraje') or 0
                         
-                        # Obtener cliente
-                        if v.get('id_cliente'):
-                            c_result = supabase.table('cliente') \
-                                .select('id_usuario, latitud, longitud, ubicacion_confirmada') \
-                                .eq('id', v['id_cliente']) \
-                                .execute()
-                            
-                            if c_result.data:
-                                c = c_result.data[0]
-                                recepcion['latitud'] = c.get('latitud')
-                                recepcion['longitud'] = c.get('longitud')
-                                recepcion['ubicacion_confirmada'] = c.get('ubicacion_confirmada', False)
+                        id_cliente = v.get('id_cliente')
+                        
+                        if id_cliente:
+                            try:
+                                # Paso 3: Obtener cliente
+                                c_result = supabase.table('cliente') \
+                                    .select('id_usuario, latitud, longitud, ubicacion_confirmada') \
+                                    .eq('id', id_cliente) \
+                                    .execute()
                                 
-                                # Obtener usuario (cliente)
-                                if c.get('id_usuario'):
-                                    u_result = supabase.table('usuario') \
-                                        .select('nombre, contacto, email, ubicacion') \
-                                        .eq('id', c['id_usuario']) \
-                                        .execute()
+                                if c_result.data:
+                                    c = c_result.data[0]
+                                    recepcion['latitud'] = c.get('latitud')
+                                    recepcion['longitud'] = c.get('longitud')
+                                    recepcion['ubicacion_confirmada'] = c.get('ubicacion_confirmada', False)
                                     
-                                    if u_result.data:
-                                        u = u_result.data[0]
-                                        recepcion['cliente_nombre'] = u.get('nombre') or 'N/A'
-                                        recepcion['cliente_telefono'] = u.get('contacto') or 'N/A'
-                                        recepcion['cliente_email'] = u.get('email') or 'N/A'
-                                        recepcion['cliente_ubicacion'] = u.get('ubicacion') or ''
+                                    id_usuario = c.get('id_usuario')
+                                    
+                                    if id_usuario:
+                                        try:
+                                            # Paso 4: Obtener usuario (cliente)
+                                            u_result = supabase.table('usuario') \
+                                                .select('nombre, contacto, email, ubicacion') \
+                                                .eq('id', id_usuario) \
+                                                .execute()
+                                            
+                                            if u_result.data:
+                                                u = u_result.data[0]
+                                                recepcion['cliente_nombre'] = u.get('nombre') or 'N/A'
+                                                recepcion['cliente_telefono'] = u.get('contacto') or 'N/A'
+                                                recepcion['cliente_email'] = u.get('email') or 'N/A'
+                                                recepcion['cliente_ubicacion'] = u.get('ubicacion') or ''
+                                        except Exception as e:
+                                            logger.warning(f"⚠️ Error obteniendo usuario {id_usuario}: {e}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Error obteniendo cliente {id_cliente}: {e}")
                 except Exception as e:
-                    logger.warning(f"⚠️ Error obteniendo datos del vehículo {orden.get('id_vehiculo')}: {e}")
+                    logger.warning(f"⚠️ Error obteniendo vehículo {id_vehiculo}: {e}")
             
             recepciones.append(recepcion)
         
-        logger.info(f"✅ {len(recepciones)} recepciones listadas (fallback simple)")
+        logger.info(f"✅ {len(recepciones)} recepciones listadas (método simple)")
         return jsonify({'success': True, 'recepciones': recepciones}), 200
         
     except Exception as e:
-        logger.error(f"❌ Error en fallback simple: {str(e)}")
+        logger.error(f"❌ Error en método simple: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'success': True, 'recepciones': []}), 200
 
 # =====================================================
@@ -535,7 +447,7 @@ def obtener_sesion(current_user, codigo):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# ENDPOINT 6: GUARDAR SECCIÓN (CORREGIDO)
+# ENDPOINT 6: GUARDAR SECCIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/guardar-seccion', methods=['POST'])
@@ -666,7 +578,7 @@ def unirse_sesion(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# ENDPOINT 8: FINALIZAR SESIÓN (CON RENOMBRADO DE CARPETA)
+# ENDPOINT 8: FINALIZAR SESIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/finalizar-sesion', methods=['POST'])
@@ -881,7 +793,7 @@ def finalizar_sesion(current_user):
             supabase.table('recepcion').insert(recepcion_data).execute()
             
             # =============================================
-            # 🔥 PASO IMPORTANTE: RENOMBRAR CARPETA EN DRIVE
+            # RENOMBRAR CARPETA EN DRIVE
             # =============================================
             carpeta_renombrada = False
             try:
@@ -928,18 +840,13 @@ def finalizar_sesion(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# ENDPOINT 9: CANCELAR SESIÓN (CON ELIMINACIÓN DE CARPETA EN DRIVE)
+# ENDPOINT 9: CANCELAR SESIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/cancelar-sesion', methods=['DELETE'])
 @jefe_operativo_required
 def cancelar_sesion(current_user):
-    """
-    Cancela una sesión activa y elimina TODOS los datos asociados:
-    - Archivos en Google Drive
-    - Registros en Supabase
-    - Memoria (sesiones_activas)
-    """
+    """Cancela una sesión activa y elimina TODOS los datos asociados"""
     global sesiones_activas
     try:
         from google_drive import google_drive
@@ -988,18 +895,11 @@ def cancelar_sesion(current_user):
         if codigo_sesion in sesiones_activas:
             del sesiones_activas[codigo_sesion]
             logger.info(f"✅ Sesión eliminada de memoria: {codigo_sesion}")
-        else:
-            sesiones_activas = {}
-            logger.info(f"🔄 Sesiones recargadas: {len(sesiones_activas)} activas")
         
         return jsonify({
             'success': True,
             'message': f'Sesión {codigo_sesion} cancelada y datos eliminados',
-            'carpeta_eliminada': carpeta_eliminada,
-            'detalles': {
-                'sesion_eliminada': True,
-                'carpeta_eliminada': carpeta_eliminada
-            }
+            'carpeta_eliminada': carpeta_eliminada
         }), 200
         
     except Exception as e:
@@ -1064,10 +964,7 @@ def verificar_placa(current_user, placa):
 @recepcion_jefe_bp.route('/upload-foto', methods=['POST'])
 @jefe_operativo_required
 def upload_foto_drive(current_user):
-    """
-    Sube una foto a Google Drive
-    ESTRUCTURA: S-XXXXX/recepcion/fotos/
-    """
+    """Sube una foto a Google Drive"""
     try:
         from google_drive import google_drive
         from datetime import datetime
@@ -1137,7 +1034,7 @@ def upload_foto_drive(current_user):
                 
                 guardar_sesion_en_db(sesion)
                 
-                logger.info(f"📸 Sesión actualizada: {fotos_validas}/7 fotos - Completado: {fotos_completas}")
+                logger.info(f"📸 Sesión actualizada: {fotos_validas}/7 fotos")
                 
         except Exception as e:
             logger.warning(f"⚠️ No se pudo actualizar sesión automáticamente: {e}")
@@ -1160,9 +1057,7 @@ def upload_foto_drive(current_user):
 @recepcion_jefe_bp.route('/actualizar-foto-sesion', methods=['POST'])
 @jefe_operativo_required
 def actualizar_foto_sesion(current_user):
-    """
-    Actualiza la URL de una foto en la sesión actual
-    """
+    """Actualiza la URL de una foto en la sesión actual"""
     global sesiones_activas
     try:
         data = request.get_json()
@@ -1209,15 +1104,11 @@ def actualizar_foto_sesion(current_user):
         
         guardar_sesion_en_db(sesion)
         
-        logger.info(f"📸 Foto {campo} actualizada en sesión {codigo_sesion} - {fotos_validas}/7")
-        
         return jsonify({
             'success': True,
             'fotos_subidas': fotos_validas,
             'total': 7,
-            'completado': fotos_completas,
-            'campo': campo,
-            'url': url
+            'completado': fotos_completas
         })
         
     except Exception as e:
@@ -1231,9 +1122,7 @@ def actualizar_foto_sesion(current_user):
 @recepcion_jefe_bp.route('/verificar-fotos/<codigo>', methods=['GET'])
 @jefe_operativo_required
 def verificar_fotos(current_user, codigo):
-    """
-    Verifica el estado de las fotos de una sesión
-    """
+    """Verifica el estado de las fotos de una sesión"""
     global sesiones_activas
     try:
         if codigo not in sesiones_activas:
@@ -1287,9 +1176,7 @@ def verificar_fotos(current_user, codigo):
 @recepcion_jefe_bp.route('/verificar-carpeta/<nombre>', methods=['GET'])
 @jefe_operativo_required
 def verificar_carpeta(current_user, nombre):
-    """
-    Verifica si una carpeta existe en Google Drive
-    """
+    """Verifica si una carpeta existe en Google Drive"""
     try:
         from google_drive import google_drive
         
@@ -1319,10 +1206,7 @@ def verificar_carpeta(current_user, nombre):
 @recepcion_jefe_bp.route('/upload-audio', methods=['POST'])
 @jefe_operativo_required
 def upload_audio_drive(current_user):
-    """
-    Sube un audio a Google Drive
-    ESTRUCTURA: S-XXXXX/recepcion/audios/
-    """
+    """Sube un audio a Google Drive"""
     try:
         from google_drive import google_drive
         from datetime import datetime
@@ -1385,9 +1269,7 @@ def upload_audio_drive(current_user):
 @recepcion_jefe_bp.route('/renombrar-carpeta', methods=['POST'])
 @jefe_operativo_required
 def renombrar_carpeta_drive(current_user):
-    """
-    Renombra una carpeta en Google Drive
-    """
+    """Renombra una carpeta en Google Drive"""
     try:
         from google_drive import google_drive
         
@@ -1430,9 +1312,7 @@ def renombrar_carpeta_drive(current_user):
 @recepcion_jefe_bp.route('/imagen-base64', methods=['POST'])
 @jefe_operativo_required
 def obtener_imagen_base64(current_user):
-    """
-    Descarga una imagen de Google Drive y la convierte a base64
-    """
+    """Descarga una imagen de Google Drive y la convierte a base64"""
     try:
         import requests
         import base64
@@ -1471,15 +1351,13 @@ def obtener_imagen_base64(current_user):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# ENDPOINT 19: DETALLE RECEPCIÓN (CORREGIDO)
+# ENDPOINT 19: DETALLE RECEPCIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/detalle-recepcion/<int:id_orden>', methods=['GET'])
 @jefe_operativo_required
 def detalle_recepcion(current_user, id_orden):
-    """
-    Obtiene el detalle completo de una recepción
-    """
+    """Obtiene el detalle completo de una recepción"""
     try:
         orden_result = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo, id_jefe_operativo, id_jefe_operativo_2') \
@@ -1541,7 +1419,7 @@ def detalle_recepcion(current_user, id_orden):
                     if u_result.data:
                         usuario = u_result.data
         
-        # 🔥 OBTENER RECEPCIÓN CON TODAS LAS FOTOS
+        # Obtener recepción
         recepcion_result = supabase.table('recepcion') \
             .select('''
                 id,
@@ -1561,7 +1439,7 @@ def detalle_recepcion(current_user, id_orden):
         
         recepcion = recepcion_result.data if recepcion_result.data else {}
         
-        # 🔥 CONSTRUIR OBJETO DE FOTOS CON TODAS LAS URLS
+        fotos_limpias = {}
         fotos = {
             'url_lateral_izquierda': recepcion.get('url_lateral_izquierda'),
             'url_lateral_derecha': recepcion.get('url_lateral_derecha'),
@@ -1572,8 +1450,6 @@ def detalle_recepcion(current_user, id_orden):
             'url_foto_tablero': recepcion.get('url_foto_tablero')
         }
         
-        # 🔥 LIMPIAR URLs NULAS O VACÍAS PARA QUE EL FRONTEND LAS FILTRE
-        fotos_limpias = {}
         for key, value in fotos.items():
             if value and value != 'null' and value != 'None' and value != '':
                 fotos_limpias[key] = value
@@ -1598,7 +1474,6 @@ def detalle_recepcion(current_user, id_orden):
             'latitud': cliente_data.get('latitud'),
             'longitud': cliente_data.get('longitud'),
             'ubicacion_confirmada': cliente_data.get('ubicacion_confirmada', False),
-            # 🔥 FOTOS LIMPIAS
             'fotos': fotos_limpias,
             'audio_url': recepcion.get('url_grabacion_problema'),
             'transcripcion_problema': recepcion.get('transcripcion_problema', '')
@@ -1617,9 +1492,7 @@ def detalle_recepcion(current_user, id_orden):
 @recepcion_jefe_bp.route('/eliminar-recepcion/<int:id_orden>', methods=['DELETE'])
 @jefe_operativo_required
 def eliminar_recepcion(current_user, id_orden):
-    """
-    Elimina una recepción (solo si está en estado EnRecepcion)
-    """
+    """Elimina una recepción (solo si está en estado EnRecepcion)"""
     try:
         orden_result = supabase.table('ordentrabajo').select('id, estado_global').eq('id', id_orden).execute()
         if not orden_result.data:

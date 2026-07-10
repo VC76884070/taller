@@ -2351,6 +2351,9 @@ async function verDetalleRecepcion(id) {
     }
 }
 
+// =====================================================
+// FUNCIÓN CORREGIDA: mostrarModalDetalle
+// =====================================================
 function mostrarModalDetalle(detalle) {
     const modal = document.getElementById('modalDetalleRecepcion');
     const body = document.getElementById('detalleRecepcionBody');
@@ -2359,17 +2362,28 @@ function mostrarModalDetalle(detalle) {
     console.log('📋 Detalle completo:', detalle);
     console.log('📸 Fotos en detalle:', detalle.fotos);
     
+    // 🔥 CONTAR FOTOS VÁLIDAS
     const fotos = detalle.fotos || {};
-    const fotosValidas = Object.values(fotos).filter(url => 
-        url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined'
-    );
-    const fotosCount = fotosValidas.length;
+    const camposFotos = [
+        { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo', icono: 'fa-car-side' },
+        { campo: 'url_lateral_derecha', label: 'Lateral Derecho', icono: 'fa-car-side' },
+        { campo: 'url_foto_frontal', label: 'Frontal', icono: 'fa-car' },
+        { campo: 'url_foto_trasera', label: 'Trasera', icono: 'fa-car' },
+        { campo: 'url_foto_superior', label: 'Superior', icono: 'fa-arrow-up' },
+        { campo: 'url_foto_inferior', label: 'Inferior', icono: 'fa-arrow-down' },
+        { campo: 'url_foto_tablero', label: 'Tablero', icono: 'fa-tachometer-alt' }
+    ];
+    
+    const fotosExistentes = camposFotos.filter(f => {
+        const url = fotos[f.campo];
+        return url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined';
+    });
+    const fotosCount = fotosExistentes.length;
     
     console.log(`📸 Fotos válidas: ${fotosCount}/7`);
     
-    // 🔥 CONSTRUIR HTML DE FOTOS - DIRECTO Y SIMPLE
+    // 🔥 CONSTRUIR HTML DE FOTOS PARA EL TAB
     let fotosHtml = '';
-    
     if (fotosCount === 0) {
         fotosHtml = `
             <div style="text-align: center; padding: 3rem 1.5rem; color: #8E8E93;">
@@ -2379,42 +2393,30 @@ function mostrarModalDetalle(detalle) {
             </div>
         `;
     } else {
-        const camposFotos = [
-            { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo', icono: 'fa-car-side' },
-            { campo: 'url_lateral_derecha', label: 'Lateral Derecho', icono: 'fa-car-side' },
-            { campo: 'url_foto_frontal', label: 'Frontal', icono: 'fa-car' },
-            { campo: 'url_foto_trasera', label: 'Trasera', icono: 'fa-car' },
-            { campo: 'url_foto_superior', label: 'Superior', icono: 'fa-arrow-up' },
-            { campo: 'url_foto_inferior', label: 'Inferior', icono: 'fa-arrow-down' },
-            { campo: 'url_foto_tablero', label: 'Tablero', icono: 'fa-tachometer-alt' }
-        ];
-        
-        const fotosExistentes = camposFotos.filter(f => {
-            const url = fotos[f.campo];
-            return url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined';
-        });
-        
         fotosHtml = `
             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; padding: 0.5rem 0;">
-                ${fotosExistentes.map(f => `
-                    <div style="position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid #2C2C2E; transition: all 0.3s ease; background: #1A1A1C; min-height: 120px;"
-                         onclick="verImagenAmpliada('${fotos[f.campo]}', '${f.label}')"
-                         title="Haz clic para ampliar">
-                        <img src="${fotos[f.campo]}" 
-                             alt="${f.label}" 
-                             loading="lazy" 
-                             style="width: 100%; height: 100%; object-fit: cover; display: block;"
-                             onerror="this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#1A1A1C;color:#8E8E93;font-size:0.7rem;gap:0.5rem;\\'><i class=\\'${f.icono}\\' style=\\'font-size:1.5rem;opacity:0.3;\\'></i><span>${f.label}</span></div>'">
-                        <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.85)); color: white; font-size: 0.7rem; padding: 0.6rem 0.5rem 0.4rem; text-align: center; display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-weight: 500;">
-                            <i class="${f.icono}" style="font-size: 0.65rem; opacity: 0.7;"></i> ${f.label}
+                ${fotosExistentes.map(f => {
+                    const url = fotos[f.campo];
+                    return `
+                        <div style="position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid #2C2C2E; transition: all 0.3s ease; background: #1A1A1C; min-height: 120px;"
+                             onclick="verImagenAmpliada('${url}', '${f.label}')"
+                             title="Haz clic para ampliar">
+                            <img src="${url}" 
+                                 alt="${f.label}" 
+                                 loading="lazy" 
+                                 style="width: 100%; height: 100%; object-fit: cover; display: block;"
+                                 onerror="this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#1A1A1C;color:#8E8E93;font-size:0.7rem;gap:0.5rem;\\'><i class=\\'${f.icono}\\' style=\\'font-size:1.5rem;opacity:0.3;\\'></i><span>${f.label}</span></div>'">
+                            <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.85)); color: white; font-size: 0.7rem; padding: 0.6rem 0.5rem 0.4rem; text-align: center; display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-weight: 500;">
+                                <i class="${f.icono}" style="font-size: 0.65rem; opacity: 0.7;"></i> ${f.label}
+                            </div>
                         </div>
-                    </div>
-                `).join('')}
+                    `;
+                }).join('')}
             </div>
         `;
     }
     
-    // 🔥 CONSTRUIR EL MODAL COMPLETO
+    // 🔥 CONSTRUIR EL MODAL COMPLETO - FOTOS SOLO EN EL TAB DE FOTOS
     const tabsHtml = `
         <div class="detalle-tabs">
             <button class="detalle-tab active" data-tab="info">📋 Información</button>
@@ -2422,6 +2424,7 @@ function mostrarModalDetalle(detalle) {
             <button class="detalle-tab" data-tab="descripcion">📝 Descripción</button>
         </div>
         <div class="detalle-panes">
+            <!-- TAB 1: INFORMACIÓN - SIN FOTOS -->
             <div class="detalle-pane active" id="pane-info">
                 <div class="detalle-grid">
                     <div class="detalle-item">
@@ -2499,10 +2502,12 @@ function mostrarModalDetalle(detalle) {
                 </div>
             </div>
             
+            <!-- TAB 2: FOTOS - SOLO FOTOS -->
             <div class="detalle-pane" id="pane-fotos">
                 ${fotosHtml}
             </div>
             
+            <!-- TAB 3: DESCRIPCIÓN -->
             <div class="detalle-pane" id="pane-descripcion">
                 <div class="detalle-descripcion-texto">${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}</div>
                 ${detalle.audio_url ? `<div class="detalle-audio"><audio controls src="${detalle.audio_url}" style="width: 100%; border-radius: 8px;"></audio></div>` : ''}
@@ -2521,13 +2526,21 @@ function mostrarModalDetalle(detalle) {
     const panes = document.querySelectorAll('.detalle-pane');
     
     tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const tabId = tab.dataset.tab;
+        tab.addEventListener('click', function() {
+            const tabId = this.dataset.tab;
+            
+            // Desactivar todos los tabs
             tabs.forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
+            this.classList.add('active');
+            
+            // Ocultar todos los panes
             panes.forEach(pane => pane.classList.remove('active'));
+            
+            // Mostrar el pane seleccionado
             const activePane = document.getElementById(`pane-${tabId}`);
-            if (activePane) activePane.classList.add('active');
+            if (activePane) {
+                activePane.classList.add('active');
+            }
             
             // 🔥 FORZAR RECARGA DE IMÁGENES AL CAMBIAR A LA PESTAÑA DE FOTOS
             if (tabId === 'fotos') {

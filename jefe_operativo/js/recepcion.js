@@ -1909,17 +1909,54 @@ function initRecepcionesPanel() {
 
 async function cargarRecepciones() {
     try {
-        const response = await fetchWithToken(`${API_URL}/jefe-operativo/listar-recepciones`, { method: 'GET' });
+        console.log('📡 [cargarRecepciones] Iniciando carga...');
+        
+        const response = await fetchWithToken(`${API_URL}/jefe-operativo/listar-recepciones`, { 
+            method: 'GET' 
+        });
+        
+        console.log('📡 [cargarRecepciones] Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+        
         const data = await response.json();
+        console.log('📡 [cargarRecepciones] Datos recibidos COMPLETOS:', JSON.stringify(data, null, 2));
         
         if (data.recepciones) {
+            console.log(`📡 [cargarRecepciones] Cantidad de recepciones: ${data.recepciones.length}`);
+            
+            // 🔥 VERIFICAR CADA RECEPCIÓN INDIVIDUALMENTE
+            data.recepciones.forEach((rec, index) => {
+                console.log(`📋 Recepción ${index + 1}:`, {
+                    id: rec.id,
+                    codigo: rec.codigo_unico,
+                    'cliente_nombre': rec.cliente_nombre,
+                    'placa': rec.placa,
+                    'marca': rec.marca,
+                    'modelo': rec.modelo,
+                    'estado': rec.estado_global
+                });
+            });
+            
+            // 🔥 ASIGNAR DIRECTAMENTE LOS DATOS RECIBIDOS
             recepcionesActuales = data.recepciones;
+            
             const count = document.getElementById('recepcionesCount');
             if (count) count.textContent = recepcionesActuales.length;
+            
+            filtrarYMostrarRecepciones();
+        } else {
+            console.warn('⚠️ [cargarRecepciones] No se recibieron recepciones');
+            recepcionesActuales = [];
             filtrarYMostrarRecepciones();
         }
     } catch (error) {
-        logger.error('Error cargando recepciones:', error);
+        console.error('❌ [cargarRecepciones] Error:', error);
+        mostrarNotificacion('Error cargando recepciones: ' + error.message, 'error');
+        recepcionesActuales = [];
+        filtrarYMostrarRecepciones();
     }
 }
 
@@ -1927,28 +1964,56 @@ async function cargarRecepciones() {
 // FILTRAR Y MOSTRAR RECEPCIONES - VERSIÓN MODERNA CON CARDS
 // =====================================================
 
+// =====================================================
+// FUNCIÓN CORREGIDA - RENDERIZADO DE RECEPCIONES
+// =====================================================
 function filtrarYMostrarRecepciones() {
     const listDiv = document.getElementById('recepcionesList');
     if (!listDiv) return;
     
-    let filtradas = [...recepcionesActuales];
+    console.log('📋 [filtrarYMostrarRecepciones] Total recepciones:', recepcionesActuales.length);
     
-    const searchTerm = document.getElementById('searchRecepcion')?.value.toLowerCase() || '';
-    if (searchTerm) {
-        filtradas = filtradas.filter(r => 
-            (r.codigo_unico && r.codigo_unico.toLowerCase().includes(searchTerm)) || 
-            (r.placa && r.placa.toLowerCase().includes(searchTerm)) || 
-            (r.cliente_nombre && r.cliente_nombre.toLowerCase().includes(searchTerm)) ||
-            (r.marca && r.marca.toLowerCase().includes(searchTerm)) ||
-            (r.modelo && r.modelo.toLowerCase().includes(searchTerm))
-        );
+    // 🔥 LOG DE LOS DATOS REALES QUE LLEGAN
+    if (recepcionesActuales.length > 0) {
+        console.log('📋 Primera recepción (DATOS CRUDOS):', recepcionesActuales[0]);
+        console.log('📋 Campos disponibles:', Object.keys(recepcionesActuales[0]));
+        console.log('📋 cliente_nombre:', recepcionesActuales[0].cliente_nombre);
+        console.log('📋 placa:', recepcionesActuales[0].placa);
+        console.log('📋 marca:', recepcionesActuales[0].marca);
+        console.log('📋 modelo:', recepcionesActuales[0].modelo);
     }
     
+    let filtradas = [...recepcionesActuales];
+    
+    // FILTRO DE BÚSQUEDA
+    const searchTerm = document.getElementById('searchRecepcion')?.value?.toLowerCase() || '';
+    if (searchTerm) {
+        filtradas = filtradas.filter(r => {
+            const codigo = (r.codigo_unico || '').toLowerCase();
+            const placa = (r.placa || '').toLowerCase();
+            const cliente = (r.cliente_nombre || '').toLowerCase();
+            const marca = (r.marca || '').toLowerCase();
+            const modelo = (r.modelo || '').toLowerCase();
+            
+            return codigo.includes(searchTerm) ||
+                   placa.includes(searchTerm) ||
+                   cliente.includes(searchTerm) ||
+                   marca.includes(searchTerm) ||
+                   modelo.includes(searchTerm);
+        });
+    }
+    
+    // FILTRO DE FECHA
     const fechaDesde = document.getElementById('fechaDesde')?.value;
     const fechaHasta = document.getElementById('fechaHasta')?.value;
-    if (fechaDesde) filtradas = filtradas.filter(r => r.fecha_ingreso >= fechaDesde);
-    if (fechaHasta) filtradas = filtradas.filter(r => r.fecha_ingreso <= fechaHasta + 'T23:59:59');
+    if (fechaDesde) {
+        filtradas = filtradas.filter(r => r.fecha_ingreso && r.fecha_ingreso >= fechaDesde);
+    }
+    if (fechaHasta) {
+        filtradas = filtradas.filter(r => r.fecha_ingreso && r.fecha_ingreso <= fechaHasta + 'T23:59:59');
+    }
     
+    // FILTRO DE ESTADO
     const estadoFiltro = document.getElementById('estadoFiltro')?.value;
     if (estadoFiltro && estadoFiltro !== 'todos') {
         filtradas = filtradas.filter(r => r.estado_global === estadoFiltro);
@@ -1962,12 +2027,20 @@ function filtrarYMostrarRecepciones() {
             <div class="empty-state">
                 <i class="fas fa-inbox"></i>
                 <p>No hay recepciones que coincidan con los filtros</p>
-                <small style="color: var(--gris-texto); font-size: 0.7rem;">Intenta cambiar los criterios de búsqueda</small>
+                <small style="color: var(--gris-texto); font-size: 0.7rem;">
+                    ${recepcionesActuales.length > 0 ? 
+                        `Hay ${recepcionesActuales.length} recepciones pero no coinciden con los filtros` : 
+                        'No hay recepciones registradas en el sistema'}
+                </small>
+                <button onclick="cargarRecepciones()" style="margin-top: 10px; padding: 8px 20px; background: #C1121F; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                    <i class="fas fa-sync"></i> Recargar
+                </button>
             </div>
         `;
         return;
     }
     
+    // PAGINACIÓN
     const itemsPorPagina = 10;
     const totalPaginas = Math.ceil(filtradas.length / itemsPorPagina);
     if (paginaActual > totalPaginas) paginaActual = totalPaginas;
@@ -1977,14 +2050,45 @@ function filtrarYMostrarRecepciones() {
     const fin = inicio + itemsPorPagina;
     const paginadas = filtradas.slice(inicio, fin);
     
+    // 🔥 RENDERIZAR CON DATOS CORRECTOS
     listDiv.innerHTML = paginadas.map(rec => {
-        const estadoClass = rec.estado_global || 'EnRecepcion';
+        // 🔥 FUNCIÓN SEGURA PARA OBTENER VALORES
+        const safeValue = (value, defaultValue = 'N/A') => {
+            if (value === null || value === undefined || value === '' || 
+                value === 'null' || value === 'None' || value === 'undefined') {
+                return defaultValue;
+            }
+            return value;
+        };
+        
+        // 🔥 OBTENER DATOS - USANDO LOS CAMPOS DEL BACKEND
+        const codigo = safeValue(rec.codigo_unico, 'OT-N/A');
+        const estado = rec.estado_global || 'EnRecepcion';
         const estadoLabel = {
             'EnRecepcion': 'En Recepción',
             'EnTaller': 'En Taller',
             'Finalizado': 'Finalizado'
-        }[estadoClass] || estadoClass;
+        }[estado] || estado;
         
+        // 🔥 CLIENTE - USAR EL CAMPO CORRECTO
+        const clienteNombre = safeValue(rec.cliente_nombre);
+        
+        // 🔥 VEHÍCULO - USAR LOS CAMPOS CORRECTOS
+        const placa = safeValue(rec.placa);
+        const marca = safeValue(rec.marca, '');
+        const modelo = safeValue(rec.modelo, '');
+        
+        // Construir texto del vehículo
+        let vehiculoTexto = 'Vehículo sin especificar';
+        if (marca && modelo) {
+            vehiculoTexto = `${marca} ${modelo}`;
+        } else if (marca) {
+            vehiculoTexto = marca;
+        } else if (modelo) {
+            vehiculoTexto = modelo;
+        }
+        
+        // Fecha
         const fechaFormateada = rec.fecha_ingreso ? 
             new Date(rec.fecha_ingreso).toLocaleDateString('es-ES', {
                 day: '2-digit',
@@ -1992,17 +2096,21 @@ function filtrarYMostrarRecepciones() {
                 year: 'numeric'
             }) : 'Fecha N/A';
         
-        const clienteNombre = rec.cliente_nombre || 'N/A';
-        const placa = rec.placa || 'N/A';
-        const vehiculoTexto = rec.marca && rec.modelo ? 
-            `${rec.marca} ${rec.modelo}` : 
-            (rec.marca || rec.modelo || 'Vehículo sin especificar');
+        // 🔥 LOG PARA VERIFICAR LO QUE SE ESTÁ RENDERIZANDO
+        console.log(`📋 Renderizando: ${codigo}`, {
+            'cliente_nombre': rec.cliente_nombre,
+            'cliente_final': clienteNombre,
+            'placa': placa,
+            'marca': marca,
+            'modelo': modelo,
+            'vehiculo_texto': vehiculoTexto
+        });
         
         return `
-            <div class="recepcion-card estado-${estadoClass}">
+            <div class="recepcion-card estado-${estado}">
                 <div class="recepcion-header">
-                    <span class="recepcion-codigo">${escapeHtml(rec.codigo_unico || 'N/A')}</span>
-                    <span class="recepcion-estado ${estadoClass}">${estadoLabel}</span>
+                    <span class="recepcion-codigo">${escapeHtml(codigo)}</span>
+                    <span class="recepcion-estado ${estado}">${estadoLabel}</span>
                 </div>
                 
                 <div class="recepcion-body">
@@ -2050,6 +2158,7 @@ function filtrarYMostrarRecepciones() {
         `;
     }).join('');
     
+    // PAGINACIÓN
     const paginaInfo = document.getElementById('paginaInfo');
     if (paginaInfo) paginaInfo.textContent = `Página ${paginaActual} de ${totalPaginas}`;
     

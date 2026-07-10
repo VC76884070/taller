@@ -3428,9 +3428,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('✅ Recepcion.js inicializado correctamente (Google Drive)');
 });
 
-// =====================================================
+// =====================================================::::::::::
 // FUNCIONES GLOBALES
-// =====================================================
+// =====================================================_________________ 
 window.unirseSesionConCodigo = unirseSesionConCodigo;
 window.verDetalleRecepcion = verDetalleRecepcion;
 window.editarRecepcion = editarRecepcion;

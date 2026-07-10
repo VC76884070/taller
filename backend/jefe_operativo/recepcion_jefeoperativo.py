@@ -1633,7 +1633,7 @@ def detalle_recepcion(current_user, id_orden):
 
 # =====================================================
 # ENDPOINT 20: ELIMINAR RECEPCIÓN
-# =====================================================
+# =====================================================:::::
 
 @recepcion_jefe_bp.route('/eliminar-recepcion/<int:id_orden>', methods=['DELETE'])
 @jefe_operativo_required

@@ -21,7 +21,7 @@ SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
 
 
-# =====================================================
+# =====================================================________
 # FUNCIÓN AUXILIAR PARA VERIFICAR TOKEN Y ROLES
 # =====================================================
 def verificar_token_y_roles(roles_permitidos):

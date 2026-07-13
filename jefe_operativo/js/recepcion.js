@@ -57,13 +57,18 @@ let audioDriveUrl = null;
 let descripcionModificadaManualmente = false;
 let descripcionOriginal = '';
 
-// Variables para recepciones guardadas
+// Variables para recepciones guardadas - PAGINACIÓN
 let recepcionesActuales = [];
 let paginaActual = 1;
 let itemsPorPagina = 10;
 let recepcionSeleccionada = null;
 let modoEdicionRecepcion = false;
 let recepcionEditandoId = null;
+let cargandoMas = false;
+let noHayMasRecepciones = false;
+let totalRecepciones = 0;
+let offsetActual = 0;
+const LIMITE_RECEPCIONES = 5;
 
 // Variables para Leaflet
 let mapCliente = null;
@@ -1883,37 +1888,102 @@ async function cargarDatosSesionLigero() {
 }
 
 // =====================================================
-// RECEPCIONES GUARDADAS
+// RECEPCIONES GUARDADAS - VERSIÓN CON PAGINACIÓN
 // =====================================================
 function initRecepcionesPanel() {
     cargarRecepciones();
     
     const btnRefresh = document.getElementById('btnRefreshRecepciones');
-    if (btnRefresh) btnRefresh.addEventListener('click', cargarRecepciones);
+    if (btnRefresh) {
+        btnRefresh.addEventListener('click', () => {
+            offsetActual = 0;
+            recepcionesActuales = [];
+            noHayMasRecepciones = false;
+            cargarRecepciones();
+        });
+    }
     
     const searchInput = document.getElementById('searchRecepcion');
-    if (searchInput) searchInput.addEventListener('input', () => { paginaActual = 1; filtrarYMostrarRecepciones(); });
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            offsetActual = 0;
+            recepcionesActuales = [];
+            noHayMasRecepciones = false;
+            filtrarYMostrarRecepciones();
+        });
+    }
     
     const fechaDesde = document.getElementById('fechaDesde');
     const fechaHasta = document.getElementById('fechaHasta');
     const estadoFiltro = document.getElementById('estadoFiltro');
-    if (fechaDesde) fechaDesde.addEventListener('change', filtrarYMostrarRecepciones);
-    if (fechaHasta) fechaHasta.addEventListener('change', filtrarYMostrarRecepciones);
-    if (estadoFiltro) estadoFiltro.addEventListener('change', filtrarYMostrarRecepciones);
+    
+    if (fechaDesde) fechaDesde.addEventListener('change', () => {
+        offsetActual = 0;
+        recepcionesActuales = [];
+        noHayMasRecepciones = false;
+        filtrarYMostrarRecepciones();
+    });
+    
+    if (fechaHasta) fechaHasta.addEventListener('change', () => {
+        offsetActual = 0;
+        recepcionesActuales = [];
+        noHayMasRecepciones = false;
+        filtrarYMostrarRecepciones();
+    });
+    
+    if (estadoFiltro) estadoFiltro.addEventListener('change', () => {
+        offsetActual = 0;
+        recepcionesActuales = [];
+        noHayMasRecepciones = false;
+        filtrarYMostrarRecepciones();
+    });
     
     const btnAnterior = document.getElementById('btnPaginaAnterior');
     const btnSiguiente = document.getElementById('btnPaginaSiguiente');
-    if (btnAnterior) btnAnterior.addEventListener('click', () => { if (paginaActual > 1) { paginaActual--; filtrarYMostrarRecepciones(); } });
-    if (btnSiguiente) btnSiguiente.addEventListener('click', () => { paginaActual++; filtrarYMostrarRecepciones(); });
+    
+    if (btnAnterior) {
+        btnAnterior.addEventListener('click', () => {
+            if (offsetActual >= LIMITE_RECEPCIONES) {
+                offsetActual -= LIMITE_RECEPCIONES;
+                cargarRecepciones();
+            }
+        });
+    }
+    
+    if (btnSiguiente) {
+        btnSiguiente.addEventListener('click', () => {
+            if (!noHayMasRecepciones) {
+                offsetActual += LIMITE_RECEPCIONES;
+                cargarRecepciones();
+            }
+        });
+    }
 }
 
-async function cargarRecepciones() {
+// =====================================================
+// CARGAR RECEPCIONES CON PAGINACIÓN
+// =====================================================
+async function cargarRecepciones(append = false) {
     try {
-        console.log('📡 [cargarRecepciones] Iniciando carga...');
+        if (cargandoMas) return;
+        cargandoMas = true;
         
-        const response = await fetchWithToken(`${API_URL}/jefe-operativo/listar-recepciones`, { 
-            method: 'GET' 
-        });
+        console.log(`📡 [cargarRecepciones] Cargando ${LIMITE_RECEPCIONES} recepciones desde offset ${offsetActual}...`);
+        
+        const listDiv = document.getElementById('recepcionesList');
+        if (listDiv && !append) {
+            listDiv.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #C1121F;"></i>
+                    <p style="margin-top: 10px;">Cargando recepciones...</p>
+                </div>
+            `;
+        }
+        
+        const response = await fetchWithToken(
+            `${API_URL}/jefe-operativo/listar-recepciones?limit=${LIMITE_RECEPCIONES}&offset=${offsetActual}`, 
+            { method: 'GET' }
+        );
         
         console.log('📡 [cargarRecepciones] Response status:', response.status);
         
@@ -1922,50 +1992,69 @@ async function cargarRecepciones() {
         }
         
         const data = await response.json();
-        console.log('📡 [cargarRecepciones] Datos recibidos COMPLETOS:', JSON.stringify(data, null, 2));
+        console.log('📡 [cargarRecepciones] Datos recibidos:', data);
         
-        if (data.recepciones) {
+        if (data.success && data.recepciones) {
             console.log(`📡 [cargarRecepciones] Cantidad de recepciones: ${data.recepciones.length}`);
             
-            // 🔥 VERIFICAR CADA RECEPCIÓN INDIVIDUALMENTE
-            data.recepciones.forEach((rec, index) => {
-                console.log(`📋 Recepción ${index + 1}:`, {
-                    id: rec.id,
-                    codigo: rec.codigo_unico,
-                    'cliente_nombre': rec.cliente_nombre,
-                    'placa': rec.placa,
-                    'marca': rec.marca,
-                    'modelo': rec.modelo,
-                    'estado': rec.estado_global
-                });
-            });
+            if (data.paginacion) {
+                totalRecepciones = data.paginacion.total || 0;
+                noHayMasRecepciones = !data.paginacion.has_more;
+                
+                const paginaInfo = document.getElementById('paginaInfo');
+                if (paginaInfo) {
+                    const paginaActual = Math.floor(offsetActual / LIMITE_RECEPCIONES) + 1;
+                    const totalPaginas = Math.ceil(totalRecepciones / LIMITE_RECEPCIONES);
+                    paginaInfo.textContent = `Página ${paginaActual} de ${totalPaginas || 1}`;
+                }
+                
+                const btnAnterior = document.getElementById('btnPaginaAnterior');
+                const btnSiguiente = document.getElementById('btnPaginaSiguiente');
+                if (btnAnterior) btnAnterior.disabled = offsetActual === 0;
+                if (btnSiguiente) btnSiguiente.disabled = noHayMasRecepciones;
+            }
             
-            // 🔥 ASIGNAR DIRECTAMENTE LOS DATOS RECIBIDOS
-            recepcionesActuales = data.recepciones;
+            if (append) {
+                recepcionesActuales = [...recepcionesActuales, ...data.recepciones];
+            } else {
+                recepcionesActuales = data.recepciones;
+            }
             
             const count = document.getElementById('recepcionesCount');
-            if (count) count.textContent = recepcionesActuales.length;
+            if (count) count.textContent = totalRecepciones || recepcionesActuales.length;
             
             filtrarYMostrarRecepciones();
         } else {
             console.warn('⚠️ [cargarRecepciones] No se recibieron recepciones');
-            recepcionesActuales = [];
-            filtrarYMostrarRecepciones();
+            if (!append) {
+                recepcionesActuales = [];
+                filtrarYMostrarRecepciones();
+            }
         }
     } catch (error) {
         console.error('❌ [cargarRecepciones] Error:', error);
         mostrarNotificacion('Error cargando recepciones: ' + error.message, 'error');
-        recepcionesActuales = [];
-        filtrarYMostrarRecepciones();
+        
+        const listDiv = document.getElementById('recepcionesList');
+        if (listDiv && !append) {
+            listDiv.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #dc3545;"></i>
+                    <p style="margin-top: 10px;">Error al cargar recepciones</p>
+                    <small style="color: var(--gris-texto);">${error.message}</small>
+                    <button onclick="cargarRecepciones()" style="margin-top: 10px; padding: 8px 20px; background: #C1121F; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                        <i class="fas fa-sync"></i> Reintentar
+                    </button>
+                </div>
+            `;
+        }
+    } finally {
+        cargandoMas = false;
     }
 }
 
 // =====================================================
-// FILTRAR Y MOSTRAR RECEPCIONES - VERSIÓN MODERNA CON CARDS
-// =====================================================
-
-// =====================================================
-// FUNCIÓN CORREGIDA - RENDERIZADO DE RECEPCIONES
+// FILTRAR Y MOSTRAR RECEPCIONES - VERSIÓN OPTIMIZADA
 // =====================================================
 function filtrarYMostrarRecepciones() {
     const listDiv = document.getElementById('recepcionesList');
@@ -1973,19 +2062,8 @@ function filtrarYMostrarRecepciones() {
     
     console.log('📋 [filtrarYMostrarRecepciones] Total recepciones:', recepcionesActuales.length);
     
-    // 🔥 LOG DE LOS DATOS REALES QUE LLEGAN
-    if (recepcionesActuales.length > 0) {
-        console.log('📋 Primera recepción (DATOS CRUDOS):', recepcionesActuales[0]);
-        console.log('📋 Campos disponibles:', Object.keys(recepcionesActuales[0]));
-        console.log('📋 cliente_nombre:', recepcionesActuales[0].cliente_nombre);
-        console.log('📋 placa:', recepcionesActuales[0].placa);
-        console.log('📋 marca:', recepcionesActuales[0].marca);
-        console.log('📋 modelo:', recepcionesActuales[0].modelo);
-    }
-    
     let filtradas = [...recepcionesActuales];
     
-    // FILTRO DE BÚSQUEDA
     const searchTerm = document.getElementById('searchRecepcion')?.value?.toLowerCase() || '';
     if (searchTerm) {
         filtradas = filtradas.filter(r => {
@@ -2003,7 +2081,6 @@ function filtrarYMostrarRecepciones() {
         });
     }
     
-    // FILTRO DE FECHA
     const fechaDesde = document.getElementById('fechaDesde')?.value;
     const fechaHasta = document.getElementById('fechaHasta')?.value;
     if (fechaDesde) {
@@ -2013,7 +2090,6 @@ function filtrarYMostrarRecepciones() {
         filtradas = filtradas.filter(r => r.fecha_ingreso && r.fecha_ingreso <= fechaHasta + 'T23:59:59');
     }
     
-    // FILTRO DE ESTADO
     const estadoFiltro = document.getElementById('estadoFiltro')?.value;
     if (estadoFiltro && estadoFiltro !== 'todos') {
         filtradas = filtradas.filter(r => r.estado_global === estadoFiltro);
@@ -2023,36 +2099,40 @@ function filtrarYMostrarRecepciones() {
     if (countSpan) countSpan.textContent = filtradas.length;
     
     if (filtradas.length === 0) {
+        let mensaje = 'No hay recepciones que coincidan con los filtros';
+        let subtitulo = '';
+        
+        if (recepcionesActuales.length === 0 && !noHayMasRecepciones) {
+            mensaje = 'Cargando recepciones...';
+            subtitulo = 'Por favor espera';
+        } else if (recepcionesActuales.length === 0 && noHayMasRecepciones) {
+            mensaje = 'No hay recepciones registradas';
+            subtitulo = 'Comienza creando una nueva recepción';
+        } else if (recepcionesActuales.length > 0) {
+            subtitulo = `Hay ${recepcionesActuales.length} recepciones pero no coinciden con los filtros`;
+        }
+        
         listDiv.innerHTML = `
             <div class="empty-state">
                 <i class="fas fa-inbox"></i>
-                <p>No hay recepciones que coincidan con los filtros</p>
-                <small style="color: var(--gris-texto); font-size: 0.7rem;">
-                    ${recepcionesActuales.length > 0 ? 
-                        `Hay ${recepcionesActuales.length} recepciones pero no coinciden con los filtros` : 
-                        'No hay recepciones registradas en el sistema'}
-                </small>
+                <p>${mensaje}</p>
+                ${subtitulo ? `<small style="color: var(--gris-texto); font-size: 0.7rem;">${subtitulo}</small>` : ''}
+                ${!noHayMasRecepciones ? `
+                <div style="margin-top: 15px;">
+                    <i class="fas fa-spinner fa-spin" style="color: #C1121F;"></i>
+                    <span style="color: var(--gris-texto); font-size: 0.8rem; margin-left: 8px;">Cargando más...</span>
+                </div>
+                ` : `
                 <button onclick="cargarRecepciones()" style="margin-top: 10px; padding: 8px 20px; background: #C1121F; color: white; border: none; border-radius: 6px; cursor: pointer;">
                     <i class="fas fa-sync"></i> Recargar
                 </button>
+                `}
             </div>
         `;
         return;
     }
     
-    // PAGINACIÓN
-    const itemsPorPagina = 10;
-    const totalPaginas = Math.ceil(filtradas.length / itemsPorPagina);
-    if (paginaActual > totalPaginas) paginaActual = totalPaginas;
-    if (paginaActual < 1) paginaActual = 1;
-    
-    const inicio = (paginaActual - 1) * itemsPorPagina;
-    const fin = inicio + itemsPorPagina;
-    const paginadas = filtradas.slice(inicio, fin);
-    
-    // 🔥 RENDERIZAR CON DATOS CORRECTOS
-    listDiv.innerHTML = paginadas.map(rec => {
-        // 🔥 FUNCIÓN SEGURA PARA OBTENER VALORES
+    listDiv.innerHTML = filtradas.map(rec => {
         const safeValue = (value, defaultValue = 'N/A') => {
             if (value === null || value === undefined || value === '' || 
                 value === 'null' || value === 'None' || value === 'undefined') {
@@ -2061,7 +2141,6 @@ function filtrarYMostrarRecepciones() {
             return value;
         };
         
-        // 🔥 OBTENER DATOS - USANDO LOS CAMPOS DEL BACKEND
         const codigo = safeValue(rec.codigo_unico, 'OT-N/A');
         const estado = rec.estado_global || 'EnRecepcion';
         const estadoLabel = {
@@ -2070,15 +2149,11 @@ function filtrarYMostrarRecepciones() {
             'Finalizado': 'Finalizado'
         }[estado] || estado;
         
-        // 🔥 CLIENTE - USAR EL CAMPO CORRECTO
         const clienteNombre = safeValue(rec.cliente_nombre);
-        
-        // 🔥 VEHÍCULO - USAR LOS CAMPOS CORRECTOS
         const placa = safeValue(rec.placa);
         const marca = safeValue(rec.marca, '');
         const modelo = safeValue(rec.modelo, '');
         
-        // Construir texto del vehículo
         let vehiculoTexto = 'Vehículo sin especificar';
         if (marca && modelo) {
             vehiculoTexto = `${marca} ${modelo}`;
@@ -2088,23 +2163,12 @@ function filtrarYMostrarRecepciones() {
             vehiculoTexto = modelo;
         }
         
-        // Fecha
         const fechaFormateada = rec.fecha_ingreso ? 
             new Date(rec.fecha_ingreso).toLocaleDateString('es-ES', {
                 day: '2-digit',
                 month: '2-digit',
                 year: 'numeric'
             }) : 'Fecha N/A';
-        
-        // 🔥 LOG PARA VERIFICAR LO QUE SE ESTÁ RENDERIZANDO
-        console.log(`📋 Renderizando: ${codigo}`, {
-            'cliente_nombre': rec.cliente_nombre,
-            'cliente_final': clienteNombre,
-            'placa': placa,
-            'marca': marca,
-            'modelo': modelo,
-            'vehiculo_texto': vehiculoTexto
-        });
         
         return `
             <div class="recepcion-card estado-${estado}">
@@ -2158,14 +2222,41 @@ function filtrarYMostrarRecepciones() {
         `;
     }).join('');
     
-    // PAGINACIÓN
-    const paginaInfo = document.getElementById('paginaInfo');
-    if (paginaInfo) paginaInfo.textContent = `Página ${paginaActual} de ${totalPaginas}`;
-    
-    const btnAnterior = document.getElementById('btnPaginaAnterior');
-    const btnSiguiente = document.getElementById('btnPaginaSiguiente');
-    if (btnAnterior) btnAnterior.disabled = paginaActual <= 1;
-    if (btnSiguiente) btnSiguiente.disabled = paginaActual >= totalPaginas;
+    // Mostrar indicador de "Cargar más" si hay más recepciones
+    if (!noHayMasRecepciones && recepcionesActuales.length > 0) {
+        const footerDiv = document.createElement('div');
+        footerDiv.style.cssText = 'text-align: center; padding: 10px 0;';
+        footerDiv.innerHTML = `
+            <button onclick="cargarRecepciones(true)" class="btn-cargar-mas" style="
+                background: transparent;
+                border: 2px solid var(--border-color);
+                color: var(--gris-texto);
+                padding: 8px 20px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 0.85rem;
+                transition: all 0.3s ease;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+            " onmouseover="this.style.borderColor='#C1121F'; this.style.color='#C1121F';" 
+               onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--gris-texto)';">
+                <i class="fas fa-chevron-down"></i> Cargar más
+            </button>
+            <p style="color: var(--gris-texto); font-size: 0.7rem; margin-top: 5px;">
+                Mostrando ${recepcionesActuales.length} de ${totalRecepciones} recepciones
+            </p>
+        `;
+        listDiv.appendChild(footerDiv);
+    } else if (totalRecepciones > 0 && recepcionesActuales.length > 0) {
+        const footerDiv = document.createElement('div');
+        footerDiv.style.cssText = 'text-align: center; padding: 10px 0; color: var(--gris-texto); font-size: 0.75rem;';
+        footerDiv.innerHTML = `
+            <i class="fas fa-check-circle" style="color: var(--verde-exito);"></i>
+            <span style="margin-left: 5px;">Todas las recepciones cargadas (${totalRecepciones})</span>
+        `;
+        listDiv.appendChild(footerDiv);
+    }
 }
 
 // =====================================================
@@ -2334,7 +2425,7 @@ function setupModalUbicacionLeaflet() {
 }
 
 // =====================================================
-// FUNCIONES DE DETALLE Y EDICIÓN - VERSIÓN SIMPLIFICADA Y CORREGIDA
+// FUNCIONES DE DETALLE Y EDICIÓN
 // =====================================================
 
 async function verDetalleRecepcion(id) {
@@ -2353,6 +2444,7 @@ async function verDetalleRecepcion(id) {
 
 // =====================================================
 // FUNCIÓN CORREGIDA: mostrarModalDetalle
+// LAS FOTOS SOLO APARECEN EN EL TAB DE FOTOS
 // =====================================================
 function mostrarModalDetalle(detalle) {
     const modal = document.getElementById('modalDetalleRecepcion');
@@ -2362,7 +2454,6 @@ function mostrarModalDetalle(detalle) {
     console.log('📋 Detalle completo:', detalle);
     console.log('📸 Fotos en detalle:', detalle.fotos);
     
-    // 🔥 CONTAR FOTOS VÁLIDAS
     const fotos = detalle.fotos || {};
     const camposFotos = [
         { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo', icono: 'fa-car-side' },
@@ -2382,7 +2473,6 @@ function mostrarModalDetalle(detalle) {
     
     console.log(`📸 Fotos válidas: ${fotosCount}/7`);
     
-    // 🔥 CONSTRUIR HTML DE FOTOS PARA EL TAB
     let fotosHtml = '';
     if (fotosCount === 0) {
         fotosHtml = `
@@ -2393,20 +2483,21 @@ function mostrarModalDetalle(detalle) {
             </div>
         `;
     } else {
+        const timestamp = Date.now();
         fotosHtml = `
             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; padding: 0.5rem 0;">
-                ${fotosExistentes.map(f => {
+                ${fotosExistentes.map((f, index) => {
                     const url = fotos[f.campo];
+                    const imgId = `foto-${f.campo}-${timestamp}-${index}`;
                     return `
-                        <div style="position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid #2C2C2E; transition: all 0.3s ease; background: #1A1A1C; min-height: 120px;"
-                             onclick="verImagenAmpliada('${url}', '${f.label}')"
+                        <div style="position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid #2C2C2E; transition: all 0.3s ease; background: #1A1A1C; min-height: 120px; display: flex; align-items: center; justify-content: center;"
+                             onclick="verImagenAmpliadaPorId('${imgId}', '${f.label}')"
                              title="Haz clic para ampliar">
-                            <img src="${url}" 
-                                 alt="${f.label}" 
-                                 loading="lazy" 
-                                 style="width: 100%; height: 100%; object-fit: cover; display: block;"
-                                 onerror="this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#1A1A1C;color:#8E8E93;font-size:0.7rem;gap:0.5rem;\\'><i class=\\'${f.icono}\\' style=\\'font-size:1.5rem;opacity:0.3;\\'></i><span>${f.label}</span></div>'">
-                            <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.85)); color: white; font-size: 0.7rem; padding: 0.6rem 0.5rem 0.4rem; text-align: center; display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-weight: 500;">
+                            <div id="${imgId}" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; color: #8E8E93; gap: 8px;">
+                                <i class="fas fa-spinner fa-spin" style="font-size: 24px; color: #C1121F;"></i>
+                                <span style="font-size: 11px;">Cargando...</span>
+                            </div>
+                            <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.85)); color: white; font-size: 0.7rem; padding: 0.6rem 0.5rem 0.4rem; text-align: center; display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-weight: 500; z-index: 2;">
                                 <i class="${f.icono}" style="font-size: 0.65rem; opacity: 0.7;"></i> ${f.label}
                             </div>
                         </div>
@@ -2416,112 +2507,77 @@ function mostrarModalDetalle(detalle) {
         `;
     }
     
-    // 🔥 CONSTRUIR EL MODAL COMPLETO - FOTOS SOLO EN EL TAB DE FOTOS
-    const tabsHtml = `
+    const html = `
         <div class="detalle-tabs">
             <button class="detalle-tab active" data-tab="info">📋 Información</button>
             <button class="detalle-tab" data-tab="fotos">📸 Fotos (${fotosCount}/7)</button>
             <button class="detalle-tab" data-tab="descripcion">📝 Descripción</button>
         </div>
         <div class="detalle-panes">
-            <!-- TAB 1: INFORMACIÓN - SIN FOTOS -->
             <div class="detalle-pane active" id="pane-info">
-                <div class="detalle-grid">
-                    <div class="detalle-item">
-                        <span class="detalle-label">Código de Trabajo</span>
-                        <span class="detalle-value">${escapeHtml(detalle.codigo_unico || 'N/A')}</span>
-                    </div>
-                    <div class="detalle-item">
-                        <span class="detalle-label">Fecha de Ingreso</span>
-                        <span class="detalle-value">${detalle.fecha_ingreso ? new Date(detalle.fecha_ingreso).toLocaleString() : 'N/A'}</span>
-                    </div>
-                    <div class="detalle-item">
-                        <span class="detalle-label">Estado</span>
-                        <span class="detalle-value estado-${detalle.estado_global || 'EnRecepcion'}">${detalle.estado_global || 'En Recepción'}</span>
-                    </div>
-                    <div class="detalle-item">
-                        <span class="detalle-label">Jefe Principal</span>
-                        <span class="detalle-value">${escapeHtml(detalle.jefe_operativo?.nombre || 'No asignado')}</span>
-                    </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; background: #1A1A1C; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                    <div><span style="color: #8E8E93; font-size: 11px;">Código</span><br><strong style="color: #C1121F;">${escapeHtml(detalle.codigo_unico || 'N/A')}</strong></div>
+                    <div><span style="color: #8E8E93; font-size: 11px;">Fecha</span><br><strong>${detalle.fecha_ingreso ? new Date(detalle.fecha_ingreso).toLocaleString() : 'N/A'}</strong></div>
+                    <div><span style="color: #8E8E93; font-size: 11px;">Estado</span><br><span class="estado-${detalle.estado_global || 'EnRecepcion'}" style="font-weight: 600;">${detalle.estado_global || 'En Recepción'}</span></div>
+                    <div><span style="color: #8E8E93; font-size: 11px;">Jefe Principal</span><br><strong>${escapeHtml(detalle.jefe_operativo?.nombre || 'No asignado')}</strong></div>
                     ${detalle.jefe_operativo_2?.nombre ? `
-                    <div class="detalle-item">
-                        <span class="detalle-label">Jefe Secundario</span>
-                        <span class="detalle-value">${escapeHtml(detalle.jefe_operativo_2.nombre)}</span>
-                    </div>
+                    <div style="grid-column: span 2;"><span style="color: #8E8E93; font-size: 11px;">Jefe Secundario</span><br><strong>${escapeHtml(detalle.jefe_operativo_2.nombre)}</strong></div>
                     ` : ''}
                 </div>
                 
-                <h4 style="margin-top: 1.2rem; margin-bottom: 0.6rem; color: #C1121F; font-size: 0.9rem;">
-                    <i class="fas fa-user"></i> Datos del Cliente
-                </h4>
-                <div class="detalle-grid">
-                    <div class="detalle-item">
-                        <span class="detalle-label">Nombre</span>
-                        <span class="detalle-value">${escapeHtml(detalle.cliente_nombre || 'N/A')}</span>
+                <div style="background: #1A1A1C; padding: 10px 12px; border-radius: 8px; margin-bottom: 8px;">
+                    <div style="color: #C1121F; font-weight: 600; font-size: 12px; margin-bottom: 6px;"><i class="fas fa-user"></i> Cliente</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 13px;">
+                        <div><span style="color: #8E8E93; font-size: 10px;">Nombre</span><br><strong>${escapeHtml(detalle.cliente_nombre || 'N/A')}</strong></div>
+                        <div><span style="color: #8E8E93; font-size: 10px;">Teléfono</span><br><strong>${escapeHtml(detalle.cliente_telefono || 'N/A')}</strong></div>
+                        <div style="grid-column: 1 / -1;"><span style="color: #8E8E93; font-size: 10px;">Ubicación</span><br><strong>${escapeHtml(detalle.cliente_ubicacion || 'No especificada')}</strong></div>
+                        ${detalle.latitud && detalle.longitud ? `
+                        <div style="grid-column: 1 / -1;"><span style="color: #8E8E93; font-size: 10px;">Coordenadas</span><br><strong>${detalle.latitud}, ${detalle.longitud}</strong></div>
+                        ` : ''}
                     </div>
-                    <div class="detalle-item">
-                        <span class="detalle-label">Teléfono</span>
-                        <span class="detalle-value">${escapeHtml(detalle.cliente_telefono || 'N/A')}</span>
-                    </div>
-                    <div class="detalle-item">
-                        <span class="detalle-label">Ubicación</span>
-                        <span class="detalle-value">${escapeHtml(detalle.cliente_ubicacion || 'No especificada')}</span>
-                    </div>
-                    ${detalle.latitud && detalle.longitud ? `
-                    <div class="detalle-item">
-                        <span class="detalle-label">Coordenadas</span>
-                        <span class="detalle-value">${detalle.latitud}, ${detalle.longitud}</span>
-                    </div>
-                    ` : ''}
                 </div>
                 
-                <h4 style="margin-top: 1.2rem; margin-bottom: 0.6rem; color: #C1121F; font-size: 0.9rem;">
-                    <i class="fas fa-car"></i> Datos del Vehículo
-                </h4>
-                <div class="detalle-grid">
-                    <div class="detalle-item">
-                        <span class="detalle-label">Placa</span>
-                        <span class="detalle-value">${escapeHtml(detalle.placa || 'N/A')}</span>
-                    </div>
-                    <div class="detalle-item">
-                        <span class="detalle-label">Marca</span>
-                        <span class="detalle-value">${escapeHtml(detalle.marca || 'N/A')}</span>
-                    </div>
-                    <div class="detalle-item">
-                        <span class="detalle-label">Modelo</span>
-                        <span class="detalle-value">${escapeHtml(detalle.modelo || 'N/A')}</span>
-                    </div>
-                    <div class="detalle-item">
-                        <span class="detalle-label">Año</span>
-                        <span class="detalle-value">${detalle.anio || 'N/A'}</span>
-                    </div>
-                    <div class="detalle-item">
-                        <span class="detalle-label">Kilometraje</span>
-                        <span class="detalle-value">${detalle.kilometraje?.toLocaleString() || '0'} km</span>
+                <div style="background: #1A1A1C; padding: 10px 12px; border-radius: 8px;">
+                    <div style="color: #C1121F; font-weight: 600; font-size: 12px; margin-bottom: 6px;"><i class="fas fa-car"></i> Vehículo</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 12px; font-size: 13px;">
+                        <div><span style="color: #8E8E93; font-size: 10px;">Placa</span><br><strong style="color: #C1121F;">${escapeHtml(detalle.placa || 'N/A')}</strong></div>
+                        <div><span style="color: #8E8E93; font-size: 10px;">Marca</span><br><strong>${escapeHtml(detalle.marca || 'N/A')}</strong></div>
+                        <div><span style="color: #8E8E93; font-size: 10px;">Modelo</span><br><strong>${escapeHtml(detalle.modelo || 'N/A')}</strong></div>
+                        <div><span style="color: #8E8E93; font-size: 10px;">Año</span><br><strong>${detalle.anio || 'N/A'}</strong></div>
+                        <div style="grid-column: span 2;"><span style="color: #8E8E93; font-size: 10px;">Kilometraje</span><br><strong>${detalle.kilometraje?.toLocaleString() || '0'} km</strong></div>
                     </div>
                 </div>
             </div>
             
-            <!-- TAB 2: FOTOS - SOLO FOTOS -->
             <div class="detalle-pane" id="pane-fotos">
                 ${fotosHtml}
             </div>
             
-            <!-- TAB 3: DESCRIPCIÓN -->
             <div class="detalle-pane" id="pane-descripcion">
-                <div class="detalle-descripcion-texto">${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}</div>
-                ${detalle.audio_url ? `<div class="detalle-audio"><audio controls src="${detalle.audio_url}" style="width: 100%; border-radius: 8px;"></audio></div>` : ''}
+                <div style="background: #1A1A1C; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+                    <div style="color: #C1121F; font-weight: 600; font-size: 12px; margin-bottom: 6px;"><i class="fas fa-align-left"></i> Descripción del Problema</div>
+                    <div style="background: #0D0D0E; padding: 10px; border-radius: 6px; font-size: 13px; line-height: 1.6; min-height: 40px; white-space: pre-wrap; word-wrap: break-word;">
+                        ${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}
+                    </div>
+                </div>
+                ${detalle.audio_url ? `
+                <div style="background: #1A1A1C; padding: 12px; border-radius: 8px;">
+                    <div style="color: #C1121F; font-weight: 600; font-size: 12px; margin-bottom: 6px;"><i class="fas fa-microphone"></i> Audio de la Descripción</div>
+                    <audio controls src="${detalle.audio_url}" style="width: 100%; border-radius: 8px;"></audio>
+                </div>
+                ` : `
+                <div style="background: #1A1A1C; padding: 12px; border-radius: 8px; text-align: center; color: #8E8E93;">
+                    <i class="fas fa-microphone-slash" style="font-size: 20px; opacity: 0.5;"></i>
+                    <p style="margin-top: 5px; font-size: 12px;">No hay audio disponible</p>
+                </div>
+                `}
             </div>
         </div>
     `;
     
-    // 🔥 INSERTAR EN EL MODAL
-    body.innerHTML = tabsHtml;
+    body.innerHTML = html;
     modal.classList.add('show');
     
-    // =============================================
-    // EVENTOS DE TABS
-    // =============================================
     const tabs = document.querySelectorAll('.detalle-tab');
     const panes = document.querySelectorAll('.detalle-pane');
     
@@ -2529,58 +2585,498 @@ function mostrarModalDetalle(detalle) {
         tab.addEventListener('click', function() {
             const tabId = this.dataset.tab;
             
-            // Desactivar todos los tabs
             tabs.forEach(t => t.classList.remove('active'));
             this.classList.add('active');
             
-            // Ocultar todos los panes
             panes.forEach(pane => pane.classList.remove('active'));
             
-            // Mostrar el pane seleccionado
             const activePane = document.getElementById(`pane-${tabId}`);
             if (activePane) {
                 activePane.classList.add('active');
             }
             
-            // 🔥 FORZAR RECARGA DE IMÁGENES AL CAMBIAR A LA PESTAÑA DE FOTOS
             if (tabId === 'fotos') {
                 setTimeout(() => {
-                    const fotosPane = document.getElementById('pane-fotos');
-                    if (fotosPane) {
-                        const imagenes = fotosPane.querySelectorAll('img');
-                        imagenes.forEach(img => {
-                            const src = img.src;
-                            if (src && src.includes('drive.google.com')) {
-                                img.src = src + '&cache=' + Date.now();
-                            }
-                        });
-                    }
-                }, 100);
+                    cargarImagenesFotos(detalle.fotos);
+                }, 200);
             }
         });
     });
     
+    setTimeout(() => {
+        const fotosTab = document.querySelector('.detalle-tab[data-tab="fotos"]');
+        if (fotosTab && fotosTab.classList.contains('active')) {
+            cargarImagenesFotos(detalle.fotos);
+        }
+    }, 400);
+    
     // =============================================
-    // BOTONES DE EXPORTACIÓN
+    // BOTÓN PDF EN EL DETALLE
     // =============================================
-    const btnWord = document.getElementById('btnExportarWord');
-    const btnPDF = document.getElementById('btnExportarPDF');
-    if (btnWord) btnWord.onclick = () => exportarAWord(detalle);
-    if (btnPDF) btnPDF.onclick = () => exportarAPDF();
+    const btnPDFDetalle = document.getElementById('btnExportarPDFDetalle');
+    if (btnPDFDetalle) {
+        btnPDFDetalle.onclick = function() {
+            exportarDetallePDF(detalle);
+        };
+    }
 }
 
+// =====================================================
+// FUNCIÓN PARA EXPORTAR DETALLE A PDF
+// =====================================================
+function exportarDetallePDF(detalle) {
+    if (!detalle) {
+        mostrarNotificacion('No hay datos para exportar', 'warning');
+        return;
+    }
+    
+    mostrarNotificacion('Generando PDF del detalle...', 'info');
+    
+    // 🔥 PRIMERO, convertir todas las fotos a base64
+    const fotos = detalle.fotos || {};
+    const camposFotos = [
+        'url_lateral_izquierda',
+        'url_lateral_derecha',
+        'url_foto_frontal',
+        'url_foto_trasera',
+        'url_foto_superior',
+        'url_foto_inferior',
+        'url_foto_tablero'
+    ];
+    
+    // Crear una copia del detalle para no modificar el original
+    const detalleConBase64 = JSON.parse(JSON.stringify(detalle));
+    
+    // Función para convertir una imagen a base64
+    async function convertirImagenes() {
+        const promesas = [];
+        
+        for (const campo of camposFotos) {
+            const url = fotos[campo];
+            if (url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined') {
+                promesas.push(
+                    convertirImagenABase64(url)
+                        .then(base64 => {
+                            detalleConBase64.fotos[campo] = base64;
+                            console.log(`✅ Imagen convertida: ${campo}`);
+                        })
+                        .catch(error => {
+                            console.warn(`⚠️ No se pudo convertir ${campo}:`, error);
+                            // Mantener la URL original como fallback
+                        })
+                );
+            }
+        }
+        
+        await Promise.all(promesas);
+    }
+    
+    // Mostrar progreso
+    mostrarNotificacion('⏳ Preparando imágenes para el PDF...', 'info');
+    
+    // Convertir imágenes y luego generar el PDF
+    convertirImagenes().then(() => {
+        const contenidoHTML = generarHTMLDetallePDFConBase64(detalleConBase64);
+        
+        const container = document.createElement('div');
+        container.id = 'detallePdfContainer';
+        container.style.cssText = `
+            position: fixed;
+            left: -9999px;
+            top: 0;
+            width: 210mm;
+            padding: 20px;
+            background: white;
+            font-family: Arial, sans-serif;
+            color: #222;
+            font-size: 12px;
+            line-height: 1.5;
+        `;
+        container.innerHTML = contenidoHTML;
+        document.body.appendChild(container);
+        
+        setTimeout(() => {
+            const elemento = document.getElementById('detallePdfContainer');
+            
+            if (typeof html2pdf === 'undefined') {
+                mostrarNotificacion('Error: html2pdf no está cargado', 'error');
+                document.body.removeChild(container);
+                return;
+            }
+            
+            const opt = {
+                margin: [10, 10, 10, 10],
+                filename: `Detalle_Recepcion_${detalle.codigo_unico || 'orden'}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    allowTaint: true
+                },
+                jsPDF: {
+                    unit: 'mm',
+                    format: 'a4',
+                    orientation: 'portrait'
+                }
+            };
+            
+            html2pdf().set(opt).from(elemento).save()
+                .then(() => {
+                    mostrarNotificacion('✅ PDF generado exitosamente', 'success');
+                    document.body.removeChild(container);
+                })
+                .catch((error) => {
+                    console.error('Error generando PDF:', error);
+                    mostrarNotificacion('Error al generar PDF', 'error');
+                    document.body.removeChild(container);
+                });
+        }, 500);
+    }).catch(error => {
+        console.error('Error preparando imágenes:', error);
+        mostrarNotificacion('Error al preparar imágenes para el PDF', 'error');
+    });
+}
+
+// =====================================================
+// FUNCIÓN PARA GENERAR HTML DEL DETALLE EN PDF (CON BASE64)
+// =====================================================
+function generarHTMLDetallePDFConBase64(detalle) {
+    const fotos = detalle.fotos || {};
+    const camposFotos = [
+        { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo' },
+        { campo: 'url_lateral_derecha', label: 'Lateral Derecho' },
+        { campo: 'url_foto_frontal', label: 'Frontal' },
+        { campo: 'url_foto_trasera', label: 'Trasera' },
+        { campo: 'url_foto_superior', label: 'Superior' },
+        { campo: 'url_foto_inferior', label: 'Inferior' },
+        { campo: 'url_foto_tablero', label: 'Tablero' }
+    ];
+    
+    const fotosExistentes = camposFotos.filter(f => {
+        const url = fotos[f.campo];
+        return url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined';
+    });
+    
+    const fechaActual = new Date().toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Detalle Recepción ${detalle.codigo_unico}</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: Arial, sans-serif; color: #222; padding: 20px; background: white; }
+                .header { border-bottom: 3px solid #C1121F; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+                .header h1 { color: #C1121F; font-size: 22px; }
+                .header h1 span { color: #222; }
+                .header .fecha { color: #666; font-size: 12px; }
+                .titulo-orden { text-align: center; font-size: 16px; color: #C1121F; margin-bottom: 15px; }
+                .codigo-orden { text-align: center; font-size: 14px; font-weight: bold; background: #f0f0f0; display: inline-block; padding: 4px 15px; border-radius: 4px; margin: 0 auto 15px; }
+                .seccion { background: #f8f8f8; border-radius: 8px; padding: 12px 15px; margin-bottom: 12px; }
+                .seccion-titulo { font-weight: bold; font-size: 14px; color: #C1121F; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+                .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; }
+                .item { margin-bottom: 4px; }
+                .item .label { font-size: 10px; color: #888; text-transform: uppercase; }
+                .item .value { font-size: 13px; font-weight: 500; }
+                .item .value.codigo { color: #C1121F; font-family: monospace; }
+                .item .value.placa { color: #C1121F; font-weight: bold; }
+                .full-width { grid-column: 1 / -1; }
+                .fotos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 8px; }
+                .foto-item { border: 1px solid #ddd; border-radius: 4px; overflow: hidden; text-align: center; background: white; }
+                .foto-item img { width: 100%; height: 100px; object-fit: cover; display: block; background: #eee; }
+                .foto-item .foto-label { font-size: 9px; padding: 4px; font-weight: bold; color: #555; background: #f5f5f5; }
+                .descripcion-texto { background: white; padding: 10px; border-radius: 4px; border: 1px solid #ddd; font-size: 12px; line-height: 1.6; min-height: 40px; }
+                .audio-container { margin-top: 8px; }
+                .audio-container audio { width: 100%; height: 30px; }
+                .sin-audio { color: #999; font-style: italic; font-size: 12px; padding: 8px; text-align: center; }
+                .footer { text-align: center; font-size: 10px; color: #999; margin-top: 20px; padding-top: 10px; border-top: 1px solid #eee; }
+                .firmas { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 15px; }
+                .firma { text-align: center; padding: 10px; }
+                .firma .linea { border-bottom: 2px solid #333; height: 35px; margin-bottom: 4px; }
+                .firma .nombre { font-size: 12px; font-weight: 500; }
+                .firma .fecha-firma { font-size: 10px; color: #999; }
+                @media print {
+                    body { padding: 0; }
+                    .foto-item { break-inside: avoid; }
+                }
+            </style>
+        </head>
+        <body>
+            <!-- HEADER -->
+            <div class="header">
+                <h1>FURIA <span>MOTOR</span></h1>
+                <div class="fecha">${fechaActual}</div>
+            </div>
+            
+            <div class="titulo-orden">ORDEN DE TRABAJO - RECEPCIÓN</div>
+            <div style="text-align: center;">
+                <span class="codigo-orden"># ${detalle.codigo_unico || 'OT-N/A'}</span>
+            </div>
+            
+            <!-- INFORMACIÓN GENERAL -->
+            <div class="seccion">
+                <div class="seccion-titulo">📋 Información General</div>
+                <div class="grid">
+                    <div class="item">
+                        <div class="label">Código</div>
+                        <div class="value codigo">${escapeHtml(detalle.codigo_unico || 'N/A')}</div>
+                    </div>
+                    <div class="item">
+                        <div class="label">Fecha de Ingreso</div>
+                        <div class="value">${detalle.fecha_ingreso ? new Date(detalle.fecha_ingreso).toLocaleString('es-ES') : 'N/A'}</div>
+                    </div>
+                    <div class="item">
+                        <div class="label">Estado</div>
+                        <div class="value" style="color: ${detalle.estado_global === 'EnRecepcion' ? '#F59E0B' : detalle.estado_global === 'EnTaller' ? '#2563EB' : '#10B981'}">${detalle.estado_global || 'En Recepción'}</div>
+                    </div>
+                    <div class="item">
+                        <div class="label">Jefe Operativo</div>
+                        <div class="value">${escapeHtml(detalle.jefe_operativo?.nombre || 'No asignado')}</div>
+                    </div>
+                    ${detalle.jefe_operativo_2?.nombre ? `
+                    <div class="item full-width">
+                        <div class="label">Jefe Operativo 2</div>
+                        <div class="value">${escapeHtml(detalle.jefe_operativo_2.nombre)}</div>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+            
+            <!-- CLIENTE -->
+            <div class="seccion">
+                <div class="seccion-titulo">👤 Datos del Cliente</div>
+                <div class="grid">
+                    <div class="item">
+                        <div class="label">Nombre</div>
+                        <div class="value">${escapeHtml(detalle.cliente_nombre || 'N/A')}</div>
+                    </div>
+                    <div class="item">
+                        <div class="label">Teléfono</div>
+                        <div class="value">${escapeHtml(detalle.cliente_telefono || 'N/A')}</div>
+                    </div>
+                    <div class="item full-width">
+                        <div class="label">Ubicación</div>
+                        <div class="value">${escapeHtml(detalle.cliente_ubicacion || 'No especificada')}</div>
+                    </div>
+                    ${detalle.latitud && detalle.longitud ? `
+                    <div class="item full-width">
+                        <div class="label">Coordenadas</div>
+                        <div class="value">${detalle.latitud}, ${detalle.longitud}</div>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+            
+            <!-- VEHÍCULO -->
+            <div class="seccion">
+                <div class="seccion-titulo">🚗 Datos del Vehículo</div>
+                <div class="grid">
+                    <div class="item">
+                        <div class="label">Placa</div>
+                        <div class="value placa">${escapeHtml(detalle.placa || 'N/A')}</div>
+                    </div>
+                    <div class="item">
+                        <div class="label">Marca</div>
+                        <div class="value">${escapeHtml(detalle.marca || 'N/A')}</div>
+                    </div>
+                    <div class="item">
+                        <div class="label">Modelo</div>
+                        <div class="value">${escapeHtml(detalle.modelo || 'N/A')}</div>
+                    </div>
+                    <div class="item">
+                        <div class="label">Año</div>
+                        <div class="value">${detalle.anio || 'N/A'}</div>
+                    </div>
+                    <div class="item">
+                        <div class="label">Kilometraje</div>
+                        <div class="value">${detalle.kilometraje?.toLocaleString() || '0'} km</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- FOTOS -->
+            <div class="seccion">
+                <div class="seccion-titulo">📸 Fotos (${fotosExistentes.length}/7)</div>
+                <div class="fotos-grid">
+                    ${fotosExistentes.length > 0 ? fotosExistentes.map(f => `
+                        <div class="foto-item">
+                            <img src="${fotos[f.campo]}" alt="${f.label}" onerror="this.style.display='none'">
+                            <div class="foto-label">${f.label}</div>
+                        </div>
+                    `).join('') : '<p style="color: #999; font-style: italic; font-size: 12px; grid-column: 1 / -1; text-align: center;">No se registraron fotos</p>'}
+                </div>
+            </div>
+            
+            <!-- DESCRIPCIÓN -->
+            <div class="seccion">
+                <div class="seccion-titulo">📝 Descripción del Problema</div>
+                <div class="descripcion-texto">${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}</div>
+                ${detalle.audio_url ? `
+                <div class="audio-container">
+                    <audio controls src="${detalle.audio_url}"></audio>
+                </div>
+                ` : `
+                <div class="sin-audio"><i class="fas fa-microphone-slash"></i> No hay audio disponible</div>
+                `}
+            </div>
+            
+            <!-- FIRMAS -->
+            <div class="seccion">
+                <div class="seccion-titulo">✍️ Firmas</div>
+                <div class="firmas">
+                    <div class="firma">
+                        <div class="linea"></div>
+                        <div class="nombre">${escapeHtml(detalle.cliente_nombre || '____________________')}</div>
+                        <div class="fecha-firma">Firma del Cliente - ${fechaActual}</div>
+                    </div>
+                    <div class="firma">
+                        <div class="linea"></div>
+                        <div class="nombre">${escapeHtml(detalle.jefe_operativo?.nombre || '____________________')}</div>
+                        <div class="fecha-firma">Firma del Jefe Operativo - ${fechaActual}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- FOOTER -->
+            <div class="footer">
+                Documento generado automáticamente por FURIA MOTOR COMPANY<br>
+                Código: ${detalle.codigo_unico || 'N/A'} | ${fechaActual}
+            </div>
+        </body>
+        </html>
+    `;
+}
+
+// =====================================================
+// FUNCIÓN PARA CARGAR IMÁGENES VÍA BACKEND
+// =====================================================
+async function cargarImagenesFotos(fotos) {
+    if (!fotos) return;
+    
+    const panelFotos = document.getElementById('pane-fotos');
+    if (!panelFotos) {
+        console.warn('⚠️ No se encontró el panel de fotos');
+        return;
+    }
+    
+    const camposFotos = [
+        { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo' },
+        { campo: 'url_lateral_derecha', label: 'Lateral Derecho' },
+        { campo: 'url_foto_frontal', label: 'Frontal' },
+        { campo: 'url_foto_trasera', label: 'Trasera' },
+        { campo: 'url_foto_superior', label: 'Superior' },
+        { campo: 'url_foto_inferior', label: 'Inferior' },
+        { campo: 'url_foto_tablero', label: 'Tablero' }
+    ];
+    
+    for (const f of camposFotos) {
+        const url = fotos[f.campo];
+        if (!url || url === 'null' || url === 'None' || url === '') continue;
+        
+        const contenedores = panelFotos.querySelectorAll(`[id^="foto-${f.campo}-"]`);
+        if (contenedores.length === 0) {
+            console.warn(`⚠️ No se encontró contenedor para: ${f.campo}`);
+            continue;
+        }
+        
+        const contenedor = contenedores[0];
+        
+        try {
+            console.log(`📥 Cargando imagen: ${f.campo}`);
+            
+            const response = await fetchWithToken(`${API_URL}/jefe-operativo/imagen-base64`, {
+                method: 'POST',
+                body: JSON.stringify({ url: url })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Error HTTP: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.base64) {
+                contenedor.innerHTML = `
+                    <img src="${data.base64}" 
+                         alt="${f.label}" 
+                         style="width: 100%; height: 100%; object-fit: cover; display: block;"
+                         onerror="this.parentElement.innerHTML='<div style=\\'display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:4px;height:100%;\\'><i class=\\'fas fa-exclamation-triangle\\' style=\\'font-size:20px;\\'></i><span style=\\'font-size:10px;text-align:center;\\'>Error al cargar</span></div>'">
+                `;
+                console.log(`✅ Imagen cargada: ${f.campo}`);
+            } else {
+                throw new Error(data.error || 'Error convirtiendo imagen');
+            }
+            
+        } catch (error) {
+            console.error(`❌ Error cargando ${f.campo}:`, error);
+            contenedor.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: #8E8E93; gap: 4px; height: 100%;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 20px;"></i>
+                    <span style="font-size: 10px; text-align: center;">Error al cargar</span>
+                </div>
+            `;
+        }
+    }
+}
+
+// =====================================================
+// FUNCIÓN PARA VER IMAGEN AMPLIADA POR ID
+// =====================================================
+function verImagenAmpliadaPorId(imgId, label) {
+    const contenedor = document.getElementById(imgId);
+    if (!contenedor) return;
+    
+    const img = contenedor.querySelector('img');
+    if (!img) {
+        mostrarNotificacion('La imagen aún no se ha cargado', 'warning');
+        return;
+    }
+    
+    verImagenAmpliada(img.src, label);
+}
+
+// =====================================================
+// FUNCIÓN PARA VER IMAGEN AMPLIADA
+// =====================================================
 function verImagenAmpliada(url, label) {
     const modal = document.createElement('div');
     modal.className = 'modal-imagen';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.92);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        padding: 20px;
+    `;
     modal.innerHTML = `
-        <div class="modal-imagen-content">
-            <button class="modal-imagen-close" onclick="this.closest('.modal-imagen').remove()">&times;</button>
-            <img src="${url}" alt="${label}">
-            <p>${label}</p>
+        <div style="position: relative; max-width: 90%; max-height: 90%;">
+            <button style="position: absolute; top: -40px; right: 0; background: none; border: none; color: white; font-size: 32px; cursor: pointer; z-index: 10; padding: 8px 12px;"
+                    onclick="this.closest('.modal-imagen').remove()">&times;</button>
+            <img src="${url}" alt="${label}" style="max-width: 100%; max-height: 80vh; border-radius: 8px; object-fit: contain; display: block;">
+            <p style="color: white; text-align: center; margin-top: 12px; font-size: 14px; opacity: 0.8;">${label}</p>
         </div>
     `;
+    modal.addEventListener('click', function(e) {
+        if (e.target === this) this.remove();
+    });
     document.body.appendChild(modal);
-    modal.style.display = 'flex';
 }
 
 function exportarAWord(detalle) {
@@ -3135,6 +3631,7 @@ async function descargarPDFFinal() {
 
 // =====================================================
 // FUNCIÓN PARA MOSTRAR EL MODAL CON EL REPORTE
+// Y GUARDAR PDF EN GOOGLE DRIVE AUTOMÁTICAMENTE
 // =====================================================
 async function mostrarReporteFinal(idOrden) {
     const modal = document.getElementById('codigoOrdenModal');
@@ -3143,21 +3640,75 @@ async function mostrarReporteFinal(idOrden) {
     
     if (!modal || !body) return;
     
-    if (btnDescargar) btnDescargar.style.display = 'none';
+    if (btnDescargar) {
+        btnDescargar.style.display = 'none';
+        btnDescargar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando PDF...';
+        btnDescargar.disabled = true;
+    }
     
     body.innerHTML = `
         <div style="text-align: center; padding: 40px 20px;">
             <i class="fas fa-spinner fa-spin" style="font-size: 48px; color: #C1121F; margin-bottom: 20px;"></i>
             <h3 style="color: white; margin-bottom: 10px;">Generando reporte...</h3>
             <p style="color: #8E8E93;">Por favor espera, estamos preparando tu documento</p>
+            <div style="margin-top: 20px; max-width: 300px; margin-left: auto; margin-right: auto;">
+                <div style="height: 4px; background: #2C2C2E; border-radius: 4px; overflow: hidden;">
+                    <div id="pdfProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #C1121F, #8B0F1A); border-radius: 4px; transition: width 0.5s ease;"></div>
+                </div>
+                <p id="pdfProgressText" style="font-size: 12px; color: #8E8E93; margin-top: 8px;">Iniciando...</p>
+            </div>
         </div>
     `;
     
     modal.classList.add('show');
     
+    const updateProgress = (percent, text) => {
+        const bar = document.getElementById('pdfProgressBar');
+        const textEl = document.getElementById('pdfProgressText');
+        if (bar) bar.style.width = `${Math.min(percent, 100)}%`;
+        if (textEl) textEl.textContent = text;
+    };
+    
+    updateProgress(10, 'Cargando datos de la orden...');
+    
     const detalle = await cargarDatosOrdenCompleta(idOrden);
     
-    if (detalle) {
+    if (!detalle) {
+        body.innerHTML = `
+            <div style="text-align: center; padding: 40px 20px; color: #dc3545;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 20px;"></i>
+                <h3>Error al cargar los datos</h3>
+                <p>Intenta nuevamente o revisa la consola</p>
+                <button class="btn-primary" onclick="cerrarModalOrden()" style="margin-top: 15px;">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+            </div>
+        `;
+        if (btnDescargar) {
+            btnDescargar.style.display = 'none';
+            btnDescargar.disabled = false;
+        }
+        return;
+    }
+    
+    updateProgress(30, 'Datos cargados. Generando PDF...');
+    
+    try {
+        const response = await fetchWithToken(`${API_URL}/jefe-operativo/generar-pdf-recepcion/${idOrden}`, {
+            method: 'POST'
+        });
+        
+        updateProgress(60, 'Subiendo PDF a Google Drive...');
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Error al generar el PDF');
+        }
+        
+        const data = await response.json();
+        
+        updateProgress(90, '¡PDF generado exitosamente!');
+        
         const modalHeader = modal.querySelector('.modal-header h2');
         if (modalHeader) {
             modalHeader.innerHTML = `
@@ -3174,6 +3725,12 @@ async function mostrarReporteFinal(idOrden) {
                     El vehículo ha sido registrado con el código:<br>
                     <strong style="color: #C1121F; font-size: 20px; font-family: monospace;">${detalle.codigo_unico || 'OT-N/A'}</strong>
                 </p>
+                <div style="background: #1A1A1C; border-radius: 8px; padding: 15px; margin: 15px 0; border: 1px solid #2C2C2E;">
+                    <i class="fas fa-file-pdf" style="color: #C1121F; font-size: 20px; margin-right: 10px;"></i>
+                    <span style="color: #8E8E93; font-size: 13px;">PDF guardado en Google Drive</span>
+                    <br>
+                    <span style="color: #8E8E93; font-size: 11px;">${data.filename || 'Documento'}</span>
+                </div>
                 <p style="color: #8E8E93; font-size: 14px;">Haz clic en "Descargar PDF" para obtener el reporte completo.</p>
             </div>
         `;
@@ -3181,6 +3738,60 @@ async function mostrarReporteFinal(idOrden) {
         if (btnDescargar) {
             btnDescargar.style.display = 'inline-flex';
             btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
+            btnDescargar.disabled = false;
+            btnDescargar.onclick = function(e) {
+                e.preventDefault();
+                if (data.url) {
+                    window.open(data.url, '_blank');
+                } else {
+                    descargarPDFFinal();
+                }
+            };
+        }
+        
+        datosReporteFinal = detalle;
+        if (data.url) {
+            datosReporteFinal.pdf_url = data.url;
+        }
+        
+        updateProgress(100, '¡Completado!');
+        mostrarNotificacion('✅ PDF generado y guardado en Google Drive', 'success');
+        
+        setTimeout(() => {
+            const progressBar = document.getElementById('pdfProgressBar');
+            const progressText = document.getElementById('pdfProgressText');
+            if (progressBar) progressBar.style.display = 'none';
+            if (progressText) progressText.style.display = 'none';
+        }, 2000);
+        
+    } catch (error) {
+        console.error('❌ Error generando PDF:', error);
+        
+        body.innerHTML = `
+            <div style="text-align: center; padding: 30px 20px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #F59E0B; margin-bottom: 20px;"></i>
+                <h3 style="color: white; margin-bottom: 10px;">¡Recepción finalizada!</h3>
+                <p style="color: #8E8E93; margin-bottom: 20px;">
+                    El vehículo ha sido registrado con el código:<br>
+                    <strong style="color: #C1121F; font-size: 20px; font-family: monospace;">${detalle.codigo_unico || 'OT-N/A'}</strong>
+                </p>
+                <div style="background: rgba(245, 158, 11, 0.1); border-radius: 8px; padding: 12px; margin: 10px 0; border: 1px solid rgba(245, 158, 11, 0.2);">
+                    <p style="color: #F59E0B; font-size: 13px;">
+                        <i class="fas fa-exclamation-circle"></i> 
+                        Error al guardar PDF: ${error.message || 'Error desconocido'}
+                    </p>
+                    <p style="color: #8E8E93; font-size: 12px; margin-top: 5px;">
+                        Puedes descargar el PDF manualmente con el botón de abajo.
+                    </p>
+                </div>
+                <p style="color: #8E8E93; font-size: 14px;">Haz clic en "Descargar PDF" para obtener el reporte completo.</p>
+            </div>
+        `;
+        
+        if (btnDescargar) {
+            btnDescargar.style.display = 'inline-flex';
+            btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
+            btnDescargar.disabled = false;
             btnDescargar.onclick = function(e) {
                 e.preventDefault();
                 descargarPDFFinal();
@@ -3188,18 +3799,7 @@ async function mostrarReporteFinal(idOrden) {
         }
         
         datosReporteFinal = detalle;
-        
-        mostrarNotificacion('✅ Reporte listo para descargar', 'success');
-        
-    } else {
-        body.innerHTML = `
-            <div style="text-align: center; padding: 40px 20px; color: #dc3545;">
-                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 20px;"></i>
-                <h3>Error al cargar los datos</h3>
-                <p>Intenta nuevamente o revisa la consola</p>
-            </div>
-        `;
-        if (btnDescargar) btnDescargar.style.display = 'none';
+        mostrarNotificacion('⚠️ Error al guardar PDF en Drive, pero la recepción está finalizada', 'warning');
     }
 }
 
@@ -3550,22 +4150,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('✅ Recepcion.js inicializado correctamente (Google Drive)');
 });
 
-// =====================================================::::::::::
+// =====================================================
 // FUNCIONES GLOBALES
-// =====================================================_________________ 
+// =====================================================
+
+// Funciones de sesión
 window.unirseSesionConCodigo = unirseSesionConCodigo;
+window.finalizarSesionConReporte = finalizarSesionConReporte;
+
+// Funciones de recepciones
 window.verDetalleRecepcion = verDetalleRecepcion;
 window.editarRecepcion = editarRecepcion;
 window.confirmarEliminarRecepcion = confirmarEliminarRecepcion;
+
+// Funciones de modales
 window.cerrarModal = () => document.getElementById('codigoModal')?.classList.remove('show');
 window.cerrarModalOrden = () => document.getElementById('codigoOrdenModal')?.classList.remove('show');
 window.cerrarModalDetalle = () => document.getElementById('modalDetalleRecepcion')?.classList.remove('show');
 window.cerrarModalEliminar = () => document.getElementById('modalConfirmarEliminar')?.classList.remove('show');
+
+// Funciones de imágenes
 window.verImagenAmpliada = verImagenAmpliada;
+window.verImagenAmpliadaPorId = verImagenAmpliadaPorId;
+
+// Funciones de PDF
 window.descargarPDFFinal = descargarPDFFinal;
 window.mostrarReporteFinal = mostrarReporteFinal;
 window.cargarDatosOrdenCompleta = cargarDatosOrdenCompleta;
-window.finalizarSesionConReporte = finalizarSesionConReporte;
+window.exportarDetallePDF = exportarDetallePDF;
+
+// Logout
 window.logout = () => {
     detenerPolling();
     detenerKeepAlive();

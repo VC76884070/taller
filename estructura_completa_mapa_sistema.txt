@@ -1,12 +1,12 @@
 ================================================================================
 📊 ESTRUCTURA DEL PROYECTO FLASK
 ================================================================================
-📅 Generado: 2026-06-04 17:35:38
-📍 Ruta: D:\ESCRITORIO\DOCUMENTOS PROYECTO\PROYECTO
+📅 Generado: 2026-07-13 11:54:01
+📍 Ruta: C:\Users\i5_2\Desktop\taller
 🐍 Framework: Flask
 ================================================================================
 
-📁 PROYECTO/
+📁 taller/
 ├── 📁 backend/
 │   ├── 📁 cliente/
 │   │   ├── 🐍 avances.py
@@ -15,6 +15,9 @@
 │   │   ├── 🐍 misreservas.py
 │   │   ├── 🐍 misvehiculos.py
 │   │   └── 🐍 perfil.py
+│   ├── 📁 credentials/
+│   │   ├── 📦 google-drive-credentials.json
+│   │   └── 📦 oauth-credentials.json
 │   ├── 📁 encargado_rep_almacen/
 │   │   ├── 🐍 dashboard.py
 │   │   ├── 🐍 historial.py
@@ -23,13 +26,13 @@
 │   │   ├── 🐍 solicitudes_compra.py
 │   │   └── 🐍 solicitudes_cotizacion.py
 │   ├── 📁 jefe_operativo/
+│   │   ├── 📄 .htaccess
 │   │   ├── 🐍 comunicados.py
 │   │   ├── 🐍 control_calidad.py
-│   │   ├── 🐍 dashboard.py
 │   │   ├── 🐍 dashboard_jefe_operativo.py
 │   │   ├── 🐍 historial.py
 │   │   ├── 🐍 perfil.py
-│   │   └── 🐍 recepcion.py
+│   │   └── 🐍 recepcion_jefeoperativo.py
 │   ├── 📁 jefe_taller/
 │   │   ├── 🐍 admin_roles.py
 │   │   ├── 🐍 calendario_bahias.py
@@ -48,12 +51,41 @@
 │   │   ├── 🐍 historial.py
 │   │   ├── 🐍 misvehiculos.py
 │   │   └── 🐍 perfil.py
-│   ├── 🚀 app.py
+│   ├── 📁 uploads/
+│   │   ├── 📁 avatars/
+│   │   │   ├── 🖼️ avatar_26_1cac6c1c.jpeg
+│   │   │   └── 🖼️ avatar_26_9e3326de.jpeg
+│   │   └── 📁 sesion/
+│   │       ├── 📁 S-0314S0/
+│   │       │   ├── 🖼️ lateral_derecha_20260325_151924.jpg
+│   │       │   └── 🖼️ lateral_izquierda_20260325_151858.jpg
+│   │       ├── 📁 S-1DGLX3/
+│   │       │   ├── 🖼️ lateral_izquierda_20260325_174320.jpg
+│   │       │   └── 🖼️ lateral_izquierda_20260325_174515.jpg
+│   │       ├── 📁 S-5LZDIY/
+│   │       │   ├── 🖼️ foto_frontal_20260325_153126.jpg
+│   │       │   ├── 🖼️ lateral_derecha_20260325_152859.jpg
+│   │       │   ├── 🖼️ lateral_izquierda_20260325_152729.jpg
+│   │       │   └── 🖼️ lateral_izquierda_20260325_153044.jpg
+│   │       ├── 📁 S-WSZ6T4/
+│   │       │   ├── 🖼️ foto_frontal_20260325_172750.jpg
+│   │       │   ├── 🖼️ lateral_derecha_20260325_172814.jpg
+│   │       │   ├── 🖼️ lateral_derecha_20260325_172957.jpg
+│   │       │   ├── 🖼️ lateral_izquierda_20260325_172700.jpg
+│   │       │   └── 🖼️ lateral_izquierda_20260325_172740.jpg
+│   │       └── 📁 S-XR2L1V/
+│   │           ├── 🖼️ lateral_izquierda_20260325_173548.jpg
+│   │           └── 🖼️ lateral_izquierda_20260325_173613.jpg
+│   ├── 📄 .env
+│   ├── 🐍 app.py
 │   ├── 🐍 config.py
 │   ├── 🐍 decorators.py
+│   ├── 🐍 generar_token.py
+│   ├── 🐍 google_drive.py
 │   ├── 🐍 login.py
-│   ├── 📦 requirements.txt
-│   └── 🐍 test_supabase.py
+│   ├── 📄 requirements.txt
+│   ├── 🐍 test_supabase.py
+│   └── 📄 token.pickle
 ├── 📁 cliente/
 │   ├── 📁 components/
 │   │   └── 🌐 sidebar.html
@@ -82,6 +114,7 @@
 │   ├── 📁 components/
 │   │   └── 🌐 sidebar.html
 │   ├── 📁 css/
+│   │   ├── 🎨 dashboard-mobile.css
 │   │   ├── 🎨 dashboard.css
 │   │   ├── 🎨 historial.css
 │   │   ├── 🎨 perfil.css
@@ -103,8 +136,8 @@
 │   ├── 🌐 solicitudes_compra.html
 │   └── 🌐 solicitudes_cotizacion.html
 ├── 📁 img/
-│   ├── 📄 logoblanco.jpeg
-│   └── 📄 logonegro.jpeg
+│   ├── 🖼️ logoblanco.jpeg
+│   └── 🖼️ logonegro.jpeg
 ├── 📁 jefe_operativo/
 │   ├── 📁 components/
 │   │   └── 🌐 sidebar.html
@@ -120,6 +153,7 @@
 │   │   ├── 📜 control_calidad.js
 │   │   ├── 📜 dashboard.js
 │   │   ├── 📜 historial.js
+│   │   ├── 📜 imageCompressor.js
 │   │   ├── 📜 include.js
 │   │   ├── 📜 perfil.js
 │   │   └── 📜 recepcion.js
@@ -197,12 +231,26 @@
 │   ├── 🌐 historial.html
 │   ├── 🌐 misvehiculos.html
 │   └── 🌐 perfil.html
-├── 🙈 .gitignore
-├── 📄 estructura_completa.txt
-├── 🐍 generar_estructura_flask.py
-├── 📄 icono.png
+├── 📄 .gitignore
+├── 📄 estructura_completa base.txt
+├── 📄 estructura_flask.txt
+├── 🐍 generar_estructura.py
+├── 🖼️ icono.png
 ├── 📦 manifest.json
 ├── 📄 Procfile
 ├── 📦 railway.json
 ├── 📄 runtime.txt
-└── 📜 sw.js
+├── 📜 sw.js
+├── 🐍 test_drive.py
+└── 🐍 verificar_carpeta.py
+
+================================================================================
+📈 ESTADÍSTICAS
+================================================================================
+📁 Carpetas : 39
+🐍 Python   : 44
+🌐 HTML     : 42
+🎨 CSS      : 36
+📜 JS       : 42
+🖼️ Imágenes : 20
+📄 Otros    : 13

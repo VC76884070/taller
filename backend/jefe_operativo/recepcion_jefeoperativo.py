@@ -1,5 +1,6 @@
 # =====================================================
-# RECEPCION_JEFEOPERATIVO.PY - VERSIÓN SIMPLE QUE FUNCIONA
+# RECEPCION_JEFEOPERATIVO.PY - VERSIÓN COMPLETA
+# CON GENERACIÓN DE PDF Y GUARDADO EN GOOGLE DRIVE
 # =====================================================
 
 from flask import Blueprint, request, jsonify, current_app
@@ -12,6 +13,11 @@ from werkzeug.security import generate_password_hash
 import uuid
 import random
 import string
+import re
+import tempfile
+import os
+import requests
+from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +34,66 @@ supabase = config.supabase
 # ALMACENAMIENTO DE SESIONES COLABORATIVAS
 # =====================================================
 sesiones_activas = {}
+
+# =====================================================
+# FUNCIÓN PARA NORMALIZAR URLS DE GOOGLE DRIVE
+# =====================================================
+
+def normalizar_url_drive(url):
+    """
+    Convierte cualquier URL de Google Drive a una URL de visualización directa
+    """
+    if not url:
+        return None
+    
+    # Si ya es una URL de descarga directa, devolverla
+    if 'uc?export=view' in url or 'export=download' in url:
+        return url
+    
+    # Si es una URL de vista previa (drive.google.com/file/d/.../view)
+    match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', url)
+    if match:
+        file_id = match.group(1)
+        return f"https://drive.google.com/uc?export=view&id={file_id}"
+    
+    # Si es una URL de "open" (drive.google.com/open?id=...)
+    match = re.search(r'open\?id=([a-zA-Z0-9_-]+)', url)
+    if match:
+        file_id = match.group(1)
+        return f"https://drive.google.com/uc?export=view&id={file_id}"
+    
+    # Si es una URL con parámetro id
+    if 'id=' in url:
+        file_id = url.split('id=')[-1].split('&')[0]
+        return f"https://drive.google.com/uc?export=view&id={file_id}"
+    
+    # Fallback: devolver la URL original
+    return url
+
+
+def obtener_file_id_drive(url):
+    """
+    Extrae el file_id de una URL de Google Drive
+    """
+    if not url:
+        return None
+    
+    # Formato: https://drive.google.com/uc?export=view&id=XXX
+    if 'id=' in url:
+        return url.split('id=')[-1].split('&')[0]
+    
+    # Formato: https://drive.google.com/file/d/XXX/view
+    if '/d/' in url:
+        parts = url.split('/d/')
+        if len(parts) > 1:
+            return parts[1].split('/')[0]
+    
+    # Formato: https://drive.google.com/open?id=XXX
+    if 'open?id=' in url:
+        return url.split('open?id=')[-1].split('&')[0]
+    
+    return None
+
 
 # =====================================================
 # DECORADOR DE AUTENTICACIÓN
@@ -98,6 +164,7 @@ def jefe_operativo_required(f):
     
     return decorated_function
 
+
 # =====================================================
 # FUNCIONES AUXILIARES
 # =====================================================
@@ -107,6 +174,7 @@ def generar_codigo_sesion():
     caracteres = string.ascii_uppercase + string.digits
     codigo = ''.join(random.choices(caracteres, k=6))
     return f"S-{codigo}"
+
 
 def guardar_sesion_en_db(sesion):
     """Guarda o actualiza una sesión en la base de datos"""
@@ -149,6 +217,7 @@ def guardar_sesion_en_db(sesion):
         logger.error(f"Error guardando sesión: {str(e)}")
         return False
 
+
 def cargar_sesion_de_db(codigo):
     """Carga una sesión específica desde la base de datos"""
     try:
@@ -177,6 +246,7 @@ def cargar_sesion_de_db(codigo):
         logger.error(f"Error cargando sesión: {str(e)}")
         return None
 
+
 # =====================================================
 # ENDPOINT 1: PING (PRUEBA)
 # =====================================================
@@ -204,9 +274,14 @@ def ping():
             '/imagen-base64',
             '/actualizar-foto-sesion',
             '/verificar-fotos/<codigo>',
-            '/verificar-carpeta/<nombre>'
+            '/verificar-carpeta/<nombre>',
+            '/detalle-recepcion/<int:id_orden>',
+            '/eliminar-recepcion/<int:id_orden>',
+            '/generar-pdf-recepcion/<int:id_orden>',
+            '/descargar-pdf-recepcion/<int:id_orden>'
         ]
     }), 200
+
 
 # =====================================================
 # ENDPOINT 2: SESIONES ACTIVAS
@@ -247,46 +322,46 @@ def listar_sesiones_activas(current_user):
         logger.error(f"Error listando sesiones: {str(e)}")
         return jsonify({'success': True, 'sesiones': []}), 200
 
+
 # =====================================================
-# 🔥 ENDPOINT 3: LISTAR RECEPCIONES - VERSIÓN SIMPLE (FUNCIONA)
+# ENDPOINT 3: LISTAR RECEPCIONES - VERSIÓN OPTIMIZADA
 # =====================================================
 
 @recepcion_jefe_bp.route('/listar-recepciones', methods=['GET'])
 @jefe_operativo_required
 def listar_recepciones(current_user):
     """
-    Lista las recepciones guardadas CON TODOS LOS DATOS DEL CLIENTE
-    Versión SIMPLE que FUNCIONA en todos los entornos
+    Lista las recepciones guardadas con paginación
+    Por defecto devuelve las últimas 5 órdenes
     """
     try:
+        # Obtener parámetros de paginación
+        limit = request.args.get('limit', 5, type=int)
+        offset = request.args.get('offset', 0, type=int)
+        
+        # Limitar el máximo de registros por página
+        if limit > 50:
+            limit = 50
+        
         logger.info(f"📋 [listar_recepciones] Usuario: {current_user.get('nombre')}")
-        logger.info(f"📋 [listar_recepciones] Usando método SIMPLE con consultas separadas")
+        logger.info(f"📋 [listar_recepciones] Limit: {limit}, Offset: {offset}")
         
-        # 🔥 SIEMPRE usar el método simple (funciona en local y en producción)
-        return listar_recepciones_simple(current_user)
-        
-    except Exception as e:
-        logger.error(f"❌ [listar_recepciones] Error: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return jsonify({'success': True, 'recepciones': []}), 200
-
-
-def listar_recepciones_simple(current_user):
-    """
-    Versión simple con consultas separadas - FUNCIONA EN TODOS LOS ENTORNOS
-    """
-    try:
-        logger.info("📊 [listar_recepciones_simple] Iniciando consultas separadas...")
-        
-        # Paso 1: Obtener todas las órdenes de trabajo
+        # 🔥 OBTENER SOLO LAS ÚLTIMAS ÓRDENES CON PAGINACIÓN
         resultado = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
             .order('fecha_ingreso', desc=True) \
-            .limit(50) \
+            .limit(limit) \
+            .offset(offset) \
             .execute()
         
         logger.info(f"📊 Órdenes encontradas: {len(resultado.data) if resultado.data else 0}")
+        
+        # 🔥 OBTENER EL TOTAL DE ÓRDENES PARA LA PAGINACIÓN
+        total_result = supabase.table('ordentrabajo') \
+            .select('id', count='exact') \
+            .execute()
+        
+        total_ordenes = total_result.count if hasattr(total_result, 'count') else len(total_result.data or [])
         
         recepciones = []
         
@@ -369,7 +444,121 @@ def listar_recepciones_simple(current_user):
             
             recepciones.append(recepcion)
         
-        logger.info(f"✅ {len(recepciones)} recepciones listadas (método simple)")
+        logger.info(f"✅ {len(recepciones)} recepciones listadas (paginadas)")
+        
+        return jsonify({
+            'success': True,
+            'recepciones': recepciones,
+            'paginacion': {
+                'total': total_ordenes,
+                'limit': limit,
+                'offset': offset,
+                'has_more': (offset + limit) < total_ordenes
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ [listar_recepciones] Error: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'recepciones': []
+        }), 500
+
+
+def listar_recepciones_simple(current_user):
+    """Versión simple con consultas separadas"""
+    try:
+        logger.info("📊 [listar_recepciones_simple] Iniciando consultas separadas...")
+        
+        resultado = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
+            .order('fecha_ingreso', desc=True) \
+            .limit(50) \
+            .execute()
+        
+        logger.info(f"📊 Órdenes encontradas: {len(resultado.data) if resultado.data else 0}")
+        
+        recepciones = []
+        
+        for orden in (resultado.data or []):
+            recepcion = {
+                'id': orden.get('id'),
+                'codigo_unico': orden.get('codigo_unico', 'OT-N/A'),
+                'fecha_ingreso': orden.get('fecha_ingreso'),
+                'estado_global': orden.get('estado_global', 'EnRecepcion'),
+                'cliente_nombre': 'N/A',
+                'cliente_telefono': 'N/A',
+                'cliente_email': 'N/A',
+                'cliente_ubicacion': '',
+                'latitud': None,
+                'longitud': None,
+                'placa': 'N/A',
+                'marca': '',
+                'modelo': '',
+                'anio': None,
+                'kilometraje': 0
+            }
+            
+            id_vehiculo = orden.get('id_vehiculo')
+            
+            if id_vehiculo:
+                try:
+                    v_result = supabase.table('vehiculo') \
+                        .select('placa, marca, modelo, anio, kilometraje, id_cliente') \
+                        .eq('id', id_vehiculo) \
+                        .execute()
+                    
+                    if v_result.data:
+                        v = v_result.data[0]
+                        recepcion['placa'] = v.get('placa') or 'N/A'
+                        recepcion['marca'] = v.get('marca') or ''
+                        recepcion['modelo'] = v.get('modelo') or ''
+                        recepcion['anio'] = v.get('anio')
+                        recepcion['kilometraje'] = v.get('kilometraje') or 0
+                        
+                        id_cliente = v.get('id_cliente')
+                        
+                        if id_cliente:
+                            try:
+                                c_result = supabase.table('cliente') \
+                                    .select('id_usuario, latitud, longitud, ubicacion_confirmada') \
+                                    .eq('id', id_cliente) \
+                                    .execute()
+                                
+                                if c_result.data:
+                                    c = c_result.data[0]
+                                    recepcion['latitud'] = c.get('latitud')
+                                    recepcion['longitud'] = c.get('longitud')
+                                    recepcion['ubicacion_confirmada'] = c.get('ubicacion_confirmada', False)
+                                    
+                                    id_usuario = c.get('id_usuario')
+                                    
+                                    if id_usuario:
+                                        try:
+                                            u_result = supabase.table('usuario') \
+                                                .select('nombre, contacto, email, ubicacion') \
+                                                .eq('id', id_usuario) \
+                                                .execute()
+                                            
+                                            if u_result.data:
+                                                u = u_result.data[0]
+                                                recepcion['cliente_nombre'] = u.get('nombre') or 'N/A'
+                                                recepcion['cliente_telefono'] = u.get('contacto') or 'N/A'
+                                                recepcion['cliente_email'] = u.get('email') or 'N/A'
+                                                recepcion['cliente_ubicacion'] = u.get('ubicacion') or ''
+                                        except Exception as e:
+                                            logger.warning(f"⚠️ Error obteniendo usuario {id_usuario}: {e}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Error obteniendo cliente {id_cliente}: {e}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Error obteniendo vehículo {id_vehiculo}: {e}")
+            
+            recepciones.append(recepcion)
+        
+        logger.info(f"✅ {len(recepciones)} recepciones listadas")
         return jsonify({'success': True, 'recepciones': recepciones}), 200
         
     except Exception as e:
@@ -377,6 +566,7 @@ def listar_recepciones_simple(current_user):
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({'success': True, 'recepciones': []}), 200
+
 
 # =====================================================
 # ENDPOINT 4: INICIAR SESIÓN
@@ -422,6 +612,7 @@ def iniciar_sesion(current_user):
         logger.error(f"Error iniciando sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
 # ENDPOINT 5: OBTENER SESIÓN
 # =====================================================
@@ -445,6 +636,7 @@ def obtener_sesion(current_user, codigo):
     except Exception as e:
         logger.error(f"Error obteniendo sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 # =====================================================
 # ENDPOINT 6: GUARDAR SECCIÓN
@@ -475,7 +667,6 @@ def guardar_seccion(current_user):
         if sesion.get('estado') != 'activa':
             return jsonify({'error': 'Sesión finalizada'}), 400
         
-        # Guardar según la sección
         if seccion == 'cliente':
             sesion['datos']['cliente'] = {
                 'nombre': datos_seccion.get('nombre', ''),
@@ -506,18 +697,13 @@ def guardar_seccion(current_user):
             if 'fotos' not in sesion['datos']:
                 sesion['datos']['fotos'] = {}
             
-            fotos_actualizadas = 0
             for campo, valor in datos_seccion.items():
                 if valor and valor != 'null' and valor != '':
                     sesion['datos']['fotos'][campo] = valor
-                    fotos_actualizadas += 1
-                    logger.info(f"📸 Foto {campo} guardada en sesión")
             
             fotos = sesion['datos']['fotos']
             fotos_validas = sum(1 for v in fotos.values() if v and v != 'null' and v != '')
             sesion['secciones_completadas']['fotos'] = fotos_validas == 7
-            
-            logger.info(f"📸 Fotos en sesión: {fotos_validas}/7 - Actualizadas: {fotos_actualizadas}")
             
         elif seccion == 'descripcion':
             sesion['datos']['descripcion']['texto'] = datos_seccion.get('texto', '')
@@ -534,6 +720,7 @@ def guardar_seccion(current_user):
     except Exception as e:
         logger.error(f"Error guardando sección: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 # =====================================================
 # ENDPOINT 7: UNIRSE A SESIÓN
@@ -576,6 +763,7 @@ def unirse_sesion(current_user):
     except Exception as e:
         logger.error(f"Error uniéndose a sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 # =====================================================
 # ENDPOINT 8: FINALIZAR SESIÓN
@@ -798,7 +986,6 @@ def finalizar_sesion(current_user):
             carpeta_renombrada = False
             try:
                 logger.info(f"📁 Intentando renombrar carpeta {codigo_sesion} a {codigo_unico}")
-                
                 folder_id = google_drive.get_folder_id_by_name(codigo_sesion)
                 
                 if folder_id:
@@ -838,6 +1025,7 @@ def finalizar_sesion(current_user):
     except Exception as e:
         logger.error(f"Error finalizando: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 # =====================================================
 # ENDPOINT 9: CANCELAR SESIÓN
@@ -906,6 +1094,7 @@ def cancelar_sesion(current_user):
         logger.error(f"❌ Error cancelando sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
 # ENDPOINT 10: PING SESIÓN
 # =====================================================
@@ -922,6 +1111,7 @@ def ping_sesion(current_user, codigo):
     except Exception as e:
         logger.error(f"Error en ping: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 # =====================================================
 # ENDPOINT 11: VERIFICAR PLACA
@@ -956,6 +1146,7 @@ def verificar_placa(current_user, placa):
     except Exception as e:
         logger.error(f"Error verificando placa: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 # =====================================================
 # ENDPOINT 12: SUBIR FOTO A GOOGLE DRIVE
@@ -995,7 +1186,8 @@ def upload_foto_drive(current_user):
             folder_path=folder_path
         )
         
-        logger.info(f"📸 Foto subida: {result['url']}")
+        url = result['url']
+        logger.info(f"📸 Foto subida: {url}")
         
         try:
             if codigo_sesion not in sesiones_activas:
@@ -1022,7 +1214,7 @@ def upload_foto_drive(current_user):
                 }
                 campo_db = campo_map.get(campo, campo)
                 
-                sesion['datos']['fotos'][campo_db] = result['url']
+                sesion['datos']['fotos'][campo_db] = url
                 
                 fotos = sesion['datos']['fotos']
                 fotos_validas = sum(1 for v in fotos.values() if v and v != 'null' and v != '')
@@ -1041,7 +1233,7 @@ def upload_foto_drive(current_user):
         
         return jsonify({
             'success': True,
-            'url': result['url'],
+            'url': url,
             'id': result['id'],
             'web_view_link': result['web_view_link']
         })
@@ -1049,6 +1241,7 @@ def upload_foto_drive(current_user):
     except Exception as e:
         logger.error(f"❌ Error subiendo foto: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 # =====================================================
 # ENDPOINT 13: ACTUALIZAR FOTO EN SESIÓN
@@ -1115,6 +1308,7 @@ def actualizar_foto_sesion(current_user):
         logger.error(f"❌ Error actualizando foto en sesión: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
 # ENDPOINT 14: VERIFICAR FOTOS DE SESIÓN
 # =====================================================
@@ -1169,6 +1363,7 @@ def verificar_fotos(current_user, codigo):
         logger.error(f"Error verificando fotos: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
 # ENDPOINT 15: VERIFICAR CARPETA EN DRIVE
 # =====================================================
@@ -1198,6 +1393,7 @@ def verificar_carpeta(current_user, nombre):
     except Exception as e:
         logger.error(f"Error verificando carpeta: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 # =====================================================
 # ENDPOINT 16: SUBIR AUDIO A GOOGLE DRIVE
@@ -1262,6 +1458,7 @@ def upload_audio_drive(current_user):
         logger.error(f"❌ Error subiendo audio: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
 # ENDPOINT 17: RENOMBRAR CARPETA (MANUAL)
 # =====================================================
@@ -1305,6 +1502,7 @@ def renombrar_carpeta_drive(current_user):
         logger.error(f"❌ Error renombrando carpeta: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
 # ENDPOINT 18: IMAGEN A BASE64
 # =====================================================
@@ -1323,9 +1521,10 @@ def obtener_imagen_base64(current_user):
         if not url:
             return jsonify({'error': 'URL requerida'}), 400
         
-        logger.info(f"📥 Descargando imagen desde: {url[:50]}...")
+        url_normalizada = normalizar_url_drive(url)
+        logger.info(f"📥 Descargando imagen desde: {url_normalizada[:80]}...")
         
-        response = requests.get(url, timeout=30)
+        response = requests.get(url_normalizada, timeout=30)
         
         if response.status_code != 200:
             logger.error(f"❌ Error descargando imagen: {response.status_code}")
@@ -1350,6 +1549,7 @@ def obtener_imagen_base64(current_user):
         logger.error(f"❌ Error obteniendo imagen base64: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
 # ENDPOINT 19: DETALLE RECEPCIÓN
 # =====================================================
@@ -1357,7 +1557,7 @@ def obtener_imagen_base64(current_user):
 @recepcion_jefe_bp.route('/detalle-recepcion/<int:id_orden>', methods=['GET'])
 @jefe_operativo_required
 def detalle_recepcion(current_user, id_orden):
-    """Obtiene el detalle completo de una recepción"""
+    """Obtiene el detalle completo de una recepción con URLs normalizadas"""
     try:
         orden_result = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo, id_jefe_operativo, id_jefe_operativo_2') \
@@ -1431,7 +1631,8 @@ def detalle_recepcion(current_user, id_orden):
                 url_foto_inferior,
                 url_foto_tablero,
                 url_grabacion_problema,
-                transcripcion_problema
+                transcripcion_problema,
+                url_pdf
             ''') \
             .eq('id_orden_trabajo', id_orden) \
             .single() \
@@ -1439,6 +1640,7 @@ def detalle_recepcion(current_user, id_orden):
         
         recepcion = recepcion_result.data if recepcion_result.data else {}
         
+        # Normalizar URLs de fotos
         fotos_limpias = {}
         fotos = {
             'url_lateral_izquierda': recepcion.get('url_lateral_izquierda'),
@@ -1452,9 +1654,17 @@ def detalle_recepcion(current_user, id_orden):
         
         for key, value in fotos.items():
             if value and value != 'null' and value != 'None' and value != '':
-                fotos_limpias[key] = value
+                fotos_limpias[key] = normalizar_url_drive(value)
             else:
                 fotos_limpias[key] = None
+        
+        # Normalizar audio
+        audio_url = recepcion.get('url_grabacion_problema')
+        if audio_url and audio_url != 'null' and audio_url != 'None' and audio_url != '':
+            if 'drive.google.com' in audio_url:
+                audio_url = normalizar_url_drive(audio_url)
+        else:
+            audio_url = None
         
         detalle = {
             'id': orden['id'],
@@ -1475,15 +1685,19 @@ def detalle_recepcion(current_user, id_orden):
             'longitud': cliente_data.get('longitud'),
             'ubicacion_confirmada': cliente_data.get('ubicacion_confirmada', False),
             'fotos': fotos_limpias,
-            'audio_url': recepcion.get('url_grabacion_problema'),
-            'transcripcion_problema': recepcion.get('transcripcion_problema', '')
+            'audio_url': audio_url,
+            'transcripcion_problema': recepcion.get('transcripcion_problema', ''),
+            'url_pdf': recepcion.get('url_pdf')
         }
+        
+        logger.info(f"📸 Fotos normalizadas: {sum(1 for v in fotos_limpias.values() if v)}/7")
         
         return jsonify({'success': True, 'detalle': detalle}), 200
         
     except Exception as e:
         logger.error(f"Error obteniendo detalle: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 # =====================================================
 # ENDPOINT 20: ELIMINAR RECEPCIÓN
@@ -1507,4 +1721,350 @@ def eliminar_recepcion(current_user, id_orden):
         return jsonify({'success': True}), 200
     except Exception as e:
         logger.error(f"Error eliminando recepción: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 21: GENERAR Y GUARDAR PDF EN GOOGLE DRIVE
+# =====================================================
+
+@recepcion_jefe_bp.route('/generar-pdf-recepcion/<int:id_orden>', methods=['POST'])
+@jefe_operativo_required
+def generar_pdf_recepcion(current_user, id_orden):
+    """
+    Genera un PDF de la recepción y lo guarda en Google Drive
+    """
+    try:
+        from google_drive import google_drive
+        from reportlab.lib.pagesizes import A4
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+        from datetime import datetime
+        
+        logger.info(f"📄 Generando PDF para orden {id_orden}")
+        
+        # =============================================
+        # OBTENER DATOS DE LA RECEPCIÓN
+        # =============================================
+        
+        orden_result = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo, id_jefe_operativo, id_jefe_operativo_2') \
+            .eq('id', id_orden) \
+            .single() \
+            .execute()
+        
+        if not orden_result.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        orden = orden_result.data
+        
+        # Obtener jefe principal
+        jefe_principal = {}
+        if orden.get('id_jefe_operativo'):
+            j1 = supabase.table('usuario') \
+                .select('id, nombre, contacto, email') \
+                .eq('id', orden['id_jefe_operativo']) \
+                .execute()
+            if j1.data:
+                jefe_principal = j1.data[0]
+        
+        # Obtener vehículo
+        vehiculo_result = supabase.table('vehiculo') \
+            .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
+            .eq('id', orden['id_vehiculo']) \
+            .single() \
+            .execute()
+        
+        vehiculo = vehiculo_result.data if vehiculo_result.data else {}
+        
+        # Obtener cliente y usuario
+        usuario = {}
+        cliente_data = {}
+        if vehiculo.get('id_cliente'):
+            c_result = supabase.table('cliente') \
+                .select('id, id_usuario, latitud, longitud, ubicacion_confirmada') \
+                .eq('id', vehiculo['id_cliente']) \
+                .single() \
+                .execute()
+            if c_result.data:
+                cliente_data = c_result.data
+                if cliente_data.get('id_usuario'):
+                    u_result = supabase.table('usuario') \
+                        .select('id, nombre, contacto, ubicacion, email') \
+                        .eq('id', cliente_data['id_usuario']) \
+                        .single() \
+                        .execute()
+                    if u_result.data:
+                        usuario = u_result.data
+        
+        # Obtener recepción
+        recepcion_result = supabase.table('recepcion') \
+            .select('''
+                id,
+                url_lateral_izquierda,
+                url_lateral_derecha,
+                url_foto_frontal,
+                url_foto_trasera,
+                url_foto_superior,
+                url_foto_inferior,
+                url_foto_tablero,
+                url_grabacion_problema,
+                transcripcion_problema
+            ''') \
+            .eq('id_orden_trabajo', id_orden) \
+            .single() \
+            .execute()
+        
+        recepcion = recepcion_result.data if recepcion_result.data else {}
+        
+        # =============================================
+        # GENERAR PDF CON REPORTLAB
+        # =============================================
+        
+        fecha_actual = datetime.now().strftime('%Y%m%d_%H%M%S')
+        nombre_archivo = f"Recepcion_{orden['codigo_unico']}_{fecha_actual}.pdf"
+        
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_file:
+            pdf_path = tmp_file.name
+        
+        # Configurar documento
+        doc = SimpleDocTemplate(
+            pdf_path,
+            pagesize=A4,
+            rightMargin=1.5*cm,
+            leftMargin=1.5*cm,
+            topMargin=1.5*cm,
+            bottomMargin=1.5*cm
+        )
+        
+        # Estilos
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            textColor=colors.HexColor('#C1121F'),
+            alignment=TA_CENTER,
+            spaceAfter=12
+        )
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=14,
+            textColor=colors.HexColor('#C1121F'),
+            spaceAfter=6,
+            spaceBefore=12
+        )
+        normal_style = ParagraphStyle(
+            'CustomNormal',
+            parent=styles['Normal'],
+            fontSize=10,
+            spaceAfter=4
+        )
+        small_style = ParagraphStyle(
+            'Small',
+            parent=styles['Normal'],
+            fontSize=8,
+            textColor=colors.HexColor('#666666'),
+            spaceAfter=2
+        )
+        
+        # Construir contenido
+        story = []
+        
+        # Título
+        story.append(Paragraph("FURIA MOTOR COMPANY", title_style))
+        story.append(Paragraph("ORDEN DE TRABAJO - RECEPCIÓN", heading_style))
+        story.append(Spacer(1, 0.3*cm))
+        
+        # Código y fecha
+        story.append(Paragraph(f"<b>Código:</b> {orden['codigo_unico']}", normal_style))
+        fecha_ingreso = datetime.fromisoformat(orden['fecha_ingreso']).strftime('%d/%m/%Y %H:%M') if orden.get('fecha_ingreso') else 'No registrada'
+        story.append(Paragraph(f"<b>Fecha:</b> {fecha_ingreso}", normal_style))
+        estado_labels = {
+            'EnRecepcion': 'En Recepción',
+            'EnTaller': 'En Taller',
+            'Finalizado': 'Finalizado'
+        }
+        story.append(Paragraph(f"<b>Estado:</b> {estado_labels.get(orden['estado_global'], orden['estado_global'])}", normal_style))
+        story.append(Spacer(1, 0.5*cm))
+        
+        # Datos del Cliente
+        story.append(Paragraph("👤 DATOS DEL CLIENTE", heading_style))
+        story.append(Paragraph(f"<b>Nombre:</b> {usuario.get('nombre', 'No registrado')}", normal_style))
+        story.append(Paragraph(f"<b>Teléfono:</b> {usuario.get('contacto', 'No registrado')}", normal_style))
+        story.append(Paragraph(f"<b>Ubicación:</b> {usuario.get('ubicacion', 'No especificada')}", normal_style))
+        if cliente_data.get('latitud') and cliente_data.get('longitud'):
+            story.append(Paragraph(f"<b>Coordenadas:</b> {cliente_data['latitud']}, {cliente_data['longitud']}", normal_style))
+        story.append(Spacer(1, 0.3*cm))
+        
+        # Datos del Vehículo
+        story.append(Paragraph("🚗 DATOS DEL VEHÍCULO", heading_style))
+        story.append(Paragraph(f"<b>Placa:</b> {vehiculo.get('placa', 'No registrada')}", normal_style))
+        story.append(Paragraph(f"<b>Marca:</b> {vehiculo.get('marca', 'No registrada')}", normal_style))
+        story.append(Paragraph(f"<b>Modelo:</b> {vehiculo.get('modelo', 'No registrado')}", normal_style))
+        story.append(Paragraph(f"<b>Año:</b> {vehiculo.get('anio', 'No especificado')}", normal_style))
+        story.append(Paragraph(f"<b>Kilometraje:</b> {vehiculo.get('kilometraje', 0)} km", normal_style))
+        story.append(Spacer(1, 0.3*cm))
+        
+        # Descripción
+        story.append(Paragraph("📝 DESCRIPCIÓN DEL PROBLEMA", heading_style))
+        descripcion = recepcion.get('transcripcion_problema', 'No se registró descripción')
+        story.append(Paragraph(descripcion, normal_style))
+        story.append(Spacer(1, 0.3*cm))
+        
+        # Fotos
+        story.append(Paragraph("📸 FOTOS", heading_style))
+        
+        fotos_dict = {
+            'Lateral Izquierdo': recepcion.get('url_lateral_izquierda'),
+            'Lateral Derecho': recepcion.get('url_lateral_derecha'),
+            'Frontal': recepcion.get('url_foto_frontal'),
+            'Trasera': recepcion.get('url_foto_trasera'),
+            'Superior': recepcion.get('url_foto_superior'),
+            'Inferior': recepcion.get('url_foto_inferior'),
+            'Tablero': recepcion.get('url_foto_tablero')
+        }
+        
+        fotos_validas = {k: v for k, v in fotos_dict.items() if v and v != 'null' and v != 'None' and v != ''}
+        
+        if fotos_validas:
+            fotos_agregadas = 0
+            for nombre, url in list(fotos_validas.items())[:2]:
+                try:
+                    file_id = obtener_file_id_drive(url)
+                    if file_id:
+                        url_descarga = f"https://drive.google.com/uc?export=download&id={file_id}"
+                        response = requests.get(url_descarga, timeout=30)
+                        if response.status_code == 200:
+                            img = Image(BytesIO(response.content))
+                            img.drawHeight = 3*cm
+                            img.drawWidth = 4*cm
+                            story.append(Paragraph(f"<b>{nombre}:</b>", normal_style))
+                            story.append(img)
+                            fotos_agregadas += 1
+                except Exception as e:
+                    logger.warning(f"No se pudo incluir foto {nombre}: {str(e)}")
+                    story.append(Paragraph(f"<b>{nombre}:</b> No disponible", small_style))
+            
+            if len(fotos_validas) > 2:
+                story.append(Paragraph(f"<i>+ {len(fotos_validas) - 2} fotos adicionales disponibles en la carpeta de Drive</i>", small_style))
+        else:
+            story.append(Paragraph("No se registraron fotos", normal_style))
+        
+        story.append(Spacer(1, 0.5*cm))
+        
+        # Firmas
+        story.append(Paragraph("✍️ FIRMAS", heading_style))
+        story.append(Spacer(1, 0.3*cm))
+        
+        firma_data = [
+            ['', ''],
+            ['Firma del Cliente', 'Firma del Jefe Operativo'],
+            ['_________________________', '_________________________'],
+            [usuario.get('nombre', '____________________'), jefe_principal.get('nombre', '____________________')],
+            [fecha_actual, fecha_actual]
+        ]
+        
+        firma_table = Table(firma_data, colWidths=[7*cm, 7*cm])
+        firma_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LINEABOVE', (0, 2), (-1, 2), 1, colors.black),
+        ]))
+        story.append(firma_table)
+        
+        # Pie de página
+        story.append(Spacer(1, 0.5*cm))
+        story.append(Paragraph("Documento generado automáticamente por FURIA MOTOR", 
+                              ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#999999'), alignment=TA_CENTER)))
+        
+        # Generar PDF
+        doc.build(story)
+        logger.info(f"✅ PDF generado: {pdf_path}")
+        
+        # =============================================
+        # SUBIR PDF A GOOGLE DRIVE
+        # =============================================
+        
+        with open(pdf_path, 'rb') as f:
+            pdf_data = f.read()
+        
+        folder_path = google_drive.generate_folder_path(
+            modulo='recepcion',
+            referencia_id=orden['codigo_unico'],
+            subcarpeta='documentos'
+        )
+        
+        result = google_drive.upload_file(
+            file_data=pdf_data,
+            filename=nombre_archivo,
+            folder_path=folder_path,
+            mime_type='application/pdf',
+            public=True
+        )
+        
+        # Actualizar la recepción con la URL del PDF
+        supabase.table('recepcion') \
+            .update({
+                'url_pdf': result['url']
+            }) \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
+        # Limpiar archivo temporal
+        try:
+            os.unlink(pdf_path)
+        except:
+            pass
+        
+        logger.info(f"✅ PDF subido a Drive: {nombre_archivo} -> {result['url']}")
+        
+        return jsonify({
+            'success': True,
+            'url': result['url'],
+            'filename': nombre_archivo,
+            'message': 'PDF generado y guardado en Google Drive'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error generando PDF: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 22: DESCARGAR PDF GENERADO
+# =====================================================
+
+@recepcion_jefe_bp.route('/descargar-pdf-recepcion/<int:id_orden>', methods=['GET'])
+@jefe_operativo_required
+def descargar_pdf_recepcion(current_user, id_orden):
+    """
+    Obtiene la URL del PDF de una recepción ya generado
+    """
+    try:
+        resultado = supabase.table('recepcion') \
+            .select('url_pdf') \
+            .eq('id_orden_trabajo', id_orden) \
+            .single() \
+            .execute()
+        
+        if not resultado.data or not resultado.data.get('url_pdf'):
+            return jsonify({'error': 'PDF no encontrado para esta recepción'}), 404
+        
+        return jsonify({
+            'success': True,
+            'url': resultado.data['url_pdf']
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error obteniendo PDF: {str(e)}")
         return jsonify({'error': str(e)}), 500

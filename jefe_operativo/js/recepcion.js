@@ -2444,7 +2444,7 @@ async function verDetalleRecepcion(id) {
 
 // =====================================================
 // FUNCIÓN CORREGIDA: mostrarModalDetalle
-// LAS FOTOS SOLO APARECEN EN EL TAB DE FOTOS
+// AHORA USA LAS NUEVAS CLASES CSS Y MANEJA EL AUDIO CORRECTAMENTE
 // =====================================================
 function mostrarModalDetalle(detalle) {
     const modal = document.getElementById('modalDetalleRecepcion');
@@ -2453,6 +2453,10 @@ function mostrarModalDetalle(detalle) {
     
     console.log('📋 Detalle completo:', detalle);
     console.log('📸 Fotos en detalle:', detalle.fotos);
+    console.log('🎵 Audio URL:', detalle.audio_url);
+    
+    // 🔥 Guardar detalle en datosReporteFinal para el PDF
+    datosReporteFinal = detalle;
     
     const fotos = detalle.fotos || {};
     const camposFotos = [
@@ -2473,32 +2477,31 @@ function mostrarModalDetalle(detalle) {
     
     console.log(`📸 Fotos válidas: ${fotosCount}/7`);
     
+    // 🔥 CONSTRUIR FOTOS HTML CON LAS NUEVAS CLASES
     let fotosHtml = '';
     if (fotosCount === 0) {
         fotosHtml = `
-            <div style="text-align: center; padding: 3rem 1.5rem; color: #8E8E93;">
-                <i class="fas fa-camera" style="font-size: 2.5rem; opacity: 0.3; margin-bottom: 0.5rem;"></i>
-                <p style="font-size: 1rem;">No se registraron fotos para esta recepción</p>
-                <small style="opacity: 0.6;">Las fotos se capturan durante el proceso de recepción</small>
+            <div class="detalle-fotos-vacio">
+                <i class="fas fa-camera"></i>
+                <p>No se registraron fotos para esta recepción</p>
+                <small>Las fotos se capturan durante el proceso de recepción</small>
             </div>
         `;
     } else {
         const timestamp = Date.now();
         fotosHtml = `
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; padding: 0.5rem 0;">
+            <div class="detalle-fotos-grid">
                 ${fotosExistentes.map((f, index) => {
                     const url = fotos[f.campo];
                     const imgId = `foto-${f.campo}-${timestamp}-${index}`;
                     return `
-                        <div style="position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid #2C2C2E; transition: all 0.3s ease; background: #1A1A1C; min-height: 120px; display: flex; align-items: center; justify-content: center;"
-                             onclick="verImagenAmpliadaPorId('${imgId}', '${f.label}')"
-                             title="Haz clic para ampliar">
-                            <div id="${imgId}" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; color: #8E8E93; gap: 8px;">
-                                <i class="fas fa-spinner fa-spin" style="font-size: 24px; color: #C1121F;"></i>
-                                <span style="font-size: 11px;">Cargando...</span>
+                        <div class="detalle-foto" onclick="verImagenAmpliadaPorId('${imgId}', '${f.label}')" title="Haz clic para ampliar">
+                            <div id="${imgId}" class="detalle-foto-placeholder">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <span>Cargando...</span>
                             </div>
-                            <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.85)); color: white; font-size: 0.7rem; padding: 0.6rem 0.5rem 0.4rem; text-align: center; display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-weight: 500; z-index: 2;">
-                                <i class="${f.icono}" style="font-size: 0.65rem; opacity: 0.7;"></i> ${f.label}
+                            <div class="detalle-foto-label">
+                                <i class="${f.icono}"></i> ${f.label}
                             </div>
                         </div>
                     `;
@@ -2507,70 +2510,179 @@ function mostrarModalDetalle(detalle) {
         `;
     }
     
+    // 🔥 VERIFICAR SI EL AUDIO ES VÁLIDO
+    const audioUrl = detalle.audio_url;
+    const tieneAudio = audioUrl && audioUrl !== 'null' && audioUrl !== 'None' && audioUrl !== '' && audioUrl !== null && audioUrl !== 'undefined';
+    
+    // 🔥 CONSTRUIR EL HTML DEL AUDIO
+    let audioHtml = '';
+    if (tieneAudio) {
+        // Normalizar la URL del audio si es necesario
+        let audioSrc = audioUrl;
+        // Si es una URL de Google Drive, convertir a formato de visualización
+        if (audioSrc.includes('drive.google.com')) {
+            // Intentar extraer el ID del archivo
+            const match = audioSrc.match(/[?&]id=([^&]+)/);
+            if (match) {
+                audioSrc = `https://drive.google.com/uc?export=download&id=${match[1]}`;
+            } else {
+                // Si no tiene el parámetro id, intentar otro formato
+                const match2 = audioSrc.match(/\/file\/d\/([^\/]+)/);
+                if (match2) {
+                    audioSrc = `https://drive.google.com/uc?export=download&id=${match2[1]}`;
+                }
+            }
+        }
+        
+        audioHtml = `
+            <div class="detalle-card">
+                <div class="detalle-card-title">
+                    <i class="fas fa-microphone"></i> Audio de la Descripción
+                </div>
+                <div class="detalle-audio">
+                    <audio controls src="${audioSrc}" style="width: 100%; border-radius: 8px;"></audio>
+                </div>
+            </div>
+        `;
+        console.log('🎵 Audio cargado correctamente:', audioSrc);
+    } else {
+        audioHtml = `
+            <div class="detalle-sin-audio">
+                <i class="fas fa-microphone-slash"></i>
+                <span>No hay audio disponible para esta recepción</span>
+            </div>
+        `;
+        console.log('🎵 No hay audio disponible');
+    }
+    
+    // 🔥 CONSTRUIR EL MODAL COMPLETO CON LAS NUEVAS CLASES
     const html = `
         <div class="detalle-tabs">
-            <button class="detalle-tab active" data-tab="info">📋 Información</button>
-            <button class="detalle-tab" data-tab="fotos">📸 Fotos (${fotosCount}/7)</button>
-            <button class="detalle-tab" data-tab="descripcion">📝 Descripción</button>
+            <button class="detalle-tab active" data-tab="info">
+                <i class="fas fa-info-circle"></i> Información
+            </button>
+            <button class="detalle-tab" data-tab="fotos">
+                <i class="fas fa-images"></i> Fotos 
+                <span class="tab-badge">${fotosCount}/7</span>
+            </button>
+            <button class="detalle-tab" data-tab="descripcion">
+                <i class="fas fa-align-left"></i> Descripción
+            </button>
         </div>
+        
         <div class="detalle-panes">
+            <!-- ========================================= -->
+            <!-- TAB 1: INFORMACIÓN                        -->
+            <!-- ========================================= -->
             <div class="detalle-pane active" id="pane-info">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; background: #1A1A1C; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
-                    <div><span style="color: #8E8E93; font-size: 11px;">Código</span><br><strong style="color: #C1121F;">${escapeHtml(detalle.codigo_unico || 'N/A')}</strong></div>
-                    <div><span style="color: #8E8E93; font-size: 11px;">Fecha</span><br><strong>${detalle.fecha_ingreso ? new Date(detalle.fecha_ingreso).toLocaleString() : 'N/A'}</strong></div>
-                    <div><span style="color: #8E8E93; font-size: 11px;">Estado</span><br><span class="estado-${detalle.estado_global || 'EnRecepcion'}" style="font-weight: 600;">${detalle.estado_global || 'En Recepción'}</span></div>
-                    <div><span style="color: #8E8E93; font-size: 11px;">Jefe Principal</span><br><strong>${escapeHtml(detalle.jefe_operativo?.nombre || 'No asignado')}</strong></div>
-                    ${detalle.jefe_operativo_2?.nombre ? `
-                    <div style="grid-column: span 2;"><span style="color: #8E8E93; font-size: 11px;">Jefe Secundario</span><br><strong>${escapeHtml(detalle.jefe_operativo_2.nombre)}</strong></div>
-                    ` : ''}
-                </div>
-                
-                <div style="background: #1A1A1C; padding: 10px 12px; border-radius: 8px; margin-bottom: 8px;">
-                    <div style="color: #C1121F; font-weight: 600; font-size: 12px; margin-bottom: 6px;"><i class="fas fa-user"></i> Cliente</div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 13px;">
-                        <div><span style="color: #8E8E93; font-size: 10px;">Nombre</span><br><strong>${escapeHtml(detalle.cliente_nombre || 'N/A')}</strong></div>
-                        <div><span style="color: #8E8E93; font-size: 10px;">Teléfono</span><br><strong>${escapeHtml(detalle.cliente_telefono || 'N/A')}</strong></div>
-                        <div style="grid-column: 1 / -1;"><span style="color: #8E8E93; font-size: 10px;">Ubicación</span><br><strong>${escapeHtml(detalle.cliente_ubicacion || 'No especificada')}</strong></div>
-                        ${detalle.latitud && detalle.longitud ? `
-                        <div style="grid-column: 1 / -1;"><span style="color: #8E8E93; font-size: 10px;">Coordenadas</span><br><strong>${detalle.latitud}, ${detalle.longitud}</strong></div>
+                <!-- TARJETA: INFORMACIÓN GENERAL -->
+                <div class="detalle-card">
+                    <div class="detalle-card-title">
+                        <i class="fas fa-info-circle"></i> Información General
+                    </div>
+                    <div class="detalle-grid">
+                        <div class="detalle-item">
+                            <span class="detalle-label">Código</span>
+                            <span class="detalle-value codigo">${escapeHtml(detalle.codigo_unico || 'N/A')}</span>
+                        </div>
+                        <div class="detalle-item">
+                            <span class="detalle-label">Fecha de Ingreso</span>
+                            <span class="detalle-value">${detalle.fecha_ingreso ? new Date(detalle.fecha_ingreso).toLocaleString('es-ES') : 'N/A'}</span>
+                        </div>
+                        <div class="detalle-item">
+                            <span class="detalle-label">Estado</span>
+                            <span class="detalle-value estado-badge ${detalle.estado_global || 'EnRecepcion'}">${detalle.estado_global || 'En Recepción'}</span>
+                        </div>
+                        <div class="detalle-item">
+                            <span class="detalle-label">Jefe Operativo</span>
+                            <span class="detalle-value">${escapeHtml(detalle.jefe_operativo?.nombre || 'No asignado')}</span>
+                        </div>
+                        ${detalle.jefe_operativo_2?.nombre ? `
+                        <div class="detalle-item full-width">
+                            <span class="detalle-label">Jefe Operativo 2</span>
+                            <span class="detalle-value">${escapeHtml(detalle.jefe_operativo_2.nombre)}</span>
+                        </div>
                         ` : ''}
                     </div>
                 </div>
                 
-                <div style="background: #1A1A1C; padding: 10px 12px; border-radius: 8px;">
-                    <div style="color: #C1121F; font-weight: 600; font-size: 12px; margin-bottom: 6px;"><i class="fas fa-car"></i> Vehículo</div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 12px; font-size: 13px;">
-                        <div><span style="color: #8E8E93; font-size: 10px;">Placa</span><br><strong style="color: #C1121F;">${escapeHtml(detalle.placa || 'N/A')}</strong></div>
-                        <div><span style="color: #8E8E93; font-size: 10px;">Marca</span><br><strong>${escapeHtml(detalle.marca || 'N/A')}</strong></div>
-                        <div><span style="color: #8E8E93; font-size: 10px;">Modelo</span><br><strong>${escapeHtml(detalle.modelo || 'N/A')}</strong></div>
-                        <div><span style="color: #8E8E93; font-size: 10px;">Año</span><br><strong>${detalle.anio || 'N/A'}</strong></div>
-                        <div style="grid-column: span 2;"><span style="color: #8E8E93; font-size: 10px;">Kilometraje</span><br><strong>${detalle.kilometraje?.toLocaleString() || '0'} km</strong></div>
+                <!-- TARJETA: CLIENTE -->
+                <div class="detalle-card">
+                    <div class="detalle-card-title">
+                        <i class="fas fa-user"></i> Datos del Cliente
+                    </div>
+                    <div class="detalle-grid">
+                        <div class="detalle-item">
+                            <span class="detalle-label">Nombre</span>
+                            <span class="detalle-value">${escapeHtml(detalle.cliente_nombre || 'N/A')}</span>
+                        </div>
+                        <div class="detalle-item">
+                            <span class="detalle-label">Teléfono</span>
+                            <span class="detalle-value">${escapeHtml(detalle.cliente_telefono || 'N/A')}</span>
+                        </div>
+                        <div class="detalle-item full-width">
+                            <span class="detalle-label">Ubicación</span>
+                            <span class="detalle-value">${escapeHtml(detalle.cliente_ubicacion || 'No especificada')}</span>
+                        </div>
+                        ${detalle.latitud && detalle.longitud ? `
+                        <div class="detalle-item full-width">
+                            <span class="detalle-label">Coordenadas</span>
+                            <span class="detalle-value">${detalle.latitud}, ${detalle.longitud}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+                
+                <!-- TARJETA: VEHÍCULO -->
+                <div class="detalle-card">
+                    <div class="detalle-card-title">
+                        <i class="fas fa-car"></i> Datos del Vehículo
+                    </div>
+                    <div class="detalle-grid">
+                        <div class="detalle-item">
+                            <span class="detalle-label">Placa</span>
+                            <span class="detalle-value placa">${escapeHtml(detalle.placa || 'N/A')}</span>
+                        </div>
+                        <div class="detalle-item">
+                            <span class="detalle-label">Marca</span>
+                            <span class="detalle-value">${escapeHtml(detalle.marca || 'N/A')}</span>
+                        </div>
+                        <div class="detalle-item">
+                            <span class="detalle-label">Modelo</span>
+                            <span class="detalle-value">${escapeHtml(detalle.modelo || 'N/A')}</span>
+                        </div>
+                        <div class="detalle-item">
+                            <span class="detalle-label">Año</span>
+                            <span class="detalle-value">${detalle.anio || 'N/A'}</span>
+                        </div>
+                        <div class="detalle-item full-width">
+                            <span class="detalle-label">Kilometraje</span>
+                            <span class="detalle-value">${detalle.kilometraje?.toLocaleString() || '0'} km</span>
+                        </div>
                     </div>
                 </div>
             </div>
             
+            <!-- ========================================= -->
+            <!-- TAB 2: FOTOS                              -->
+            <!-- ========================================= -->
             <div class="detalle-pane" id="pane-fotos">
                 ${fotosHtml}
             </div>
             
+            <!-- ========================================= -->
+            <!-- TAB 3: DESCRIPCIÓN                        -->
+            <!-- ========================================= -->
             <div class="detalle-pane" id="pane-descripcion">
-                <div style="background: #1A1A1C; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
-                    <div style="color: #C1121F; font-weight: 600; font-size: 12px; margin-bottom: 6px;"><i class="fas fa-align-left"></i> Descripción del Problema</div>
-                    <div style="background: #0D0D0E; padding: 10px; border-radius: 6px; font-size: 13px; line-height: 1.6; min-height: 40px; white-space: pre-wrap; word-wrap: break-word;">
+                <div class="detalle-card">
+                    <div class="detalle-card-title">
+                        <i class="fas fa-align-left"></i> Descripción del Problema
+                    </div>
+                    <div class="detalle-descripcion-texto">
                         ${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}
                     </div>
                 </div>
-                ${detalle.audio_url ? `
-                <div style="background: #1A1A1C; padding: 12px; border-radius: 8px;">
-                    <div style="color: #C1121F; font-weight: 600; font-size: 12px; margin-bottom: 6px;"><i class="fas fa-microphone"></i> Audio de la Descripción</div>
-                    <audio controls src="${detalle.audio_url}" style="width: 100%; border-radius: 8px;"></audio>
-                </div>
-                ` : `
-                <div style="background: #1A1A1C; padding: 12px; border-radius: 8px; text-align: center; color: #8E8E93;">
-                    <i class="fas fa-microphone-slash" style="font-size: 20px; opacity: 0.5;"></i>
-                    <p style="margin-top: 5px; font-size: 12px;">No hay audio disponible</p>
-                </div>
-                `}
+                ${audioHtml}
             </div>
         </div>
     `;
@@ -2578,6 +2690,9 @@ function mostrarModalDetalle(detalle) {
     body.innerHTML = html;
     modal.classList.add('show');
     
+    // =============================================
+    // EVENTOS DE TABS
+    // =============================================
     const tabs = document.querySelectorAll('.detalle-tab');
     const panes = document.querySelectorAll('.detalle-pane');
     
@@ -2600,9 +2715,22 @@ function mostrarModalDetalle(detalle) {
                     cargarImagenesFotos(detalle.fotos);
                 }, 200);
             }
+            
+            // 🔥 FORZAR RECARGA DEL AUDIO CUANDO SE ABRE EL TAB DE DESCRIPCIÓN
+            if (tabId === 'descripcion') {
+                setTimeout(() => {
+                    const audioElement = document.querySelector('#pane-descripcion audio');
+                    if (audioElement) {
+                        // Cargar el audio nuevamente
+                        audioElement.load();
+                        console.log('🎵 Audio recargado');
+                    }
+                }, 100);
+            }
         });
     });
     
+    // Cargar fotos si el tab está activo
     setTimeout(() => {
         const fotosTab = document.querySelector('.detalle-tab[data-tab="fotos"]');
         if (fotosTab && fotosTab.classList.contains('active')) {
@@ -2611,12 +2739,13 @@ function mostrarModalDetalle(detalle) {
     }, 400);
     
     // =============================================
-    // BOTÓN PDF EN EL DETALLE
+    // 🔥 BOTÓN PDF - USAR descargarPDFFinal()
     // =============================================
     const btnPDFDetalle = document.getElementById('btnExportarPDFDetalle');
     if (btnPDFDetalle) {
         btnPDFDetalle.onclick = function() {
-            exportarDetallePDF(detalle);
+            datosReporteFinal = detalle;
+            descargarPDFFinal();
         };
     }
 }
@@ -2983,13 +3112,15 @@ async function cargarImagenesFotos(fotos) {
         const url = fotos[f.campo];
         if (!url || url === 'null' || url === 'None' || url === '') continue;
         
-        const contenedores = panelFotos.querySelectorAll(`[id^="foto-${f.campo}-"]`);
+        // Buscar el contenedor de la foto dentro del panel
+        const contenedores = panelFotos.querySelectorAll(`.detalle-foto .detalle-foto-placeholder[id^="foto-${f.campo}-"]`);
         if (contenedores.length === 0) {
             console.warn(`⚠️ No se encontró contenedor para: ${f.campo}`);
             continue;
         }
         
         const contenedor = contenedores[0];
+        const fotoDiv = contenedor.closest('.detalle-foto');
         
         try {
             console.log(`📥 Cargando imagen: ${f.campo}`);
@@ -3006,12 +3137,17 @@ async function cargarImagenesFotos(fotos) {
             const data = await response.json();
             
             if (data.success && data.base64) {
+                // Reemplazar el placeholder con la imagen
                 contenedor.innerHTML = `
                     <img src="${data.base64}" 
                          alt="${f.label}" 
                          style="width: 100%; height: 100%; object-fit: cover; display: block;"
                          onerror="this.parentElement.innerHTML='<div style=\\'display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:4px;height:100%;\\'><i class=\\'fas fa-exclamation-triangle\\' style=\\'font-size:20px;\\'></i><span style=\\'font-size:10px;text-align:center;\\'>Error al cargar</span></div>'">
                 `;
+                // Añadir clase para indicar que está cargada
+                if (fotoDiv) {
+                    fotoDiv.classList.add('loaded');
+                }
                 console.log(`✅ Imagen cargada: ${f.campo}`);
             } else {
                 throw new Error(data.error || 'Error convirtiendo imagen');
@@ -3252,22 +3388,37 @@ async function cargarDatosOrdenCompleta(idOrden) {
             const fotos = datosReporteFinal.fotos || {};
             const fotosBase64 = {};
             
-            for (const [key, url] of Object.entries(fotos)) {
-                if (url && url !== 'null' && url !== 'None' && url !== '') {
-                    try {
-                        const base64 = await convertirImagenABase64(url);
-                        fotosBase64[key] = base64;
-                        console.log(`✅ Imagen convertida: ${key}`);
-                    } catch (error) {
-                        console.warn(`⚠️ No se pudo convertir ${key}:`, error);
-                        fotosBase64[key] = url;
-                    }
-                } else {
-                    fotosBase64[key] = null;
+            // 🔥 Contar fotos válidas
+            const camposFotos = [
+                'url_lateral_izquierda',
+                'url_lateral_derecha',
+                'url_foto_frontal',
+                'url_foto_trasera',
+                'url_foto_superior',
+                'url_foto_inferior',
+                'url_foto_tablero'
+            ];
+            
+            const fotosValidas = camposFotos.filter(c => fotos[c] && fotos[c] !== 'null' && fotos[c] !== 'None' && fotos[c] !== '');
+            
+            // 🔥 Convertir cada foto a base64
+            for (const campo of fotosValidas) {
+                const url = fotos[campo];
+                try {
+                    const base64 = await convertirImagenABase64(url);
+                    fotosBase64[campo] = base64;
+                    console.log(`✅ Imagen convertida: ${campo}`);
+                } catch (error) {
+                    console.warn(`⚠️ No se pudo convertir ${campo}:`, error);
+                    fotosBase64[campo] = url; // Fallback: URL original
                 }
             }
             
+            // 🔥 Guardar fotos en base64 para el PDF
             datosReporteFinal.fotos_base64 = fotosBase64;
+            
+            // 🔥 También actualizar fotos con las base64 para que el reporte las use
+            datosReporteFinal.fotos = fotosBase64;
             
             return datosReporteFinal;
         } else {
@@ -3281,13 +3432,14 @@ async function cargarDatosOrdenCompleta(idOrden) {
 }
 
 // =====================================================
-// GENERAR HTML DEL REPORTE
+// GENERAR HTML DEL REPORTE - OCUPA TODA LA HOJA
 // =====================================================
 function generarHTMLReporte(detalle) {
     if (!detalle) {
         return '<div class="loading-preview"><i class="fas fa-exclamation-triangle"></i><p>No hay datos para mostrar</p></div>';
     }
     
+    // 🔥 USAR fotos_base64 o fotos
     const fotos = detalle.fotos_base64 || detalle.fotos || {};
     const fotosArray = Object.entries(fotos)
         .filter(([key, url]) => url && url !== 'null' && url !== 'None' && url !== '')
@@ -3298,17 +3450,17 @@ function generarHTMLReporte(detalle) {
         }));
     
     const fotosHTML = fotosArray.length > 0 ? `
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 8px 0;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 8px 0;">
             ${fotosArray.map(f => `
                 <div style="border: 1px solid #ddd; border-radius: 4px; overflow: hidden; background: #f5f5f5; text-align: center;">
                     <img src="${f.url}" alt="${f.label}" 
-                         style="width: 100%; height: 100px; object-fit: cover; display: block; background: #eee;"
-                         onerror="this.style.display='none'">
-                    <div style="padding: 3px; font-size: 8px; font-weight: bold; color: #555;">${f.label}</div>
+                         style="width: 100%; height: 110px; object-fit: cover; display: block; background: #eee;"
+                         onerror="this.parentElement.innerHTML='<div style=\\'padding:20px;text-align:center;color:#999;font-size:10px;\\'><i class=\\'fas fa-image\\' style=\\'font-size:20px;display:block;margin-bottom:5px;\\'></i>${f.label}<br><span style=\\'font-size:8px;\\'>No disponible</span></div>'">
+                    <div style="padding: 4px; font-size: 8px; font-weight: bold; color: #555; background: #f9f9f9;">${f.label}</div>
                 </div>
             `).join('')}
         </div>
-    ` : '<p style="color: #999; font-style: italic; font-size: 11px;">No se registraron fotos</p>';
+    ` : '<p style="color: #999; font-style: italic; font-size: 11px; text-align: center; padding: 15px;">No se registraron fotos</p>';
     
     const clienteNombre = detalle.cliente_nombre || 'No registrado';
     const clienteTelefono = detalle.cliente_telefono || 'No registrado';
@@ -3330,6 +3482,7 @@ function generarHTMLReporte(detalle) {
         'Finalizado': 'Finalizado'
     };
     const estadoLabel = estadoLabels[estado] || estado;
+    const estadoColor = estado === 'EnRecepcion' ? '#ffc107' : estado === 'EnTaller' ? '#17a2b8' : '#28a745';
     
     const jefePrincipal = detalle.jefe_operativo?.nombre || 'No asignado';
     const jefeSecundario = detalle.jefe_operativo_2?.nombre || null;
@@ -3345,8 +3498,8 @@ function generarHTMLReporte(detalle) {
         }) : 'No registrada';
     
     const audioHTML = detalle.audio_url ? `
-        <div style="margin-top: 6px;">
-            <audio controls src="${detalle.audio_url}" style="width: 100%; max-width: 300px; border-radius: 4px; height: 30px;"></audio>
+        <div style="margin-top: 8px;">
+            <audio controls src="${detalle.audio_url}" style="width: 100%; max-width: 280px; border-radius: 4px; height: 32px;"></audio>
         </div>
     ` : '';
     
@@ -3359,108 +3512,141 @@ function generarHTMLReporte(detalle) {
     return `
         <div class="reporte-container" id="reporteImprimible" style="
             max-width: 100%;
-            width: 210mm;
+            width: 100%;
             margin: 0 auto;
-            padding: 12mm 10mm 8mm 10mm;
+            padding: 10mm 12mm 8mm 12mm;
             font-family: 'Segoe UI', Arial, sans-serif;
             background: white;
             color: #222;
-            font-size: 10px;
-            line-height: 1.35;
+            font-size: 10.5px;
+            line-height: 1.5;
             box-sizing: border-box;
             page-break-after: avoid;
         ">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #C1121F; padding-bottom: 10px; margin-bottom: 10px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <h1 style="font-size: 20px; color: #C1121F; margin: 0;">FURIA <span style="color: #222;">MOTOR</span></h1>
+            <!-- HEADER -->
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #C1121F; padding-bottom: 10px; margin-bottom: 12px;">
+                <div>
+                    <h1 style="font-size: 22px; color: #C1121F; margin: 0; letter-spacing: 1px;">FURIA <span style="color: #222;">MOTOR</span></h1>
+                    <div style="font-size: 8px; color: #888; margin-top: 2px; letter-spacing: 2px;">TALLER AUTOMOTRIZ ESPECIALIZADO</div>
                 </div>
-                <div style="text-align: right; font-size: 9px;">
-                    <strong>FURIA MOTOR COMPANY</strong><br>
-                    Taller Automotriz Especializado<br>
-                    Cochabamba, Bolivia
+                <div style="text-align: right; font-size: 8px; line-height: 1.4;">
+                    <strong style="font-size: 9px; color: #C1121F;">FURIA MOTOR COMPANY</strong><br>
+                    Cochabamba, Bolivia<br>
+                    <span style="font-size: 7px; color: #999;">Tel: +591 4 1234567</span>
                 </div>
             </div>
             
-            <div style="text-align: center; margin-bottom: 10px;">
-                <h2 style="font-size: 14px; color: #C1121F; margin: 0;">ORDEN DE TRABAJO - RECEPCIÓN</h2>
-                <div style="font-size: 12px; font-weight: bold; background: #f0f0f0; display: inline-block; padding: 2px 10px; border-radius: 3px; margin-top: 3px;">
+            <!-- TÍTULO DE ORDEN -->
+            <div style="text-align: center; margin-bottom: 12px;">
+                <h2 style="font-size: 14px; color: #C1121F; margin: 0; letter-spacing: 3px; text-transform: uppercase;">Orden de Trabajo - Recepción</h2>
+                <div style="font-size: 13px; font-weight: bold; background: #f0f0f0; display: inline-block; padding: 4px 20px; border-radius: 4px; margin-top: 4px; color: #C1121F; border: 1px solid #ddd;">
                     # ${detalle.codigo_unico || 'OT-N/A'}
                 </div>
             </div>
             
-            <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
-                <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">📋 Información General</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; font-size: 10px;">
-                    <div><strong>Fecha:</strong> ${fechaIngreso}</div>
-                    <div><strong>Estado:</strong> <span style="background: ${estado === 'EnRecepcion' ? '#ffc107' : estado === 'EnTaller' ? '#17a2b8' : '#28a745'}; color: white; padding: 1px 6px; border-radius: 8px; font-size: 9px;">${estadoLabel}</span></div>
-                    <div><strong>ID Orden:</strong> #${detalle.id || 'N/A'}</div>
-                    <div><strong>Jefe Operativo:</strong> ${jefePrincipal}</div>
-                    ${jefeSecundario ? `<div><strong>Jefe Op. 2:</strong> ${jefeSecundario}</div>` : ''}
+            <!-- INFORMACIÓN GENERAL - UNA SOLA FILA CON MEJOR ESPACIADO -->
+            <div style="background: #f8f8f8; border-radius: 4px; padding: 8px 12px; margin-bottom: 10px; border: 1px solid #eee;">
+                <div style="display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 9.5px;">
+                    <span><strong>📅 Fecha:</strong> ${fechaIngreso}</span>
+                    <span><strong>📊 Estado:</strong> <span style="background: ${estadoColor}; color: white; padding: 1px 10px; border-radius: 12px; font-size: 8px; font-weight: 600;">${estadoLabel}</span></span>
+                    <span><strong>🆔 ID Orden:</strong> #${detalle.id || 'N/A'}</span>
+                    <span><strong>👨‍💼 Jefe Operativo:</strong> ${jefePrincipal}</span>
+                    ${jefeSecundario ? `<span><strong>👨‍💼 Jefe Op. 2:</strong> ${jefeSecundario}</span>` : ''}
                 </div>
             </div>
             
-            <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
-                <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">👤 Datos del Cliente</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; font-size: 10px;">
-                    <div><strong>Nombre:</strong> ${clienteNombre}</div>
-                    <div><strong>Teléfono:</strong> ${clienteTelefono}</div>
-                    <div style="grid-column: 1 / -1;"><strong>Ubicación:</strong> ${clienteUbicacion}</div>
-                    <div style="grid-column: 1 / -1;"><strong>Coordenadas:</strong> ${coordenadas}</div>
+            <!-- CLIENTE Y VEHÍCULO - DOS COLUMNAS CON MEJOR ESPACIADO -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                <!-- CLIENTE -->
+                <div style="background: #f8f8f8; border-radius: 4px; padding: 8px 12px; border: 1px solid #eee;">
+                    <div style="font-weight: 700; font-size: 10px; color: #C1121F; margin-bottom: 6px; border-bottom: 1px solid #ddd; padding-bottom: 4px; letter-spacing: 1px;">
+                        👤 Datos del Cliente
+                    </div>
+                    <div style="font-size: 9.5px; line-height: 1.7;">
+                        <div><strong>Nombre:</strong> ${clienteNombre}</div>
+                        <div><strong>Teléfono:</strong> ${clienteTelefono}</div>
+                        <div><strong>Ubicación:</strong> ${clienteUbicacion}</div>
+                        ${coordenadas !== 'No especificadas' ? `<div><strong>Coordenadas:</strong> ${coordenadas}</div>` : ''}
+                    </div>
+                </div>
+                
+                <!-- VEHÍCULO -->
+                <div style="background: #f8f8f8; border-radius: 4px; padding: 8px 12px; border: 1px solid #eee;">
+                    <div style="font-weight: 700; font-size: 10px; color: #C1121F; margin-bottom: 6px; border-bottom: 1px solid #ddd; padding-bottom: 4px; letter-spacing: 1px;">
+                        🚗 Datos del Vehículo
+                    </div>
+                    <div style="font-size: 9.5px; line-height: 1.7;">
+                        <div><strong style="color: #C1121F; font-size: 11px;">Placa:</strong> <strong style="color: #C1121F; font-size: 11px;">${placa}</strong></div>
+                        <div><strong>Marca:</strong> ${marca}</div>
+                        <div><strong>Modelo:</strong> ${modelo}</div>
+                        <div><strong>Año:</strong> ${anio}</div>
+                        <div><strong>Kilometraje:</strong> ${kilometraje}</div>
+                    </div>
                 </div>
             </div>
             
-            <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
-                <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">🚗 Datos del Vehículo</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px 10px; font-size: 10px;">
-                    <div><strong>Placa:</strong> <strong>${placa}</strong></div>
-                    <div><strong>Marca:</strong> ${marca}</div>
-                    <div><strong>Modelo:</strong> ${modelo}</div>
-                    <div><strong>Año:</strong> ${anio}</div>
-                    <div style="grid-column: span 2;"><strong>Kilometraje:</strong> ${kilometraje}</div>
+            <!-- FOTOS -->
+            <div style="background: #f8f8f8; border-radius: 4px; padding: 8px 12px; margin-bottom: 10px; border: 1px solid #eee;">
+                <div style="font-weight: 700; font-size: 10px; color: #C1121F; margin-bottom: 6px; border-bottom: 1px solid #ddd; padding-bottom: 4px; letter-spacing: 1px;">
+                    📸 Fotos (${fotosArray.length}/7)
                 </div>
-            </div>
-            
-            <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
-                <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">📸 Fotos (${fotosArray.length}/7)</h3>
                 ${fotosHTML}
             </div>
             
-            <div style="background: #f8f8f8; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;">
-                <h3 style="font-size: 10px; color: #C1121F; margin: 0 0 4px 0;">📝 Descripción</h3>
-                <div style="background: white; padding: 6px 8px; border-radius: 3px; font-size: 10px; min-height: 30px; border: 1px solid #eee;">
+            <!-- DESCRIPCIÓN -->
+            <div style="background: #f8f8f8; border-radius: 4px; padding: 8px 12px; margin-bottom: 12px; border: 1px solid #eee;">
+                <div style="font-weight: 700; font-size: 10px; color: #C1121F; margin-bottom: 6px; border-bottom: 1px solid #ddd; padding-bottom: 4px; letter-spacing: 1px;">
+                    📝 Descripción del Problema
+                </div>
+                <div style="background: white; padding: 8px 10px; border-radius: 4px; font-size: 9.5px; min-height: 30px; border: 1px solid #e8e8e8; white-space: pre-wrap; line-height: 1.6;">
                     ${detalle.transcripcion_problema || 'No se registró descripción'}
                 </div>
                 ${audioHTML}
             </div>
             
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; padding-top: 18px; border-top: 2px solid #ddd;">
-                <div style="text-align: center; padding: 0 10px;">
-                    <p style="font-weight: 700; color: #C1121F; margin-bottom: 10px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase;">Firma del Cliente</p>
-                    <div style="border-bottom: 2px solid #333; height: 45px; margin-bottom: 6px;"></div>
-                    <div style="font-size: 10px; color: #555; font-weight: 500;">${clienteNombre}</div>
-                    <div style="font-size: 9px; color: #999; margin-top: 3px;">${fechaActual}</div>
+            <!-- ✍️ FIRMAS - CON ESPACIO AMPLIO -->
+            <div style="margin-top: 15px; padding-top: 12px; border-top: 2px solid #ddd;">
+                <div style="font-weight: 700; font-size: 11px; color: #C1121F; text-align: center; margin-bottom: 12px; letter-spacing: 3px; text-transform: uppercase;">
+                    ✍️ Firmas de Conformidad
                 </div>
-                <div style="text-align: center; padding: 0 10px;">
-                    <p style="font-weight: 700; color: #C1121F; margin-bottom: 10px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase;">Firma del Jefe Operativo</p>
-                    <div style="border-bottom: 2px solid #333; height: 45px; margin-bottom: 6px;"></div>
-                    <div style="font-size: 10px; color: #555; font-weight: 500;">${jefePrincipal}</div>
-                    <div style="font-size: 9px; color: #999; margin-top: 3px;">${fechaActual}</div>
-                    ${jefePrincipalContacto ? `<div style="font-size: 8px; color: #999; margin-top: 2px;">Contacto: ${jefePrincipalContacto}</div>` : ''}
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
+                    <!-- FIRMA CLIENTE -->
+                    <div style="text-align: center; padding: 0 5px;">
+                        <div style="font-weight: 600; color: #333; margin-bottom: 8px; font-size: 9px; text-transform: uppercase; letter-spacing: 1px;">Firma del Cliente</div>
+                        <div style="border-bottom: 2px solid #333; height: 45px; margin-bottom: 5px;"></div>
+                        <div style="font-size: 10px; color: #555; font-weight: 600;">${clienteNombre}</div>
+                        <div style="font-size: 8px; color: #999; margin-top: 3px;">${fechaActual}</div>
+                        <div style="font-size: 7px; color: #bbb; margin-top: 6px;">_________________________</div>
+                        <div style="font-size: 7px; color: #bbb;">Nombre completo y fecha</div>
+                    </div>
+                    
+                    <!-- FIRMA JEFE OPERATIVO -->
+                    <div style="text-align: center; padding: 0 5px;">
+                        <div style="font-weight: 600; color: #333; margin-bottom: 8px; font-size: 9px; text-transform: uppercase; letter-spacing: 1px;">Firma del Jefe Operativo</div>
+                        <div style="border-bottom: 2px solid #333; height: 45px; margin-bottom: 5px;"></div>
+                        <div style="font-size: 10px; color: #555; font-weight: 600;">${jefePrincipal}</div>
+                        <div style="font-size: 8px; color: #999; margin-top: 3px;">${fechaActual}</div>
+                        <div style="font-size: 7px; color: #bbb; margin-top: 6px;">_________________________</div>
+                        <div style="font-size: 7px; color: #bbb;">Nombre completo y fecha</div>
+                        ${jefePrincipalContacto ? `<div style="font-size: 7px; color: #999; margin-top: 4px;">📞 Contacto: ${jefePrincipalContacto}</div>` : ''}
+                    </div>
                 </div>
             </div>
             
-            <div style="text-align: center; margin-top: 15px; padding-top: 8px; border-top: 1px solid #eee; font-size: 8px; color: #bbb;">
-                <span>Documento generado automáticamente</span> | 
-                <span>Código: ${detalle.codigo_unico || 'N/A'}</span> | 
+            <!-- FOOTER -->
+            <div style="text-align: center; margin-top: 18px; padding-top: 8px; border-top: 1px solid #eee; font-size: 7px; color: #bbb; line-height: 1.4;">
+                <span>Documento generado automáticamente por <strong style="color: #C1121F;">FURIA MOTOR</strong></span> | 
+                <span>Código: <strong>${detalle.codigo_unico || 'N/A'}</strong></span> | 
                 <span>${new Date().toLocaleString('es-ES')}</span>
-                <p style="margin: 2px 0 0 0; color: #bbb;">FURIA MOTOR COMPANY - Todos los derechos reservados</p>
+                <div style="color: #ccc; margin-top: 2px; font-size: 6.5px;">FURIA MOTOR COMPANY - Todos los derechos reservados</div>
             </div>
         </div>
     `;
 }
 
 // =====================================================
-// FUNCIÓN PARA DESCARGAR PDF
+// FUNCIÓN PARA DESCARGAR PDF - TAMAÑO CARTA (LETTER)
 // =====================================================
 async function descargarPDFFinal() {
     if (descargandoPDF) {
@@ -3475,7 +3661,7 @@ async function descargarPDFFinal() {
 
     descargandoPDF = true;
     
-    const btnDescargar = document.getElementById('btnDescargarPDFFinal');
+    const btnDescargar = document.getElementById('btnDescargarPDFFinal') || document.getElementById('btnExportarPDFDetalle');
     if (btnDescargar) {
         btnDescargar.disabled = true;
         btnDescargar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
@@ -3483,10 +3669,64 @@ async function descargarPDFFinal() {
 
     showProgress('Generando PDF', 'Preparando el documento...', 3);
     updateProgressBar(10, 1);
-    updateProgressMessage('Generando contenido del reporte...');
+    updateProgressMessage('Cargando imágenes...');
 
     try {
-        const reporteHTML = generarHTMLReporte(datosReporteFinal);
+        // 🔥 PASO 1: Crear una copia del detalle para no modificar el original
+        const detalleParaPDF = JSON.parse(JSON.stringify(datosReporteFinal));
+        
+        // 🔥 PASO 2: Verificar si ya tiene fotos en base64, si no, convertirlas
+        const fotos = datosReporteFinal.fotos || {};
+        const camposFotos = [
+            'url_lateral_izquierda',
+            'url_lateral_derecha',
+            'url_foto_frontal',
+            'url_foto_trasera',
+            'url_foto_superior',
+            'url_foto_inferior',
+            'url_foto_tablero'
+        ];
+        
+        // Contar fotos válidas que necesitan conversión
+        const fotosNecesitanConversion = camposFotos.filter(c => {
+            const url = fotos[c];
+            return url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined' && !url.startsWith('data:image');
+        });
+        
+        let fotosConvertidas = 0;
+        const totalFotos = fotosNecesitanConversion.length;
+        
+        if (totalFotos > 0) {
+            updateProgressMessage(`Convirtiendo ${totalFotos} fotos...`);
+            
+            for (const campo of fotosNecesitanConversion) {
+                const url = fotos[campo];
+                try {
+                    const base64 = await convertirImagenABase64(url);
+                    if (base64 && base64.startsWith('data:image')) {
+                        detalleParaPDF.fotos[campo] = base64;
+                        fotosConvertidas++;
+                        updateProgressMessage(`✅ ${fotosConvertidas}/${totalFotos} fotos convertidas`);
+                    } else {
+                        detalleParaPDF.fotos[campo] = url;
+                    }
+                } catch (error) {
+                    console.warn(`⚠️ No se pudo convertir ${campo}:`, error);
+                    detalleParaPDF.fotos[campo] = url;
+                }
+            }
+        }
+        
+        // 🔥 PASO 3: Asegurar que fotos_base64 exista
+        if (!detalleParaPDF.fotos_base64) {
+            detalleParaPDF.fotos_base64 = detalleParaPDF.fotos;
+        }
+        
+        // 🔥 PASO 4: Generar el HTML del reporte
+        updateProgressBar(40, 1);
+        updateProgressMessage('Generando contenido del reporte...');
+        
+        const reporteHTML = generarHTMLReporte(detalleParaPDF);
 
         const container = document.createElement('div');
         container.id = 'pdfContainer';
@@ -3508,26 +3748,13 @@ async function descargarPDFFinal() {
         container.innerHTML = reporteHTML;
         document.body.appendChild(container);
 
-        updateProgressBar(30, 1);
+        updateProgressBar(50, 1);
         updateProgressMessage('Renderizando contenido...');
 
         await new Promise(resolve => setTimeout(resolve, 500));
 
+        // 🔥 PASO 5: Esperar a que las imágenes se carguen
         const imagenes = container.querySelectorAll('img');
-        for (const img of imagenes) {
-            if (img.src && img.src.startsWith('data:image')) {
-                continue;
-            }
-            if (img.src && img.src.includes('googleusercontent.com')) {
-                const cleanUrl = img.src.split('?')[0];
-                const id = img.src.split('id=')[1]?.split('&')[0];
-                if (id) {
-                    img.src = `https://drive.google.com/uc?export=view&id=${id}&cache=${Date.now()}`;
-                    img.crossOrigin = 'anonymous';
-                }
-            }
-        }
-
         const promesasImagenes = Array.from(imagenes).map(img => {
             return new Promise((resolve) => {
                 if (img.complete && img.naturalHeight > 0) {
@@ -3547,7 +3774,7 @@ async function descargarPDFFinal() {
 
         await new Promise(resolve => setTimeout(resolve, 500));
 
-        updateProgressBar(50, 2);
+        updateProgressBar(60, 2);
         updateProgressMessage('Generando archivo PDF...');
 
         const elemento = container.querySelector('.reporte-container');
@@ -3565,9 +3792,11 @@ async function descargarPDFFinal() {
             });
         }
 
+        // 🔥 TAMAÑO CARTA (LETTER) en mm: 215.9 x 279.4 mm
+        // En descargarPDFFinal, actualiza los márgenes:
         const opt = {
-            margin: [8, 8, 8, 8],
-            filename: `Reporte_${datosReporteFinal.codigo_unico || 'orden'}.pdf`,
+            margin: [9, 9, 9, 9],  // Márgenes más amplios para mejor presentación
+            filename: `Reporte_${detalleParaPDF.codigo_unico || 'orden'}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: {
                 scale: 2,
@@ -3579,26 +3808,21 @@ async function descargarPDFFinal() {
                 onclone: function(doc) {
                     const imgs = doc.querySelectorAll('img');
                     imgs.forEach(img => {
-                        if (img.src && img.src.includes('googleusercontent.com')) {
-                            const cleanUrl = img.src.split('?')[0];
-                            const id = img.src.split('id=')[1]?.split('&')[0];
-                            if (id) {
-                                img.src = `https://drive.google.com/uc?export=view&id=${id}&cache=${Date.now()}`;
-                                img.crossOrigin = 'anonymous';
-                            }
+                        if (img.src && img.src.startsWith('data:image')) {
+                            img.crossOrigin = 'anonymous';
                         }
                     });
                 }
             },
             jsPDF: {
                 unit: 'mm',
-                format: 'a4',
+                format: 'letter',
                 orientation: 'portrait'
             },
             pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
         };
 
-        updateProgressBar(70, 2);
+        updateProgressBar(80, 2);
         updateProgressMessage('Generando PDF...');
 
         await html2pdf().set(opt).from(elemento).save();
@@ -3694,7 +3918,8 @@ async function mostrarReporteFinal(idOrden) {
     updateProgress(30, 'Datos cargados. Generando PDF...');
     
     try {
-        const response = await fetchWithToken(`${API_URL}/jefe-operativo/generar-pdf-recepcion/${idOrden}`, {
+        // 🔥 USAR EL NUEVO ENDPOINT CON PDFKIT
+        const response = await fetchWithToken(`${API_URL}/jefe-operativo/generar-pdf-pdfkit/${idOrden}`, {
             method: 'POST'
         });
         

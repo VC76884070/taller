@@ -1,6 +1,6 @@
 # =====================================================
 # RECEPCION_JEFEOPERATIVO.PY - VERSIÓN COMPLETA
-# CON GENERACIÓN DE PDF Y GUARDADO EN GOOGLE DRIVE
+# CON TODOS LOS ENDPOINTS Y GENERACIÓN DE PDF CON REPORTLAB
 # =====================================================
 
 from flask import Blueprint, request, jsonify, current_app
@@ -260,6 +260,7 @@ def ping():
         'endpoints': [
             '/sesiones-activas',
             '/listar-recepciones',
+            '/listar-recepciones-simple',
             '/iniciar-sesion',
             '/obtener-sesion/<codigo>',
             '/guardar-seccion',
@@ -324,7 +325,7 @@ def listar_sesiones_activas(current_user):
 
 
 # =====================================================
-# ENDPOINT 3: LISTAR RECEPCIONES - VERSIÓN OPTIMIZADA
+# ENDPOINT 3: LISTAR RECEPCIONES (VERSIÓN OPTIMIZADA CON PAGINACIÓN)
 # =====================================================
 
 @recepcion_jefe_bp.route('/listar-recepciones', methods=['GET'])
@@ -346,7 +347,7 @@ def listar_recepciones(current_user):
         logger.info(f"📋 [listar_recepciones] Usuario: {current_user.get('nombre')}")
         logger.info(f"📋 [listar_recepciones] Limit: {limit}, Offset: {offset}")
         
-        # 🔥 OBTENER SOLO LAS ÚLTIMAS ÓRDENES CON PAGINACIÓN
+        # OBTENER SOLO LAS ÚLTIMAS ÓRDENES CON PAGINACIÓN
         resultado = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
             .order('fecha_ingreso', desc=True) \
@@ -356,7 +357,7 @@ def listar_recepciones(current_user):
         
         logger.info(f"📊 Órdenes encontradas: {len(resultado.data) if resultado.data else 0}")
         
-        # 🔥 OBTENER EL TOTAL DE ÓRDENES PARA LA PAGINACIÓN
+        # OBTENER EL TOTAL DE ÓRDENES PARA LA PAGINACIÓN
         total_result = supabase.table('ordentrabajo') \
             .select('id', count='exact') \
             .execute()
@@ -468,8 +469,14 @@ def listar_recepciones(current_user):
         }), 500
 
 
+# =====================================================
+# ENDPOINT 4: LISTAR RECEPCIONES (VERSIÓN SIMPLE)
+# =====================================================
+
+@recepcion_jefe_bp.route('/listar-recepciones-simple', methods=['GET'])
+@jefe_operativo_required
 def listar_recepciones_simple(current_user):
-    """Versión simple con consultas separadas"""
+    """Versión simple de listar recepciones con consultas separadas"""
     try:
         logger.info("📊 [listar_recepciones_simple] Iniciando consultas separadas...")
         
@@ -569,7 +576,7 @@ def listar_recepciones_simple(current_user):
 
 
 # =====================================================
-# ENDPOINT 4: INICIAR SESIÓN
+# ENDPOINT 5: INICIAR SESIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/iniciar-sesion', methods=['POST'])
@@ -614,7 +621,7 @@ def iniciar_sesion(current_user):
 
 
 # =====================================================
-# ENDPOINT 5: OBTENER SESIÓN
+# ENDPOINT 6: OBTENER SESIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/obtener-sesion/<codigo>', methods=['GET'])
@@ -639,7 +646,7 @@ def obtener_sesion(current_user, codigo):
 
 
 # =====================================================
-# ENDPOINT 6: GUARDAR SECCIÓN
+# ENDPOINT 7: GUARDAR SECCIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/guardar-seccion', methods=['POST'])
@@ -723,7 +730,7 @@ def guardar_seccion(current_user):
 
 
 # =====================================================
-# ENDPOINT 7: UNIRSE A SESIÓN
+# ENDPOINT 8: UNIRSE A SESIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/unirse-sesion', methods=['POST'])
@@ -766,7 +773,7 @@ def unirse_sesion(current_user):
 
 
 # =====================================================
-# ENDPOINT 8: FINALIZAR SESIÓN
+# ENDPOINT 9: FINALIZAR SESIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/finalizar-sesion', methods=['POST'])
@@ -964,7 +971,7 @@ def finalizar_sesion(current_user):
             
             id_orden = orden_result.data[0]['id']
             
-            # 5. Guardar recepción
+            # 5. Guardar recepción (SIN PDF automático)
             recepcion_data = {
                 'id_orden_trabajo': id_orden,
                 'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
@@ -1015,7 +1022,8 @@ def finalizar_sesion(current_user):
                 'success': True,
                 'codigo': codigo_unico,
                 'id_orden': id_orden,
-                'carpeta_renombrada': carpeta_renombrada
+                'carpeta_renombrada': carpeta_renombrada,
+                'message': 'Recepción guardada exitosamente. Puedes generar el PDF manualmente.'
             }), 200
             
         except Exception as e:
@@ -1028,7 +1036,7 @@ def finalizar_sesion(current_user):
 
 
 # =====================================================
-# ENDPOINT 9: CANCELAR SESIÓN
+# ENDPOINT 10: CANCELAR SESIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/cancelar-sesion', methods=['DELETE'])
@@ -1096,7 +1104,7 @@ def cancelar_sesion(current_user):
 
 
 # =====================================================
-# ENDPOINT 10: PING SESIÓN
+# ENDPOINT 11: PING SESIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/ping-sesion/<codigo>', methods=['GET'])
@@ -1114,7 +1122,7 @@ def ping_sesion(current_user, codigo):
 
 
 # =====================================================
-# ENDPOINT 11: VERIFICAR PLACA
+# ENDPOINT 12: VERIFICAR PLACA
 # =====================================================
 
 @recepcion_jefe_bp.route('/verificar-placa/<placa>', methods=['GET'])
@@ -1149,7 +1157,7 @@ def verificar_placa(current_user, placa):
 
 
 # =====================================================
-# ENDPOINT 12: SUBIR FOTO A GOOGLE DRIVE
+# ENDPOINT 13: SUBIR FOTO A GOOGLE DRIVE
 # =====================================================
 
 @recepcion_jefe_bp.route('/upload-foto', methods=['POST'])
@@ -1244,7 +1252,7 @@ def upload_foto_drive(current_user):
 
 
 # =====================================================
-# ENDPOINT 13: ACTUALIZAR FOTO EN SESIÓN
+# ENDPOINT 14: ACTUALIZAR FOTO EN SESIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/actualizar-foto-sesion', methods=['POST'])
@@ -1310,7 +1318,7 @@ def actualizar_foto_sesion(current_user):
 
 
 # =====================================================
-# ENDPOINT 14: VERIFICAR FOTOS DE SESIÓN
+# ENDPOINT 15: VERIFICAR FOTOS DE SESIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/verificar-fotos/<codigo>', methods=['GET'])
@@ -1365,7 +1373,7 @@ def verificar_fotos(current_user, codigo):
 
 
 # =====================================================
-# ENDPOINT 15: VERIFICAR CARPETA EN DRIVE
+# ENDPOINT 16: VERIFICAR CARPETA EN DRIVE
 # =====================================================
 
 @recepcion_jefe_bp.route('/verificar-carpeta/<nombre>', methods=['GET'])
@@ -1396,7 +1404,7 @@ def verificar_carpeta(current_user, nombre):
 
 
 # =====================================================
-# ENDPOINT 16: SUBIR AUDIO A GOOGLE DRIVE
+# ENDPOINT 17: SUBIR AUDIO A GOOGLE DRIVE
 # =====================================================
 
 @recepcion_jefe_bp.route('/upload-audio', methods=['POST'])
@@ -1460,7 +1468,7 @@ def upload_audio_drive(current_user):
 
 
 # =====================================================
-# ENDPOINT 17: RENOMBRAR CARPETA (MANUAL)
+# ENDPOINT 18: RENOMBRAR CARPETA (MANUAL)
 # =====================================================
 
 @recepcion_jefe_bp.route('/renombrar-carpeta', methods=['POST'])
@@ -1504,7 +1512,7 @@ def renombrar_carpeta_drive(current_user):
 
 
 # =====================================================
-# ENDPOINT 18: IMAGEN A BASE64
+# ENDPOINT 19: IMAGEN A BASE64
 # =====================================================
 
 @recepcion_jefe_bp.route('/imagen-base64', methods=['POST'])
@@ -1551,7 +1559,7 @@ def obtener_imagen_base64(current_user):
 
 
 # =====================================================
-# ENDPOINT 19: DETALLE RECEPCIÓN
+# ENDPOINT 20: DETALLE RECEPCIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/detalle-recepcion/<int:id_orden>', methods=['GET'])
@@ -1700,7 +1708,7 @@ def detalle_recepcion(current_user, id_orden):
 
 
 # =====================================================
-# ENDPOINT 20: ELIMINAR RECEPCIÓN
+# ENDPOINT 21: ELIMINAR RECEPCIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/eliminar-recepcion/<int:id_orden>', methods=['DELETE'])
@@ -1725,33 +1733,33 @@ def eliminar_recepcion(current_user, id_orden):
 
 
 # =====================================================
-# ENDPOINT 21: GENERAR Y GUARDAR PDF EN GOOGLE DRIVE
+# ENDPOINT 22: GENERAR PDF CON REPORTLAB
 # =====================================================
 
 @recepcion_jefe_bp.route('/generar-pdf-recepcion/<int:id_orden>', methods=['POST'])
 @jefe_operativo_required
 def generar_pdf_recepcion(current_user, id_orden):
     """
-    Genera un PDF de la recepción y lo guarda en Google Drive
+    Genera un PDF de la recepción usando ReportLab (sin dependencias externas)
     """
     try:
         from google_drive import google_drive
         from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib import colors
         from reportlab.lib.units import cm
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+        from reportlab.lib.enums import TA_CENTER
         from datetime import datetime
         
-        logger.info(f"📄 Generando PDF para orden {id_orden}")
+        logger.info(f"📄 Generando PDF con ReportLab para orden {id_orden}")
         
         # =============================================
         # OBTENER DATOS DE LA RECEPCIÓN
         # =============================================
         
         orden_result = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo, id_jefe_operativo, id_jefe_operativo_2') \
+            .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo, id_jefe_operativo') \
             .eq('id', id_orden) \
             .single() \
             .execute()
@@ -1824,9 +1832,10 @@ def generar_pdf_recepcion(current_user, id_orden):
         # GENERAR PDF CON REPORTLAB
         # =============================================
         
-        fecha_actual = datetime.now().strftime('%Y%m%d_%H%M%S')
-        nombre_archivo = f"Recepcion_{orden['codigo_unico']}_{fecha_actual}.pdf"
+        fecha_actual = datetime.now().strftime('%d/%m/%Y %H:%M')
+        fecha_ingreso = datetime.fromisoformat(orden['fecha_ingreso']).strftime('%d/%m/%Y %H:%M') if orden.get('fecha_ingreso') else 'No registrada'
         
+        # Crear archivo temporal
         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_file:
             pdf_path = tmp_file.name
         
@@ -1834,10 +1843,10 @@ def generar_pdf_recepcion(current_user, id_orden):
         doc = SimpleDocTemplate(
             pdf_path,
             pagesize=A4,
-            rightMargin=1.5*cm,
-            leftMargin=1.5*cm,
-            topMargin=1.5*cm,
-            bottomMargin=1.5*cm
+            rightMargin=2*cm,
+            leftMargin=2*cm,
+            topMargin=2*cm,
+            bottomMargin=2*cm
         )
         
         # Estilos
@@ -1845,7 +1854,7 @@ def generar_pdf_recepcion(current_user, id_orden):
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontSize=18,
+            fontSize=20,
             textColor=colors.HexColor('#C1121F'),
             alignment=TA_CENTER,
             spaceAfter=12
@@ -1864,13 +1873,6 @@ def generar_pdf_recepcion(current_user, id_orden):
             fontSize=10,
             spaceAfter=4
         )
-        small_style = ParagraphStyle(
-            'Small',
-            parent=styles['Normal'],
-            fontSize=8,
-            textColor=colors.HexColor('#666666'),
-            spaceAfter=2
-        )
         
         # Construir contenido
         story = []
@@ -1882,14 +1884,8 @@ def generar_pdf_recepcion(current_user, id_orden):
         
         # Código y fecha
         story.append(Paragraph(f"<b>Código:</b> {orden['codigo_unico']}", normal_style))
-        fecha_ingreso = datetime.fromisoformat(orden['fecha_ingreso']).strftime('%d/%m/%Y %H:%M') if orden.get('fecha_ingreso') else 'No registrada'
-        story.append(Paragraph(f"<b>Fecha:</b> {fecha_ingreso}", normal_style))
-        estado_labels = {
-            'EnRecepcion': 'En Recepción',
-            'EnTaller': 'En Taller',
-            'Finalizado': 'Finalizado'
-        }
-        story.append(Paragraph(f"<b>Estado:</b> {estado_labels.get(orden['estado_global'], orden['estado_global'])}", normal_style))
+        story.append(Paragraph(f"<b>Fecha de Ingreso:</b> {fecha_ingreso}", normal_style))
+        story.append(Paragraph(f"<b>Estado:</b> {orden.get('estado_global', 'En Recepción')}", normal_style))
         story.append(Spacer(1, 0.5*cm))
         
         # Datos del Cliente
@@ -1916,47 +1912,6 @@ def generar_pdf_recepcion(current_user, id_orden):
         story.append(Paragraph(descripcion, normal_style))
         story.append(Spacer(1, 0.3*cm))
         
-        # Fotos
-        story.append(Paragraph("📸 FOTOS", heading_style))
-        
-        fotos_dict = {
-            'Lateral Izquierdo': recepcion.get('url_lateral_izquierda'),
-            'Lateral Derecho': recepcion.get('url_lateral_derecha'),
-            'Frontal': recepcion.get('url_foto_frontal'),
-            'Trasera': recepcion.get('url_foto_trasera'),
-            'Superior': recepcion.get('url_foto_superior'),
-            'Inferior': recepcion.get('url_foto_inferior'),
-            'Tablero': recepcion.get('url_foto_tablero')
-        }
-        
-        fotos_validas = {k: v for k, v in fotos_dict.items() if v and v != 'null' and v != 'None' and v != ''}
-        
-        if fotos_validas:
-            fotos_agregadas = 0
-            for nombre, url in list(fotos_validas.items())[:2]:
-                try:
-                    file_id = obtener_file_id_drive(url)
-                    if file_id:
-                        url_descarga = f"https://drive.google.com/uc?export=download&id={file_id}"
-                        response = requests.get(url_descarga, timeout=30)
-                        if response.status_code == 200:
-                            img = Image(BytesIO(response.content))
-                            img.drawHeight = 3*cm
-                            img.drawWidth = 4*cm
-                            story.append(Paragraph(f"<b>{nombre}:</b>", normal_style))
-                            story.append(img)
-                            fotos_agregadas += 1
-                except Exception as e:
-                    logger.warning(f"No se pudo incluir foto {nombre}: {str(e)}")
-                    story.append(Paragraph(f"<b>{nombre}:</b> No disponible", small_style))
-            
-            if len(fotos_validas) > 2:
-                story.append(Paragraph(f"<i>+ {len(fotos_validas) - 2} fotos adicionales disponibles en la carpeta de Drive</i>", small_style))
-        else:
-            story.append(Paragraph("No se registraron fotos", normal_style))
-        
-        story.append(Spacer(1, 0.5*cm))
-        
         # Firmas
         story.append(Paragraph("✍️ FIRMAS", heading_style))
         story.append(Spacer(1, 0.3*cm))
@@ -1982,7 +1937,7 @@ def generar_pdf_recepcion(current_user, id_orden):
         
         # Pie de página
         story.append(Spacer(1, 0.5*cm))
-        story.append(Paragraph("Documento generado automáticamente por FURIA MOTOR", 
+        story.append(Paragraph("Documento generado automáticamente por FURIA MOTOR COMPANY", 
                               ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#999999'), alignment=TA_CENTER)))
         
         # Generar PDF
@@ -1995,6 +1950,8 @@ def generar_pdf_recepcion(current_user, id_orden):
         
         with open(pdf_path, 'rb') as f:
             pdf_data = f.read()
+        
+        nombre_archivo = f"Recepcion_{orden['codigo_unico']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         
         folder_path = google_drive.generate_folder_path(
             modulo='recepcion',
@@ -2041,7 +1998,7 @@ def generar_pdf_recepcion(current_user, id_orden):
 
 
 # =====================================================
-# ENDPOINT 22: DESCARGAR PDF GENERADO
+# ENDPOINT 23: DESCARGAR PDF GENERADO
 # =====================================================
 
 @recepcion_jefe_bp.route('/descargar-pdf-recepcion/<int:id_orden>', methods=['GET'])

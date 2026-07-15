@@ -346,7 +346,7 @@ function initFullCalendar() {
     
     const calendarConfig = {
         locale: 'es',
-        initialView: isMobile ? 'timeGridWeek' : 'dayGridMonth',
+        initialView: 'dayGridMonth',
         headerToolbar: {
             left: 'prev,next',
             center: 'title',

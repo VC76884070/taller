@@ -1011,18 +1011,40 @@ function stopRecording() {
     }
 }
 
+// =====================================================
+// FUNCIÓN: ELIMINAR AUDIO EN MODO EDICIÓN
+// =====================================================
+
 function eliminarGrabacion() {
     audioBlob = null;
     audioChunks = [];
-    audioDriveUrl = null;
+    
+    // Si estamos en modo edición, marcar que el audio fue eliminado
+    if (modoEdicionRecepcion) {
+        audioDriveUrl = null;
+        window.audioOriginalRecepcion = null;
+        mostrarNotificacion('🎵 Audio eliminado de la edición', 'info');
+    } else {
+        audioDriveUrl = null;
+    }
+    
     if (audioPreview) {
-        if (audioPreview.src && audioPreview.src.startsWith('blob:')) URL.revokeObjectURL(audioPreview.src);
+        if (audioPreview.src && audioPreview.src.startsWith('blob:')) {
+            URL.revokeObjectURL(audioPreview.src);
+        }
         audioPreview.src = '';
         audioPreview.style.display = 'none';
     }
-    if (audioStatus) audioStatus.textContent = 'Grabación eliminada';
-    if (btnEliminarAudio) btnEliminarAudio.style.display = 'none';
-    btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
+    if (audioStatus) {
+        audioStatus.textContent = modoEdicionRecepcion ? 'Audio eliminado' : 'Grabación eliminada';
+        audioStatus.style.color = 'var(--gris-texto)';
+    }
+    if (btnEliminarAudio) {
+        btnEliminarAudio.style.display = 'none';
+    }
+    if (btnGrabarAudio) {
+        btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
+    }
     isRecording = false;
     
     if (codigoSesion && descripcionProblema?.value.trim()) {
@@ -2444,7 +2466,7 @@ async function verDetalleRecepcion(id) {
 
 // =====================================================
 // FUNCIÓN CORREGIDA: mostrarModalDetalle
-// AHORA USA LAS NUEVAS CLASES CSS Y MANEJA EL AUDIO CORRECTAMENTE
+// CON IFRAME DE GOOGLE DRIVE Y FONDO OSCURO
 // =====================================================
 function mostrarModalDetalle(detalle) {
     const modal = document.getElementById('modalDetalleRecepcion');
@@ -2477,7 +2499,7 @@ function mostrarModalDetalle(detalle) {
     
     console.log(`📸 Fotos válidas: ${fotosCount}/7`);
     
-    // 🔥 CONSTRUIR FOTOS HTML CON LAS NUEVAS CLASES
+    // 🔥 CONSTRUIR FOTOS HTML
     let fotosHtml = '';
     if (fotosCount === 0) {
         fotosHtml = `
@@ -2514,48 +2536,124 @@ function mostrarModalDetalle(detalle) {
     const audioUrl = detalle.audio_url;
     const tieneAudio = audioUrl && audioUrl !== 'null' && audioUrl !== 'None' && audioUrl !== '' && audioUrl !== null && audioUrl !== 'undefined';
     
-    // 🔥 CONSTRUIR EL HTML DEL AUDIO
+    // 🔥 CONSTRUIR EL HTML DEL AUDIO - CON IFRAME DE GOOGLE DRIVE
     let audioHtml = '';
     if (tieneAudio) {
-        // Normalizar la URL del audio si es necesario
-        let audioSrc = audioUrl;
-        // Si es una URL de Google Drive, convertir a formato de visualización
-        if (audioSrc.includes('drive.google.com')) {
-            // Intentar extraer el ID del archivo
-            const match = audioSrc.match(/[?&]id=([^&]+)/);
-            if (match) {
-                audioSrc = `https://drive.google.com/uc?export=download&id=${match[1]}`;
+        // 🔥 Extraer el ID del archivo de Google Drive
+        let fileId = null;
+        
+        const match1 = audioUrl.match(/[?&]id=([^&]+)/);
+        if (match1) {
+            fileId = match1[1];
+        } else {
+            const match2 = audioUrl.match(/\/file\/d\/([^\/]+)/);
+            if (match2) {
+                fileId = match2[1];
             } else {
-                // Si no tiene el parámetro id, intentar otro formato
-                const match2 = audioSrc.match(/\/file\/d\/([^\/]+)/);
-                if (match2) {
-                    audioSrc = `https://drive.google.com/uc?export=download&id=${match2[1]}`;
+                const match3 = audioUrl.match(/\/d\/([^\/]+)/);
+                if (match3) {
+                    fileId = match3[1];
                 }
             }
         }
         
-        audioHtml = `
-            <div class="detalle-card">
-                <div class="detalle-card-title">
-                    <i class="fas fa-microphone"></i> Audio de la Descripción
+        if (fileId) {
+            // 🔥 URL del reproductor de Google Drive
+            const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+            const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+            const viewUrl = `https://drive.google.com/file/d/${fileId}/view`;
+            
+            console.log('🎵 URL del reproductor de Google Drive:', embedUrl);
+            
+            audioHtml = `
+                <div class="detalle-card" style="background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 16px;">
+                    <div class="detalle-card-title" style="color: #fff; margin-bottom: 12px;">
+                        <i class="fas fa-microphone" style="color: #C1121F;"></i> Audio de la Descripción
+                    </div>
+                    
+                    <div style="background: #0d0d0d; border-radius: 10px; padding: 16px; border: 1px solid #2a2a2a;">
+                        <!-- Header -->
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px;">
+                            <div style="width: 44px; height: 44px; background: #C1121F; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                <i class="fas fa-headphones" style="color: white; font-size: 20px;"></i>
+                            </div>
+                            <div style="flex: 1;">
+                                <div style="color: #fff; font-size: 14px; font-weight: 600;">Audio de la recepción</div>
+                                <div style="color: #888; font-size: 11px;">Grabado durante la recepción del vehículo</div>
+                            </div>
+                            <div style="color: #10B981; font-size: 12px; background: rgba(16, 185, 129, 0.15); padding: 4px 14px; border-radius: 20px; white-space: nowrap;">
+                                <i class="fas fa-check-circle"></i> Disponible
+                            </div>
+                        </div>
+                        
+                        <!-- 🔥 Reproductor de Google Drive en iframe -->
+                        <div style="background: #000; border-radius: 8px; overflow: hidden; border: 1px solid #2a2a2a;">
+                            <iframe 
+                                src="${embedUrl}" 
+                                style="width: 100%; height: 100px; border: none; display: block;"
+                                allow="autoplay"
+                                allowfullscreen>
+                            </iframe>
+                        </div>
+                        
+                        <!-- 🔥 Botones de acción -->
+                        <div style="display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; justify-content: center;">
+                            <a href="${viewUrl}" target="_blank" 
+                               style="background: #1a1a1a; color: #C1121F; padding: 7px 18px; border-radius: 6px; border: 1px solid #333; text-decoration: none; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; transition: all 0.3s;"
+                               onmouseover="this.style.background='#2a2a2a'"
+                               onmouseout="this.style.background='#1a1a1a'">
+                                <i class="fas fa-external-link-alt"></i> Abrir en Google Drive
+                            </a>
+                            <a href="${downloadUrl}" download 
+                               style="background: #C1121F; color: white; padding: 7px 18px; border-radius: 6px; border: none; text-decoration: none; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; transition: all 0.3s;"
+                               onmouseover="this.style.background='#a00f1a'"
+                               onmouseout="this.style.background='#C1121F'">
+                                <i class="fas fa-download"></i> Descargar Audio
+                            </a>
+                            <button onclick="window.open('${viewUrl}', '_blank')" 
+                                    style="background: #2563EB; color: white; padding: 7px 18px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; transition: all 0.3s;"
+                                    onmouseover="this.style.background='#1d4ed8'"
+                                    onmouseout="this.style.background='#2563EB'">
+                                <i class="fas fa-external-link-alt"></i> Abrir en nueva pestaña
+                            </button>
+                        </div>
+                        
+                        <div style="margin-top: 10px; font-size: 10px; color: #444; text-align: center; border-top: 1px solid #1a1a1a; padding-top: 10px;">
+                            <i class="fas fa-info-circle"></i> 
+                            Haz clic en el botón de Play dentro del reproductor para escuchar el audio
+                        </div>
+                    </div>
                 </div>
-                <div class="detalle-audio">
-                    <audio controls src="${audioSrc}" style="width: 100%; border-radius: 8px;"></audio>
+            `;
+            console.log('🎵 Audio con iframe de Google Drive cargado correctamente');
+        } else {
+            // Fallback: Si no se pudo extraer el ID
+            audioHtml = `
+                <div class="detalle-card">
+                    <div class="detalle-card-title">
+                        <i class="fas fa-microphone"></i> Audio de la Descripción
+                    </div>
+                    <div style="text-align: center; padding: 30px 20px; background: #1a1a1a; border-radius: 8px;">
+                        <i class="fas fa-external-link-alt" style="font-size: 32px; color: #C1121F; margin-bottom: 12px; display: block;"></i>
+                        <p style="color: #ccc; margin-bottom: 16px;">Haz clic en el enlace para escuchar el audio</p>
+                        <a href="${audioUrl}" target="_blank" style="color: #C1121F; font-size: 14px; text-decoration: underline; display: inline-block; padding: 8px 20px; background: #2a2a2a; border-radius: 6px;">
+                            <i class="fas fa-headphones"></i> Escuchar audio en Google Drive
+                        </a>
+                    </div>
                 </div>
-            </div>
-        `;
-        console.log('🎵 Audio cargado correctamente:', audioSrc);
+            `;
+        }
     } else {
         audioHtml = `
-            <div class="detalle-sin-audio">
-                <i class="fas fa-microphone-slash"></i>
-                <span>No hay audio disponible para esta recepción</span>
+            <div class="detalle-sin-audio" style="background: #1a1a1a; border-radius: 8px; padding: 30px; text-align: center;">
+                <i class="fas fa-microphone-slash" style="font-size: 32px; color: #555; margin-bottom: 12px; display: block;"></i>
+                <span style="color: #888;">No hay audio disponible para esta recepción</span>
             </div>
         `;
         console.log('🎵 No hay audio disponible');
     }
     
-    // 🔥 CONSTRUIR EL MODAL COMPLETO CON LAS NUEVAS CLASES
+    // 🔥 CONSTRUIR EL MODAL COMPLETO
     const html = `
         <div class="detalle-tabs">
             <button class="detalle-tab active" data-tab="info">
@@ -2716,16 +2814,20 @@ function mostrarModalDetalle(detalle) {
                 }, 200);
             }
             
-            // 🔥 FORZAR RECARGA DEL AUDIO CUANDO SE ABRE EL TAB DE DESCRIPCIÓN
+            // 🔥 Recargar el iframe cuando se abre el tab de descripción
             if (tabId === 'descripcion') {
                 setTimeout(() => {
-                    const audioElement = document.querySelector('#pane-descripcion audio');
-                    if (audioElement) {
-                        // Cargar el audio nuevamente
-                        audioElement.load();
-                        console.log('🎵 Audio recargado');
+                    const iframe = document.querySelector('#pane-descripcion iframe');
+                    if (iframe) {
+                        // Recargar el iframe para asegurar que el audio cargue
+                        const src = iframe.src;
+                        iframe.src = '';
+                        setTimeout(() => {
+                            iframe.src = src;
+                            console.log('🎵 Iframe de audio recargado');
+                        }, 100);
                     }
-                }, 100);
+                }, 200);
             }
         });
     });
@@ -2739,7 +2841,7 @@ function mostrarModalDetalle(detalle) {
     }, 400);
     
     // =============================================
-    // 🔥 BOTÓN PDF - USAR descargarPDFFinal()
+    // 🔥 BOTÓN PDF
     // =============================================
     const btnPDFDetalle = document.getElementById('btnExportarPDFDetalle');
     if (btnPDFDetalle) {
@@ -2750,6 +2852,109 @@ function mostrarModalDetalle(detalle) {
     }
 }
 
+// =====================================================
+// 🔥 FUNCIONES DE CONTROL DE AUDIO (CORREGIDAS)
+// =====================================================
+
+function toggleAudioPlayer(playerId) {
+    const audio = document.getElementById(playerId);
+    const btn = document.getElementById(`${playerId}-btn`);
+    
+    if (!audio || !btn) return;
+    
+    if (audio.paused) {
+        // 🔥 Guardar referencia al botón y audio para manejar la promesa
+        const playPromise = audio.play();
+        
+        if (playPromise !== undefined) {
+            playPromise
+                .then(() => {
+                    // ✅ Reproducción exitosa
+                    btn.innerHTML = '<i class="fas fa-pause" style="font-size: 14px;"></i>';
+                    btn.style.background = '#C1121F';
+                    console.log('🎵 Audio reproduciendo correctamente');
+                })
+                .catch((error) => {
+                    // ❌ Error en la reproducción
+                    console.warn('⚠️ Error reproduciendo audio:', error);
+                    
+                    // Si el error es por interrupción, reintentar después de un momento
+                    if (error.name === 'AbortError' || error.message.includes('interrupted')) {
+                        console.log('🔄 Reintentando reproducción...');
+                        setTimeout(() => {
+                            audio.play()
+                                .then(() => {
+                                    btn.innerHTML = '<i class="fas fa-pause" style="font-size: 14px;"></i>';
+                                    btn.style.background = '#C1121F';
+                                })
+                                .catch(() => {
+                                    mostrarNotificacion('❌ No se pudo reproducir el audio. Intenta descargarlo.', 'warning');
+                                    btn.innerHTML = '<i class="fas fa-play" style="font-size: 14px; margin-left: 2px;"></i>';
+                                    btn.style.background = '#dc3545';
+                                });
+                        }, 300);
+                    } else {
+                        // Otros errores
+                        mostrarNotificacion('❌ No se pudo reproducir el audio: ' + error.message, 'warning');
+                        btn.innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size: 14px;"></i>';
+                        btn.style.background = '#dc3545';
+                    }
+                });
+        }
+    } else {
+        // 🔥 Pausar el audio
+        audio.pause();
+        btn.innerHTML = '<i class="fas fa-play" style="font-size: 14px; margin-left: 2px;"></i>';
+        btn.style.background = '#C1121F';
+        console.log('⏸️ Audio pausado');
+    }
+}
+
+function seekAudio(playerId, value) {
+    const audio = document.getElementById(playerId);
+    if (!audio) return;
+    
+    const total = audio.duration;
+    if (total && !isNaN(total)) {
+        audio.currentTime = (value / 100) * total;
+    }
+}
+
+function toggleAudioMute(playerId) {
+    const audio = document.getElementById(playerId);
+    if (!audio) return;
+    
+    audio.muted = !audio.muted;
+    const btn = event?.target || document.querySelector(`#${playerId}-mute-btn`);
+    if (btn) {
+        btn.innerHTML = audio.muted ? 
+            '<i class="fas fa-volume-mute"></i>' : 
+            '<i class="fas fa-volume-up"></i>';
+    }
+}
+
+function seekAudio(playerId, value) {
+    const audio = document.getElementById(playerId);
+    if (!audio) return;
+    
+    const total = audio.duration;
+    if (total && !isNaN(total)) {
+        audio.currentTime = (value / 100) * total;
+    }
+}
+
+function toggleAudioMute(playerId) {
+    const audio = document.getElementById(playerId);
+    if (!audio) return;
+    
+    audio.muted = !audio.muted;
+    const btn = event?.target || document.querySelector(`#${playerId}-mute-btn`);
+    if (btn) {
+        btn.innerHTML = audio.muted ? 
+            '<i class="fas fa-volume-mute"></i>' : 
+            '<i class="fas fa-volume-up"></i>';
+    }
+}
 // =====================================================
 // FUNCIÓN PARA EXPORTAR DETALLE A PDF
 // =====================================================
@@ -3290,36 +3495,435 @@ function exportarAPDF() {
         .then(() => mostrarNotificacion('PDF generado', 'success'))
         .catch(() => mostrarNotificacion('Error generando PDF', 'error'));
 }
+// =====================================================
+// FUNCIÓN: EDITAR RECEPCIÓN (COMPLETA CON FOTOS Y AUDIO)
+// =====================================================
 
 async function editarRecepcion(id) {
     try {
+        mostrarNotificacion('📝 Cargando datos para edición...', 'info');
+        
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/detalle-recepcion/${id}`, { method: 'GET' });
         const data = await response.json();
-        if (response.ok && data.detalle) {
-            const detalle = data.detalle;
-            if (document.getElementById('clienteNombre')) document.getElementById('clienteNombre').value = detalle.cliente_nombre || '';
-            if (document.getElementById('clienteTelefono')) document.getElementById('clienteTelefono').value = detalle.cliente_telefono || '';
-            if (document.getElementById('clienteUbicacion')) document.getElementById('clienteUbicacion').value = detalle.cliente_ubicacion || '';
-            if (document.getElementById('vehiculoPlaca')) document.getElementById('vehiculoPlaca').value = detalle.placa || '';
-            if (document.getElementById('vehiculoMarca')) document.getElementById('vehiculoMarca').value = detalle.marca || '';
-            if (document.getElementById('vehiculoModelo')) document.getElementById('vehiculoModelo').value = detalle.modelo || '';
-            if (descripcionProblema) descripcionProblema.value = detalle.transcripcion_problema || '';
-            
-            modoEdicionRecepcion = true;
-            recepcionEditandoId = id;
-            mostrarNotificacion('Modo edición activado', 'info');
-            
-            if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'none';
-            if (sessionPanel) sessionPanel.style.display = 'flex';
-            if (colaboradoresPanel) colaboradoresPanel.style.display = 'block';
-            if (recepcionForm) recepcionForm.style.display = 'block';
-            
-            validarCompletadoCliente();
-            validarCompletadoVehiculo();
-            validarCompletadoDescripcion();
+        
+        if (!response.ok || !data.detalle) {
+            throw new Error(data.error || 'Error cargando datos');
         }
+        
+        const detalle = data.detalle;
+        
+        // 🔥 Verificar que la orden esté en estado "EnRecepcion"
+        if (detalle.estado_global !== 'EnRecepcion') {
+            mostrarNotificacion(`⚠️ No se puede editar una orden en estado "${detalle.estado_global}"`, 'warning');
+            return;
+        }
+        
+        // =============================================
+        // 1. CARGAR DATOS EN EL FORMULARIO
+        // =============================================
+        
+        // Cliente
+        if (document.getElementById('clienteNombre')) {
+            document.getElementById('clienteNombre').value = detalle.cliente_nombre || '';
+        }
+        if (document.getElementById('clienteTelefono')) {
+            document.getElementById('clienteTelefono').value = detalle.cliente_telefono || '';
+        }
+        if (document.getElementById('clienteUbicacion')) {
+            document.getElementById('clienteUbicacion').value = detalle.cliente_ubicacion || '';
+        }
+        if (document.getElementById('clienteLatitud')) {
+            document.getElementById('clienteLatitud').value = detalle.latitud || '';
+        }
+        if (document.getElementById('clienteLongitud')) {
+            document.getElementById('clienteLongitud').value = detalle.longitud || '';
+        }
+        
+        // Vehículo
+        if (document.getElementById('vehiculoPlaca')) {
+            document.getElementById('vehiculoPlaca').value = detalle.placa || '';
+        }
+        if (document.getElementById('vehiculoMarca')) {
+            document.getElementById('vehiculoMarca').value = detalle.marca || '';
+        }
+        if (document.getElementById('vehiculoModelo')) {
+            document.getElementById('vehiculoModelo').value = detalle.modelo || '';
+        }
+        if (document.getElementById('vehiculoAnio')) {
+            document.getElementById('vehiculoAnio').value = detalle.anio || '';
+        }
+        if (document.getElementById('vehiculoKilometraje')) {
+            document.getElementById('vehiculoKilometraje').value = detalle.kilometraje || 0;
+        }
+        
+        // Descripción
+        if (descripcionProblema) {
+            descripcionProblema.value = detalle.transcripcion_problema || '';
+        }
+        
+        // =============================================
+        // 2. CARGAR AUDIO EXISTENTE
+        // =============================================
+        if (detalle.audio_url && detalle.audio_url !== 'null' && detalle.audio_url !== 'None' && detalle.audio_url !== '') {
+            audioDriveUrl = detalle.audio_url;
+            
+            // Mostrar el audio en el preview
+            if (audioPreview) {
+                audioPreview.src = detalle.audio_url;
+                audioPreview.style.display = 'block';
+                audioPreview.load();
+                console.log('🎵 Audio cargado para edición:', detalle.audio_url);
+            }
+            
+            if (btnEliminarAudio) {
+                btnEliminarAudio.style.display = 'flex';
+            }
+            
+            if (audioStatus) {
+                audioStatus.textContent = 'Audio disponible para edición';
+                audioStatus.style.color = 'var(--verde-exito)';
+            }
+            
+            // Cambiar el texto del botón de grabación
+            if (btnGrabarAudio) {
+                btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Regrabar Audio';
+            }
+        } else {
+            audioDriveUrl = null;
+            if (audioPreview) {
+                audioPreview.src = '';
+                audioPreview.style.display = 'none';
+            }
+            if (btnEliminarAudio) {
+                btnEliminarAudio.style.display = 'none';
+            }
+            if (audioStatus) {
+                audioStatus.textContent = 'No hay audio grabado';
+                audioStatus.style.color = 'var(--gris-texto)';
+            }
+            if (btnGrabarAudio) {
+                btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
+            }
+        }
+        
+        // =============================================
+        // 3. CARGAR FOTOS EXISTENTES
+        // =============================================
+        const fotos = detalle.fotos || {};
+        let fotosCargadas = 0;
+        
+        for (const foto of FOTOS_CONFIG) {
+            const url = fotos[foto.campo];
+            const uploadDiv = document.getElementById(`upload-${foto.id}`);
+            const input = document.getElementById(foto.id);
+            const preview = uploadDiv?.querySelector('.upload-preview');
+            const removeBtn = uploadDiv?.querySelector('.remove-photo');
+            
+            if (url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined') {
+                // 🔥 Cargar la foto existente
+                if (preview) {
+                    // Mostrar la imagen con la URL de Google Drive
+                    preview.style.backgroundImage = `url('${url}')`;
+                    preview.style.backgroundSize = 'cover';
+                    preview.style.backgroundPosition = 'center';
+                    preview.innerHTML = '';
+                    uploadDiv.classList.add('has-image');
+                    uploadDiv.dataset.driveUrl = url;
+                    
+                    // Guardar la URL en fotosSubidasLocal
+                    fotosSubidasLocal[foto.campo] = url;
+                    
+                    // Mostrar el botón de eliminar
+                    if (removeBtn) {
+                        removeBtn.style.display = 'flex';
+                    }
+                    
+                    // Marcar como completado en el progreso
+                    actualizarProgresoFoto(foto.campo, 100, 'completed');
+                    fotosCargadas++;
+                    
+                    console.log(`📸 Foto cargada: ${foto.campo}`);
+                }
+            } else {
+                // Limpiar si no hay foto
+                if (preview) {
+                    preview.style.backgroundImage = '';
+                    preview.innerHTML = '';
+                    uploadDiv.classList.remove('has-image');
+                }
+                if (removeBtn) {
+                    removeBtn.style.display = 'none';
+                }
+                delete uploadDiv?.dataset.driveUrl;
+                delete fotosSubidasLocal[foto.campo];
+                actualizarProgresoFoto(foto.campo, 0, 'pending');
+            }
+        }
+        
+        console.log(`📸 Fotos cargadas: ${fotosCargadas}/7`);
+        
+        // =============================================
+        // 4. ACTUALIZAR ESTADO DE SECCIONES
+        // =============================================
+        
+        // Cliente
+        seccionesCompletadasLocal.cliente = !!(detalle.cliente_nombre && detalle.cliente_telefono);
+        actualizarEstadoVisualSeccion('cliente', seccionesCompletadasLocal.cliente);
+        
+        // Vehículo
+        seccionesCompletadasLocal.vehiculo = !!(detalle.placa && detalle.marca && detalle.modelo);
+        actualizarEstadoVisualSeccion('vehiculo', seccionesCompletadasLocal.vehiculo);
+        
+        // Fotos
+        seccionesCompletadasLocal.fotos = fotosCargadas === 7;
+        actualizarEstadoVisualSeccion('fotos', seccionesCompletadasLocal.fotos);
+        
+        // Descripción
+        seccionesCompletadasLocal.descripcion = !!(detalle.transcripcion_problema && detalle.transcripcion_problema.trim().length > 0);
+        actualizarEstadoVisualSeccion('descripcion', seccionesCompletadasLocal.descripcion);
+        
+        // =============================================
+        // 5. CONFIGURAR MODO EDICIÓN
+        // =============================================
+        modoEdicionRecepcion = true;
+        recepcionEditandoId = id;
+        
+        // Guardar los datos originales para comparar
+        window.datosOriginalesRecepcion = detalle;
+        window.fotosOriginalesRecepcion = JSON.parse(JSON.stringify(fotos));
+        window.audioOriginalRecepcion = detalle.audio_url || null;
+        
+        // Cambiar el botón de "Finalizar" a "Guardar Cambios"
+        if (btnFinalizar) {
+            btnFinalizar.innerHTML = '<i class="fas fa-save"></i> Guardar Cambios';
+            btnFinalizar.disabled = false;
+            btnFinalizar.onclick = guardarCambiosRecepcion;
+            btnFinalizar.style.background = 'linear-gradient(135deg, #2563EB, #1d4ed8)';
+        }
+        
+        // Mostrar el formulario
+        if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'none';
+        if (sessionPanel) sessionPanel.style.display = 'flex';
+        if (colaboradoresPanel) colaboradoresPanel.style.display = 'block';
+        if (recepcionForm) recepcionForm.style.display = 'block';
+        
+        // Mostrar código de la orden en edición
+        if (codigoActivoSpan) {
+            codigoActivoSpan.textContent = `✏️ EDITANDO: ${detalle.codigo_unico || 'OT-N/A'}`;
+            codigoActivoSpan.style.color = '#2563EB';
+        }
+        
+        // Mostrar banner de edición
+        const sessionInfo = document.querySelector('.session-info');
+        if (sessionInfo) {
+            const editBanner = document.createElement('div');
+            editBanner.id = 'editBanner';
+            editBanner.style.cssText = `
+                background: rgba(37, 99, 235, 0.15);
+                border: 1px solid #2563EB;
+                border-radius: 6px;
+                padding: 8px 16px;
+                margin: 8px 0;
+                color: #2563EB;
+                font-size: 13px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            `;
+            editBanner.innerHTML = `
+                <i class="fas fa-edit"></i>
+                <span>Modo edición: <strong>${detalle.codigo_unico}</strong></span>
+                <button onclick="cancelarEdicion()" style="margin-left: auto; background: transparent; border: 1px solid #dc3545; color: #dc3545; padding: 2px 12px; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            `;
+            sessionInfo.prepend(editBanner);
+        }
+        
+        actualizarBotonFinalizar();
+        
+        mostrarNotificacion(`✅ Editando recepción: ${detalle.codigo_unico}`, 'success');
+        
     } catch (error) {
-        mostrarNotificacion('Error cargando datos para edición', 'error');
+        console.error('❌ Error en editarRecepcion:', error);
+        mostrarNotificacion('Error cargando datos para edición: ' + error.message, 'error');
+    }
+}
+
+// =====================================================
+// FUNCIÓN: CANCELAR EDICIÓN
+// =====================================================
+
+function cancelarEdicion() {
+    if (confirm('¿Cancelar la edición? Los cambios no guardados se perderán.')) {
+        // Restaurar el botón Finalizar
+        if (btnFinalizar) {
+            btnFinalizar.innerHTML = '<i class="fas fa-check-circle"></i> Finalizar Recepción';
+            btnFinalizar.disabled = true;
+            btnFinalizar.onclick = finalizarSesionConReporte;
+            btnFinalizar.style.background = '';
+        }
+        
+        // Limpiar banner de edición
+        const editBanner = document.getElementById('editBanner');
+        if (editBanner) editBanner.remove();
+        
+        // Restaurar código
+        if (codigoActivoSpan) {
+            codigoActivoSpan.textContent = '';
+            codigoActivoSpan.style.color = '';
+        }
+        
+        modoEdicionRecepcion = false;
+        recepcionEditandoId = null;
+        window.datosOriginalesRecepcion = null;
+        window.fotosOriginalesRecepcion = null;
+        window.audioOriginalRecepcion = null;
+        
+        limpiarSesionCompleta();
+        mostrarNotificacion('Edición cancelada', 'info');
+    }
+}
+
+// =====================================================
+// FUNCIÓN: GUARDAR CAMBIOS DE RECEPCIÓN (CON FOTOS Y AUDIO)
+// =====================================================
+
+async function guardarCambiosRecepcion() {
+    if (!recepcionEditandoId) {
+        mostrarNotificacion('⚠️ No hay una recepción en edición', 'warning');
+        return;
+    }
+    
+    // 🔥 Validar que todas las secciones estén completas
+    validarCompletadoCliente();
+    validarCompletadoVehiculo();
+    validarCompletadoFotos();
+    validarCompletadoDescripcion();
+    
+    if (!seccionesCompletadasLocal.cliente || !seccionesCompletadasLocal.vehiculo || 
+        !seccionesCompletadasLocal.fotos || !seccionesCompletadasLocal.descripcion) {
+        mostrarNotificacion('⚠️ Completa todas las secciones antes de guardar', 'warning');
+        return;
+    }
+    
+    // 🔥 Confirmar con el usuario
+    if (!confirm('¿Guardar los cambios en esta recepción?')) {
+        return;
+    }
+    
+    showProgress('Guardando cambios', 'Actualizando recepción...', 3);
+    updateProgressBar(10, 1);
+    updateProgressMessage('Preparando datos...');
+    
+    try {
+        // 🔥 Recopilar todas las fotos del formulario
+        const fotosData = {};
+        for (const foto of FOTOS_CONFIG) {
+            const uploadDiv = document.getElementById(`upload-${foto.id}`);
+            let url = uploadDiv?.dataset.driveUrl;
+            
+            // Si no hay URL en el dataset, intentar obtenerla de fotosSubidasLocal
+            if (!url) {
+                url = fotosSubidasLocal[foto.campo];
+            }
+            
+            // Si aún no hay URL, usar la original si existe
+            if (!url && window.fotosOriginalesRecepcion) {
+                url = window.fotosOriginalesRecepcion[foto.campo];
+            }
+            
+            fotosData[foto.campo] = url || null;
+        }
+        
+        // 🔥 Recopilar todos los datos del formulario
+        const datosActualizados = {
+            cliente: {
+                nombre: document.getElementById('clienteNombre')?.value || '',
+                telefono: document.getElementById('clienteTelefono')?.value || '',
+                ubicacion: document.getElementById('clienteUbicacion')?.value || '',
+                latitud: document.getElementById('clienteLatitud')?.value || null,
+                longitud: document.getElementById('clienteLongitud')?.value || null
+            },
+            vehiculo: {
+                placa: document.getElementById('vehiculoPlaca')?.value.toUpperCase() || '',
+                marca: document.getElementById('vehiculoMarca')?.value || '',
+                modelo: document.getElementById('vehiculoModelo')?.value || '',
+                anio: parseInt(document.getElementById('vehiculoAnio')?.value) || null,
+                kilometraje: parseInt(document.getElementById('vehiculoKilometraje')?.value) || 0
+            },
+            fotos: fotosData,
+            descripcion: {
+                texto: descripcionProblema?.value || '',
+                audio_url: audioDriveUrl || null
+            }
+        };
+        
+        console.log('📸 Fotos a guardar:', fotosData);
+        console.log('🎵 Audio a guardar:', datosActualizados.descripcion.audio_url);
+        
+        updateProgressBar(30, 1);
+        updateProgressMessage('Actualizando datos en la base de datos...');
+        
+        // 🔥 Enviar la actualización al servidor
+        const response = await fetchWithToken(`${API_URL}/jefe-operativo/actualizar-recepcion/${recepcionEditandoId}`, {
+            method: 'PUT',
+            body: JSON.stringify(datosActualizados)
+        });
+        
+        updateProgressBar(70, 2);
+        updateProgressMessage('Verificando cambios...');
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Error del servidor: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        updateProgressBar(100, 3);
+        updateProgressMessage('¡Cambios guardados exitosamente!');
+        
+        mostrarNotificacion('✅ Cambios guardados correctamente', 'success');
+        
+        // 🔥 Resetear modo edición
+        modoEdicionRecepcion = false;
+        recepcionEditandoId = null;
+        window.datosOriginalesRecepcion = null;
+        window.fotosOriginalesRecepcion = null;
+        window.audioOriginalRecepcion = null;
+        
+        // Restaurar el botón Finalizar
+        if (btnFinalizar) {
+            btnFinalizar.innerHTML = '<i class="fas fa-check-circle"></i> Finalizar Recepción';
+            btnFinalizar.disabled = true;
+            btnFinalizar.onclick = finalizarSesionConReporte;
+            btnFinalizar.style.background = '';
+        }
+        
+        // Eliminar banner de edición
+        const editBanner = document.getElementById('editBanner');
+        if (editBanner) editBanner.remove();
+        
+        // Restaurar código
+        if (codigoActivoSpan) {
+            codigoActivoSpan.textContent = '';
+            codigoActivoSpan.style.color = '';
+        }
+        
+        // Cerrar el formulario y volver a la lista
+        limpiarSesionCompleta();
+        
+        setTimeout(() => {
+            completeProgress(true);
+            if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
+            cargarRecepciones();
+        }, 500);
+        
+    } catch (error) {
+        console.error('❌ Error guardando cambios:', error);
+        completeProgress(false);
+        mostrarNotificacion('❌ Error al guardar cambios: ' + error.message, 'error');
     }
 }
 
@@ -4276,6 +4880,10 @@ function generatePhotoUploads() {
     console.log('📸 Las fotos están definidas en el HTML');
 }
 
+// =====================================================
+// FUNCIÓN: CONFIGURAR SUBIDA DE FOTOS (COMPLETA)
+// =====================================================
+
 function setupPhotoUploads() {
     for (const foto of FOTOS_CONFIG) {
         const input = document.getElementById(foto.id);
@@ -4294,50 +4902,83 @@ function setupPhotoUploads() {
                 const inputEl = document.getElementById(foto.id);
                 const preview = uploadDiv.querySelector('.upload-preview');
                 
+                // 🔥 Si hay una URL de objeto, revocarla
+                if (uploadDiv.dataset.objectUrl) {
+                    URL.revokeObjectURL(uploadDiv.dataset.objectUrl);
+                    delete uploadDiv.dataset.objectUrl;
+                }
+                
+                // 🔥 Limpiar el input file
                 if (inputEl) {
                     inputEl.value = '';
+                    // Clonar y reemplazar para resetear el input
                     const newInput = inputEl.cloneNode(true);
                     inputEl.parentNode.replaceChild(newInput, inputEl);
                     newInput.addEventListener('change', () => procesarFoto(newInput, foto));
                 }
                 
+                // 🔥 Limpiar la vista previa
                 if (preview) {
                     preview.style.backgroundImage = '';
                     preview.innerHTML = '';
                     preview.style.display = '';
                 }
                 
+                // 🔥 Remover clases y estilos
                 uploadDiv.classList.remove('has-image');
                 uploadDiv.classList.remove('error');
                 removeBtn.style.display = 'none';
                 
+                // 🔥 Eliminar la URL del dataset y de fotosSubidasLocal
                 delete uploadDiv.dataset.driveUrl;
                 delete fotosSubidasLocal[foto.campo];
                 
-                if (uploadDiv.dataset.objectUrl) {
-                    URL.revokeObjectURL(uploadDiv.dataset.objectUrl);
-                    delete uploadDiv.dataset.objectUrl;
-                }
-                
+                // 🔥 Resetear el progreso visual
                 actualizarProgresoFoto(foto.campo, 0, 'pending');
                 
+                // 🔥 Si estamos en modo edición, marcar que la foto fue eliminada
+                if (modoEdicionRecepcion) {
+                    // Marcar la foto como eliminada en los datos originales
+                    if (window.fotosOriginalesRecepcion) {
+                        window.fotosOriginalesRecepcion[foto.campo] = null;
+                        console.log(`📸 Foto ${foto.campo} marcada como eliminada en modo edición`);
+                    }
+                    // También eliminar de la sesión actual si existe
+                    if (sesionActual && sesionActual.datos && sesionActual.datos.fotos) {
+                        sesionActual.datos.fotos[foto.campo] = null;
+                    }
+                }
+                
+                // 🔥 Eliminar de la cola de subida si está pendiente
                 const index = uploadQueue.findIndex(item => item.campo === foto.campo);
                 if (index !== -1) {
                     uploadQueue.splice(index, 1);
+                    console.log(`📸 Foto ${foto.campo} eliminada de la cola de subida`);
                 }
                 
+                // 🔥 Eliminar de los resultados de subida
                 const resultIndex = uploadResults.findIndex(r => r.campo === foto.campo);
                 if (resultIndex !== -1) {
                     uploadResults.splice(resultIndex, 1);
                 }
                 
+                // 🔥 Si la foto estaba subida a Drive, eliminar la URL de los datos locales
+                if (fotosSubidasLocal[foto.campo]) {
+                    delete fotosSubidasLocal[foto.campo];
+                }
+                
+                // 🔥 Validar el estado de completado de fotos
                 validarCompletadoFotos();
                 
-                if (codigoSesion) {
+                // 🔥 Si hay una sesión activa, guardar los cambios
+                if (codigoSesion && !modoEdicionRecepcion) {
                     guardarSeccion('fotos');
                 }
                 
-                mostrarNotificacion(`📸 ${foto.label} eliminada`, 'info');
+                // 🔥 Mostrar notificación
+                mostrarNotificacion(`📸 ${foto.label} eliminada${modoEdicionRecepcion ? ' de la edición' : ''}`, 'info');
+                
+                console.log(`📸 Foto ${foto.campo} eliminada completamente`);
             });
         }
     }

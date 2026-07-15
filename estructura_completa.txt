@@ -1,7 +1,7 @@
 ================================================================================
 📊 ESTRUCTURA DEL PROYECTO FLASK
 ================================================================================
-📅 Generado: 2026-07-13 11:54:01
+📅 Generado: 2026-07-15 09:36:24
 📍 Ruta: C:\Users\i5_2\Desktop\taller
 🐍 Framework: Flask
 ================================================================================
@@ -232,8 +232,8 @@
 │   ├── 🌐 misvehiculos.html
 │   └── 🌐 perfil.html
 ├── 📄 .gitignore
-├── 📄 estructura_completa base.txt
-├── 📄 estructura_flask.txt
+├── 📄 estructura_completa_base_de_datos.txt
+├── 📄 estructura_completa_mapa_sistema.txt
 ├── 🐍 generar_estructura.py
 ├── 🖼️ icono.png
 ├── 📦 manifest.json

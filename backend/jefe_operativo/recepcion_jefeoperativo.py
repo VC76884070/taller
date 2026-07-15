@@ -1,6 +1,6 @@
 # =====================================================
 # RECEPCION_JEFEOPERATIVO.PY - VERSIÓN COMPLETA
-# CON TODOS LOS ENDPOINTS Y GENERACIÓN DE PDF CON REPORTLAB
+# CON TODOS LOS ENDPOINTS Y CORRECCIÓN DE AUDIO
 # =====================================================
 
 from flask import Blueprint, request, jsonify, current_app
@@ -36,35 +36,47 @@ supabase = config.supabase
 sesiones_activas = {}
 
 # =====================================================
-# FUNCIÓN PARA NORMALIZAR URLS DE GOOGLE DRIVE
+# FUNCIÓN PARA NORMALIZAR URLS DE GOOGLE DRIVE (CORREGIDA)
 # =====================================================
 
 def normalizar_url_drive(url):
     """
     Convierte cualquier URL de Google Drive a una URL de visualización directa
+    SOPORTA IMÁGENES Y AUDIOS
     """
     if not url:
         return None
     
-    # Si ya es una URL de descarga directa, devolverla
-    if 'uc?export=view' in url or 'export=download' in url:
+    # Si es una cadena vacía o "null"
+    if url == 'null' or url == 'None' or url == '':
+        return None
+    
+    # Si ya es una URL de descarga directa
+    if 'uc?export=view' in url or 'export=download' in url or 'uc?export=download' in url:
         return url
     
-    # Si es una URL de vista previa (drive.google.com/file/d/.../view)
+    # Si es una URL de drive.google.com/file/d/.../view
     match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', url)
     if match:
         file_id = match.group(1)
+        # Para audios usar export=download, para imágenes usar export=view
+        if '.wav' in url or '.mp3' in url or '.m4a' in url or 'audio' in url.lower():
+            return f"https://drive.google.com/uc?export=download&id={file_id}"
         return f"https://drive.google.com/uc?export=view&id={file_id}"
     
     # Si es una URL de "open" (drive.google.com/open?id=...)
     match = re.search(r'open\?id=([a-zA-Z0-9_-]+)', url)
     if match:
         file_id = match.group(1)
+        if '.wav' in url or '.mp3' in url or '.m4a' in url or 'audio' in url.lower():
+            return f"https://drive.google.com/uc?export=download&id={file_id}"
         return f"https://drive.google.com/uc?export=view&id={file_id}"
     
     # Si es una URL con parámetro id
     if 'id=' in url:
         file_id = url.split('id=')[-1].split('&')[0]
+        if '.wav' in url or '.mp3' in url or '.m4a' in url or 'audio' in url.lower():
+            return f"https://drive.google.com/uc?export=download&id={file_id}"
         return f"https://drive.google.com/uc?export=view&id={file_id}"
     
     # Fallback: devolver la URL original
@@ -93,6 +105,19 @@ def obtener_file_id_drive(url):
         return url.split('open?id=')[-1].split('&')[0]
     
     return None
+
+
+def verificar_url_audio(url):
+    """
+    Verifica si una URL de audio es accesible
+    """
+    if not url:
+        return False
+    try:
+        response = requests.head(url, timeout=5)
+        return response.status_code == 200
+    except:
+        return False
 
 
 # =====================================================
@@ -277,6 +302,7 @@ def ping():
             '/verificar-fotos/<codigo>',
             '/verificar-carpeta/<nombre>',
             '/detalle-recepcion/<int:id_orden>',
+            '/obtener-audio/<int:id_orden>',
             '/eliminar-recepcion/<int:id_orden>',
             '/generar-pdf-recepcion/<int:id_orden>',
             '/descargar-pdf-recepcion/<int:id_orden>'
@@ -971,7 +997,7 @@ def finalizar_sesion(current_user):
             
             id_orden = orden_result.data[0]['id']
             
-            # 5. Guardar recepción (SIN PDF automático)
+            # 5. Guardar recepción
             recepcion_data = {
                 'id_orden_trabajo': id_orden,
                 'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
@@ -1559,7 +1585,7 @@ def obtener_imagen_base64(current_user):
 
 
 # =====================================================
-# ENDPOINT 20: DETALLE RECEPCIÓN
+# 🔥 ENDPOINT 20: DETALLE RECEPCIÓN (CORREGIDO)
 # =====================================================
 
 @recepcion_jefe_bp.route('/detalle-recepcion/<int:id_orden>', methods=['GET'])
@@ -1666,11 +1692,14 @@ def detalle_recepcion(current_user, id_orden):
             else:
                 fotos_limpias[key] = None
         
-        # Normalizar audio
+        # 🔥 CORRECCIÓN: Normalizar audio SIEMPRE
         audio_url = recepcion.get('url_grabacion_problema')
+        logger.info(f"🎵 Audio raw: {audio_url}")
+        
         if audio_url and audio_url != 'null' and audio_url != 'None' and audio_url != '':
-            if 'drive.google.com' in audio_url:
-                audio_url = normalizar_url_drive(audio_url)
+            audio_normalizado = normalizar_url_drive(audio_url)
+            logger.info(f"🎵 Audio normalizado: {audio_normalizado}")
+            audio_url = audio_normalizado
         else:
             audio_url = None
         
@@ -1699,16 +1728,67 @@ def detalle_recepcion(current_user, id_orden):
         }
         
         logger.info(f"📸 Fotos normalizadas: {sum(1 for v in fotos_limpias.values() if v)}/7")
+        logger.info(f"🎵 Audio final: {detalle['audio_url']}")
         
         return jsonify({'success': True, 'detalle': detalle}), 200
         
     except Exception as e:
         logger.error(f"Error obteniendo detalle: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 
 # =====================================================
-# ENDPOINT 21: ELIMINAR RECEPCIÓN
+# 🔥 NUEVO ENDPOINT 21: OBTENER AUDIO ESPECÍFICO
+# =====================================================
+
+@recepcion_jefe_bp.route('/obtener-audio/<int:id_orden>', methods=['GET'])
+@jefe_operativo_required
+def obtener_audio_recepcion(current_user, id_orden):
+    """
+    Obtiene la URL del audio de una recepción, normalizada para reproducción
+    """
+    try:
+        recepcion_result = supabase.table('recepcion') \
+            .select('url_grabacion_problema') \
+            .eq('id_orden_trabajo', id_orden) \
+            .single() \
+            .execute()
+        
+        if not recepcion_result.data:
+            return jsonify({'error': 'Recepción no encontrada'}), 404
+        
+        audio_url = recepcion_result.data.get('url_grabacion_problema')
+        
+        if not audio_url or audio_url == 'null' or audio_url == 'None' or audio_url == '':
+            return jsonify({'error': 'No hay audio disponible'}), 404
+        
+        audio_normalizada = normalizar_url_drive(audio_url)
+        
+        # Verificar si la URL es accesible
+        try:
+            response = requests.head(audio_normalizada, timeout=5)
+            if response.status_code != 200:
+                file_id = obtener_file_id_drive(audio_url)
+                if file_id:
+                    audio_normalizada = f"https://drive.google.com/uc?export=download&id={file_id}"
+        except:
+            pass
+        
+        return jsonify({
+            'success': True,
+            'audio_url': audio_normalizada,
+            'original_url': audio_url
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error obteniendo audio: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 22: ELIMINAR RECEPCIÓN
 # =====================================================
 
 @recepcion_jefe_bp.route('/eliminar-recepcion/<int:id_orden>', methods=['DELETE'])
@@ -1733,14 +1813,14 @@ def eliminar_recepcion(current_user, id_orden):
 
 
 # =====================================================
-# ENDPOINT 22: GENERAR PDF CON REPORTLAB
+# ENDPOINT 23: GENERAR PDF CON REPORTLAB
 # =====================================================
 
 @recepcion_jefe_bp.route('/generar-pdf-recepcion/<int:id_orden>', methods=['POST'])
 @jefe_operativo_required
 def generar_pdf_recepcion(current_user, id_orden):
     """
-    Genera un PDF de la recepción usando ReportLab (sin dependencias externas)
+    Genera un PDF de la recepción usando ReportLab
     """
     try:
         from google_drive import google_drive
@@ -1754,86 +1834,17 @@ def generar_pdf_recepcion(current_user, id_orden):
         
         logger.info(f"📄 Generando PDF con ReportLab para orden {id_orden}")
         
-        # =============================================
-        # OBTENER DATOS DE LA RECEPCIÓN
-        # =============================================
+        # Obtener datos de la recepción
+        detalle_response = detalle_recepcion(current_user, id_orden)
+        detalle_data = detalle_response.get_json()
         
-        orden_result = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo, id_jefe_operativo') \
-            .eq('id', id_orden) \
-            .single() \
-            .execute()
+        if not detalle_data.get('success'):
+            return jsonify({'error': 'Error obteniendo datos de la recepción'}), 500
         
-        if not orden_result.data:
-            return jsonify({'error': 'Orden no encontrada'}), 404
-        
-        orden = orden_result.data
-        
-        # Obtener jefe principal
-        jefe_principal = {}
-        if orden.get('id_jefe_operativo'):
-            j1 = supabase.table('usuario') \
-                .select('id, nombre, contacto, email') \
-                .eq('id', orden['id_jefe_operativo']) \
-                .execute()
-            if j1.data:
-                jefe_principal = j1.data[0]
-        
-        # Obtener vehículo
-        vehiculo_result = supabase.table('vehiculo') \
-            .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
-            .eq('id', orden['id_vehiculo']) \
-            .single() \
-            .execute()
-        
-        vehiculo = vehiculo_result.data if vehiculo_result.data else {}
-        
-        # Obtener cliente y usuario
-        usuario = {}
-        cliente_data = {}
-        if vehiculo.get('id_cliente'):
-            c_result = supabase.table('cliente') \
-                .select('id, id_usuario, latitud, longitud, ubicacion_confirmada') \
-                .eq('id', vehiculo['id_cliente']) \
-                .single() \
-                .execute()
-            if c_result.data:
-                cliente_data = c_result.data
-                if cliente_data.get('id_usuario'):
-                    u_result = supabase.table('usuario') \
-                        .select('id, nombre, contacto, ubicacion, email') \
-                        .eq('id', cliente_data['id_usuario']) \
-                        .single() \
-                        .execute()
-                    if u_result.data:
-                        usuario = u_result.data
-        
-        # Obtener recepción
-        recepcion_result = supabase.table('recepcion') \
-            .select('''
-                id,
-                url_lateral_izquierda,
-                url_lateral_derecha,
-                url_foto_frontal,
-                url_foto_trasera,
-                url_foto_superior,
-                url_foto_inferior,
-                url_foto_tablero,
-                url_grabacion_problema,
-                transcripcion_problema
-            ''') \
-            .eq('id_orden_trabajo', id_orden) \
-            .single() \
-            .execute()
-        
-        recepcion = recepcion_result.data if recepcion_result.data else {}
-        
-        # =============================================
-        # GENERAR PDF CON REPORTLAB
-        # =============================================
+        detalle = detalle_data.get('detalle', {})
         
         fecha_actual = datetime.now().strftime('%d/%m/%Y %H:%M')
-        fecha_ingreso = datetime.fromisoformat(orden['fecha_ingreso']).strftime('%d/%m/%Y %H:%M') if orden.get('fecha_ingreso') else 'No registrada'
+        fecha_ingreso = detalle.get('fecha_ingreso', 'No registrada')
         
         # Crear archivo temporal
         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_file:
@@ -1883,32 +1894,32 @@ def generar_pdf_recepcion(current_user, id_orden):
         story.append(Spacer(1, 0.3*cm))
         
         # Código y fecha
-        story.append(Paragraph(f"<b>Código:</b> {orden['codigo_unico']}", normal_style))
+        story.append(Paragraph(f"<b>Código:</b> {detalle.get('codigo_unico', 'N/A')}", normal_style))
         story.append(Paragraph(f"<b>Fecha de Ingreso:</b> {fecha_ingreso}", normal_style))
-        story.append(Paragraph(f"<b>Estado:</b> {orden.get('estado_global', 'En Recepción')}", normal_style))
+        story.append(Paragraph(f"<b>Estado:</b> {detalle.get('estado_global', 'En Recepción')}", normal_style))
         story.append(Spacer(1, 0.5*cm))
         
         # Datos del Cliente
         story.append(Paragraph("👤 DATOS DEL CLIENTE", heading_style))
-        story.append(Paragraph(f"<b>Nombre:</b> {usuario.get('nombre', 'No registrado')}", normal_style))
-        story.append(Paragraph(f"<b>Teléfono:</b> {usuario.get('contacto', 'No registrado')}", normal_style))
-        story.append(Paragraph(f"<b>Ubicación:</b> {usuario.get('ubicacion', 'No especificada')}", normal_style))
-        if cliente_data.get('latitud') and cliente_data.get('longitud'):
-            story.append(Paragraph(f"<b>Coordenadas:</b> {cliente_data['latitud']}, {cliente_data['longitud']}", normal_style))
+        story.append(Paragraph(f"<b>Nombre:</b> {detalle.get('cliente_nombre', 'No registrado')}", normal_style))
+        story.append(Paragraph(f"<b>Teléfono:</b> {detalle.get('cliente_telefono', 'No registrado')}", normal_style))
+        story.append(Paragraph(f"<b>Ubicación:</b> {detalle.get('cliente_ubicacion', 'No especificada')}", normal_style))
+        if detalle.get('latitud') and detalle.get('longitud'):
+            story.append(Paragraph(f"<b>Coordenadas:</b> {detalle['latitud']}, {detalle['longitud']}", normal_style))
         story.append(Spacer(1, 0.3*cm))
         
         # Datos del Vehículo
         story.append(Paragraph("🚗 DATOS DEL VEHÍCULO", heading_style))
-        story.append(Paragraph(f"<b>Placa:</b> {vehiculo.get('placa', 'No registrada')}", normal_style))
-        story.append(Paragraph(f"<b>Marca:</b> {vehiculo.get('marca', 'No registrada')}", normal_style))
-        story.append(Paragraph(f"<b>Modelo:</b> {vehiculo.get('modelo', 'No registrado')}", normal_style))
-        story.append(Paragraph(f"<b>Año:</b> {vehiculo.get('anio', 'No especificado')}", normal_style))
-        story.append(Paragraph(f"<b>Kilometraje:</b> {vehiculo.get('kilometraje', 0)} km", normal_style))
+        story.append(Paragraph(f"<b>Placa:</b> {detalle.get('placa', 'No registrada')}", normal_style))
+        story.append(Paragraph(f"<b>Marca:</b> {detalle.get('marca', 'No registrada')}", normal_style))
+        story.append(Paragraph(f"<b>Modelo:</b> {detalle.get('modelo', 'No registrado')}", normal_style))
+        story.append(Paragraph(f"<b>Año:</b> {detalle.get('anio', 'No especificado')}", normal_style))
+        story.append(Paragraph(f"<b>Kilometraje:</b> {detalle.get('kilometraje', 0)} km", normal_style))
         story.append(Spacer(1, 0.3*cm))
         
         # Descripción
         story.append(Paragraph("📝 DESCRIPCIÓN DEL PROBLEMA", heading_style))
-        descripcion = recepcion.get('transcripcion_problema', 'No se registró descripción')
+        descripcion = detalle.get('transcripcion_problema', 'No se registró descripción')
         story.append(Paragraph(descripcion, normal_style))
         story.append(Spacer(1, 0.3*cm))
         
@@ -1920,7 +1931,8 @@ def generar_pdf_recepcion(current_user, id_orden):
             ['', ''],
             ['Firma del Cliente', 'Firma del Jefe Operativo'],
             ['_________________________', '_________________________'],
-            [usuario.get('nombre', '____________________'), jefe_principal.get('nombre', '____________________')],
+            [detalle.get('cliente_nombre', '____________________'), 
+             detalle.get('jefe_operativo', {}).get('nombre', '____________________')],
             [fecha_actual, fecha_actual]
         ]
         
@@ -1944,18 +1956,15 @@ def generar_pdf_recepcion(current_user, id_orden):
         doc.build(story)
         logger.info(f"✅ PDF generado: {pdf_path}")
         
-        # =============================================
-        # SUBIR PDF A GOOGLE DRIVE
-        # =============================================
-        
+        # Subir a Google Drive
         with open(pdf_path, 'rb') as f:
             pdf_data = f.read()
         
-        nombre_archivo = f"Recepcion_{orden['codigo_unico']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        nombre_archivo = f"Recepcion_{detalle.get('codigo_unico', 'orden')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         
         folder_path = google_drive.generate_folder_path(
             modulo='recepcion',
-            referencia_id=orden['codigo_unico'],
+            referencia_id=detalle.get('codigo_unico', 'orden'),
             subcarpeta='documentos'
         )
         
@@ -1998,7 +2007,7 @@ def generar_pdf_recepcion(current_user, id_orden):
 
 
 # =====================================================
-# ENDPOINT 23: DESCARGAR PDF GENERADO
+# ENDPOINT 24: DESCARGAR PDF GENERADO
 # =====================================================
 
 @recepcion_jefe_bp.route('/descargar-pdf-recepcion/<int:id_orden>', methods=['GET'])
@@ -2024,4 +2033,246 @@ def descargar_pdf_recepcion(current_user, id_orden):
         
     except Exception as e:
         logger.error(f"❌ Error obteniendo PDF: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# =====================================================
+# 🔥 ENDPOINT: PROXY PARA AUDIO DE GOOGLE DRIVE
+# =====================================================
+
+@recepcion_jefe_bp.route('/proxy-audio', methods=['GET'])
+@jefe_operativo_required
+def proxy_audio(current_user):
+    """
+    Sirve un archivo de audio desde Google Drive como streaming
+    para que el navegador pueda reproducirlo correctamente
+    """
+    try:
+        import requests
+        from flask import Response, stream_with_context
+        
+        url = request.args.get('url')
+        if not url:
+            return jsonify({'error': 'URL requerida'}), 400
+        
+        # Normalizar la URL de Google Drive
+        file_id = obtener_file_id_drive(url)
+        if not file_id:
+            return jsonify({'error': 'No se pudo extraer el ID del archivo'}), 400
+        
+        # URL de descarga directa
+        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        
+        logger.info(f"🎵 Proxy de audio: {download_url}")
+        
+        # Hacer la petición a Google Drive
+        response = requests.get(download_url, stream=True, timeout=30)
+        
+        if response.status_code != 200:
+            return jsonify({'error': f'Error descargando audio: {response.status_code}'}), 400
+        
+        # Detectar el tipo de contenido
+        content_type = response.headers.get('content-type', 'audio/wav')
+        
+        # Crear respuesta con streaming
+        def generate():
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+        
+        return Response(
+            stream_with_context(generate()),
+            headers={
+                'Content-Type': content_type,
+                'Content-Disposition': 'inline',
+                'Accept-Ranges': 'bytes',
+                'Cache-Control': 'no-cache'
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error en proxy de audio: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# =====================================================
+# 🔥 ENDPOINT: ACTUALIZAR RECEPCIÓN (EDICIÓN)
+# =====================================================
+
+@recepcion_jefe_bp.route('/actualizar-recepcion/<int:id_orden>', methods=['PUT'])
+@jefe_operativo_required
+def actualizar_recepcion(current_user, id_orden):
+    """
+    Actualiza una recepción existente (solo si está en EnRecepcion)
+    Actualiza: cliente, vehículo, fotos, descripción, audio
+    """
+    try:
+        from google_drive import google_drive
+        
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'Datos no proporcionados'}), 400
+        
+        # =============================================
+        # 1. VERIFICAR QUE LA ORDEN EXISTA Y ESTÉ EN RECEPCIÓN
+        # =============================================
+        orden_result = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, estado_global, id_vehiculo') \
+            .eq('id', id_orden) \
+            .single() \
+            .execute()
+        
+        if not orden_result.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        orden = orden_result.data
+        
+        if orden.get('estado_global') != 'EnRecepcion':
+            return jsonify({'error': f'No se puede editar una orden en estado "{orden.get("estado_global")}"'}), 400
+        
+        codigo_unico = orden.get('codigo_unico')
+        
+        # =============================================
+        # 2. OBTENER DATOS DEL CLIENTE
+        # =============================================
+        cliente_data = data.get('cliente', {})
+        nombre = cliente_data.get('nombre', '')
+        telefono = cliente_data.get('telefono', '')
+        ubicacion = cliente_data.get('ubicacion', '')
+        latitud = cliente_data.get('latitud')
+        longitud = cliente_data.get('longitud')
+        
+        # =============================================
+        # 3. OBTENER DATOS DEL VEHÍCULO
+        # =============================================
+        vehiculo_data = data.get('vehiculo', {})
+        placa = vehiculo_data.get('placa', '').upper()
+        marca = vehiculo_data.get('marca', '')
+        modelo = vehiculo_data.get('modelo', '')
+        anio = vehiculo_data.get('anio')
+        kilometraje = vehiculo_data.get('kilometraje', 0)
+        
+        # =============================================
+        # 4. OBTENER FOTOS Y DESCRIPCIÓN
+        # =============================================
+        fotos = data.get('fotos', {})
+        descripcion = data.get('descripcion', {})
+        texto_descripcion = descripcion.get('texto', '')
+        audio_url = descripcion.get('audio_url')
+        
+        # =============================================
+        # 5. ACTUALIZAR CLIENTE
+        # =============================================
+        # Obtener el id_cliente actual
+        vehiculo_actual = supabase.table('vehiculo') \
+            .select('id_cliente') \
+            .eq('id', orden['id_vehiculo']) \
+            .single() \
+            .execute()
+        
+        if vehiculo_actual.data:
+            id_cliente = vehiculo_actual.data.get('id_cliente')
+            
+            if id_cliente:
+                # Obtener id_usuario del cliente
+                cliente_db = supabase.table('cliente') \
+                    .select('id_usuario') \
+                    .eq('id', id_cliente) \
+                    .single() \
+                    .execute()
+                
+                if cliente_db.data:
+                    id_usuario = cliente_db.data.get('id_usuario')
+                    
+                    # Actualizar usuario (cliente)
+                    if id_usuario:
+                        supabase.table('usuario') \
+                            .update({
+                                'nombre': nombre,
+                                'contacto': telefono,
+                                'ubicacion': ubicacion
+                            }) \
+                            .eq('id', id_usuario) \
+                            .execute()
+                    
+                    # Actualizar cliente (coordenadas)
+                    supabase.table('cliente') \
+                        .update({
+                            'latitud': latitud,
+                            'longitud': longitud
+                        }) \
+                        .eq('id', id_cliente) \
+                        .execute()
+        
+        # =============================================
+        # 6. ACTUALIZAR VEHÍCULO
+        # =============================================
+        supabase.table('vehiculo') \
+            .update({
+                'placa': placa,
+                'marca': marca,
+                'modelo': modelo,
+                'anio': anio,
+                'kilometraje': kilometraje
+            }) \
+            .eq('id', orden['id_vehiculo']) \
+            .execute()
+        
+        # =============================================
+        # 7. ACTUALIZAR RECEPCIÓN (FOTOS Y DESCRIPCIÓN)
+        # =============================================
+        recepcion_update = {
+            'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
+            'url_lateral_derecha': fotos.get('url_lateral_derecha'),
+            'url_foto_frontal': fotos.get('url_foto_frontal'),
+            'url_foto_trasera': fotos.get('url_foto_trasera'),
+            'url_foto_superior': fotos.get('url_foto_superior'),
+            'url_foto_inferior': fotos.get('url_foto_inferior'),
+            'url_foto_tablero': fotos.get('url_foto_tablero'),
+            'transcripcion_problema': texto_descripcion
+        }
+        
+        # Solo actualizar el audio si se proporcionó uno nuevo
+        if audio_url:
+            recepcion_update['url_grabacion_problema'] = audio_url
+        
+        supabase.table('recepcion') \
+            .update(recepcion_update) \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
+        # =============================================
+        # 8. ACTUALIZAR CARPETA EN GOOGLE DRIVE
+        # =============================================
+        carpeta_actualizada = False
+        try:
+            # Verificar si la carpeta existe
+            folder_id = google_drive.get_folder_id_by_name(codigo_unico)
+            
+            if folder_id:
+                # La carpeta ya existe, solo actualizamos los archivos dentro
+                logger.info(f"📁 Carpeta encontrada: {codigo_unico} (ID: {folder_id})")
+                
+                # Aquí podrías subir nuevas fotos/audio si es necesario
+                # Las fotos ya están en la base de datos con sus URLs
+                
+                carpeta_actualizada = True
+            else:
+                logger.warning(f"⚠️ No se encontró la carpeta: {codigo_unico}")
+                
+        except Exception as e:
+            logger.error(f"❌ Error verificando carpeta en Drive: {str(e)}")
+        
+        logger.info(f"✅ Recepción {codigo_unico} actualizada correctamente")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Recepción actualizada exitosamente',
+            'codigo_unico': codigo_unico,
+            'carpeta_actualizada': carpeta_actualizada
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error actualizando recepción: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500

@@ -12,10 +12,10 @@
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <!-- Leaflet CSS (para mapa gratuito) -->
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-    <!-- ========== CONFIGURACIÓN PWA ========== -->
+    <!-- PWA -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -42,12 +42,12 @@
 </head>
 
 <body>
-    <!-- ========== BOTÓN HAMBURGUESA PARA MÓVIL/TABLET ========== -->
+    <!-- BOTÓN HAMBURGUESA -->
     <button class="hamburger-menu" id="hamburgerMenu" aria-label="Menú">
         <i class="fas fa-bars"></i>
     </button>
 
-    <!-- ========== OVERLAY PARA CERRAR SIDEBAR ========== -->
+    <!-- OVERLAY -->
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <div class="app">
@@ -94,7 +94,7 @@
                 <!-- Panel de Control de Sesión Actual -->
                 <div class="session-panel" id="sessionPanel" style="display: none;">
                     <div class="session-info">
-                        <div class="status-indicator" id="statusIndicator">
+                        <div class="status-indicator">
                             <i class="fas fa-circle"></i>
                             <span>Sesión activa</span>
                         </div>
@@ -114,13 +114,17 @@
                         <button type="button" class="btn-cancelar-sesion" id="btnCancelarSesion">
                             <i class="fas fa-trash-alt"></i> Cancelar Sesión
                         </button>
+                        <button type="button" class="btn-sincronizar-fotos" id="btnSincronizarFotos"
+                            style="background: #2563EB; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-sync-alt"></i> Sincronizar Fotos
+                        </button>
                         <button type="button" class="btn-finalizar" id="btnFinalizar" disabled>
                             <i class="fas fa-check-circle"></i> Finalizar Recepción
                         </button>
                     </div>
                 </div>
 
-                <!-- Panel de Colaboradores en la sesión actual -->
+                <!-- Panel de Colaboradores -->
                 <div class="colaboradores-panel" id="colaboradoresPanel" style="display: none;">
                     <div class="colaboradores-header">
                         <i class="fas fa-users"></i>
@@ -132,7 +136,7 @@
 
                 <!-- FORMULARIO DE RECEPCIÓN -->
                 <form id="recepcionForm" class="recepcion-form" style="display: none;">
-                    <!-- 1️⃣ DATOS DEL CLIENTE -->
+                    <!-- CLIENTE -->
                     <div class="form-card" data-seccion="cliente">
                         <div class="card-header">
                             <div class="card-icon"><i class="fas fa-user"></i></div>
@@ -157,16 +161,19 @@
                                     <input type="tel" id="clienteTelefono" placeholder="Ej: 77712345">
                                 </div>
                                 <div class="form-group full-width">
-                                    <label for="clienteUbicacion"><i class="fas fa-map-marker-alt"></i> Ubicación</label>
+                                    <label for="clienteUbicacion"><i class="fas fa-map-marker-alt"></i>
+                                        Ubicación</label>
                                     <div class="ubicacion-input-group">
-                                        <input type="text" id="clienteUbicacion" placeholder="Selecciona una ubicación en el mapa..." readonly>
+                                        <input type="text" id="clienteUbicacion"
+                                            placeholder="Selecciona una ubicación en el mapa..." readonly>
                                         <button type="button" class="btn-ubicacion" id="btnAbrirModalUbicacion">
                                             <i class="fas fa-map-pin"></i> Elegir en mapa
                                         </button>
                                     </div>
                                     <input type="hidden" id="clienteLatitud" value="">
                                     <input type="hidden" id="clienteLongitud" value="">
-                                    <small class="form-hint"><i class="fas fa-info-circle"></i> Haz clic en "Elegir en mapa" para seleccionar la ubicación exacta</small>
+                                    <small class="form-hint"><i class="fas fa-info-circle"></i> Haz clic en "Elegir en
+                                        mapa" para seleccionar la ubicación exacta</small>
                                 </div>
                             </div>
                             <div class="form-actions-seccion">
@@ -180,7 +187,7 @@
                         </div>
                     </div>
 
-                    <!-- 2️⃣ DATOS DEL VEHÍCULO -->
+                    <!-- VEHÍCULO -->
                     <div class="form-card" data-seccion="vehiculo">
                         <div class="card-header">
                             <div class="card-icon"><i class="fas fa-car"></i></div>
@@ -196,7 +203,8 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="vehiculoPlaca"><i class="fas fa-id-card"></i> Placa *</label>
-                                    <input type="text" id="vehiculoPlaca" placeholder="Ej: ABC123" maxlength="8" style="text-transform: uppercase;">
+                                    <input type="text" id="vehiculoPlaca" placeholder="Ej: ABC123" maxlength="8"
+                                        style="text-transform: uppercase;">
                                 </div>
                                 <div class="form-group">
                                     <label for="vehiculoMarca"><i class="fas fa-tag"></i> Marca *</label>
@@ -215,7 +223,8 @@
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="vehiculoKilometraje"><i class="fas fa-tachometer-alt"></i> Kilometraje</label>
+                                    <label for="vehiculoKilometraje"><i class="fas fa-tachometer-alt"></i>
+                                        Kilometraje</label>
                                     <input type="number" id="vehiculoKilometraje" placeholder="Ej: 45000">
                                 </div>
                             </div>
@@ -230,7 +239,7 @@
                         </div>
                     </div>
 
-                    <!-- 3️⃣ REGISTRO FOTOGRÁFICO -->
+                    <!-- FOTOS -->
                     <div class="form-card" data-seccion="fotos">
                         <div class="card-header">
                             <div class="card-icon"><i class="fas fa-camera"></i></div>
@@ -242,9 +251,7 @@
                         </div>
                         <div class="card-body">
                             <div class="photo-grid" id="photoGrid">
-                                <!-- ============================================= -->
                                 <!-- FOTO 1: LATERAL IZQUIERDO -->
-                                <!-- ============================================= -->
                                 <div class="photo-upload" id="upload-fotoLateralIzq" data-campo="lateral_izquierdo">
                                     <input type="file" id="fotoLateralIzq" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
@@ -254,8 +261,9 @@
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-lateral_izquierdo"/>
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22"
+                                                    id="ring-lateral_izquierdo" />
                                             </svg>
                                             <span class="progress-percent" id="percent-lateral_izquierdo">0%</span>
                                         </div>
@@ -275,9 +283,7 @@
                                     </button>
                                 </div>
 
-                                <!-- ============================================= -->
                                 <!-- FOTO 2: LATERAL DERECHO -->
-                                <!-- ============================================= -->
                                 <div class="photo-upload" id="upload-fotoLateralDer" data-campo="lateral_derecho">
                                     <input type="file" id="fotoLateralDer" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
@@ -287,8 +293,9 @@
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-lateral_derecho"/>
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22"
+                                                    id="ring-lateral_derecho" />
                                             </svg>
                                             <span class="progress-percent" id="percent-lateral_derecho">0%</span>
                                         </div>
@@ -308,9 +315,7 @@
                                     </button>
                                 </div>
 
-                                <!-- ============================================= -->
                                 <!-- FOTO 3: FRONTAL -->
-                                <!-- ============================================= -->
                                 <div class="photo-upload" id="upload-fotoFrontal" data-campo="frontal">
                                     <input type="file" id="fotoFrontal" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
@@ -320,8 +325,8 @@
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-frontal"/>
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-frontal" />
                                             </svg>
                                             <span class="progress-percent" id="percent-frontal">0%</span>
                                         </div>
@@ -341,9 +346,7 @@
                                     </button>
                                 </div>
 
-                                <!-- ============================================= -->
                                 <!-- FOTO 4: TRASERA -->
-                                <!-- ============================================= -->
                                 <div class="photo-upload" id="upload-fotoTrasera" data-campo="trasera">
                                     <input type="file" id="fotoTrasera" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
@@ -353,8 +356,8 @@
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-trasera"/>
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-trasera" />
                                             </svg>
                                             <span class="progress-percent" id="percent-trasera">0%</span>
                                         </div>
@@ -374,9 +377,7 @@
                                     </button>
                                 </div>
 
-                                <!-- ============================================= -->
                                 <!-- FOTO 5: SUPERIOR -->
-                                <!-- ============================================= -->
                                 <div class="photo-upload" id="upload-fotoSuperior" data-campo="superior">
                                     <input type="file" id="fotoSuperior" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
@@ -386,8 +387,8 @@
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-superior"/>
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-superior" />
                                             </svg>
                                             <span class="progress-percent" id="percent-superior">0%</span>
                                         </div>
@@ -407,9 +408,7 @@
                                     </button>
                                 </div>
 
-                                <!-- ============================================= -->
                                 <!-- FOTO 6: INFERIOR -->
-                                <!-- ============================================= -->
                                 <div class="photo-upload" id="upload-fotoInferior" data-campo="inferior">
                                     <input type="file" id="fotoInferior" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
@@ -419,8 +418,8 @@
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-inferior"/>
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-inferior" />
                                             </svg>
                                             <span class="progress-percent" id="percent-inferior">0%</span>
                                         </div>
@@ -440,9 +439,7 @@
                                     </button>
                                 </div>
 
-                                <!-- ============================================= -->
                                 <!-- FOTO 7: TABLERO -->
-                                <!-- ============================================= -->
                                 <div class="photo-upload" id="upload-fotoTablero" data-campo="tablero">
                                     <input type="file" id="fotoTablero" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
@@ -452,8 +449,8 @@
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-tablero"/>
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-tablero" />
                                             </svg>
                                             <span class="progress-percent" id="percent-tablero">0%</span>
                                         </div>
@@ -487,7 +484,7 @@
                         </div>
                     </div>
 
-                    <!-- 4️⃣ DESCRIPCIÓN DEL PROBLEMA -->
+                    <!-- DESCRIPCIÓN -->
                     <div class="form-card" data-seccion="descripcion">
                         <div class="card-header">
                             <div class="card-icon"><i class="fas fa-pencil-alt"></i></div>
@@ -501,15 +498,18 @@
                         </div>
                         <div class="card-body">
                             <div class="form-group">
-                                <label for="descripcionProblema"><i class="fas fa-align-left"></i> Describa el problema</label>
-                                <textarea id="descripcionProblema" rows="5" placeholder="Ej: El vehículo hace un ruido extraño al frenar..."></textarea>
+                                <label for="descripcionProblema"><i class="fas fa-align-left"></i> Describa el
+                                    problema</label>
+                                <textarea id="descripcionProblema" rows="5"
+                                    placeholder="Ej: El vehículo hace un ruido extraño al frenar..."></textarea>
                             </div>
                             <div class="audio-controls">
                                 <div class="audio-buttons">
                                     <button type="button" class="btn-audio" id="btnGrabarAudio">
                                         <i class="fas fa-microphone"></i> Grabar Audio
                                     </button>
-                                    <button type="button" class="btn-eliminar-audio" id="btnEliminarAudio" style="display: none;">
+                                    <button type="button" class="btn-eliminar-audio" id="btnEliminarAudio"
+                                        style="display: none;">
                                         <i class="fas fa-trash-alt"></i> Eliminar Grabación
                                     </button>
                                 </div>
@@ -533,7 +533,7 @@
                     </div>
                 </form>
 
-                <!-- PANEL DE RECEPCIONES GUARDADAS -->
+                <!-- RECEPCIONES GUARDADAS -->
                 <div class="recepciones-guardadas-panel" id="recepcionesGuardadasPanel">
                     <div class="panel-header">
                         <i class="fas fa-archive"></i>
@@ -592,7 +592,7 @@
     <!-- MODALES -->
     <!-- ===================================================== -->
 
-    <!-- Modal para unirse por código -->
+    <!-- Modal unirse por código -->
     <div class="modal" id="modalUnirsePorCodigo">
         <div class="modal-content">
             <div class="modal-header">
@@ -602,7 +602,8 @@
             <div class="modal-body">
                 <p>Ingresa el código de la sesión:</p>
                 <div class="form-group">
-                    <input type="text" id="codigoUnirseInput" placeholder="Ej: S-ABC123" class="codigo-input" autocomplete="off" style="text-transform: uppercase;">
+                    <input type="text" id="codigoUnirseInput" placeholder="Ej: S-ABC123" class="codigo-input"
+                        autocomplete="off" style="text-transform: uppercase;">
                 </div>
                 <p class="modal-hint">* Máximo 2 colaboradores por sesión</p>
             </div>
@@ -613,7 +614,7 @@
         </div>
     </div>
 
-    <!-- Modal de código generado (sesión creada) -->
+    <!-- Modal código generado -->
     <div class="modal" id="codigoModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -631,7 +632,7 @@
         </div>
     </div>
 
-    <!-- Modal de orden finalizada -->
+    <!-- Modal orden finalizada -->
     <div class="modal" id="codigoOrdenModal">
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
@@ -649,17 +650,15 @@
                 <button class="btn-secondary" onclick="cerrarModalOrden()">
                     <i class="fas fa-times"></i> Cerrar
                 </button>
-                <button class="btn-primary" id="btnDescargarPDFFinal" style="display: inline-flex; background: linear-gradient(135deg, #C1121F, #8B0F1A);">
+                <button class="btn-primary" id="btnDescargarPDFFinal"
+                    style="display: inline-flex; background: linear-gradient(135deg, #C1121F, #8B0F1A);">
                     <i class="fas fa-file-pdf"></i> 📥 Descargar PDF
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- ===================================================== -->
-    <!-- ✅ MODAL PARA VER DETALLES DE RECEPCIÓN (CORREGIDO)    -->
-    <!-- SOLO BOTÓN PDF, SIN WORD                                -->
-    <!-- ===================================================== -->
+    <!-- Modal detalle recepción -->
     <div class="modal modal-detalle" id="modalDetalleRecepcion">
         <div class="modal-content modal-detalle-content">
             <div class="modal-header">
@@ -668,13 +667,15 @@
             </div>
             <div class="modal-body" id="detalleRecepcionBody"></div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalDetalle()"><i class="fas fa-times"></i> Cerrar</button>
-                <button class="btn-primary" id="btnExportarPDFDetalle"><i class="fas fa-file-pdf"></i> 📥 Descargar PDF</button>
+                <button class="btn-secondary" onclick="cerrarModalDetalle()"><i class="fas fa-times"></i>
+                    Cerrar</button>
+                <button class="btn-primary" id="btnExportarPDFDetalle"><i class="fas fa-file-pdf"></i> 📥 Descargar
+                    PDF</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal para confirmar eliminación -->
+    <!-- Modal confirmar eliminación -->
     <div class="modal" id="modalConfirmarEliminar">
         <div class="modal-content">
             <div class="modal-header">
@@ -687,13 +688,15 @@
                 <div id="eliminarInfo"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalEliminar()"><i class="fas fa-times"></i> Cancelar</button>
-                <button class="btn-danger" id="btnConfirmarEliminar"><i class="fas fa-trash-alt"></i> Sí, Eliminar</button>
+                <button class="btn-secondary" onclick="cerrarModalEliminar()"><i class="fas fa-times"></i>
+                    Cancelar</button>
+                <button class="btn-danger" id="btnConfirmarEliminar"><i class="fas fa-trash-alt"></i> Sí,
+                    Eliminar</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal para seleccionar ubicación con Leaflet -->
+    <!-- Modal ubicación Leaflet -->
     <div class="modal" id="modalUbicacionLeaflet">
         <div class="modal-content modal-ubicacion">
             <div class="modal-header">
@@ -704,12 +707,14 @@
                 <div class="ubicacion-busqueda">
                     <div class="search-container">
                         <i class="fas fa-search"></i>
-                        <input type="text" id="modalBuscarUbicacionLeaflet" placeholder="Buscar dirección..." class="ubicacion-search">
+                        <input type="text" id="modalBuscarUbicacionLeaflet" placeholder="Buscar dirección..."
+                            class="ubicacion-search">
                         <button type="button" id="btnBuscarUbicacionLeaflet" class="btn-buscar">
                             <i class="fas fa-search"></i> Buscar
                         </button>
                     </div>
-                    <div id="leafletMapa" style="height: 400px; width: 100%; border-radius: 12px; margin: 15px 0;"></div>
+                    <div id="leafletMapa" style="height: 400px; width: 100%; border-radius: 12px; margin: 15px 0;">
+                    </div>
                     <div class="ubicacion-info" id="ubicacionInfoLeaflet" style="display: none;">
                         <div class="info-card">
                             <i class="fas fa-check-circle"></i>
@@ -722,15 +727,15 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" id="btnCancelarUbicacionLeaflet"><i class="fas fa-times"></i> Cancelar</button>
-                <button class="btn-primary" id="btnConfirmarUbicacionLeaflet" disabled><i class="fas fa-check"></i> Usar esta ubicación</button>
+                <button class="btn-secondary" id="btnCancelarUbicacionLeaflet"><i class="fas fa-times"></i>
+                    Cancelar</button>
+                <button class="btn-primary" id="btnConfirmarUbicacionLeaflet" disabled><i class="fas fa-check"></i> Usar
+                    esta ubicación</button>
             </div>
         </div>
     </div>
 
-    <!-- ===================================================== -->
-    <!-- BARRA DE PROGRESO PARA OPERACIONES -->
-    <!-- ===================================================== -->
+    <!-- PROGRESO -->
     <div class="progress-overlay" id="progressOverlay">
         <div class="progress-container">
             <div class="progress-icon" id="progressIcon">
@@ -762,17 +767,17 @@
     <!-- ===================================================== -->
     <!-- SCRIPTS -->
     <!-- ===================================================== -->
-    
+
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    
+
     <!-- Sidebar include -->
     <script src="/jefe_operativo/js/include.js"></script>
-    
+
     <!-- COMPRESOR DE IMÁGENES -->
     <script src="/jefe_operativo/js/imageCompressor.js"></script>
-    
+
     <!-- RECEPCION.JS -->
     <script src="/jefe_operativo/js/recepcion.js"></script>
 

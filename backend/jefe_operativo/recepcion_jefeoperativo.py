@@ -359,41 +359,46 @@ def listar_sesiones_activas(current_user):
 def listar_recepciones(current_user):
     """
     Lista las recepciones guardadas con paginación
-    Por defecto devuelve las últimas 5 órdenes
+    Compatible con versiones antiguas y nuevas de supabase-py
     """
     try:
-        # Obtener parámetros de paginación
         limit = request.args.get('limit', 5, type=int)
         offset = request.args.get('offset', 0, type=int)
         
-        # Limitar el máximo de registros por página
         if limit > 50:
             limit = 50
         
-        logger.info(f"📋 [listar_recepciones] Usuario: {current_user.get('nombre')}")
         logger.info(f"📋 [listar_recepciones] Limit: {limit}, Offset: {offset}")
         
-        # OBTENER SOLO LAS ÚLTIMAS ÓRDENES CON PAGINACIÓN
-        resultado = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
-            .order('fecha_ingreso', desc=True) \
-            .limit(limit) \
-            .offset(offset) \
-            .execute()
+        # 🔥 INTENTAR CON offset() (versión antigua)
+        try:
+            resultado = supabase.table('ordentrabajo') \
+                .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
+                .order('fecha_ingreso', desc=True) \
+                .limit(limit) \
+                .offset(offset) \
+                .execute()
+            logger.info("✅ Usando .offset() (versión antigua)")
+        except AttributeError:
+            # 🔥 SI FALLA, USAR range() (versión nueva)
+            logger.info("🔄 .offset() no disponible, usando .range() (versión nueva)")
+            start = offset
+            end = offset + limit
+            resultado = supabase.table('ordentrabajo') \
+                .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
+                .order('fecha_ingreso', desc=True) \
+                .range(start, end - 1) \
+                .execute()
         
-        logger.info(f"📊 Órdenes encontradas: {len(resultado.data) if resultado.data else 0}")
-        
-        # OBTENER EL TOTAL DE ÓRDENES PARA LA PAGINACIÓN
+        # OBTENER EL TOTAL
         total_result = supabase.table('ordentrabajo') \
             .select('id', count='exact') \
             .execute()
-        
         total_ordenes = total_result.count if hasattr(total_result, 'count') else len(total_result.data or [])
         
+        # PROCESAR RECEPCIONES (el resto del código igual)
         recepciones = []
-        
         for orden in (resultado.data or []):
-            # Datos base de la orden
             recepcion = {
                 'id': orden.get('id'),
                 'codigo_unico': orden.get('codigo_unico', 'OT-N/A'),
@@ -413,10 +418,8 @@ def listar_recepciones(current_user):
             }
             
             id_vehiculo = orden.get('id_vehiculo')
-            
             if id_vehiculo:
                 try:
-                    # Paso 2: Obtener vehículo
                     v_result = supabase.table('vehiculo') \
                         .select('placa, marca, modelo, anio, kilometraje, id_cliente') \
                         .eq('id', id_vehiculo) \
@@ -431,10 +434,8 @@ def listar_recepciones(current_user):
                         recepcion['kilometraje'] = v.get('kilometraje') or 0
                         
                         id_cliente = v.get('id_cliente')
-                        
                         if id_cliente:
                             try:
-                                # Paso 3: Obtener cliente
                                 c_result = supabase.table('cliente') \
                                     .select('id_usuario, latitud, longitud, ubicacion_confirmada') \
                                     .eq('id', id_cliente) \
@@ -447,10 +448,8 @@ def listar_recepciones(current_user):
                                     recepcion['ubicacion_confirmada'] = c.get('ubicacion_confirmada', False)
                                     
                                     id_usuario = c.get('id_usuario')
-                                    
                                     if id_usuario:
                                         try:
-                                            # Paso 4: Obtener usuario (cliente)
                                             u_result = supabase.table('usuario') \
                                                 .select('nombre, contacto, email, ubicacion') \
                                                 .eq('id', id_usuario) \
@@ -471,7 +470,7 @@ def listar_recepciones(current_user):
             
             recepciones.append(recepcion)
         
-        logger.info(f"✅ {len(recepciones)} recepciones listadas (paginadas)")
+        logger.info(f"✅ {len(recepciones)} recepciones listadas")
         
         return jsonify({
             'success': True,
@@ -485,7 +484,7 @@ def listar_recepciones(current_user):
         }), 200
         
     except Exception as e:
-        logger.error(f"❌ [listar_recepciones] Error: {str(e)}")
+        logger.error(f"❌ Error: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({

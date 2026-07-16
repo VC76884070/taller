@@ -5,6 +5,8 @@ import sys
 import logging
 from config import config
 from dotenv import load_dotenv
+import jwt
+import datetime
 
 # Cargar variables de entorno
 load_dotenv()
@@ -174,6 +176,105 @@ except ImportError as e:
     logger.warning(f"⚠️ No se pudo importar google_drive: {e}")
 except Exception as e:
     logger.error(f"❌ Error inicializando Google Drive: {e}")
+
+# =====================================================
+# 🔥 ENDPOINT PARA REFRESCAR TOKEN (NUEVO)
+# =====================================================
+
+@app.route('/api/refresh-token', methods=['POST'])
+def refresh_token():
+    """
+    Refresca un token JWT expirado.
+    Recibe el token viejo y devuelve uno nuevo con fecha extendida.
+    """
+    try:
+        data = request.get_json()
+        token = data.get('token')
+        
+        if not token:
+            return jsonify({'error': 'Token no proporcionado'}), 400
+        
+        try:
+            # 🔥 Decodificar SIN verificar expiración para obtener el usuario
+            payload = jwt.decode(
+                token, 
+                app.config['SECRET_KEY'], 
+                algorithms=['HS256'], 
+                options={'verify_exp': False}
+            )
+            
+            # Obtener datos del usuario
+            if 'user' in payload:
+                user_data = payload['user']
+            else:
+                user_data = payload
+            
+            user_id = user_data.get('id')
+            if not user_id:
+                return jsonify({'error': 'Token inválido - ID de usuario no encontrado'}), 401
+            
+            # 🔥 Verificar que el usuario existe en la base de datos
+            user_result = config.supabase.table('usuario') \
+                .select('id, nombre, email, contacto') \
+                .eq('id', user_id) \
+                .execute()
+            
+            if not user_result.data:
+                return jsonify({'error': 'Usuario no encontrado'}), 401
+            
+            usuario = user_result.data[0]
+            
+            # 🔥 Obtener roles del usuario
+            roles_result = config.supabase.table('usuario_rol') \
+                .select('id_rol, rol!inner(nombre_rol)') \
+                .eq('id_usuario', user_id) \
+                .execute()
+            
+            roles = []
+            for ur in (roles_result.data or []):
+                if 'rol' in ur and 'nombre_rol' in ur['rol']:
+                    roles.append(ur['rol']['nombre_rol'])
+            
+            # 🔥 Construir datos para el nuevo token
+            new_token_data = {
+                'id': usuario['id'],
+                'nombre': usuario.get('nombre', ''),
+                'email': usuario.get('email', ''),
+                'contacto': usuario.get('contacto', ''),
+                'roles': roles,
+                'type': 'staff'
+            }
+            
+            # 🔥 Generar NUEVO token con expiración extendida (7 días)
+            new_token = jwt.encode(
+                {
+                    'user': new_token_data, 
+                    'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
+                },
+                app.config['SECRET_KEY'],
+                algorithm='HS256'
+            )
+            
+            logger.info(f"✅ Token refrescado para usuario: {usuario.get('nombre')} (ID: {user_id})")
+            
+            return jsonify({
+                'success': True,
+                'token': new_token,
+                'user': new_token_data
+            }), 200
+            
+        except jwt.InvalidTokenError as e:
+            logger.error(f"❌ Token inválido al refrescar: {str(e)}")
+            return jsonify({'error': 'Token inválido'}), 401
+        except Exception as e:
+            logger.error(f"❌ Error decodificando token: {str(e)}")
+            return jsonify({'error': f'Error al decodificar token: {str(e)}'}), 401
+            
+    except Exception as e:
+        logger.error(f"❌ Error refrescando token: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 # =====================================================
 # IMPORTAR BLUEPRINTS

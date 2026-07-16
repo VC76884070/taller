@@ -2018,10 +2018,13 @@ async function unirseSesionConCodigo(codigo) {
 function iniciarPolling() {
     if (pollingInterval) clearInterval(pollingInterval);
     pollingInterval = setInterval(() => {
-        if (codigoSesion && !camposEnEdicion.cliente && !camposEnEdicion.vehiculo && !camposEnEdicion.descripcion) {
-            cargarDatosSesionLigero();
+        // 🔥 SOLO ejecutar si NO hay subidas activas
+        if (codigoSesion && !colaActiva && !isProcessingQueue) {
+            if (!camposEnEdicion.cliente && !camposEnEdicion.vehiculo && !camposEnEdicion.descripcion) {
+                cargarDatosSesionLigero();
+            }
         }
-    }, 5000);
+    }, 3000); // 🔥 Cambiado a 3 segundos para mejor sincronización
 }
 
 function detenerPolling() {
@@ -5230,5 +5233,339 @@ window.logout = () => {
     localStorage.clear();
     window.location.href = `${window.API_BASE_URL}/`;
 };
+
+// =====================================================
+// 🔥 FUNCIÓN PARA SINCRONIZAR FOTOS - CORREGIDA
+// =====================================================
+
+function sincronizarEstadoFotos() {
+    console.log('🔄 [sincronizarEstadoFotos] Iniciando sincronización...');
+    
+    // 1. Contar fotos en el DOM
+    let fotosDOM = 0;
+    let fotosConUrl = 0;
+    let fotosFaltantesDOM = [];
+    
+    for (const foto of FOTOS_CONFIG) {
+        const uploadDiv = document.getElementById(`upload-${foto.id}`);
+        if (uploadDiv && uploadDiv.classList.contains('has-image')) {
+            fotosDOM++;
+            if (uploadDiv.dataset.driveUrl) {
+                fotosConUrl++;
+            } else {
+                fotosFaltantesDOM.push(foto.label);
+            }
+        }
+    }
+    
+    console.log(`📸 DOM: ${fotosDOM}/7 con imagen, ${fotosConUrl}/7 con URL`);
+    
+    // 2. Contar fotos en la sesión del backend
+    let fotosSesion = 0;
+    let fotosSesionConUrl = 0;
+    
+    if (sesionActual?.datos?.fotos) {
+        const fotos = sesionActual.datos.fotos;
+        for (const foto of FOTOS_CONFIG) {
+            const url = fotos[foto.campo];
+            if (url && url !== 'null' && url !== '') {
+                fotosSesion++;
+                fotosSesionConUrl++;
+            }
+        }
+    }
+    
+    console.log(`📸 Sesión: ${fotosSesionConUrl}/7 fotos con URL`);
+    
+    // 3. SI EL DOM TIENE 7 PERO LA SESIÓN NO, FORZAR GUARDADO
+    if (fotosConUrl === 7 && fotosSesionConUrl < 7) {
+        console.log('🔥 DOM tiene 7 fotos, pero sesión no. Forzando guardado...');
+        
+        // Recopilar todas las URLs del DOM
+        const fotosData = {};
+        for (const foto of FOTOS_CONFIG) {
+            const uploadDiv = document.getElementById(`upload-${foto.id}`);
+            fotosData[foto.campo] = uploadDiv?.dataset.driveUrl || null;
+        }
+        
+        // Guardar directamente al backend
+        guardarSeccion('fotos').then(() => {
+            console.log('✅ Fotos guardadas forzadamente');
+            // Re-validar después de guardar
+            setTimeout(() => {
+                validarCompletadoFotos();
+            }, 500);
+        });
+        return;
+    }
+    
+    // 4. SI LA SESIÓN TIENE 7 PERO EL DOM NO, ACTUALIZAR DOM
+    if (fotosSesionConUrl === 7 && fotosConUrl < 7) {
+        console.log('🔥 Sesión tiene 7 fotos, actualizando DOM...');
+        
+        for (const foto of FOTOS_CONFIG) {
+            const url = sesionActual.datos.fotos[foto.campo];
+            if (url && url !== 'null' && url !== '') {
+                const uploadDiv = document.getElementById(`upload-${foto.id}`);
+                if (uploadDiv) {
+                    uploadDiv.dataset.driveUrl = url;
+                    fotosSubidasLocal[foto.campo] = url;
+                    
+                    if (!uploadDiv.classList.contains('has-image')) {
+                        const preview = uploadDiv.querySelector('.upload-preview');
+                        if (preview) {
+                            preview.style.backgroundImage = `url('${url}')`;
+                            preview.style.backgroundSize = 'cover';
+                            preview.style.backgroundPosition = 'center';
+                            preview.innerHTML = '';
+                            uploadDiv.classList.add('has-image');
+                            const removeBtn = uploadDiv.querySelector('.remove-photo');
+                            if (removeBtn) removeBtn.style.display = 'flex';
+                            actualizarProgresoFoto(foto.campo, 100, 'completed');
+                        }
+                    }
+                }
+            }
+        }
+        
+        setTimeout(() => {
+            validarCompletadoFotos();
+        }, 300);
+        return;
+    }
+    
+    // 5. Si ambas tienen 7, asegurar que el estado local sea true
+    if (fotosConUrl === 7 && fotosSesionConUrl === 7) {
+        console.log('✅ Todas las fotos están sincronizadas (7/7)');
+        seccionesCompletadasLocal.fotos = true;
+        actualizarEstadoVisualSeccion('fotos', true);
+        actualizarBotonFinalizar();
+    } else {
+        // Mostrar qué fotos faltan
+        const faltantes = FOTOS_CONFIG
+            .filter(f => {
+                const div = document.getElementById(`upload-${f.id}`);
+                return !div || !div.dataset.driveUrl;
+            })
+            .map(f => f.label);
+        
+        if (faltantes.length > 0 && faltantes.length < 7) {
+            console.log(`⚠️ Fotos faltantes: ${faltantes.join(', ')}`);
+        }
+    }
+}
+
+// =====================================================
+// 🔥 SOBREESCRIBIR validarCompletadoFotos CON VERSIÓN CORREGIDA
+// =====================================================
+
+// Guardar la función original si existe
+const originalValidarCompletadoFotos = window.validarCompletadoFotos || function() {};
+
+// Nueva versión mejorada
+window.validarCompletadoFotos = function() {
+    console.log('📸 [validarCompletadoFotos] INICIO');
+    
+    // PASO 1: Contar fotos en el DOM
+    let domFotosConUrl = 0;
+    let domFotosConImagen = 0;
+    const estadoFotosDOM = {};
+    
+    for (const foto of FOTOS_CONFIG) {
+        const uploadDiv = document.getElementById(`upload-${foto.id}`);
+        const hasImage = uploadDiv?.classList.contains('has-image') || false;
+        const driveUrl = uploadDiv?.dataset.driveUrl || null;
+        
+        estadoFotosDOM[foto.campo] = {
+            hasImage,
+            driveUrl,
+            valid: !!(driveUrl && driveUrl !== 'null' && driveUrl !== '')
+        };
+        
+        if (hasImage) domFotosConImagen++;
+        if (estadoFotosDOM[foto.campo].valid) domFotosConUrl++;
+    }
+    
+    console.log(`📸 DOM: ${domFotosConImagen} imágenes, ${domFotosConUrl} URLs válidas`);
+    
+    // PASO 2: Si DOM tiene 7 URLs, es la fuente de verdad
+    if (domFotosConUrl === 7) {
+        console.log('✅ DOM tiene 7 URLs válidas - marcando como completado');
+        seccionesCompletadasLocal.fotos = true;
+        actualizarEstadoVisualSeccion('fotos', true);
+        actualizarBotonFinalizar();
+        
+        // Actualizar badge
+        const fotosBadge = document.getElementById('statusFotos');
+        if (fotosBadge) {
+            fotosBadge.textContent = '✓ Completado (7/7)';
+            fotosBadge.classList.add('completado');
+            fotosBadge.classList.remove('en-proceso');
+        }
+        
+        // Si la sesión no tiene 7, guardar
+        let sesionFotos = 0;
+        if (sesionActual?.datos?.fotos) {
+            sesionFotos = Object.values(sesionActual.datos.fotos)
+                .filter(v => v && v !== 'null' && v !== '').length;
+        }
+        
+        if (sesionFotos < 7 && codigoSesion) {
+            console.log('🔄 Sesión no tiene 7 fotos, guardando...');
+            guardarSeccion('fotos');
+        }
+        
+        return true;
+    }
+    
+    // PASO 3: Verificar si la sesión tiene 7 fotos
+    let sesionFotosValidas = 0;
+    if (sesionActual?.datos?.fotos) {
+        sesionFotosValidas = Object.values(sesionActual.datos.fotos)
+            .filter(v => v && v !== 'null' && v !== '').length;
+        console.log(`📸 Sesión: ${sesionFotosValidas}/7 fotos`);
+    }
+    
+    // PASO 4: Si la sesión tiene 7, actualizar DOM
+    if (sesionFotosValidas === 7 && domFotosConUrl < 7) {
+        console.log('🔄 Sesión tiene 7 fotos, actualizando DOM...');
+        for (const foto of FOTOS_CONFIG) {
+            const url = sesionActual.datos.fotos[foto.campo];
+            if (url && url !== 'null' && url !== '') {
+                const uploadDiv = document.getElementById(`upload-${foto.id}`);
+                if (uploadDiv && !uploadDiv.dataset.driveUrl) {
+                    uploadDiv.dataset.driveUrl = url;
+                    fotosSubidasLocal[foto.campo] = url;
+                    
+                    if (!uploadDiv.classList.contains('has-image')) {
+                        const preview = uploadDiv.querySelector('.upload-preview');
+                        if (preview) {
+                            preview.style.backgroundImage = `url('${url}')`;
+                            preview.style.backgroundSize = 'cover';
+                            preview.style.backgroundPosition = 'center';
+                            preview.innerHTML = '';
+                            uploadDiv.classList.add('has-image');
+                            const removeBtn = uploadDiv.querySelector('.remove-photo');
+                            if (removeBtn) removeBtn.style.display = 'flex';
+                            actualizarProgresoFoto(foto.campo, 100, 'completed');
+                        }
+                    }
+                }
+            }
+        }
+        // Recontar después de actualizar
+        setTimeout(() => window.validarCompletadoFotos(), 300);
+        return false;
+    }
+    
+    // PASO 5: Estado intermedio - mostrar progreso
+    const totalValidas = Math.max(domFotosConUrl, sesionFotosValidas);
+    const fotosBadge = document.getElementById('statusFotos');
+    if (fotosBadge) {
+        if (totalValidas === 7) {
+            fotosBadge.textContent = '✓ Completado (7/7)';
+            fotosBadge.classList.add('completado');
+            fotosBadge.classList.remove('en-proceso');
+            seccionesCompletadasLocal.fotos = true;
+        } else if (totalValidas > 0) {
+            fotosBadge.textContent = `⏳ ${totalValidas}/7 en Drive`;
+            fotosBadge.classList.add('en-proceso');
+            fotosBadge.classList.remove('completado');
+            seccionesCompletadasLocal.fotos = false;
+        } else {
+            fotosBadge.textContent = `○ ${domFotosConImagen}/7 fotos`;
+            fotosBadge.classList.add('en-proceso');
+            fotosBadge.classList.remove('completado');
+            seccionesCompletadasLocal.fotos = false;
+        }
+    }
+    
+    actualizarBotonFinalizar();
+    
+    console.log(`📸 Resultado final: ${seccionesCompletadasLocal.fotos ? '✅ COMPLETADO' : '❌ PENDIENTE'}`);
+    return seccionesCompletadasLocal.fotos;
+};
+
+// =====================================================
+// 🔥 SOBREESCRIBIR cargarDatosSesionLigero PARA NO SOBREESCRIBIR FOTOS
+// =====================================================
+
+const originalCargarDatosSesionLigero = cargarDatosSesionLigero;
+
+cargarDatosSesionLigero = async function() {
+    if (!codigoSesion || actualizando) return;
+    
+    actualizando = true;
+    try {
+        const response = await fetchWithToken(`${API_URL}/jefe-operativo/obtener-sesion/${codigoSesion}`, { method: 'GET' });
+        const data = await response.json();
+        
+        if (!data.sesion || data.sesion.estado === 'finalizada') {
+            limpiarSesionCompleta();
+            mostrarNotificacion('La sesión fue finalizada por otro usuario', 'info');
+            return;
+        }
+        
+        // 🔥 GUARDAR FOTOS DEL DOM ANTES DE SOBREESCRIBIR
+        const fotosDOM = {};
+        for (const foto of FOTOS_CONFIG) {
+            const uploadDiv = document.getElementById(`upload-${foto.id}`);
+            if (uploadDiv && uploadDiv.dataset.driveUrl) {
+                fotosDOM[foto.campo] = uploadDiv.dataset.driveUrl;
+            }
+        }
+        
+        // Actualizar sesión
+        sesionActual = data.sesion;
+        
+        // 🔥 RESTAURAR FOTOS DEL DOM SI ES NECESARIO
+        if (sesionActual.datos && sesionActual.datos.fotos) {
+            // Si el DOM tiene más fotos que la sesión, conservar las del DOM
+            let domCount = Object.values(fotosDOM).filter(v => v && v !== 'null' && v !== '').length;
+            let sesionCount = Object.values(sesionActual.datos.fotos).filter(v => v && v !== 'null' && v !== '').length;
+            
+            if (domCount > sesionCount) {
+                console.log(`🔄 Conservando fotos del DOM (${domCount}) sobre sesión (${sesionCount})`);
+                for (const campo of Object.keys(fotosDOM)) {
+                    if (fotosDOM[campo]) {
+                        sesionActual.datos.fotos[campo] = fotosDOM[campo];
+                    }
+                }
+            }
+        }
+        
+        // Actualizar secciones COMPLETADAS (excepto fotos si el DOM tiene más)
+        const nuevasSecciones = data.sesion.secciones_completadas;
+        if (nuevasSecciones) {
+            // Para cliente y vehiculo y descripcion, usar lo que dice la sesión
+            if (seccionesCompletadasLocal.cliente !== nuevasSecciones.cliente) {
+                seccionesCompletadasLocal.cliente = nuevasSecciones.cliente;
+                actualizarEstadoVisualSeccion('cliente', nuevasSecciones.cliente);
+            }
+            if (seccionesCompletadasLocal.vehiculo !== nuevasSecciones.vehiculo) {
+                seccionesCompletadasLocal.vehiculo = nuevasSecciones.vehiculo;
+                actualizarEstadoVisualSeccion('vehiculo', nuevasSecciones.vehiculo);
+            }
+            if (seccionesCompletadasLocal.descripcion !== nuevasSecciones.descripcion) {
+                seccionesCompletadasLocal.descripcion = nuevasSecciones.descripcion;
+                actualizarEstadoVisualSeccion('descripcion', nuevasSecciones.descripcion);
+            }
+            
+            // 🔥 PARA FOTOS: usar validarCompletadoFotos() que hace la verificación completa
+            setTimeout(() => {
+                window.validarCompletadoFotos();
+            }, 100);
+        }
+        
+        actualizarBotonFinalizar();
+        
+    } catch (error) {
+        logger.error('Error en polling ligero:', error);
+    } finally {
+        actualizando = false;
+    }
+};
+
+console.log('✅ [FIX] validarCompletadoFotos y cargarDatosSesionLigero sobreescritos correctamente');
 
 console.log('✅ recepcion.js cargado - Versión con Google Drive y cola secuencial');

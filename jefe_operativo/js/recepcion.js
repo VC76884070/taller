@@ -607,6 +607,9 @@ function encolarFoto(file, campo, label) {
     }
 }
 
+// =====================================================
+// PROCESAR COLA - CORREGIDO
+// =====================================================
 async function procesarCola() {
     if (uploadQueue.length === 0) {
         isProcessingQueue = false;
@@ -622,7 +625,11 @@ async function procesarCola() {
             mostrarNotificacion(`✅ ${exitos} fotos subidas exitosamente`, 'success');
         }
         
-        validarCompletadoFotos();
+        // 🔥 FORZAR VALIDACIÓN COMPLETA
+        setTimeout(() => {
+            validarCompletadoFotos();
+        }, 500);
+        
         return;
     }
     
@@ -632,6 +639,7 @@ async function procesarCola() {
     const item = uploadQueue.shift();
     const { file, campo, label } = item;
     
+    const uploadDiv = document.getElementById(`upload-${campo}`);
     const barContainer = document.querySelector(`#upload-${campo} .progress-bar-foto`);
     const statusContainer = document.querySelector(`#upload-${campo} .uploading-status`);
     
@@ -655,18 +663,34 @@ async function procesarCola() {
         actualizarProgresoFoto(campo, 100, 'completed');
         uploadResults.push({ campo, label, success: true, url });
         
-        const uploadDiv = document.getElementById(`upload-${campo}`);
+        // 🔥 GUARDAR URL EN MÚLTIPLES LUGARES
         if (uploadDiv) {
             uploadDiv.dataset.driveUrl = url;
             fotosSubidasLocal[campo] = url;
             uploadDiv.classList.remove('error');
+            uploadDiv.classList.add('has-image');
+            
+            // Actualizar preview si existe
+            const preview = uploadDiv.querySelector('.upload-preview');
+            if (preview) {
+                preview.style.backgroundImage = `url('${url}')`;
+            }
+            
+            console.log(`✅ Foto ${label} subida y guardada: ${url}`);
         }
         
+        // 🔥 ACTUALIZAR SESIÓN EN BACKEND
         try {
             await actualizarSesionFoto(campo, url);
+            console.log(`✅ Sesión actualizada para ${label}`);
         } catch (e) {
             console.warn('⚠️ No se pudo actualizar sesión:', e);
         }
+        
+        // 🔥 FORZAR VALIDACIÓN
+        setTimeout(() => {
+            validarCompletadoFotos();
+        }, 300);
         
         setTimeout(() => {
             if (barContainer) barContainer.style.display = 'none';
@@ -680,7 +704,6 @@ async function procesarCola() {
         console.error(`❌ Error subiendo ${label}:`, error);
         uploadResults.push({ campo, label, success: false, error: error.message });
         
-        const uploadDiv = document.getElementById(`upload-${campo}`);
         if (uploadDiv) {
             uploadDiv.classList.add('error');
             const input = uploadDiv.querySelector('input[type="file"]');
@@ -690,24 +713,6 @@ async function procesarCola() {
         }
         
         mostrarNotificacion(`❌ Error en ${label}: ${error.message}`, 'error');
-    }
-    
-    validarCompletadoFotos();
-    
-    const fotosConfig = ['lateral_izquierdo', 'lateral_derecho', 'frontal', 'trasera', 'superior', 'inferior', 'tablero'];
-    const todasSubidas = fotosConfig.every(campo => {
-        const div = document.getElementById(`upload-${campo}`);
-        return div && div.dataset.driveUrl;
-    });
-    
-    if (todasSubidas) {
-        seccionesCompletadasLocal.fotos = true;
-        actualizarEstadoVisualSeccion('fotos', true);
-        actualizarBotonFinalizar();
-        
-        if (codigoSesion) {
-            await guardarSeccion('fotos');
-        }
     }
     
     setTimeout(() => {
@@ -1269,58 +1274,115 @@ function validarCompletadoVehiculo() {
     }
     return completada;
 }
-
+// =====================================================
+// VALIDAR COMPLETADO DE FOTOS - CORREGIDO
+// =====================================================
 function validarCompletadoFotos() {
     let fotosConImagen = 0;
     let fotosConUrl = 0;
+    let fotosFaltantes = [];
     
+    // 🔥 PRIMERO: Contar fotos desde el DOM
     for (const foto of FOTOS_CONFIG) {
         const uploadDiv = document.getElementById(`upload-${foto.id}`);
+        
+        // Verificar si tiene imagen
         if (uploadDiv && uploadDiv.classList.contains('has-image')) {
             fotosConImagen++;
+            
+            // Verificar si tiene URL en dataset
             if (uploadDiv.dataset.driveUrl) {
                 fotosConUrl++;
+            } else {
+                fotosFaltantes.push(foto.label);
+                console.log(`⚠️ Foto ${foto.label} tiene imagen pero NO tiene driveUrl`);
             }
+        } else {
+            fotosFaltantes.push(foto.label);
         }
     }
     
-    if (sesionActual?.datos?.fotos) {
-        const fotosSesion = Object.values(sesionActual.datos.fotos).filter(v => v && v !== 'null' && v !== '');
-        const fotosSesionValidas = fotosSesion.length;
-        if (fotosSesionValidas > fotosConUrl) {
-            fotosConUrl = fotosSesionValidas;
-            for (const foto of FOTOS_CONFIG) {
-                const uploadDiv = document.getElementById(`upload-${foto.id}`);
-                const url = sesionActual.datos.fotos[foto.campo];
-                if (url && url !== 'null' && url !== '' && !uploadDiv?.dataset.driveUrl) {
-                    const preview = uploadDiv?.querySelector('.upload-preview');
-                    if (preview) {
-                        preview.style.backgroundImage = `url('${url}')`;
-                        preview.style.backgroundSize = 'cover';
-                        preview.style.backgroundPosition = 'center';
-                        preview.innerHTML = '';
-                        uploadDiv.classList.add('has-image');
+    console.log(`📸 Fotos: ${fotosConImagen}/7 con imagen, ${fotosConUrl}/7 con URL en Drive`);
+    
+    // 🔥 SEGUNDO: Si hay fotos con imagen pero sin driveUrl, intentar recuperarlas
+    if (fotosConImagen > fotosConUrl && fotosConImagen > 0) {
+        console.log('🔄 Intentando recuperar URLs de fotos desde la sesión...');
+        
+        // Buscar en fotosSubidasLocal
+        for (const foto of FOTOS_CONFIG) {
+            const uploadDiv = document.getElementById(`upload-${foto.id}`);
+            if (uploadDiv && uploadDiv.classList.contains('has-image') && !uploadDiv.dataset.driveUrl) {
+                // Intentar obtener de fotosSubidasLocal
+                if (fotosSubidasLocal[foto.campo]) {
+                    uploadDiv.dataset.driveUrl = fotosSubidasLocal[foto.campo];
+                    fotosConUrl++;
+                    console.log(`✅ Recuperada URL para ${foto.label}: ${fotosSubidasLocal[foto.campo]}`);
+                }
+                // Intentar obtener de sesionActual
+                else if (sesionActual?.datos?.fotos?.[foto.campo]) {
+                    const url = sesionActual.datos.fotos[foto.campo];
+                    if (url && url !== 'null' && url !== '') {
                         uploadDiv.dataset.driveUrl = url;
-                        const removeBtn = uploadDiv.querySelector('.remove-photo');
-                        if (removeBtn) removeBtn.style.display = 'flex';
-                        actualizarProgresoFoto(foto.campo, 100, 'completed');
+                        fotosConUrl++;
+                        console.log(`✅ Recuperada URL de sesión para ${foto.label}: ${url}`);
                     }
                 }
             }
         }
     }
     
-    const todasTienenImagen = fotosConImagen === 7;
-    const todasEnDrive = fotosConUrl === 7;
+    // 🔥 TERCERO: Verificar desde la sesión actual
+    if (sesionActual?.datos?.fotos) {
+        const fotosSesion = Object.values(sesionActual.datos.fotos).filter(v => v && v !== 'null' && v !== '');
+        const fotosSesionValidas = fotosSesion.length;
+        console.log(`📸 Fotos en sesión: ${fotosSesionValidas}/7`);
+        
+        if (fotosSesionValidas > fotosConUrl) {
+            fotosConUrl = fotosSesionValidas;
+            // Sincronizar DOM con sesión
+            for (const foto of FOTOS_CONFIG) {
+                const uploadDiv = document.getElementById(`upload-${foto.id}`);
+                const url = sesionActual.datos.fotos[foto.campo];
+                if (url && url !== 'null' && url !== '' && uploadDiv && !uploadDiv.dataset.driveUrl) {
+                    uploadDiv.dataset.driveUrl = url;
+                    if (!uploadDiv.classList.contains('has-image')) {
+                        const preview = uploadDiv.querySelector('.upload-preview');
+                        if (preview) {
+                            preview.style.backgroundImage = `url('${url}')`;
+                            preview.style.backgroundSize = 'cover';
+                            preview.style.backgroundPosition = 'center';
+                            preview.innerHTML = '';
+                            uploadDiv.classList.add('has-image');
+                            const removeBtn = uploadDiv.querySelector('.remove-photo');
+                            if (removeBtn) removeBtn.style.display = 'flex';
+                            actualizarProgresoFoto(foto.campo, 100, 'completed');
+                        }
+                    }
+                }
+            }
+        }
+    }
     
+    // 🔥 CUARTO: Recontar después de las recuperaciones
+    let fotosConUrlFinal = 0;
+    for (const foto of FOTOS_CONFIG) {
+        const uploadDiv = document.getElementById(`upload-${foto.id}`);
+        if (uploadDiv && uploadDiv.dataset.driveUrl) {
+            fotosConUrlFinal++;
+        }
+    }
+    
+    console.log(`📸 Total final: ${fotosConUrlFinal}/7 fotos con URL`);
+    
+    // Actualizar badge
     const fotosBadge = document.getElementById('statusFotos');
     if (fotosBadge) {
-        if (todasEnDrive) {
+        if (fotosConUrlFinal === 7) {
             fotosBadge.textContent = '✓ Completado (7/7)';
             fotosBadge.classList.add('completado');
             fotosBadge.classList.remove('en-proceso');
-        } else if (todasTienenImagen) {
-            fotosBadge.textContent = `⏳ ${fotosConUrl}/7 en Drive`;
+        } else if (fotosConImagen > 0) {
+            fotosBadge.textContent = `⏳ ${fotosConUrlFinal}/7 en Drive`;
             fotosBadge.classList.add('en-proceso');
             fotosBadge.classList.remove('completado');
         } else {
@@ -1330,9 +1392,22 @@ function validarCompletadoFotos() {
         }
     }
     
+    // Actualizar estado local
+    const todasEnDrive = fotosConUrlFinal === 7;
     if (seccionesCompletadasLocal.fotos !== todasEnDrive) {
         seccionesCompletadasLocal.fotos = todasEnDrive;
         actualizarBotonFinalizar();
+    }
+    
+    // Si faltan fotos, mostrar cuáles
+    if (fotosConUrlFinal < 7) {
+        const faltantes = FOTOS_CONFIG
+            .filter(f => {
+                const div = document.getElementById(`upload-${f.id}`);
+                return !div || !div.dataset.driveUrl;
+            })
+            .map(f => f.label);
+        console.log(`⚠️ Fotos faltantes: ${faltantes.join(', ')}`);
     }
     
     return todasEnDrive;

@@ -309,7 +309,7 @@ async function fetchWithRetry(url, options = {}, retries = MAX_UPLOAD_RETRIES) {
 }
 
 // =====================================================
-// FUNCIÓN PARA HACER PETICIONES CON TOKEN
+// FUNCIÓN PARA HACER PETICIONES CON TOKEN - CORREGIDA
 // =====================================================
 async function fetchWithToken(url, options = {}) {
     const token = localStorage.getItem('furia_token');
@@ -331,7 +331,16 @@ async function fetchWithToken(url, options = {}) {
             headers
         });
         
+        // 🔥 SOLO manejar 401 si NO es una petición de subida
         if (response.status === 401) {
+            const isUpload = url.includes('upload-foto') || url.includes('upload-audio');
+            
+            // 🔥 Si es upload, NO redirigir, solo lanzar error controlado
+            if (isUpload) {
+                logger.warn('[fetchWithToken] ⚠️ Error 401 en subida - Token expirado');
+                throw new Error('Sesión expirada - Reintenta subir la foto');
+            }
+            
             logger.warn('[fetchWithToken] ⚠️ Token expirado, intentando refrescar...');
             
             try {
@@ -348,15 +357,25 @@ async function fetchWithToken(url, options = {}) {
                 if (refreshResponse.ok) {
                     const refreshData = await refreshResponse.json();
                     if (refreshData.token) {
+                        // Guardar nuevo token
                         localStorage.setItem('furia_token', refreshData.token);
+                        
+                        // Reintentar la petición original con el nuevo token
                         const newHeaders = {
                             ...headers,
                             'Authorization': `Bearer ${refreshData.token}`
                         };
+                        
+                        // Si es FormData, no usar Content-Type
+                        if (options.body && options.body instanceof FormData) {
+                            delete newHeaders['Content-Type'];
+                        }
+                        
                         const retryResponse = await fetch(url, {
                             ...options,
                             headers: newHeaders
                         });
+                        
                         if (retryResponse.ok) {
                             return retryResponse;
                         }
@@ -366,13 +385,16 @@ async function fetchWithToken(url, options = {}) {
                 logger.error('[fetchWithToken] ❌ Error refrescando token:', refreshError);
             }
             
-            logger.error('[fetchWithToken] ❌ Error 401 - Token inválido o expirado');
-            mostrarNotificacion('⏳ Tu sesión expiró. Por favor, inicia sesión nuevamente.', 'warning');
-            localStorage.clear();
-            
-            setTimeout(() => {
-                window.location.href = `${window.API_BASE_URL}/`;
-            }, 1500);
+            // 🔥 SOLO redirigir si NO es una subida
+            if (!url.includes('upload-foto') && !url.includes('upload-audio')) {
+                logger.error('[fetchWithToken] ❌ Error 401 - Token inválido o expirado');
+                mostrarNotificacion('⏳ Tu sesión expiró. Por favor, inicia sesión nuevamente.', 'warning');
+                localStorage.clear();
+                
+                setTimeout(() => {
+                    window.location.href = `${window.API_BASE_URL}/`;
+                }, 1500);
+            }
             
             throw new Error('Sesión expirada');
         }
@@ -693,9 +715,6 @@ async function procesarCola() {
     }, 500);
 }
 
-// =====================================================
-// SUBIR FOTO A GOOGLE DRIVE
-// =====================================================
 async function subirFotoGoogleDrive(file, carpeta, campo) {
     return new Promise(async (resolve, reject) => {
         if (subidasActivas[campo]) {
@@ -715,6 +734,7 @@ async function subirFotoGoogleDrive(file, carpeta, campo) {
             const url = `${API_URL}/jefe-operativo/upload-foto`;
             const token = localStorage.getItem('furia_token');
             
+            // 🔥 USAR FETCH NORMAL PARA SUBIDAS (NO fetchWithToken)
             const response = await fetch(url, {
                 method: 'POST',
                 body: formData,
@@ -722,6 +742,49 @@ async function subirFotoGoogleDrive(file, carpeta, campo) {
                     'Authorization': `Bearer ${token}`
                 }
             });
+            
+            // 🔥 Manejar 401 específicamente en subidas
+            if (response.status === 401) {
+                // Intentar refrescar token
+                try {
+                    const refreshResponse = await fetch(`${API_URL}/refresh-token`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: token })
+                    });
+                    
+                    if (refreshResponse.ok) {
+                        const refreshData = await refreshResponse.json();
+                        if (refreshData.token) {
+                            localStorage.setItem('furia_token', refreshData.token);
+                            
+                            // Reintentar subida con nuevo token
+                            const retryResponse = await fetch(url, {
+                                method: 'POST',
+                                body: formData,
+                                headers: {
+                                    'Authorization': `Bearer ${refreshData.token}`
+                                }
+                            });
+                            
+                            if (retryResponse.ok) {
+                                const data = await retryResponse.json();
+                                if (data.success && data.url) {
+                                    resolve(data.url);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                } catch (refreshError) {
+                    logger.error('❌ Error refrescando token en subida:', refreshError);
+                }
+                
+                // Si falla el refresh, mostrar notificación y permitir reintentar
+                mostrarNotificacion('⚠️ Tu sesión expiró. Vuelve a intentar subir la foto.', 'warning');
+                reject(new Error('Sesión expirada - Reintenta subir la foto'));
+                return;
+            }
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -1052,7 +1115,6 @@ function eliminarGrabacion() {
     }
     validarCompletadoDescripcion();
 }
-
 async function subirAudioGoogleDrive(audioBlob, carpeta) {
     return new Promise(async (resolve, reject) => {
         const formData = new FormData();
@@ -1072,6 +1134,46 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
                     'Authorization': `Bearer ${token}`
                 }
             });
+            
+            // 🔥 Manejar 401 en audio
+            if (response.status === 401) {
+                try {
+                    const refreshResponse = await fetch(`${API_URL}/refresh-token`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: token })
+                    });
+                    
+                    if (refreshResponse.ok) {
+                        const refreshData = await refreshResponse.json();
+                        if (refreshData.token) {
+                            localStorage.setItem('furia_token', refreshData.token);
+                            
+                            const retryResponse = await fetch(url, {
+                                method: 'POST',
+                                body: formData,
+                                headers: {
+                                    'Authorization': `Bearer ${refreshData.token}`
+                                }
+                            });
+                            
+                            if (retryResponse.ok) {
+                                const data = await retryResponse.json();
+                                if (data.success && data.url) {
+                                    resolve(data.url);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                } catch (refreshError) {
+                    logger.error('❌ Error refrescando token en audio:', refreshError);
+                }
+                
+                mostrarNotificacion('⚠️ Sesión expirada. Reintenta subir el audio.', 'warning');
+                reject(new Error('Sesión expirada - Reintenta subir el audio'));
+                return;
+            }
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);

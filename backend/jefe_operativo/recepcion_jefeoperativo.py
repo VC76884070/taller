@@ -1181,14 +1181,11 @@ def verificar_placa(current_user, placa):
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# ENDPOINT 13: SUBIR FOTO A GOOGLE DRIVE
-# =====================================================
+# En recepcion_jefeoperativo.py - Asegúrate de que este código esté correcto
 
 @recepcion_jefe_bp.route('/upload-foto', methods=['POST'])
 @jefe_operativo_required
 def upload_foto_drive(current_user):
-    """Sube una foto a Google Drive"""
     try:
         from google_drive import google_drive
         from datetime import datetime
@@ -1203,10 +1200,15 @@ def upload_foto_drive(current_user):
         if not codigo_sesion:
             return jsonify({'error': 'No se recibió el código de sesión'}), 400
         
+        # 🔥 VERIFICAR QUE EL ARCHIVO NO ESTÉ VACÍO
+        if file.filename == '':
+            return jsonify({'error': 'Archivo vacío'}), 400
+        
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         user_id = current_user['id']
         filename = f"{campo}_{user_id}_{timestamp}.jpg"
         
+        # 🔥 USAR EL CÓDIGO DE SESIÓN COMO CARPETA
         folder_path = google_drive.generate_folder_path(
             modulo='recepcion',
             referencia_id=codigo_sesion,
@@ -1222,47 +1224,27 @@ def upload_foto_drive(current_user):
         url = result['url']
         logger.info(f"📸 Foto subida: {url}")
         
-        try:
-            if codigo_sesion not in sesiones_activas:
-                sesion = cargar_sesion_de_db(codigo_sesion)
-                if sesion:
-                    sesiones_activas[codigo_sesion] = sesion
+        # 🔥 ACTUALIZAR SESIÓN EN MEMORIA
+        if codigo_sesion in sesiones_activas:
+            sesion = sesiones_activas[codigo_sesion]
+            if 'datos' not in sesion:
+                sesion['datos'] = {}
+            if 'fotos' not in sesion['datos']:
+                sesion['datos']['fotos'] = {}
             
-            if codigo_sesion in sesiones_activas:
-                sesion = sesiones_activas[codigo_sesion]
-                
-                if 'datos' not in sesion:
-                    sesion['datos'] = {}
-                if 'fotos' not in sesion['datos']:
-                    sesion['datos']['fotos'] = {}
-                
-                campo_map = {
-                    'lateral_izquierdo': 'url_lateral_izquierda',
-                    'lateral_derecho': 'url_lateral_derecha',
-                    'frontal': 'url_foto_frontal',
-                    'trasera': 'url_foto_trasera',
-                    'superior': 'url_foto_superior',
-                    'inferior': 'url_foto_inferior',
-                    'tablero': 'url_foto_tablero'
-                }
-                campo_db = campo_map.get(campo, campo)
-                
-                sesion['datos']['fotos'][campo_db] = url
-                
-                fotos = sesion['datos']['fotos']
-                fotos_validas = sum(1 for v in fotos.values() if v and v != 'null' and v != '')
-                fotos_completas = fotos_validas == 7
-                
-                if 'secciones_completadas' not in sesion:
-                    sesion['secciones_completadas'] = {}
-                sesion['secciones_completadas']['fotos'] = fotos_completas
-                
-                guardar_sesion_en_db(sesion)
-                
-                logger.info(f"📸 Sesión actualizada: {fotos_validas}/7 fotos")
-                
-        except Exception as e:
-            logger.warning(f"⚠️ No se pudo actualizar sesión automáticamente: {e}")
+            campo_map = {
+                'lateral_izquierdo': 'url_lateral_izquierda',
+                'lateral_derecho': 'url_lateral_derecha',
+                'frontal': 'url_foto_frontal',
+                'trasera': 'url_foto_trasera',
+                'superior': 'url_foto_superior',
+                'inferior': 'url_foto_inferior',
+                'tablero': 'url_foto_tablero'
+            }
+            campo_db = campo_map.get(campo, campo)
+            
+            sesion['datos']['fotos'][campo_db] = url
+            guardar_sesion_en_db(sesion)
         
         return jsonify({
             'success': True,
@@ -1273,6 +1255,8 @@ def upload_foto_drive(current_user):
         
     except Exception as e:
         logger.error(f"❌ Error subiendo foto: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 

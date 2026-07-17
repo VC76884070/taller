@@ -887,39 +887,53 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
     });
 }
 
-// =====================================================
-// VALIDACIONES
-// =====================================================
 function validarCompletadoCliente() {
-    const nombre = document.getElementById('clienteNombre')?.value.trim();
-    const telefono = document.getElementById('clienteTelefono')?.value.trim();
-    const completada = !!(nombre && telefono);
+    const nombre = document.getElementById('clienteNombre')?.value?.trim();
+    const telefono = document.getElementById('clienteTelefono')?.value?.trim();
+    const ubicacion = document.getElementById('clienteUbicacion')?.value?.trim();
+    
+    // 🔥 AHORA REQUIERE LOS 3 CAMPOS: NOMBRE + TELÉFONO + UBICACIÓN
+    const completada = !!(nombre && telefono && ubicacion);
+    
     if (seccionesCompletadasLocal.cliente !== completada) {
         seccionesCompletadasLocal.cliente = completada;
         actualizarEstadoVisualSeccion('cliente', completada);
         actualizarBotonFinalizar();
-        if (completada && codigoSesion && !camposEnEdicion.cliente) guardarSeccion('cliente');
+        if (completada && codigoSesion && !camposEnEdicion.cliente) {
+            guardarSeccion('cliente');
+        }
     }
     return completada;
 }
 
 function validarCompletadoVehiculo() {
-    const placa = document.getElementById('vehiculoPlaca')?.value.trim();
-    const marca = document.getElementById('vehiculoMarca')?.value.trim();
-    const modelo = document.getElementById('vehiculoModelo')?.value.trim();
-    const completada = !!(placa && marca && modelo);
+    const placa = document.getElementById('vehiculoPlaca')?.value?.trim();
+    const marca = document.getElementById('vehiculoMarca')?.value?.trim();
+    const modelo = document.getElementById('vehiculoModelo')?.value?.trim();
+    const anio = document.getElementById('vehiculoAnio')?.value?.trim();
+    const kilometraje = document.getElementById('vehiculoKilometraje')?.value?.trim();
+    
+    // 🔥 AHORA REQUIERE LOS 5 CAMPOS: PLACA + MARCA + MODELO + AÑO + KILOMETRAJE
+    const completada = !!(placa && marca && modelo && anio && kilometraje);
+    
     if (seccionesCompletadasLocal.vehiculo !== completada) {
         seccionesCompletadasLocal.vehiculo = completada;
         actualizarEstadoVisualSeccion('vehiculo', completada);
         actualizarBotonFinalizar();
-        if (completada && codigoSesion && !camposEnEdicion.vehiculo) guardarSeccion('vehiculo');
+        if (completada && codigoSesion && !camposEnEdicion.vehiculo) {
+            guardarSeccion('vehiculo');
+        }
     }
     return completada;
 }
 
 function validarCompletadoDescripcion() {
     const texto = descripcionProblema?.value?.trim();
-    const completada = !!(texto && texto.length > 0);
+    const tieneAudio = !!(audioDriveUrl && audioDriveUrl !== 'null' && audioDriveUrl !== '');
+    
+    // 🔥 AHORA REQUIERE TEXTO + AUDIO
+    const completada = !!(texto && texto.length > 0 && tieneAudio);
+    
     if (seccionesCompletadasLocal.descripcion !== completada) {
         seccionesCompletadasLocal.descripcion = completada;
         actualizarEstadoVisualSeccion('descripcion', completada);

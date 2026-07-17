@@ -1078,47 +1078,235 @@ async function recuperarSesionActiva() {
 }
 
 // =====================================================
-// FINALIZAR SESIÓN
+// FUNCIÓN COMPLETA: FINALIZAR SESIÓN CON REPORTE (CORREGIDA)
 // =====================================================
 async function finalizarSesionConReporte() {
-    if (!codigoSesion) return;
-    
+    if (!codigoSesion) {
+        mostrarNotificacion('⚠️ No hay sesión activa', 'warning');
+        return;
+    }
+
     showProgress('Finalizando Recepción', 'Validando datos...');
-    updateProgressBar(10);
-    
-    validarCompletadoCliente();
-    validarCompletadoVehiculo();
-    validarCompletadoFotos();
-    validarCompletadoDescripcion();
-    
-    await new Promise(resolve => setTimeout(resolve, 300));
-    updateProgressBar(30);
-    
-    if (!seccionesCompletadasLocal.cliente || !seccionesCompletadasLocal.vehiculo || 
-        !seccionesCompletadasLocal.fotos || !seccionesCompletadasLocal.descripcion) {
-        completeProgress(false);
-        mostrarNotificacion('Completa todas las secciones antes de finalizar', 'warning');
-        return;
-    }
-    
-    if (!confirm('¿Finalizar recepción? Los datos se guardarán permanentemente.')) {
-        hideProgress();
-        return;
-    }
-    
-    updateProgressBar(50);
-    updateProgressMessage('Guardando información...');
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
+    updateProgressBar(5);
+
     try {
-        updateProgressBar(70);
+        // =============================================
+        // 1. RECOLECTAR TODAS LAS URLS DE FOTOS
+        // =============================================
+        updateProgressMessage('Verificando fotos...');
+        
+        // Construir objeto de fotos con todas las URLs
+        const fotosParaGuardar = {};
+        let fotosFaltantes = [];
+        let totalFotosConUrl = 0;
+        
+        for (const foto of FOTOS_CONFIG) {
+            const uploadDiv = document.getElementById(`upload-${foto.id}`);
+            let url = uploadDiv?.getAttribute('data-drive-url') || 
+                     uploadDiv?.dataset?.driveUrl || 
+                     fotosSubidasLocal[foto.campo];
+            
+            // Verificar en la sesión
+            if (!url || url === 'null' || url === '' || url === 'undefined') {
+                if (sesionActual?.datos?.fotos) {
+                    url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
+                }
+            }
+            
+            if (url && url !== 'null' && url !== '' && url !== 'undefined') {
+                fotosParaGuardar[foto.campo] = url;
+                totalFotosConUrl++;
+            } else {
+                // Verificar si hay imagen en el preview (subida pero sin URL)
+                const preview = uploadDiv?.querySelector('.upload-preview');
+                const hasImage = uploadDiv?.classList.contains('has-image') || 
+                                (preview && preview.style.backgroundImage && 
+                                 preview.style.backgroundImage !== '' && 
+                                 preview.style.backgroundImage !== 'none');
+                
+                if (hasImage) {
+                    // Tiene imagen pero no URL - podría estar subiendo
+                    fotosFaltantes.push(`${foto.label} (subiendo...)`);
+                } else {
+                    fotosFaltantes.push(foto.label);
+                }
+            }
+        }
+
+        // =============================================
+        // 2. VERIFICAR QUE TODAS LAS FOTOS TENGAN URL
+        // =============================================
+        if (totalFotosConUrl < 7) {
+            // Intentar guardar las fotos que tenemos en la sesión
+            if (Object.keys(fotosParaGuardar).length > 0) {
+                updateProgressMessage('Guardando fotos en el servidor...');
+                
+                // Guardar sección de fotos
+                const guardarResponse = await fetchWithToken(`${API_URL}/jefe-operativo/guardar-seccion`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        codigo: codigoSesion,
+                        seccion: 'fotos',
+                        datos: fotosParaGuardar
+                    })
+                });
+                
+                if (guardarResponse.ok) {
+                    const guardarData = await guardarResponse.json();
+                    if (guardarData.success) {
+                        sesionActual = guardarData.sesion;
+                        // Recalcular fotos
+                        const fotosSesion = sesionActual?.datos?.fotos || {};
+                        totalFotosConUrl = Object.values(fotosSesion).filter(v => v && v !== 'null' && v !== '').length;
+                    }
+                }
+            }
+            
+            // Verificar nuevamente después de guardar
+            if (totalFotosConUrl < 7) {
+                // Recalcular fotos faltantes
+                fotosFaltantes = [];
+                for (const foto of FOTOS_CONFIG) {
+                    const uploadDiv = document.getElementById(`upload-${foto.id}`);
+                    let url = uploadDiv?.getAttribute('data-drive-url') || 
+                             uploadDiv?.dataset?.driveUrl || 
+                             fotosSubidasLocal[foto.campo];
+                    
+                    if (!url || url === 'null' || url === '' || url === 'undefined') {
+                        if (sesionActual?.datos?.fotos) {
+                            url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
+                        }
+                    }
+                    
+                    if (!url || url === 'null' || url === '' || url === 'undefined') {
+                        fotosFaltantes.push(foto.label);
+                    }
+                }
+                
+                if (fotosFaltantes.length > 0) {
+                    completeProgress(false);
+                    mostrarNotificacion(`⚠️ Faltan fotos: ${fotosFaltantes.join(', ')}`, 'warning');
+                    return;
+                }
+            }
+        }
+
+        // =============================================
+        // 3. VALIDAR TODAS LAS SECCIONES
+        // =============================================
+        updateProgressBar(30);
+        updateProgressMessage('Validando datos...');
+        
+        // Validar cliente
+        const clienteNombre = document.getElementById('clienteNombre')?.value?.trim() || '';
+        const clienteTelefono = document.getElementById('clienteTelefono')?.value?.trim() || '';
+        seccionesCompletadasLocal.cliente = !!(clienteNombre && clienteTelefono);
+        actualizarEstadoVisualSeccion('cliente', seccionesCompletadasLocal.cliente);
+        
+        // Validar vehículo
+        const placa = document.getElementById('vehiculoPlaca')?.value?.trim() || '';
+        const marca = document.getElementById('vehiculoMarca')?.value?.trim() || '';
+        const modelo = document.getElementById('vehiculoModelo')?.value?.trim() || '';
+        seccionesCompletadasLocal.vehiculo = !!(placa && marca && modelo);
+        actualizarEstadoVisualSeccion('vehiculo', seccionesCompletadasLocal.vehiculo);
+        
+        // Validar fotos (usar totalFotosConUrl)
+        seccionesCompletadasLocal.fotos = totalFotosConUrl === 7;
+        actualizarEstadoVisualSeccion('fotos', seccionesCompletadasLocal.fotos);
+        
+        // Validar descripción
+        const descripcionTexto = descripcionProblema?.value?.trim() || '';
+        seccionesCompletadasLocal.descripcion = !!(descripcionTexto && descripcionTexto.length > 0);
+        actualizarEstadoVisualSeccion('descripcion', seccionesCompletadasLocal.descripcion);
+        
+        // =============================================
+        // 4. VERIFICAR ESTADO FINAL
+        // =============================================
+        const seccionesFaltantes = [];
+        if (!seccionesCompletadasLocal.cliente) seccionesFaltantes.push('Cliente');
+        if (!seccionesCompletadasLocal.vehiculo) seccionesFaltantes.push('Vehículo');
+        if (!seccionesCompletadasLocal.fotos) seccionesFaltantes.push('Fotos (7/7 requeridas)');
+        if (!seccionesCompletadasLocal.descripcion) seccionesFaltantes.push('Descripción');
+        
+        if (seccionesFaltantes.length > 0) {
+            completeProgress(false);
+            mostrarNotificacion(`⚠️ Completa: ${seccionesFaltantes.join(', ')}`, 'warning');
+            return;
+        }
+
+        // =============================================
+        // 5. CONFIRMAR CON EL USUARIO
+        // =============================================
+        if (!confirm('✅ ¿Finalizar recepción?\n\nLos datos se guardarán permanentemente y se generará la orden de trabajo.')) {
+            hideProgress();
+            return;
+        }
+
+        // =============================================
+        // 6. PREPARAR DATOS PARA ENVIAR
+        // =============================================
+        updateProgressBar(50);
+        updateProgressMessage('Preparando datos...');
+        
+        // Recolectar todas las URLs de fotos de la sesión o del DOM
+        const fotosFinales = {};
+        for (const foto of FOTOS_CONFIG) {
+            const uploadDiv = document.getElementById(`upload-${foto.id}`);
+            let url = uploadDiv?.getAttribute('data-drive-url') || 
+                     uploadDiv?.dataset?.driveUrl || 
+                     fotosSubidasLocal[foto.campo];
+            
+            if (!url || url === 'null' || url === '' || url === 'undefined') {
+                if (sesionActual?.datos?.fotos) {
+                    url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
+                }
+            }
+            
+            if (url && url !== 'null' && url !== '' && url !== 'undefined') {
+                fotosFinales[foto.campo] = url;
+            }
+        }
+        
+        const datosFinales = {
+            cliente: {
+                nombre: clienteNombre,
+                telefono: clienteTelefono,
+                ubicacion: document.getElementById('clienteUbicacion')?.value || '',
+                latitud: document.getElementById('clienteLatitud')?.value || null,
+                longitud: document.getElementById('clienteLongitud')?.value || null
+            },
+            vehiculo: {
+                placa: placa.toUpperCase(),
+                marca: marca,
+                modelo: modelo,
+                anio: parseInt(document.getElementById('vehiculoAnio')?.value) || null,
+                kilometraje: parseInt(document.getElementById('vehiculoKilometraje')?.value) || 0
+            },
+            fotos: fotosFinales,
+            descripcion: {
+                texto: descripcionTexto,
+                audio_url: audioDriveUrl || null
+            }
+        };
+
+        // =============================================
+        // 7. ENVIAR AL SERVIDOR PARA FINALIZAR
+        // =============================================
+        updateProgressBar(60);
         updateProgressMessage('Generando orden de trabajo...');
         
-        if (!userInfo || !userInfo.id) throw new Error('No se encontró información del usuario.');
+        if (!userInfo || !userInfo.id) {
+            throw new Error('No se encontró información del usuario.');
+        }
         
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/finalizar-sesion`, {
             method: 'POST',
-            body: JSON.stringify({ codigo: codigoSesion, datos: sesionActual?.datos, usuario_id: userInfo.id, usuario_nombre: userInfo.nombre })
+            body: JSON.stringify({ 
+                codigo: codigoSesion, 
+                datos: datosFinales,
+                usuario_id: userInfo.id, 
+                usuario_nombre: userInfo.nombre 
+            })
         });
         
         if (!response.ok) {
@@ -1127,24 +1315,56 @@ async function finalizarSesionConReporte() {
         }
         
         const data = await response.json();
-        if (data.success) {
-            updateProgressBar(100);
-            updateProgressMessage('¡Recepción finalizada con éxito!');
-            
-            if (data.id_orden) await mostrarReporteFinal(data.id_orden);
-            else mostrarNotificacion('Error: No se recibió el ID de la orden', 'error');
-            
-            limpiarSesionCompleta();
-            setTimeout(() => { completeProgress(true); mostrarNotificacion('Recepción finalizada', 'success'); }, 500);
-            if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
-            await cargarRecepciones();
-            await cargarSesionesActivas();
-        } else {
-            throw new Error(data.message || 'Error al finalizar');
+        
+        if (!data.success) {
+            throw new Error(data.message || 'Error al finalizar la recepción');
         }
+
+        // =============================================
+        // 8. PROCESAR RESPUESTA EXITOSA
+        // =============================================
+        updateProgressBar(90);
+        updateProgressMessage('¡Recepción finalizada con éxito!');
+        
+        const idOrden = data.id_orden;
+        mostrarNotificacion(`✅ Recepción finalizada: ${data.codigo || 'OT-N/A'}`, 'success');
+        
+        // =============================================
+        // 9. GENERAR REPORTE / PDF
+        // =============================================
+        if (idOrden) {
+            updateProgressMessage('Generando reporte...');
+            await mostrarReporteFinal(idOrden);
+        } else {
+            mostrarNotificacion('⚠️ Recepción guardada pero no se pudo generar el reporte', 'warning');
+        }
+        
+        // =============================================
+        // 10. LIMPIAR SESIÓN
+        // =============================================
+        updateProgressBar(100);
+        updateProgressMessage('¡Completado!');
+        
+        limpiarSesionCompleta();
+        
+        setTimeout(() => {
+            completeProgress(true);
+            if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
+            cargarRecepciones();
+            cargarSesionesActivas();
+        }, 500);
+        
     } catch (error) {
+        console.error('Error en finalizarSesionConReporte:', error);
         completeProgress(false);
-        mostrarNotificacion(error.message || 'Error al finalizar', 'error');
+        mostrarNotificacion(`❌ ${error.message || 'Error al finalizar la recepción'}`, 'error');
+        
+        if (error.message?.includes('Sesión expirada') || error.message?.includes('token')) {
+            setTimeout(() => {
+                localStorage.clear();
+                window.location.href = `${window.API_BASE_URL}/`;
+            }, 3000);
+        }
     }
 }
 
@@ -1646,10 +1866,11 @@ function mostrarModalDetalle(detalle) {
 }
 
 // =====================================================
-// FUNCIONES DE IMÁGENES
+// CARGAR IMÁGENES DE FOTOS EN EL DETALLE
 // =====================================================
 async function cargarImagenesFotos(fotos) {
     if (!fotos) return;
+    
     const panelFotos = document.getElementById('pane-fotos');
     if (!panelFotos) return;
     
@@ -1659,29 +1880,185 @@ async function cargarImagenesFotos(fotos) {
     for (let i = 0; i < camposFotos.length; i++) {
         const campo = camposFotos[i];
         const url = fotos[campo];
-        if (!url || url === 'null' || url === 'None' || url === '') continue;
         
+        // 🔥 VERIFICAR QUE LA URL SEA VÁLIDA
+        if (!url || url === 'null' || url === 'None' || url === '' || url === 'undefined') {
+            continue;
+        }
+        
+        // Buscar el contenedor de la foto
         const contenedores = panelFotos.querySelectorAll(`.detalle-foto-placeholder[id^="foto-${campo}-"]`);
         if (contenedores.length === 0) continue;
         const contenedor = contenedores[0];
         const fotoDiv = contenedor.closest('.detalle-foto');
         
+        // 🔥 MOSTRAR INDICADOR DE CARGA
+        contenedor.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:8px;height:100%;">
+            <i class="fas fa-spinner fa-spin" style="font-size:24px;color:#C1121F;"></i>
+            <span style="font-size:10px;text-align:center;">Cargando...</span>
+        </div>`;
+        
         try {
+            // 🔥 LLAMAR AL ENDPOINT PARA CONVERTIR A BASE64
             const response = await fetchWithToken(`${API_URL}/jefe-operativo/imagen-base64`, {
                 method: 'POST',
                 body: JSON.stringify({ url })
             });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
             const data = await response.json();
+            
             if (data.success && data.base64) {
+                // 🔥 MOSTRAR LA IMAGEN CON LA URL BASE64
                 contenedor.innerHTML = `<img src="${data.base64}" alt="${labels[i]}" style="width:100%;height:100%;object-fit:cover;display:block;" 
                     onerror="this.parentElement.innerHTML='<div style=\\'display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:4px;height:100%;\\'><i class=\\'fas fa-exclamation-triangle\\' style=\\'font-size:20px;\\'></i><span style=\\'font-size:10px;text-align:center;\\'>Error</span></div>'">`;
                 if (fotoDiv) fotoDiv.classList.add('loaded');
+            } else {
+                throw new Error(data.error || 'Error convirtiendo imagen');
             }
         } catch (error) {
+            console.error(`❌ Error cargando foto ${labels[i]}:`, error);
             contenedor.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:4px;height:100%;">
-                <i class="fas fa-exclamation-triangle" style="font-size:20px;"></i><span style="font-size:10px;text-align:center;">Error</span></div>`;
+                <i class="fas fa-exclamation-triangle" style="font-size:20px;"></i>
+                <span style="font-size:10px;text-align:center;">Error al cargar</span>
+            </div>`;
         }
     }
+}
+// =====================================================
+// GENERAR HTML PARA EL REPORTE (CON IMÁGENES CONVERTIDAS)
+// =====================================================
+async function generarHTMLReporteConImagenes(detalle) {
+    if (!detalle) return '<div class="loading-preview"><i class="fas fa-exclamation-triangle"></i><p>No hay datos</p></div>';
+    
+    const fotos = detalle.fotos || {};
+    const camposFotos = ['url_lateral_izquierda', 'url_lateral_derecha', 'url_foto_frontal', 'url_foto_trasera', 'url_foto_superior', 'url_foto_inferior', 'url_foto_tablero'];
+    const labels = ['Lateral Izquierdo', 'Lateral Derecho', 'Frontal', 'Trasera', 'Superior', 'Inferior', 'Tablero'];
+    
+    // 🔥 CONVERTIR CADA FOTO A BASE64 PARA EL PDF
+    const fotosBase64 = {};
+    for (let i = 0; i < camposFotos.length; i++) {
+        const campo = camposFotos[i];
+        const url = fotos[campo];
+        if (url && url !== 'null' && url !== 'None' && url !== '' && url !== 'undefined') {
+            try {
+                // Intentar convertir a base64
+                const response = await fetchWithToken(`${API_URL}/jefe-operativo/imagen-base64`, {
+                    method: 'POST',
+                    body: JSON.stringify({ url })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.base64) {
+                        fotosBase64[campo] = data.base64;
+                    }
+                }
+            } catch (error) {
+                console.warn(`Error convirtiendo ${campo}:`, error);
+            }
+        }
+    }
+    
+    const fechaActual = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const fechaIngreso = detalle.fecha_ingreso ? new Date(detalle.fecha_ingreso).toLocaleString('es-ES') : 'No registrada';
+    
+    // 🔥 USAR LAS IMÁGENES EN BASE64 PARA EL PDF
+    const fotosArray = Object.entries(fotosBase64)
+        .filter(([key, url]) => url && url.startsWith('data:image'))
+        .map(([key, url]) => {
+            const index = camposFotos.indexOf(key);
+            return { campo: key, label: labels[index] || key, url };
+        });
+    
+    return `<div class="reporte-container" style="max-width:100%;width:100%;margin:0 auto;padding:10mm 12mm 8mm 12mm;font-family:'Segoe UI',Arial,sans-serif;background:white;color:#222;font-size:10.5px;line-height:1.5;box-sizing:border-box;">
+        <!-- Encabezado -->
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #C1121F;padding-bottom:10px;margin-bottom:12px;">
+            <div><h1 style="font-size:22px;color:#C1121F;margin:0;">FURIA <span style="color:#222;">MOTOR</span></h1>
+            <div style="font-size:8px;color:#888;margin-top:2px;">TALLER AUTOMOTRIZ ESPECIALIZADO</div></div>
+            <div style="text-align:right;font-size:8px;line-height:1.4;">
+                <strong style="font-size:9px;color:#C1121F;">FURIA MOTOR COMPANY</strong><br>Cochabamba, Bolivia<br>
+                <span style="font-size:7px;color:#999;">Tel: +591 4 1234567</span>
+            </div>
+        </div>
+        
+        <!-- Título -->
+        <div style="text-align:center;margin-bottom:12px;">
+            <h2 style="font-size:14px;color:#C1121F;margin:0;letter-spacing:3px;text-transform:uppercase;">Orden de Trabajo - Recepción</h2>
+            <div style="font-size:13px;font-weight:bold;background:#f0f0f0;display:inline-block;padding:4px 20px;border-radius:4px;margin-top:4px;color:#C1121F;border:1px solid #ddd;"># ${detalle.codigo_unico || 'OT-N/A'}</div>
+        </div>
+        
+        <!-- Información General -->
+        <div style="background:#f8f8f8;border-radius:4px;padding:8px 12px;margin-bottom:10px;border:1px solid #eee;">
+            <div style="display:flex;flex-wrap:wrap;gap:6px 20px;font-size:9.5px;">
+                <span><strong>📅 Fecha:</strong> ${fechaIngreso}</span>
+                <span><strong>📊 Estado:</strong> <span style="background:#ffc107;color:white;padding:1px 10px;border-radius:12px;font-size:8px;font-weight:600;">${detalle.estado_global || 'En Recepción'}</span></span>
+                <span><strong>🆔 ID Orden:</strong> #${detalle.id || 'N/A'}</span>
+            </div>
+        </div>
+        
+        <!-- Cliente y Vehículo -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+            <div style="background:#f8f8f8;border-radius:4px;padding:8px 12px;border:1px solid #eee;">
+                <div style="font-weight:700;font-size:10px;color:#C1121F;margin-bottom:6px;border-bottom:1px solid #ddd;padding-bottom:4px;">👤 Datos del Cliente</div>
+                <div style="font-size:9.5px;line-height:1.7;">
+                    <div><strong>Nombre:</strong> ${detalle.cliente_nombre || 'No registrado'}</div>
+                    <div><strong>Teléfono:</strong> ${detalle.cliente_telefono || 'No registrado'}</div>
+                    <div><strong>Ubicación:</strong> ${detalle.cliente_ubicacion || 'No especificada'}</div>
+                </div>
+            </div>
+            <div style="background:#f8f8f8;border-radius:4px;padding:8px 12px;border:1px solid #eee;">
+                <div style="font-weight:700;font-size:10px;color:#C1121F;margin-bottom:6px;border-bottom:1px solid #ddd;padding-bottom:4px;">🚗 Datos del Vehículo</div>
+                <div style="font-size:9.5px;line-height:1.7;">
+                    <div><strong style="color:#C1121F;font-size:11px;">Placa:</strong> <strong style="color:#C1121F;font-size:11px;">${detalle.placa || 'No registrada'}</strong></div>
+                    <div><strong>Marca:</strong> ${detalle.marca || 'No registrada'}</div>
+                    <div><strong>Modelo:</strong> ${detalle.modelo || 'No registrado'}</div>
+                    <div><strong>Año:</strong> ${detalle.anio || 'No especificado'}</div>
+                    <div><strong>Kilometraje:</strong> ${detalle.kilometraje ? Number(detalle.kilometraje).toLocaleString() : '0'} km</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Fotos -->
+        <div style="background:#f8f8f8;border-radius:4px;padding:8px 12px;margin-bottom:10px;border:1px solid #eee;">
+            <div style="font-weight:700;font-size:10px;color:#C1121F;margin-bottom:6px;border-bottom:1px solid #ddd;padding-bottom:4px;">📸 Fotos (${fotosArray.length}/7)</div>
+            ${fotosArray.length > 0 ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;margin:4px 0;">${fotosArray.map(f => `<div style="border:1px solid #ddd;border-radius:4px;overflow:hidden;background:#f5f5f5;text-align:center;"><img src="${f.url}" alt="${f.label}" style="width:100%;height:100px;object-fit:cover;display:block;background:#eee;"><div style="padding:2px;font-size:7px;font-weight:bold;color:#555;background:#f9f9f9;">${f.label}</div></div>`).join('')}</div>` : '<p style="color:#999;font-style:italic;font-size:11px;text-align:center;padding:10px;">No se registraron fotos</p>'}
+        </div>
+        
+        <!-- Descripción -->
+        <div style="background:#f8f8f8;border-radius:4px;padding:8px 12px;margin-bottom:10px;border:1px solid #eee;">
+            <div style="font-weight:700;font-size:10px;color:#C1121F;margin-bottom:6px;border-bottom:1px solid #ddd;padding-bottom:4px;">📝 Descripción del Problema</div>
+            <div style="background:white;padding:8px 10px;border-radius:4px;font-size:9.5px;min-height:30px;border:1px solid #e8e8e8;white-space:pre-wrap;line-height:1.6;">${detalle.transcripcion_problema || 'No se registró descripción'}</div>
+        </div>
+        
+        <!-- Firmas -->
+        <div style="margin-top:15px;padding-top:12px;border-top:2px solid #ddd;">
+            <div style="font-weight:700;font-size:11px;color:#C1121F;text-align:center;margin-bottom:12px;letter-spacing:3px;text-transform:uppercase;">✍️ Firmas de Conformidad</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;">
+                <div style="text-align:center;padding:0 5px;">
+                    <div style="font-weight:600;color:#333;margin-bottom:8px;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Firma del Cliente</div>
+                    <div style="border-bottom:2px solid #333;height:45px;margin-bottom:5px;"></div>
+                    <div style="font-size:10px;color:#555;font-weight:600;">${detalle.cliente_nombre || '____________________'}</div>
+                    <div style="font-size:8px;color:#999;margin-top:3px;">${fechaActual}</div>
+                </div>
+                <div style="text-align:center;padding:0 5px;">
+                    <div style="font-weight:600;color:#333;margin-bottom:8px;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Firma del Jefe Operativo</div>
+                    <div style="border-bottom:2px solid #333;height:45px;margin-bottom:5px;"></div>
+                    <div style="font-size:10px;color:#555;font-weight:600;">${detalle.jefe_operativo?.nombre || '____________________'}</div>
+                    <div style="font-size:8px;color:#999;margin-top:3px;">${fechaActual}</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div style="text-align:center;margin-top:18px;padding-top:8px;border-top:1px solid #eee;font-size:7px;color:#bbb;line-height:1.4;">
+            <span>Documento generado automáticamente por <strong style="color:#C1121F;">FURIA MOTOR</strong></span> | 
+            <span>Código: <strong>${detalle.codigo_unico || 'N/A'}</strong></span> | 
+            <span>${new Date().toLocaleString('es-ES')}</span>
+        </div>
+    </div>`;
 }
 
 function verImagenAmpliadaPorId(imgId, label) {
@@ -1706,15 +2083,24 @@ function verImagenAmpliada(url, label) {
 }
 
 // =====================================================
-// DESCARGA DE PDF
+// GENERAR PDF - DESCARGA Y SUBE A GOOGLE DRIVE
 // =====================================================
 async function descargarPDFFinal() {
-    if (descargandoPDF) { mostrarNotificacion('⏳ Ya se está generando el PDF...', 'warning'); return; }
-    if (!datosReporteFinal) { mostrarNotificacion('⚠️ No hay datos para generar PDF', 'warning'); return; }
+    if (descargandoPDF) {
+        mostrarNotificacion('⏳ Ya se está generando el PDF...', 'warning');
+        return;
+    }
+    if (!datosReporteFinal) {
+        mostrarNotificacion('⚠️ No hay datos para generar PDF', 'warning');
+        return;
+    }
     
     descargandoPDF = true;
     const btnDescargar = document.getElementById('btnDescargarPDFFinal') || document.getElementById('btnExportarPDFDetalle');
-    if (btnDescargar) { btnDescargar.disabled = true; btnDescargar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...'; }
+    if (btnDescargar) {
+        btnDescargar.disabled = true;
+        btnDescargar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
+    }
     
     showProgress('Generando PDF', 'Preparando el documento...');
     updateProgressBar(10);
@@ -1724,27 +2110,33 @@ async function descargarPDFFinal() {
         const fotos = datosReporteFinal.fotos || {};
         const camposFotos = ['url_lateral_izquierda', 'url_lateral_derecha', 'url_foto_frontal', 'url_foto_trasera', 'url_foto_superior', 'url_foto_inferior', 'url_foto_tablero'];
         
+        // 🔥 CONVERTIR FOTOS A BASE64 PARA EL PDF
+        updateProgressMessage('Convirtiendo fotos...');
         const fotosNecesitanConversion = camposFotos.filter(c => {
             const url = fotos[c];
             return url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined' && !url.startsWith('data:image');
         });
         
-        if (fotosNecesitanConversion.length > 0) {
-            updateProgressMessage(`Convirtiendo ${fotosNecesitanConversion.length} fotos...`);
-            for (const campo of fotosNecesitanConversion) {
-                const url = fotos[campo];
-                try {
-                    const base64 = await convertirImagenABase64(url);
-                    if (base64 && base64.startsWith('data:image')) detalleParaPDF.fotos[campo] = base64;
-                } catch (error) {}
+        for (const campo of fotosNecesitanConversion) {
+            const url = fotos[campo];
+            try {
+                const base64 = await convertirImagenABase64(url);
+                if (base64 && base64.startsWith('data:image')) {
+                    detalleParaPDF.fotos[campo] = base64;
+                }
+            } catch (error) {
+                console.warn(`Error convirtiendo ${campo}:`, error);
             }
         }
         
-        if (!detalleParaPDF.fotos_base64) detalleParaPDF.fotos_base64 = detalleParaPDF.fotos;
+        detalleParaPDF.fotos_base64 = detalleParaPDF.fotos;
         updateProgressBar(40);
-        updateProgressMessage('Generando contenido...');
         
+        // 🔥 GENERAR HTML DEL REPORTE
+        updateProgressMessage('Generando contenido del reporte...');
         const reporteHTML = generarHTMLReporte(detalleParaPDF);
+        
+        // Crear contenedor temporal
         const container = document.createElement('div');
         container.id = 'pdfContainer';
         container.style.cssText = `position:fixed;left:0;top:0;width:100%;max-width:800px;margin:0 auto;padding:30px;background:white;font-family:Arial,sans-serif;z-index:-1;opacity:0;pointer-events:none;overflow:visible;`;
@@ -1752,12 +2144,10 @@ async function descargarPDFFinal() {
         document.body.appendChild(container);
         
         updateProgressBar(50);
-        updateProgressMessage('Renderizando...');
+        updateProgressMessage('Renderizando PDF...');
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        updateProgressBar(60);
-        updateProgressMessage('Generando PDF...');
-        
+        // 🔥 CARGAR html2pdf.js SI ES NECESARIO
         if (typeof html2pdf === 'undefined') {
             await new Promise((resolve, reject) => {
                 const script = document.createElement('script');
@@ -1768,28 +2158,98 @@ async function descargarPDFFinal() {
             });
         }
         
-        const opt = {
-            margin: [9, 9, 9, 9],
-            filename: `Reporte_${detalleParaPDF.codigo_unico || 'orden'}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false },
-            jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' }
-        };
+        updateProgressBar(60);
+        updateProgressMessage('Generando archivo PDF...');
         
         const elemento = container.querySelector('.reporte-container');
         if (!elemento) throw new Error('No se encontró el contenido del reporte');
         
-        await html2pdf().set(opt).from(elemento).save();
+        // 🔥 GENERAR PDF COMO BLOB
+        const pdfBlob = await html2pdf()
+            .set({
+                margin: [9, 9, 9, 9],
+                filename: `Reporte_${detalleParaPDF.codigo_unico || 'orden'}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { 
+                    scale: 2, 
+                    useCORS: true, 
+                    allowTaint: true, 
+                    backgroundColor: '#ffffff', 
+                    logging: false 
+                },
+                jsPDF: { 
+                    unit: 'mm', 
+                    format: 'letter', 
+                    orientation: 'portrait' 
+                }
+            })
+            .from(elemento)
+            .outputPdf('blob');
+        
+        updateProgressBar(75);
+        updateProgressMessage('Preparando para descargar...');
+        
+        // 🔥 1. DESCARGAR EL PDF LOCALMENTE
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(pdfBlob);
+        link.download = `Recepcion_${detalleParaPDF.codigo_unico || 'orden'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+        
+        mostrarNotificacion('📥 PDF descargado localmente', 'success');
+        
+        updateProgressBar(85);
+        updateProgressMessage('Subiendo PDF a Google Drive...');
+        
+        // 🔥 2. CONVERTIR BLOB A BASE64 PARA SUBIR A DRIVE
+        const reader = new FileReader();
+        const pdfBase64 = await new Promise((resolve) => {
+            reader.onload = () => resolve(reader.result);
+            reader.readAsDataURL(pdfBlob);
+        });
+        
+        // 🔥 3. ENVIAR AL BACKEND PARA SUBIR A GOOGLE DRIVE
+        const response = await fetchWithToken(`${API_URL}/jefe-operativo/subir-pdf-recepcion`, {
+            method: 'POST',
+            body: JSON.stringify({
+                pdf_base64: pdfBase64,
+                id_orden: detalleParaPDF.id || detalleParaPDF.id_orden,
+                codigo_unico: detalleParaPDF.codigo_unico || 'orden'
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Error al subir PDF a Drive');
+        }
+        
+        const data = await response.json();
+        
         updateProgressBar(100);
-        setTimeout(() => { completeProgress(true); mostrarNotificacion('✅ PDF descargado', 'success'); }, 500);
-        setTimeout(() => { if (container && document.body.contains(container)) document.body.removeChild(container); }, 3000);
+        updateProgressMessage('¡PDF guardado en Google Drive!');
+        
+        // 🔥 LIMPIAR CONTENEDOR
+        setTimeout(() => {
+            if (container && document.body.contains(container)) {
+                document.body.removeChild(container);
+            }
+        }, 1000);
+        
+        mostrarNotificacion('✅ PDF guardado en Google Drive', 'success');
+        setTimeout(() => completeProgress(true), 500);
         
     } catch (error) {
+        console.error('Error generando PDF:', error);
         completeProgress(false);
-        mostrarNotificacion('❌ Error al generar PDF', 'error');
+        mostrarNotificacion('❌ Error al generar PDF: ' + error.message, 'error');
     }
     
-    if (btnDescargar) { btnDescargar.disabled = false; btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF'; }
+    if (btnDescargar) {
+        btnDescargar.disabled = false;
+        btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
+    }
     descargandoPDF = false;
 }
 
@@ -1890,7 +2350,7 @@ async function convertirImagenABase64(url) {
 }
 
 // =====================================================
-// MOSTRAR REPORTE FINAL
+// MOSTRAR REPORTE FINAL - GENERA PDF AUTOMÁTICAMENTE
 // =====================================================
 async function mostrarReporteFinal(idOrden) {
     const modal = document.getElementById('codigoOrdenModal');
@@ -1917,50 +2377,50 @@ async function mostrarReporteFinal(idOrden) {
         return;
     }
     
-    try {
-        const response = await fetchWithToken(`${API_URL}/jefe-operativo/generar-pdf-recepcion/${idOrden}`, { method: 'POST' });
-        if (!response.ok) throw new Error('Error al generar el PDF');
-        const data = await response.json();
-        
-        const modalHeader = modal.querySelector('.modal-header h2');
-        if (modalHeader) {
-            modalHeader.innerHTML = `<i class="fas fa-check-circle" style="color:var(--verde-exito);"></i> ✅ ¡Recepción Finalizada! - ${detalle.codigo_unico || 'OT-N/A'}`;
-        }
-        
-        body.innerHTML = `<div style="text-align:center;padding:30px 20px;">
-            <i class="fas fa-check-circle" style="font-size:48px;color:#10B981;margin-bottom:20px;"></i>
-            <h3 style="color:white;margin-bottom:10px;">¡Recepción finalizada!</h3>
-            <p style="color:#8E8E93;margin-bottom:20px;">Código: <strong style="color:#C1121F;font-size:20px;">${detalle.codigo_unico || 'OT-N/A'}</strong></p>
-            <div style="background:#1A1A1C;border-radius:8px;padding:15px;margin:15px 0;border:1px solid #2C2C2E;">
-                <i class="fas fa-file-pdf" style="color:#C1121F;font-size:20px;margin-right:10px;"></i>
-                <span style="color:#8E8E93;font-size:13px;">PDF guardado en Google Drive</span>
-            </div>
-            <p style="color:#8E8E93;font-size:14px;">Haz clic en "Descargar PDF" para obtener el reporte.</p>
-        </div>`;
-        
-        if (btnDescargar) {
-            btnDescargar.style.display = 'inline-flex';
-            btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
-            btnDescargar.disabled = false;
-            btnDescargar.onclick = function(e) { e.preventDefault(); if (data.url) window.open(data.url, '_blank'); else descargarPDFFinal(); };
-        }
-        datosReporteFinal = detalle;
-        mostrarNotificacion('✅ PDF generado y guardado en Drive', 'success');
-        
-    } catch (error) {
-        body.innerHTML = `<div style="text-align:center;padding:30px 20px;">
-            <i class="fas fa-check-circle" style="font-size:48px;color:#10B981;margin-bottom:20px;"></i>
-            <h3 style="color:white;margin-bottom:10px;">¡Recepción finalizada!</h3>
-            <p style="color:#8E8E93;margin-bottom:20px;">Código: <strong style="color:#C1121F;font-size:20px;">${detalle.codigo_unico || 'OT-N/A'}</strong></p>
-            <div style="background:rgba(245,158,11,0.1);border-radius:8px;padding:12px;margin:10px 0;border:1px solid rgba(245,158,11,0.2);">
-                <p style="color:#F59E0B;font-size:13px;"><i class="fas fa-exclamation-circle"></i> Error al guardar PDF: ${error.message}</p>
-            </div>
-            <p style="color:#8E8E93;font-size:14px;">Haz clic en "Descargar PDF" para obtener el reporte.</p>
-        </div>`;
-        if (btnDescargar) { btnDescargar.style.display = 'inline-flex'; btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF'; btnDescargar.disabled = false; btnDescargar.onclick = descargarPDFFinal; }
-        datosReporteFinal = detalle;
-        mostrarNotificacion('⚠️ Error al guardar PDF en Drive', 'warning');
+    // 🔥 ASIGNAR DATOS PARA EL PDF
+    datosReporteFinal = detalle;
+    datosReporteFinal.id_orden = idOrden;
+    
+    // 🔥 GENERAR EL PDF AUTOMÁTICAMENTE (descarga + sube a Drive)
+    await descargarPDFFinal();
+    
+    // 🔥 MOSTRAR MODAL CON CONFIRMACIÓN
+    const modalHeader = modal.querySelector('.modal-header h2');
+    if (modalHeader) {
+        modalHeader.innerHTML = `<i class="fas fa-check-circle" style="color:var(--verde-exito);"></i> ✅ ¡Recepción Finalizada! - ${detalle.codigo_unico || 'OT-N/A'}`;
     }
+    
+    // Verificar si el PDF ya está en la base de datos
+    let pdfUrl = null;
+    try {
+        const pdfResponse = await fetchWithToken(`${API_URL}/jefe-operativo/descargar-pdf-recepcion/${idOrden}`);
+        if (pdfResponse.ok) {
+            const pdfData = await pdfResponse.json();
+            if (pdfData.success && pdfData.url) {
+                pdfUrl = pdfData.url;
+            }
+        }
+    } catch (e) {}
+    
+    body.innerHTML = `<div style="text-align:center;padding:30px 20px;">
+        <i class="fas fa-check-circle" style="font-size:48px;color:#10B981;margin-bottom:20px;"></i>
+        <h3 style="color:white;margin-bottom:10px;">¡Recepción finalizada!</h3>
+        <p style="color:#8E8E93;margin-bottom:20px;">Código: <strong style="color:#C1121F;font-size:20px;">${detalle.codigo_unico || 'OT-N/A'}</strong></p>
+        <div style="background:#1A1A1C;border-radius:8px;padding:15px;margin:15px 0;border:1px solid #2C2C2E;">
+            <i class="fas fa-file-pdf" style="color:#C1121F;font-size:20px;margin-right:10px;"></i>
+            <span style="color:#8E8E93;font-size:13px;">${pdfUrl ? '✅ PDF guardado en Google Drive' : '📄 PDF descargado localmente'}</span>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+            <button class="btn-primary" onclick="descargarPDFFinal()" style="margin-top:10px;">
+                <i class="fas fa-file-pdf"></i> 📥 Regenerar PDF
+            </button>
+            ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn-secondary" style="margin-top:10px;background:#1A1A1C;border:1px solid #C1121F;color:#C1121F;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
+                <i class="fas fa-external-link-alt"></i> Ver en Drive
+            </a>` : ''}
+        </div>
+    </div>`;
+    
+    mostrarNotificacion('✅ PDF generado y descargado', 'success');
 }
 
 async function cargarDatosOrdenCompleta(idOrden) {
@@ -2473,7 +2933,16 @@ function setupPhotoUploads() {
         }
     }
 }
-
+// =====================================================
+// EXPORTAR DETALLE PDF
+// =====================================================
+async function exportarDetallePDF() {
+    if (!datosReporteFinal) {
+        mostrarNotificacion('⚠️ No hay datos para exportar', 'warning');
+        return;
+    }
+    await descargarPDFFinal();
+}
 // =====================================================
 // CHECK AUTH
 // =====================================================

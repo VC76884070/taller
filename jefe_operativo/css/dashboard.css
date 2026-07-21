@@ -254,7 +254,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   TOP BAR - CON MARGEN PARA EVITAR SUPERPOSICIÓN
+   TOP BAR
    ===================================================== */
 .top-bar {
     background: var(--bg-secondary);
@@ -268,21 +268,6 @@ body.sidebar-open {
     z-index: 99;
     flex-wrap: wrap;
     gap: 1rem;
-}
-
-/* Ajuste para móvil: margen superior para que el título no se superponga con el botón hamburguesa */
-@media (max-width: 1024px) {
-    .top-bar {
-        padding: 1rem 1rem 1rem 4.5rem;
-        min-height: 70px;
-    }
-}
-
-@media (max-width: 480px) {
-    .top-bar {
-        padding: 0.8rem 0.8rem 0.8rem 3.8rem;
-        min-height: 60px;
-    }
 }
 
 .page-title h1 {
@@ -299,6 +284,7 @@ body.sidebar-open {
     display: flex;
     align-items: center;
     gap: 1.5rem;
+    flex-wrap: wrap;
 }
 
 .notification-icon {
@@ -307,6 +293,8 @@ body.sidebar-open {
     font-size: 1.2rem;
     color: var(--gris-texto);
     transition: var(--transition);
+    display: flex;
+    align-items: center;
 }
 .notification-icon:hover {
     color: var(--rojo-primario);
@@ -330,6 +318,7 @@ body.sidebar-open {
     gap: 0.5rem;
     color: var(--gris-texto);
     font-size: 0.9rem;
+    white-space: nowrap;
 }
 
 .content {
@@ -337,7 +326,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   KPI CARDS - ESTRUCTURA ACTUAL (COMPATIBLE)
+   KPI CARDS
    ===================================================== */
 .kpi-grid {
     display: grid;
@@ -1113,6 +1102,12 @@ body.sidebar-open {
         width: 100% !important;
     }
     
+    /* Ajuste para móvil: margen superior para que el título no se superponga con el botón hamburguesa */
+    .top-bar {
+        padding: 1rem 1rem 1rem 4.5rem;
+        min-height: 70px;
+    }
+    
     .content {
         padding: 1rem;
     }
@@ -1128,26 +1123,84 @@ body.sidebar-open {
     }
 }
 
-/* MÓVILES (max 768px) - REDISEÑO COMPACTO */
+/* =====================================================
+   MÓVILES (max 768px) - REDISEÑO COMPACTO
+   CON ICONOS A LA DERECHA
+   ===================================================== */
 @media (max-width: 768px) {
+    /* 🔴 TOP BAR - MEJORADO PARA MÓVIL */
     .top-bar {
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 0.8rem 0.8rem 0.8rem 4.5rem;
-        min-height: 70px;
-    }
-    .top-actions {
-        width: 100%;
-        justify-content: space-between;
-    }
-    .page-title h1 {
-        font-size: 1.2rem;
-    }
-    .page-title p {
-        font-size: 0.75rem;
+        flex-direction: row;
+        align-items: center;
+        padding: 0.7rem 0.7rem 0.7rem 4.5rem;
+        min-height: 60px;
+        gap: 0.5rem;
+        flex-wrap: nowrap;
     }
     
-    /* KPI CARDS - VERSIÓN COMPACTA PARA MÓVIL */
+    .page-title {
+        flex: 0 1 auto;
+        min-width: 0;
+    }
+    .page-title h1 {
+        font-size: 0.95rem;
+        margin-bottom: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .page-title p {
+        display: none;
+    }
+    
+    .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        flex-wrap: nowrap;
+        margin-left: auto;
+        flex-shrink: 0;
+    }
+    
+    .notification-icon {
+        font-size: 1.1rem;
+    }
+    .notification-badge {
+        font-size: 0.6rem;
+        padding: 0.1rem 0.35rem;
+        min-width: 16px;
+        top: -6px;
+        right: -6px;
+    }
+    
+    .date-display {
+        font-size: 0.7rem;
+        gap: 0.3rem;
+    }
+    .date-display i {
+        font-size: 0.8rem;
+    }
+    
+    /* Ocultar texto "Actualizar" en móvil y hacer botón circular */
+    .refresh-btn span {
+        display: none;
+    }
+    .refresh-btn {
+        padding: 6px 8px;
+        border-radius: 50%;
+        width: 34px;
+        height: 34px;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 0.9rem;
+        gap: 0;
+    }
+    .refresh-btn i {
+        font-size: 1rem;
+        margin: 0;
+    }
+    
+    /* 🔴 KPI CARDS - ICONOS A LA DERECHA */
     .kpi-grid {
         grid-template-columns: repeat(2, 1fr);
         gap: 0.7rem;
@@ -1156,28 +1209,35 @@ body.sidebar-open {
         padding: 0.75rem 0.6rem;
         border-radius: var(--radius-md);
         border-left-width: 3px;
-        text-align: center;
+        text-align: left;
     }
     .kpi-header {
-        flex-direction: column;
-        gap: 0.3rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-direction: row;
         margin-bottom: 0.3rem;
+        gap: 0.5rem;
     }
     .kpi-title {
         font-size: 0.65rem;
-        text-align: center;
-        order: 2;
+        text-align: left;
+        order: 1;
+        flex: 1;
     }
     .kpi-icon-small {
         font-size: 1rem;
-        order: 1;
+        order: 2;
+        flex-shrink: 0;
     }
     .kpi-value {
         font-size: 1.6rem;
         margin-bottom: 0.3rem;
+        text-align: left;
     }
     .kpi-footer {
         font-size: 0.6rem;
+        text-align: left;
     }
     .kpi-footer i {
         font-size: 0.6rem;
@@ -1303,22 +1363,6 @@ body.sidebar-open {
     .toast-notification {
         min-width: auto;
     }
-    
-    /* Ocultar texto "Actualizar" en móvil */
-    .refresh-btn span {
-        display: none;
-    }
-    .refresh-btn {
-        padding: 8px 10px;
-        border-radius: 50%;
-        width: 38px;
-        height: 38px;
-        justify-content: center;
-    }
-    .refresh-btn i {
-        font-size: 1.1rem;
-        margin: 0;
-    }
 }
 
 /* MÓVILES PEQUEÑOS (max 480px) */
@@ -1339,15 +1383,46 @@ body.sidebar-open {
     }
     
     .top-bar {
-        padding: 0.6rem 0.6rem 0.6rem 3.8rem;
-        min-height: 60px;
+        padding: 0.5rem 0.5rem 0.5rem 3.8rem;
+        min-height: 54px;
     }
     
-    .date-display span {
-        display: none;
-    }
     .page-title h1 {
-        font-size: 1rem;
+        font-size: 0.8rem;
+        max-width: 120px;
+    }
+    
+    .top-actions {
+        gap: 0.4rem;
+    }
+    
+    .notification-icon {
+        font-size: 0.9rem;
+    }
+    .notification-badge {
+        font-size: 0.5rem;
+        padding: 0.05rem 0.3rem;
+        min-width: 14px;
+        top: -5px;
+        right: -5px;
+    }
+    
+    .date-display {
+        font-size: 0.6rem;
+        gap: 0.2rem;
+    }
+    .date-display i {
+        font-size: 0.7rem;
+    }
+    
+    .refresh-btn {
+        width: 30px;
+        height: 30px;
+        padding: 4px 6px;
+        font-size: 0.8rem;
+    }
+    .refresh-btn i {
+        font-size: 0.8rem;
     }
     
     .kpi-grid {

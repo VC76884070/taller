@@ -293,10 +293,11 @@ def mis_proximas_entregas(current_user):
     print("📡 /mis-proximas-entregas llamado")
     
     try:
+        # 🔧 CORRECCIÓN: Eliminar nulls_last que causa el error
         ordenes = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, fecha_estimada_finalizacion, dias_estimados_reparacion, id_vehiculo') \
             .not_.in_('estado_global', ['Finalizado', 'Entregado']) \
-            .order('fecha_estimada_finalizacion', nulls_last=True) \
+            .order('fecha_estimada_finalizacion', desc=False) \
             .limit(15) \
             .execute()
         
@@ -357,14 +358,17 @@ def mis_proximas_entregas(current_user):
                 'prioridad': prioridad
             })
         
-        # Ordenar por días restantes
-        resultado.sort(key=lambda x: x['dias_restantes'] if x['dias_restantes'] is not None else 999)
+        # 🔧 CORRECCIÓN: Ordenar en Python en lugar de usar nulls_last
+        # Las órdenes sin fecha van al final
+        resultado.sort(key=lambda x: (x['dias_restantes'] is None, x['dias_restantes'] if x['dias_restantes'] is not None else 999))
         
         print(f"✅ {len(resultado)} próximas entregas")
         return jsonify({'success': True, 'entregas': resultado}), 200
         
     except Exception as e:
         print(f"❌ Error en próximas entregas: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': True, 'entregas': []}), 200
 
 

@@ -324,7 +324,7 @@ function renderizarVehiculosTaller(vehiculos) {
 }
 
 // =====================================================
-// FULLCALENDAR - RESPONSIVE
+// FULLCALENDAR - SOLO VISTA MENSUAL (CORREGIDO)
 // =====================================================
 
 function initFullCalendar() {
@@ -340,17 +340,16 @@ function initFullCalendar() {
         return;
     }
     
-    console.log('✅ Inicializando FullCalendar...');
+    console.log('✅ Inicializando FullCalendar - Solo vista mensual');
     
-    const isMobile = window.innerWidth <= 768;
-    
+    // 🔴 FORZAMOS SOLO VISTA MENSUAL
     const calendarConfig = {
         locale: 'es',
         initialView: 'dayGridMonth',
         headerToolbar: {
             left: 'prev,next',
             center: 'title',
-            right: isMobile ? 'timeGridWeek,dayGridMonth' : 'dayGridMonth'
+            right: '' // 🔴 Eliminamos los botones de cambio de vista
         },
         height: 'auto',
         weekends: true,
@@ -364,16 +363,10 @@ function initFullCalendar() {
             dayGridMonth: {
                 titleFormat: { year: 'numeric', month: 'long' },
                 dayHeaderFormat: { weekday: 'short' },
-                dayMaxEvents: isMobile ? 2 : true,
+                dayMaxEvents: true,
                 moreLinkText: function(num) {
                     return `+${num} más`;
                 }
-            },
-            timeGridWeek: {
-                titleFormat: { year: 'numeric', month: 'long', day: 'numeric' },
-                slotDuration: '01:00:00',
-                allDaySlot: true,
-                slotLabelFormat: isMobile ? { hour: 'numeric', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit' }
             }
         },
         events: function(fetchInfo, successCallback, failureCallback) {
@@ -407,6 +400,8 @@ function initFullCalendar() {
                 const placa = orden.vehiculo?.placa || orden.codigo_unico || 'Vehículo';
                 const estaAtrasado = fechaFin < hoy;
                 
+                // 🔴 Títulos más cortos para móvil
+                const isMobile = window.innerWidth <= 768;
                 const tituloReparacion = isMobile ? `🔧 ${placa}` : `🔧 Reparación: ${placa}`;
                 const tituloEntrega = isMobile ? `🚗 ${placa}` : `🚗 ENTREGA: ${placa}`;
                 
@@ -446,20 +441,17 @@ function initFullCalendar() {
     calendar = new FullCalendar.Calendar(container, calendarConfig);
     calendar.render();
     
+    // 🔴 ELIMINAMOS el resize que cambiaba a vista semanal
+    // Solo mantenemos un resize para ajustar el tamaño del texto
     window.addEventListener('resize', function() {
         if (calendar) {
-            const newIsMobile = window.innerWidth <= 768;
-            const currentView = calendar.view.type;
-            
-            if (newIsMobile && currentView === 'dayGridMonth') {
-                calendar.changeView('timeGridWeek');
-            } else if (!newIsMobile && currentView === 'timeGridWeek' && window.innerWidth > 768) {
-                calendar.changeView('dayGridMonth');
-            }
+            // Solo refrescamos eventos si cambia el tamaño
+            // NO cambiamos la vista
+            calendar.refetchEvents();
         }
     });
     
-    console.log('✅ FullCalendar inicializado');
+    console.log('✅ FullCalendar inicializado - Solo vista mensual');
 }
 
 // =====================================================

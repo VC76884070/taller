@@ -2403,7 +2403,7 @@ def proxy_audio(current_user):
 
 
 # =====================================================
-# ENDPOINT 28: ACTUALIZAR RECEPCIÓN (EDICIÓN)
+# ENDPOINT: ACTUALIZAR RECEPCIÓN (EDICIÓN) - CORREGIDO
 # =====================================================
 
 @recepcion_jefe_bp.route('/actualizar-recepcion/<int:id_orden>', methods=['PUT'])
@@ -2411,12 +2411,16 @@ def proxy_audio(current_user):
 def actualizar_recepcion(current_user, id_orden):
     try:
         from google_drive import google_drive
+        import datetime
         
         data = request.get_json()
         
         if not data:
             return jsonify({'error': 'Datos no proporcionados'}), 400
         
+        logger.info(f"📝 Editando recepción {id_orden}")
+        
+        # 1. OBTENER ORDEN DE TRABAJO
         orden_result = supabase.table('ordentrabajo') \
             .select('id, codigo_unico, estado_global, id_vehiculo') \
             .eq('id', id_orden) \
@@ -2426,12 +2430,12 @@ def actualizar_recepcion(current_user, id_orden):
             return jsonify({'error': 'Orden no encontrada'}), 404
         
         orden = orden_result.data[0]
+        codigo_unico = orden.get('codigo_unico')
         
         if orden.get('estado_global') != 'EnRecepcion':
             return jsonify({'error': f'No se puede editar una orden en estado "{orden.get("estado_global")}"'}), 400
         
-        codigo_unico = orden.get('codigo_unico')
-        
+        # 2. EXTRAER DATOS DEL FRONTEND
         cliente_data = data.get('cliente', {})
         nombre = cliente_data.get('nombre', '')
         telefono = cliente_data.get('telefono', '')
@@ -2451,6 +2455,7 @@ def actualizar_recepcion(current_user, id_orden):
         texto_descripcion = descripcion.get('texto', '')
         audio_url = descripcion.get('audio_url')
         
+        # 3. VERIFICAR/ACTUALIZAR CLIENTE
         vehiculo_actual = supabase.table('vehiculo') \
             .select('id_cliente') \
             .eq('id', orden['id_vehiculo']) \
@@ -2486,6 +2491,7 @@ def actualizar_recepcion(current_user, id_orden):
                         .eq('id', id_cliente) \
                         .execute()
         
+        # 4. ACTUALIZAR VEHÍCULO
         supabase.table('vehiculo') \
             .update({
                 'placa': placa,
@@ -2497,6 +2503,35 @@ def actualizar_recepcion(current_user, id_orden):
             .eq('id', orden['id_vehiculo']) \
             .execute()
         
+        # 5. VERIFICAR CARPETA EN DRIVE ANTES DE SUBIR
+        carpeta_verificada = False
+        carpeta_id = None
+        
+        try:
+            # Buscar carpeta por nombre (código único)
+            carpeta_id = google_drive.get_folder_id_by_name(codigo_unico)
+            
+            if carpeta_id:
+                logger.info(f"📁 Carpeta encontrada: {codigo_unico} (ID: {carpeta_id})")
+                carpeta_verificada = True
+            else:
+                # Si no existe, crear la carpeta
+                logger.info(f"📁 Creando carpeta para: {codigo_unico}")
+                folder_path = google_drive.generate_folder_path(
+                    modulo='recepcion',
+                    referencia_id=codigo_unico
+                )
+                # Intentar crear la carpeta
+                carpeta_id = google_drive.create_folder_path(folder_path)
+                if carpeta_id:
+                    carpeta_verificada = True
+                    logger.info(f"📁 Carpeta creada: {codigo_unico} (ID: {carpeta_id})")
+                else:
+                    logger.warning(f"⚠️ No se pudo crear la carpeta para {codigo_unico}")
+        except Exception as e:
+            logger.error(f"❌ Error verificando/creando carpeta: {str(e)}")
+        
+        # 6. GUARDAR RECEPCIÓN
         recepcion_update = {
             'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
             'url_lateral_derecha': fotos.get('url_lateral_derecha'),
@@ -2508,7 +2543,7 @@ def actualizar_recepcion(current_user, id_orden):
             'transcripcion_problema': texto_descripcion
         }
         
-        if audio_url:
+        if audio_url and audio_url != 'null' and audio_url != '':
             recepcion_update['url_grabacion_problema'] = audio_url
         
         supabase.table('recepcion') \
@@ -2516,24 +2551,15 @@ def actualizar_recepcion(current_user, id_orden):
             .eq('id_orden_trabajo', id_orden) \
             .execute()
         
-        carpeta_actualizada = False
-        try:
-            folder_id = google_drive.get_folder_id_by_name(codigo_unico)
-            if folder_id:
-                logger.info(f"📁 Carpeta encontrada: {codigo_unico} (ID: {folder_id})")
-                carpeta_actualizada = True
-            else:
-                logger.warning(f"⚠️ No se encontró la carpeta: {codigo_unico}")
-        except Exception as e:
-            logger.error(f"❌ Error verificando carpeta en Drive: {str(e)}")
-        
         logger.info(f"✅ Recepción {codigo_unico} actualizada correctamente")
+        logger.info(f"📸 Fotos: {len([v for v in fotos.values() if v and v != 'null']) }/7")
         
         return jsonify({
             'success': True,
             'message': 'Recepción actualizada exitosamente',
             'codigo_unico': codigo_unico,
-            'carpeta_actualizada': carpeta_actualizada
+            'carpeta_verificada': carpeta_verificada,
+            'carpeta_id': carpeta_id
         }), 200
         
     except Exception as e:

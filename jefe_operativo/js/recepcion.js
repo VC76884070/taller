@@ -356,7 +356,7 @@ function actualizarProgresoFoto(campo, progreso, estado = 'pending') {
 }
 
 // =====================================================
-// SUBIR FOTO A GOOGLE DRIVE
+// SUBIR FOTO A GOOGLE DRIVE (CORREGIDO)
 // =====================================================
 async function subirFotoGoogleDrive(file, carpeta, campo) {
     return new Promise(async (resolve, reject) => {
@@ -371,7 +371,19 @@ async function subirFotoGoogleDrive(file, carpeta, campo) {
             formData.append('file', file);
             formData.append('carpeta', carpeta || 'recepcion');
             formData.append('campo', campo);
-            formData.append('codigo_sesion', codigoSesion);
+            formData.append('codigo_sesion', codigoSesion || '');
+            
+            // 🔥 ENVIAR CÓDIGO DE ORDEN Y MODO EDICIÓN
+            const codigoOrden = window.datosOriginalesRecepcion?.codigo_unico || null;
+            formData.append('codigo_orden', codigoOrden || '');
+            formData.append('modo_edicion', modoEdicionRecepcion ? 'true' : 'false');
+            
+            console.log('📸 Subiendo foto:', {
+                campo,
+                codigoSesion,
+                codigoOrden,
+                modoEdicion: modoEdicionRecepcion
+            });
             
             const token = localStorage.getItem('furia_token');
             const response = await fetch(`${API_URL}/jefe-operativo/upload-foto`, {
@@ -483,15 +495,43 @@ function encolarFoto(file, campo, label) {
     if (!isProcessingQueue) procesarCola();
 }
 
+// =====================================================
+// PROCESAR COLA DE FOTOS (CORREGIDO)
+// =====================================================
 async function procesarCola() {
     if (uploadQueue.length === 0) {
         isProcessingQueue = false;
         colaActiva = false;
         const exitos = uploadResults.filter(r => r.success).length;
         const errores = uploadResults.filter(r => !r.success).length;
-        if (errores > 0) mostrarNotificacion(`⚠️ ${exitos} subidas exitosas, ${errores} errores`, 'warning');
-        else mostrarNotificacion(`✅ ${exitos} fotos subidas exitosamente`, 'success');
-        setTimeout(validarCompletadoFotos, 500);
+        
+        if (errores > 0) {
+            mostrarNotificacion(`⚠️ ${exitos} subidas exitosas, ${errores} errores`, 'warning');
+        } else if (exitos > 0) {
+            mostrarNotificacion(`✅ ${exitos} fotos subidas exitosamente`, 'success');
+        }
+        
+        // 🔥 FORZAR VALIDACIÓN COMPLETA DEL CONTADOR
+        setTimeout(() => {
+            validarCompletadoFotos();
+            // Si estamos en modo edición, guardar la sección
+            if (modoEdicionRecepcion && codigoSesion) {
+                // Recolectar URLs y guardar
+                const fotosData = {};
+                for (const foto of FOTOS_CONFIG) {
+                    const uploadDiv = document.getElementById(`upload-${foto.id}`);
+                    let url = uploadDiv?.getAttribute('data-drive-url') || 
+                             uploadDiv?.dataset?.driveUrl || 
+                             fotosSubidasLocal[foto.campo];
+                    if (url && url !== 'null' && url !== '') {
+                        fotosData[foto.campo] = url;
+                    }
+                }
+                if (Object.keys(fotosData).length > 0) {
+                    guardarSeccion('fotos');
+                }
+            }
+        }, 500);
         return;
     }
     
@@ -527,11 +567,20 @@ async function procesarCola() {
             uploadDiv.classList.remove('error');
             uploadDiv.classList.add('has-image');
             const preview = uploadDiv.querySelector('.upload-preview');
-            if (preview) preview.style.backgroundImage = `url('${url}')`;
+            if (preview) {
+                // 🔥 ACTUALIZAR PREVIEW CON LA URL FINAL
+                preview.style.backgroundImage = `url('${url}')`;
+                preview.style.backgroundSize = 'cover';
+                preview.style.backgroundPosition = 'center';
+            }
         }
         
+        // 🔥 ACTUALIZAR SESIÓN Y CONTADOR
         try { await actualizarSesionFoto(campo, url); } catch (e) {}
-        setTimeout(validarCompletadoFotos, 500);
+        
+        // 🔥 VALIDAR CONTADOR DESPUÉS DE CADA FOTO SUBIDA
+        setTimeout(validarCompletadoFotos, 300);
+        
         setTimeout(() => {
             if (barContainer) barContainer.style.display = 'none';
             if (statusContainer) statusContainer.style.display = 'none';
@@ -553,7 +602,7 @@ async function procesarCola() {
 }
 
 // =====================================================
-// PROCESAR FOTO
+// PROCESAR FOTO (CORREGIDO - ACTUALIZA CONTADOR)
 // =====================================================
 async function procesarFoto(input, foto) {
     const file = input.files[0];
@@ -620,7 +669,9 @@ async function procesarFoto(input, foto) {
     try {
         const fileToUpload = await comprimirImagen(file);
         encolarFoto(fileToUpload, foto.campo, foto.label);
-        validarCompletadoFotos();
+        // 🔥 EL CONTADOR SE ACTUALIZA EN validarCompletadoFotos
+        // que se llama automáticamente al final de la cola
+        mostrarNotificacion(`📸 Subiendo ${foto.label}...`, 'info');
     } catch (error) {
         if (preview) {
             preview.style.backgroundImage = '';
@@ -637,30 +688,74 @@ async function procesarFoto(input, foto) {
 }
 
 // =====================================================
-// VALIDAR COMPLETADO DE FOTOS
+// VALIDAR COMPLETADO DE FOTOS (VERSIÓN MEJORADA)
 // =====================================================
 function validarCompletadoFotos() {
     let fotosConUrl = 0;
     let fotosConImagen = 0;
+    let fotosDetalle = {};
     
     for (const foto of FOTOS_CONFIG) {
         const uploadDiv = document.getElementById(`upload-${foto.id}`);
         const hasImage = uploadDiv?.classList.contains('has-image') || false;
         if (hasImage) fotosConImagen++;
         
-        let driveUrl = uploadDiv?.getAttribute('data-drive-url') || uploadDiv?.dataset?.driveUrl || null;
-        if (!driveUrl && fotosSubidasLocal[foto.campo]) {
-            driveUrl = fotosSubidasLocal[foto.campo];
-            if (uploadDiv) { uploadDiv.setAttribute('data-drive-url', driveUrl); uploadDiv.dataset.driveUrl = driveUrl; }
-        }
-        if (!driveUrl && sesionActual?.datos?.fotos?.[CAMPO_MAP[foto.campo]]) {
-            const url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
-            if (url && url !== 'null' && url !== '') {
-                driveUrl = url;
-                if (uploadDiv) { uploadDiv.setAttribute('data-drive-url', driveUrl); uploadDiv.dataset.driveUrl = driveUrl; fotosSubidasLocal[foto.campo] = driveUrl; }
+        let driveUrl = uploadDiv?.getAttribute('data-drive-url') || 
+                       uploadDiv?.dataset?.driveUrl || 
+                       fotosSubidasLocal[foto.campo];
+        
+        // Verificar en sesión actual
+        if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
+            if (sesionActual?.datos?.fotos) {
+                const url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
+                if (url && url !== 'null' && url !== '' && url !== 'undefined') {
+                    driveUrl = url;
+                    // Actualizar DOM
+                    if (uploadDiv) {
+                        uploadDiv.setAttribute('data-drive-url', driveUrl);
+                        uploadDiv.dataset.driveUrl = driveUrl;
+                        fotosSubidasLocal[foto.campo] = driveUrl;
+                    }
+                }
             }
         }
-        if (driveUrl && driveUrl !== 'null' && driveUrl !== '') fotosConUrl++;
+        
+        // Verificar en datos originales de edición
+        if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
+            if (window.datosOriginalesRecepcion?.fotos) {
+                const url = window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]];
+                if (url && url !== 'null' && url !== '' && url !== 'undefined') {
+                    driveUrl = url;
+                    if (uploadDiv) {
+                        uploadDiv.setAttribute('data-drive-url', driveUrl);
+                        uploadDiv.dataset.driveUrl = driveUrl;
+                        fotosSubidasLocal[foto.campo] = driveUrl;
+                    }
+                }
+            }
+        }
+        
+        // Contar si hay URL válida
+        if (driveUrl && driveUrl !== 'null' && driveUrl !== '' && driveUrl !== 'undefined') {
+            fotosConUrl++;
+            fotosDetalle[foto.campo] = { 
+                url: driveUrl, 
+                estado: 'completado',
+                label: foto.label 
+            };
+        } else if (hasImage) {
+            fotosDetalle[foto.campo] = { 
+                url: null, 
+                estado: 'subiendo',
+                label: foto.label 
+            };
+        } else {
+            fotosDetalle[foto.campo] = { 
+                url: null, 
+                estado: 'pendiente',
+                label: foto.label 
+            };
+        }
     }
     
     const completado = fotosConUrl === 7;
@@ -668,23 +763,29 @@ function validarCompletadoFotos() {
     if (fotosBadge) {
         if (completado) {
             fotosBadge.textContent = '✓ Completado (7/7)';
-            fotosBadge.classList.add('completado');
-            fotosBadge.classList.remove('en-proceso');
+            fotosBadge.className = 'status-badge completado';
         } else if (fotosConUrl > 0) {
             fotosBadge.textContent = `⏳ ${fotosConUrl}/7 en Drive`;
-            fotosBadge.classList.add('en-proceso');
-            fotosBadge.classList.remove('completado');
+            fotosBadge.className = 'status-badge en-proceso';
         } else {
             fotosBadge.textContent = `○ ${fotosConImagen}/7 fotos`;
-            fotosBadge.classList.add('en-proceso');
-            fotosBadge.classList.remove('completado');
+            fotosBadge.className = 'status-badge en-proceso';
         }
     }
     
+    // 🔥 ACTUALIZAR ESTADO LOCAL
     if (seccionesCompletadasLocal.fotos !== completado) {
         seccionesCompletadasLocal.fotos = completado;
         actualizarBotonFinalizar();
     }
+    
+    // 🔥 LOG PARA DEPURACIÓN
+    console.log('📸 Estado de fotos:', {
+        total: fotosConUrl,
+        completado: completado,
+        detalle: fotosDetalle
+    });
+    
     return completado;
 }
 
@@ -1382,6 +1483,9 @@ async function finalizarSesionConReporte() {
     }
 }
 
+// =====================================================
+// LIMPIAR SESIÓN COMPLETA
+// =====================================================
 function limpiarSesionCompleta() {
     detenerPolling();
     detenerKeepAlive();
@@ -1396,40 +1500,141 @@ function limpiarSesionCompleta() {
     seccionesCompletadasLocal = { cliente: false, vehiculo: false, fotos: false, descripcion: false };
     localStorage.removeItem('sesion_actual');
     
+    // 🔥 LIMPIAR VARIABLES DE EDICIÓN
+    window.sesionCodigoOriginal = null;
+    window.datosOriginalesRecepcion = null;
+    window.fotosOriginalesRecepcion = null;
+    window.audioOriginalRecepcion = null;
+    
+    // 🔥 LIMPIAR URL DE BLOB DE AUDIO
+    if (window.audioBlobUrl) {
+        try {
+            URL.revokeObjectURL(window.audioBlobUrl);
+        } catch (e) {}
+        window.audioBlobUrl = null;
+    }
+    
+    // 🔥 LIMPIAR CACHÉ DE IMÁGENES (opcional - si quieres liberar memoria)
+    if (window.imageCache) {
+        window.imageCache.clear();
+    }
+    
     if (sessionPanel) sessionPanel.style.display = 'none';
     if (colaboradoresPanel) colaboradoresPanel.style.display = 'none';
     if (recepcionForm) recepcionForm.style.display = 'none';
     if (sesionesActivasPanel) sesionesActivasPanel.style.display = 'block';
     
+    // Limpiar todos los inputs del formulario
     document.querySelectorAll('#recepcionForm input, #recepcionForm textarea').forEach(input => {
-        if (input.id !== 'clienteLatitud' && input.id !== 'clienteLongitud') input.value = '';
+        if (input.id !== 'clienteLatitud' && input.id !== 'clienteLongitud') {
+            input.value = '';
+        }
+        // Limpiar cualquier estado de error
+        input.classList.remove('error', 'success');
     });
+    if (clienteLatitudInput) clienteLatitudInput.value = '';
+    if (clienteLongitudInput) clienteLongitudInput.value = '';
     
+    // Limpiar todas las fotos
     document.querySelectorAll('.photo-upload').forEach(upload => {
         upload.classList.remove('has-image', 'error');
         const preview = upload.querySelector('.upload-preview');
-        if (preview) { preview.style.backgroundImage = ''; preview.innerHTML = ''; }
+        if (preview) {
+            preview.style.backgroundImage = '';
+            preview.style.backgroundSize = '';
+            preview.style.backgroundPosition = '';
+            preview.innerHTML = '';
+            preview.style.display = '';
+        }
         const removeBtn = upload.querySelector('.remove-photo');
         if (removeBtn) removeBtn.style.display = 'none';
         upload.removeAttribute('data-drive-url');
         delete upload.dataset.driveUrl;
-        if (upload.dataset.objectUrl) { URL.revokeObjectURL(upload.dataset.objectUrl); delete upload.dataset.objectUrl; }
+        if (upload.dataset.objectUrl) {
+            try {
+                URL.revokeObjectURL(upload.dataset.objectUrl);
+            } catch (e) {}
+            delete upload.dataset.objectUrl;
+        }
         const campo = upload.dataset.campo;
         if (campo) actualizarProgresoFoto(campo, 0, 'pending');
+        // Limpiar el input file
+        const fileInput = upload.querySelector('input[type="file"]');
+        if (fileInput) fileInput.value = '';
     });
     
-    if (audioPreview) { audioPreview.src = ''; audioPreview.style.display = 'none'; }
-    audioStatus.textContent = '';
-    btnEliminarAudio.style.display = 'none';
-    btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
-    btnGrabarAudio.classList.remove('recording');
+    // Limpiar audio
+    if (audioPreview) {
+        audioPreview.src = '';
+        audioPreview.style.display = 'none';
+        audioPreview.oncanplay = null;
+        audioPreview.onerror = null;
+    }
+    if (audioStatus) {
+        audioStatus.textContent = '';
+        audioStatus.style.color = '';
+    }
+    if (btnEliminarAudio) btnEliminarAudio.style.display = 'none';
+    if (btnGrabarAudio) {
+        btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
+        btnGrabarAudio.classList.remove('recording');
+    }
+    isRecording = false;
+    if (mediaRecorder) {
+        try {
+            if (mediaRecorder.state === 'recording') mediaRecorder.stop();
+        } catch (e) {}
+        mediaRecorder = null;
+    }
+    audioChunks = [];
+    audioBlob = null;
     
+    // Restaurar badges de secciones
     ['Cliente', 'Vehiculo', 'Fotos', 'Descripcion'].forEach(seccion => {
         const badge = document.getElementById(`status${seccion}`);
-        if (badge) { badge.textContent = '○ Pendiente'; badge.className = 'status-badge en-proceso'; }
+        if (badge) {
+            badge.textContent = '○ Pendiente';
+            badge.className = 'status-badge en-proceso';
+        }
     });
     
-    actualizarBotonFinalizar();
+    // Restaurar botón finalizar
+    if (btnFinalizar) {
+        btnFinalizar.innerHTML = '<i class="fas fa-check-circle"></i> Finalizar Recepción';
+        btnFinalizar.disabled = true;
+        btnFinalizar.onclick = finalizarSesionConReporte;
+        btnFinalizar.style.background = '';
+        btnFinalizar.style.backgroundColor = '';
+    }
+    
+    // Eliminar banner de edición si existe
+    const banner = document.getElementById('editBanner');
+    if (banner) banner.remove();
+    
+    // Limpiar código activo
+    if (codigoActivoSpan) {
+        codigoActivoSpan.textContent = '';
+        codigoActivoSpan.style.color = '';
+    }
+    
+    // Limpiar cualquier modal abierto
+    const modalesAbiertos = document.querySelectorAll('.modal.show, .modal-comunicados.active');
+    modalesAbiertos.forEach(modal => {
+        modal.classList.remove('show', 'active');
+    });
+    
+    // Limpiar cualquier toast
+    const toasts = document.querySelectorAll('.toast-notification');
+    toasts.forEach(toast => toast.remove());
+    
+    // Limpiar cualquier overlay de progreso
+    hideProgress();
+    
+    // Limpiar estados de edición
+    modoEdicionRecepcion = false;
+    recepcionEditandoId = null;
+    
+    console.log('🧹 Sesión limpiada completamente');
 }
 
 // =====================================================
@@ -2465,7 +2670,115 @@ async function cargarDatosOrdenCompleta(idOrden) {
 }
 
 // =====================================================
-// EDITAR RECEPCIÓN (CORREGIDO)
+// CARGAR AUDIO EN EDICIÓN (CORREGIDO)
+// =====================================================
+async function cargarAudioEnEdicion(audioUrl) {
+    if (!audioUrl || audioUrl === 'null' || audioUrl === 'None' || audioUrl === '') {
+        return null;
+    }
+    
+    try {
+        // 🔥 CONSTRUIR URL DEL PROXY CON EL TOKEN
+        const token = localStorage.getItem('furia_token');
+        const proxyUrl = `${API_URL}/jefe-operativo/proxy-audio?url=${encodeURIComponent(audioUrl)}`;
+        
+        console.log('🎵 Intentando cargar audio con proxy:', proxyUrl);
+        
+        // 🔥 PROBAR EL AUDIO CON EL PROXY (usando HEAD con token)
+        const testResponse = await fetch(proxyUrl, {
+            method: 'HEAD',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (testResponse.ok) {
+            console.log('✅ Proxy de audio disponible');
+            return proxyUrl;
+        } else {
+            console.warn(`⚠️ Proxy respondió ${testResponse.status}, usando URL directa`);
+            // Si el proxy falla, intentar con URL directa de descarga
+            const fileId = extraerFileIdDrive(audioUrl);
+            if (fileId) {
+                return `https://drive.google.com/uc?export=download&id=${fileId}`;
+            }
+            return audioUrl;
+        }
+        
+    } catch (error) {
+        console.warn('⚠️ Error verificando audio:', error);
+        // Fallback: intentar extraer file_id
+        const fileId = extraerFileIdDrive(audioUrl);
+        if (fileId) {
+            return `https://drive.google.com/uc?export=download&id=${fileId}`;
+        }
+        return audioUrl;
+    }
+}
+// =====================================================
+// EXTRAER FILE_ID DE GOOGLE DRIVE
+// =====================================================
+function extraerFileIdDrive(url) {
+    if (!url) return null;
+    
+    // Formato 1: https://drive.google.com/uc?export=view&id=XXX
+    let match = url.match(/[?&]id=([^&]+)/);
+    if (match) return match[1];
+    
+    // Formato 2: https://drive.google.com/file/d/XXX/view
+    match = url.match(/\/file\/d\/([^\/]+)/);
+    if (match) return match[1];
+    
+    // Formato 3: https://drive.google.com/open?id=XXX
+    match = url.match(/open\?id=([^&]+)/);
+    if (match) return match[1];
+    
+    // Formato 4: ID directo (10+ caracteres alfanuméricos)
+    if (url.match(/^[a-zA-Z0-9_-]{10,}$/)) return url;
+    
+    return null;
+}
+
+
+// =====================================================
+// CARGAR AUDIO EN EDICIÓN (CON FETCH Y BLOB)
+// =====================================================
+async function cargarAudioConToken(audioUrl) {
+    if (!audioUrl || audioUrl === 'null' || audioUrl === 'None' || audioUrl === '') {
+        return null;
+    }
+    
+    try {
+        const token = localStorage.getItem('furia_token');
+        const proxyUrl = `${API_URL}/jefe-operativo/proxy-audio?url=${encodeURIComponent(audioUrl)}`;
+        
+        console.log('🎵 Descargando audio con token...');
+        
+        // 🔥 DESCARGAR EL AUDIO CON FETCH Y TOKEN
+        const response = await fetch(proxyUrl, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        // 🔥 CONVERTIR A BLOB Y CREAR URL LOCAL
+        const blob = await response.blob();
+        const localUrl = URL.createObjectURL(blob);
+        
+        console.log('✅ Audio descargado y convertido a URL local');
+        return localUrl;
+        
+    } catch (error) {
+        console.warn('⚠️ Error cargando audio con fetch:', error);
+        return null;
+    }
+}
+// =====================================================
+// EDITAR RECEPCIÓN (COMPLETO - CON AUDIO CORREGIDO)
 // =====================================================
 async function editarRecepcion(id) {
     try {
@@ -2512,29 +2825,97 @@ async function editarRecepcion(id) {
         seccionesCompletadasLocal.vehiculo = !!(detalle.placa && detalle.marca && detalle.modelo && detalle.anio && detalle.kilometraje);
         actualizarEstadoVisualSeccion('vehiculo', seccionesCompletadasLocal.vehiculo);
         
-        // ========== CARGAR AUDIO ==========
-        if (detalle.audio_url && detalle.audio_url !== 'null' && detalle.audio_url !== 'None') {
-            audioDriveUrl = detalle.audio_url;
-            audioPreview.src = detalle.audio_url;
-            audioPreview.style.display = 'block';
-            btnEliminarAudio.style.display = 'flex';
-            audioStatus.textContent = 'Audio disponible';
-            btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Regrabar Audio';
+        // ========== CARGAR DESCRIPCIÓN ==========
+        descripcionProblema.value = detalle.transcripcion_problema || '';
+        seccionesCompletadasLocal.descripcion = !!(detalle.transcripcion_problema && detalle.transcripcion_problema.trim().length > 0);
+        actualizarEstadoVisualSeccion('descripcion', seccionesCompletadasLocal.descripcion);
+        
+        // ========== 🔥 CARGAR AUDIO (CORREGIDO CON FETCH) ==========
+        const audioUrl = detalle.audio_url;
+        const tieneAudio = audioUrl && audioUrl !== 'null' && audioUrl !== 'None' && audioUrl !== '' && audioUrl !== null && audioUrl !== 'undefined';
+        
+        // Guardar URL original para referencia
+        audioDriveUrl = tieneAudio ? audioUrl : null;
+        
+        if (tieneAudio) {
+            // Mostrar indicador de carga
+            if (audioStatus) {
+                audioStatus.textContent = '⏳ Cargando audio...';
+                audioStatus.style.color = '#f59e0b';
+            }
+            
+            // 🔥 CARGAR AUDIO CON FETCH Y TOKEN
+            const localAudioUrl = await cargarAudioConToken(audioUrl);
+            
+            if (localAudioUrl && audioPreview) {
+                // Usar la URL local (blob)
+                audioPreview.src = localAudioUrl;
+                audioPreview.style.display = 'block';
+                
+                // Guardar referencia para limpiar después
+                if (window.audioBlobUrl) {
+                    URL.revokeObjectURL(window.audioBlobUrl);
+                }
+                window.audioBlobUrl = localAudioUrl;
+                
+                audioPreview.oncanplay = function() {
+                    console.log('✅ Audio cargado correctamente');
+                    if (audioStatus) {
+                        audioStatus.textContent = '✅ Audio disponible';
+                        audioStatus.style.color = '#10B981';
+                    }
+                    btnEliminarAudio.style.display = 'flex';
+                    btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Regrabar Audio';
+                };
+                
+                audioPreview.onerror = function(e) {
+                    console.warn('⚠️ Error reproduciendo audio:', e);
+                    // Si falla la URL local, intentar con la URL directa de Drive
+                    const fileId = extraerFileIdDrive(audioUrl);
+                    if (fileId) {
+                        const directUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+                        audioPreview.src = directUrl;
+                        audioPreview.load();
+                    }
+                    if (audioStatus) {
+                        audioStatus.textContent = 'Audio disponible (directo)';
+                        audioStatus.style.color = '#10B981';
+                    }
+                    btnEliminarAudio.style.display = 'flex';
+                    btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Regrabar Audio';
+                };
+            } else if (audioPreview) {
+                // Fallback: usar URL directa
+                audioPreview.src = audioUrl;
+                audioPreview.style.display = 'block';
+                if (audioStatus) {
+                    audioStatus.textContent = 'Audio disponible (directo)';
+                    audioStatus.style.color = '#10B981';
+                }
+                btnEliminarAudio.style.display = 'flex';
+                btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Regrabar Audio';
+            }
         } else {
+            // No hay audio
             audioDriveUrl = null;
-            audioPreview.src = '';
-            audioPreview.style.display = 'none';
+            if (audioPreview) {
+                audioPreview.src = '';
+                audioPreview.style.display = 'none';
+                // Limpiar URL de blob si existe
+                if (window.audioBlobUrl) {
+                    URL.revokeObjectURL(window.audioBlobUrl);
+                    window.audioBlobUrl = null;
+                }
+            }
+            if (audioStatus) {
+                audioStatus.textContent = 'No hay audio';
+                audioStatus.style.color = '#8E8E93';
+            }
             btnEliminarAudio.style.display = 'none';
-            audioStatus.textContent = 'No hay audio';
             btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
         }
         
-        // ========== CARGAR DESCRIPCIÓN ==========
-        descripcionProblema.value = detalle.transcripcion_problema || '';
-        seccionesCompletadasLocal.descripcion = !!(detalle.transcripcion_problema && detalle.transcripcion_problema.trim().length > 0 && audioDriveUrl);
-        actualizarEstadoVisualSeccion('descripcion', seccionesCompletadasLocal.descripcion);
-        
-        // ========== CARGAR FOTOS (USANDO LA NUEVA FUNCIÓN) ==========
+        // ========== CARGAR FOTOS ==========
         await cargarFotosExistentes(detalle.fotos);
         
         // ========== CONFIGURAR MODO EDICIÓN ==========
@@ -2543,7 +2924,7 @@ async function editarRecepcion(id) {
         window.datosOriginalesRecepcion = detalle;
         window.fotosOriginalesRecepcion = JSON.parse(JSON.stringify(detalle.fotos || {}));
         window.audioOriginalRecepcion = detalle.audio_url || null;
-        
+        window.datosOriginalesRecepcion.codigo_unico = detalle.codigo_unico; 
         // Cambiar botón finalizar
         if (btnFinalizar) {
             btnFinalizar.innerHTML = '<i class="fas fa-save"></i> Guardar Cambios';
@@ -2555,7 +2936,6 @@ async function editarRecepcion(id) {
         // Banner de edición
         const sessionInfo = document.querySelector('.session-info');
         if (sessionInfo) {
-            // Eliminar banner existente
             const bannerExistente = document.getElementById('editBanner');
             if (bannerExistente) bannerExistente.remove();
             
@@ -2573,9 +2953,14 @@ async function editarRecepcion(id) {
         }
         
         actualizarBotonFinalizar();
+        
+        // Validar descripción con audio
+        validarCompletadoDescripcion();
+        
         mostrarNotificacion(`✅ Editando recepción: ${detalle.codigo_unico}`, 'success');
         
     } catch (error) {
+        console.error('Error en editarRecepcion:', error);
         mostrarNotificacion('Error cargando datos: ' + error.message, 'error');
     }
 }
@@ -2657,6 +3042,13 @@ async function guardarCambiosRecepcion() {
         updateProgressBar(20);
         updateProgressMessage('Preparando datos...');
         
+        // 🔥 EXTRAER CÓDIGO DE SESIÓN DE LAS URLS DE FOTOS
+        const sesionCodigoExtraido = extraerSesionCodigoDeFotos(fotosData);
+        const sesionCodigoOriginal = window.sesionCodigoOriginal || sesionCodigoExtraido || codigoSesion || null;
+        
+        console.log('📌 Código de sesión para edición:', sesionCodigoOriginal);
+        console.log('📌 FotosData:', fotosData);
+        
         // Construir datos actualizados
         const datosActualizados = {
             cliente: {
@@ -2677,7 +3069,11 @@ async function guardarCambiosRecepcion() {
             descripcion: {
                 texto: descripcionProblema?.value || '',
                 audio_url: audioDriveUrl || null
-            }
+            },
+            // 🔥 ENVIAR EL CÓDIGO DE SESIÓN EXTRAÍDO
+            sesion_codigo: sesionCodigoOriginal,
+            // También enviar el código único de la orden
+            codigo_unico: window.datosOriginalesRecepcion?.codigo_unico || null
         };
         
         updateProgressBar(40);
@@ -2709,6 +3105,7 @@ async function guardarCambiosRecepcion() {
         window.datosOriginalesRecepcion = null;
         window.fotosOriginalesRecepcion = null;
         window.audioOriginalRecepcion = null;
+        window.sesionCodigoOriginal = null;
         
         // Restaurar botón finalizar
         if (btnFinalizar) {
@@ -2956,35 +3353,82 @@ function setupUnirsePorCodigo() {
     modalUnirse?.addEventListener('click', (e) => { if (e.target === modalUnirse) cerrarModal(); });
 }
 
+// Modificar la función de eliminar en setupPhotoUploads
 function setupPhotoUploads() {
     for (const foto of FOTOS_CONFIG) {
         const input = document.getElementById(foto.id);
         if (input) input.addEventListener('change', () => procesarFoto(input, foto));
+        
         const uploadDiv = document.getElementById(`upload-${foto.id}`);
         const removeBtn = uploadDiv?.querySelector('.remove-photo');
+        
         if (removeBtn) {
             removeBtn.addEventListener('click', function(e) {
                 e.stopPropagation();
                 e.preventDefault();
+                
+                // 🔥 SI ESTÁ EN MODO EDICIÓN, PERMITIR SUBIR UNA NUEVA FOTO
+                const confirmar = confirm(`¿Eliminar la foto ${foto.label}?`);
+                if (!confirmar) return;
+                
+                // Eliminar la foto
                 uploadDiv.removeAttribute('data-drive-url');
                 delete uploadDiv.dataset.driveUrl;
                 delete fotosSubidasLocal[foto.campo];
-                if (uploadDiv.dataset.objectUrl) { URL.revokeObjectURL(uploadDiv.dataset.objectUrl); delete uploadDiv.dataset.objectUrl; }
+                
+                if (uploadDiv.dataset.objectUrl) {
+                    URL.revokeObjectURL(uploadDiv.dataset.objectUrl);
+                    delete uploadDiv.dataset.objectUrl;
+                }
+                
                 const inputEl = document.getElementById(foto.id);
                 if (inputEl) {
                     inputEl.value = '';
-                    const newInput = inputEl.cloneNode(true);
-                    inputEl.parentNode.replaceChild(newInput, inputEl);
-                    newInput.addEventListener('change', () => procesarFoto(newInput, foto));
                 }
+                
                 const preview = uploadDiv.querySelector('.upload-preview');
-                if (preview) { preview.style.backgroundImage = ''; preview.innerHTML = ''; preview.style.display = ''; }
+                if (preview) {
+                    preview.style.backgroundImage = '';
+                    preview.innerHTML = '';
+                    preview.style.display = '';
+                }
+                
                 uploadDiv.classList.remove('has-image', 'error');
                 this.style.display = 'none';
                 actualizarProgresoFoto(foto.campo, 0, 'pending');
+                
+                // 🔥 ACTUALIZAR CONTADOR Y GUARDAR
                 validarCompletadoFotos();
-                if (codigoSesion && !modoEdicionRecepcion) guardarSeccion('fotos');
-                mostrarNotificacion(`📸 ${foto.label} eliminada`, 'info');
+                
+                if (modoEdicionRecepcion && codigoSesion) {
+                    // Recolectar URLs y guardar
+                    const fotosData = {};
+                    for (const f of FOTOS_CONFIG) {
+                        const div = document.getElementById(`upload-${f.id}`);
+                        let url = div?.getAttribute('data-drive-url') || 
+                                 div?.dataset?.driveUrl || 
+                                 fotosSubidasLocal[f.campo];
+                        if (url && url !== 'null' && url !== '') {
+                            fotosData[f.campo] = url;
+                        }
+                    }
+                    if (Object.keys(fotosData).length > 0) {
+                        guardarSeccion('fotos');
+                    }
+                }
+                
+                mostrarNotificacion(`📸 ${foto.label} eliminada - sube una nueva foto`, 'info');
+                
+                // 🔥 DESTACAR EL INPUT PARA QUE EL USUARIO SUBA UNA NUEVA FOTO
+                const inputFile = document.getElementById(foto.id);
+                if (inputFile) {
+                    inputFile.style.border = '2px solid #C1121F';
+                    inputFile.style.borderRadius = '8px';
+                    setTimeout(() => {
+                        inputFile.style.border = '';
+                        inputFile.style.borderRadius = '';
+                    }, 3000);
+                }
             });
         }
     }
@@ -3083,71 +3527,113 @@ window.logout = () => {
     window.location.href = `${window.API_BASE_URL}/`;
 };
 // =====================================================
-// CARGAR FOTOS EXISTENTES EN EDICIÓN (CORREGIDO)
+// CARGAR FOTOS EXISTENTES EN PARALELO (MUCHO MÁS RÁPIDO)
 // =====================================================
 async function cargarFotosExistentes(fotos) {
     if (!fotos) return;
     
-    let fotosCargadas = 0;
+    // Identificar qué fotos tienen URL válida
+    const fotosAProcesar = [];
     
     for (const foto of FOTOS_CONFIG) {
         const campoDB = CAMPO_MAP[foto.campo];
         const url = fotos[campoDB];
-        const uploadDiv = document.getElementById(`upload-${foto.id}`);
         
-        if (!uploadDiv) continue;
-        
-        const preview = uploadDiv.querySelector('.upload-preview');
-        const removeBtn = uploadDiv.querySelector('.remove-photo');
-        
-        // Limpiar estado anterior
-        uploadDiv.classList.remove('has-image', 'error');
-        uploadDiv.removeAttribute('data-drive-url');
-        delete uploadDiv.dataset.driveUrl;
-        delete fotosSubidasLocal[foto.campo];
-        
-        if (preview) {
-            preview.style.backgroundImage = '';
-            preview.innerHTML = '';
-            preview.style.display = '';
-        }
-        
-        // Si hay URL válida, cargarla
         if (url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined') {
-            try {
-                // Verificar si la imagen es accesible
-                const img = new Image();
-                img.onload = function() {
-                    // Imagen cargada correctamente
-                    if (preview) {
-                        preview.style.backgroundImage = `url('${url}')`;
-                        preview.style.backgroundSize = 'cover';
-                        preview.style.backgroundPosition = 'center';
-                        preview.innerHTML = '';
-                        uploadDiv.classList.add('has-image');
-                        uploadDiv.setAttribute('data-drive-url', url);
-                        uploadDiv.dataset.driveUrl = url;
-                        fotosSubidasLocal[foto.campo] = url;
-                        if (removeBtn) removeBtn.style.display = 'flex';
-                        actualizarProgresoFoto(foto.campo, 100, 'completed');
-                        fotosCargadas++;
-                    }
-                };
-                img.onerror = function() {
-                    // Error al cargar la imagen
-                    logger.warn(`⚠️ No se pudo cargar la foto ${foto.campo}: ${url}`);
-                    if (removeBtn) removeBtn.style.display = 'none';
-                    actualizarProgresoFoto(foto.campo, 0, 'pending');
-                };
-                img.src = url;
-            } catch (error) {
-                logger.warn(`⚠️ Error al cargar ${foto.campo}:`, error);
-                if (removeBtn) removeBtn.style.display = 'none';
-                actualizarProgresoFoto(foto.campo, 0, 'pending');
+            fotosAProcesar.push({
+                ...foto,
+                url: url,
+                campoDB: campoDB
+            });
+        }
+    }
+    
+    // Si no hay fotos, salir
+    if (fotosAProcesar.length === 0) {
+        console.log('📸 No hay fotos para cargar');
+        return;
+    }
+    
+    // Mostrar estado de carga en todas las fotos
+    for (const foto of fotosAProcesar) {
+        const uploadDiv = document.getElementById(`upload-${foto.id}`);
+        const preview = uploadDiv?.querySelector('.upload-preview');
+        if (preview) {
+            preview.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:8px;height:100%;background:rgba(0,0,0,0.3);border-radius:8px;">
+                <i class="fas fa-spinner fa-spin" style="font-size:24px;color:#C1121F;"></i>
+                <span style="font-size:10px;text-align:center;">Cargando...</span>
+            </div>`;
+        }
+        actualizarProgresoFoto(foto.campo, 0, 'uploading');
+    }
+    
+    // 🔥 CARGAR TODAS LAS FOTOS EN PARALELO
+    const startTime = Date.now();
+    console.log(`📸 Cargando ${fotosAProcesar.length} fotos en paralelo...`);
+    
+    const promesas = fotosAProcesar.map(async (foto) => {
+        try {
+            const response = await fetchWithToken(`${API_URL}/jefe-operativo/imagen-base64`, {
+                method: 'POST',
+                body: JSON.stringify({ url: foto.url })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.base64) {
+                return { ...foto, base64: data.base64, success: true };
+            } else {
+                throw new Error(data.error || 'Error convirtiendo imagen');
+            }
+        } catch (error) {
+            console.warn(`⚠️ Error cargando ${foto.campo}:`, error);
+            return { ...foto, success: false, error: error.message };
+        }
+    });
+    
+    // Esperar a que todas terminen
+    const resultados = await Promise.all(promesas);
+    
+    const tiempoTotal = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`✅ Todas las fotos cargadas en ${tiempoTotal} segundos`);
+    
+    // Procesar resultados
+    let fotosCargadas = 0;
+    
+    for (const resultado of resultados) {
+        const uploadDiv = document.getElementById(`upload-${resultado.id}`);
+        const preview = uploadDiv?.querySelector('.upload-preview');
+        const removeBtn = uploadDiv?.querySelector('.remove-photo');
+        
+        if (resultado.success && resultado.base64) {
+            // Cargar la imagen
+            if (preview) {
+                preview.style.backgroundImage = `url('${resultado.base64}')`;
+                preview.style.backgroundSize = 'cover';
+                preview.style.backgroundPosition = 'center';
+                preview.innerHTML = '';
+                uploadDiv.classList.add('has-image');
+                uploadDiv.setAttribute('data-drive-url', resultado.url);
+                uploadDiv.dataset.driveUrl = resultado.url;
+                fotosSubidasLocal[resultado.campo] = resultado.url;
+                if (removeBtn) removeBtn.style.display = 'flex';
+                actualizarProgresoFoto(resultado.campo, 100, 'completed');
+                fotosCargadas++;
             }
         } else {
+            // Error
+            if (preview) {
+                preview.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:4px;height:100%;background:rgba(0,0,0,0.3);border-radius:8px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size:20px;color:#ef4444;"></i>
+                    <span style="font-size:9px;text-align:center;">Error</span>
+                </div>`;
+            }
             if (removeBtn) removeBtn.style.display = 'none';
-            actualizarProgresoFoto(foto.campo, 0, 'pending');
+            actualizarProgresoFoto(resultado.campo, 0, 'error');
         }
     }
     
@@ -3168,6 +3654,24 @@ async function cargarFotosExistentes(fotos) {
         }
     }
     
-    logger.info(`📸 Fotos cargadas: ${fotosCargadas}/7`);
+    console.log(`📸 ${fotosCargadas}/7 fotos cargadas en ${tiempoTotal}s`);
     return fotosCargadas;
+}
+// =====================================================
+// EXTRAER CÓDIGO DE SESIÓN DE LAS URLS DE FOTOS
+// =====================================================
+function extraerSesionCodigoDeFotos(fotosData) {
+    if (!fotosData || typeof fotosData !== 'object') return null;
+    
+    for (const [campo, url] of Object.entries(fotosData)) {
+        if (url && typeof url === 'string') {
+            // Buscar patrón S-XXXXX en la URL
+            const match = url.match(/S-[A-Z0-9]{6}/);
+            if (match) {
+                console.log(`🔍 Código de sesión encontrado en ${campo}: ${match[0]}`);
+                return match[0];
+            }
+        }
+    }
+    return null;
 }

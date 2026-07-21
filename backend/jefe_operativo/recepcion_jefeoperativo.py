@@ -1334,10 +1334,6 @@ def verificar_placa(current_user, placa):
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# ENDPOINT: UPLOAD FOTO (CORREGIDO)
-# =====================================================
-
 @recepcion_jefe_bp.route('/upload-foto', methods=['POST'])
 @jefe_operativo_required
 def upload_foto_drive(current_user):
@@ -1349,12 +1345,27 @@ def upload_foto_drive(current_user):
         file = request.files.get('file')
         campo = request.form.get('campo', 'general')
         codigo_sesion = request.form.get('codigo_sesion')
+        codigo_orden = request.form.get('codigo_orden')  # 🔥 NUEVO: código de orden de trabajo
+        modo_edicion = request.form.get('modo_edicion', 'false') == 'true'  # 🔥 NUEVO: indicar si es edición
         
         if not file:
             return jsonify({'error': 'No se envió el archivo'}), 400
         
-        if not codigo_sesion:
-            return jsonify({'error': 'No se recibió el código de sesión'}), 400
+        # 🔥 DETERMINAR QUÉ IDENTIFICADOR USAR
+        referencia_id = None
+        if modo_edicion and codigo_orden:
+            # Si es edición y tenemos código de orden, usarlo
+            referencia_id = codigo_orden
+            logger.info(f"📸 Subiendo foto en modo edición - usando código de orden: {codigo_orden}")
+        elif codigo_sesion:
+            referencia_id = codigo_sesion
+            logger.info(f"📸 Subiendo foto - usando código de sesión: {codigo_sesion}")
+        else:
+            # Si no hay ningún identificador, buscar en la sesión activa
+            if codigo_sesion and codigo_sesion in sesiones_activas:
+                referencia_id = codigo_sesion
+            else:
+                return jsonify({'error': 'No se pudo determinar la carpeta destino'}), 400
         
         if file.filename == '':
             return jsonify({'error': 'Archivo vacío'}), 400
@@ -1363,11 +1374,14 @@ def upload_foto_drive(current_user):
         user_id = current_user['id']
         filename = f"{campo}_{user_id}_{timestamp}.jpg"
         
+        # 🔥 USAR LA REFERENCIA CORRECTA
         folder_path = google_drive.generate_folder_path(
             modulo='recepcion',
-            referencia_id=codigo_sesion,
+            referencia_id=referencia_id,
             subcarpeta='fotos'
         )
+        
+        logger.info(f"📁 Subiendo foto a: {folder_path}")
         
         result = google_drive.upload_file(
             file_data=file,
@@ -1392,7 +1406,7 @@ def upload_foto_drive(current_user):
         
         # 🔥 ACTUALIZAR SESIÓN EN MEMORIA Y BD CON RETRY
         fotos_validas = 0
-        if codigo_sesion in sesiones_activas:
+        if codigo_sesion and codigo_sesion in sesiones_activas:
             sesion = sesiones_activas[codigo_sesion]
             if 'datos' not in sesion:
                 sesion['datos'] = {}
@@ -1424,7 +1438,8 @@ def upload_foto_drive(current_user):
             'url': url,
             'id': result['id'],
             'web_view_link': result['web_view_link'],
-            'fotos_validas': fotos_validas
+            'fotos_validas': fotos_validas,
+            'referencia_usada': referencia_id
         })
         
     except Exception as e:
@@ -1432,7 +1447,6 @@ def upload_foto_drive(current_user):
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
-
 
 # =====================================================
 # ENDPOINT: ACTUALIZAR FOTO EN SESIÓN (CORREGIDO)
@@ -1850,9 +1864,7 @@ def renombrar_carpeta_drive(current_user):
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# ENDPOINT 21: IMAGEN A BASE64
-# =====================================================
+# En recepcion_jefeoperativo.py - Mejorar el endpoint imagen-base64
 
 @recepcion_jefe_bp.route('/imagen-base64', methods=['POST'])
 @jefe_operativo_required
@@ -1863,14 +1875,15 @@ def obtener_imagen_base64(current_user):
         
         data = request.get_json()
         url = data.get('url')
+        # 🔥 PARÁMETRO PARA MINIATURA (más rápido)
+        thumbnail = data.get('thumbnail', True)  # Por defecto usa miniatura
+        size = data.get('size', 'w400')  # w100, w200, w400, w800
         
         if not url:
             return jsonify({'error': 'URL requerida'}), 400
         
-        # 🔥 OBTENER EL FILE_ID DE LA URL
         file_id = obtener_file_id_drive(url)
         if not file_id:
-            # Intentar con normalizar_url_drive
             url_normalizada = normalizar_url_drive(url)
             file_id = obtener_file_id_drive(url_normalizada)
         
@@ -1878,29 +1891,29 @@ def obtener_imagen_base64(current_user):
             logger.error(f"❌ No se pudo extraer file_id de: {url}")
             return jsonify({'error': 'No se pudo identificar el archivo en Google Drive'}), 400
         
-        # 🔥 USAR LA URL DE DESCARGA DIRECTA
-        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        # 🔥 USAR MINIATURA DE GOOGLE DRIVE (MUCHO MÁS RÁPIDO)
+        if thumbnail:
+            # Miniaturas: w100, w200, w400, w800
+            download_url = f"https://drive.google.com/thumbnail?id={file_id}&sz={size}"
+            logger.info(f"📥 Usando miniatura: {download_url}")
+        else:
+            download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            logger.info(f"📥 Descargando imagen completa: {download_url}")
         
-        logger.info(f"📥 Descargando imagen desde: {download_url}")
-        
-        # 🔥 HACER LA PETICIÓN CON HEADERS PARA EVITAR BLOQUEOS
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
-        response = requests.get(download_url, headers=headers, timeout=30)
+        response = requests.get(download_url, headers=headers, timeout=10)
         
         if response.status_code != 200:
-            logger.error(f"❌ Error descargando imagen: {response.status_code}")
-            # Intentar con la URL alternativa
-            alt_url = f"https://drive.google.com/thumbnail?id={file_id}&sz=w800"
-            response = requests.get(alt_url, headers=headers, timeout=30)
+            # Fallback a descarga completa
+            download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            response = requests.get(download_url, headers=headers, timeout=10)
             if response.status_code != 200:
                 return jsonify({'error': f'Error descargando imagen: {response.status_code}'}), 400
         
         content_type = response.headers.get('content-type', 'image/jpeg')
-        
-        # 🔥 CONVERTIR A BASE64
         img_base64 = base64.b64encode(response.content).decode('utf-8')
         base64_data = f"data:{content_type};base64,{img_base64}"
         
@@ -1911,13 +1924,8 @@ def obtener_imagen_base64(current_user):
             'base64': base64_data
         })
         
-    except requests.exceptions.Timeout:
-        logger.error("❌ Timeout descargando imagen")
-        return jsonify({'error': 'Timeout descargando imagen'}), 500
     except Exception as e:
         logger.error(f"❌ Error obteniendo imagen base64: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
@@ -2357,27 +2365,38 @@ def descargar_pdf_recepcion(current_user, id_orden):
 # ENDPOINT 27: PROXY PARA AUDIO
 # =====================================================
 
+# En recepcion_jefeoperativo.py - Verifica que este código esté así:
+
 @recepcion_jefe_bp.route('/proxy-audio', methods=['GET'])
-@jefe_operativo_required
+@jefe_operativo_required  # 🔥 Asegurar que requiere autenticación
 def proxy_audio(current_user):
     try:
         from flask import Response, stream_with_context
+        import requests
         
         url = request.args.get('url')
         if not url:
             return jsonify({'error': 'URL requerida'}), 400
         
+        # 🔥 EXTRAER FILE_ID
         file_id = obtener_file_id_drive(url)
         if not file_id:
             return jsonify({'error': 'No se pudo extraer el ID del archivo'}), 400
         
+        # 🔥 USAR URL DE DESCARGA DIRECTA
         download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
         
         logger.info(f"🎵 Proxy de audio: {download_url}")
         
-        response = requests.get(download_url, stream=True, timeout=30)
+        # 🔥 HACER LA PETICIÓN CON HEADERS
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        response = requests.get(download_url, stream=True, headers=headers, timeout=30)
         
         if response.status_code != 200:
+            logger.error(f"❌ Error descargando audio: {response.status_code}")
             return jsonify({'error': f'Error descargando audio: {response.status_code}'}), 400
         
         content_type = response.headers.get('content-type', 'audio/wav')
@@ -2389,11 +2408,13 @@ def proxy_audio(current_user):
         
         return Response(
             stream_with_context(generate()),
+            status=200,
             headers={
                 'Content-Type': content_type,
                 'Content-Disposition': 'inline',
                 'Accept-Ranges': 'bytes',
-                'Cache-Control': 'no-cache'
+                'Cache-Control': 'no-cache',
+                'Access-Control-Allow-Origin': '*'
             }
         )
         
@@ -2404,6 +2425,10 @@ def proxy_audio(current_user):
 
 # =====================================================
 # ENDPOINT: ACTUALIZAR RECEPCIÓN (EDICIÓN) - CORREGIDO
+# =====================================================
+
+# =====================================================
+# ENDPOINT: ACTUALIZAR RECEPCIÓN (EDICIÓN) - COMPLETO
 # =====================================================
 
 @recepcion_jefe_bp.route('/actualizar-recepcion/<int:id_orden>', methods=['PUT'])
@@ -2431,6 +2456,9 @@ def actualizar_recepcion(current_user, id_orden):
         
         orden = orden_result.data[0]
         codigo_unico = orden.get('codigo_unico')
+        
+        if not codigo_unico:
+            return jsonify({'error': 'La orden no tiene código único'}), 400
         
         if orden.get('estado_global') != 'EnRecepcion':
             return jsonify({'error': f'No se puede editar una orden en estado "{orden.get("estado_global")}"'}), 400
@@ -2503,31 +2531,74 @@ def actualizar_recepcion(current_user, id_orden):
             .eq('id', orden['id_vehiculo']) \
             .execute()
         
-        # 5. VERIFICAR CARPETA EN DRIVE ANTES DE SUBIR
+        # =============================================
+        # 5. 🔥 VERIFICAR CARPETA EN DRIVE (USANDO codigo_unico PRIMERO)
+        # =============================================
         carpeta_verificada = False
         carpeta_id = None
         
         try:
-            # Buscar carpeta por nombre (código único)
-            carpeta_id = google_drive.get_folder_id_by_name(codigo_unico)
+            sesion_codigo = data.get('sesion_codigo')
             
-            if carpeta_id:
-                logger.info(f"📁 Carpeta encontrada: {codigo_unico} (ID: {carpeta_id})")
-                carpeta_verificada = True
-            else:
-                # Si no existe, crear la carpeta
+            logger.info(f"📁 Buscando carpeta para: codigo_unico={codigo_unico}, sesion_codigo={sesion_codigo}")
+            
+            # 🔥 PRIMERO: Buscar por código de orden (el nombre actual de la carpeta)
+            if codigo_unico:
+                carpeta_id = google_drive.get_folder_id_by_name(codigo_unico)
+                if carpeta_id:
+                    logger.info(f"📁 Carpeta encontrada por código de orden: {codigo_unico} (ID: {carpeta_id})")
+                    carpeta_verificada = True
+            
+            # 🔥 SEGUNDO: Si no se encontró, buscar por código de sesión (nombre original)
+            if not carpeta_id and sesion_codigo:
+                carpeta_id = google_drive.get_folder_id_by_name(sesion_codigo)
+                if carpeta_id:
+                    logger.info(f"📁 Carpeta encontrada por código de sesión: {sesion_codigo} (ID: {carpeta_id})")
+                    # Renombrar la carpeta al código de la orden
+                    rename_result = google_drive.rename_folder(carpeta_id, codigo_unico)
+                    if rename_result:
+                        logger.info(f"📁 Carpeta renombrada: {sesion_codigo} -> {codigo_unico}")
+                        carpeta_verificada = True
+                    else:
+                        logger.warning(f"⚠️ No se pudo renombrar la carpeta {sesion_codigo}")
+            
+            # 🔥 TERCERO: Si no se encontró, buscar por coincidencia parcial
+            if not carpeta_id:
+                logger.info(f"📁 Buscando carpeta por coincidencia parcial...")
+                all_folders = google_drive.service.files().list(
+                    q="mimeType='application/vnd.google-apps.folder' and trashed=false",
+                    fields="files(id, name, parents)",
+                    pageSize=100
+                ).execute()
+                
+                for folder in all_folders.get('files', []):
+                    folder_name = folder.get('name', '')
+                    # Verificar si el nombre contiene el código o parte de él
+                    if codigo_unico and codigo_unico in folder_name:
+                        carpeta_id = folder.get('id')
+                        logger.info(f"📁 Carpeta encontrada por coincidencia: {folder_name} (ID: {carpeta_id})")
+                        # Renombrar si es necesario
+                        if folder_name != codigo_unico:
+                            rename_result = google_drive.rename_folder(carpeta_id, codigo_unico)
+                            if rename_result:
+                                logger.info(f"📁 Carpeta renombrada: {folder_name} -> {codigo_unico}")
+                        carpeta_verificada = True
+                        break
+            
+            # 🔥 CUARTO: Si aún no se encontró, crear la carpeta
+            if not carpeta_id and codigo_unico:
                 logger.info(f"📁 Creando carpeta para: {codigo_unico}")
                 folder_path = google_drive.generate_folder_path(
                     modulo='recepcion',
-                    referencia_id=codigo_unico
+                    codigo_orden=codigo_unico
                 )
-                # Intentar crear la carpeta
-                carpeta_id = google_drive.create_folder_path(folder_path)
+                carpeta_id = google_drive._get_or_create_folder(folder_path)
                 if carpeta_id:
                     carpeta_verificada = True
                     logger.info(f"📁 Carpeta creada: {codigo_unico} (ID: {carpeta_id})")
                 else:
                     logger.warning(f"⚠️ No se pudo crear la carpeta para {codigo_unico}")
+                    
         except Exception as e:
             logger.error(f"❌ Error verificando/creando carpeta: {str(e)}")
         
@@ -2546,24 +2617,105 @@ def actualizar_recepcion(current_user, id_orden):
         if audio_url and audio_url != 'null' and audio_url != '':
             recepcion_update['url_grabacion_problema'] = audio_url
         
-        supabase.table('recepcion') \
-            .update(recepcion_update) \
-            .eq('id_orden_trabajo', id_orden) \
-            .execute()
+        # Solo actualizar campos que tengan valor
+        recepcion_update_limpia = {}
+        for key, value in recepcion_update.items():
+            if value and value != 'null' and value != 'None' and value != '':
+                recepcion_update_limpia[key] = value
+        
+        if recepcion_update_limpia:
+            supabase.table('recepcion') \
+                .update(recepcion_update_limpia) \
+                .eq('id_orden_trabajo', id_orden) \
+                .execute()
         
         logger.info(f"✅ Recepción {codigo_unico} actualizada correctamente")
-        logger.info(f"📸 Fotos: {len([v for v in fotos.values() if v and v != 'null']) }/7")
+        
+        # Contar fotos guardadas
+        fotos_guardadas = sum(1 for v in fotos.values() if v and v != 'null' and v != '')
+        logger.info(f"📸 Fotos: {fotos_guardadas}/7")
         
         return jsonify({
             'success': True,
             'message': 'Recepción actualizada exitosamente',
             'codigo_unico': codigo_unico,
             'carpeta_verificada': carpeta_verificada,
-            'carpeta_id': carpeta_id
+            'carpeta_id': carpeta_id,
+            'fotos_guardadas': fotos_guardadas
         }), 200
         
     except Exception as e:
         logger.error(f"❌ Error actualizando recepción: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+# =====================================================
+# ENDPOINT: REEMPLAZAR FOTO EN DRIVE
+# =====================================================
+
+@recepcion_jefe_bp.route('/reemplazar-foto', methods=['POST'])
+@jefe_operativo_required
+def reemplazar_foto_drive(current_user):
+    """
+    Reemplaza una foto existente en Drive (elimina la anterior y sube la nueva)
+    """
+    try:
+        from google_drive import google_drive
+        from datetime import datetime
+        
+        file = request.files.get('file')
+        campo = request.form.get('campo')
+        url_anterior = request.form.get('url_anterior')
+        codigo_orden = request.form.get('codigo_orden')
+        
+        if not file:
+            return jsonify({'error': 'No se envió el archivo'}), 400
+        
+        if not campo:
+            return jsonify({'error': 'No se especificó el campo'}), 400
+        
+        # 1. ELIMINAR FOTO ANTERIOR SI EXISTE
+        if url_anterior and url_anterior != 'null' and url_anterior != '':
+            try:
+                file_id = google_drive.extract_file_id_from_url(url_anterior)
+                if file_id:
+                    google_drive.delete_file(file_id)
+                    logger.info(f"🗑️ Foto anterior eliminada: {file_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo eliminar foto anterior: {e}")
+        
+        # 2. SUBIR NUEVA FOTO
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        user_id = current_user['id']
+        filename = f"{campo}_{user_id}_{timestamp}.jpg"
+        
+        # Usar el código de orden para la carpeta
+        referencia = codigo_orden or 'recepcion'
+        
+        folder_path = google_drive.generate_folder_path(
+            modulo='recepcion',
+            referencia_id=referencia,
+            subcarpeta='fotos'
+        )
+        
+        result = google_drive.upload_file(
+            file_data=file,
+            filename=filename,
+            folder_path=folder_path
+        )
+        
+        url = result['url']
+        logger.info(f"📸 Foto reemplazada: {url}")
+        
+        return jsonify({
+            'success': True,
+            'url': url,
+            'id': result['id'],
+            'web_view_link': result['web_view_link'],
+            'message': 'Foto reemplazada exitosamente'
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error reemplazando foto: {str(e)}")
         return jsonify({'error': str(e)}), 500

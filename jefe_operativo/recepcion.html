@@ -545,26 +545,40 @@
                     </div>
 
                     <div class="filtros-recepciones">
-                        <div class="filtro-grupo">
+                        <div class="filtro-grupo" style="flex: 2; min-width: 200px;">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="searchRecepcion" placeholder="Buscar..." class="filtro-input">
+                            <input type="text" id="searchRecepcion" placeholder="Buscar por código o placa..." class="filtro-input">
                         </div>
-                        <div class="filtro-grupo">
-                            <i class="fas fa-calendar"></i>
-                            <input type="date" id="fechaDesde" class="filtro-input" placeholder="Desde">
-                        </div>
-                        <div class="filtro-grupo">
-                            <i class="fas fa-calendar-alt"></i>
-                            <input type="date" id="fechaHasta" class="filtro-input" placeholder="Hasta">
-                        </div>
-                        <div class="filtro-grupo">
+                        <div class="filtro-grupo" style="flex: 1.5; min-width: 180px;">
+                            <i class="fas fa-filter"></i>
                             <select id="estadoFiltro" class="filtro-select">
-                                <option value="todos">Todos</option>
-                                <option value="EnRecepcion">En Recepción</option>
-                                <option value="EnTaller">En Taller</option>
-                                <option value="Finalizado">Finalizado</option>
+                                <option value="todos">Todos los estados</option>
+                                <!-- Recepción -->
+                                <option value="EnRecepcion">📋 En Recepción</option>
+                                <!-- Diagnóstico -->
+                                <option value="EnDiagnostico">🔍 En Diagnóstico</option>
+                                <option value="DiagnosticoCompletado">✅ Diagnóstico Completado</option>
+                                <option value="DiagnosticoAprobado">👍 Diagnóstico Aprobado</option>
+                                <option value="DiagnosticoRechazado">👎 Diagnóstico Rechazado</option>
+                                <!-- Cotización -->
+                                <option value="CotizacionEnviada">📨 Cotización Enviada</option>
+                                <option value="CotizacionAceptada">✅ Cotización Aceptada</option>
+                                <option value="CotizacionParcial">🟡 Cotización Parcial</option>
+                                <option value="CotizacionRechazada">❌ Cotización Rechazada</option>
+                                <!-- Reparación -->
+                                <option value="EnArmadoVehiculo">🔧 En Armado</option>
+                                <option value="VehiculoArmado">✅ Vehículo Armado</option>
+                                <option value="EnReparacion">🔧 En Reparación</option>
+                                <option value="EnPausa">⏸️ En Pausa</option>
+                                <option value="ReparacionCompletada">✅ Reparación Completada</option>
+                                <!-- Final -->
+                                <option value="Finalizado">🏁 Finalizado</option>
+                                <option value="Entregado">🚗 Entregado</option>
                             </select>
                         </div>
+                        <button class="btn-limpiar-filtros" id="btnLimpiarFiltros" title="Limpiar filtros">
+                            <i class="fas fa-times"></i> Limpiar
+                        </button>
                     </div>
 
                     <div class="recepciones-list" id="recepcionesList">

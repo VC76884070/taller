@@ -4160,7 +4160,150 @@ body.sidebar-open {
         grid-template-columns: repeat(4, 1fr);
     }
 }
+/* =====================================================
+   FILTROS MEJORADOS
+   ===================================================== */
+.filtros-recepciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--card-bg, #1A1A1C);
+    border-radius: 12px;
+    border: 1px solid var(--border-color, #2C2C2E);
+    margin-bottom: 16px;
+    align-items: center;
+}
 
+.filtro-grupo {
+    display: flex;
+    align-items: center;
+    background: var(--input-bg, #0D0D0D);
+    border-radius: 8px;
+    border: 1px solid var(--border-color, #2C2C2E);
+    padding: 0 12px;
+    transition: border-color 0.3s;
+}
+
+.filtro-grupo:focus-within {
+    border-color: #C1121F;
+}
+
+.filtro-grupo i {
+    color: #8E8E93;
+    font-size: 14px;
+    margin-right: 10px;
+}
+
+.filtro-input {
+    background: transparent;
+    border: none;
+    padding: 10px 0;
+    color: var(--text-color, #fff);
+    font-size: 14px;
+    width: 100%;
+    outline: none;
+}
+
+.filtro-input::placeholder {
+    color: #5A5A5E;
+}
+
+.filtro-select {
+    background: transparent;
+    border: none;
+    padding: 10px 0;
+    color: var(--text-color, #fff);
+    font-size: 14px;
+    width: 100%;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238E8E93' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 28px;
+}
+
+.filtro-select option {
+    background: #1A1A1C;
+    color: #fff;
+    padding: 8px;
+}
+
+.btn-limpiar-filtros {
+    background: transparent;
+    border: 1px solid #4A4A4E;
+    color: #8E8E93;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.btn-limpiar-filtros:hover {
+    background: #2C2C2E;
+    color: #fff;
+    border-color: #C1121F;
+}
+
+.btn-limpiar-filtros i {
+    font-size: 12px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .filtros-recepciones {
+        flex-direction: column;
+        padding: 12px 16px;
+    }
+    
+    .filtro-grupo {
+        width: 100%;
+    }
+    
+    .filtro-grupo[style*="flex:"] {
+        flex: 1 !important;
+        min-width: unset !important;
+        width: 100%;
+    }
+    
+    .btn-limpiar-filtros {
+        width: 100%;
+        justify-content: center;
+    }
+}
+/* En tu CSS */
+.btn-transcribir {
+    background: #C1121F;
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.3s;
+}
+
+.btn-transcribir:hover {
+    background: #a00f1a;
+    transform: scale(1.02);
+}
+
+.btn-transcribir:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
 /* =====================================================
 FIN DEL CSS
 ===================================================== */

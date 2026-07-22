@@ -1,41 +1,34 @@
 # =====================================================
-# RECEPCION_JEFEOPERATIVO.PY - VERSIÓN COMPLETA CORREGIDA
-# CON TODOS LOS ENDPOINTS - SESIONES + GOOGLE DRIVE + RENOMBRADO + LISTADO CON CLIENTE
+# RESERVAS_SOLICITUDES.PY - JEFE TALLER
+# GESTIÓN DE RESERVAS Y SOLICITUDES DE CLIENTES
 # =====================================================
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify
 from functools import wraps
 from config import config
 import jwt
 import datetime
 import logging
-from werkzeug.security import generate_password_hash
 import uuid
-import random
-import string
+from werkzeug.security import generate_password_hash
 
 logger = logging.getLogger(__name__)
 
 # =====================================================
 # CREAR BLUEPRINT
 # =====================================================
-recepcion_jefe_bp = Blueprint('recepcion_jefe', __name__, url_prefix='/api/jefe-operativo')
+reservas_solicitudes_bp = Blueprint('reservas_solicitudes', __name__, url_prefix='/api/jefe-taller')
 
-# Configuración
 SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
 
-# =====================================================
-# ALMACENAMIENTO DE SESIONES COLABORATIVAS
-# =====================================================
-sesiones_activas = {}
 
 # =====================================================
-# DECORADOR DE AUTENTICACIÓN
+# DECORADOR DE AUTENTICACIÓN PARA JEFE TALLER
 # =====================================================
 
-def jefe_operativo_required(f):
-    """Decorador para verificar que el usuario es jefe operativo"""
+def jefe_taller_required(f):
+    """Decorador para verificar que el usuario es jefe taller"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         token = request.headers.get('Authorization', '').replace('Bearer ', '')
@@ -77,7 +70,7 @@ def jefe_operativo_required(f):
                 if 'rol' in ur and 'nombre_rol' in ur['rol']:
                     roles.append(ur['rol']['nombre_rol'])
             
-            if 'jefe_operativo' not in roles and 'admin_general' not in roles:
+            if 'jefe_taller' not in roles and 'admin_general' not in roles:
                 return jsonify({'error': 'Acceso no autorizado'}), 403
             
             current_user = {
@@ -99,1388 +92,861 @@ def jefe_operativo_required(f):
     
     return decorated_function
 
+
 # =====================================================
 # FUNCIONES AUXILIARES
 # =====================================================
 
-def generar_codigo_sesion():
-    """Genera un código único para una sesión colaborativa"""
-    caracteres = string.ascii_uppercase + string.digits
-    codigo = ''.join(random.choices(caracteres, k=6))
-    return f"S-{codigo}"
-
-def guardar_sesion_en_db(sesion):
-    """Guarda o actualiza una sesión en la base de datos"""
+def verificar_disponibilidad_horario(fecha_agendada, reserva_id=None):
+    """Verifica si el horario está disponible"""
     try:
-        existente = supabase.table('sesion_colaborativa') \
-            .select('codigo') \
-            .eq('codigo', sesion['codigo']) \
-            .execute()
+        # Verificar que la fecha no sea en el pasado
+        ahora = datetime.datetime.now()
+        if fecha_agendada < ahora:
+            return False, "No se pueden agendar reservas en fechas pasadas"
         
-        if existente.data:
-            supabase.table('sesion_colaborativa') \
-                .update({
-                    'colaboradores_ids': sesion.get('colaboradores', []),
-                    'colaboradores_nombres': sesion.get('colaboradores_nombres', []),
-                    'datos': sesion.get('datos', {}),
-                    'secciones_completadas': sesion.get('secciones_completadas', {}),
-                    'secciones_editando': sesion.get('secciones_editando', {}),
-                    'estado': sesion.get('estado', 'activa'),
-                    'ultima_actividad': datetime.datetime.now().isoformat()
-                }) \
-                .eq('codigo', sesion['codigo']) \
-                .execute()
-        else:
-            supabase.table('sesion_colaborativa') \
-                .insert({
-                    'codigo': sesion['codigo'],
-                    'creador_id': sesion['creador'],
-                    'creador_nombre': sesion['creador_nombre'],
-                    'colaboradores_ids': sesion.get('colaboradores', []),
-                    'colaboradores_nombres': sesion.get('colaboradores_nombres', []),
-                    'datos': sesion.get('datos', {}),
-                    'secciones_completadas': sesion.get('secciones_completadas', {}),
-                    'secciones_editando': sesion.get('secciones_editando', {}),
-                    'estado': sesion.get('estado', 'activa'),
-                    'fecha_creacion': sesion.get('fecha_creacion', datetime.datetime.now().isoformat())
-                }) \
-                .execute()
-        return True
-    except Exception as e:
-        logger.error(f"Error guardando sesión: {str(e)}")
-        return False
-
-def cargar_sesion_de_db(codigo):
-    """Carga una sesión específica desde la base de datos"""
-    try:
-        resultado = supabase.table('sesion_colaborativa') \
-            .select('*') \
-            .eq('codigo', codigo) \
-            .execute()
+        # Verificar horario de atención (8:00 - 20:00)
+        hora = fecha_agendada.hour
+        if hora < 8 or hora >= 20:
+            return False, "El horario de atención es de 8:00 a 20:00"
         
-        if resultado.data:
-            s = resultado.data[0]
-            return {
-                'codigo': s['codigo'],
-                'creador': s['creador_id'],
-                'creador_nombre': s['creador_nombre'],
-                'colaboradores': s['colaboradores_ids'],
-                'colaboradores_nombres': s['colaboradores_nombres'],
-                'datos': s['datos'],
-                'secciones_completadas': s['secciones_completadas'],
-                'secciones_editando': s.get('secciones_editando', {}),
-                'estado': s['estado'],
-                'fecha_creacion': s['fecha_creacion'],
-                'ultima_actividad': s.get('ultima_actividad', s['fecha_creacion'])
-            }
-        return None
-    except Exception as e:
-        logger.error(f"Error cargando sesión: {str(e)}")
-        return None
-
-# =====================================================
-# ENDPOINT 1: PING (PRUEBA)
-# =====================================================
-
-@recepcion_jefe_bp.route('/ping', methods=['GET'])
-def ping():
-    """Endpoint de prueba"""
-    return jsonify({
-        'success': True,
-        'message': '✅ Jefe Operativo Recepción funcionando correctamente',
-        'endpoints': [
-            '/sesiones-activas',
-            '/listar-recepciones',
-            '/iniciar-sesion',
-            '/obtener-sesion/<codigo>',
-            '/guardar-seccion',
-            '/unirse-sesion',
-            '/finalizar-sesion',
-            '/cancelar-sesion',
-            '/ping-sesion/<codigo>',
-            '/verificar-placa/<placa>',
-            '/upload-foto',
-            '/upload-audio',
-            '/renombrar-carpeta',
-            '/imagen-base64',
-            '/actualizar-foto-sesion',
-            '/verificar-fotos/<codigo>',
-            '/verificar-carpeta/<nombre>'
-        ]
-    }), 200
-
-# =====================================================
-# ENDPOINT 2: SESIONES ACTIVAS
-# =====================================================
-
-@recepcion_jefe_bp.route('/sesiones-activas', methods=['GET'])
-@jefe_operativo_required
-def listar_sesiones_activas(current_user):
-    """Lista todas las sesiones activas"""
-    global sesiones_activas
-    try:
-        # Limpiar sesiones finalizadas de memoria
-        sesiones_a_eliminar = []
-        for codigo, s in sesiones_activas.items():
-            if s.get('estado') == 'finalizada':
-                sesiones_a_eliminar.append(codigo)
+        # Verificar si ya hay una reserva en ese horario
+        inicio_dia = fecha_agendada.replace(hour=0, minute=0, second=0, microsecond=0)
+        fin_dia = fecha_agendada.replace(hour=23, minute=59, second=59, microsecond=999999)
         
-        for codigo in sesiones_a_eliminar:
-            if codigo in sesiones_activas:
-                del sesiones_activas[codigo]
+        query = supabase.table('solicitud_reserva_cliente') \
+            .select('id') \
+            .gte('fecha_agendada', inicio_dia.isoformat()) \
+            .lte('fecha_agendada', fin_dia.isoformat()) \
+            .eq('estado', 'confirmada')
         
-        # Construir lista de sesiones activas
-        sesiones = []
-        for codigo, s in sesiones_activas.items():
-            if s.get('estado') == 'activa':
-                sesiones.append({
-                    'codigo': s['codigo'],
-                    'creador_nombre': s.get('creador_nombre', ''),
-                    'colaboradores': s.get('colaboradores', []),
-                    'colaboradores_nombres': s.get('colaboradores_nombres', []),
-                    'secciones_completadas': s.get('secciones_completadas', {}),
-                    'fecha_creacion': s.get('fecha_creacion'),
-                    'estado': s.get('estado', 'activa')
-                })
+        # Si es una edición, excluir la reserva actual
+        if reserva_id:
+            query = query.neq('id', reserva_id)
         
-        return jsonify({'success': True, 'sesiones': sesiones}), 200
-    except Exception as e:
-        logger.error(f"Error listando sesiones: {str(e)}")
-        return jsonify({'success': True, 'sesiones': []}), 200
-
-# =====================================================
-# ENDPOINT 3: LISTAR RECEPCIONES (CORREGIDO - CON CLIENTE)
-# =====================================================
-
-@recepcion_jefe_bp.route('/listar-recepciones', methods=['GET'])
-@jefe_operativo_required
-def listar_recepciones(current_user):
-    """Lista las recepciones guardadas con datos del cliente y vehículo"""
-    try:
-        print("🔍 INICIANDO listar-recepciones")
+        result = query.execute()
         
-        # Obtener todas las órdenes
-        ordenes_result = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
-            .order('fecha_ingreso', desc=True) \
-            .limit(50) \
-            .execute()
-        
-        print(f"📋 Órdenes encontradas: {len(ordenes_result.data) if ordenes_result.data else 0}")
-        
-        recepciones = []
-        
-        for orden in (ordenes_result.data or []):
-            print(f"\n🔹 Procesando orden ID: {orden['id']} - Código: {orden.get('codigo_unico')}")
-            
-            # Inicializar variables
-            placa = ''
-            marca = ''
-            modelo = ''
-            cliente_nombre = 'N/A'
-            cliente_telefono = ''
-            cliente_ubicacion = ''
-            id_vehiculo = orden.get('id_vehiculo')
-            
-            if id_vehiculo:
-                print(f"   🔸 Vehículo ID: {id_vehiculo}")
-                
-                # 1. Obtener vehículo
-                vehiculo_result = supabase.table('vehiculo') \
-                    .select('placa, marca, modelo, id_cliente') \
-                    .eq('id', id_vehiculo) \
+        if result.data:
+            # Verificar si hay conflicto de horario (misma hora)
+            for reserva in result.data:
+                # Obtener la fecha de la reserva existente
+                reserva_result = supabase.table('solicitud_reserva_cliente') \
+                    .select('fecha_agendada') \
+                    .eq('id', reserva['id']) \
                     .execute()
                 
-                if vehiculo_result.data:
-                    v = vehiculo_result.data[0]
-                    placa = v.get('placa', '')
-                    marca = v.get('marca', '')
-                    modelo = v.get('modelo', '')
-                    id_cliente = v.get('id_cliente')
-                    
-                    print(f"   🔸 Vehículo: {marca} {modelo} ({placa})")
-                    print(f"   🔸 ID Cliente: {id_cliente}")
-                    
-                    if id_cliente:
-                        # 2. Obtener cliente
-                        cliente_result = supabase.table('cliente') \
-                            .select('id_usuario') \
-                            .eq('id', id_cliente) \
-                            .execute()
-                        
-                        if cliente_result.data:
-                            c = cliente_result.data[0]
-                            id_usuario = c.get('id_usuario')
-                            print(f"   🔸 ID Usuario: {id_usuario}")
-                            
-                            if id_usuario:
-                                # 3. Obtener usuario (NOMBRE DEL CLIENTE)
-                                usuario_result = supabase.table('usuario') \
-                                    .select('nombre, contacto, ubicacion') \
-                                    .eq('id', id_usuario) \
-                                    .execute()
-                                
-                                if usuario_result.data:
-                                    u = usuario_result.data[0]
-                                    cliente_nombre = u.get('nombre', 'N/A')
-                                    cliente_telefono = u.get('contacto', '')
-                                    cliente_ubicacion = u.get('ubicacion', '')
-                                    print(f"   ✅ Cliente encontrado: {cliente_nombre}")
-                                else:
-                                    print(f"   ❌ Usuario NO encontrado para id: {id_usuario}")
-                            else:
-                                print(f"   ❌ id_usuario es null")
-                        else:
-                            print(f"   ❌ Cliente NO encontrado para id: {id_cliente}")
-                    else:
-                        print(f"   ❌ id_cliente es null")
-                else:
-                    print(f"   ❌ Vehículo NO encontrado para id: {id_vehiculo}")
-            else:
-                print(f"   ❌ id_vehiculo es null")
-            
-            recepciones.append({
-                'id': orden['id'],
-                'codigo_unico': orden.get('codigo_unico', 'N/A'),
-                'fecha_ingreso': orden.get('fecha_ingreso'),
-                'estado_global': orden.get('estado_global', 'EnRecepcion'),
-                'placa': placa,
-                'marca': marca,
-                'modelo': modelo,
-                'cliente_nombre': cliente_nombre,
-                'cliente_telefono': cliente_telefono,
-                'cliente_ubicacion': cliente_ubicacion
-            })
+                if reserva_result.data:
+                    fecha_existente = datetime.datetime.fromisoformat(
+                        reserva_result.data[0]['fecha_agendada'].replace('Z', '+00:00')
+                    )
+                    # Si es la misma hora, hay conflicto
+                    if fecha_existente.hour == fecha_agendada.hour and \
+                       fecha_existente.minute == fecha_agendada.minute:
+                        return False, "Ya existe una reserva confirmada en ese horario"
         
-        print(f"\n✅ Total recepciones procesadas: {len(recepciones)}")
-        return jsonify({'success': True, 'recepciones': recepciones}), 200
+        return True, "Horario disponible"
         
     except Exception as e:
-        print(f"❌ ERROR en listar-recepciones: {str(e)}")
+        logger.error(f"Error verificando disponibilidad: {str(e)}")
+        return False, "Error verificando disponibilidad"
+
+
+# =====================================================
+# ENDPOINT 1: LISTAR CLIENTES
+# =====================================================
+
+@reservas_solicitudes_bp.route('/clientes', methods=['GET'])
+@jefe_taller_required
+def listar_clientes(current_user):
+    """Lista todos los clientes para el select"""
+    try:
+        # Obtener usuarios con rol de cliente (rol_id = 5)
+        resultado = supabase.table('usuario') \
+            .select('id, nombre, contacto, email') \
+            .execute()
+        
+        # Filtrar clientes (los que tienen rol 5)
+        clientes = []
+        for usuario in (resultado.data or []):
+            # Verificar si tiene rol de cliente
+            roles_result = supabase.table('usuario_rol') \
+                .select('id_rol') \
+                .eq('id_usuario', usuario['id']) \
+                .eq('id_rol', 5) \
+                .execute()
+            
+            if roles_result.data:
+                clientes.append({
+                    'id': usuario['id'],
+                    'nombre': usuario.get('nombre', ''),
+                    'contacto': usuario.get('contacto', ''),
+                    'email': usuario.get('email', '')
+                })
+        
+        return jsonify({'success': True, 'clientes': clientes}), 200
+        
+    except Exception as e:
+        logger.error(f"Error listando clientes: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 2: REGISTRAR NUEVO CLIENTE
+# =====================================================
+
+@reservas_solicitudes_bp.route('/clientes/nuevo', methods=['POST'])
+@jefe_taller_required
+def registrar_nuevo_cliente(current_user):
+    """Registra un nuevo cliente con su vehículo"""
+    try:
+        data = request.get_json()
+        
+        nombre = data.get('nombre', '').strip()
+        email = data.get('email', '').strip()
+        contacto = data.get('contacto', '').strip()
+        ubicacion = data.get('ubicacion')
+        placa = data.get('placa', '').strip().upper()
+        marca = data.get('marca', '').strip()
+        modelo = data.get('modelo', '').strip()
+        anio = data.get('anio')
+        
+        if not nombre or not email or not contacto or not placa:
+            return jsonify({'error': 'Nombre, email, contacto y placa son requeridos'}), 400
+        
+        # Verificar si el email ya existe
+        email_existente = supabase.table('usuario') \
+            .select('id') \
+            .eq('email', email) \
+            .execute()
+        
+        if email_existente.data:
+            return jsonify({'error': 'El email ya está registrado'}), 400
+        
+        # Verificar si el contacto ya existe
+        contacto_existente = supabase.table('usuario') \
+            .select('id') \
+            .eq('contacto', contacto) \
+            .execute()
+        
+        if contacto_existente.data:
+            return jsonify({'error': 'El número de contacto ya está registrado'}), 400
+        
+        # Verificar si la placa ya existe
+        placa_existente = supabase.table('vehiculo') \
+            .select('id') \
+            .eq('placa', placa) \
+            .execute()
+        
+        if placa_existente.data:
+            return jsonify({'error': f'La placa {placa} ya está registrada'}), 400
+        
+        # Generar contraseña temporal
+        password_temporal = str(uuid.uuid4())[:8]
+        contrasenia_hash = generate_password_hash(password_temporal)
+        
+        # 1. Crear usuario
+        user_result = supabase.table('usuario').insert({
+            'nombre': nombre,
+            'email': email,
+            'contacto': contacto,
+            'ubicacion': ubicacion,
+            'contrasenia': contrasenia_hash,
+            'fecha_registro': datetime.datetime.now().isoformat()
+        }).execute()
+        
+        if not user_result.data:
+            return jsonify({'error': 'Error creando usuario'}), 500
+        
+        id_usuario = user_result.data[0]['id']
+        
+        # 2. Asignar rol de cliente (id_rol = 5)
+        supabase.table('usuario_rol').insert({
+            'id_usuario': id_usuario,
+            'id_rol': 5,
+            'fecha_asignacion': datetime.datetime.now().isoformat()
+        }).execute()
+        
+        # 3. Crear cliente
+        cliente_result = supabase.table('cliente').insert({
+            'id_usuario': id_usuario,
+            'tipo_documento': 'CI',
+            'numero_documento': f"TEMP-{int(datetime.datetime.now().timestamp())}",
+            'email': email
+        }).execute()
+        
+        if not cliente_result.data:
+            return jsonify({'error': 'Error creando cliente'}), 500
+        
+        id_cliente = cliente_result.data[0]['id']
+        
+        # 4. Crear vehículo
+        vehiculo_result = supabase.table('vehiculo').insert({
+            'id_cliente': id_cliente,
+            'placa': placa,
+            'marca': marca,
+            'modelo': modelo,
+            'anio': anio
+        }).execute()
+        
+        if not vehiculo_result.data:
+            return jsonify({'error': 'Error creando vehículo'}), 500
+        
+        return jsonify({
+            'success': True,
+            'message': 'Cliente registrado exitosamente',
+            'cliente': {
+                'id_usuario': id_usuario,
+                'nombre': nombre,
+                'email': email,
+                'contacto': contacto,
+                'password_temporal': password_temporal
+            },
+            'vehiculo': {
+                'id': vehiculo_result.data[0]['id'],
+                'placa': placa
+            }
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Error registrando cliente: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 3: LISTAR VEHÍCULOS DE UN CLIENTE
+# =====================================================
+
+@reservas_solicitudes_bp.route('/vehiculos-cliente/<int:cliente_id>', methods=['GET'])
+@jefe_taller_required
+def listar_vehiculos_cliente(current_user, cliente_id):
+    """Lista los vehículos de un cliente"""
+    try:
+        # Obtener cliente para verificar que existe
+        cliente_result = supabase.table('cliente') \
+            .select('id') \
+            .eq('id_usuario', cliente_id) \
+            .execute()
+        
+        if not cliente_result.data:
+            return jsonify({'error': 'Cliente no encontrado'}), 404
+        
+        id_cliente = cliente_result.data[0]['id']
+        
+        # Obtener vehículos
+        vehiculos_result = supabase.table('vehiculo') \
+            .select('id, placa, marca, modelo, anio, kilometraje') \
+            .eq('id_cliente', id_cliente) \
+            .execute()
+        
+        return jsonify({
+            'success': True,
+            'vehiculos': vehiculos_result.data or []
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error listando vehículos: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 4: LISTAR SOLICITUDES DE CLIENTES
+# =====================================================
+
+@reservas_solicitudes_bp.route('/solicitudes-clientes', methods=['GET'])
+@jefe_taller_required
+def listar_solicitudes_clientes(current_user):
+    """Lista todas las solicitudes de clientes"""
+    try:
+        estado = request.args.get('estado')
+        
+        query = supabase.table('solicitud_reserva_cliente') \
+            .select('''
+                id,
+                id_cliente,
+                id_vehiculo,
+                fecha_solicitud,
+                fecha_deseada,
+                hora_deseada,
+                fecha_agendada,
+                descripcion_problema,
+                mensaje_adicional,
+                estado,
+                created_at,
+                cliente!inner(
+                    id_usuario,
+                    usuario!inner(
+                        id,
+                        nombre,
+                        contacto,
+                        email
+                    )
+                ),
+                vehiculo!inner(
+                    placa,
+                    marca,
+                    modelo,
+                    anio
+                )
+            ''') \
+            .order('fecha_solicitud', desc=True)
+        
+        if estado and estado != 'todos':
+            query = query.eq('estado', estado)
+        
+        resultado = query.execute()
+        
+        solicitudes = []
+        for s in (resultado.data or []):
+            cliente_data = s.get('cliente', {})
+            usuario_data = cliente_data.get('usuario', {})
+            vehiculo_data = s.get('vehiculo', {})
+            
+            solicitudes.append({
+                'id': s.get('id'),
+                'id_cliente': s.get('id_cliente'),
+                'fecha_solicitud': s.get('fecha_solicitud'),
+                'fecha_deseada': s.get('fecha_deseada'),
+                'hora_deseada': s.get('hora_deseada'),
+                'fecha_agendada': s.get('fecha_agendada'),
+                'descripcion_problema': s.get('descripcion_problema', ''),
+                'mensaje_adicional': s.get('mensaje_adicional', ''),
+                'estado': s.get('estado', 'pendiente'),
+                'cliente_nombre': usuario_data.get('nombre', 'N/A'),
+                'cliente_contacto': usuario_data.get('contacto', 'N/A'),
+                'cliente_email': usuario_data.get('email', 'N/A'),
+                'placa': vehiculo_data.get('placa', 'N/A'),
+                'marca': vehiculo_data.get('marca', ''),
+                'modelo': vehiculo_data.get('modelo', ''),
+                'anio': vehiculo_data.get('anio'),
+                'id_vehiculo': s.get('id_vehiculo')
+            })
+        
+        return jsonify({'success': True, 'solicitudes': solicitudes}), 200
+        
+    except Exception as e:
+        logger.error(f"Error listando solicitudes: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': True, 'recepciones': []}), 500
+        return jsonify({'error': str(e)}), 500
+
 
 # =====================================================
-# ENDPOINT 4: DETALLE RECEPCIÓN (CORREGIDO - CON TODOS LOS DATOS)
+# ENDPOINT 5: ACTUALIZAR ESTADO DE SOLICITUD
 # =====================================================
 
-@recepcion_jefe_bp.route('/detalle-recepcion/<int:id_orden>', methods=['GET'])
-@jefe_operativo_required
-def detalle_recepcion(current_user, id_orden):
-    """
-    Obtiene el detalle completo de una recepción
-    """
+@reservas_solicitudes_bp.route('/solicitudes-clientes/<int:id_solicitud>/estado', methods=['PATCH'])
+@jefe_taller_required
+def actualizar_estado_solicitud(current_user, id_solicitud):
+    """Actualiza el estado de una solicitud"""
     try:
-        # 🔥 CORREGIDO: Sintaxis correcta para joins en Supabase
-        orden_result = supabase.table('ordentrabajo') \
+        data = request.get_json()
+        estado = data.get('estado')
+        fecha_agendada = data.get('fecha_agendada')
+        
+        if not estado:
+            return jsonify({'error': 'Estado requerido'}), 400
+        
+        # Verificar que la solicitud existe
+        solicitud_result = supabase.table('solicitud_reserva_cliente') \
+            .select('*') \
+            .eq('id', id_solicitud) \
+            .execute()
+        
+        if not solicitud_result.data:
+            return jsonify({'error': 'Solicitud no encontrada'}), 404
+        
+        solicitud = solicitud_result.data[0]
+        estado_actual = solicitud.get('estado', 'pendiente')
+        
+        # Validar transiciones de estado
+        if estado_actual == 'completada' and estado != 'completada':
+            return jsonify({'error': 'Una solicitud completada no puede cambiar de estado'}), 400
+        
+        if estado_actual == 'cancelada' and estado != 'cancelada':
+            return jsonify({'error': 'Una solicitud cancelada no puede cambiar de estado'}), 400
+        
+        # Si se confirma, verificar disponibilidad
+        if estado == 'confirmada':
+            if not fecha_agendada:
+                # Usar fecha deseada + hora deseada
+                fecha_deseada = solicitud.get('fecha_deseada')
+                hora_deseada = solicitud.get('hora_deseada', '09:00')
+                
+                if not fecha_deseada:
+                    return jsonify({'error': 'La solicitud no tiene fecha deseada'}), 400
+                
+                fecha_agendada = f"{fecha_deseada}T{hora_deseada}:00"
+            
+            # Verificar que la fecha sea válida
+            try:
+                fecha_obj = datetime.datetime.fromisoformat(fecha_agendada.replace('Z', '+00:00'))
+                fecha_agendada_iso = fecha_obj.isoformat()
+            except ValueError:
+                return jsonify({'error': 'Formato de fecha inválido'}), 400
+            
+            # Verificar disponibilidad
+            disponible, mensaje = verificar_disponibilidad_horario(fecha_obj, id_solicitud)
+            if not disponible:
+                return jsonify({'error': mensaje}), 409
+        
+        # Actualizar
+        update_data = {'estado': estado}
+        if fecha_agendada:
+            update_data['fecha_agendada'] = fecha_agendada
+        
+        supabase.table('solicitud_reserva_cliente') \
+            .update(update_data) \
+            .eq('id', id_solicitud) \
+            .execute()
+        
+        logger.info(f"Solicitud {id_solicitud} actualizada a estado {estado}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Solicitud actualizada a {estado}'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error actualizando solicitud: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 6: OBTENER DETALLE DE SOLICITUD
+# =====================================================
+
+@reservas_solicitudes_bp.route('/solicitudes-clientes/<int:id_solicitud>', methods=['GET'])
+@jefe_taller_required
+def obtener_solicitud(current_user, id_solicitud):
+    """Obtiene el detalle de una solicitud específica"""
+    try:
+        resultado = supabase.table('solicitud_reserva_cliente') \
             .select('''
-                id, 
-                codigo_unico, 
-                fecha_ingreso, 
-                estado_global,
-                id_jefe_operativo,
-                id_jefe_operativo_2,
-                vehiculo (
+                id,
+                id_cliente,
+                id_vehiculo,
+                fecha_solicitud,
+                fecha_deseada,
+                hora_deseada,
+                fecha_agendada,
+                descripcion_problema,
+                mensaje_adicional,
+                estado,
+                cliente!inner(
+                    id_usuario,
+                    usuario!inner(
+                        id,
+                        nombre,
+                        contacto,
+                        email
+                    )
+                ),
+                vehiculo!inner(
                     id,
                     placa,
                     marca,
                     modelo,
-                    anio,
-                    kilometraje,
-                    cliente (
-                        id,
-                        id_usuario,
-                        latitud,
-                        longitud,
-                        usuario (
-                            id,
-                            nombre,
-                            contacto,
-                            ubicacion,
-                            email
-                        )
-                    )
+                    anio
                 )
             ''') \
-            .eq('id', id_orden) \
+            .eq('id', id_solicitud) \
             .single() \
             .execute()
         
-        if not orden_result.data:
-            return jsonify({'error': 'Orden no encontrada'}), 404
+        if not resultado.data:
+            return jsonify({'error': 'Solicitud no encontrada'}), 404
         
-        orden = orden_result.data
-        vehiculo = orden.get('vehiculo', {})
-        cliente = vehiculo.get('cliente', {})
-        usuario = cliente.get('usuario', {})
+        s = resultado.data
+        cliente_data = s.get('cliente', {})
+        usuario_data = cliente_data.get('usuario', {})
+        vehiculo_data = s.get('vehiculo', {})
         
-        # Obtener jefe operativo principal
-        jefe_principal = {}
-        if orden.get('id_jefe_operativo'):
-            j1 = supabase.table('usuario') \
-                .select('id, nombre, contacto, email') \
-                .eq('id', orden['id_jefe_operativo']) \
-                .execute()
-            if j1.data:
-                jefe_principal = j1.data[0]
+        solicitud = {
+            'id': s.get('id'),
+            'id_cliente': s.get('id_cliente'),
+            'fecha_solicitud': s.get('fecha_solicitud'),
+            'fecha_deseada': s.get('fecha_deseada'),
+            'hora_deseada': s.get('hora_deseada'),
+            'fecha_agendada': s.get('fecha_agendada'),
+            'descripcion_problema': s.get('descripcion_problema', ''),
+            'mensaje_adicional': s.get('mensaje_adicional', ''),
+            'estado': s.get('estado', 'pendiente'),
+            'cliente_nombre': usuario_data.get('nombre', 'N/A'),
+            'cliente_contacto': usuario_data.get('contacto', 'N/A'),
+            'cliente_email': usuario_data.get('email', 'N/A'),
+            'placa': vehiculo_data.get('placa', 'N/A'),
+            'marca': vehiculo_data.get('marca', ''),
+            'modelo': vehiculo_data.get('modelo', ''),
+            'anio': vehiculo_data.get('anio'),
+            'id_vehiculo': s.get('id_vehiculo')
+        }
         
-        # Obtener jefe operativo secundario
-        jefe_secundario = {}
-        if orden.get('id_jefe_operativo_2'):
-            j2 = supabase.table('usuario') \
-                .select('id, nombre, contacto, email') \
-                .eq('id', orden['id_jefe_operativo_2']) \
-                .execute()
-            if j2.data:
-                jefe_secundario = j2.data[0]
+        return jsonify({'success': True, 'solicitud': solicitud}), 200
         
-        # Obtener recepción (fotos y descripción)
-        recepcion_result = supabase.table('recepcion') \
-            .select('*') \
-            .eq('id_orden_trabajo', id_orden) \
+    except Exception as e:
+        logger.error(f"Error obteniendo solicitud: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 7: LISTAR RESERVAS (PARA CALENDARIO)
+# =====================================================
+
+@reservas_solicitudes_bp.route('/reservas', methods=['GET'])
+@jefe_taller_required
+def listar_reservas(current_user):
+    """Lista todas las reservas confirmadas para el calendario"""
+    try:
+        estado = request.args.get('estado')
+        
+        query = supabase.table('solicitud_reserva_cliente') \
+            .select('''
+                id,
+                fecha_agendada,
+                descripcion_problema,
+                mensaje_adicional,
+                estado,
+                cliente!inner(
+                    id_usuario,
+                    usuario!inner(
+                        id,
+                        nombre,
+                        contacto
+                    )
+                ),
+                vehiculo!inner(
+                    id,
+                    placa,
+                    marca,
+                    modelo,
+                    anio
+                )
+            ''') \
+            .not_.is_('fecha_agendada', 'null') \
+            .order('fecha_agendada')
+        
+        if estado and estado != 'todos':
+            query = query.eq('estado', estado)
+        
+        resultado = query.execute()
+        
+        reservas = []
+        for r in (resultado.data or []):
+            cliente_data = r.get('cliente', {})
+            usuario_data = cliente_data.get('usuario', {})
+            vehiculo_data = r.get('vehiculo', {})
+            
+            reservas.append({
+                'id': r.get('id'),
+                'fecha_agendada': r.get('fecha_agendada'),
+                'descripcion_problema': r.get('descripcion_problema', ''),
+                'estado': r.get('estado', 'pendiente'),
+                'cliente_nombre': usuario_data.get('nombre', 'N/A'),
+                'cliente_contacto': usuario_data.get('contacto', 'N/A'),
+                'placa': vehiculo_data.get('placa', 'N/A'),
+                'marca': vehiculo_data.get('marca', ''),
+                'modelo': vehiculo_data.get('modelo', ''),
+                'anio': vehiculo_data.get('anio')
+            })
+        
+        return jsonify({'success': True, 'reservas': reservas}), 200
+        
+    except Exception as e:
+        logger.error(f"Error listando reservas: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 8: OBTENER DETALLE DE RESERVA
+# =====================================================
+
+@reservas_solicitudes_bp.route('/reservas/<int:id_reserva>', methods=['GET'])
+@jefe_taller_required
+def obtener_reserva(current_user, id_reserva):
+    """Obtiene el detalle de una reserva específica"""
+    try:
+        resultado = supabase.table('solicitud_reserva_cliente') \
+            .select('''
+                id,
+                id_cliente,
+                id_vehiculo,
+                fecha_agendada,
+                descripcion_problema,
+                mensaje_adicional,
+                estado,
+                cliente!inner(
+                    id_usuario,
+                    usuario!inner(
+                        id,
+                        nombre,
+                        contacto,
+                        email
+                    )
+                ),
+                vehiculo!inner(
+                    id,
+                    placa,
+                    marca,
+                    modelo,
+                    anio
+                )
+            ''') \
+            .eq('id', id_reserva) \
             .single() \
             .execute()
-        recepcion = recepcion_result.data if recepcion_result.data else {}
         
-        detalle = {
-            'id': orden['id'],
-            'codigo_unico': orden.get('codigo_unico', 'N/A'),
-            'fecha_ingreso': orden.get('fecha_ingreso'),
-            'estado_global': orden.get('estado_global', 'EnRecepcion'),
-            'jefe_operativo': jefe_principal,
-            'jefe_operativo_2': jefe_secundario,
-            'placa': vehiculo.get('placa', ''),
-            'marca': vehiculo.get('marca', ''),
-            'modelo': vehiculo.get('modelo', ''),
-            'anio': vehiculo.get('anio'),
-            'kilometraje': vehiculo.get('kilometraje'),
-            'cliente_nombre': usuario.get('nombre', ''),
-            'cliente_telefono': usuario.get('contacto', ''),
-            'cliente_ubicacion': usuario.get('ubicacion', ''),
-            'cliente_email': usuario.get('email', ''),
-            'latitud': cliente.get('latitud'),
-            'longitud': cliente.get('longitud'),
-            'fotos': {
-                'url_lateral_izquierda': recepcion.get('url_lateral_izquierda'),
-                'url_lateral_derecha': recepcion.get('url_lateral_derecha'),
-                'url_foto_frontal': recepcion.get('url_foto_frontal'),
-                'url_foto_trasera': recepcion.get('url_foto_trasera'),
-                'url_foto_superior': recepcion.get('url_foto_superior'),
-                'url_foto_inferior': recepcion.get('url_foto_inferior'),
-                'url_foto_tablero': recepcion.get('url_foto_tablero')
-            },
-            'audio_url': recepcion.get('url_grabacion_problema'),
-            'transcripcion_problema': recepcion.get('transcripcion_problema', '')
+        if not resultado.data:
+            return jsonify({'error': 'Reserva no encontrada'}), 404
+        
+        r = resultado.data
+        cliente_data = r.get('cliente', {})
+        usuario_data = cliente_data.get('usuario', {})
+        vehiculo_data = r.get('vehiculo', {})
+        
+        reserva = {
+            'id': r.get('id'),
+            'id_cliente': r.get('id_cliente'),
+            'fecha_agendada': r.get('fecha_agendada'),
+            'descripcion_problema': r.get('descripcion_problema', ''),
+            'mensaje_adicional': r.get('mensaje_adicional', ''),
+            'estado': r.get('estado', 'pendiente'),
+            'cliente_nombre': usuario_data.get('nombre', 'N/A'),
+            'cliente_contacto': usuario_data.get('contacto', 'N/A'),
+            'cliente_email': usuario_data.get('email', 'N/A'),
+            'placa': vehiculo_data.get('placa', 'N/A'),
+            'marca': vehiculo_data.get('marca', ''),
+            'modelo': vehiculo_data.get('modelo', ''),
+            'anio': vehiculo_data.get('anio'),
+            'id_vehiculo': r.get('id_vehiculo')
         }
         
-        return jsonify({'success': True, 'detalle': detalle}), 200
+        return jsonify({'success': True, 'reserva': reserva}), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo detalle: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error obteniendo reserva: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
-# ENDPOINT 5: INICIAR SESIÓN
+# ENDPOINT 9: CREAR RESERVA MANUAL
 # =====================================================
 
-@recepcion_jefe_bp.route('/iniciar-sesion', methods=['POST'])
-@jefe_operativo_required
-def iniciar_sesion(current_user):
-    """Crea una nueva sesión colaborativa"""
-    global sesiones_activas
+@reservas_solicitudes_bp.route('/reservas', methods=['POST'])
+@jefe_taller_required
+def crear_reserva(current_user):
+    """Crea una reserva manual desde el panel"""
     try:
-        codigo_sesion = generar_codigo_sesion()
+        data = request.get_json()
         
-        sesion = {
-            'codigo': codigo_sesion,
-            'creador': current_user['id'],
-            'creador_nombre': current_user.get('nombre', 'Técnico'),
-            'colaboradores': [current_user['id']],
-            'colaboradores_nombres': [current_user.get('nombre', 'Técnico')],
-            'datos': {
-                'cliente': {'nombre': '', 'telefono': '', 'ubicacion': '', 'latitud': None, 'longitud': None},
-                'vehiculo': {'placa': '', 'marca': '', 'modelo': '', 'anio': None, 'kilometraje': None},
-                'fotos': {
-                    'url_lateral_izquierda': None, 'url_lateral_derecha': None,
-                    'url_foto_frontal': None, 'url_foto_trasera': None,
-                    'url_foto_superior': None, 'url_foto_inferior': None, 'url_foto_tablero': None
-                },
-                'descripcion': {'texto': '', 'audio_url': None}
-            },
-            'secciones_completadas': {'cliente': False, 'vehiculo': False, 'fotos': False, 'descripcion': False},
-            'secciones_editando': {},
-            'estado': 'activa',
-            'fecha_creacion': datetime.datetime.now().isoformat(),
-            'ultima_actividad': datetime.datetime.now().isoformat()
+        cliente_id = data.get('cliente_id')
+        vehiculo_id = data.get('vehiculo_id')
+        fecha_agendada = data.get('fecha_agendada')
+        descripcion_problema = data.get('descripcion_problema')
+        notas = data.get('notas')
+        es_manual = data.get('es_manual', True)
+        
+        if not cliente_id or not vehiculo_id or not fecha_agendada or not descripcion_problema:
+            return jsonify({'error': 'Cliente, vehículo, fecha y descripción son requeridos'}), 400
+        
+        # Verificar que el cliente existe
+        cliente_result = supabase.table('cliente') \
+            .select('id') \
+            .eq('id_usuario', cliente_id) \
+            .execute()
+        
+        if not cliente_result.data:
+            return jsonify({'error': 'Cliente no encontrado'}), 404
+        
+        id_cliente = cliente_result.data[0]['id']
+        
+        # Verificar que el vehículo existe y pertenece al cliente
+        vehiculo_result = supabase.table('vehiculo') \
+            .select('id') \
+            .eq('id', vehiculo_id) \
+            .eq('id_cliente', id_cliente) \
+            .execute()
+        
+        if not vehiculo_result.data:
+            return jsonify({'error': 'Vehículo no encontrado o no pertenece al cliente'}), 404
+        
+        # Verificar disponibilidad
+        try:
+            fecha_obj = datetime.datetime.fromisoformat(fecha_agendada.replace('Z', '+00:00'))
+        except ValueError:
+            return jsonify({'error': 'Formato de fecha inválido'}), 400
+        
+        disponible, mensaje = verificar_disponibilidad_horario(fecha_obj)
+        if not disponible:
+            return jsonify({'error': mensaje}), 409
+        
+        # Crear la reserva
+        reserva_data = {
+            'id_cliente': cliente_id,
+            'id_vehiculo': vehiculo_id,
+            'fecha_deseada': fecha_obj.date().isoformat(),
+            'hora_deseada': fecha_obj.strftime('%H:%M'),
+            'fecha_agendada': fecha_agendada,
+            'descripcion_problema': descripcion_problema,
+            'mensaje_adicional': notas,
+            'estado': 'confirmada',
+            'es_manual': es_manual,
+            'fecha_solicitud': datetime.datetime.now().isoformat()
         }
         
-        guardar_sesion_en_db(sesion)
-        sesiones_activas[codigo_sesion] = sesion
+        result = supabase.table('solicitud_reserva_cliente') \
+            .insert(reserva_data) \
+            .execute()
         
-        return jsonify({'success': True, 'codigo': codigo_sesion, 'sesion': sesion}), 200
-        
-    except Exception as e:
-        logger.error(f"Error iniciando sesión: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT 6: OBTENER SESIÓN
-# =====================================================
-
-@recepcion_jefe_bp.route('/obtener-sesion/<codigo>', methods=['GET'])
-@jefe_operativo_required
-def obtener_sesion(current_user, codigo):
-    """Obtiene los datos de una sesión específica"""
-    global sesiones_activas
-    try:
-        if codigo in sesiones_activas:
-            return jsonify({'success': True, 'sesion': sesiones_activas[codigo]}), 200
-        
-        sesion = cargar_sesion_de_db(codigo)
-        if sesion:
-            sesiones_activas[codigo] = sesion
-            return jsonify({'success': True, 'sesion': sesion}), 200
-        
-        return jsonify({'error': 'Sesión no encontrada'}), 404
-        
-    except Exception as e:
-        logger.error(f"Error obteniendo sesión: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT 7: GUARDAR SECCIÓN (CORREGIDO)
-# =====================================================
-
-@recepcion_jefe_bp.route('/guardar-seccion', methods=['POST'])
-@jefe_operativo_required
-def guardar_seccion(current_user):
-    """Guarda una sección específica de la sesión"""
-    global sesiones_activas
-    try:
-        data = request.get_json()
-        codigo_sesion = data.get('codigo')
-        seccion = data.get('seccion')
-        datos_seccion = data.get('datos', {})
-        
-        if not codigo_sesion:
-            return jsonify({'error': 'Código requerido'}), 400
-        
-        if codigo_sesion not in sesiones_activas:
-            sesion = cargar_sesion_de_db(codigo_sesion)
-            if not sesion:
-                return jsonify({'error': 'Sesión no encontrada'}), 404
-            sesiones_activas[codigo_sesion] = sesion
-        
-        sesion = sesiones_activas[codigo_sesion]
-        
-        if sesion.get('estado') != 'activa':
-            return jsonify({'error': 'Sesión finalizada'}), 400
-        
-        # Guardar según la sección
-        if seccion == 'cliente':
-            sesion['datos']['cliente'] = {
-                'nombre': datos_seccion.get('nombre', ''),
-                'telefono': datos_seccion.get('telefono', ''),
-                'ubicacion': datos_seccion.get('ubicacion', ''),
-                'latitud': datos_seccion.get('latitud'),
-                'longitud': datos_seccion.get('longitud')
-            }
-            sesion['secciones_completadas']['cliente'] = bool(
-                datos_seccion.get('nombre') and datos_seccion.get('telefono')
-            )
-            
-        elif seccion == 'vehiculo':
-            sesion['datos']['vehiculo'] = {
-                'placa': datos_seccion.get('placa', '').upper(),
-                'marca': datos_seccion.get('marca', ''),
-                'modelo': datos_seccion.get('modelo', ''),
-                'anio': datos_seccion.get('anio'),
-                'kilometraje': datos_seccion.get('kilometraje', 0)
-            }
-            sesion['secciones_completadas']['vehiculo'] = bool(
-                datos_seccion.get('placa') and datos_seccion.get('marca') and datos_seccion.get('modelo')
-            )
-            
-        elif seccion == 'fotos':
-            if 'datos' not in sesion:
-                sesion['datos'] = {}
-            if 'fotos' not in sesion['datos']:
-                sesion['datos']['fotos'] = {}
-            
-            fotos_actualizadas = 0
-            for campo, valor in datos_seccion.items():
-                if valor and valor != 'null' and valor != '':
-                    sesion['datos']['fotos'][campo] = valor
-                    fotos_actualizadas += 1
-                    logger.info(f"📸 Foto {campo} guardada en sesión")
-            
-            fotos = sesion['datos']['fotos']
-            fotos_validas = sum(1 for v in fotos.values() if v and v != 'null' and v != '')
-            sesion['secciones_completadas']['fotos'] = fotos_validas == 7
-            
-            logger.info(f"📸 Fotos en sesión: {fotos_validas}/7 - Actualizadas: {fotos_actualizadas}")
-            
-        elif seccion == 'descripcion':
-            sesion['datos']['descripcion']['texto'] = datos_seccion.get('texto', '')
-            audio_url = datos_seccion.get('audio_url')
-            if audio_url and audio_url.startswith('http'):
-                sesion['datos']['descripcion']['audio_url'] = audio_url
-            sesion['secciones_completadas']['descripcion'] = bool(datos_seccion.get('texto'))
-        
-        sesion['ultima_actividad'] = datetime.datetime.now().isoformat()
-        guardar_sesion_en_db(sesion)
-        
-        return jsonify({'success': True, 'sesion': sesion}), 200
-        
-    except Exception as e:
-        logger.error(f"Error guardando sección: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT 8: UNIRSE A SESIÓN
-# =====================================================
-
-@recepcion_jefe_bp.route('/unirse-sesion', methods=['POST'])
-@jefe_operativo_required
-def unirse_sesion(current_user):
-    """Permite a un jefe operativo unirse a una sesión existente"""
-    global sesiones_activas
-    try:
-        data = request.get_json()
-        codigo_sesion = data.get('codigo')
-        
-        if not codigo_sesion:
-            return jsonify({'error': 'Código requerido'}), 400
-        
-        if codigo_sesion not in sesiones_activas:
-            sesion = cargar_sesion_de_db(codigo_sesion)
-            if not sesion:
-                return jsonify({'error': 'Sesión no encontrada'}), 404
-            sesiones_activas[codigo_sesion] = sesion
-        
-        sesion = sesiones_activas[codigo_sesion]
-        
-        if sesion.get('estado') != 'activa':
-            return jsonify({'error': 'Sesión no activa'}), 400
-        
-        if len(sesion.get('colaboradores', [])) >= 2:
-            return jsonify({'error': 'Máximo 2 colaboradores'}), 400
-        
-        if current_user['id'] not in sesion.get('colaboradores', []):
-            sesion['colaboradores'].append(current_user['id'])
-            sesion['colaboradores_nombres'].append(current_user.get('nombre', 'Técnico'))
-            sesion['ultima_actividad'] = datetime.datetime.now().isoformat()
-            guardar_sesion_en_db(sesion)
-        
-        return jsonify({'success': True, 'sesion': sesion}), 200
-        
-    except Exception as e:
-        logger.error(f"Error uniéndose a sesión: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT 9: FINALIZAR SESIÓN (CON RENOMBRADO DE CARPETA Y GUARDADO COMPLETO)
-# =====================================================
-
-@recepcion_jefe_bp.route('/finalizar-sesion', methods=['POST'])
-@jefe_operativo_required
-def finalizar_sesion(current_user):
-    """Finaliza una sesión y crea la orden de trabajo con todos los datos"""
-    global sesiones_activas
-    try:
-        from google_drive import google_drive
-        
-        data = request.get_json()
-        codigo_sesion = data.get('codigo')
-        datos_directos = data.get('datos', {})
-        
-        if not codigo_sesion:
-            return jsonify({'error': 'Código requerido'}), 400
-        
-        if codigo_sesion not in sesiones_activas:
-            sesion = cargar_sesion_de_db(codigo_sesion)
-            if not sesion:
-                return jsonify({'error': 'Sesión no encontrada'}), 404
-            sesiones_activas[codigo_sesion] = sesion
-        
-        sesion = sesiones_activas[codigo_sesion]
-        
-        if sesion.get('estado') != 'activa':
-            return jsonify({'error': 'Sesión no activa'}), 400
-        
-        if datos_directos:
-            sesion['datos'] = datos_directos
-        
-        secciones_faltantes = [s for s, c in sesion['secciones_completadas'].items() if not c]
-        if secciones_faltantes:
-            return jsonify({'error': f'Faltan: {", ".join(secciones_faltantes)}'}), 400
-        
-        # =============================================
-        # CREAR ORDEN DE TRABAJO
-        # =============================================
-        try:
-            cliente_data = sesion['datos'].get('cliente', {})
-            vehiculo_data = sesion['datos'].get('vehiculo', {})
-            descripcion_data = sesion['datos'].get('descripcion', {})
-            fotos = sesion['datos'].get('fotos', {})
-            
-            # 1. Obtener o crear cliente
-            id_cliente = None
-            id_usuario = None
-            
-            telefono = cliente_data.get('telefono', '')
-            nombre = cliente_data.get('nombre', '')
-            ubicacion = cliente_data.get('ubicacion', '')
-            latitud = cliente_data.get('latitud')
-            longitud = cliente_data.get('longitud')
-            
-            if telefono:
-                usuario_existente = supabase.table('usuario') \
-                    .select('id') \
-                    .eq('contacto', telefono) \
-                    .execute()
-                
-                if usuario_existente.data:
-                    id_usuario = usuario_existente.data[0]['id']
-                    
-                    cliente_existente = supabase.table('cliente') \
-                        .select('id') \
-                        .eq('id_usuario', id_usuario) \
-                        .execute()
-                    
-                    if cliente_existente.data:
-                        id_cliente = cliente_existente.data[0]['id']
-            
-            if not id_cliente:
-                email_cliente = f"cliente_{uuid.uuid4().hex[:8]}@furia.com"
-                contrasenia = generate_password_hash(telefono if telefono else '123456')
-                
-                user_result = supabase.table('usuario').insert({
-                    'nombre': nombre,
-                    'contacto': telefono,
-                    'ubicacion': ubicacion,
-                    'contrasenia': contrasenia,
-                    'fecha_registro': datetime.datetime.now().isoformat(),
-                    'email': email_cliente
-                }).execute()
-                
-                if user_result.data:
-                    id_usuario = user_result.data[0]['id']
-                    
-                    supabase.table('usuario_rol').insert({
-                        'id_usuario': id_usuario,
-                        'id_rol': 5,
-                        'fecha_asignacion': datetime.datetime.now().isoformat()
-                    }).execute()
-                    
-                    cliente_result = supabase.table('cliente').insert({
-                        'id_usuario': id_usuario,
-                        'tipo_documento': 'CI',
-                        'numero_documento': f"TEMP-{int(datetime.datetime.now().timestamp())}",
-                        'email': email_cliente,
-                        'latitud': latitud,
-                        'longitud': longitud
-                    }).execute()
-                    
-                    if cliente_result.data:
-                        id_cliente = cliente_result.data[0]['id']
-            
-            if not id_cliente:
-                return jsonify({'error': 'Error creando cliente'}), 500
-            
-            # 2. Obtener o crear vehículo
-            placa = vehiculo_data.get('placa', '').upper()
-            id_vehiculo = None
-            
-            if placa:
-                vehiculo_existente = supabase.table('vehiculo') \
-                    .select('id') \
-                    .eq('placa', placa) \
-                    .execute()
-                
-                if vehiculo_existente.data:
-                    id_vehiculo = vehiculo_existente.data[0]['id']
-                    supabase.table('vehiculo') \
-                        .update({
-                            'marca': vehiculo_data.get('marca', ''),
-                            'modelo': vehiculo_data.get('modelo', ''),
-                            'anio': vehiculo_data.get('anio'),
-                            'kilometraje': vehiculo_data.get('kilometraje', 0),
-                            'id_cliente': id_cliente
-                        }) \
-                        .eq('id', id_vehiculo) \
-                        .execute()
-                else:
-                    vehiculo_result = supabase.table('vehiculo').insert({
-                        'id_cliente': id_cliente,
-                        'placa': placa,
-                        'marca': vehiculo_data.get('marca', ''),
-                        'modelo': vehiculo_data.get('modelo', ''),
-                        'anio': vehiculo_data.get('anio'),
-                        'kilometraje': vehiculo_data.get('kilometraje', 0)
-                    }).execute()
-                    
-                    if vehiculo_result.data:
-                        id_vehiculo = vehiculo_result.data[0]['id']
-            
-            if not id_vehiculo:
-                return jsonify({'error': 'Error creando vehículo'}), 500
-            
-            # 3. Generar código único
-            fecha = datetime.datetime.now()
-            inicio_dia = datetime.datetime.combine(fecha.date(), datetime.time.min)
-            fin_dia = datetime.datetime.combine(fecha.date(), datetime.time.max)
-            
-            ordenes_hoy = supabase.table('ordentrabajo') \
-                .select('codigo_unico') \
-                .gte('fecha_ingreso', inicio_dia.isoformat()) \
-                .lte('fecha_ingreso', fin_dia.isoformat()) \
-                .execute()
-            
-            secuencias_existentes = []
-            for orden in (ordenes_hoy.data or []):
-                codigo = orden.get('codigo_unico', '')
-                try:
-                    partes = codigo.split('-')
-                    if len(partes) == 3:
-                        secuencia = int(partes[2])
-                        secuencias_existentes.append(secuencia)
-                except (ValueError, IndexError):
-                    pass
-            
-            siguiente = 1
-            while siguiente in secuencias_existentes:
-                siguiente += 1
-            
-            codigo_unico = f"OT-{fecha.strftime('%y%m%d')}-{str(siguiente).zfill(3)}"
-            
-            # 4. Crear orden de trabajo
-            orden_data = {
-                'codigo_unico': codigo_unico,
-                'id_vehiculo': id_vehiculo,
-                'id_jefe_operativo': current_user['id'],
-                'fecha_ingreso': datetime.datetime.now().isoformat(),
-                'estado_global': 'EnRecepcion'
-            }
-            
-            if len(sesion.get('colaboradores', [])) > 1:
-                for colab_id in sesion.get('colaboradores', []):
-                    if colab_id != current_user['id']:
-                        orden_data['id_jefe_operativo_2'] = colab_id
-                        break
-            
-            orden_result = supabase.table('ordentrabajo').insert(orden_data).execute()
-            
-            if not orden_result.data:
-                return jsonify({'error': 'Error creando orden de trabajo'}), 500
-            
-            id_orden = orden_result.data[0]['id']
-            
-            # 5. Guardar recepción con todas las fotos
-            recepcion_data = {
-                'id_orden_trabajo': id_orden,
-                'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
-                'url_lateral_derecha': fotos.get('url_lateral_derecha'),
-                'url_foto_frontal': fotos.get('url_foto_frontal'),
-                'url_foto_trasera': fotos.get('url_foto_trasera'),
-                'url_foto_superior': fotos.get('url_foto_superior'),
-                'url_foto_inferior': fotos.get('url_foto_inferior'),
-                'url_foto_tablero': fotos.get('url_foto_tablero'),
-                'url_grabacion_problema': descripcion_data.get('audio_url'),
-                'transcripcion_problema': descripcion_data.get('texto', '')
-            }
-            
-            recepcion_result = supabase.table('recepcion').insert(recepcion_data).execute()
-            
-            if not recepcion_result.data:
-                logger.error(f"❌ Error guardando recepción: {recepcion_result}")
-                # No fallamos la operación, pero registramos el error
-            
-            # =============================================
-            # 🔥 RENOMBRAR CARPETA EN DRIVE
-            # =============================================
-            carpeta_renombrada = False
-            try:
-                logger.info(f"📁 Intentando renombrar carpeta {codigo_sesion} a {codigo_unico}")
-                
-                folder_id = google_drive.get_folder_id_by_name(codigo_sesion)
-                
-                if folder_id:
-                    rename_result = google_drive.rename_folder(folder_id, codigo_unico)
-                    if rename_result:
-                        carpeta_renombrada = True
-                        logger.info(f"✅ Carpeta renombrada exitosamente: {codigo_sesion} -> {codigo_unico}")
-                    else:
-                        logger.warning(f"⚠️ No se pudo renombrar la carpeta {codigo_sesion}")
-                else:
-                    logger.warning(f"⚠️ No se encontró la carpeta con nombre: {codigo_sesion}")
-                    
-            except Exception as e:
-                logger.error(f"❌ Error renombrando carpeta: {str(e)}")
-            
-            # 6. Marcar sesión como finalizada
-            sesion['estado'] = 'finalizada'
-            guardar_sesion_en_db(sesion)
-            
-            # 7. Eliminar de memoria
-            if codigo_sesion in sesiones_activas:
-                del sesiones_activas[codigo_sesion]
-            
-            logger.info(f"✅ Sesión {codigo_sesion} finalizada. Orden: {codigo_unico}")
-            
-            return jsonify({
-                'success': True,
-                'codigo': codigo_unico,
-                'id_orden': id_orden,
-                'carpeta_renombrada': carpeta_renombrada
-            }), 200
-            
-        except Exception as e:
-            logger.error(f"Error creando orden: {str(e)}")
-            return jsonify({'error': str(e)}), 500
-        
-    except Exception as e:
-        logger.error(f"Error finalizando: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT 10: CANCELAR SESIÓN (CON ELIMINACIÓN DE CARPETA)
-# =====================================================
-
-@recepcion_jefe_bp.route('/cancelar-sesion', methods=['DELETE'])
-@jefe_operativo_required
-def cancelar_sesion(current_user):
-    """Cancela una sesión activa y elimina TODOS los datos asociados"""
-    global sesiones_activas
-    try:
-        from google_drive import google_drive
-        
-        data = request.get_json()
-        codigo_sesion = data.get('codigo')
-        
-        if not codigo_sesion:
-            return jsonify({'error': 'Código requerido'}), 400
-        
-        logger.info(f"🗑️ Cancelando sesión: {codigo_sesion}")
-        
-        # 1. ELIMINAR CARPETA DE GOOGLE DRIVE
-        carpeta_eliminada = False
-        try:
-            logger.info(f"🔍 Buscando carpeta en Drive: {codigo_sesion}")
-            folder_id = google_drive.get_folder_id_by_name(codigo_sesion)
-            
-            if folder_id:
-                logger.info(f"📁 Carpeta encontrada: {folder_id}")
-                delete_result = google_drive.delete_folder(folder_id)
-                if delete_result:
-                    carpeta_eliminada = True
-                    logger.info(f"✅ Carpeta eliminada de Drive: {codigo_sesion}")
-                else:
-                    logger.warning(f"⚠️ No se pudo eliminar la carpeta: {codigo_sesion}")
-            else:
-                logger.warning(f"⚠️ Carpeta NO encontrada en Drive: {codigo_sesion}")
-                
-        except Exception as e:
-            logger.error(f"❌ Error eliminando carpeta de Drive: {str(e)}")
-        
-        # 2. ELIMINAR REGISTROS DE SUPABASE
-        try:
-            logger.info(f"🗄️ Eliminando sesión de Supabase: {codigo_sesion}")
-            supabase.table('sesion_colaborativa') \
-                .delete() \
-                .eq('codigo', codigo_sesion) \
-                .execute()
-            logger.info(f"✅ Sesión eliminada de Supabase: {codigo_sesion}")
-                
-        except Exception as e:
-            logger.error(f"❌ Error eliminando de Supabase: {str(e)}")
-        
-        # 3. ELIMINAR DE MEMORIA
-        if codigo_sesion in sesiones_activas:
-            del sesiones_activas[codigo_sesion]
-            logger.info(f"✅ Sesión eliminada de memoria: {codigo_sesion}")
+        if not result.data:
+            return jsonify({'error': 'Error creando reserva'}), 500
         
         return jsonify({
             'success': True,
-            'message': f'Sesión {codigo_sesion} cancelada y datos eliminados',
-            'carpeta_eliminada': carpeta_eliminada
+            'message': 'Reserva creada exitosamente',
+            'reserva': result.data[0]
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Error creando reserva: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT 10: ACTUALIZAR RESERVA
+# =====================================================
+
+@reservas_solicitudes_bp.route('/reservas/<int:id_reserva>', methods=['PUT'])
+@jefe_taller_required
+def actualizar_reserva(current_user, id_reserva):
+    """Actualiza una reserva existente"""
+    try:
+        data = request.get_json()
+        
+        fecha_agendada = data.get('fecha_agendada')
+        descripcion_problema = data.get('descripcion_problema')
+        mensaje_adicional = data.get('mensaje_adicional')
+        
+        # Verificar que la reserva existe
+        reserva_result = supabase.table('solicitud_reserva_cliente') \
+            .select('*') \
+            .eq('id', id_reserva) \
+            .execute()
+        
+        if not reserva_result.data:
+            return jsonify({'error': 'Reserva no encontrada'}), 404
+        
+        reserva = reserva_result.data[0]
+        
+        if reserva.get('estado') == 'completada':
+            return jsonify({'error': 'No se puede editar una reserva completada'}), 400
+        
+        update_data = {}
+        
+        if fecha_agendada:
+            try:
+                fecha_obj = datetime.datetime.fromisoformat(fecha_agendada.replace('Z', '+00:00'))
+                disponible, mensaje = verificar_disponibilidad_horario(fecha_obj, id_reserva)
+                if not disponible:
+                    return jsonify({'error': mensaje}), 409
+                update_data['fecha_agendada'] = fecha_agendada
+                update_data['fecha_deseada'] = fecha_obj.date().isoformat()
+                update_data['hora_deseada'] = fecha_obj.strftime('%H:%M')
+            except ValueError:
+                return jsonify({'error': 'Formato de fecha inválido'}), 400
+        
+        if descripcion_problema:
+            update_data['descripcion_problema'] = descripcion_problema
+        
+        if mensaje_adicional is not None:
+            update_data['mensaje_adicional'] = mensaje_adicional
+        
+        if not update_data:
+            return jsonify({'error': 'No hay datos para actualizar'}), 400
+        
+        supabase.table('solicitud_reserva_cliente') \
+            .update(update_data) \
+            .eq('id', id_reserva) \
+            .execute()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Reserva actualizada exitosamente'
         }), 200
         
     except Exception as e:
-        logger.error(f"❌ Error cancelando sesión: {str(e)}")
+        logger.error(f"Error actualizando reserva: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
-# ENDPOINT 11: PING SESIÓN
+# ENDPOINT 11: ELIMINAR RESERVA
 # =====================================================
 
-@recepcion_jefe_bp.route('/ping-sesion/<codigo>', methods=['GET'])
-@jefe_operativo_required
-def ping_sesion(current_user, codigo):
-    """Mantiene activa una sesión"""
-    global sesiones_activas
+@reservas_solicitudes_bp.route('/reservas/<int:id_reserva>', methods=['DELETE'])
+@jefe_taller_required
+def eliminar_reserva(current_user, id_reserva):
+    """Elimina una reserva"""
     try:
-        if codigo in sesiones_activas:
-            sesiones_activas[codigo]['ultima_actividad'] = datetime.datetime.now().isoformat()
-        return jsonify({'success': True}), 200
-    except Exception as e:
-        logger.error(f"Error en ping: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT 12: VERIFICAR PLACA
-# =====================================================
-
-@recepcion_jefe_bp.route('/verificar-placa/<placa>', methods=['GET'])
-@jefe_operativo_required
-def verificar_placa(current_user, placa):
-    """Verifica si una placa ya existe en el sistema"""
-    try:
-        placa = placa.upper()
-        resultado = supabase.table('vehiculo') \
-            .select('id, placa, marca, modelo, cliente!inner(id_usuario, usuario!inner(nombre, contacto))') \
-            .eq('placa', placa) \
+        # Verificar que la reserva existe
+        reserva_result = supabase.table('solicitud_reserva_cliente') \
+            .select('estado') \
+            .eq('id', id_reserva) \
             .execute()
         
-        if resultado.data:
-            v = resultado.data[0]
-            cliente = v.get('cliente', {})
-            usuario = cliente.get('usuario', {})
-            return jsonify({
-                'exists': True,
-                'vehiculo': {
-                    'placa': v['placa'],
-                    'marca': v.get('marca', ''),
-                    'modelo': v.get('modelo', ''),
-                    'cliente': usuario.get('nombre', ''),
-                    'telefono': usuario.get('contacto', '')
-                }
-            }), 200
-        return jsonify({'exists': False}), 200
+        if not reserva_result.data:
+            return jsonify({'error': 'Reserva no encontrada'}), 404
+        
+        if reserva_result.data[0].get('estado') == 'completada':
+            return jsonify({'error': 'No se puede eliminar una reserva completada'}), 400
+        
+        supabase.table('solicitud_reserva_cliente') \
+            .delete() \
+            .eq('id', id_reserva) \
+            .execute()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Reserva eliminada exitosamente'
+        }), 200
+        
     except Exception as e:
-        logger.error(f"Error verificando placa: {str(e)}")
+        logger.error(f"Error eliminando reserva: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
-# ENDPOINT 13: SUBIR FOTO A GOOGLE DRIVE
+# ENDPOINT 12: NOTIFICACIONES
 # =====================================================
 
-@recepcion_jefe_bp.route('/upload-foto', methods=['POST'])
-@jefe_operativo_required
-def upload_foto_drive(current_user):
-    """Sube una foto a Google Drive"""
+@reservas_solicitudes_bp.route('/notificaciones', methods=['GET'])
+@jefe_taller_required
+def obtener_notificaciones(current_user):
+    """Obtiene las notificaciones del jefe taller"""
     try:
-        from google_drive import google_drive
-        from datetime import datetime
+        # Obtener solicitudes pendientes
+        pendientes_result = supabase.table('solicitud_reserva_cliente') \
+            .select('id, fecha_solicitud, cliente!inner(usuario!inner(nombre))') \
+            .eq('estado', 'pendiente') \
+            .execute()
         
-        file = request.files.get('file')
-        campo = request.form.get('campo', 'general')
-        codigo_sesion = request.form.get('codigo_sesion')
-        
-        if not file:
-            return jsonify({'error': 'No se envió el archivo'}), 400
-        
-        if not codigo_sesion:
-            return jsonify({'error': 'No se recibió el código de sesión'}), 400
-        
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        user_id = current_user['id']
-        filename = f"{campo}_{user_id}_{timestamp}.jpg"
-        
-        folder_path = google_drive.generate_folder_path(
-            modulo='recepcion',
-            referencia_id=codigo_sesion,
-            subcarpeta='fotos'
-        )
-        
-        result = google_drive.upload_file(
-            file_data=file,
-            filename=filename,
-            folder_path=folder_path
-        )
-        
-        logger.info(f"📸 Foto subida: {result['url']}")
-        
-        # Actualizar sesión
-        try:
-            if codigo_sesion not in sesiones_activas:
-                sesion = cargar_sesion_de_db(codigo_sesion)
-                if sesion:
-                    sesiones_activas[codigo_sesion] = sesion
+        notificaciones = []
+        for s in (pendientes_result.data or []):
+            cliente_data = s.get('cliente', {})
+            usuario_data = cliente_data.get('usuario', {})
             
-            if codigo_sesion in sesiones_activas:
-                sesion = sesiones_activas[codigo_sesion]
-                
-                if 'datos' not in sesion:
-                    sesion['datos'] = {}
-                if 'fotos' not in sesion['datos']:
-                    sesion['datos']['fotos'] = {}
-                
-                campo_map = {
-                    'lateral_izquierdo': 'url_lateral_izquierda',
-                    'lateral_derecho': 'url_lateral_derecha',
-                    'frontal': 'url_foto_frontal',
-                    'trasera': 'url_foto_trasera',
-                    'superior': 'url_foto_superior',
-                    'inferior': 'url_foto_inferior',
-                    'tablero': 'url_foto_tablero'
-                }
-                campo_db = campo_map.get(campo, campo)
-                
-                sesion['datos']['fotos'][campo_db] = result['url']
-                
-                fotos = sesion['datos']['fotos']
-                fotos_validas = sum(1 for v in fotos.values() if v and v != 'null' and v != '')
-                fotos_completas = fotos_validas == 7
-                
-                if 'secciones_completadas' not in sesion:
-                    sesion['secciones_completadas'] = {}
-                sesion['secciones_completadas']['fotos'] = fotos_completas
-                
-                guardar_sesion_en_db(sesion)
-                
-                logger.info(f"📸 Sesión actualizada: {fotos_validas}/7 fotos")
-                
-        except Exception as e:
-            logger.warning(f"⚠️ No se pudo actualizar sesión: {e}")
-        
-        return jsonify({
-            'success': True,
-            'url': result['url'],
-            'id': result['id'],
-            'web_view_link': result['web_view_link']
-        })
-        
-    except Exception as e:
-        logger.error(f"❌ Error subiendo foto: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT 14: ACTUALIZAR FOTO EN SESIÓN
-# =====================================================
-
-@recepcion_jefe_bp.route('/actualizar-foto-sesion', methods=['POST'])
-@jefe_operativo_required
-def actualizar_foto_sesion(current_user):
-    """Actualiza la URL de una foto en la sesión actual"""
-    global sesiones_activas
-    try:
-        data = request.get_json()
-        codigo_sesion = data.get('codigo_sesion')
-        campo = data.get('campo')
-        url = data.get('url')
-        
-        if not codigo_sesion or not campo or not url:
-            return jsonify({'error': 'Faltan datos requeridos'}), 400
-        
-        if codigo_sesion not in sesiones_activas:
-            sesion = cargar_sesion_de_db(codigo_sesion)
-            if not sesion:
-                return jsonify({'error': 'Sesión no encontrada'}), 404
-            sesiones_activas[codigo_sesion] = sesion
-        
-        sesion = sesiones_activas[codigo_sesion]
-        
-        if 'datos' not in sesion:
-            sesion['datos'] = {}
-        if 'fotos' not in sesion['datos']:
-            sesion['datos']['fotos'] = {}
-        
-        campo_map = {
-            'lateral_izquierdo': 'url_lateral_izquierda',
-            'lateral_derecho': 'url_lateral_derecha',
-            'frontal': 'url_foto_frontal',
-            'trasera': 'url_foto_trasera',
-            'superior': 'url_foto_superior',
-            'inferior': 'url_foto_inferior',
-            'tablero': 'url_foto_tablero'
-        }
-        campo_db = campo_map.get(campo, campo)
-        
-        sesion['datos']['fotos'][campo_db] = url
-        
-        fotos = sesion['datos']['fotos']
-        fotos_validas = sum(1 for v in fotos.values() if v and v != 'null' and v != '')
-        fotos_completas = fotos_validas == 7
-        
-        if 'secciones_completadas' not in sesion:
-            sesion['secciones_completadas'] = {}
-        sesion['secciones_completadas']['fotos'] = fotos_completas
-        
-        guardar_sesion_en_db(sesion)
-        
-        return jsonify({
-            'success': True,
-            'fotos_subidas': fotos_validas,
-            'total': 7,
-            'completado': fotos_completas,
-            'campo': campo,
-            'url': url
-        })
-        
-    except Exception as e:
-        logger.error(f"❌ Error actualizando foto en sesión: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT 15: VERIFICAR FOTOS DE SESIÓN
-# =====================================================
-
-@recepcion_jefe_bp.route('/verificar-fotos/<codigo>', methods=['GET'])
-@jefe_operativo_required
-def verificar_fotos(current_user, codigo):
-    """Verifica el estado de las fotos de una sesión"""
-    global sesiones_activas
-    try:
-        if codigo not in sesiones_activas:
-            sesion = cargar_sesion_de_db(codigo)
-            if not sesion:
-                return jsonify({'error': 'Sesión no encontrada'}), 404
-            sesiones_activas[codigo] = sesion
-        
-        sesion = sesiones_activas[codigo]
-        fotos = sesion.get('datos', {}).get('fotos', {})
-        
-        campos_fotos = [
-            'url_lateral_izquierda',
-            'url_lateral_derecha',
-            'url_foto_frontal',
-            'url_foto_trasera',
-            'url_foto_superior',
-            'url_foto_inferior',
-            'url_foto_tablero'
-        ]
-        
-        fotos_subidas = 0
-        fotos_estado = {}
-        
-        for campo in campos_fotos:
-            url = fotos.get(campo)
-            if url and url != 'null' and url != '':
-                fotos_subidas += 1
-                fotos_estado[campo] = True
-            else:
-                fotos_estado[campo] = False
-        
-        completado = fotos_subidas == 7
-        
-        return jsonify({
-            'success': True,
-            'total': 7,
-            'subidas': fotos_subidas,
-            'completado': completado,
-            'estado': fotos_estado
-        })
-        
-    except Exception as e:
-        logger.error(f"Error verificando fotos: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT 16: VERIFICAR CARPETA EN DRIVE
-# =====================================================
-
-@recepcion_jefe_bp.route('/verificar-carpeta/<nombre>', methods=['GET'])
-@jefe_operativo_required
-def verificar_carpeta(current_user, nombre):
-    """Verifica si una carpeta existe en Google Drive"""
-    try:
-        from google_drive import google_drive
-        
-        folder_id = google_drive.get_folder_id_by_name(nombre)
-        
-        if folder_id:
-            return jsonify({
-                'success': True,
-                'exists': True,
-                'folder_id': folder_id,
-                'nombre': nombre
+            notificaciones.append({
+                'id': s['id'],
+                'tipo': 'solicitud_pendiente',
+                'mensaje': f"Nueva solicitud de {usuario_data.get('nombre', 'Cliente')}",
+                'leida': False,
+                'fecha': s.get('fecha_solicitud')
             })
-        else:
-            return jsonify({
-                'success': True,
-                'exists': False,
-                'nombre': nombre
-            })
-    except Exception as e:
-        logger.error(f"Error verificando carpeta: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT 17: SUBIR AUDIO A GOOGLE DRIVE
-# =====================================================
-
-@recepcion_jefe_bp.route('/upload-audio', methods=['POST'])
-@jefe_operativo_required
-def upload_audio_drive(current_user):
-    """Sube un audio a Google Drive"""
-    try:
-        from google_drive import google_drive
-        from datetime import datetime
-        
-        file = request.files.get('file')
-        codigo_sesion = request.form.get('codigo_sesion')
-        
-        if not file:
-            return jsonify({'error': 'No se envió el archivo'}), 400
-        
-        if not codigo_sesion:
-            return jsonify({'error': 'No se recibió el código de sesión'}), 400
-        
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        user_id = current_user['id']
-        filename = f"audio_{user_id}_{timestamp}.wav"
-        
-        folder_path = google_drive.generate_folder_path(
-            modulo='recepcion',
-            referencia_id=codigo_sesion,
-            subcarpeta='audios'
-        )
-        
-        result = google_drive.upload_file(
-            file_data=file,
-            filename=filename,
-            folder_path=folder_path,
-            mime_type='audio/wav'
-        )
-        
-        logger.info(f"🎵 Audio subido: {result['url']}")
-        
-        try:
-            if codigo_sesion in sesiones_activas:
-                sesion = sesiones_activas[codigo_sesion]
-                if 'datos' not in sesion:
-                    sesion['datos'] = {}
-                if 'descripcion' not in sesion['datos']:
-                    sesion['datos']['descripcion'] = {}
-                sesion['datos']['descripcion']['audio_url'] = result['url']
-                guardar_sesion_en_db(sesion)
-        except Exception as e:
-            logger.warning(f"⚠️ No se pudo actualizar sesión con audio: {e}")
         
         return jsonify({
             'success': True,
-            'url': result['url'],
-            'id': result['id'],
-            'web_view_link': result['web_view_link']
-        })
+            'notificaciones': notificaciones
+        }), 200
         
     except Exception as e:
-        logger.error(f"❌ Error subiendo audio: {str(e)}")
+        logger.error(f"Error obteniendo notificaciones: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT 18: RENOMBRAR CARPETA (MANUAL)
-# =====================================================
-
-@recepcion_jefe_bp.route('/renombrar-carpeta', methods=['POST'])
-@jefe_operativo_required
-def renombrar_carpeta_drive(current_user):
-    """Renombra una carpeta en Google Drive"""
-    try:
-        from google_drive import google_drive
-        
-        data = request.get_json()
-        nombre_actual = data.get('nombre_actual')
-        nombre_nuevo = data.get('nombre_nuevo')
-        
-        if not nombre_actual or not nombre_nuevo:
-            return jsonify({'error': 'Se requieren nombre_actual y nombre_nuevo'}), 400
-        
-        folder_id = google_drive.get_folder_id_by_name(nombre_actual)
-        
-        if not folder_id:
-            return jsonify({
-                'success': False,
-                'error': f'No se encontró la carpeta: {nombre_actual}'
-            }), 404
-        
-        resultado = google_drive.rename_folder(folder_id, nombre_nuevo)
-        
-        if resultado:
-            return jsonify({
-                'success': True,
-                'message': f'Carpeta renombrada: {nombre_actual} -> {nombre_nuevo}'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Error al renombrar la carpeta'
-            }), 500
-        
-    except Exception as e:
-        logger.error(f"❌ Error renombrando carpeta: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT 19: IMAGEN A BASE64
-# =====================================================
-
-@recepcion_jefe_bp.route('/imagen-base64', methods=['POST'])
-@jefe_operativo_required
-def obtener_imagen_base64(current_user):
-    """Descarga una imagen de Google Drive y la convierte a base64"""
-    try:
-        import requests
-        import base64
-        
-        data = request.get_json()
-        url = data.get('url')
-        
-        if not url:
-            return jsonify({'error': 'URL requerida'}), 400
-        
-        logger.info(f"📥 Descargando imagen desde: {url[:50]}...")
-        
-        response = requests.get(url, timeout=30)
-        
-        if response.status_code != 200:
-            logger.error(f"❌ Error descargando imagen: {response.status_code}")
-            return jsonify({'error': f'Error descargando imagen: {response.status_code}'}), 400
-        
-        content_type = response.headers.get('content-type', 'image/jpeg')
-        
-        img_base64 = base64.b64encode(response.content).decode('utf-8')
-        base64_data = f"data:{content_type};base64,{img_base64}"
-        
-        logger.info(f"✅ Imagen convertida a base64: {len(base64_data)} bytes")
-        
-        return jsonify({
-            'success': True,
-            'base64': base64_data
-        })
-        
-    except requests.exceptions.Timeout:
-        logger.error("❌ Timeout descargando imagen")
-        return jsonify({'error': 'Timeout descargando imagen'}), 500
-    except Exception as e:
-        logger.error(f"❌ Error obteniendo imagen base64: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-# =====================================================
-# ENDPOINT 20: ELIMINAR RECEPCIÓN
-# =====================================================
-
-@recepcion_jefe_bp.route('/eliminar-recepcion/<int:id_orden>', methods=['DELETE'])
-@jefe_operativo_required
-def eliminar_recepcion(current_user, id_orden):
-    """Elimina una recepción (solo si está en estado EnRecepcion)"""
-    try:
-        orden_result = supabase.table('ordentrabajo').select('id, estado_global').eq('id', id_orden).execute()
-        if not orden_result.data:
-            return jsonify({'error': 'Recepción no encontrada'}), 404
-        
-        if orden_result.data[0]['estado_global'] != 'EnRecepcion':
-            return jsonify({'error': 'No se puede eliminar una recepción en este estado'}), 400
-        
-        supabase.table('recepcion').delete().eq('id_orden_trabajo', id_orden).execute()
-        supabase.table('ordentrabajo').delete().eq('id', id_orden).execute()
-        
-        return jsonify({'success': True}), 200
-    except Exception as e:
-        logger.error(f"Error eliminando recepción: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-    

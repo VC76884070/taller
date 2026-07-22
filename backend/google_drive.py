@@ -13,6 +13,7 @@ import time
 import socket
 import ssl
 import re
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from google.auth.transport.requests import Request
@@ -27,6 +28,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 # =====================================================
+# WHISPER - TRANSCRIPCIÓN DE AUDIO
+# =====================================================
+try:
+    import whisper
+    import requests as http_requests
+    WHISPER_AVAILABLE = True
+    logger.info("✅ Whisper importado correctamente")
+except ImportError as e:
+    logger.warning(f"⚠️ Whisper no disponible: {e}. Instalar con: pip install openai-whisper")
+    WHISPER_AVAILABLE = False
+
+# =====================================================
 # DESACTIVAR SSL PARA PRUEBAS (OPCIONAL)
 # =====================================================
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -38,6 +51,31 @@ MAX_RETRIES = 3
 RETRY_DELAY = 2
 UPLOAD_TIMEOUT = 120
 
+# Configuración de Whisper
+WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'base')  # tiny, base, small, medium, large
+WHISPER_LANGUAGE = os.getenv('WHISPER_LANGUAGE', 'es')  # es, en, etc.
+
+# Cargar modelo Whisper una sola vez (lazy loading)
+_whisper_model = None
+
+def get_whisper_model():
+    """Carga el modelo Whisper de forma lazy (solo cuando se necesita)"""
+    global _whisper_model
+    if not WHISPER_AVAILABLE:
+        return None
+    
+    if _whisper_model is None:
+        try:
+            logger.info(f"🎙️ Cargando modelo Whisper '{WHISPER_MODEL}'...")
+            _whisper_model = whisper.load_model(WHISPER_MODEL)
+            logger.info(f"✅ Modelo Whisper '{WHISPER_MODEL}' cargado correctamente")
+        except Exception as e:
+            logger.error(f"❌ Error cargando modelo Whisper: {str(e)}")
+            return None
+    
+    return _whisper_model
+
+
 # =====================================================
 # CLASE PRINCIPAL
 # =====================================================
@@ -47,6 +85,7 @@ class GoogleDriveService:
     Servicio para interactuar con Google Drive
     Usa OAuth 2.0 con variables de entorno
     INCLUYE RENOVACIÓN AUTOMÁTICA DE TOKENS
+    Y TRANSCRIPCIÓN DE AUDIO CON WHISPER
     """
     
     def __init__(self, app=None):
@@ -616,7 +655,7 @@ class GoogleDriveService:
             return False
     
     # =====================================================
-    # ELIMINAR ARCHIVOS (NUEVO - PARA REEMPLAZO DE FOTOS)
+    # ELIMINAR ARCHIVOS (PARA REEMPLAZO DE FOTOS)
     # =====================================================
     
     def delete_file(self, file_id):
@@ -663,7 +702,7 @@ class GoogleDriveService:
         return self.delete_file(file_id)
     
     # =====================================================
-    # EXTRAER FILE_ID DE URL (NUEVO - PARA REEMPLAZO)
+    # EXTRAER FILE_ID DE URL
     # =====================================================
     
     def extract_file_id_from_url(self, url):
@@ -709,7 +748,7 @@ class GoogleDriveService:
         return None
     
     # =====================================================
-    # VERIFICAR EXISTENCIA DE ARCHIVOS (NUEVO)
+    # VERIFICAR EXISTENCIA DE ARCHIVOS
     # =====================================================
     
     def file_exists(self, file_id):
@@ -758,6 +797,205 @@ class GoogleDriveService:
         except Exception as e:
             logger.error(f"❌ Error obteniendo metadatos {file_id}: {str(e)}")
             return None
+    
+    # =====================================================
+    # TRANSCRIPCIÓN DE AUDIO CON WHISPER
+    # =====================================================
+    
+    def transcribir_audio(self, url_audio, language=None, model_name=None):
+        """
+        Descarga un audio desde una URL y lo transcribe usando Whisper.
+        
+        Args:
+            url_audio (str): URL del audio en Google Drive
+            language (str): Código de idioma (ej: 'es', 'en'). Por defecto usa WHISPER_LANGUAGE
+            model_name (str): Nombre del modelo (ej: 'tiny', 'base', 'small'). 
+                              Por defecto usa WHISPER_MODEL
+        
+        Returns:
+            dict: {
+                'success': bool,
+                'transcripcion': str (texto transcrito),
+                'error': str (mensaje de error si falló)
+            }
+        """
+        if not WHISPER_AVAILABLE:
+            return {
+                'success': False,
+                'error': 'Whisper no está instalado. Ejecuta: pip install openai-whisper'
+            }
+        
+        # Verificar que la URL es válida
+        if not url_audio:
+            return {
+                'success': False,
+                'error': 'URL de audio no proporcionada'
+            }
+        
+        # Normalizar URL
+        file_id = self.extract_file_id_from_url(url_audio)
+        if not file_id:
+            return {
+                'success': False,
+                'error': f'No se pudo extraer el ID del archivo de: {url_audio[:50]}...'
+            }
+        
+        # Usar URL de descarga
+        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        
+        # Configurar parámetros
+        language = language or WHISPER_LANGUAGE
+        model_name = model_name or WHISPER_MODEL
+        
+        # Cargar modelo
+        model = get_whisper_model()
+        if model is None:
+            return {
+                'success': False,
+                'error': 'No se pudo cargar el modelo Whisper'
+            }
+        
+        temp_file = None
+        
+        try:
+            logger.info(f"🎙️ Descargando audio desde: {download_url}")
+            
+            # Descargar audio
+            response = http_requests.get(download_url, timeout=60)
+            response.raise_for_status()
+            
+            # Guardar en archivo temporal
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+                tmp.write(response.content)
+                temp_file = tmp.name
+            
+            logger.info(f"🎙️ Audio descargado: {temp_file} ({len(response.content)} bytes)")
+            
+            # Transcribir con Whisper
+            logger.info(f"🎙️ Transcribiendo con modelo '{model_name}', idioma '{language}'...")
+            
+            result = model.transcribe(
+                temp_file,
+                language=language,
+                task='transcribe',
+                verbose=False
+            )
+            
+            texto = result.get('text', '').strip()
+            
+            logger.info(f"✅ Transcripción completada: '{texto[:50]}...'")
+            
+            return {
+                'success': True,
+                'transcripcion': texto,
+                'idioma': language,
+                'modelo': model_name,
+                'duracion': result.get('segments', [{}])[-1].get('end', 0) if result.get('segments') else 0
+            }
+            
+        except http_requests.exceptions.RequestException as e:
+            logger.error(f"❌ Error descargando audio: {str(e)}")
+            return {
+                'success': False,
+                'error': f'Error descargando audio: {str(e)}'
+            }
+        except Exception as e:
+            logger.error(f"❌ Error durante la transcripción: {str(e)}")
+            return {
+                'success': False,
+                'error': f'Error transcribiendo audio: {str(e)}'
+            }
+        finally:
+            # Limpiar archivo temporal
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.unlink(temp_file)
+                    logger.debug(f"🗑️ Archivo temporal eliminado: {temp_file}")
+                except Exception as e:
+                    logger.warning(f"⚠️ No se pudo eliminar archivo temporal: {str(e)}")
+    
+    def transcribir_audio_desde_file(self, file_data, filename=None, language=None, model_name=None):
+        """
+        Transcribe un audio directamente desde un objeto de archivo (FileStorage o bytes)
+        
+        Args:
+            file_data: FileStorage de Flask o bytes
+            filename: Nombre del archivo (opcional)
+            language: Código de idioma
+            model_name: Nombre del modelo
+        
+        Returns:
+            dict: {success, transcripcion, error}
+        """
+        if not WHISPER_AVAILABLE:
+            return {
+                'success': False,
+                'error': 'Whisper no está instalado'
+            }
+        
+        # Cargar modelo
+        model = get_whisper_model()
+        if model is None:
+            return {
+                'success': False,
+                'error': 'No se pudo cargar el modelo Whisper'
+            }
+        
+        language = language or WHISPER_LANGUAGE
+        model_name = model_name or WHISPER_MODEL
+        
+        temp_file = None
+        
+        try:
+            # Guardar en archivo temporal
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+                if hasattr(file_data, 'read'):
+                    # FileStorage de Flask
+                    file_data.seek(0)
+                    tmp.write(file_data.read())
+                elif isinstance(file_data, bytes):
+                    tmp.write(file_data)
+                else:
+                    return {
+                        'success': False,
+                        'error': 'Tipo de archivo no soportado'
+                    }
+                temp_file = tmp.name
+            
+            logger.info(f"🎙️ Archivo temporal creado: {temp_file}")
+            
+            # Transcribir con Whisper
+            result = model.transcribe(
+                temp_file,
+                language=language,
+                task='transcribe',
+                verbose=False
+            )
+            
+            texto = result.get('text', '').strip()
+            
+            logger.info(f"✅ Transcripción completada: '{texto[:50]}...'")
+            
+            return {
+                'success': True,
+                'transcripcion': texto,
+                'idioma': language,
+                'modelo': model_name
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error transcribiendo audio: {str(e)}")
+            return {
+                'success': False,
+                'error': f'Error transcribiendo audio: {str(e)}'
+            }
+        finally:
+            # Limpiar archivo temporal
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.unlink(temp_file)
+                except:
+                    pass
     
     # =====================================================
     # COMPARTIR ARCHIVOS
@@ -825,6 +1063,22 @@ class GoogleDriveService:
             'expiry': self._creds.expiry.isoformat() if self._creds.expiry else None,
             'has_refresh_token': bool(self._creds.refresh_token),
             'expired': self._creds.expired
+        }
+    
+    def get_whisper_status(self):
+        """
+        Retorna el estado de Whisper
+        
+        Returns:
+            dict: {available, model_loaded, model_name}
+        """
+        model_loaded = _whisper_model is not None
+        
+        return {
+            'available': WHISPER_AVAILABLE,
+            'model_loaded': model_loaded,
+            'model_name': WHISPER_MODEL if WHISPER_AVAILABLE else None,
+            'language': WHISPER_LANGUAGE if WHISPER_AVAILABLE else None
         }
 
 

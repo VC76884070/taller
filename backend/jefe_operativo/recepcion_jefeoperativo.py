@@ -2890,3 +2890,105 @@ def eliminar_foto_drive(current_user):
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
+
+# =====================================================
+# ENDPOINT: TRANSCRIBIR AUDIO CON WHISPER
+# =====================================================
+
+@recepcion_jefe_bp.route('/transcribir-audio', methods=['POST'])
+@jefe_operativo_required
+def transcribir_audio_endpoint(current_user):
+    """
+    Transcribe un audio usando Whisper (gratis y local)
+    Recibe: { id_orden, audio_url (opcional) }
+    Retorna: { success, transcripcion, modelo_usado }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'Datos no proporcionados'}), 400
+        
+        id_orden = data.get('id_orden')
+        audio_url = data.get('audio_url')
+        
+        # Si no se proporciona audio_url, buscarlo en la base de datos
+        if not audio_url and id_orden:
+            recepcion = supabase.table('recepcion') \
+                .select('url_grabacion_problema') \
+                .eq('id_orden_trabajo', id_orden) \
+                .execute()
+            
+            if recepcion.data and recepcion.data[0].get('url_grabacion_problema'):
+                audio_url = recepcion.data[0]['url_grabacion_problema']
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'No se encontró audio para esta orden'
+                }), 404
+        
+        if not audio_url:
+            return jsonify({
+                'success': False,
+                'error': 'URL de audio no proporcionada'
+            }), 400
+        
+        # Normalizar URL
+        audio_url_normalizada = normalizar_url_drive(audio_url)
+        if not audio_url_normalizada:
+            return jsonify({
+                'success': False,
+                'error': 'URL de audio inválida'
+            }), 400
+        
+        logger.info(f"🎙️ Iniciando transcripción para orden {id_orden}")
+        logger.info(f"🎙️ URL: {audio_url_normalizada[:80]}...")
+        
+        # Transcribir con Whisper (usará el modelo de la variable de entorno)
+        from google_drive import google_drive
+        
+        resultado = google_drive.transcribir_audio(
+            url_audio=audio_url_normalizada,
+            language='es'  # Puedes cambiarlo o hacerlo configurable
+        )
+        
+        if not resultado['success']:
+            logger.error(f"❌ Error en transcripción: {resultado['error']}")
+            return jsonify({
+                'success': False,
+                'error': resultado['error']
+            }), 500
+        
+        transcripcion = resultado['transcripcion']
+        modelo_usado = resultado.get('modelo', 'desconocido')
+        
+        logger.info(f"✅ Transcripción completada con {modelo_usado}")
+        logger.info(f"📝 Texto: '{transcripcion[:100]}...'")
+        
+        # Guardar transcripción en la base de datos (si tenemos id_orden)
+        if id_orden:
+            try:
+                supabase.table('recepcion') \
+                    .update({'transcripcion_problema': transcripcion}) \
+                    .eq('id_orden_trabajo', id_orden) \
+                    .execute()
+                logger.info(f"💾 Transcripción guardada para orden {id_orden}")
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo guardar transcripción: {str(e)}")
+        
+        return jsonify({
+            'success': True,
+            'transcripcion': transcripcion,
+            'modelo_usado': modelo_usado,
+            'idioma': resultado.get('idioma', 'es'),
+            'duracion': resultado.get('duracion', 0)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error en transcribir_audio_endpoint: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

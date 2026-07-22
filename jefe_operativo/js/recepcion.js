@@ -2021,31 +2021,46 @@ function mostrarConfirmacionCancelar() {
     }
 }
 
-// =====================================================
-// RECEPCIONES GUARDADAS
-// =====================================================
 function initRecepcionesPanel() {
     cargarRecepciones();
+    
     document.getElementById('btnRefreshRecepciones')?.addEventListener('click', () => {
-        offsetActual = 0; recepcionesActuales = []; noHayMasRecepciones = false; cargarRecepciones();
+        offsetActual = 0; 
+        recepcionesActuales = []; 
+        noHayMasRecepciones = false; 
+        cargarRecepciones();
     });
+    
+    // 🔥 BÚSQUEDA EN TIEMPO REAL
     document.getElementById('searchRecepcion')?.addEventListener('input', () => {
-        offsetActual = 0; recepcionesActuales = []; noHayMasRecepciones = false; filtrarYMostrarRecepciones();
+        offsetActual = 0; 
+        recepcionesActuales = []; 
+        noHayMasRecepciones = false; 
+        filtrarYMostrarRecepciones();
     });
-    document.getElementById('fechaDesde')?.addEventListener('change', () => {
-        offsetActual = 0; recepcionesActuales = []; noHayMasRecepciones = false; filtrarYMostrarRecepciones();
+    
+    // 🔥 BOTÓN LIMPIAR BÚSQUEDA
+    document.getElementById('btnLimpiarFiltros')?.addEventListener('click', () => {
+        document.getElementById('searchRecepcion').value = '';
+        offsetActual = 0;
+        recepcionesActuales = [];
+        noHayMasRecepciones = false;
+        filtrarYMostrarRecepciones();
+        mostrarNotificacion('🧹 Búsqueda limpiada', 'info');
     });
-    document.getElementById('fechaHasta')?.addEventListener('change', () => {
-        offsetActual = 0; recepcionesActuales = []; noHayMasRecepciones = false; filtrarYMostrarRecepciones();
-    });
-    document.getElementById('estadoFiltro')?.addEventListener('change', () => {
-        offsetActual = 0; recepcionesActuales = []; noHayMasRecepciones = false; filtrarYMostrarRecepciones();
-    });
+    
     document.getElementById('btnPaginaAnterior')?.addEventListener('click', () => {
-        if (offsetActual >= LIMITE_RECEPCIONES) { offsetActual -= LIMITE_RECEPCIONES; cargarRecepciones(); }
+        if (offsetActual >= LIMITE_RECEPCIONES) { 
+            offsetActual -= LIMITE_RECEPCIONES; 
+            cargarRecepciones(); 
+        }
     });
+    
     document.getElementById('btnPaginaSiguiente')?.addEventListener('click', () => {
-        if (!noHayMasRecepciones) { offsetActual += LIMITE_RECEPCIONES; cargarRecepciones(); }
+        if (!noHayMasRecepciones) { 
+            offsetActual += LIMITE_RECEPCIONES; 
+            cargarRecepciones(); 
+        }
     });
 }
 
@@ -2084,59 +2099,108 @@ async function cargarRecepciones(append = false) {
     } finally { cargandoMas = false; }
 }
 
+// =====================================================
+// FILTRAR Y MOSTRAR RECEPCIONES (SOLO POR BÚSQUEDA)
+// =====================================================
 function filtrarYMostrarRecepciones() {
     const listDiv = document.getElementById('recepcionesList');
     if (!listDiv) return;
     
     let filtradas = [...recepcionesActuales];
-    const searchTerm = document.getElementById('searchRecepcion')?.value?.toLowerCase() || '';
+    
+    // 🔥 FILTRO POR BÚSQUEDA (código, placa o cliente)
+    const searchTerm = document.getElementById('searchRecepcion')?.value?.toLowerCase().trim() || '';
     if (searchTerm) {
-        filtradas = filtradas.filter(r => 
-            (r.codigo_unico || '').toLowerCase().includes(searchTerm) ||
-            (r.placa || '').toLowerCase().includes(searchTerm) ||
-            (r.cliente_nombre || '').toLowerCase().includes(searchTerm)
-        );
+        filtradas = filtradas.filter(r => {
+            const codigo = (r.codigo_unico || '').toLowerCase();
+            const placa = (r.placa || '').toLowerCase();
+            const cliente = (r.cliente_nombre || '').toLowerCase();
+            return codigo.includes(searchTerm) || 
+                   placa.includes(searchTerm) || 
+                   cliente.includes(searchTerm);
+        });
     }
-    const fechaDesde = document.getElementById('fechaDesde')?.value;
-    const fechaHasta = document.getElementById('fechaHasta')?.value;
-    if (fechaDesde) filtradas = filtradas.filter(r => r.fecha_ingreso && r.fecha_ingreso >= fechaDesde);
-    if (fechaHasta) filtradas = filtradas.filter(r => r.fecha_ingreso && r.fecha_ingreso <= fechaHasta + 'T23:59:59');
-    const estadoFiltro = document.getElementById('estadoFiltro')?.value;
-    if (estadoFiltro && estadoFiltro !== 'todos') filtradas = filtradas.filter(r => r.estado_global === estadoFiltro);
+    
+    // Actualizar contador
     document.getElementById('recepcionesCount').textContent = filtradas.length;
     
+    // Mostrar mensaje si no hay resultados
     if (filtradas.length === 0) {
-        listDiv.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>No hay recepciones</p></div>`;
+        const searchActive = searchTerm.length > 0;
+        listDiv.innerHTML = `<div class="empty-state">
+            <i class="fas fa-search"></i>
+            <p>${searchActive ? 'No hay recepciones que coincidan con la búsqueda' : 'No hay recepciones guardadas'}</p>
+            ${searchActive ? '<small>Intenta con otro término de búsqueda</small>' : '<small>Las recepciones aparecerán aquí</small>'}
+        </div>`;
         return;
     }
     
+    // Mapeo de estados con colores
+    const estadoConfig = {
+        'EnRecepcion': { label: '📋 En Recepción', color: '#ffc107' },
+        'EnDiagnostico': { label: '🔍 En Diagnóstico', color: '#17a2b8' },
+        'DiagnosticoCompletado': { label: '✅ Diagnóstico Completado', color: '#28a745' },
+        'DiagnosticoAprobado': { label: '👍 Diagnóstico Aprobado', color: '#28a745' },
+        'DiagnosticoRechazado': { label: '👎 Diagnóstico Rechazado', color: '#dc3545' },
+        'CotizacionEnviada': { label: '📨 Cotización Enviada', color: '#6f42c1' },
+        'CotizacionAceptada': { label: '✅ Cotización Aceptada', color: '#28a745' },
+        'CotizacionParcial': { label: '🟡 Cotización Parcial', color: '#ffc107' },
+        'CotizacionRechazada': { label: '❌ Cotización Rechazada', color: '#dc3545' },
+        'EnArmadoVehiculo': { label: '🔧 En Armado', color: '#fd7e14' },
+        'VehiculoArmado': { label: '✅ Vehículo Armado', color: '#28a745' },
+        'EnReparacion': { label: '🔧 En Reparación', color: '#fd7e14' },
+        'EnPausa': { label: '⏸️ En Pausa', color: '#ffc107' },
+        'ReparacionCompletada': { label: '✅ Reparación Completada', color: '#28a745' },
+        'Finalizado': { label: '🏁 Finalizado', color: '#20c997' },
+        'Entregado': { label: '🚗 Entregado', color: '#20c997' }
+    };
+    
+    // Renderizar tarjetas
     listDiv.innerHTML = filtradas.map(rec => {
-        const estadoLabels = { 'EnRecepcion': 'En Recepción', 'EnTaller': 'En Taller', 'Finalizado': 'Finalizado' };
         const estado = rec.estado_global || 'EnRecepcion';
-        const fecha = rec.fecha_ingreso ? new Date(rec.fecha_ingreso).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A';
+        const config = estadoConfig[estado] || { label: estado, color: '#8E8E93' };
+        const fecha = rec.fecha_ingreso ? new Date(rec.fecha_ingreso).toLocaleDateString('es-ES', { 
+            day: '2-digit', 
+            month: '2-digit', 
+            year: 'numeric' 
+        }) : 'N/A';
         const vehiculo = `${rec.marca || ''} ${rec.modelo || ''}`.trim() || 'Vehículo sin especificar';
         
-        return `<div class="recepcion-card estado-${estado}">
+        return `<div class="recepcion-card" style="border-left: 4px solid ${config.color};">
             <div class="recepcion-header">
                 <span class="recepcion-codigo">${escapeHtml(rec.codigo_unico || 'OT-N/A')}</span>
-                <span class="recepcion-estado ${estado}">${estadoLabels[estado] || estado}</span>
+                <span class="recepcion-estado" style="background: ${config.color}20; color: ${config.color}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                    ${config.label}
+                </span>
             </div>
             <div class="recepcion-body">
                 <div class="recepcion-info-item">
                     <div class="icon-wrapper"><i class="fas fa-user"></i></div>
-                    <div><span class="info-label">Cliente</span><span class="info-value">${escapeHtml(rec.cliente_nombre || 'N/A')}</span></div>
+                    <div>
+                        <span class="info-label">Cliente</span>
+                        <span class="info-value">${escapeHtml(rec.cliente_nombre || 'N/A')}</span>
+                    </div>
                 </div>
                 <div class="recepcion-info-item">
                     <div class="icon-wrapper"><i class="fas fa-car"></i></div>
-                    <div><span class="info-label">Vehículo</span><span class="info-value">${escapeHtml(vehiculo)} <span class="placa-badge">${escapeHtml(rec.placa || 'N/A')}</span></span></div>
+                    <div>
+                        <span class="info-label">Vehículo</span>
+                        <span class="info-value">${escapeHtml(vehiculo)} <span class="placa-badge" style="background: #2C2C2E; padding: 2px 8px; border-radius: 4px; font-size: 11px; color: #8E8E93;">${escapeHtml(rec.placa || 'N/A')}</span></span>
+                    </div>
                 </div>
             </div>
             <div class="recepcion-footer">
                 <span class="recepcion-fecha"><i class="far fa-calendar-alt"></i> ${fecha}</span>
                 <div class="recepcion-actions">
-                    <button class="btn-action btn-ver" onclick="verDetalleRecepcion(${rec.id})"><i class="fas fa-eye"></i> Ver</button>
-                    <button class="btn-action btn-editar" onclick="editarRecepcion(${rec.id})"><i class="fas fa-edit"></i> Editar</button>
-                    <button class="btn-action btn-eliminar" onclick="confirmarEliminarRecepcion(${rec.id})"><i class="fas fa-trash-alt"></i> Eliminar</button>
+                    <button class="btn-action btn-ver" onclick="verDetalleRecepcion(${rec.id})">
+                        <i class="fas fa-eye"></i> Ver
+                    </button>
+                    <button class="btn-action btn-editar" onclick="editarRecepcion(${rec.id})" ${estado !== 'EnRecepcion' ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
+                        <i class="fas fa-edit"></i> Editar
+                    </button>
+                    <button class="btn-action btn-eliminar" onclick="confirmarEliminarRecepcion(${rec.id})" ${estado !== 'EnRecepcion' ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
+                        <i class="fas fa-trash-alt"></i> Eliminar
+                    </button>
                 </div>
             </div>
         </div>`;
@@ -2165,7 +2229,7 @@ async function verDetalleRecepcion(id) {
 }
 
 // =====================================================
-// MOSTRAR MODAL DETALLE
+// MOSTRAR MODAL DETALLE (CON PRECARGA DE FOTOS OPTIMIZADA Y BOTÓN DE TRANSCRIPCIÓN)
 // =====================================================
 function mostrarModalDetalle(detalle) {
     const modal = document.getElementById('modalDetalleRecepcion');
@@ -2254,6 +2318,46 @@ function mostrarModalDetalle(detalle) {
         audioHtml = `<div class="detalle-sin-audio"><i class="fas fa-microphone-slash"></i> No hay audio disponible</div>`;
     }
     
+    // =============================================
+    // 🔥 DESCRIPCIÓN CON BOTÓN DE TRANSCRIPCIÓN
+    // =============================================
+    
+    // Verificar si hay audio para mostrar el botón
+    const tieneAudioParaTranscribir = detalle.audio_url && 
+                                      detalle.audio_url !== 'null' && 
+                                      detalle.audio_url !== 'None' && 
+                                      detalle.audio_url !== '' && 
+                                      detalle.audio_url !== null && 
+                                      detalle.audio_url !== 'undefined';
+    
+    // Texto de la transcripción (si existe)
+    const transcripcionActual = detalle.transcripcion_problema || 'No se registró descripción';
+    
+    const descripcionHtml = `
+        <div class="detalle-card">
+            <div class="detalle-card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                <span><i class="fas fa-align-left"></i> Descripción del Problema</span>
+                ${tieneAudioParaTranscribir ? `
+                <button class="btn-transcribir" onclick="transcribirAudioManual(${detalle.id})" 
+                        style="background:#C1121F;color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:6px;transition:all 0.3s;">
+                    <i class="fas fa-microphone"></i> 🎙️ Transcribir Audio
+                </button>
+                ` : `
+                <span style="color:#8E8E93;font-size:11px;"><i class="fas fa-microphone-slash"></i> Sin audio para transcribir</span>
+                `}
+            </div>
+            <div class="detalle-descripcion-texto">
+                <textarea id="transcripcionManual" style="width:100%;min-height:80px;background:#1A1A1C;color:#fff;border:1px solid #2C2C2E;border-radius:8px;padding:12px;font-size:13px;resize:vertical;font-family:inherit;line-height:1.6;">
+                    ${escapeHtml(transcripcionActual)}
+                </textarea>
+            </div>
+        </div>
+    `;
+    
+    // =============================================
+    // CONSTRUIR HTML COMPLETO
+    // =============================================
+    
     const html = `<div class="detalle-tabs">
         <button class="detalle-tab active" data-tab="info"><i class="fas fa-info-circle"></i> Información</button>
         <button class="detalle-tab" data-tab="fotos"><i class="fas fa-images"></i> Fotos <span class="tab-badge">${fotosCount}/7</span></button>
@@ -2290,9 +2394,7 @@ function mostrarModalDetalle(detalle) {
         </div>
         <div class="detalle-pane" id="pane-fotos">${fotosHtml}</div>
         <div class="detalle-pane" id="pane-descripcion">
-            <div class="detalle-card"><div class="detalle-card-title"><i class="fas fa-align-left"></i> Descripción del Problema</div>
-                <div class="detalle-descripcion-texto">${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}</div>
-            </div>
+            ${descripcionHtml}
             ${audioHtml}
         </div>
     </div>`;
@@ -2300,7 +2402,7 @@ function mostrarModalDetalle(detalle) {
     body.innerHTML = html;
     modal.classList.add('show');
     
-    // Tabs
+    // 🔥 CONFIGURAR TABS - OPTIMIZADO
     document.querySelectorAll('.detalle-tab').forEach(tab => {
         tab.addEventListener('click', function() {
             const tabId = this.dataset.tab;
@@ -2309,20 +2411,47 @@ function mostrarModalDetalle(detalle) {
             document.querySelectorAll('.detalle-pane').forEach(p => p.classList.remove('active'));
             const activePane = document.getElementById(`pane-${tabId}`);
             if (activePane) activePane.classList.add('active');
-            if (tabId === 'fotos') setTimeout(() => cargarImagenesFotos(detalle.fotos), 200);
+            
+            if (tabId === 'fotos') {
+                // 🔥 VERIFICAR SI YA ESTÁN CARGADAS
+                const panelFotos = document.getElementById('pane-fotos');
+                const imagenesCargadas = panelFotos?.querySelectorAll('.detalle-foto.loaded').length || 0;
+                const totalFotos = Object.values(detalle.fotos || {}).filter(v => v && v !== 'null' && v !== 'None' && v !== '' && v !== 'undefined').length;
+                
+                if (imagenesCargadas < totalFotos) {
+                    // Solo cargar si no todas están cargadas
+                    setTimeout(() => cargarImagenesFotos(detalle.fotos), 200);
+                } else {
+                    console.log('📸 Fotos ya cargadas, no es necesario recargar');
+                }
+            }
         });
     });
     
+    // 🔥 PRECARGAR FOTOS EN PARALELO (incluso si no están visibles)
     setTimeout(() => {
+        // Verificar si el tab de fotos está activo
         const fotosTab = document.querySelector('.detalle-tab[data-tab="fotos"]');
-        if (fotosTab && fotosTab.classList.contains('active')) cargarImagenesFotos(detalle.fotos);
-    }, 400);
+        const isFotosTabActive = fotosTab?.classList.contains('active') || false;
+        
+        if (isFotosTabActive) {
+            // Si el tab está activo, cargar inmediatamente
+            cargarImagenesFotos(detalle.fotos);
+        } else {
+            // Si no está activo, precargar en segundo plano
+            console.log('📸 Precargando fotos en segundo plano...');
+            // Esperar un poco antes de precargar para no bloquear la UI
+            setTimeout(() => {
+                cargarImagenesFotos(detalle.fotos);
+            }, 500);
+        }
+    }, 300);
     
+    // 🔥 BOTÓN PDF
     document.getElementById('btnExportarPDFDetalle').onclick = () => { datosReporteFinal = detalle; descargarPDFFinal(); };
 }
-
 // =====================================================
-// CARGAR IMÁGENES DE FOTOS EN EL DETALLE
+// CARGAR IMÁGENES DE FOTOS EN EL DETALLE (OPTIMIZADO - EN PARALELO)
 // =====================================================
 async function cargarImagenesFotos(fotos) {
     if (!fotos) return;
@@ -2333,32 +2462,65 @@ async function cargarImagenesFotos(fotos) {
     const camposFotos = ['url_lateral_izquierda', 'url_lateral_derecha', 'url_foto_frontal', 'url_foto_trasera', 'url_foto_superior', 'url_foto_inferior', 'url_foto_tablero'];
     const labels = ['Lateral Izquierdo', 'Lateral Derecho', 'Frontal', 'Trasera', 'Superior', 'Inferior', 'Tablero'];
     
+    // 🔥 IDENTIFICAR QUÉ FOTOS TIENEN URL VÁLIDA
+    const fotosAProcesar = [];
+    
     for (let i = 0; i < camposFotos.length; i++) {
         const campo = camposFotos[i];
         const url = fotos[campo];
         
         // 🔥 VERIFICAR QUE LA URL SEA VÁLIDA
-        if (!url || url === 'null' || url === 'None' || url === '' || url === 'undefined') {
-            continue;
+        if (url && url !== 'null' && url !== 'None' && url !== '' && url !== 'undefined') {
+            fotosAProcesar.push({
+                index: i,
+                campo: campo,
+                label: labels[i],
+                url: url,
+                contenedorId: null // Se asignará después
+            });
         }
-        
-        // Buscar el contenedor de la foto
-        const contenedores = panelFotos.querySelectorAll(`.detalle-foto-placeholder[id^="foto-${campo}-"]`);
-        if (contenedores.length === 0) continue;
-        const contenedor = contenedores[0];
-        const fotoDiv = contenedor.closest('.detalle-foto');
-        
-        // 🔥 MOSTRAR INDICADOR DE CARGA
-        contenedor.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:8px;height:100%;">
-            <i class="fas fa-spinner fa-spin" style="font-size:24px;color:#C1121F;"></i>
-            <span style="font-size:10px;text-align:center;">Cargando...</span>
-        </div>`;
-        
+    }
+    
+    // Si no hay fotos, salir
+    if (fotosAProcesar.length === 0) {
+        console.log('📸 No hay fotos para cargar en el detalle');
+        return;
+    }
+    
+    console.log(`📸 Cargando ${fotosAProcesar.length} fotos en paralelo para el detalle...`);
+    
+    // 🔥 ASIGNAR CADA FOTO A SU CONTENEDOR
+    for (const foto of fotosAProcesar) {
+        // Buscar el contenedor de la foto usando el campo
+        const contenedores = panelFotos.querySelectorAll(`.detalle-foto-placeholder[id^="foto-${foto.campo}-"]`);
+        if (contenedores.length > 0) {
+            foto.contenedorId = contenedores[0].id;
+            const contenedor = contenedores[0];
+            const fotoDiv = contenedor.closest('.detalle-foto');
+            
+            // 🔥 MOSTRAR INDICADOR DE CARGA
+            contenedor.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:8px;height:100%;">
+                <i class="fas fa-spinner fa-spin" style="font-size:24px;color:#C1121F;"></i>
+                <span style="font-size:10px;text-align:center;">Cargando...</span>
+            </div>`;
+            
+            if (fotoDiv) fotoDiv.classList.remove('loaded');
+        }
+    }
+    
+    // 🔥 CARGAR TODAS LAS FOTOS EN PARALELO
+    const startTime = Date.now();
+    
+    const promesas = fotosAProcesar.map(async (foto) => {
         try {
-            // 🔥 LLAMAR AL ENDPOINT PARA CONVERTIR A BASE64
+            // 🔥 USAR thumbnail para mejor rendimiento
             const response = await fetchWithToken(`${API_URL}/jefe-operativo/imagen-base64`, {
                 method: 'POST',
-                body: JSON.stringify({ url })
+                body: JSON.stringify({ 
+                    url: foto.url, 
+                    thumbnail: true, 
+                    size: 'w400' 
+                })
             });
             
             if (!response.ok) {
@@ -2368,21 +2530,50 @@ async function cargarImagenesFotos(fotos) {
             const data = await response.json();
             
             if (data.success && data.base64) {
-                // 🔥 MOSTRAR LA IMAGEN CON LA URL BASE64
-                contenedor.innerHTML = `<img src="${data.base64}" alt="${labels[i]}" style="width:100%;height:100%;object-fit:cover;display:block;" 
-                    onerror="this.parentElement.innerHTML='<div style=\\'display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:4px;height:100%;\\'><i class=\\'fas fa-exclamation-triangle\\' style=\\'font-size:20px;\\'></i><span style=\\'font-size:10px;text-align:center;\\'>Error</span></div>'">`;
-                if (fotoDiv) fotoDiv.classList.add('loaded');
+                return { ...foto, base64: data.base64, success: true };
             } else {
                 throw new Error(data.error || 'Error convirtiendo imagen');
             }
         } catch (error) {
-            console.error(`❌ Error cargando foto ${labels[i]}:`, error);
+            console.warn(`⚠️ Error cargando ${foto.campo}:`, error.message);
+            return { ...foto, success: false, error: error.message };
+        }
+    });
+    
+    // Esperar a que todas terminen
+    const resultados = await Promise.all(promesas);
+    
+    const tiempoTotal = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`✅ Todas las fotos del detalle cargadas en ${tiempoTotal} segundos`);
+    
+    // 🔥 PROCESAR RESULTADOS
+    let fotosCargadas = 0;
+    
+    for (const resultado of resultados) {
+        const contenedor = document.getElementById(resultado.contenedorId);
+        if (!contenedor) continue;
+        
+        const fotoDiv = contenedor.closest('.detalle-foto');
+        
+        if (resultado.success && resultado.base64) {
+            // 🔥 MOSTRAR LA IMAGEN
+            contenedor.innerHTML = `<img src="${resultado.base64}" alt="${resultado.label}" 
+                style="width:100%;height:100%;object-fit:cover;display:block;" 
+                onerror="this.parentElement.innerHTML='<div style=\\'display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:4px;height:100%;\\'><i class=\\'fas fa-exclamation-triangle\\' style=\\'font-size:20px;\\'></i><span style=\\'font-size:10px;text-align:center;\\'>Error</span></div>'">`;
+            
+            if (fotoDiv) fotoDiv.classList.add('loaded');
+            fotosCargadas++;
+        } else {
+            // 🔥 MOSTRAR ERROR
             contenedor.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:4px;height:100%;">
-                <i class="fas fa-exclamation-triangle" style="font-size:20px;"></i>
-                <span style="font-size:10px;text-align:center;">Error al cargar</span>
+                <i class="fas fa-exclamation-triangle" style="font-size:20px;color:#ef4444;"></i>
+                <span style="font-size:9px;text-align:center;">Error</span>
             </div>`;
         }
     }
+    
+    console.log(`📸 ${fotosCargadas}/${resultados.length} fotos cargadas en el detalle en ${tiempoTotal}s`);
+    return fotosCargadas;
 }
 // =====================================================
 // GENERAR HTML PARA EL REPORTE (CON IMÁGENES CONVERTIDAS)
@@ -4017,4 +4208,84 @@ function extraerSesionCodigoDeFotos(fotosData) {
         }
     }
     return null;
+}
+// =====================================================
+// TRANSCRIBIR AUDIO MANUALMENTE (BOTÓN)
+// =====================================================
+
+async function transcribirAudioManual(idOrden) {
+    if (!idOrden) {
+        mostrarNotificacion('⚠️ No se proporcionó ID de orden', 'warning');
+        return;
+    }
+    
+    // Verificar si ya hay una transcripción
+    const textarea = document.getElementById('transcripcionManual');
+    if (textarea && textarea.value && textarea.value.trim().length > 10) {
+        if (!confirm('⚠️ Ya hay una transcripción. ¿Deseas sobrescribirla con la transcripción automática?')) {
+            return;
+        }
+    }
+    
+    mostrarNotificacion('🎙️ Transcribiendo audio... puede tomar unos segundos', 'info');
+    
+    try {
+        const response = await fetchWithToken(`${API_URL}/jefe-operativo/transcribir-audio`, {
+            method: 'POST',
+            body: JSON.stringify({ id_orden: idOrden })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Error en la transcripción');
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.transcripcion) {
+            // Actualizar el textarea con la transcripción
+            if (textarea) {
+                textarea.value = data.transcripcion;
+                textarea.style.border = '2px solid #10B981';
+                setTimeout(() => {
+                    textarea.style.border = '';
+                }, 3000);
+            }
+            
+            mostrarNotificacion(`✅ Transcripción completada (${data.modelo_usado || 'Whisper'})`, 'success');
+            
+            // Guardar automáticamente
+            if (idOrden) {
+                await guardarTranscripcion(idOrden, data.transcripcion);
+            }
+        } else {
+            mostrarNotificacion('❌ Error: ' + (data.error || 'No se pudo transcribir'), 'error');
+        }
+        
+    } catch (error) {
+        console.error('Error transcribiendo audio:', error);
+        mostrarNotificacion('❌ Error al transcribir: ' + error.message, 'error');
+    }
+}
+
+// =====================================================
+// GUARDAR TRANSCRIPCIÓN EN EL SERVIDOR
+// =====================================================
+
+async function guardarTranscripcion(idOrden, texto) {
+    try {
+        const response = await fetchWithToken(`${API_URL}/jefe-operativo/guardar-transcripcion`, {
+            method: 'POST',
+            body: JSON.stringify({
+                id_orden: idOrden,
+                transcripcion: texto
+            })
+        });
+        
+        if (response.ok) {
+            console.log('✅ Transcripción guardada');
+        }
+    } catch (error) {
+        console.warn('⚠️ No se pudo guardar transcripción:', error);
+    }
 }

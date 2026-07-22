@@ -373,7 +373,6 @@ async function subirFotoGoogleDrive(file, carpeta, campo) {
             formData.append('campo', campo);
             formData.append('codigo_sesion', codigoSesion || '');
             
-            // 🔥 ENVIAR CÓDIGO DE ORDEN Y MODO EDICIÓN
             const codigoOrden = window.datosOriginalesRecepcion?.codigo_unico || null;
             formData.append('codigo_orden', codigoOrden || '');
             formData.append('modo_edicion', modoEdicionRecepcion ? 'true' : 'false');
@@ -432,7 +431,109 @@ async function subirFotoGoogleDrive(file, carpeta, campo) {
         }
     });
 }
-
+// =====================================================
+// REEMPLAZAR FOTO EN DRIVE (ELIMINA LA ANTERIOR Y SUBE LA NUEVA)
+// =====================================================
+async function reemplazarFotoEnDrive(file, campo, urlAnterior) {
+    return new Promise(async (resolve, reject) => {
+        if (subidasActivas[campo]) {
+            reject(new Error(`Ya hay una subida en curso para ${campo}`));
+            return;
+        }
+        subidasActivas[campo] = true;
+        
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('carpeta', codigoSesion || 'recepcion');
+            formData.append('campo', campo);
+            formData.append('codigo_sesion', codigoSesion || '');
+            formData.append('url_anterior', urlAnterior); // 🔥 ENVIAR URL ANTERIOR
+            
+            const codigoOrden = window.datosOriginalesRecepcion?.codigo_unico || null;
+            formData.append('codigo_orden', codigoOrden || '');
+            formData.append('modo_edicion', 'true');
+            
+            console.log('🔄 Reemplazando foto:', { campo, urlAnterior, codigoSesion, codigoOrden });
+            
+            const token = localStorage.getItem('furia_token');
+            const response = await fetch(`${API_URL}/jefe-operativo/reemplazar-foto`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            // Manejar 401 - token expirado
+            if (response.status === 401) {
+                try {
+                    const refreshResponse = await fetch(`${API_URL}/refresh-token`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token })
+                    });
+                    if (refreshResponse.ok) {
+                        const refreshData = await refreshResponse.json();
+                        if (refreshData.token) {
+                            localStorage.setItem('furia_token', refreshData.token);
+                            const retryResponse = await fetch(`${API_URL}/jefe-operativo/reemplazar-foto`, {
+                                method: 'POST',
+                                body: formData,
+                                headers: { 'Authorization': `Bearer ${refreshData.token}` }
+                            });
+                            if (retryResponse.ok) {
+                                const data = await retryResponse.json();
+                                if (data.success && data.url) {
+                                    resolve(data.url);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                } catch (refreshError) {}
+                mostrarNotificacion('⚠️ Sesión expirada. Reintenta subir la foto.', 'warning');
+                reject(new Error('Sesión expirada'));
+                return;
+            }
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.url) {
+                // Actualizar DOM con la nueva URL
+                const uploadDiv = document.getElementById(`upload-${campo}`);
+                if (uploadDiv) {
+                    uploadDiv.setAttribute('data-drive-url', data.url);
+                    uploadDiv.dataset.driveUrl = data.url;
+                    fotosSubidasLocal[campo] = data.url;
+                }
+                // Actualizar datos originales para que no se pierda la referencia
+                if (window.datosOriginalesRecepcion?.fotos) {
+                    const campoMap = {
+                        'lateral_izquierdo': 'url_lateral_izquierda',
+                        'lateral_derecho': 'url_lateral_derecha',
+                        'frontal': 'url_foto_frontal',
+                        'trasera': 'url_foto_trasera',
+                        'superior': 'url_foto_superior',
+                        'inferior': 'url_foto_inferior',
+                        'tablero': 'url_foto_tablero'
+                    };
+                    const campoDB = campoMap[campo] || campo;
+                    window.datosOriginalesRecepcion.fotos[campoDB] = data.url;
+                }
+                resolve(data.url);
+            } else {
+                reject(new Error(data.error || 'Error reemplazando foto'));
+            }
+        } catch (error) {
+            reject(error);
+        } finally {
+            delete subidasActivas[campo];
+        }
+    });
+}
 // =====================================================
 // ACTUALIZAR FOTO EN SESIÓN
 // =====================================================
@@ -487,16 +588,16 @@ async function comprimirImagen(file) {
 }
 
 // =====================================================
-// PROCESAR COLA DE FOTOS
+// ENCOLAR FOTO (CON SOPORTE PARA REEMPLAZO)
 // =====================================================
-function encolarFoto(file, campo, label) {
-    uploadQueue.push({ file, campo, label, intentos: 0 });
+function encolarFoto(file, campo, label, urlAnterior = null) {
+    uploadQueue.push({ file, campo, label, intentos: 0, urlAnterior });
     actualizarProgresoFoto(campo, 0, 'pending');
     if (!isProcessingQueue) procesarCola();
 }
 
 // =====================================================
-// PROCESAR COLA DE FOTOS (CORREGIDO)
+// PROCESAR COLA DE FOTOS (CORREGIDO - CON DOM CORRECTO)
 // =====================================================
 async function procesarCola() {
     if (uploadQueue.length === 0) {
@@ -511,19 +612,16 @@ async function procesarCola() {
             mostrarNotificacion(`✅ ${exitos} fotos subidas exitosamente`, 'success');
         }
         
-        // 🔥 FORZAR VALIDACIÓN COMPLETA DEL CONTADOR
         setTimeout(() => {
             validarCompletadoFotos();
-            // Si estamos en modo edición, guardar la sección
             if (modoEdicionRecepcion && codigoSesion) {
-                // Recolectar URLs y guardar
                 const fotosData = {};
                 for (const foto of FOTOS_CONFIG) {
                     const uploadDiv = document.getElementById(`upload-${foto.id}`);
                     let url = uploadDiv?.getAttribute('data-drive-url') || 
                              uploadDiv?.dataset?.driveUrl || 
                              fotosSubidasLocal[foto.campo];
-                    if (url && url !== 'null' && url !== '') {
+                    if (url && url !== 'null' && url !== '' && url !== 'undefined') {
                         fotosData[foto.campo] = url;
                     }
                 }
@@ -538,13 +636,28 @@ async function procesarCola() {
     isProcessingQueue = true;
     colaActiva = true;
     const item = uploadQueue.shift();
-    const { file, campo, label } = item;
-    const uploadDiv = document.getElementById(`upload-${campo}`);
-    const barContainer = document.querySelector(`#upload-${campo} .progress-bar-foto`);
-    const statusContainer = document.querySelector(`#upload-${campo} .uploading-status`);
+    const { file, campo, label, urlAnterior } = item;
     
+    // 🔥 BUSCAR POR ID CORRECTO
+    const fotoConfig = FOTOS_CONFIG.find(f => f.campo === campo);
+    const uploadDiv = document.getElementById(`upload-${fotoConfig?.id || campo}`);
+    const barContainer = uploadDiv?.querySelector('.progress-bar-foto');
+    const statusContainer = uploadDiv?.querySelector('.uploading-status');
+    const preview = uploadDiv?.querySelector('.upload-preview');
+    const removeBtn = uploadDiv?.querySelector('.remove-photo');
+    const ring = document.getElementById(`ring-${campo}`);
+    const percent = document.getElementById(`percent-${campo}`);
+    
+    // 🔥 MOSTRAR ANIMACIÓN DE CARGA
     if (barContainer) barContainer.style.display = 'block';
-    if (statusContainer) statusContainer.style.display = 'flex';
+    if (statusContainer) {
+        statusContainer.style.display = 'flex';
+        statusContainer.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Subiendo...</span>';
+        statusContainer.className = 'uploading-status uploading';
+    }
+    if (ring) ring.classList.add('uploading');
+    if (percent) percent.textContent = '0%';
+    
     actualizarProgresoFoto(campo, 0, 'uploading');
     
     let progreso = 0;
@@ -555,46 +668,92 @@ async function procesarCola() {
     }, 300);
     
     try {
-        const url = await subirFotoGoogleDrive(file, codigoSesion || 'temp', campo);
-        clearInterval(interval);
-        actualizarProgresoFoto(campo, 100, 'completed');
-        uploadResults.push({ campo, label, success: true, url });
+        let url;
         
+        // 🔥 SI HAY URL ANTERIOR, USAR REEMPLAZO
+        if (urlAnterior && modoEdicionRecepcion) {
+            console.log(`🔄 Reemplazando foto ${campo} (anterior: ${urlAnterior.substring(0, 50)}...)`);
+            url = await reemplazarFotoEnDrive(file, campo, urlAnterior);
+        } else {
+            console.log(`📸 Subiendo foto nueva ${campo}`);
+            url = await subirFotoGoogleDrive(file, codigoSesion || 'temp', campo);
+        }
+        
+        clearInterval(interval);
+        
+        // 🔥 ACTUALIZAR DOM CON LA URL
         if (uploadDiv) {
+            // 🔥 IMPORTANTE: Guardar la URL en el DOM
             uploadDiv.setAttribute('data-drive-url', url);
             uploadDiv.dataset.driveUrl = url;
             fotosSubidasLocal[campo] = url;
             uploadDiv.classList.remove('error');
             uploadDiv.classList.add('has-image');
-            const preview = uploadDiv.querySelector('.upload-preview');
+            
+            // 🔥 Actualizar el preview con la URL
             if (preview) {
-                // 🔥 ACTUALIZAR PREVIEW CON LA URL FINAL
                 preview.style.backgroundImage = `url('${url}')`;
                 preview.style.backgroundSize = 'cover';
                 preview.style.backgroundPosition = 'center';
+                preview.innerHTML = '';
+                preview.style.display = 'block';
             }
+            
+            if (removeBtn) removeBtn.style.display = 'flex';
         }
         
-        // 🔥 ACTUALIZAR SESIÓN Y CONTADOR
+        // 🔥 ACTUALIZAR PROGRESO
+        actualizarProgresoFoto(campo, 100, 'completed');
+        uploadResults.push({ campo, label, success: true, url });
+        
+        // 🔥 GUARDAR EN SESIÓN
         try { await actualizarSesionFoto(campo, url); } catch (e) {}
         
-        // 🔥 VALIDAR CONTADOR DESPUÉS DE CADA FOTO SUBIDA
+        // 🔥 ACTUALIZAR CONTADOR
         setTimeout(validarCompletadoFotos, 300);
         
+        // Ocultar barras de progreso
         setTimeout(() => {
             if (barContainer) barContainer.style.display = 'none';
-            if (statusContainer) statusContainer.style.display = 'none';
+            if (statusContainer) {
+                statusContainer.style.display = 'none';
+                statusContainer.className = 'uploading-status';
+            }
+            if (ring) ring.classList.remove('uploading');
+            if (percent) {
+                percent.textContent = '✓';
+                percent.className = 'progress-percent completed';
+            }
         }, 1500);
+        
+        console.log(`✅ Foto ${campo} subida exitosamente: ${url.substring(0, 50)}...`);
         
     } catch (error) {
         clearInterval(interval);
+        console.error(`❌ Error subiendo ${label}:`, error);
+        
         actualizarProgresoFoto(campo, 100, 'error');
         uploadResults.push({ campo, label, success: false, error: error.message });
+        
         if (uploadDiv) {
             uploadDiv.classList.add('error');
             const input = uploadDiv.querySelector('input[type="file"]');
             if (input) input.value = '';
         }
+        
+        if (statusContainer) {
+            statusContainer.style.display = 'flex';
+            statusContainer.innerHTML = `<i class="fas fa-exclamation-circle"></i> <span>Error: ${error.message}</span>`;
+            statusContainer.className = 'uploading-status error';
+        }
+        
+        setTimeout(() => {
+            if (statusContainer) {
+                statusContainer.style.display = 'none';
+                statusContainer.className = 'uploading-status';
+            }
+        }, 4000);
+        
         mostrarNotificacion(`❌ Error en ${label}: ${error.message}`, 'error');
     }
     
@@ -602,7 +761,7 @@ async function procesarCola() {
 }
 
 // =====================================================
-// PROCESAR FOTO (CORREGIDO - ACTUALIZA CONTADOR)
+// PROCESAR FOTO (CORREGIDO - CON REEMPLAZO EN DRIVE)
 // =====================================================
 async function procesarFoto(input, foto) {
     const file = input.files[0];
@@ -612,6 +771,19 @@ async function procesarFoto(input, foto) {
     const preview = uploadDiv?.querySelector('.upload-preview');
     const removeBtn = uploadDiv?.querySelector('.remove-photo');
     
+    // 🔥 OBTENER URL ANTERIOR (para reemplazar)
+    let urlAnterior = uploadDiv?.getAttribute('data-drive-url') || 
+                      uploadDiv?.dataset?.driveUrl || 
+                      fotosSubidasLocal[foto.campo];
+    
+    // Si estamos en modo edición y hay URL anterior, guardarla para reemplazo
+    if (modoEdicionRecepcion && urlAnterior && urlAnterior !== 'null' && urlAnterior !== '' && urlAnterior !== 'undefined') {
+        console.log(`🔄 Reemplazando foto anterior para ${foto.campo}: ${urlAnterior}`);
+    } else {
+        urlAnterior = null;
+    }
+    
+    // Limpiar datos anteriores
     if (uploadDiv) {
         uploadDiv.removeAttribute('data-drive-url');
         delete uploadDiv.dataset.driveUrl;
@@ -633,6 +805,7 @@ async function procesarFoto(input, foto) {
         uploadDiv.classList.remove('error');
         uploadDiv.dataset.objectUrl = objectUrl;
         
+        // Elementos de progreso
         const ringContainer = document.createElement('div');
         ringContainer.className = 'progress-ring-container';
         ringContainer.innerHTML = `
@@ -668,9 +841,14 @@ async function procesarFoto(input, foto) {
     
     try {
         const fileToUpload = await comprimirImagen(file);
-        encolarFoto(fileToUpload, foto.campo, foto.label);
-        // 🔥 EL CONTADOR SE ACTUALIZA EN validarCompletadoFotos
-        // que se llama automáticamente al final de la cola
+        
+        // 🔥 SI HAY URL ANTERIOR, USAR REEMPLAZO
+        if (urlAnterior && modoEdicionRecepcion) {
+            await reemplazarFotoEnDrive(fileToUpload, foto.campo, urlAnterior);
+        } else {
+            encolarFoto(fileToUpload, foto.campo, foto.label);
+        }
+        
         mostrarNotificacion(`📸 Subiendo ${foto.label}...`, 'info');
     } catch (error) {
         if (preview) {
@@ -688,44 +866,45 @@ async function procesarFoto(input, foto) {
 }
 
 // =====================================================
-// VALIDAR COMPLETADO DE FOTOS (VERSIÓN MEJORADA)
+// VALIDAR COMPLETADO DE FOTOS (CORREGIDO - RECALCULA CORRECTAMENTE)
 // =====================================================
 function validarCompletadoFotos() {
     let fotosConUrl = 0;
     let fotosConImagen = 0;
     let fotosDetalle = {};
+    let fotosEliminadas = 0;
+    
+    console.log('📸 Validando fotos...');
     
     for (const foto of FOTOS_CONFIG) {
         const uploadDiv = document.getElementById(`upload-${foto.id}`);
         const hasImage = uploadDiv?.classList.contains('has-image') || false;
-        if (hasImage) fotosConImagen++;
         
+        // 🔥 OBTENER URL DEL DOM (LA FUENTE MÁS CONFIABLE)
         let driveUrl = uploadDiv?.getAttribute('data-drive-url') || 
                        uploadDiv?.dataset?.driveUrl || 
-                       fotosSubidasLocal[foto.campo];
+                       null;
         
-        // Verificar en sesión actual
+        // 🔥 VERIFICAR EN fotosSubidasLocal SOLO SI NO HAY URL EN EL DOM
         if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
-            if (sesionActual?.datos?.fotos) {
-                const url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
-                if (url && url !== 'null' && url !== '' && url !== 'undefined') {
-                    driveUrl = url;
-                    // Actualizar DOM
-                    if (uploadDiv) {
-                        uploadDiv.setAttribute('data-drive-url', driveUrl);
-                        uploadDiv.dataset.driveUrl = driveUrl;
-                        fotosSubidasLocal[foto.campo] = driveUrl;
-                    }
+            const localUrl = fotosSubidasLocal[foto.campo];
+            if (localUrl && localUrl !== 'null' && localUrl !== '' && localUrl !== 'undefined') {
+                driveUrl = localUrl;
+                // Restaurar en el DOM
+                if (uploadDiv) {
+                    uploadDiv.setAttribute('data-drive-url', driveUrl);
+                    uploadDiv.dataset.driveUrl = driveUrl;
                 }
             }
         }
         
-        // Verificar en datos originales de edición
+        // 🔥 SOLO COMO FALLBACK: Buscar en datos originales
         if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
             if (window.datosOriginalesRecepcion?.fotos) {
                 const url = window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]];
                 if (url && url !== 'null' && url !== '' && url !== 'undefined') {
                     driveUrl = url;
+                    // Restaurar en el DOM
                     if (uploadDiv) {
                         uploadDiv.setAttribute('data-drive-url', driveUrl);
                         uploadDiv.dataset.driveUrl = driveUrl;
@@ -735,30 +914,83 @@ function validarCompletadoFotos() {
             }
         }
         
-        // Contar si hay URL válida
+        // 🔥 SOLO COMO FALLBACK ULTIMO: Buscar en sesión
+        if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
+            if (sesionActual?.datos?.fotos) {
+                const url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
+                if (url && url !== 'null' && url !== '' && url !== 'undefined') {
+                    driveUrl = url;
+                    if (uploadDiv) {
+                        uploadDiv.setAttribute('data-drive-url', driveUrl);
+                        uploadDiv.dataset.driveUrl = driveUrl;
+                        fotosSubidasLocal[foto.campo] = driveUrl;
+                    }
+                }
+            }
+        }
+        
+        // 🔥 VERIFICAR SI LA FOTO FUE ELIMINADA (no tiene imagen ni URL)
+        const esEliminada = !hasImage && (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined');
+        if (esEliminada) {
+            fotosEliminadas++;
+            // Asegurar que no queden vestigios
+            if (uploadDiv) {
+                uploadDiv.removeAttribute('data-drive-url');
+                delete uploadDiv.dataset.driveUrl;
+                delete fotosSubidasLocal[foto.campo];
+            }
+            // Eliminar de datos originales también
+            if (window.datosOriginalesRecepcion?.fotos) {
+                window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]] = null;
+            }
+            if (window.fotosOriginalesRecepcion) {
+                window.fotosOriginalesRecepcion[CAMPO_MAP[foto.campo]] = null;
+            }
+        }
+        
+        // 🔥 CONTAR URLS VÁLIDAS
         if (driveUrl && driveUrl !== 'null' && driveUrl !== '' && driveUrl !== 'undefined') {
-            fotosConUrl++;
-            fotosDetalle[foto.campo] = { 
-                url: driveUrl, 
-                estado: 'completado',
-                label: foto.label 
-            };
+            // Verificar que la URL no sea de una foto eliminada que quedó en cache
+            const esValida = !esEliminada && (uploadDiv?.classList.contains('has-image') || true);
+            if (esValida) {
+                fotosConUrl++;
+                fotosDetalle[foto.campo] = { 
+                    url: driveUrl, 
+                    estado: 'completado',
+                    label: foto.label 
+                };
+                console.log(`📸 ${foto.campo}: URL válida ✅`);
+            } else {
+                fotosDetalle[foto.campo] = { 
+                    url: null, 
+                    estado: 'eliminada',
+                    label: foto.label 
+                };
+                console.log(`📸 ${foto.campo}: URL inválida (eliminada) ❌`);
+            }
         } else if (hasImage) {
+            // Tiene imagen pero no URL - podría estar subiendo
+            fotosConImagen++;
             fotosDetalle[foto.campo] = { 
                 url: null, 
                 estado: 'subiendo',
                 label: foto.label 
             };
+            console.log(`📸 ${foto.campo}: Subiendo... ⏳`);
         } else {
             fotosDetalle[foto.campo] = { 
                 url: null, 
                 estado: 'pendiente',
                 label: foto.label 
             };
+            console.log(`📸 ${foto.campo}: Pendiente ○`);
         }
     }
     
+    // 🔥 CALCULAR COMPLETADO - SOLO SI HAY 7 FOTOS CON URL VÁLIDA
     const completado = fotosConUrl === 7;
+    
+    // 🔥 ACTUALIZAR BADGE VISUAL
     const fotosBadge = document.getElementById('statusFotos');
     if (fotosBadge) {
         if (completado) {
@@ -767,8 +999,11 @@ function validarCompletadoFotos() {
         } else if (fotosConUrl > 0) {
             fotosBadge.textContent = `⏳ ${fotosConUrl}/7 en Drive`;
             fotosBadge.className = 'status-badge en-proceso';
+        } else if (fotosConImagen > 0) {
+            fotosBadge.textContent = `⏳ Subiendo ${fotosConImagen}/7`;
+            fotosBadge.className = 'status-badge en-proceso';
         } else {
-            fotosBadge.textContent = `○ ${fotosConImagen}/7 fotos`;
+            fotosBadge.textContent = `○ ${fotosEliminadas > 0 ? 'Eliminadas' : '0/7 fotos'}`;
             fotosBadge.className = 'status-badge en-proceso';
         }
     }
@@ -777,12 +1012,14 @@ function validarCompletadoFotos() {
     if (seccionesCompletadasLocal.fotos !== completado) {
         seccionesCompletadasLocal.fotos = completado;
         actualizarBotonFinalizar();
+        console.log(`📸 Estado actualizado: ${completado ? 'COMPLETADO ✅' : 'PENDIENTE ❌'}`);
     }
     
-    // 🔥 LOG PARA DEPURACIÓN
-    console.log('📸 Estado de fotos:', {
+    console.log('📸 Resumen final:', {
         total: fotosConUrl,
         completado: completado,
+        eliminadas: fotosEliminadas,
+        subiendo: fotosConImagen,
         detalle: fotosDetalle
     });
     
@@ -2984,6 +3221,9 @@ function cancelarEdicion() {
         mostrarNotificacion('Edición cancelada', 'info');
     }
 }
+// =====================================================
+// GUARDAR CAMBIOS RECEPCIÓN (CORREGIDO)
+// =====================================================
 async function guardarCambiosRecepcion() {
     if (!recepcionEditandoId) {
         mostrarNotificacion('⚠️ No hay una recepción en edición', 'warning');
@@ -3014,30 +3254,56 @@ async function guardarCambiosRecepcion() {
     updateProgressBar(10);
     
     try {
-        // Recolectar todas las URLs de fotos
+        // 🔥 RECOLECTAR TODAS LAS URLS DE FOTOS - DESDE EL DOM
         const fotosData = {};
         let fotosValidas = 0;
         
         for (const foto of FOTOS_CONFIG) {
             const uploadDiv = document.getElementById(`upload-${foto.id}`);
-            let url = uploadDiv?.getAttribute('data-drive-url') || 
-                     uploadDiv?.dataset?.driveUrl || 
-                     fotosSubidasLocal[foto.campo];
             
+            // 🔥 OBTENER URL DEL DOM (la más reciente)
+            let url = uploadDiv?.getAttribute('data-drive-url') || 
+                      uploadDiv?.dataset?.driveUrl || 
+                      fotosSubidasLocal[foto.campo];
+            
+            // 🔥 Si no tiene URL en el DOM, verificar en el preview (puede ser una subida nueva)
             if (!url || url === 'null' || url === '' || url === 'undefined') {
-                // Buscar en datos originales
+                // Verificar si la foto fue eliminada (no tiene imagen)
+                const hasImage = uploadDiv?.classList.contains('has-image') || false;
+                if (!hasImage) {
+                    // La foto fue eliminada, guardar como null
+                    fotosData[foto.campo] = null;
+                    continue;
+                }
+            }
+            
+            // 🔥 Si aún no hay URL, buscar en datos originales (fotos que no se tocaron)
+            if (!url || url === 'null' || url === '' || url === 'undefined') {
                 if (window.fotosOriginalesRecepcion) {
                     url = window.fotosOriginalesRecepcion[CAMPO_MAP[foto.campo]];
                 }
             }
             
+            // 🔥 Si aún no hay URL, buscar en la sesión
+            if (!url || url === 'null' || url === '' || url === 'undefined') {
+                if (sesionActual?.datos?.fotos) {
+                    url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
+                }
+            }
+            
+            // 🔥 Guardar la URL (o null si no existe)
             if (url && url !== 'null' && url !== '' && url !== 'undefined') {
                 fotosData[foto.campo] = url;
                 fotosValidas++;
+                console.log(`📸 ${foto.campo}: ${url.substring(0, 50)}...`);
             } else {
                 fotosData[foto.campo] = null;
+                console.log(`📸 ${foto.campo}: SIN URL (eliminada)`);
             }
         }
+        
+        console.log(`📸 Total fotos válidas: ${fotosValidas}/7`);
+        console.log('📸 fotosData:', fotosData);
         
         updateProgressBar(20);
         updateProgressMessage('Preparando datos...');
@@ -3047,7 +3313,6 @@ async function guardarCambiosRecepcion() {
         const sesionCodigoOriginal = window.sesionCodigoOriginal || sesionCodigoExtraido || codigoSesion || null;
         
         console.log('📌 Código de sesión para edición:', sesionCodigoOriginal);
-        console.log('📌 FotosData:', fotosData);
         
         // Construir datos actualizados
         const datosActualizados = {
@@ -3065,14 +3330,12 @@ async function guardarCambiosRecepcion() {
                 anio: parseInt(document.getElementById('vehiculoAnio')?.value) || null,
                 kilometraje: parseInt(document.getElementById('vehiculoKilometraje')?.value) || 0
             },
-            fotos: fotosData,
+            fotos: fotosData,  // 🔥 ENVIAR TODAS LAS FOTOS (incluyendo null)
             descripcion: {
                 texto: descripcionProblema?.value || '',
                 audio_url: audioDriveUrl || null
             },
-            // 🔥 ENVIAR EL CÓDIGO DE SESIÓN EXTRAÍDO
-            sesion_codigo: sesionCodigoOriginal,
-            // También enviar el código único de la orden
+            sesion_codigo: sesionCodigoOriginal || window.datosOriginalesRecepcion?.codigo_unico || null,
             codigo_unico: window.datosOriginalesRecepcion?.codigo_unico || null
         };
         
@@ -3093,6 +3356,7 @@ async function guardarCambiosRecepcion() {
         }
         
         const result = await response.json();
+        console.log('✅ Respuesta del servidor:', result);
         
         updateProgressBar(90);
         updateProgressMessage('¡Cambios guardados!');
@@ -3353,29 +3617,86 @@ function setupUnirsePorCodigo() {
     modalUnirse?.addEventListener('click', (e) => { if (e.target === modalUnirse) cerrarModal(); });
 }
 
-// Modificar la función de eliminar en setupPhotoUploads
+// =====================================================
+// SETUP PHOTO UPLOADS (CON ELIMINACIÓN DE DRIVE CORREGIDA)
+// =====================================================
 function setupPhotoUploads() {
     for (const foto of FOTOS_CONFIG) {
         const input = document.getElementById(foto.id);
-        if (input) input.addEventListener('change', () => procesarFoto(input, foto));
+        if (input) {
+            input.addEventListener('change', () => procesarFoto(input, foto));
+        }
         
         const uploadDiv = document.getElementById(`upload-${foto.id}`);
         const removeBtn = uploadDiv?.querySelector('.remove-photo');
         
         if (removeBtn) {
-            removeBtn.addEventListener('click', function(e) {
+            removeBtn.addEventListener('click', async function(e) {
                 e.stopPropagation();
                 e.preventDefault();
                 
-                // 🔥 SI ESTÁ EN MODO EDICIÓN, PERMITIR SUBIR UNA NUEVA FOTO
+                // 🔥 OBTENER LA URL ACTUAL DEL DOM
+                let urlAnterior = uploadDiv?.getAttribute('data-drive-url') || 
+                                  uploadDiv?.dataset?.driveUrl || 
+                                  fotosSubidasLocal[foto.campo];
+                
+                // 🔥 SI NO HAY URL EN EL DOM, BUSCAR EN window.datosOriginalesRecepcion
+                if (!urlAnterior || urlAnterior === 'null' || urlAnterior === '' || urlAnterior === 'undefined') {
+                    if (window.datosOriginalesRecepcion?.fotos) {
+                        urlAnterior = window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]];
+                        console.log(`📸 URL recuperada de datosOriginales: ${urlAnterior}`);
+                    }
+                }
+                
+                // 🔥 SI AÚN NO HAY URL, BUSCAR EN window.fotosOriginalesRecepcion
+                if (!urlAnterior || urlAnterior === 'null' || urlAnterior === '' || urlAnterior === 'undefined') {
+                    if (window.fotosOriginalesRecepcion) {
+                        urlAnterior = window.fotosOriginalesRecepcion[CAMPO_MAP[foto.campo]];
+                        console.log(`📸 URL recuperada de fotosOriginales: ${urlAnterior}`);
+                    }
+                }
+                
+                console.log(`📸 URL anterior encontrada para ${foto.campo}: ${urlAnterior ? urlAnterior.substring(0, 50) + '...' : 'null'}`);
+                
                 const confirmar = confirm(`¿Eliminar la foto ${foto.label}?`);
                 if (!confirmar) return;
                 
-                // Eliminar la foto
+                // 🔥 SI HAY URL Y ESTÁ EN MODO EDICIÓN, ELIMINAR DE DRIVE
+                if (modoEdicionRecepcion && urlAnterior && urlAnterior !== 'null' && urlAnterior !== '' && urlAnterior !== 'undefined') {
+                    try {
+                        mostrarNotificacion(`🗑️ Eliminando ${foto.label} de Drive...`, 'info');
+                        
+                        const token = localStorage.getItem('furia_token');
+                        const response = await fetch(`${API_URL}/jefe-operativo/eliminar-foto`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: JSON.stringify({ url: urlAnterior })
+                        });
+                        
+                        const result = await response.json();
+                        if (result.success) {
+                            mostrarNotificacion(`✅ ${foto.label} eliminada de Drive`, 'success');
+                        } else {
+                            mostrarNotificacion(`⚠️ No se pudo eliminar de Drive: ${result.error || 'Error desconocido'}`, 'warning');
+                        }
+                    } catch (error) {
+                        console.warn('Error eliminando foto de Drive:', error);
+                        mostrarNotificacion(`⚠️ Error al eliminar de Drive: ${error.message}`, 'warning');
+                    }
+                } else if (!modoEdicionRecepcion) {
+                    // Si no está en modo edición, solo eliminar del DOM
+                    mostrarNotificacion(`📸 ${foto.label} eliminada del formulario`, 'info');
+                }
+                
+                // 🔥 ELIMINAR LA FOTO DEL DOM (SIEMPRE)
                 uploadDiv.removeAttribute('data-drive-url');
                 delete uploadDiv.dataset.driveUrl;
                 delete fotosSubidasLocal[foto.campo];
                 
+                // Si hay URL de objeto local (blob), revocarla
                 if (uploadDiv.dataset.objectUrl) {
                     URL.revokeObjectURL(uploadDiv.dataset.objectUrl);
                     delete uploadDiv.dataset.objectUrl;
@@ -3397,27 +3718,41 @@ function setupPhotoUploads() {
                 this.style.display = 'none';
                 actualizarProgresoFoto(foto.campo, 0, 'pending');
                 
-                // 🔥 ACTUALIZAR CONTADOR Y GUARDAR
-                validarCompletadoFotos();
-                
-                if (modoEdicionRecepcion && codigoSesion) {
-                    // Recolectar URLs y guardar
-                    const fotosData = {};
-                    for (const f of FOTOS_CONFIG) {
-                        const div = document.getElementById(`upload-${f.id}`);
-                        let url = div?.getAttribute('data-drive-url') || 
-                                 div?.dataset?.driveUrl || 
-                                 fotosSubidasLocal[f.campo];
-                        if (url && url !== 'null' && url !== '') {
-                            fotosData[f.campo] = url;
-                        }
-                    }
-                    if (Object.keys(fotosData).length > 0) {
-                        guardarSeccion('fotos');
-                    }
+                // 🔥 ACTUALIZAR DATOS ORIGINALES ANTES DE VALIDAR
+                if (window.datosOriginalesRecepcion?.fotos) {
+                    window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]] = null;
+                    console.log(`📸 datosOriginales actualizado: ${foto.campo} = null`);
+                }
+                if (window.fotosOriginalesRecepcion) {
+                    window.fotosOriginalesRecepcion[CAMPO_MAP[foto.campo]] = null;
+                    console.log(`📸 fotosOriginales actualizado: ${foto.campo} = null`);
                 }
                 
-                mostrarNotificacion(`📸 ${foto.label} eliminada - sube una nueva foto`, 'info');
+                // 🔥 ACTUALIZAR CONTADOR - FORZAR RECALCULO
+                setTimeout(() => {
+                    const completado = validarCompletadoFotos();
+                    console.log(`📸 Estado después de eliminar: ${completado ? 'COMPLETADO' : 'PENDIENTE'}`);
+                    
+                    // 🔥 SI ESTÁ EN MODO EDICIÓN, GUARDAR LA SESIÓN
+                    if (modoEdicionRecepcion && codigoSesion) {
+                        // Recolectar URLs restantes
+                        const fotosData = {};
+                        for (const f of FOTOS_CONFIG) {
+                            const div = document.getElementById(`upload-${f.id}`);
+                            let url = div?.getAttribute('data-drive-url') || 
+                                     div?.dataset?.driveUrl || 
+                                     fotosSubidasLocal[f.campo];
+                            if (url && url !== 'null' && url !== '' && url !== 'undefined') {
+                                fotosData[f.campo] = url;
+                            } else {
+                                // IMPORTANTE: Si no tiene URL, enviar null
+                                fotosData[f.campo] = null;
+                            }
+                        }
+                        console.log('📸 Guardando sesión con fotosData:', fotosData);
+                        guardarSeccion('fotos');
+                    }
+                }, 300);
                 
                 // 🔥 DESTACAR EL INPUT PARA QUE EL USUARIO SUBA UNA NUEVA FOTO
                 const inputFile = document.getElementById(foto.id);
@@ -3527,7 +3862,7 @@ window.logout = () => {
     window.location.href = `${window.API_BASE_URL}/`;
 };
 // =====================================================
-// CARGAR FOTOS EXISTENTES EN PARALELO (MUCHO MÁS RÁPIDO)
+// CARGAR FOTOS EXISTENTES EN PARALELO (CON DATA-DRIVE-URL CORRECTO)
 // =====================================================
 async function cargarFotosExistentes(fotos) {
     if (!fotos) return;
@@ -3617,9 +3952,17 @@ async function cargarFotosExistentes(fotos) {
                 preview.style.backgroundPosition = 'center';
                 preview.innerHTML = '';
                 uploadDiv.classList.add('has-image');
+                
+                // 🔥 GUARDAR LA URL EN EL DOM (IMPORTANTE PARA REEMPLAZO)
                 uploadDiv.setAttribute('data-drive-url', resultado.url);
                 uploadDiv.dataset.driveUrl = resultado.url;
                 fotosSubidasLocal[resultado.campo] = resultado.url;
+                
+                // 🔥 TAMBIÉN GUARDAR EN DATOS ORIGINALES PARA REFERENCIA
+                if (window.datosOriginalesRecepcion?.fotos) {
+                    window.datosOriginalesRecepcion.fotos[resultado.campoDB] = resultado.url;
+                }
+                
                 if (removeBtn) removeBtn.style.display = 'flex';
                 actualizarProgresoFoto(resultado.campo, 100, 'completed');
                 fotosCargadas++;

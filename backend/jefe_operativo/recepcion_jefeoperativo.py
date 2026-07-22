@@ -296,7 +296,8 @@ def ping():
             '/detalle-recepcion/<int:id_orden>', '/obtener-audio/<int:id_orden>',
             '/eliminar-recepcion/<int:id_orden>', '/generar-pdf-recepcion/<int:id_orden>',
             '/descargar-pdf-recepcion/<int:id_orden>', '/proxy-audio',
-            '/actualizar-recepcion/<int:id_orden>'
+            '/actualizar-recepcion/<int:id_orden>',  # 🔥 AGREGAR COMA
+            '/reemplazar-foto', '/eliminar-foto'
         ]
     }), 200
 
@@ -2424,11 +2425,7 @@ def proxy_audio(current_user):
 
 
 # =====================================================
-# ENDPOINT: ACTUALIZAR RECEPCIÓN (EDICIÓN) - CORREGIDO
-# =====================================================
-
-# =====================================================
-# ENDPOINT: ACTUALIZAR RECEPCIÓN (EDICIÓN) - COMPLETO
+# ENDPOINT: ACTUALIZAR RECEPCIÓN (EDICIÓN) - CORREGIDO DEFINITIVO
 # =====================================================
 
 @recepcion_jefe_bp.route('/actualizar-recepcion/<int:id_orden>', methods=['PUT'])
@@ -2444,6 +2441,7 @@ def actualizar_recepcion(current_user, id_orden):
             return jsonify({'error': 'Datos no proporcionados'}), 400
         
         logger.info(f"📝 Editando recepción {id_orden}")
+        logger.info(f"📝 Datos recibidos: {data.keys()}")
         
         # 1. OBTENER ORDEN DE TRABAJO
         orden_result = supabase.table('ordentrabajo') \
@@ -2478,7 +2476,10 @@ def actualizar_recepcion(current_user, id_orden):
         anio = vehiculo_data.get('anio')
         kilometraje = vehiculo_data.get('kilometraje', 0)
         
-        fotos = data.get('fotos', {})
+        # 🔥 OBTENER FOTOS DEL FRONTEND (pueden venir con claves cortas o largas)
+        fotos_frontend = data.get('fotos', {})
+        logger.info(f"📸 Fotos recibidas del frontend: {fotos_frontend}")
+        
         descripcion = data.get('descripcion', {})
         texto_descripcion = descripcion.get('texto', '')
         audio_url = descripcion.get('audio_url')
@@ -2532,116 +2533,137 @@ def actualizar_recepcion(current_user, id_orden):
             .execute()
         
         # =============================================
-        # 5. 🔥 VERIFICAR CARPETA EN DRIVE (USANDO codigo_unico PRIMERO)
+        # 5. 🔥 MAPEAR FOTOS CORRECTAMENTE PARA LA BASE DE DATOS
         # =============================================
-        carpeta_verificada = False
-        carpeta_id = None
         
-        try:
-            sesion_codigo = data.get('sesion_codigo')
-            
-            logger.info(f"📁 Buscando carpeta para: codigo_unico={codigo_unico}, sesion_codigo={sesion_codigo}")
-            
-            # 🔥 PRIMERO: Buscar por código de orden (el nombre actual de la carpeta)
-            if codigo_unico:
-                carpeta_id = google_drive.get_folder_id_by_name(codigo_unico)
-                if carpeta_id:
-                    logger.info(f"📁 Carpeta encontrada por código de orden: {codigo_unico} (ID: {carpeta_id})")
-                    carpeta_verificada = True
-            
-            # 🔥 SEGUNDO: Si no se encontró, buscar por código de sesión (nombre original)
-            if not carpeta_id and sesion_codigo:
-                carpeta_id = google_drive.get_folder_id_by_name(sesion_codigo)
-                if carpeta_id:
-                    logger.info(f"📁 Carpeta encontrada por código de sesión: {sesion_codigo} (ID: {carpeta_id})")
-                    # Renombrar la carpeta al código de la orden
-                    rename_result = google_drive.rename_folder(carpeta_id, codigo_unico)
-                    if rename_result:
-                        logger.info(f"📁 Carpeta renombrada: {sesion_codigo} -> {codigo_unico}")
-                        carpeta_verificada = True
-                    else:
-                        logger.warning(f"⚠️ No se pudo renombrar la carpeta {sesion_codigo}")
-            
-            # 🔥 TERCERO: Si no se encontró, buscar por coincidencia parcial
-            if not carpeta_id:
-                logger.info(f"📁 Buscando carpeta por coincidencia parcial...")
-                all_folders = google_drive.service.files().list(
-                    q="mimeType='application/vnd.google-apps.folder' and trashed=false",
-                    fields="files(id, name, parents)",
-                    pageSize=100
-                ).execute()
-                
-                for folder in all_folders.get('files', []):
-                    folder_name = folder.get('name', '')
-                    # Verificar si el nombre contiene el código o parte de él
-                    if codigo_unico and codigo_unico in folder_name:
-                        carpeta_id = folder.get('id')
-                        logger.info(f"📁 Carpeta encontrada por coincidencia: {folder_name} (ID: {carpeta_id})")
-                        # Renombrar si es necesario
-                        if folder_name != codigo_unico:
-                            rename_result = google_drive.rename_folder(carpeta_id, codigo_unico)
-                            if rename_result:
-                                logger.info(f"📁 Carpeta renombrada: {folder_name} -> {codigo_unico}")
-                        carpeta_verificada = True
-                        break
-            
-            # 🔥 CUARTO: Si aún no se encontró, crear la carpeta
-            if not carpeta_id and codigo_unico:
-                logger.info(f"📁 Creando carpeta para: {codigo_unico}")
-                folder_path = google_drive.generate_folder_path(
-                    modulo='recepcion',
-                    codigo_orden=codigo_unico
-                )
-                carpeta_id = google_drive._get_or_create_folder(folder_path)
-                if carpeta_id:
-                    carpeta_verificada = True
-                    logger.info(f"📁 Carpeta creada: {codigo_unico} (ID: {carpeta_id})")
+        # Mapeo de claves del frontend a claves de la base de datos
+        MAPEO_FOTOS = {
+            'lateral_izquierdo': 'url_lateral_izquierda',
+            'lateral_derecho': 'url_lateral_derecha',
+            'frontal': 'url_foto_frontal',
+            'trasera': 'url_foto_trasera',
+            'superior': 'url_foto_superior',
+            'inferior': 'url_foto_inferior',
+            'tablero': 'url_foto_tablero',
+            # También soportar claves ya mapeadas
+            'url_lateral_izquierda': 'url_lateral_izquierda',
+            'url_lateral_derecha': 'url_lateral_derecha',
+            'url_foto_frontal': 'url_foto_frontal',
+            'url_foto_trasera': 'url_foto_trasera',
+            'url_foto_superior': 'url_foto_superior',
+            'url_foto_inferior': 'url_foto_inferior',
+            'url_foto_tablero': 'url_foto_tablero'
+        }
+        
+        # 🔥 CONSTRUIR EL DICCIONARIO DE FOTOS PARA LA BD
+        fotos_para_bd = {}
+        
+        for key, value in fotos_frontend.items():
+            # Buscar el mapeo
+            if key in MAPEO_FOTOS:
+                db_key = MAPEO_FOTOS[key]
+                # Si el valor es válido, guardarlo; si no, None
+                if value and value != 'null' and value != 'None' and value != '' and value != 'undefined':
+                    fotos_para_bd[db_key] = value
+                    logger.info(f"📸 Mapeo: {key} -> {db_key} = {value[:50]}...")
                 else:
-                    logger.warning(f"⚠️ No se pudo crear la carpeta para {codigo_unico}")
-                    
-        except Exception as e:
-            logger.error(f"❌ Error verificando/creando carpeta: {str(e)}")
+                    fotos_para_bd[db_key] = None
+                    logger.info(f"📸 Mapeo: {key} -> {db_key} = None (eliminada)")
         
+        # Asegurar que todas las 7 fotos estén presentes
+        todas_las_claves = [
+            'url_lateral_izquierda',
+            'url_lateral_derecha',
+            'url_foto_frontal',
+            'url_foto_trasera',
+            'url_foto_superior',
+            'url_foto_inferior',
+            'url_foto_tablero'
+        ]
+        
+        for clave in todas_las_claves:
+            if clave not in fotos_para_bd:
+                # Si no está en el dict, buscar en el frontend con la clave corta
+                clave_corta = {
+                    'url_lateral_izquierda': 'lateral_izquierdo',
+                    'url_lateral_derecha': 'lateral_derecho',
+                    'url_foto_frontal': 'frontal',
+                    'url_foto_trasera': 'trasera',
+                    'url_foto_superior': 'superior',
+                    'url_foto_inferior': 'inferior',
+                    'url_foto_tablero': 'tablero'
+                }.get(clave)
+                
+                if clave_corta and clave_corta in fotos_frontend:
+                    value = fotos_frontend[clave_corta]
+                    if value and value != 'null' and value != 'None' and value != '' and value != 'undefined':
+                        fotos_para_bd[clave] = value
+                        logger.info(f"📸 Asignando {clave} desde {clave_corta}: {value[:50]}...")
+                else:
+                    # Buscar con la misma clave por si acaso
+                    if clave in fotos_frontend:
+                        value = fotos_frontend[clave]
+                        if value and value != 'null' and value != 'None' and value != '' and value != 'undefined':
+                            fotos_para_bd[clave] = value
+                            logger.info(f"📸 Asignando {clave} directamente: {value[:50]}...")
+        
+        logger.info(f"📸 Fotos FINALES para la BD: {fotos_para_bd}")
+        
+        # =============================================
         # 6. GUARDAR RECEPCIÓN
+        # =============================================
+        
+        # Verificar si ya existe recepción
+        recepcion_existente = supabase.table('recepcion') \
+            .select('id') \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
+        # Construir datos para la recepción
         recepcion_update = {
-            'url_lateral_izquierda': fotos.get('url_lateral_izquierda'),
-            'url_lateral_derecha': fotos.get('url_lateral_derecha'),
-            'url_foto_frontal': fotos.get('url_foto_frontal'),
-            'url_foto_trasera': fotos.get('url_foto_trasera'),
-            'url_foto_superior': fotos.get('url_foto_superior'),
-            'url_foto_inferior': fotos.get('url_foto_inferior'),
-            'url_foto_tablero': fotos.get('url_foto_tablero'),
             'transcripcion_problema': texto_descripcion
         }
         
-        if audio_url and audio_url != 'null' and audio_url != '':
+        # Agregar todas las fotos
+        for clave, valor in fotos_para_bd.items():
+            recepcion_update[clave] = valor
+        
+        # Agregar audio si existe
+        if audio_url and audio_url != 'null' and audio_url != '' and audio_url != 'undefined':
             recepcion_update['url_grabacion_problema'] = audio_url
+            logger.info(f"🎵 Guardando audio: {audio_url[:50]}...")
         
-        # Solo actualizar campos que tengan valor
-        recepcion_update_limpia = {}
-        for key, value in recepcion_update.items():
-            if value and value != 'null' and value != 'None' and value != '':
-                recepcion_update_limpia[key] = value
+        logger.info(f"📸 Datos FINALES a guardar: {recepcion_update}")
         
-        if recepcion_update_limpia:
-            supabase.table('recepcion') \
-                .update(recepcion_update_limpia) \
+        # 🔥 GUARDAR O ACTUALIZAR
+        if recepcion_existente.data:
+            # Actualizar recepción existente
+            result = supabase.table('recepcion') \
+                .update(recepcion_update) \
                 .eq('id_orden_trabajo', id_orden) \
                 .execute()
-        
-        logger.info(f"✅ Recepción {codigo_unico} actualizada correctamente")
+            logger.info(f"✅ Recepción actualizada para orden {id_orden}")
+        else:
+            # Crear nueva recepción
+            recepcion_update['id_orden_trabajo'] = id_orden
+            result = supabase.table('recepcion') \
+                .insert(recepcion_update) \
+                .execute()
+            logger.info(f"✅ Recepción creada para orden {id_orden}")
         
         # Contar fotos guardadas
-        fotos_guardadas = sum(1 for v in fotos.values() if v and v != 'null' and v != '')
-        logger.info(f"📸 Fotos: {fotos_guardadas}/7")
+        fotos_guardadas = sum(1 for v in recepcion_update.values() 
+                             if v and v != 'null' and v != '' and v != 'undefined' 
+                             and v != 'url_grabacion_problema' and v != 'transcripcion_problema'
+                             and v != 'id_orden_trabajo')
+        logger.info(f"📸 Fotos guardadas: {fotos_guardadas}/7")
         
         return jsonify({
             'success': True,
             'message': 'Recepción actualizada exitosamente',
             'codigo_unico': codigo_unico,
-            'carpeta_verificada': carpeta_verificada,
-            'carpeta_id': carpeta_id,
-            'fotos_guardadas': fotos_guardadas
+            'fotos_guardadas': fotos_guardadas,
+            'fotos': fotos_para_bd
         }), 200
         
     except Exception as e:
@@ -2649,16 +2671,18 @@ def actualizar_recepcion(current_user, id_orden):
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
-
 # =====================================================
-# ENDPOINT: REEMPLAZAR FOTO EN DRIVE
+# ENDPOINT: REEMPLAZAR FOTO EN DRIVE (ELIMINA Y SUBE)
 # =====================================================
 
 @recepcion_jefe_bp.route('/reemplazar-foto', methods=['POST'])
 @jefe_operativo_required
 def reemplazar_foto_drive(current_user):
     """
-    Reemplaza una foto existente en Drive (elimina la anterior y sube la nueva)
+    Reemplaza una foto existente en Drive:
+    1. Elimina la foto anterior
+    2. Sube la nueva foto
+    3. Actualiza la sesión
     """
     try:
         from google_drive import google_drive
@@ -2668,54 +2692,201 @@ def reemplazar_foto_drive(current_user):
         campo = request.form.get('campo')
         url_anterior = request.form.get('url_anterior')
         codigo_orden = request.form.get('codigo_orden')
+        codigo_sesion = request.form.get('codigo_sesion')
+        carpeta = request.form.get('carpeta', 'recepcion')
         
+        # 🔥 VALIDACIONES
         if not file:
             return jsonify({'error': 'No se envió el archivo'}), 400
         
         if not campo:
             return jsonify({'error': 'No se especificó el campo'}), 400
         
-        # 1. ELIMINAR FOTO ANTERIOR SI EXISTE
-        if url_anterior and url_anterior != 'null' and url_anterior != '':
+        logger.info(f"🔄 Reemplazando foto: campo={campo}")
+        logger.info(f"   URL anterior: {url_anterior[:80] if url_anterior else 'None'}...")
+        logger.info(f"   Código orden: {codigo_orden}")
+        logger.info(f"   Código sesión: {codigo_sesion}")
+        
+        # =============================================
+        # 1. ELIMINAR FOTO ANTERIOR
+        # =============================================
+        foto_eliminada = False
+        if url_anterior and url_anterior != 'null' and url_anterior != '' and url_anterior != 'undefined':
             try:
+                # Extraer file_id de la URL
                 file_id = google_drive.extract_file_id_from_url(url_anterior)
                 if file_id:
-                    google_drive.delete_file(file_id)
-                    logger.info(f"🗑️ Foto anterior eliminada: {file_id}")
+                    # Verificar si el archivo existe antes de eliminar
+                    if google_drive.file_exists(file_id):
+                        delete_result = google_drive.delete_file(file_id)
+                        if delete_result:
+                            foto_eliminada = True
+                            logger.info(f"🗑️ Foto anterior eliminada: {file_id}")
+                        else:
+                            logger.warning(f"⚠️ No se pudo eliminar foto: {file_id}")
+                    else:
+                        logger.info(f"ℹ️ La foto ya no existe en Drive: {file_id}")
+                        foto_eliminada = True  # Considerar como éxito
+                else:
+                    logger.warning(f"⚠️ No se pudo extraer file_id de: {url_anterior[:50]}...")
             except Exception as e:
-                logger.warning(f"⚠️ No se pudo eliminar foto anterior: {e}")
+                logger.warning(f"⚠️ Error eliminando foto anterior: {str(e)}")
+        else:
+            logger.info("ℹ️ No hay foto anterior para eliminar (subida nueva)")
         
+        # =============================================
         # 2. SUBIR NUEVA FOTO
+        # =============================================
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         user_id = current_user['id']
         filename = f"{campo}_{user_id}_{timestamp}.jpg"
         
-        # Usar el código de orden para la carpeta
-        referencia = codigo_orden or 'recepcion'
+        # Determinar referencia para la carpeta
+        referencia = codigo_orden or codigo_sesion or 'recepcion'
         
+        # Generar ruta de carpeta
         folder_path = google_drive.generate_folder_path(
             modulo='recepcion',
-            referencia_id=referencia,
+            codigo_orden=referencia,
             subcarpeta='fotos'
         )
+        
+        logger.info(f"📁 Subiendo nueva foto a: {folder_path}")
         
         result = google_drive.upload_file(
             file_data=file,
             filename=filename,
-            folder_path=folder_path
+            folder_path=folder_path,
+            public=True
         )
         
         url = result['url']
-        logger.info(f"📸 Foto reemplazada: {url}")
+        file_id = result['id']
+        logger.info(f"📸 Nueva foto subida: {file_id} - {url[:50]}...")
+        
+        # =============================================
+        # 3. ACTUALIZAR SESIÓN EN MEMORIA Y BD
+        # =============================================
+        # Mapeo de campos
+        campo_map = {
+            'lateral_izquierdo': 'url_lateral_izquierda',
+            'lateral_derecho': 'url_lateral_derecha',
+            'frontal': 'url_foto_frontal',
+            'trasera': 'url_foto_trasera',
+            'superior': 'url_foto_superior',
+            'inferior': 'url_foto_inferior',
+            'tablero': 'url_foto_tablero'
+        }
+        campo_db = campo_map.get(campo, campo)
+        
+        sesion_actualizada = False
+        
+        # Buscar en sesiones activas
+        for sesion_codigo, sesion in sesiones_activas.items():
+            if sesion.get('estado') != 'activa':
+                continue
+            
+            # Verificar si esta sesión tiene la foto anterior
+            if 'datos' in sesion and 'fotos' in sesion['datos']:
+                foto_actual = sesion['datos']['fotos'].get(campo_db)
+                
+                # Si coincide con la URL anterior o es la sesión que buscamos
+                if foto_actual == url_anterior or sesion_codigo == codigo_sesion:
+                    # Actualizar la foto
+                    sesion['datos']['fotos'][campo_db] = url
+                    
+                    # Recalcular fotos válidas
+                    fotos = sesion['datos']['fotos']
+                    fotos_validas = sum(1 for v in fotos.values() 
+                                       if v and v != 'null' and v != '' and v != 'undefined')
+                    sesion['secciones_completadas']['fotos'] = fotos_validas == 7
+                    
+                    # Guardar en BD
+                    guardar_sesion_en_db(sesion)
+                    sesion_actualizada = True
+                    logger.info(f"📸 Sesión {sesion_codigo} actualizada: {fotos_validas}/7 fotos")
+                    break
+        
+        # Si no se encontró la sesión, intentar guardar en la sesión actual
+        if not sesion_actualizada and codigo_sesion and codigo_sesion in sesiones_activas:
+            sesion = sesiones_activas[codigo_sesion]
+            if 'datos' not in sesion:
+                sesion['datos'] = {}
+            if 'fotos' not in sesion['datos']:
+                sesion['datos']['fotos'] = {}
+            sesion['datos']['fotos'][campo_db] = url
+            guardar_sesion_en_db(sesion)
+            sesion_actualizada = True
+            logger.info(f"📸 Sesión {codigo_sesion} actualizada directamente")
+        
+        logger.info(f"✅ Foto reemplazada exitosamente: {campo}")
+        logger.info(f"   Eliminada: {foto_eliminada}")
+        logger.info(f"   Nueva URL: {url[:50]}...")
         
         return jsonify({
             'success': True,
             'url': url,
-            'id': result['id'],
-            'web_view_link': result['web_view_link'],
+            'id': file_id,
+            'web_view_link': result.get('web_view_link'),
+            'foto_eliminada': foto_eliminada,
+            'sesion_actualizada': sesion_actualizada,
             'message': 'Foto reemplazada exitosamente'
         })
         
     except Exception as e:
         logger.error(f"❌ Error reemplazando foto: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# =====================================================
+# ENDPOINT: ELIMINAR FOTO INDIVIDUAL DE DRIVE
+# =====================================================
+
+@recepcion_jefe_bp.route('/eliminar-foto', methods=['POST'])
+@jefe_operativo_required
+def eliminar_foto_drive(current_user):
+    """
+    Elimina una foto específica de Google Drive por su URL
+    """
+    try:
+        from google_drive import google_drive
+        
+        data = request.get_json()
+        url = data.get('url')
+        
+        if not url:
+            return jsonify({'error': 'URL requerida'}), 400
+        
+        logger.info(f"🗑️ Eliminando foto de Drive: {url[:50]}...")
+        
+        # Extraer file_id de la URL
+        file_id = google_drive.extract_file_id_from_url(url)
+        if not file_id:
+            return jsonify({'error': 'No se pudo extraer el ID del archivo'}), 400
+        
+        # Eliminar el archivo
+        result = google_drive.delete_file(file_id)
+        
+        if result:
+            logger.info(f"✅ Foto eliminada de Drive: {file_id}")
+            return jsonify({
+                'success': True,
+                'message': 'Foto eliminada de Drive exitosamente',
+                'file_id': file_id
+            })
+        else:
+            logger.warning(f"⚠️ No se pudo eliminar la foto: {file_id}")
+            return jsonify({
+                'success': False,
+                'error': 'Error al eliminar la foto de Drive'
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"❌ Error eliminando foto: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500

@@ -2,6 +2,7 @@
 # GOOGLE DRIVE - CON OAUTH 2.0 VÍA VARIABLES DE ENTORNO
 # ESTRUCTURA: S-XXXXX/{modulo}/{subcarpeta}
 # VERSIÓN MEJORADA CON RENOVACIÓN AUTOMÁTICA DE TOKENS
+# Y SOPORTE PARA ELIMINAR/REEMPLAZAR ARCHIVOS
 # =====================================================
 
 import os
@@ -11,6 +12,7 @@ import mimetypes
 import time
 import socket
 import ssl
+import re
 from datetime import datetime
 from pathlib import Path
 from google.auth.transport.requests import Request
@@ -54,6 +56,10 @@ class GoogleDriveService:
         self._token_file = Path(__file__).parent / 'token.pickle'
         if app:
             self.init_app(app)
+    
+    # =====================================================
+    # GESTIÓN DE TOKENS
+    # =====================================================
     
     def _ensure_valid_token(self):
         """
@@ -153,6 +159,10 @@ class GoogleDriveService:
         except Exception as e:
             logger.warning(f"⚠️ No se pudo guardar token: {str(e)}")
     
+    # =====================================================
+    # INICIALIZACIÓN
+    # =====================================================
+    
     def init_app(self, app):
         """
         Inicializa el servicio con variables de entorno
@@ -237,7 +247,7 @@ class GoogleDriveService:
                 raise
     
     # =====================================================
-    # FUNCIÓN PARA SUBIR ARCHIVOS (MEJORADA)
+    # SUBIR ARCHIVOS
     # =====================================================
     
     def upload_file(self, file_data, filename, folder_path=None, mime_type=None, 
@@ -344,7 +354,7 @@ class GoogleDriveService:
         raise last_error or Exception("Error desconocido al subir archivo")
     
     # =====================================================
-    # FUNCIONES PARA MANEJAR CARPETAS
+    # GESTIÓN DE CARPETAS
     # =====================================================
     
     def _get_or_create_folder(self, folder_path):
@@ -422,7 +432,7 @@ class GoogleDriveService:
         return value
     
     # =====================================================
-    # FUNCIÓN PARA GENERAR RUTAS (NUEVA ESTRUCTURA)
+    # GENERAR RUTAS
     # =====================================================
     
     def generate_folder_path(self, modulo, codigo_orden=None, referencia_id=None, 
@@ -478,7 +488,7 @@ class GoogleDriveService:
         return '/'.join(path_parts)
     
     # =====================================================
-    # FUNCIÓN PARA RENOMBRAR CARPETAS
+    # RENOMBRAR CARPETAS
     # =====================================================
     
     def rename_folder(self, folder_id, new_name):
@@ -511,7 +521,7 @@ class GoogleDriveService:
             return False
     
     # =====================================================
-    # FUNCIÓN PARA BUSCAR CARPETA POR NOMBRE
+    # BUSCAR CARPETAS
     # =====================================================
     
     def get_folder_id_by_name(self, folder_name, parent_id=None):
@@ -562,7 +572,7 @@ class GoogleDriveService:
             return None
     
     # =====================================================
-    # FUNCIÓN PARA ELIMINAR CARPETAS (CORREGIDA)
+    # ELIMINAR CARPETAS
     # =====================================================
     
     def delete_folder(self, folder_id):
@@ -606,7 +616,151 @@ class GoogleDriveService:
             return False
     
     # =====================================================
-    # FUNCIONES PARA COMPARTIR
+    # ELIMINAR ARCHIVOS (NUEVO - PARA REEMPLAZO DE FOTOS)
+    # =====================================================
+    
+    def delete_file(self, file_id):
+        """
+        Elimina un archivo de Google Drive por su ID
+        
+        Args:
+            file_id: ID del archivo a eliminar
+        
+        Returns:
+            bool: True si se eliminó correctamente
+        """
+        try:
+            # 🔥 Asegurar token válido
+            self._ensure_valid_token()
+            
+            self.service.files().delete(fileId=file_id).execute()
+            logger.info(f"🗑️ Archivo eliminado de Drive: {file_id}")
+            return True
+        except HttpError as e:
+            if e.resp.status == 404:
+                logger.warning(f"⚠️ Archivo no encontrado (ya eliminado): {file_id}")
+                return True  # Considerar como éxito si ya no existe
+            logger.error(f"❌ Error eliminando archivo {file_id}: {str(e)}")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Error eliminando archivo {file_id}: {str(e)}")
+            return False
+    
+    def delete_file_by_url(self, url):
+        """
+        Elimina un archivo usando su URL de Google Drive
+        
+        Args:
+            url: URL del archivo en Google Drive
+        
+        Returns:
+            bool: True si se eliminó correctamente
+        """
+        file_id = self.extract_file_id_from_url(url)
+        if not file_id:
+            logger.warning(f"⚠️ No se pudo extraer ID de: {url[:50]}...")
+            return False
+        return self.delete_file(file_id)
+    
+    # =====================================================
+    # EXTRAER FILE_ID DE URL (NUEVO - PARA REEMPLAZO)
+    # =====================================================
+    
+    def extract_file_id_from_url(self, url):
+        """
+        Extrae el file_id de una URL de Google Drive
+        SOPORTA MÚLTIPLES FORMATOS
+        
+        Args:
+            url: URL de Google Drive
+        
+        Returns:
+            str: file_id o None si no se pudo extraer
+        """
+        if not url:
+            return None
+        
+        url = url.strip()
+        
+        # Formato 1: https://drive.google.com/uc?export=view&id=XXX
+        match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', url)
+        if match:
+            return match.group(1)
+        
+        # Formato 2: https://drive.google.com/file/d/XXX/view
+        match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', url)
+        if match:
+            return match.group(1)
+        
+        # Formato 3: https://drive.google.com/open?id=XXX
+        match = re.search(r'open\?id=([a-zA-Z0-9_-]+)', url)
+        if match:
+            return match.group(1)
+        
+        # Formato 4: https://drive.google.com/thumbnail?id=XXX&sz=w800
+        match = re.search(r'id=([a-zA-Z0-9_-]+)', url)
+        if match:
+            return match.group(1)
+        
+        # Formato 5: ID directo (si es solo el ID)
+        if re.match(r'^[a-zA-Z0-9_-]{10,}$', url):
+            return url
+        
+        return None
+    
+    # =====================================================
+    # VERIFICAR EXISTENCIA DE ARCHIVOS (NUEVO)
+    # =====================================================
+    
+    def file_exists(self, file_id):
+        """
+        Verifica si un archivo existe en Google Drive
+        
+        Args:
+            file_id: ID del archivo
+        
+        Returns:
+            bool: True si existe, False si no
+        """
+        try:
+            self._ensure_valid_token()
+            self.service.files().get(fileId=file_id, fields='id').execute()
+            return True
+        except HttpError as e:
+            if e.resp.status == 404:
+                return False
+            logger.warning(f"⚠️ Error verificando archivo {file_id}: {str(e)}")
+            return False
+        except Exception as e:
+            logger.warning(f"⚠️ Error verificando archivo {file_id}: {str(e)}")
+            return False
+    
+    def get_file_metadata(self, file_id):
+        """
+        Obtiene los metadatos de un archivo en Google Drive
+        
+        Args:
+            file_id: ID del archivo
+        
+        Returns:
+            dict: Metadatos del archivo o None si hay error
+        """
+        try:
+            self._ensure_valid_token()
+            file = self.service.files().get(
+                fileId=file_id,
+                fields='id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents'
+            ).execute()
+            return file
+        except HttpError as e:
+            logger.error(f"❌ Error obteniendo metadatos {file_id}: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Error obteniendo metadatos {file_id}: {str(e)}")
+            return None
+    
+    # =====================================================
+    # COMPARTIR ARCHIVOS
     # =====================================================
     
     def _set_file_public(self, file_id):
@@ -648,57 +802,7 @@ class GoogleDriveService:
             logger.warning(f"⚠️ No se pudo compartir el archivo con {email}: {str(e)}")
     
     # =====================================================
-    # FUNCIONES PARA ELIMINAR ARCHIVOS
-    # =====================================================
-    
-    def delete_file(self, file_id):
-        """Elimina un archivo de Google Drive"""
-        try:
-            # 🔥 Asegurar token válido
-            self._ensure_valid_token()
-            
-            self.service.files().delete(fileId=file_id).execute()
-            logger.info(f"🗑️ Archivo eliminado: {file_id}")
-            return True
-        except HttpError as e:
-            logger.error(f"❌ Error eliminando archivo {file_id}: {str(e)}")
-            return False
-    
-    def delete_file_by_url(self, url):
-        """Elimina un archivo usando su URL"""
-        file_id = self.extract_file_id_from_url(url)
-        if not file_id:
-            return False
-        return self.delete_file(file_id)
-    
-    # =====================================================
-    # FUNCIONES DE UTILIDAD
-    # =====================================================
-    
-    @staticmethod
-    def extract_file_id_from_url(url):
-        """Extrae el ID de un archivo de Google Drive desde su URL"""
-        if not url:
-            return None
-        
-        # Formato: https://drive.google.com/uc?export=view&id=XXX
-        if 'id=' in url:
-            return url.split('id=')[-1].split('&')[0]
-        
-        # Formato: https://drive.google.com/file/d/XXX/view
-        if '/d/' in url:
-            parts = url.split('/d/')
-            if len(parts) > 1:
-                return parts[1].split('/')[0]
-        
-        # Formato: https://drive.google.com/open?id=XXX
-        if 'open?id=' in url:
-            return url.split('open?id=')[-1].split('&')[0]
-        
-        return None
-    
-    # =====================================================
-    # MÉTODO PARA VERIFICAR ESTADO DEL TOKEN
+    # ESTADO DEL TOKEN
     # =====================================================
     
     def get_token_status(self):
@@ -722,6 +826,7 @@ class GoogleDriveService:
             'has_refresh_token': bool(self._creds.refresh_token),
             'expired': self._creds.expired
         }
+
 
 # =====================================================
 # INSTANCIA GLOBAL

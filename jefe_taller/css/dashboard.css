@@ -687,7 +687,7 @@ body {
 }
 
 /* =====================================================
-   LISTAS (DIAGNÓSTICOS, ENTREGAS, VEHÍCULOS)
+   LISTAS (DIAGNÓSTICOS, ENTREGAS)
    ===================================================== */
 .diagnosticos-list,
 .entregas-list {
@@ -773,12 +773,41 @@ body {
 }
 
 /* =====================================================
-   VEHÍCULOS EN TALLER
+   VEHÍCULOS EN TALLER - CON SCROLL
    ===================================================== */
 .vehiculos-taller-list {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    max-height: 260px;
+    overflow-y: auto;
+    padding-right: 4px;
+    scroll-behavior: smooth;
+}
+
+/* Scroll personalizado para la lista de vehículos */
+.vehiculos-taller-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.vehiculos-taller-list::-webkit-scrollbar-track {
+    background: var(--gris-oscuro);
+    border-radius: 10px;
+}
+
+.vehiculos-taller-list::-webkit-scrollbar-thumb {
+    background: var(--rojo-primario);
+    border-radius: 10px;
+}
+
+.vehiculos-taller-list::-webkit-scrollbar-thumb:hover {
+    background: var(--rojo-oscuro);
+}
+
+/* Firefox */
+.vehiculos-taller-list {
+    scrollbar-width: thin;
+    scrollbar-color: var(--rojo-primario) var(--gris-oscuro);
 }
 
 .vehiculo-taller-item {
@@ -791,6 +820,7 @@ body {
     transition: var(--transition);
     border: 1px solid var(--border-color);
     cursor: pointer;
+    flex-shrink: 0;
 }
 
 .vehiculo-taller-item:hover {
@@ -813,6 +843,7 @@ body {
 
 .vehiculo-taller-info {
     flex: 1;
+    min-width: 0;
 }
 
 .vehiculo-taller-placa {
@@ -841,6 +872,7 @@ body {
     border-radius: var(--radius-full);
     background: rgba(16, 185, 129, 0.15);
     color: var(--verde-exito);
+    flex-shrink: 0;
 }
 
 /* =====================================================
@@ -1173,7 +1205,7 @@ body {
 }
 
 /* =====================================================
-   SCROLLBAR
+   SCROLLBAR GLOBAL
    ===================================================== */
 ::-webkit-scrollbar {
     width: 6px;
@@ -1286,6 +1318,11 @@ body {
     .modal-body {
         padding: 1rem;
     }
+
+    /* Ajuste del scroll en móvil */
+    .vehiculos-taller-list {
+        max-height: 180px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -1307,6 +1344,10 @@ body {
     
     .modal-header h3 {
         font-size: 1rem;
+    }
+
+    .vehiculos-taller-list {
+        max-height: 150px;
     }
 }
 

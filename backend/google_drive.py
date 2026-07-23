@@ -24,11 +24,12 @@ from googleapiclient.http import MediaIoBaseUpload
 from googleapiclient.errors import HttpError
 from flask import current_app
 import logging
+import torch
 
 logger = logging.getLogger(__name__)
 
 # =====================================================
-# WHISPER - TRANSCRIPCIÓN DE AUDIO
+# WHISPER - TRANSCRIPCIÓN DE AUDIO (OPTIMIZADO PARA RENDER)
 # =====================================================
 try:
     import whisper
@@ -51,29 +52,114 @@ MAX_RETRIES = 3
 RETRY_DELAY = 2
 UPLOAD_TIMEOUT = 120
 
-# Configuración de Whisper
-WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'base')  # tiny, base, small, medium, large
-WHISPER_LANGUAGE = os.getenv('WHISPER_LANGUAGE', 'es')  # es, en, etc.
+# =====================================================
+# CONFIGURACIÓN DE WHISPER - OPTIMIZADA PARA RENDER
+# =====================================================
+# 🔥 RUTA DEL DISCO PERSISTENTE EN RENDER
+CACHE_DIR = os.getenv('WHISPER_CACHE_DIR', '/app/.cache/whisper')
+os.makedirs(CACHE_DIR, exist_ok=True)
 
-# Cargar modelo Whisper una sola vez (lazy loading)
+# 🔥 FORZAR WHISPER A USAR EL CACHÉ PERSISTENTE
+os.environ['XDG_CACHE_HOME'] = '/app/.cache'
+
+# 🔥 CONFIGURACIÓN OPTIMIZADA PARA 512 MB RAM
+WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'tiny')  # tiny = ~150-200 MB RAM
+WHISPER_LANGUAGE = os.getenv('WHISPER_LANGUAGE', 'es')
+WHISPER_USE_FP16 = os.getenv('WHISPER_USE_FP16', 'true').lower() == 'true'
+WHISPER_DEVICE = os.getenv('WHISPER_DEVICE', 'cpu')
+
+# 🔥 VARIABLE GLOBAL PARA MANTENER EL MODELO EN MEMORIA
 _whisper_model = None
+_whisper_model_loaded = False
+_whisper_load_error = None
+
+logger.info(f"🎙️ Configuración Whisper:")
+logger.info(f"   📁 Caché: {CACHE_DIR}")
+logger.info(f"   📦 Modelo: {WHISPER_MODEL}")
+logger.info(f"   🔢 FP16: {WHISPER_USE_FP16}")
+logger.info(f"   💻 Dispositivo: {WHISPER_DEVICE}")
+
 
 def get_whisper_model():
-    """Carga el modelo Whisper de forma lazy (solo cuando se necesita)"""
-    global _whisper_model
+    """
+    Carga el modelo Whisper UNA SOLA VEZ y lo mantiene en memoria.
+    Usa el disco persistente de Render para el caché.
+    """
+    global _whisper_model, _whisper_model_loaded, _whisper_load_error
+    
     if not WHISPER_AVAILABLE:
+        logger.warning("⚠️ Whisper no está disponible")
         return None
     
-    if _whisper_model is None:
-        try:
-            logger.info(f"🎙️ Cargando modelo Whisper '{WHISPER_MODEL}'...")
-            _whisper_model = whisper.load_model(WHISPER_MODEL)
-            logger.info(f"✅ Modelo Whisper '{WHISPER_MODEL}' cargado correctamente")
-        except Exception as e:
-            logger.error(f"❌ Error cargando modelo Whisper: {str(e)}")
-            return None
+    # 🔥 SI YA ESTÁ CARGADO, DEVOLVERLO INMEDIATAMENTE
+    if _whisper_model_loaded and _whisper_model is not None:
+        logger.debug("🎙️ Modelo Whisper ya cargado, reutilizando...")
+        return _whisper_model
     
-    return _whisper_model
+    # Si hubo un error previo, no intentar de nuevo
+    if _whisper_load_error:
+        logger.warning(f"⚠️ Modelo Whisper falló previamente: {_whisper_load_error}")
+        return None
+    
+    try:
+        logger.info(f"🎙️ Cargando modelo Whisper '{WHISPER_MODEL}' por primera vez...")
+        logger.info(f"   📁 Desde caché: {CACHE_DIR}")
+        logger.info(f"   🔢 FP16: {WHISPER_USE_FP16}")
+        logger.info(f"   💻 Dispositivo: {WHISPER_DEVICE}")
+        
+        # 🔥 CARGAR MODELO (esto solo ocurre UNA VEZ)
+        _whisper_model = whisper.load_model(
+            WHISPER_MODEL,
+            device=WHISPER_DEVICE,
+            download_root=CACHE_DIR  # 🔥 USA EL DISCO PERSISTENTE
+        )
+        
+        # 🔥 CONVERTIR A FP16 PARA AHORRAR MEMORIA (mitad de RAM)
+        if WHISPER_USE_FP16:
+            try:
+                _whisper_model = _whisper_model.half()
+                logger.info("✅ Modelo convertido a FP16 (mitad de memoria)")
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo convertir a FP16: {e}")
+        
+        _whisper_model_loaded = True
+        _whisper_load_error = None
+        
+        # 🔥 ESTIMAR MEMORIA USADA
+        try:
+            if WHISPER_DEVICE == 'cuda' and torch.cuda.is_available():
+                mem = torch.cuda.memory_allocated() / (1024**3)
+                logger.info(f"💾 Memoria GPU usada: {mem:.2f} GB")
+            else:
+                logger.info(f"💾 Modelo cargado en CPU (memoria: ~150-200 MB)")
+        except:
+            pass
+        
+        logger.info(f"✅ Modelo Whisper '{WHISPER_MODEL}' listo para usar")
+        return _whisper_model
+        
+    except Exception as e:
+        _whisper_load_error = str(e)
+        logger.error(f"❌ Error cargando modelo Whisper: {str(e)}")
+        return None
+
+
+def limpiar_modelo_whisper():
+    """
+    🔥 OPCIÓN: Libera el modelo de memoria si es necesario
+    (útil si quieres liberar RAM después de usarlo)
+    """
+    global _whisper_model, _whisper_model_loaded
+    if _whisper_model is not None:
+        try:
+            del _whisper_model
+            if WHISPER_DEVICE == 'cuda':
+                torch.cuda.empty_cache()
+            _whisper_model = None
+            _whisper_model_loaded = False
+            logger.info("🧹 Modelo Whisper liberado de memoria")
+        except:
+            pass
 
 
 # =====================================================
@@ -799,25 +885,21 @@ class GoogleDriveService:
             return None
     
     # =====================================================
-    # TRANSCRIPCIÓN DE AUDIO CON WHISPER
+    # TRANSCRIPCIÓN DE AUDIO CON WHISPER (OPTIMIZADO)
     # =====================================================
     
     def transcribir_audio(self, url_audio, language=None, model_name=None):
         """
         Descarga un audio desde una URL y lo transcribe usando Whisper.
+        🔥 USA EL MODELO EN CACHÉ (no lo recarga)
         
         Args:
             url_audio (str): URL del audio en Google Drive
-            language (str): Código de idioma (ej: 'es', 'en'). Por defecto usa WHISPER_LANGUAGE
-            model_name (str): Nombre del modelo (ej: 'tiny', 'base', 'small'). 
-                              Por defecto usa WHISPER_MODEL
+            language (str): Código de idioma (ej: 'es', 'en')
+            model_name (str): Nombre del modelo (ej: 'tiny', 'base', 'small')
         
         Returns:
-            dict: {
-                'success': bool,
-                'transcripcion': str (texto transcrito),
-                'error': str (mensaje de error si falló)
-            }
+            dict: {'success': bool, 'transcripcion': str, 'error': str}
         """
         if not WHISPER_AVAILABLE:
             return {
@@ -825,7 +907,6 @@ class GoogleDriveService:
                 'error': 'Whisper no está instalado. Ejecuta: pip install openai-whisper'
             }
         
-        # Verificar que la URL es válida
         if not url_audio:
             return {
                 'success': False,
@@ -840,14 +921,11 @@ class GoogleDriveService:
                 'error': f'No se pudo extraer el ID del archivo de: {url_audio[:50]}...'
             }
         
-        # Usar URL de descarga
         download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-        
-        # Configurar parámetros
         language = language or WHISPER_LANGUAGE
         model_name = model_name or WHISPER_MODEL
         
-        # Cargar modelo
+        # 🔥 OBTENER EL MODELO (USA EL CACHÉ EN MEMORIA)
         model = get_whisper_model()
         if model is None:
             return {
@@ -860,25 +938,23 @@ class GoogleDriveService:
         try:
             logger.info(f"🎙️ Descargando audio desde: {download_url}")
             
-            # Descargar audio
             response = http_requests.get(download_url, timeout=60)
             response.raise_for_status()
             
-            # Guardar en archivo temporal
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
                 tmp.write(response.content)
                 temp_file = tmp.name
             
             logger.info(f"🎙️ Audio descargado: {temp_file} ({len(response.content)} bytes)")
-            
-            # Transcribir con Whisper
             logger.info(f"🎙️ Transcribiendo con modelo '{model_name}', idioma '{language}'...")
             
+            # 🔥 TRANSCRIBIR (usa el modelo ya cargado en memoria)
             result = model.transcribe(
                 temp_file,
                 language=language,
                 task='transcribe',
-                verbose=False
+                verbose=False,
+                fp16=WHISPER_USE_FP16  # Usa FP16 si está habilitado
             )
             
             texto = result.get('text', '').strip()
@@ -906,7 +982,6 @@ class GoogleDriveService:
                 'error': f'Error transcribiendo audio: {str(e)}'
             }
         finally:
-            # Limpiar archivo temporal
             if temp_file and os.path.exists(temp_file):
                 try:
                     os.unlink(temp_file)
@@ -917,6 +992,7 @@ class GoogleDriveService:
     def transcribir_audio_desde_file(self, file_data, filename=None, language=None, model_name=None):
         """
         Transcribe un audio directamente desde un objeto de archivo (FileStorage o bytes)
+        🔥 USA EL MODELO EN CACHÉ (no lo recarga)
         
         Args:
             file_data: FileStorage de Flask o bytes
@@ -933,7 +1009,7 @@ class GoogleDriveService:
                 'error': 'Whisper no está instalado'
             }
         
-        # Cargar modelo
+        # 🔥 OBTENER EL MODELO (USA EL CACHÉ EN MEMORIA)
         model = get_whisper_model()
         if model is None:
             return {
@@ -947,10 +1023,8 @@ class GoogleDriveService:
         temp_file = None
         
         try:
-            # Guardar en archivo temporal
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
                 if hasattr(file_data, 'read'):
-                    # FileStorage de Flask
                     file_data.seek(0)
                     tmp.write(file_data.read())
                 elif isinstance(file_data, bytes):
@@ -964,12 +1038,13 @@ class GoogleDriveService:
             
             logger.info(f"🎙️ Archivo temporal creado: {temp_file}")
             
-            # Transcribir con Whisper
+            # 🔥 TRANSCRIBIR (usa el modelo ya cargado en memoria)
             result = model.transcribe(
                 temp_file,
                 language=language,
                 task='transcribe',
-                verbose=False
+                verbose=False,
+                fp16=WHISPER_USE_FP16
             )
             
             texto = result.get('text', '').strip()
@@ -990,7 +1065,6 @@ class GoogleDriveService:
                 'error': f'Error transcribiendo audio: {str(e)}'
             }
         finally:
-            # Limpiar archivo temporal
             if temp_file and os.path.exists(temp_file):
                 try:
                     os.unlink(temp_file)
@@ -1070,15 +1144,19 @@ class GoogleDriveService:
         Retorna el estado de Whisper
         
         Returns:
-            dict: {available, model_loaded, model_name}
+            dict: {available, model_loaded, model_name, language, device, fp16, cache_dir}
         """
-        model_loaded = _whisper_model is not None
+        global _whisper_model_loaded, _whisper_load_error
         
         return {
             'available': WHISPER_AVAILABLE,
-            'model_loaded': model_loaded,
+            'model_loaded': _whisper_model_loaded,
             'model_name': WHISPER_MODEL if WHISPER_AVAILABLE else None,
-            'language': WHISPER_LANGUAGE if WHISPER_AVAILABLE else None
+            'language': WHISPER_LANGUAGE if WHISPER_AVAILABLE else None,
+            'device': WHISPER_DEVICE if WHISPER_AVAILABLE else None,
+            'fp16': WHISPER_USE_FP16 if WHISPER_AVAILABLE else None,
+            'cache_dir': CACHE_DIR if WHISPER_AVAILABLE else None,
+            'error': _whisper_load_error
         }
 
 

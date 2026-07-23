@@ -37,6 +37,10 @@ let audioChunks = [];
 let isRecording = false;
 let audioBlob = null;
 let audioDriveUrl = null;
+// Variables de transcripción en formulario
+const btnTranscribirForm = document.getElementById('btnTranscribirAudio');
+const transcripcionStatusForm = document.getElementById('transcripcionStatusForm');
+const transcripcionTextoStatus = document.getElementById('transcripcionTextoStatus');  
 
 // Variables de recepciones
 let recepcionesActuales = [];
@@ -1162,7 +1166,6 @@ function stopRecording() {
         btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
     }
 }
-
 function eliminarGrabacion() {
     audioBlob = null;
     audioChunks = [];
@@ -1172,8 +1175,23 @@ function eliminarGrabacion() {
     btnEliminarAudio.style.display = 'none';
     btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Grabar Audio';
     isRecording = false;
+    
+    // 🔥 OCULTAR BOTÓN DE TRANSCRIPCIÓN
+    if (btnTranscribirForm) {
+        btnTranscribirForm.style.display = 'none';
+        btnTranscribirForm.disabled = false;
+    }
+    if (transcripcionStatusForm) {
+        transcripcionStatusForm.style.display = 'none';
+        transcripcionStatusForm.className = '';
+    }
+    
     validarCompletadoDescripcion();
 }
+
+// =====================================================
+// SUBIR AUDIO A GOOGLE DRIVE
+// =====================================================
 
 async function subirAudioGoogleDrive(audioBlob, carpeta) {
     return new Promise(async (resolve, reject) => {
@@ -1190,6 +1208,8 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
                 body: formData,
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            
+            // Manejar 401 - token expirado
             if (response.status === 401) {
                 try {
                     const refreshResponse = await fetch(`${API_URL}/refresh-token`, {
@@ -1208,7 +1228,19 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
                             });
                             if (retryResponse.ok) {
                                 const data = await retryResponse.json();
-                                if (data.success && data.url) { resolve(data.url); return; }
+                                if (data.success && data.url) {
+                                    // 🔥 MOSTRAR BOTÓN DE TRANSCRIPCIÓN
+                                    if (btnTranscribirForm) {
+                                        btnTranscribirForm.style.display = 'inline-flex';
+                                        btnTranscribirForm.disabled = false;
+                                        btnTranscribirForm.innerHTML = '<i class="fas fa-microphone-alt"></i> 🎙️ Transcribir Audio';
+                                    }
+                                    if (transcripcionStatusForm) {
+                                        transcripcionStatusForm.style.display = 'none';
+                                    }
+                                    resolve(data.url);
+                                    return;
+                                }
                             }
                         }
                     }
@@ -1217,11 +1249,31 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
                 reject(new Error('Sesión expirada'));
                 return;
             }
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
             const data = await response.json();
-            if (data.success && data.url) resolve(data.url);
-            else reject(new Error(data.error || 'Error subiendo audio'));
-        } catch (error) { reject(error); }
+            
+            if (data.success && data.url) {
+                // 🔥 MOSTRAR BOTÓN DE TRANSCRIPCIÓN
+                if (btnTranscribirForm) {
+                    btnTranscribirForm.style.display = 'inline-flex';
+                    btnTranscribirForm.disabled = false;
+                    btnTranscribirForm.innerHTML = '<i class="fas fa-microphone-alt"></i> 🎙️ Transcribir Audio';
+                }
+                if (transcripcionStatusForm) {
+                    transcripcionStatusForm.style.display = 'none';
+                }
+                resolve(data.url);
+            } else {
+                reject(new Error(data.error || 'Error subiendo audio'));
+            }
+            
+        } catch (error) {
+            reject(error);
+        }
     });
 }
 
@@ -2021,9 +2073,18 @@ function mostrarConfirmacionCancelar() {
     }
 }
 
+// =====================================================
+// INICIALIZAR PANEL DE RECEPCIONES
+// =====================================================
+
+// =====================================================
+// INICIALIZAR PANEL DE RECEPCIONES
+// =====================================================
+
 function initRecepcionesPanel() {
     cargarRecepciones();
     
+    // 🔥 ACTUALIZAR LISTA (recarga completa)
     document.getElementById('btnRefreshRecepciones')?.addEventListener('click', () => {
         offsetActual = 0; 
         recepcionesActuales = []; 
@@ -2031,24 +2092,41 @@ function initRecepcionesPanel() {
         cargarRecepciones();
     });
     
-    // 🔥 BÚSQUEDA EN TIEMPO REAL
-    document.getElementById('searchRecepcion')?.addEventListener('input', () => {
+    // 🔥 BÚSQUEDA - CON DEBOUNCE PARA EVITAR MUCHAS PETICIONES
+    const searchInput = document.getElementById('searchRecepcion');
+    if (searchInput) {
+        let timeoutId = null;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                offsetActual = 0;
+                recepcionesActuales = [];
+                noHayMasRecepciones = false;
+                cargarRecepciones();
+            }, 300); // Espera 300ms después de dejar de escribir
+        });
+    }
+    
+    // 🔥 FILTRO POR ESTADO - Recarga al cambiar
+    document.getElementById('estadoFiltro')?.addEventListener('change', () => {
         offsetActual = 0; 
         recepcionesActuales = []; 
         noHayMasRecepciones = false; 
-        filtrarYMostrarRecepciones();
+        cargarRecepciones();
     });
     
-    // 🔥 BOTÓN LIMPIAR BÚSQUEDA
+    // 🔥 BOTÓN LIMPIAR FILTROS
     document.getElementById('btnLimpiarFiltros')?.addEventListener('click', () => {
         document.getElementById('searchRecepcion').value = '';
+        document.getElementById('estadoFiltro').value = 'todos';
         offsetActual = 0;
         recepcionesActuales = [];
         noHayMasRecepciones = false;
-        filtrarYMostrarRecepciones();
-        mostrarNotificacion('🧹 Búsqueda limpiada', 'info');
+        cargarRecepciones();
+        mostrarNotificacion('🧹 Filtros limpiados', 'info');
     });
     
+    // 🔥 PAGINACIÓN
     document.getElementById('btnPaginaAnterior')?.addEventListener('click', () => {
         if (offsetActual >= LIMITE_RECEPCIONES) { 
             offsetActual -= LIMITE_RECEPCIONES; 
@@ -2063,15 +2141,34 @@ function initRecepcionesPanel() {
         }
     });
 }
+// =====================================================
+// CARGAR RECEPCIONES CON FILTROS
+// =====================================================
 
 async function cargarRecepciones(append = false) {
     if (cargandoMas) return;
     cargandoMas = true;
+    
     const listDiv = document.getElementById('recepcionesList');
     if (listDiv && !append) listDiv.innerHTML = `<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><p>Cargando recepciones...</p></div>`;
     
     try {
-        const response = await fetchWithToken(`${API_URL}/jefe-operativo/listar-recepciones?limit=${LIMITE_RECEPCIONES}&offset=${offsetActual}`, { method: 'GET' });
+        // 🔥 OBTENER FILTROS
+        const searchTerm = document.getElementById('searchRecepcion')?.value?.trim() || '';
+        const estadoFiltro = document.getElementById('estadoFiltro')?.value || 'todos';
+        
+        // 🔥 CONSTRUIR QUERY PARAMS
+        let url = `${API_URL}/jefe-operativo/listar-recepciones?limit=${LIMITE_RECEPCIONES}&offset=${offsetActual}`;
+        
+        if (searchTerm) {
+            url += `&search=${encodeURIComponent(searchTerm)}`;
+        }
+        if (estadoFiltro !== 'todos') {
+            url += `&estado=${encodeURIComponent(estadoFiltro)}`;
+        }
+        
+        const response = await fetchWithToken(url, { method: 'GET' });
+        
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         
@@ -2088,49 +2185,66 @@ async function cargarRecepciones(append = false) {
                 document.getElementById('btnPaginaAnterior').disabled = offsetActual === 0;
                 document.getElementById('btnPaginaSiguiente').disabled = noHayMasRecepciones;
             }
+            
             recepcionesActuales = append ? [...recepcionesActuales, ...data.recepciones] : data.recepciones;
-            document.getElementById('recepcionesCount').textContent = totalRecepciones || recepcionesActuales.length;
-            filtrarYMostrarRecepciones();
+            
+            // 🔥 ACTUALIZAR CONTADOR
+            const countSpan = document.getElementById('recepcionesCount');
+            if (countSpan) {
+                if (searchTerm || estadoFiltro !== 'todos') {
+                    const filtrosActivos = [];
+                    if (searchTerm) filtrosActivos.push(`"${searchTerm}"`);
+                    if (estadoFiltro !== 'todos') filtrosActivos.push(estadoFiltro);
+                    countSpan.textContent = `${totalRecepciones} (filtrado: ${filtrosActivos.join(' + ')})`;
+                } else {
+                    countSpan.textContent = totalRecepciones;
+                }
+            }
+            
+            renderizarRecepciones();
         } else {
-            if (!append) { recepcionesActuales = []; filtrarYMostrarRecepciones(); }
+            if (!append) { 
+                recepcionesActuales = []; 
+                renderizarRecepciones();
+            }
         }
     } catch (error) {
-        if (listDiv && !append) listDiv.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Error al cargar</p><small>${error.message}</small></div>`;
-    } finally { cargandoMas = false; }
+        console.error('Error cargando recepciones:', error);
+        if (listDiv && !append) {
+            listDiv.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Error al cargar</p><small>${error.message}</small></div>`;
+        }
+    } finally { 
+        cargandoMas = false; 
+    }
 }
+// =====================================================
+// RENDERIZAR RECEPCIONES (SEPARADO DEL FILTRADO)
+// =====================================================
 
-// =====================================================
-// FILTRAR Y MOSTRAR RECEPCIONES (SOLO POR BÚSQUEDA)
-// =====================================================
-function filtrarYMostrarRecepciones() {
+function renderizarRecepciones() {
     const listDiv = document.getElementById('recepcionesList');
     if (!listDiv) return;
     
-    let filtradas = [...recepcionesActuales];
-    
-    // 🔥 FILTRO POR BÚSQUEDA (código, placa o cliente)
-    const searchTerm = document.getElementById('searchRecepcion')?.value?.toLowerCase().trim() || '';
-    if (searchTerm) {
-        filtradas = filtradas.filter(r => {
-            const codigo = (r.codigo_unico || '').toLowerCase();
-            const placa = (r.placa || '').toLowerCase();
-            const cliente = (r.cliente_nombre || '').toLowerCase();
-            return codigo.includes(searchTerm) || 
-                   placa.includes(searchTerm) || 
-                   cliente.includes(searchTerm);
-        });
-    }
-    
-    // Actualizar contador
-    document.getElementById('recepcionesCount').textContent = filtradas.length;
+    const recepciones = recepcionesActuales || [];
     
     // Mostrar mensaje si no hay resultados
-    if (filtradas.length === 0) {
-        const searchActive = searchTerm.length > 0;
+    if (recepciones.length === 0) {
+        const searchTerm = document.getElementById('searchRecepcion')?.value?.trim() || '';
+        const estadoFiltro = document.getElementById('estadoFiltro')?.value || 'todos';
+        
+        let mensaje = 'No hay recepciones';
+        if (searchTerm && estadoFiltro !== 'todos') {
+            mensaje = `No hay recepciones que coincidan con "${searchTerm}" y estado "${estadoFiltro}"`;
+        } else if (searchTerm) {
+            mensaje = `No hay recepciones que coincidan con "${searchTerm}"`;
+        } else if (estadoFiltro !== 'todos') {
+            mensaje = `No hay recepciones con estado "${estadoFiltro}"`;
+        }
+        
         listDiv.innerHTML = `<div class="empty-state">
             <i class="fas fa-search"></i>
-            <p>${searchActive ? 'No hay recepciones que coincidan con la búsqueda' : 'No hay recepciones guardadas'}</p>
-            ${searchActive ? '<small>Intenta con otro término de búsqueda</small>' : '<small>Las recepciones aparecerán aquí</small>'}
+            <p>${mensaje}</p>
+            <small>Intenta con otro término de búsqueda o cambia el filtro</small>
         </div>`;
         return;
     }
@@ -2156,7 +2270,7 @@ function filtrarYMostrarRecepciones() {
     };
     
     // Renderizar tarjetas
-    listDiv.innerHTML = filtradas.map(rec => {
+    listDiv.innerHTML = recepciones.map(rec => {
         const estado = rec.estado_global || 'EnRecepcion';
         const config = estadoConfig[estado] || { label: estado, color: '#8E8E93' };
         const fecha = rec.fecha_ingreso ? new Date(rec.fecha_ingreso).toLocaleDateString('es-ES', { 
@@ -2206,7 +2320,6 @@ function filtrarYMostrarRecepciones() {
         </div>`;
     }).join('');
 }
-
 // =====================================================
 // FUNCIONES DE MODAL
 // =====================================================
@@ -2728,7 +2841,109 @@ function verImagenAmpliada(url, label) {
     modal.addEventListener('click', function(e) { if (e.target === this) this.remove(); });
     document.body.appendChild(modal);
 }
+// =====================================================
+// TRANSCRIBIR AUDIO DESDE EL FORMULARIO
+// =====================================================
 
+async function transcribirAudioFormulario() {
+    if (!codigoSesion) {
+        mostrarNotificacion('⚠️ No hay sesión activa', 'warning');
+        return;
+    }
+
+    if (!audioDriveUrl || audioDriveUrl === 'null' || audioDriveUrl === '' || audioDriveUrl === 'undefined') {
+        mostrarNotificacion('⚠️ Graba un audio primero', 'warning');
+        return;
+    }
+
+    const textoActual = descripcionProblema?.value?.trim() || '';
+    if (textoActual.length > 10) {
+        if (!confirm('⚠️ Ya hay texto en la descripción. ¿Deseas sobrescribirlo con la transcripción automática?')) {
+            return;
+        }
+    }
+
+    if (btnTranscribirForm) {
+        btnTranscribirForm.disabled = true;
+        btnTranscribirForm.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Transcribiendo...';
+    }
+
+    if (transcripcionStatusForm) {
+        transcripcionStatusForm.style.display = 'flex';
+        transcripcionStatusForm.className = 'loading';
+        transcripcionTextoStatus.textContent = '⏳ Transcribiendo audio... puede tomar varios segundos';
+    }
+
+    mostrarNotificacion('🎙️ Transcribiendo audio...', 'info');
+
+    try {
+        let audioUrl = audioDriveUrl;
+        if (!audioUrl && sesionActual?.datos?.descripcion?.audio_url) {
+            audioUrl = sesionActual.datos.descripcion.audio_url;
+        }
+
+        if (!audioUrl || audioUrl === 'null' || audioUrl === '' || audioUrl === 'undefined') {
+            throw new Error('No se encontró audio para transcribir');
+        }
+
+        const response = await fetchWithToken(`${API_URL}/jefe-operativo/transcribir-audio`, {
+            method: 'POST',
+            body: JSON.stringify({ audio_url: audioUrl })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Error en la transcripción');
+        }
+
+        const data = await response.json();
+
+        if (data.success && data.transcripcion) {
+            if (descripcionProblema) {
+                descripcionProblema.value = data.transcripcion;
+                descripcionProblema.style.border = '2px solid #10B981';
+                setTimeout(() => descripcionProblema.style.border = '', 3000);
+            }
+
+            if (transcripcionStatusForm) {
+                transcripcionStatusForm.className = 'success';
+                transcripcionTextoStatus.textContent = `✅ Transcripción completada (${data.modelo_usado || 'Whisper'})`;
+            }
+
+            if (codigoSesion) {
+                await guardarSeccion('descripcion');
+                mostrarNotificacion('✅ Transcripción guardada', 'success');
+            }
+
+            validarCompletadoDescripcion();
+
+        } else {
+            throw new Error(data.error || 'No se pudo transcribir');
+        }
+
+    } catch (error) {
+        console.error('Error transcribiendo audio:', error);
+        if (transcripcionStatusForm) {
+            transcripcionStatusForm.className = 'error';
+            transcripcionTextoStatus.textContent = `❌ Error: ${error.message}`;
+        }
+        mostrarNotificacion('❌ Error al transcribir: ' + error.message, 'error');
+    } finally {
+        if (btnTranscribirForm) {
+            btnTranscribirForm.disabled = false;
+            btnTranscribirForm.innerHTML = '<i class="fas fa-microphone-alt"></i> 🎙️ Transcribir Audio';
+        }
+    }
+}
+// =====================================================
+// CONFIGURAR BOTÓN DE TRANSCRIPCIÓN EN EL FORMULARIO
+// =====================================================
+
+function setupTranscripcionFormulario() {
+    if (btnTranscribirForm) {
+        btnTranscribirForm.addEventListener('click', transcribirAudioFormulario);
+    }
+}
 // =====================================================
 // GENERAR PDF - DESCARGA Y SUBE A GOOGLE DRIVE
 // =====================================================
@@ -4025,6 +4240,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await recuperarSesionActiva();
     iniciarPollingSesiones();
     initRecepcionesPanel();
+    setupTranscripcionFormulario();
 });
 
 // =====================================================
@@ -4222,12 +4438,19 @@ async function transcribirAudioManual(idOrden) {
     // Verificar si ya hay una transcripción
     const textarea = document.getElementById('transcripcionManual');
     if (textarea && textarea.value && textarea.value.trim().length > 10) {
-        if (!confirm('⚠️ Ya hay una transcripción. ¿Deseas sobrescribirla con la transcripción automática?')) {
+        if (!confirm('⚠️ Ya hay una transcripción. ¿Deseas sobrescribirla?')) {
             return;
         }
     }
     
-    mostrarNotificacion('🎙️ Transcribiendo audio... puede tomar unos segundos', 'info');
+    // Cambiar estado del botón
+    const btn = document.querySelector('.btn-transcribir');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Transcribiendo...';
+    }
+    
+    mostrarNotificacion('🎙️ Transcribiendo audio... puede tomar varios segundos', 'info');
     
     try {
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/transcribir-audio`, {
@@ -4235,21 +4458,14 @@ async function transcribirAudioManual(idOrden) {
             body: JSON.stringify({ id_orden: idOrden })
         });
         
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Error en la transcripción');
-        }
-        
         const data = await response.json();
         
         if (data.success && data.transcripcion) {
-            // Actualizar el textarea con la transcripción
+            // Actualizar el textarea
             if (textarea) {
                 textarea.value = data.transcripcion;
                 textarea.style.border = '2px solid #10B981';
-                setTimeout(() => {
-                    textarea.style.border = '';
-                }, 3000);
+                setTimeout(() => textarea.style.border = '', 3000);
             }
             
             mostrarNotificacion(`✅ Transcripción completada (${data.modelo_usado || 'Whisper'})`, 'success');
@@ -4265,11 +4481,17 @@ async function transcribirAudioManual(idOrden) {
     } catch (error) {
         console.error('Error transcribiendo audio:', error);
         mostrarNotificacion('❌ Error al transcribir: ' + error.message, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-microphone"></i> 🎙️ Transcribir Audio';
+        }
     }
 }
 
+
 // =====================================================
-// GUARDAR TRANSCRIPCIÓN EN EL SERVIDOR
+// GUARDAR TRANSCRIPCIÓN
 // =====================================================
 
 async function guardarTranscripcion(idOrden, texto) {

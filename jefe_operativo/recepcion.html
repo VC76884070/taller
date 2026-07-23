@@ -39,6 +39,217 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/jefe_operativo/css/dashboard.css">
     <link rel="stylesheet" href="/jefe_operativo/css/recepcion.css">
+
+    <!-- ============================================= -->
+    <!-- ESTILOS ADICIONALES PARA TRANSCRIPCIÓN       -->
+    <!-- ============================================= -->
+    <style>
+        /* =============================================
+           BOTÓN DE TRANSCRIPCIÓN EN EL FORMULARIO
+           ============================================= */
+        .btn-transcribir-form {
+            background: linear-gradient(135deg, #7C3AED, #6D28D9) !important;
+            color: white !important;
+            border: none !important;
+            padding: 0.7rem 1.5rem !important;
+            border-radius: var(--radius-md, 8px) !important;
+            font-size: 0.85rem !important;
+            font-weight: 500 !important;
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+            display: none;
+            align-items: center !important;
+            gap: 0.5rem !important;
+            box-shadow: 0 2px 12px rgba(124, 58, 237, 0.3) !important;
+        }
+
+        .btn-transcribir-form:hover:not(:disabled) {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4) !important;
+        }
+
+        .btn-transcribir-form:disabled {
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .btn-transcribir-form i {
+            font-size: 14px;
+        }
+
+        /* =============================================
+           ESTADO DE TRANSCRIPCIÓN EN FORMULARIO
+           ============================================= */
+        #transcripcionStatusForm {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            margin-top: 6px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        #transcripcionStatusForm i {
+            font-size: 14px;
+        }
+
+        #transcripcionStatusForm.loading {
+            color: #f59e0b;
+            background: rgba(245, 158, 11, 0.15);
+        }
+
+        #transcripcionStatusForm.success {
+            color: #10B981;
+            background: rgba(16, 185, 129, 0.15);
+        }
+
+        #transcripcionStatusForm.error {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.15);
+        }
+
+        /* =============================================
+           BOTÓN DE TRANSCRIPCIÓN EN MODAL DE DETALLE
+           ============================================= */
+        .btn-transcribir {
+            background: #C1121F !important;
+            color: white !important;
+            border: none !important;
+            padding: 6px 16px !important;
+            border-radius: 6px !important;
+            cursor: pointer !important;
+            font-size: 12px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            transition: all 0.3s ease !important;
+            font-weight: 600 !important;
+            white-space: nowrap !important;
+        }
+
+        .btn-transcribir:hover {
+            background: #a00e18 !important;
+            transform: scale(1.02);
+        }
+
+        .btn-transcribir:disabled {
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+            transform: none !important;
+        }
+
+        .btn-transcribir i {
+            font-size: 13px;
+        }
+
+        /* =============================================
+           TRANSCRIPCIÓN INFO EN MODAL
+           ============================================= */
+        #transcripcionInfo {
+            color: #8E8E93 !important;
+            font-size: 11px !important;
+            margin-top: 4px !important;
+            padding: 4px 8px !important;
+            background: rgba(16, 185, 129, 0.1) !important;
+            border-radius: 4px !important;
+            display: inline-block !important;
+        }
+
+        #transcripcionInfo.success {
+            color: #10B981 !important;
+            background: rgba(16, 185, 129, 0.15) !important;
+        }
+
+        #transcripcionInfo.error {
+            color: #ef4444 !important;
+            background: rgba(239, 68, 68, 0.15) !important;
+        }
+
+        /* =============================================
+           TEXTAREA CON TRANSCRIPCIÓN
+           ============================================= */
+        #transcripcionManual {
+            width: 100%;
+            min-height: 80px;
+            background: #1A1A1C;
+            color: #fff;
+            border: 1px solid #2C2C2E;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 13px;
+            resize: vertical;
+            font-family: inherit;
+            line-height: 1.6;
+            transition: border 0.3s ease;
+        }
+
+        #transcripcionManual:focus {
+            border-color: #C1121F;
+            outline: none;
+        }
+
+        #transcripcionManual.transcrito {
+            border-color: #10B981 !important;
+        }
+
+        /* =============================================
+           DETALLE CARD - TÍTULO CON BOTÓN
+           ============================================= */
+        .detalle-card-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .detalle-card-title .btn-transcribir {
+            flex-shrink: 0;
+        }
+
+        /* =============================================
+           RESPONSIVE
+           ============================================= */
+        @media (max-width: 768px) {
+            .btn-transcribir-form {
+                width: 100%;
+                justify-content: center;
+                padding: 0.8rem !important;
+            }
+
+            .audio-buttons {
+                flex-direction: column;
+            }
+
+            .audio-buttons .btn-audio,
+            .audio-buttons .btn-eliminar-audio,
+            .audio-buttons .btn-transcribir-form {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .detalle-card-title {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .detalle-card-title .btn-transcribir {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .btn-transcribir {
+                font-size: 11px !important;
+                padding: 8px 14px !important;
+            }
+        }
+    </style>
 </head>
 
 <body>
@@ -157,16 +368,19 @@
                                     <input type="tel" id="clienteTelefono" placeholder="Ej: 77712345">
                                 </div>
                                 <div class="form-group full-width">
-                                    <label for="clienteUbicacion"><i class="fas fa-map-marker-alt"></i> Ubicación</label>
+                                    <label for="clienteUbicacion"><i class="fas fa-map-marker-alt"></i>
+                                        Ubicación</label>
                                     <div class="ubicacion-input-group">
-                                        <input type="text" id="clienteUbicacion" placeholder="Selecciona una ubicación en el mapa..." readonly>
+                                        <input type="text" id="clienteUbicacion"
+                                            placeholder="Selecciona una ubicación en el mapa..." readonly>
                                         <button type="button" class="btn-ubicacion" id="btnAbrirModalUbicacion">
                                             <i class="fas fa-map-pin"></i> Elegir en mapa
                                         </button>
                                     </div>
                                     <input type="hidden" id="clienteLatitud" value="">
                                     <input type="hidden" id="clienteLongitud" value="">
-                                    <small class="form-hint"><i class="fas fa-info-circle"></i> Haz clic en "Elegir en mapa" para seleccionar la ubicación exacta</small>
+                                    <small class="form-hint"><i class="fas fa-info-circle"></i> Haz clic en "Elegir en
+                                        mapa" para seleccionar la ubicación exacta</small>
                                 </div>
                             </div>
                             <div class="form-actions-seccion">
@@ -196,7 +410,8 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="vehiculoPlaca"><i class="fas fa-id-card"></i> Placa *</label>
-                                    <input type="text" id="vehiculoPlaca" placeholder="Ej: ABC123" maxlength="8" style="text-transform: uppercase;">
+                                    <input type="text" id="vehiculoPlaca" placeholder="Ej: ABC123" maxlength="8"
+                                        style="text-transform: uppercase;">
                                 </div>
                                 <div class="form-group">
                                     <label for="vehiculoMarca"><i class="fas fa-tag"></i> Marca *</label>
@@ -215,7 +430,8 @@
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="vehiculoKilometraje"><i class="fas fa-tachometer-alt"></i> Kilometraje</label>
+                                    <label for="vehiculoKilometraje"><i class="fas fa-tachometer-alt"></i>
+                                        Kilometraje</label>
                                     <input type="number" id="vehiculoKilometraje" placeholder="Ej: 45000">
                                 </div>
                             </div>
@@ -254,8 +470,9 @@
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-lateral_izquierdo"/>
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22"
+                                                    id="ring-lateral_izquierdo" />
                                             </svg>
                                             <span class="progress-percent" id="percent-lateral_izquierdo">0%</span>
                                         </div>
@@ -287,8 +504,9 @@
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-lateral_derecho"/>
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22"
+                                                    id="ring-lateral_derecho" />
                                             </svg>
                                             <span class="progress-percent" id="percent-lateral_derecho">0%</span>
                                         </div>
@@ -320,8 +538,8 @@
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-frontal"/>
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-frontal" />
                                             </svg>
                                             <span class="progress-percent" id="percent-frontal">0%</span>
                                         </div>
@@ -353,8 +571,8 @@
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-trasera"/>
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-trasera" />
                                             </svg>
                                             <span class="progress-percent" id="percent-trasera">0%</span>
                                         </div>
@@ -386,8 +604,8 @@
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-superior"/>
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-superior" />
                                             </svg>
                                             <span class="progress-percent" id="percent-superior">0%</span>
                                         </div>
@@ -419,8 +637,8 @@
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-inferior"/>
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-inferior" />
                                             </svg>
                                             <span class="progress-percent" id="percent-inferior">0%</span>
                                         </div>
@@ -452,8 +670,8 @@
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22"/>
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-tablero"/>
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-tablero" />
                                             </svg>
                                             <span class="progress-percent" id="percent-tablero">0%</span>
                                         </div>
@@ -501,20 +719,33 @@
                         </div>
                         <div class="card-body">
                             <div class="form-group">
-                                <label for="descripcionProblema"><i class="fas fa-align-left"></i> Describa el problema</label>
-                                <textarea id="descripcionProblema" rows="5" placeholder="Ej: El vehículo hace un ruido extraño al frenar..."></textarea>
+                                <label for="descripcionProblema"><i class="fas fa-align-left"></i> Describa el
+                                    problema</label>
+                                <textarea id="descripcionProblema" rows="5"
+                                    placeholder="Ej: El vehículo hace un ruido extraño al frenar..."></textarea>
                             </div>
                             <div class="audio-controls">
                                 <div class="audio-buttons">
                                     <button type="button" class="btn-audio" id="btnGrabarAudio">
                                         <i class="fas fa-microphone"></i> Grabar Audio
                                     </button>
-                                    <button type="button" class="btn-eliminar-audio" id="btnEliminarAudio" style="display: none;">
+                                    <button type="button" class="btn-eliminar-audio" id="btnEliminarAudio"
+                                        style="display: none;">
                                         <i class="fas fa-trash-alt"></i> Eliminar Grabación
+                                    </button>
+                                    <!-- 🔥 BOTÓN DE TRANSCRIPCIÓN EN EL FORMULARIO -->
+                                    <button type="button" class="btn-transcribir-form" id="btnTranscribirAudio"
+                                        style="display: none;">
+                                        <i class="fas fa-microphone-alt"></i> 🎙️ Transcribir Audio
                                     </button>
                                 </div>
                                 <div class="audio-status-container">
                                     <span class="audio-status" id="audioStatus"></span>
+                                    <!-- 🔥 ESTADO DE TRANSCRIPCIÓN EN FORMULARIO -->
+                                    <div id="transcripcionStatusForm" style="display: none;">
+                                        <i class="fas fa-check-circle"></i>
+                                        <span id="transcripcionTextoStatus">Transcripción completada</span>
+                                    </div>
                                     <audio id="audioPreview" controls style="display: none;"></audio>
                                 </div>
                             </div>
@@ -547,7 +778,8 @@
                     <div class="filtros-recepciones">
                         <div class="filtro-grupo" style="flex: 2; min-width: 200px;">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="searchRecepcion" placeholder="Buscar por código o placa..." class="filtro-input">
+                            <input type="text" id="searchRecepcion" placeholder="Buscar por código o placa..."
+                                class="filtro-input">
                         </div>
                         <div class="filtro-grupo" style="flex: 1.5; min-width: 180px;">
                             <i class="fas fa-filter"></i>
@@ -616,7 +848,8 @@
             <div class="modal-body">
                 <p>Ingresa el código de la sesión:</p>
                 <div class="form-group">
-                    <input type="text" id="codigoUnirseInput" placeholder="Ej: S-ABC123" class="codigo-input" autocomplete="off" style="text-transform: uppercase;">
+                    <input type="text" id="codigoUnirseInput" placeholder="Ej: S-ABC123" class="codigo-input"
+                        autocomplete="off" style="text-transform: uppercase;">
                 </div>
                 <p class="modal-hint">* Máximo 2 colaboradores por sesión</p>
             </div>
@@ -663,7 +896,8 @@
                 <button class="btn-secondary" onclick="cerrarModalOrden()">
                     <i class="fas fa-times"></i> Cerrar
                 </button>
-                <button class="btn-primary" id="btnDescargarPDFFinal" style="display: inline-flex; background: linear-gradient(135deg, #C1121F, #8B0F1A);">
+                <button class="btn-primary" id="btnDescargarPDFFinal"
+                    style="display: inline-flex; background: linear-gradient(135deg, #C1121F, #8B0F1A);">
                     <i class="fas fa-file-pdf"></i> 📥 Descargar PDF
                 </button>
             </div>
@@ -671,8 +905,8 @@
     </div>
 
     <!-- ===================================================== -->
-    <!-- ✅ MODAL PARA VER DETALLES DE RECEPCIÓN (CORREGIDO)    -->
-    <!-- SOLO BOTÓN PDF, SIN WORD                                -->
+    <!-- ✅ MODAL PARA VER DETALLES DE RECEPCIÓN              -->
+    <!-- CON BOTÓN DE TRANSCRIPCIÓN DE AUDIO                    -->
     <!-- ===================================================== -->
     <div class="modal modal-detalle" id="modalDetalleRecepcion">
         <div class="modal-content modal-detalle-content">
@@ -680,10 +914,14 @@
                 <h2><i class="fas fa-file-alt"></i> Detalle de Recepción</h2>
                 <button class="modal-close" onclick="cerrarModalDetalle()">&times;</button>
             </div>
-            <div class="modal-body" id="detalleRecepcionBody"></div>
+            <div class="modal-body" id="detalleRecepcionBody">
+                <!-- El contenido se genera dinámicamente desde recepcion.js -->
+            </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalDetalle()"><i class="fas fa-times"></i> Cerrar</button>
-                <button class="btn-primary" id="btnExportarPDFDetalle"><i class="fas fa-file-pdf"></i> 📥 Descargar PDF</button>
+                <button class="btn-secondary" onclick="cerrarModalDetalle()"><i class="fas fa-times"></i>
+                    Cerrar</button>
+                <button class="btn-primary" id="btnExportarPDFDetalle"><i class="fas fa-file-pdf"></i> 📥 Descargar
+                    PDF</button>
             </div>
         </div>
     </div>
@@ -701,8 +939,10 @@
                 <div id="eliminarInfo"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalEliminar()"><i class="fas fa-times"></i> Cancelar</button>
-                <button class="btn-danger" id="btnConfirmarEliminar"><i class="fas fa-trash-alt"></i> Sí, Eliminar</button>
+                <button class="btn-secondary" onclick="cerrarModalEliminar()"><i class="fas fa-times"></i>
+                    Cancelar</button>
+                <button class="btn-danger" id="btnConfirmarEliminar"><i class="fas fa-trash-alt"></i> Sí,
+                    Eliminar</button>
             </div>
         </div>
     </div>
@@ -718,12 +958,14 @@
                 <div class="ubicacion-busqueda">
                     <div class="search-container">
                         <i class="fas fa-search"></i>
-                        <input type="text" id="modalBuscarUbicacionLeaflet" placeholder="Buscar dirección..." class="ubicacion-search">
+                        <input type="text" id="modalBuscarUbicacionLeaflet" placeholder="Buscar dirección..."
+                            class="ubicacion-search">
                         <button type="button" id="btnBuscarUbicacionLeaflet" class="btn-buscar">
                             <i class="fas fa-search"></i> Buscar
                         </button>
                     </div>
-                    <div id="leafletMapa" style="height: 400px; width: 100%; border-radius: 12px; margin: 15px 0;"></div>
+                    <div id="leafletMapa" style="height: 400px; width: 100%; border-radius: 12px; margin: 15px 0;">
+                    </div>
                     <div class="ubicacion-info" id="ubicacionInfoLeaflet" style="display: none;">
                         <div class="info-card">
                             <i class="fas fa-check-circle"></i>
@@ -736,8 +978,10 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" id="btnCancelarUbicacionLeaflet"><i class="fas fa-times"></i> Cancelar</button>
-                <button class="btn-primary" id="btnConfirmarUbicacionLeaflet" disabled><i class="fas fa-check"></i> Usar esta ubicación</button>
+                <button class="btn-secondary" id="btnCancelarUbicacionLeaflet"><i class="fas fa-times"></i>
+                    Cancelar</button>
+                <button class="btn-primary" id="btnConfirmarUbicacionLeaflet" disabled><i class="fas fa-check"></i> Usar
+                    esta ubicación</button>
             </div>
         </div>
     </div>
@@ -776,17 +1020,17 @@
     <!-- ===================================================== -->
     <!-- SCRIPTS -->
     <!-- ===================================================== -->
-    
+
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    
+
     <!-- Sidebar include -->
     <script src="/jefe_operativo/js/include.js"></script>
-    
+
     <!-- COMPRESOR DE IMÁGENES -->
     <script src="/jefe_operativo/js/imageCompressor.js"></script>
-    
+
     <!-- RECEPCION.JS -->
     <script src="/jefe_operativo/js/recepcion.js"></script>
 

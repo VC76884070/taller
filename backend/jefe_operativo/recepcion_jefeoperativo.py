@@ -340,7 +340,7 @@ def listar_sesiones_activas(current_user):
 
 
 # =====================================================
-# ENDPOINT 3: LISTAR RECEPCIONES
+# ENDPOINT: LISTAR RECEPCIONES CON FILTROS
 # =====================================================
 
 @recepcion_jefe_bp.route('/listar-recepciones', methods=['GET'])
@@ -349,15 +349,117 @@ def listar_recepciones(current_user):
     try:
         limit = request.args.get('limit', 5, type=int)
         offset = request.args.get('offset', 0, type=int)
+        search = request.args.get('search', '').strip()
+        estado = request.args.get('estado', '').strip()
         
         if limit > 50:
             limit = 50
         
-        logger.info(f"📋 [listar_recepciones] Limit: {limit}, Offset: {offset}")
+        logger.info(f"📋 [listar_recepciones] Limit: {limit}, Offset: {offset}, Search: '{search}', Estado: '{estado}'")
         
+        # 🔥 CONSTRUIR QUERY DE ORDENES
+        query = supabase.table('ordentrabajo').select('*')
+        
+        # 🔥 FILTRO POR ESTADO
+        if estado and estado != 'todos':
+            query = query.eq('estado_global', estado)
+        
+        # 🔥 FILTRO POR BÚSQUEDA (código, placa, cliente)
+        ordenes_ids = None
+        
+        if search:
+            # Buscar clientes por nombre
+            clientes_result = supabase.table('usuario') \
+                .select('id') \
+                .ilike('nombre', f'%{search}%') \
+                .execute()
+            clientes_ids = [c['id'] for c in (clientes_result.data or [])]
+            
+            # Buscar clientes por teléfono
+            clientes_telefono = supabase.table('usuario') \
+                .select('id') \
+                .ilike('contacto', f'%{search}%') \
+                .execute()
+            for c in (clientes_telefono.data or []):
+                if c['id'] not in clientes_ids:
+                    clientes_ids.append(c['id'])
+            
+            # Buscar vehículos por placa
+            vehiculos_result = supabase.table('vehiculo') \
+                .select('id, id_cliente') \
+                .ilike('placa', f'%{search}%') \
+                .execute()
+            vehiculos_ids = [v['id'] for v in (vehiculos_result.data or [])]
+            
+            # Obtener clientes de esos vehículos
+            for v in (vehiculos_result.data or []):
+                if v.get('id_cliente') and v['id_cliente'] not in clientes_ids:
+                    clientes_ids.append(v['id_cliente'])
+            
+            # Buscar clientes por email
+            clientes_email = supabase.table('cliente') \
+                .select('id_usuario') \
+                .ilike('email', f'%{search}%') \
+                .execute()
+            for c in (clientes_email.data or []):
+                if c.get('id_usuario') and c['id_usuario'] not in clientes_ids:
+                    clientes_ids.append(c['id_usuario'])
+            
+            # Si hay clientes, obtener vehículos de esos clientes
+            if clientes_ids:
+                vehiculos_cliente = supabase.table('vehiculo') \
+                    .select('id') \
+                    .in_('id_cliente', clientes_ids) \
+                    .execute()
+                for v in (vehiculos_cliente.data or []):
+                    if v['id'] not in vehiculos_ids:
+                        vehiculos_ids.append(v['id'])
+            
+            # Buscar órdenes por código único
+            ordenes_codigo = supabase.table('ordentrabajo') \
+                .select('id') \
+                .ilike('codigo_unico', f'%{search}%') \
+                .execute()
+            ordenes_ids = [o['id'] for o in (ordenes_codigo.data or [])]
+            
+            # Agregar órdenes de vehículos encontrados
+            if vehiculos_ids:
+                ordenes_vehiculo = supabase.table('ordentrabajo') \
+                    .select('id') \
+                    .in_('id_vehiculo', vehiculos_ids) \
+                    .execute()
+                for o in (ordenes_vehiculo.data or []):
+                    if o['id'] not in ordenes_ids:
+                        ordenes_ids.append(o['id'])
+            
+            # Si hay IDs de órdenes, filtrar
+            if ordenes_ids:
+                query = query.in_('id', ordenes_ids)
+            else:
+                # No hay coincidencias, devolver vacío
+                return jsonify({
+                    'success': True,
+                    'recepciones': [],
+                    'paginacion': {
+                        'total': 0,
+                        'limit': limit,
+                        'offset': offset,
+                        'has_more': False
+                    }
+                }), 200
+        
+        # 🔥 OBTENER TOTAL
+        count_query = supabase.table('ordentrabajo').select('id', count='exact')
+        if estado and estado != 'todos':
+            count_query = count_query.eq('estado_global', estado)
+        if ordenes_ids:
+            count_query = count_query.in_('id', ordenes_ids)
+        total_result = count_query.execute()
+        total_ordenes = total_result.count if hasattr(total_result, 'count') else len(total_result.data or [])
+        
+        # 🔥 EJECUTAR QUERY CON PAGINACIÓN
         try:
-            resultado = supabase.table('ordentrabajo') \
-                .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
+            resultado = query \
                 .order('fecha_ingreso', desc=True) \
                 .limit(limit) \
                 .offset(offset) \
@@ -367,17 +469,12 @@ def listar_recepciones(current_user):
             logger.info("🔄 .offset() no disponible, usando .range() (versión nueva)")
             start = offset
             end = offset + limit
-            resultado = supabase.table('ordentrabajo') \
-                .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
+            resultado = query \
                 .order('fecha_ingreso', desc=True) \
                 .range(start, end - 1) \
                 .execute()
         
-        total_result = supabase.table('ordentrabajo') \
-            .select('id', count='exact') \
-            .execute()
-        total_ordenes = total_result.count if hasattr(total_result, 'count') else len(total_result.data or [])
-        
+        # 🔥 PROCESAR RESULTADOS
         recepciones = []
         for orden in (resultado.data or []):
             recepcion = {
@@ -465,7 +562,7 @@ def listar_recepciones(current_user):
         }), 200
         
     except Exception as e:
-        logger.error(f"❌ Error: {str(e)}")
+        logger.error(f"❌ Error en listar_recepciones: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({
@@ -473,101 +570,6 @@ def listar_recepciones(current_user):
             'error': str(e),
             'recepciones': []
         }), 500
-
-
-# =====================================================
-# ENDPOINT 4: LISTAR RECEPCIONES (VERSIÓN SIMPLE)
-# =====================================================
-
-@recepcion_jefe_bp.route('/listar-recepciones-simple', methods=['GET'])
-@jefe_operativo_required
-def listar_recepciones_simple(current_user):
-    try:
-        resultado = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, fecha_ingreso, estado_global, id_vehiculo') \
-            .order('fecha_ingreso', desc=True) \
-            .limit(50) \
-            .execute()
-        
-        recepciones = []
-        for orden in (resultado.data or []):
-            recepcion = {
-                'id': orden.get('id'),
-                'codigo_unico': orden.get('codigo_unico', 'OT-N/A'),
-                'fecha_ingreso': orden.get('fecha_ingreso'),
-                'estado_global': orden.get('estado_global', 'EnRecepcion'),
-                'cliente_nombre': 'N/A',
-                'cliente_telefono': 'N/A',
-                'cliente_email': 'N/A',
-                'cliente_ubicacion': '',
-                'latitud': None,
-                'longitud': None,
-                'placa': 'N/A',
-                'marca': '',
-                'modelo': '',
-                'anio': None,
-                'kilometraje': 0
-            }
-            
-            id_vehiculo = orden.get('id_vehiculo')
-            if id_vehiculo:
-                try:
-                    v_result = supabase.table('vehiculo') \
-                        .select('placa, marca, modelo, anio, kilometraje, id_cliente') \
-                        .eq('id', id_vehiculo) \
-                        .execute()
-                    
-                    if v_result.data:
-                        v = v_result.data[0]
-                        recepcion['placa'] = v.get('placa') or 'N/A'
-                        recepcion['marca'] = v.get('marca') or ''
-                        recepcion['modelo'] = v.get('modelo') or ''
-                        recepcion['anio'] = v.get('anio')
-                        recepcion['kilometraje'] = v.get('kilometraje') or 0
-                        
-                        id_cliente = v.get('id_cliente')
-                        if id_cliente:
-                            try:
-                                c_result = supabase.table('cliente') \
-                                    .select('id_usuario, latitud, longitud, ubicacion_confirmada') \
-                                    .eq('id', id_cliente) \
-                                    .execute()
-                                
-                                if c_result.data:
-                                    c = c_result.data[0]
-                                    recepcion['latitud'] = c.get('latitud')
-                                    recepcion['longitud'] = c.get('longitud')
-                                    recepcion['ubicacion_confirmada'] = c.get('ubicacion_confirmada', False)
-                                    
-                                    id_usuario = c.get('id_usuario')
-                                    if id_usuario:
-                                        try:
-                                            u_result = supabase.table('usuario') \
-                                                .select('nombre, contacto, email, ubicacion') \
-                                                .eq('id', id_usuario) \
-                                                .execute()
-                                            
-                                            if u_result.data:
-                                                u = u_result.data[0]
-                                                recepcion['cliente_nombre'] = u.get('nombre') or 'N/A'
-                                                recepcion['cliente_telefono'] = u.get('contacto') or 'N/A'
-                                                recepcion['cliente_email'] = u.get('email') or 'N/A'
-                                                recepcion['cliente_ubicacion'] = u.get('ubicacion') or ''
-                                        except Exception as e:
-                                            logger.warning(f"⚠️ Error obteniendo usuario {id_usuario}: {e}")
-                            except Exception as e:
-                                logger.warning(f"⚠️ Error obteniendo cliente {id_cliente}: {e}")
-                except Exception as e:
-                    logger.warning(f"⚠️ Error obteniendo vehículo {id_vehiculo}: {e}")
-            
-            recepciones.append(recepcion)
-        
-        return jsonify({'success': True, 'recepciones': recepciones}), 200
-        
-    except Exception as e:
-        logger.error(f"❌ Error en método simple: {str(e)}")
-        return jsonify({'success': True, 'recepciones': []}), 200
-
 
 # =====================================================
 # ENDPOINT 5: INICIAR SESIÓN
@@ -2899,9 +2901,8 @@ def eliminar_foto_drive(current_user):
 @jefe_operativo_required
 def transcribir_audio_endpoint(current_user):
     """
-    Transcribe un audio usando Whisper (gratis y local)
+    Transcribe un audio usando Whisper
     Recibe: { id_orden, audio_url (opcional) }
-    Retorna: { success, transcripcion, modelo_usado }
     """
     try:
         data = request.get_json()
@@ -2942,30 +2943,25 @@ def transcribir_audio_endpoint(current_user):
             }), 400
         
         logger.info(f"🎙️ Iniciando transcripción para orden {id_orden}")
-        logger.info(f"🎙️ URL: {audio_url_normalizada[:80]}...")
         
-        # Transcribir con Whisper (usará el modelo de la variable de entorno)
+        # Transcribir con Whisper usando google_drive
         from google_drive import google_drive
         
         resultado = google_drive.transcribir_audio(
-            url_audio=audio_url_normalizada,
-            language='es'  # Puedes cambiarlo o hacerlo configurable
+            url_audio=audio_url_normalizada
         )
         
         if not resultado['success']:
-            logger.error(f"❌ Error en transcripción: {resultado['error']}")
             return jsonify({
                 'success': False,
-                'error': resultado['error']
+                'error': resultado.get('error', 'Error en la transcripción')
             }), 500
         
         transcripcion = resultado['transcripcion']
-        modelo_usado = resultado.get('modelo', 'desconocido')
         
-        logger.info(f"✅ Transcripción completada con {modelo_usado}")
-        logger.info(f"📝 Texto: '{transcripcion[:100]}...'")
+        logger.info(f"✅ Transcripción completada: {transcripcion[:100]}...")
         
-        # Guardar transcripción en la base de datos (si tenemos id_orden)
+        # Guardar en la base de datos
         if id_orden:
             try:
                 supabase.table('recepcion') \
@@ -2979,15 +2975,69 @@ def transcribir_audio_endpoint(current_user):
         return jsonify({
             'success': True,
             'transcripcion': transcripcion,
-            'modelo_usado': modelo_usado,
+            'modelo_usado': resultado.get('modelo', 'desconocido'),
             'idioma': resultado.get('idioma', 'es'),
             'duracion': resultado.get('duracion', 0)
         }), 200
         
     except Exception as e:
-        logger.error(f"❌ Error en transcribir_audio_endpoint: {str(e)}")
+        logger.error(f"❌ Error en transcribir_audio: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+# =====================================================
+# ENDPOINT: GUARDAR TRANSCRIPCIÓN MANUAL
+# =====================================================
+
+@recepcion_jefe_bp.route('/guardar-transcripcion', methods=['POST'])
+@jefe_operativo_required
+def guardar_transcripcion(current_user):
+    """
+    Guarda una transcripción manual en la base de datos
+    Recibe: { id_orden, transcripcion }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'Datos no proporcionados'}), 400
+        
+        id_orden = data.get('id_orden')
+        transcripcion = data.get('transcripcion', '').strip()
+        
+        if not id_orden:
+            return jsonify({'error': 'ID de orden requerido'}), 400
+        
+        if not transcripcion:
+            return jsonify({'error': 'Transcripción vacía'}), 400
+        
+        # Verificar que existe la orden
+        orden = supabase.table('ordentrabajo') \
+            .select('id') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if not orden.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        # Actualizar transcripción
+        supabase.table('recepcion') \
+            .update({'transcripcion_problema': transcripcion}) \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
+        logger.info(f"💾 Transcripción manual guardada para orden {id_orden}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Transcripción guardada correctamente'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error guardando transcripción: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e)

@@ -4304,6 +4304,183 @@ body.sidebar-open {
     cursor: not-allowed;
     transform: none;
 }
+
+/* =====================================================
+   BOTÓN DE TRANSCRIPCIÓN DE AUDIO - ESTILOS
+   ===================================================== */
+
+.btn-transcribir {
+    background: #C1121F !important;
+    color: white !important;
+    border: none !important;
+    padding: 6px 16px !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    font-size: 12px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    transition: all 0.3s ease !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+    box-shadow: 0 2px 8px rgba(193, 18, 31, 0.3) !important;
+}
+
+.btn-transcribir:hover {
+    background: #a00e18 !important;
+    transform: scale(1.03) !important;
+    box-shadow: 0 4px 16px rgba(193, 18, 31, 0.4) !important;
+}
+
+.btn-transcribir:disabled {
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.btn-transcribir i {
+    font-size: 13px;
+}
+
+/* =====================================================
+   TRANSCRIPCIÓN INFO - ESTADO
+   ===================================================== */
+
+#transcripcionInfo {
+    color: #8E8E93 !important;
+    font-size: 11px !important;
+    margin-top: 6px !important;
+    padding: 4px 12px !important;
+    background: rgba(16, 185, 129, 0.1) !important;
+    border-radius: 4px !important;
+    display: inline-block !important;
+    font-weight: 500 !important;
+}
+
+#transcripcionInfo.success {
+    color: #10B981 !important;
+    background: rgba(16, 185, 129, 0.15) !important;
+}
+
+#transcripcionInfo.error {
+    color: #ef4444 !important;
+    background: rgba(239, 68, 68, 0.15) !important;
+}
+
+#transcripcionInfo.loading {
+    color: #f59e0b !important;
+    background: rgba(245, 158, 11, 0.15) !important;
+}
+
+/* =====================================================
+   TEXTAREA DE TRANSCRIPCIÓN
+   ===================================================== */
+
+#transcripcionManual {
+    width: 100%;
+    min-height: 80px;
+    background: #1A1A1C;
+    color: #fff;
+    border: 1px solid #2C2C2E;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.6;
+    transition: border 0.3s ease, box-shadow 0.3s ease;
+}
+
+#transcripcionManual:focus {
+    border-color: #C1121F;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(193, 18, 31, 0.15);
+}
+
+#transcripcionManual.transcrito {
+    border-color: #10B981 !important;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15) !important;
+}
+
+#transcripcionManual.error {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
+}
+
+/* =====================================================
+   RESPONSIVE - BOTÓN DE TRANSCRIPCIÓN
+   ===================================================== */
+
+@media (max-width: 600px) {
+    .detalle-card-title {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 8px !important;
+    }
+
+    .detalle-card-title .btn-transcribir {
+        width: 100% !important;
+        justify-content: center !important;
+        padding: 8px 14px !important;
+        font-size: 11px !important;
+    }
+
+    .btn-transcribir {
+        font-size: 11px !important;
+        padding: 8px 14px !important;
+    }
+
+    #transcripcionManual {
+        font-size: 12px;
+        min-height: 60px;
+        padding: 10px 12px;
+    }
+}
+
+/* =====================================================
+   RESPONSIVE - MODAL DETALLE CON BOTÓN
+   ===================================================== */
+
+@media (max-width: 480px) {
+    .detalle-card-title {
+        gap: 6px !important;
+    }
+
+    .detalle-card-title .btn-transcribir {
+        padding: 6px 12px !important;
+        font-size: 10px !important;
+        gap: 4px !important;
+    }
+
+    .detalle-card-title .btn-transcribir i {
+        font-size: 11px !important;
+    }
+
+    #transcripcionManual {
+        font-size: 11px;
+        min-height: 50px;
+        padding: 8px 10px;
+    }
+
+    #transcripcionInfo {
+        font-size: 10px !important;
+        padding: 3px 10px !important;
+    }
+}
+
+/* =====================================================
+   ANIMACIÓN PARA EL BOTÓN DE TRANSCRIPCIÓN
+   ===================================================== */
+
+.btn-transcribir .fa-spinner {
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
 /* =====================================================
 FIN DEL CSS
 ===================================================== */

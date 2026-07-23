@@ -2,6 +2,7 @@
 # ÓRDENES DE TRABAJO - JEFE TALLER (VERSIÓN COMPLETA CORREGIDA)
 # CORREGIDO: Usa el nombre real de la tabla 'diagnostigoinicial'
 # AGREGADO: Endpoint para guardar instrucciones al técnico
+# REEMPLAZADO: Cloudinary → Google Drive para audio
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -14,8 +15,6 @@ import os
 import base64
 import tempfile
 import io
-import cloudinary
-import cloudinary.uploader
 import time
 
 logger = logging.getLogger(__name__)
@@ -24,6 +23,17 @@ jefe_taller_ordenes_bp = Blueprint('jefe_taller_ordenes', __name__, url_prefix='
 
 SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
+
+# =====================================================
+# IMPORTAR GOOGLE DRIVE (REEMPLAZA A CLOUDINARY)
+# =====================================================
+try:
+    from google_drive import google_drive
+    DRIVE_AVAILABLE = True
+    logger.info("✅ Google Drive disponible para jefe_taller_ordenes")
+except ImportError as e:
+    DRIVE_AVAILABLE = False
+    logger.warning(f"⚠️ Google Drive no disponible: {e}")
 
 # =====================================================
 # CACHE EN MEMORIA
@@ -581,14 +591,19 @@ def detalle_orden(current_user, id_orden):
         if recep_resp.data:
             recepcion = recep_resp.data[0]
         
-        # CORREGIDO: Usar 'diagnostigoinicial' que es el nombre real de la tabla
+        # =====================================================
+        # 🔧 CORREGIDO: Declarar variables ANTES del if
+        # =====================================================
         diagnostico_taller = ''
+        url_grabacion = ''  # ✅ Declaración ANTES del bloque if
+        
         diag_resp = supabase.table('diagnostigoinicial') \
-            .select('diagnostigo') \
+            .select('diagnostigo, url_grabacion') \
             .eq('id_orden_trabajo', id_orden) \
             .execute()
         if diag_resp.data:
             diagnostico_taller = diag_resp.data[0].get('diagnostigo', '')
+            url_grabacion = diag_resp.data[0].get('url_grabacion', '')
         
         detalle = {
             'id': orden['id'],
@@ -605,13 +620,16 @@ def detalle_orden(current_user, id_orden):
             'tecnicos': tecnicos,
             'planificacion': planificacion,
             'transcripcion_problema': recepcion.get('transcripcion_problema', ''),
-            'diagnostigo_taller': diagnostico_taller
+            'diagnostigo_taller': diagnostico_taller,
+            'url_grabacion': url_grabacion  # ✅ Ahora está definida
         }
         
         return jsonify({'success': True, 'detalle': detalle}), 200
         
     except Exception as e:
         logger.error(f"Error obteniendo detalle: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -913,30 +931,97 @@ def planificar_trabajo(current_user):
 
 
 # =====================================================
-# ENDPOINT 8: GUARDAR DIAGNÓSTICO INICIAL (CORREGIDO)
+# 🆕 ENDPOINT 8: GUARDAR DIAGNÓSTICO INICIAL (CON DRIVE)
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/diagnostico-inicial', methods=['POST'])
 @jefe_taller_required
 def guardar_diagnostico_inicial(current_user):
+    """
+    Guarda el diagnóstico inicial del jefe de taller
+    SOPORTA: Audio base64 → sube a Google Drive automáticamente
+    """
     try:
         data = request.get_json()
         id_orden = data.get('id_orden')
         diagnostico = data.get('diagnostico', '')
-        audio_url = data.get('audio_url')
+        audio_url = data.get('audio_url')  # Puede ser URL de Drive o base64
+        codigo_orden = data.get('codigo_orden')
         
         if not id_orden:
             return jsonify({'error': 'ID de orden requerido'}), 400
         if not diagnostico:
             return jsonify({'error': 'El diagnóstico es obligatorio'}), 400
         
-        # CORREGIDO: Usar 'diagnostigoinicial' que es el nombre real de la tabla
+        # =====================================================
+        # OBTENER CÓDIGO DE ORDEN SI NO SE PROPORCIONÓ
+        # =====================================================
+        if not codigo_orden:
+            orden_result = supabase.table('ordentrabajo') \
+                .select('codigo_unico') \
+                .eq('id', id_orden) \
+                .execute()
+            if orden_result.data:
+                codigo_orden = orden_result.data[0]['codigo_unico']
+            else:
+                codigo_orden = f"OT-{id_orden}"
+        
+        # =====================================================
+        # SI EL AUDIO VIENE COMO BASE64, SUBIRLO A DRIVE
+        # =====================================================
+        final_audio_url = audio_url
+        
+        if audio_url and audio_url.startswith('data:audio') and DRIVE_AVAILABLE:
+            try:
+                # Decodificar base64
+                if 'base64,' in audio_url:
+                    audio_base64 = audio_url.split('base64,')[1]
+                else:
+                    audio_base64 = audio_url
+                
+                audio_bytes = base64.b64decode(audio_base64)
+                
+                # Generar nombre y ruta (usando get_orden_folder_path)
+                timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+                filename = f"diagnostico_{id_orden}_{timestamp}.wav"
+                
+                # 🔥 Usar get_orden_folder_path para respetar la estructura
+                folder_path = google_drive.get_orden_folder_path(
+                    codigo_orden=codigo_orden,
+                    subcarpeta='DIAGNOSTICO_JEFE_TALLER',
+                    tipo='audio'
+                )
+                
+                # Subir a Drive
+                result = google_drive.upload_file(
+                    file_data=audio_bytes,
+                    filename=filename,
+                    folder_path=folder_path,
+                    mime_type='audio/wav',
+                    public=True
+                )
+                
+                if result and result.get('url'):
+                    final_audio_url = result.get('url')
+                    logger.info(f"✅ Audio subido a Drive: {final_audio_url}")
+                    logger.info(f"📁 Estructura: {folder_path}/{filename}")
+                else:
+                    logger.warning("⚠️ No se pudo subir audio a Drive, continuando sin audio")
+                    
+            except Exception as e:
+                logger.error(f"❌ Error subiendo audio a Drive: {str(e)}")
+                # Continuamos sin audio, no bloqueamos el guardado
+        
+        # =====================================================
+        # GUARDAR EN LA BASE DE DATOS
+        # =====================================================
+        now = datetime.datetime.now().isoformat()
+        
+        # Verificar si existe diagnóstico previo
         diagnostico_existente = supabase.table('diagnostigoinicial') \
             .select('id') \
             .eq('id_orden_trabajo', id_orden) \
             .execute()
-        
-        now = datetime.datetime.now().isoformat()
         
         if diagnostico_existente.data:
             update_data = {
@@ -944,8 +1029,8 @@ def guardar_diagnostico_inicial(current_user):
                 'fecha_hora': now,
                 'id_jefe_taller': current_user['id']
             }
-            if audio_url:
-                update_data['url_grabacion'] = audio_url
+            if final_audio_url:
+                update_data['url_grabacion'] = final_audio_url
                 
             supabase.table('diagnostigoinicial') \
                 .update(update_data) \
@@ -958,17 +1043,208 @@ def guardar_diagnostico_inicial(current_user):
                 'diagnostigo': diagnostico,
                 'fecha_hora': now
             }
-            if audio_url:
-                insert_data['url_grabacion'] = audio_url
+            if final_audio_url:
+                insert_data['url_grabacion'] = final_audio_url
                 
             supabase.table('diagnostigoinicial').insert(insert_data).execute()
         
-        cache.clear('ultimas_ordenes')
+        # =====================================================
+        # ACTUALIZAR INSTRUCCIONES EN LA ORDEN
+        # =====================================================
+        supabase.table('ordentrabajo') \
+            .update({
+                'instrucciones_tecnico': diagnostico,
+                'fecha_instrucciones': now,
+                'id_jefe_taller_instrucciones': current_user['id']
+            }) \
+            .eq('id', id_orden) \
+            .execute()
         
-        return jsonify({'success': True, 'message': 'Diagnóstico guardado correctamente'}), 200
+        # =====================================================
+        # GUARDAR EN HISTORIAL
+        # =====================================================
+        supabase.table('instrucciones_tecnico_historial').insert({
+            'id_orden_trabajo': id_orden,
+            'id_jefe_taller': current_user['id'],
+            'instrucciones': diagnostico,
+            'fecha_envio': now,
+            'leida': False
+        }).execute()
+        
+        # =====================================================
+        # NOTIFICAR A TÉCNICOS
+        # =====================================================
+        tecnicos = supabase.table('asignaciontecnico') \
+            .select('id_tecnico') \
+            .eq('id_orden_trabajo', id_orden) \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
+        orden = supabase.table('ordentrabajo') \
+            .select('codigo_unico') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        codigo_orden_texto = orden.data[0]['codigo_unico'] if orden.data else str(id_orden)
+        
+        for t in (tecnicos.data or []):
+            try:
+                supabase.table('notificacion').insert({
+                    'id_usuario_destino': t['id_tecnico'],
+                    'tipo': 'nuevas_instrucciones',
+                    'mensaje': f"📋 El Jefe de Taller ha enviado instrucciones para la orden #{codigo_orden_texto}",
+                    'fecha_envio': now,
+                    'leida': False,
+                    'id_referencia': id_orden
+                }).execute()
+            except Exception as e:
+                logger.warning(f"Error enviando notificación: {e}")
+        
+        # =====================================================
+        # CAMBIAR ESTADO DE LA ORDEN A EnDiagnostico
+        # =====================================================
+        supabase.table('ordentrabajo') \
+            .update({'estado_global': 'EnDiagnostico'}) \
+            .eq('id', id_orden) \
+            .execute()
+        
+        # Limpiar caché
+        cache.clear('ultimas_ordenes')
+        cache.clear('tecnicos_list')
+        
+        return jsonify({
+            'success': True, 
+            'message': 'Diagnóstico guardado correctamente',
+            'audio_url': final_audio_url
+        }), 200
         
     except Exception as e:
         logger.error(f"Error guardando diagnóstico: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# 🆕 ENDPOINT 14B: SUBIR AUDIO A GOOGLE DRIVE (REEMPLAZA A CLOUDINARY)
+# =====================================================
+
+@jefe_taller_ordenes_bp.route('/subir-audio-drive', methods=['POST'])
+@jefe_taller_required
+def subir_audio_diagnostico_drive(current_user):
+    """
+    Sube el audio de diagnóstico del jefe de taller a Google Drive
+    ESTRUCTURA: {codigo_orden}/DIAGNOSTICO_JEFE_TALLER/audios/
+    REEMPLAZA COMPLETAMENTE A Cloudinary
+    """
+    try:
+        data = request.get_json()
+        audio_base64 = data.get('audio')
+        id_orden = data.get('id_orden')
+        codigo_orden = data.get('codigo_orden')
+        
+        if not audio_base64:
+            return jsonify({'error': 'Audio no proporcionado'}), 400
+        
+        if not id_orden:
+            return jsonify({'error': 'ID de orden requerido'}), 400
+        
+        if not DRIVE_AVAILABLE:
+            return jsonify({'error': 'Google Drive no está disponible'}), 500
+        
+        # =====================================================
+        # OBTENER CÓDIGO DE ORDEN (YA ES EL NOMBRE DE LA CARPETA)
+        # =====================================================
+        if not codigo_orden:
+            orden_result = supabase.table('ordentrabajo') \
+                .select('codigo_unico') \
+                .eq('id', id_orden) \
+                .execute()
+            if orden_result.data:
+                codigo_orden = orden_result.data[0]['codigo_unico']
+            else:
+                codigo_orden = f"OT-{id_orden}"
+                logger.warning(f"⚠️ Orden {id_orden} sin código único, usando fallback: {codigo_orden}")
+        
+        # =====================================================
+        # DECODIFICAR AUDIO BASE64
+        # =====================================================
+        if 'base64,' in audio_base64:
+            audio_base64 = audio_base64.split('base64,')[1]
+        
+        audio_bytes = base64.b64decode(audio_base64)
+        
+        # =====================================================
+        # GENERAR NOMBRE DE ARCHIVO
+        # =====================================================
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"diagnostico_{id_orden}_{timestamp}.wav"
+        
+        # =====================================================
+        # GENERAR RUTA DE CARPETA EN DRIVE
+        # =====================================================
+        folder_path = google_drive.get_orden_folder_path(
+            codigo_orden=codigo_orden,
+            subcarpeta='DIAGNOSTICO_JEFE_TALLER',
+            tipo='audio'
+        )
+        
+        logger.info(f"📁 Carpeta de destino en Drive: {folder_path}")
+        logger.info(f"📄 Archivo: {filename}")
+        
+        # =====================================================
+        # SUBIR A GOOGLE DRIVE
+        # =====================================================
+        result = google_drive.upload_file(
+            file_data=audio_bytes,
+            filename=filename,
+            folder_path=folder_path,
+            mime_type='audio/wav',
+            public=True
+        )
+        
+        if not result or not result.get('url'):
+            return jsonify({'error': 'Error al subir archivo a Drive'}), 500
+        
+        drive_url = result.get('url')
+        file_id = result.get('id')
+        
+        logger.info(f"✅ Audio subido a Drive: {drive_url}")
+        logger.info(f"📁 Estructura: {folder_path}/{filename}")
+        
+        # =====================================================
+        # ACTUALIZAR URL EN LA BASE DE DATOS (opcional)
+        # =====================================================
+        try:
+            # Verificar si ya existe un registro de diagnóstico
+            diag_existente = supabase.table('diagnostigoinicial') \
+                .select('id') \
+                .eq('id_orden_trabajo', id_orden) \
+                .execute()
+            
+            if diag_existente.data:
+                # Actualizar solo el campo de audio, no sobrescribir el diagnóstico
+                supabase.table('diagnostigoinicial') \
+                    .update({'url_grabacion': drive_url}) \
+                    .eq('id_orden_trabajo', id_orden) \
+                    .execute()
+                logger.info(f"📝 URL de audio actualizada en DB para orden {id_orden}")
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudo actualizar URL en DB: {str(e)}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Audio subido correctamente a Google Drive',
+            'url': drive_url,
+            'file_id': file_id,
+            'folder_path': folder_path,
+            'filename': filename
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error subiendo audio a Drive: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -1181,7 +1457,7 @@ def diagnostico_pendiente(current_user, id_orden):
 
 
 # =====================================================
-# ENDPOINT 13: TRANSCRIBIR AUDIO
+# ENDPOINT 13: TRANSCRIBIR AUDIO (CON WHISPER)
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/transcribir-audio', methods=['POST'])
@@ -1228,45 +1504,6 @@ def transcribir_audio_jefe_taller(current_user):
         
     except Exception as e:
         logger.error(f"Error en transcripción: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-# =====================================================
-# ENDPOINT 14: SUBIR AUDIO A CLOUDINARY
-# =====================================================
-
-@jefe_taller_ordenes_bp.route('/subir-audio-diagnostico', methods=['POST'])
-@jefe_taller_required
-def subir_audio_diagnostico(current_user):
-    try:
-        data = request.get_json()
-        audio_base64 = data.get('audio')
-        id_orden = data.get('id_orden')
-        
-        if not audio_base64:
-            return jsonify({'error': 'Audio no proporcionado'}), 400
-        
-        if 'base64,' in audio_base64:
-            audio_base64 = audio_base64.split('base64,')[1]
-        
-        audio_bytes = base64.b64decode(audio_base64)
-        audio_file = io.BytesIO(audio_bytes)
-        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-        audio_file.name = f"diagnostico_{id_orden}_{timestamp}.wav"
-        
-        resultado = cloudinary.uploader.upload(
-            audio_file,
-            folder=f"furia_motor/diagnosticos/{id_orden}",
-            public_id=f"diagnostico_{id_orden}_{timestamp}",
-            resource_type="video"
-        )
-        
-        url = resultado.get('secure_url')
-        
-        return jsonify({'success': True, 'url': url}), 200
-        
-    except Exception as e:
-        logger.error(f"Error subiendo audio: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

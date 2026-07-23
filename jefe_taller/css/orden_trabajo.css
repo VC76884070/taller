@@ -1385,3 +1385,55 @@ body {
         grid-template-columns: repeat(6, 1fr);
     }
 }
+/* =====================================================
+   BOTÓN TRANSCRIBIR AUDIO
+   ===================================================== */
+
+.btn-transcribir {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+    color: white;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+
+.btn-transcribir:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(139, 92, 246, 0.4);
+}
+
+.btn-transcribir:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.btn-transcribir:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-transcribir i {
+    font-size: 1rem;
+}
+
+.btn-transcribir.transcribiendo {
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+    animation: pulse-transcribir 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-transcribir {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+}

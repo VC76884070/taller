@@ -1,6 +1,6 @@
 // =====================================================
 // ÓRDENES DE TRABAJO - JEFE TALLER
-// VERSIÓN COMPLETA Y CORREGIDA CON INSTRUCCIONES
+// VERSIÓN COMPLETA CON GOOGLE DRIVE (REEMPLAZA CLOUDINARY)
 // =====================================================
 
 if (typeof window.API_BASE_URL === 'undefined') {
@@ -802,7 +802,7 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
 }
 
 // =====================================================
-// 🆕 GUARDAR INSTRUCCIONES AL TÉCNICO
+// GUARDAR INSTRUCCIONES AL TÉCNICO
 // =====================================================
 
 async function guardarInstruccionesTecnico(idOrden, instrucciones, tipo = 'reparacion') {
@@ -842,7 +842,7 @@ async function guardarInstruccionesTecnico(idOrden, instrucciones, tipo = 'repar
 }
 
 // =====================================================
-// FUNCIONES DE GESTIÓN DE ORDEN (CORREGIDO CON INSTRUCCIONES)
+// FUNCIONES DE GESTIÓN DE ORDEN (CON GOOGLE DRIVE)
 // =====================================================
 
 async function abrirModalGestionOrden(idOrden) {
@@ -886,7 +886,6 @@ function renderModalGestionOrden() {
     
     const puedeEditar = puedeEditarOrden(ordenEnGestion.estado_global, ordenEnGestion.trabajo_iniciado);
     
-    // Obtener bahías para mostrar en el grid visual
     const bahiasParaSeleccion = bahiasEstado.length > 0 ? bahiasEstado : [];
     const bahiaActual = ordenEnGestion.planificacion?.bahia_asignada || null;
     
@@ -921,9 +920,7 @@ function renderModalGestionOrden() {
                 </div>
             </div>
             
-            <!-- ===================================================== -->
-            <!-- DIAGNÓSTICO DEL CLIENTE (NO EDITABLE) -->
-            <!-- ===================================================== -->
+            <!-- Diagnóstico del Cliente (NO EDITABLE) -->
             <div class="gestion-section">
                 <div class="gestion-section-header">
                     <h3><i class="fas fa-headset"></i> Diagnóstico del Cliente</h3>
@@ -943,9 +940,7 @@ function renderModalGestionOrden() {
                 </div>
             </div>
             
-            <!-- ===================================================== -->
-            <!-- DIAGNÓSTICO DEL JEFE DE TALLER (EDITABLE) -->
-            <!-- ===================================================== -->
+            <!-- Diagnóstico del Jefe de Taller (EDITABLE) -->
             <div class="gestion-section">
                 <div class="gestion-section-header">
                     <h3><i class="fas fa-stethoscope"></i> Diagnóstico del Jefe Taller</h3>
@@ -963,15 +958,19 @@ function renderModalGestionOrden() {
                         <textarea id="diagnosticoTaller" class="form-textarea" rows="4" placeholder="Ingrese el diagnóstico técnico y las instrucciones para los mecánicos..." ${!puedeEditar.editable ? 'disabled' : ''}>${escapeHtml(ordenEnGestion.diagnostigo_taller || '')}</textarea>
                     </div>
                     <div class="diagnostico-audio">
-                        <div class="diagnostico-audio-controls">
+                        <div class="diagnostico-audio-controls" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
                             <button type="button" id="btnGrabarAudioTaller" class="btn-audio" ${!puedeEditar.editable ? 'disabled' : ''}>
                                 <i class="fas fa-microphone"></i> Grabar Audio
                             </button>
                             <button type="button" id="btnDetenerAudioTaller" class="btn-audio" style="display:none;">
                                 <i class="fas fa-stop"></i> Detener Grabación
                             </button>
+                            <button type="button" id="btnTranscribirAudio" class="btn-transcribir" ${!puedeEditar.editable ? 'disabled' : ''} style="display: none;">
+                                <i class="fas fa-magic"></i> Transcribir Audio
+                            </button>
                         </div>
                         <audio id="audioReproduccionTaller" controls style="display:none; width: 100%; margin-top: 10px;"></audio>
+                        <small class="modal-hint">🎙️ El audio se subirá automáticamente a Google Drive al guardar</small>
                     </div>
                 </div>
             </div>
@@ -1059,7 +1058,6 @@ function renderModalGestionOrden() {
 
 function renderBahiasSeleccion(bahias, bahiaActual, editable) {
     if (!bahias || bahias.length === 0) {
-        // Si no hay datos de bahías, mostrar del 1 al 12
         let html = '';
         for (let i = 1; i <= 12; i++) {
             const isSelected = bahiaActual == i;
@@ -1106,22 +1104,17 @@ function setupBahiasSeleccion() {
     
     bahiasItems.forEach(item => {
         const estado = item.dataset.estado;
-        if (estado === 'ocupado') return; // No permitir seleccionar bahías ocupadas
+        if (estado === 'ocupado') return;
         
         item.addEventListener('click', () => {
             const bahiaNumero = item.dataset.bahia;
             
-            // Remover selección de todas
             bahiasItems.forEach(i => i.classList.remove('selected'));
-            
-            // Agregar selección a la actual
             item.classList.add('selected');
             
-            // Actualizar input oculto
             if (inputBahia) {
                 inputBahia.value = bahiaNumero;
             } else {
-                // Crear input si no existe
                 const formRow = document.querySelector('.bahias-seleccion-section');
                 if (formRow && !document.getElementById('bahia')) {
                     const hiddenInput = document.createElement('input');
@@ -1140,6 +1133,8 @@ function setupBahiasSeleccion() {
 function setupAudioEventosTaller() {
     const btnGrabar = document.getElementById('btnGrabarAudioTaller');
     const btnDetener = document.getElementById('btnDetenerAudioTaller');
+    const btnTranscribir = document.getElementById('btnTranscribirAudio');
+    const audioElem = document.getElementById('audioReproduccionTaller');
     
     if (btnGrabar) {
         btnGrabar.onclick = () => iniciarGrabacionAudioTaller();
@@ -1147,8 +1142,20 @@ function setupAudioEventosTaller() {
     if (btnDetener) {
         btnDetener.onclick = () => detenerGrabacionAudioTaller();
     }
+    if (btnTranscribir) {
+        btnTranscribir.onclick = () => transcribirAudioTaller();
+    }
+    
+    // Mostrar botón de transcripción cuando haya audio
+    if (audioElem) {
+        audioElem.addEventListener('loadedmetadata', () => {
+            if (audioElem.src && audioElem.src !== '') {
+                const btnTranscribir = document.getElementById('btnTranscribirAudio');
+                if (btnTranscribir) btnTranscribir.style.display = 'inline-flex';
+            }
+        });
+    }
 }
-
 async function iniciarGrabacionAudioTaller() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1166,6 +1173,9 @@ async function iniciarGrabacionAudioTaller() {
             if (audioElem) {
                 audioElem.src = audioUrl;
                 audioElem.style.display = 'block';
+                // Mostrar botón de transcripción
+                const btnTranscribir = document.getElementById('btnTranscribirAudio');
+                if (btnTranscribir) btnTranscribir.style.display = 'inline-flex';
             }
             
             stream.getTracks().forEach(track => track.stop());
@@ -1176,10 +1186,13 @@ async function iniciarGrabacionAudioTaller() {
         
         const btnGrabar = document.getElementById('btnGrabarAudioTaller');
         const btnDetener = document.getElementById('btnDetenerAudioTaller');
+        const btnTranscribir = document.getElementById('btnTranscribirAudio');
+        
         if (btnGrabar) btnGrabar.style.display = 'none';
         if (btnDetener) btnDetener.style.display = 'inline-flex';
+        if (btnTranscribir) btnTranscribir.style.display = 'none'; // Ocultar mientras graba
         
-        mostrarNotificacion('Grabando audio...', 'info');
+        mostrarNotificacion('🎙️ Grabando audio...', 'info');
         
     } catch (error) {
         console.error('Error al acceder al micrófono:', error);
@@ -1194,29 +1207,77 @@ function detenerGrabacionAudioTaller() {
         
         const btnGrabar = document.getElementById('btnGrabarAudioTaller');
         const btnDetener = document.getElementById('btnDetenerAudioTaller');
+        const btnTranscribir = document.getElementById('btnTranscribirAudio');
+        
         if (btnGrabar) btnGrabar.style.display = 'inline-flex';
         if (btnDetener) btnDetener.style.display = 'none';
+        // El botón de transcripción se muestra cuando el audio se carga
         
-        mostrarNotificacion('Grabación detenida', 'success');
+        mostrarNotificacion('⏹️ Grabación detenida', 'success');
     }
 }
-
 // =====================================================
-// 🆕 GUARDAR GESTIÓN DE ORDEN (CORREGIDO CON INSTRUCCIONES)
+// 🆕 GUARDAR GESTIÓN DE ORDEN (CON GOOGLE DRIVE)
 // =====================================================
 
 async function guardarGestionOrden() {
     if (!ordenEnGestion) return;
     
-    mostrarNotificacion('Guardando cambios...', 'info');
+    mostrarNotificacion('💾 Guardando cambios...', 'info');
     
     try {
         // 1. Obtener diagnóstico del taller (instrucciones)
         const diagnosticoTaller = document.getElementById('diagnosticoTaller')?.value;
         
-        // =====================================================
-        // 🔧 GUARDAR INSTRUCCIONES EN LA TABLA ordentrabajo
-        // =====================================================
+        // 2. Subir audio a Google Drive (si existe)
+        let audioUrl = null;
+        
+        if (audioBlob) {
+            mostrarNotificacion('📤 Subiendo audio a Google Drive...', 'info');
+            
+            try {
+                // Convertir audio a base64
+                const audioBase64 = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.readAsDataURL(audioBlob);
+                });
+                
+                // Obtener código de orden
+                const codigoOrden = ordenEnGestion.codigo_unico;
+                
+                // Subir a Google Drive usando el nuevo endpoint
+                const audioResponse = await fetch(`${API_URL}/jefe-taller/subir-audio-drive`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                    },
+                    body: JSON.stringify({
+                        audio: audioBase64,
+                        id_orden: ordenEnGestion.id,
+                        codigo_orden: codigoOrden
+                    })
+                });
+                
+                const audioData = await audioResponse.json();
+                
+                if (audioData.success) {
+                    audioUrl = audioData.url;
+                    mostrarNotificacion('✅ Audio subido a Google Drive', 'success');
+                    console.log('📁 Audio en Drive:', audioUrl);
+                    console.log('📁 Estructura:', audioData.folder_path + '/' + audioData.filename);
+                } else {
+                    mostrarNotificacion('⚠️ Error al subir audio: ' + (audioData.error || 'Error desconocido'), 'warning');
+                }
+            } catch (audioError) {
+                console.error('Error subiendo audio a Drive:', audioError);
+                mostrarNotificacion('⚠️ Error al subir audio a Google Drive', 'warning');
+                // Continuamos sin audio
+            }
+        }
+        
+        // 3. Guardar instrucciones en la tabla ordentrabajo
         if (diagnosticoTaller && diagnosticoTaller.trim() !== '') {
             const instruccionesGuardadas = await guardarInstruccionesTecnico(
                 ordenEnGestion.id,
@@ -1229,7 +1290,41 @@ async function guardarGestionOrden() {
             }
         }
         
-        // 2. Guardar técnicos seleccionados
+        // 4. Guardar diagnóstico inicial (incluye audio de Drive)
+        if (diagnosticoTaller) {
+            // Si tenemos URL de Drive, usarla; si no, enviar el audio base64 para que el backend lo suba
+            let audioParaEnviar = audioUrl || (audioBlob ? await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(audioBlob);
+            }) : null);
+            
+            const diagResponse = await fetch(`${API_URL}/jefe-taller/diagnostico-inicial`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+                },
+                body: JSON.stringify({
+                    id_orden: ordenEnGestion.id,
+                    diagnostico: diagnosticoTaller,
+                    audio_url: audioParaEnviar,
+                    codigo_orden: ordenEnGestion.codigo_unico
+                })
+            });
+            
+            if (!diagResponse.ok) {
+                const error = await diagResponse.json();
+                throw new Error(error.error || 'Error al guardar diagnóstico');
+            }
+            
+            const diagData = await diagResponse.json();
+            if (diagData.audio_url) {
+                mostrarNotificacion('🎙️ Audio guardado en Google Drive', 'success');
+            }
+        }
+        
+        // 5. Guardar técnicos seleccionados
         const tecnicosSeleccionados = Array.from(document.querySelectorAll('input[name="tecnico"]:checked'))
             .map(cb => parseInt(cb.value));
         
@@ -1244,7 +1339,7 @@ async function guardarGestionOrden() {
                     id_orden: ordenEnGestion.id,
                     tecnicos: tecnicosSeleccionados,
                     tipo_asignacion: 'diagnostico',
-                    instrucciones: diagnosticoTaller || ''  // 🔧 Enviar instrucciones también aquí
+                    instrucciones: diagnosticoTaller || ''
                 })
             });
             
@@ -1254,7 +1349,7 @@ async function guardarGestionOrden() {
             }
         }
         
-        // 3. Obtener bahía seleccionada
+        // 6. Guardar planificación (bahía, fechas)
         let bahia = null;
         const bahiaSeleccionada = document.querySelector('#bahiasGridSeleccion .bahia-item.selected');
         if (bahiaSeleccionada) {
@@ -1285,37 +1380,6 @@ async function guardarGestionOrden() {
             }
         }
         
-        // 4. Guardar diagnóstico del taller (en diagnostigoinicial)
-        let audioBase64 = null;
-        
-        if (audioBlob) {
-            audioBase64 = await new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.readAsDataURL(audioBlob);
-            });
-        }
-        
-        if (diagnosticoTaller) {
-            const diagResponse = await fetch(`${API_URL}/jefe-taller/diagnostico-inicial`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
-                },
-                body: JSON.stringify({
-                    id_orden: ordenEnGestion.id,
-                    diagnostico: diagnosticoTaller,
-                    audio_url: audioBase64
-                })
-            });
-            
-            if (!diagResponse.ok) {
-                const error = await diagResponse.json();
-                throw new Error(error.error || 'Error al guardar diagnóstico');
-            }
-        }
-        
         mostrarNotificacion('✅ Cambios guardados correctamente', 'success');
         
         // Limpiar caché y recargar datos
@@ -1329,7 +1393,7 @@ async function guardarGestionOrden() {
         
     } catch (error) {
         console.error('Error guardando:', error);
-        mostrarNotificacion('Error al guardar: ' + error.message, 'error');
+        mostrarNotificacion('❌ Error al guardar: ' + error.message, 'error');
     }
 }
 
@@ -1425,6 +1489,16 @@ async function verDetalleOrden(idOrden) {
                     <div class="detalle-seccion">
                         <h4><i class="fas fa-stethoscope"></i> Diagnóstico del Jefe Taller</h4>
                         <div class="detalle-descripcion" style="background: rgba(193,18,31,0.1);">${escapeHtml(orden.diagnostigo_taller)}</div>
+                        ${orden.url_grabacion ? `
+                        <div style="margin-top: 0.5rem;">
+                            <audio controls style="width: 100%;">
+                                <source src="${orden.url_grabacion}" type="audio/wav">
+                                Tu navegador no soporta audio.
+                            </audio>
+                            <br>
+                            <small><i class="fas fa-link"></i> <a href="${orden.url_grabacion}" target="_blank">Abrir en Google Drive</a></small>
+                        </div>
+                        ` : ''}
                     </div>
                     ` : ''}
                 </div>
@@ -1495,6 +1569,85 @@ async function verDiagnosticoPendiente(idOrden) {
     }
 }
 
+// =====================================================
+// 🆕 TRANSCRIBIR AUDIO CON WHISPER
+// =====================================================
+
+async function transcribirAudioTaller() {
+    // Verificar si hay audio grabado
+    if (!audioBlob) {
+        mostrarNotificacion('⚠️ No hay audio grabado para transcribir', 'warning');
+        return;
+    }
+
+    // Verificar si ya hay texto en el diagnóstico
+    const diagnosticoTextarea = document.getElementById('diagnosticoTaller');
+    if (!diagnosticoTextarea) {
+        mostrarNotificacion('❌ No se encontró el campo de diagnóstico', 'error');
+        return;
+    }
+
+    // Si ya hay texto, preguntar si sobrescribir
+    if (diagnosticoTextarea.value && diagnosticoTextarea.value.trim() !== '') {
+        const confirmar = confirm(
+            '⚠️ Ya hay texto en el diagnóstico.\n\n' +
+            '¿Deseas reemplazarlo con la transcripción del audio?\n\n' +
+            '• "Aceptar" → Reemplazar texto\n' +
+            '• "Cancelar" → Cancelar transcripción'
+        );
+        if (!confirmar) {
+            mostrarNotificacion('⏹️ Transcripción cancelada', 'info');
+            return;
+        }
+    }
+
+    mostrarNotificacion('🎙️ Transcribiendo audio... Esto puede tomar unos segundos', 'info');
+
+    try {
+        // Convertir audio a base64
+        const audioBase64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(audioBlob);
+        });
+
+        // Enviar al backend para transcripción
+        const response = await fetch(`${API_URL}/jefe-taller/transcribir-audio`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('furia_token')}`
+            },
+            body: JSON.stringify({
+                audio: audioBase64
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.transcripcion) {
+            // Insertar la transcripción en el textarea
+            diagnosticoTextarea.value = data.transcripcion;
+            
+            // Disparar evento para actualizar contador de caracteres si existe
+            diagnosticoTextarea.dispatchEvent(new Event('input'));
+            
+            mostrarNotificacion('✅ Transcripción completada exitosamente', 'success');
+            
+            // Scroll al textarea
+            diagnosticoTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            diagnosticoTextarea.focus();
+            
+        } else {
+            throw new Error(data.error || 'Error al transcribir el audio');
+        }
+
+    } catch (error) {
+        console.error('Error transcribiendo audio:', error);
+        mostrarNotificacion('❌ Error al transcribir: ' + error.message, 'error');
+    }
+}
+
 // Funciones para diagnóstico
 window.aprobarDiagnostico = (idOrden) => {
     mostrarNotificacion('Función en desarrollo - Aprobar diagnóstico', 'info');
@@ -1521,5 +1674,5 @@ window.cargarOrdenesFinalizadas = cargarOrdenesFinalizadas;
 window.verDiagnosticoPendiente = verDiagnosticoPendiente;
 window.verOrdenEnBahia = verOrdenEnBahia;
 window.cargarEstadoBahias = cargarEstadoBahias;
-
-console.log('✅ orden_trabajo.js cargado - Versión completa con instrucciones');
+window.transcribirAudioTaller = transcribirAudioTaller; 
+console.log('✅ orden_trabajo.js cargado - Versión con Google Drive');

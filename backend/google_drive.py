@@ -1,6 +1,6 @@
 # =====================================================
 # GOOGLE DRIVE - CON OAUTH 2.0 VÍA VARIABLES DE ENTORNO
-# ESTRUCTURA: S-XXXXX/{modulo}/{subcarpeta}
+# ESTRUCTURA: {codigo_orden}/{modulo}/{subcarpeta}
 # VERSIÓN MEJORADA CON RENOVACIÓN AUTOMÁTICA DE TOKENS
 # Y SOPORTE PARA ELIMINAR/REEMPLAZAR ARCHIVOS
 # =====================================================
@@ -384,7 +384,7 @@ class GoogleDriveService:
         Args:
             file_data: bytes o FileStorage
             filename: nombre del archivo
-            folder_path: ruta completa (ej: 'S-ABC123/recepcion/fotos')
+            folder_path: ruta completa (ej: 'OT-20260723-001/DIAGNOSTICO_JEFE_TALLER/audios')
             mime_type: tipo MIME
             public: hacer público
             share_email: compartir con email
@@ -485,7 +485,7 @@ class GoogleDriveService:
     def _get_or_create_folder(self, folder_path):
         """
         Obtiene o crea una carpeta por ruta con reintentos
-        Ejemplo: 'S-ABC123/recepcion/fotos'
+        Ejemplo: 'OT-20260723-001/DIAGNOSTICO_JEFE_TALLER/audios'
         """
         # 🔥 Asegurar token válido
         self._ensure_valid_token()
@@ -557,7 +557,47 @@ class GoogleDriveService:
         return value
     
     # =====================================================
-    # GENERAR RUTAS
+    # 🆕 GENERAR RUTA DE CARPETA DE ORDEN (CON RENOMBRE)
+    # =====================================================
+    
+    def get_orden_folder_path(self, codigo_orden, subcarpeta=None, tipo=None):
+        """
+        Obtiene la ruta de la carpeta de una orden de trabajo.
+        La carpeta ya existe con el código de orden (renombrada desde código de sesión).
+        
+        ESTRUCTURA: {codigo_orden}/{subcarpeta}/{tipo}
+        
+        Args:
+            codigo_orden: Código de la orden de trabajo (ej: 'OT-20260723-001')
+            subcarpeta: 'RECEPCION', 'DIAGNOSTICO_JEFE_TALLER', 'AVANCES', etc.
+            tipo: 'fotos', 'audios', 'documentos', 'videos'
+        
+        Returns:
+            str: Ruta de carpetas (ej: 'OT-20260723-001/DIAGNOSTICO_JEFE_TALLER/audios')
+        """
+        path_parts = [codigo_orden]
+        
+        if subcarpeta:
+            path_parts.append(subcarpeta)
+        
+        if tipo:
+            tipo_map = {
+                'imagen': 'fotos',
+                'imagenes': 'fotos',
+                'audio': 'audios',
+                'audios': 'audios',
+                'pdf': 'documentos',
+                'documento': 'documentos',
+                'documentos': 'documentos',
+                'video': 'videos',
+                'videos': 'videos'
+            }
+            path_parts.append(tipo_map.get(tipo.lower(), tipo))
+        
+        return '/'.join(path_parts)
+    
+    # =====================================================
+    # GENERAR RUTAS (LEGACY - PARA COMPATIBILIDAD)
     # =====================================================
     
     def generate_folder_path(self, modulo, codigo_orden=None, referencia_id=None, 
@@ -565,10 +605,10 @@ class GoogleDriveService:
         """
         Genera una ruta de carpeta consistente para una orden de trabajo.
         
-        ESTRUCTURA: S-XXXXX/{modulo}/{subcarpeta}
+        ESTRUCTURA: {codigo_orden}/{modulo}/{subcarpeta}
         
         Args:
-            modulo: 'recepcion', 'diagnostico', 'avance', 'compras'
+            modulo: 'RECEPCION', 'DIAGNOSTICO_JEFE_TALLER', 'AVANCES', 'COMPRAS'
             codigo_orden: código de la orden de trabajo (ej: 'OT-260701-001')
             referencia_id: ID adicional (fallback si no hay codigo_orden)
             fecha: fecha (opcional)
@@ -579,7 +619,7 @@ class GoogleDriveService:
             str: ruta de carpetas
         """
         # =============================================
-        # ESTRUCTURA: S-XXXXX/{modulo}/{subcarpeta}
+        # ESTRUCTURA: {codigo_orden}/{modulo}/{subcarpeta}
         # =============================================
         path_parts = []
         

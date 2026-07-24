@@ -681,6 +681,7 @@ window.abrirModalObservacion = function(diagnosticoId) {
     const audioPreview = document.getElementById('audioPreview');
     const grabacionUrl = document.getElementById('grabacionUrl');
     
+    // 🔥 ASIGNAR EL ID AL CAMPO OCULTO
     if (obsInput) obsInput.value = diagnosticoId;
     if (obsTexto) obsTexto.value = '';
     if (audioPreview) {
@@ -739,7 +740,7 @@ async function enviarObservacion(event) {
 }
 
 // =====================================================
-// GRABACIÓN DE AUDIO
+// GRABACIÓN DE AUDIO - MODIFICADO PARA ENVIAR diagnostico_id
 // =====================================================
 
 async function startRecording() {
@@ -758,11 +759,21 @@ async function startRecording() {
                 audioPreview.style.display = 'block';
             }
             
+            // =============================================
+            // 🔥 OBTENER diagnostico_id DEL MODAL
+            // =============================================
+            const diagnosticoId = document.getElementById('obsDiagnosticoId')?.value;
+            console.log('🔍 diagnostico_id obtenido del modal:', diagnosticoId);
+            
             const reader = new FileReader();
             reader.onloadend = async () => {
+                // =============================================
+                // 🔥 CREAR FORM DATA CON diagnostico_id
+                // =============================================
                 const formData = new FormData();
                 formData.append('audio', reader.result);
                 formData.append('tipo', 'observacion');
+                formData.append('diagnostico_id', diagnosticoId || '');  // <-- ENVIAR diagnostico_id
                 
                 try {
                     const response = await fetch(`${API_URL}/jefe-taller/subir-audio-observacion`, {
@@ -772,8 +783,15 @@ async function startRecording() {
                     });
                     const data = await response.json();
                     const grabacionUrl = document.getElementById('grabacionUrl');
-                    if (grabacionUrl && data.url) grabacionUrl.value = data.url;
-                    if (data.url) mostrarNotificacion('Audio subido correctamente', 'success');
+                    if (grabacionUrl && data.url) {
+                        grabacionUrl.value = data.url;
+                        console.log('✅ Audio subido, URL:', data.url);
+                    }
+                    if (data.url) {
+                        mostrarNotificacion('Audio subido correctamente', 'success');
+                    } else {
+                        mostrarNotificacion('Error al subir el audio', 'error');
+                    }
                 } catch (error) {
                     console.error('Error subiendo audio:', error);
                     mostrarNotificacion('Error al subir el audio', 'error');

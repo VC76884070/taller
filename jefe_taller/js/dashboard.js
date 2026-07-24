@@ -425,43 +425,75 @@ function renderizarBahias(bahias) {
 }
 
 // =====================================================
-// RENDERIZADO DE DIAGNÓSTICOS
+// RENDERIZADO DE DIAGNÓSTICOS - VERSIÓN MEJORADA
 // =====================================================
 
 function renderizarDiagnosticos(diagnosticos) {
     const container = document.getElementById('diagnosticosList');
     if (!container) return;
     
+    console.log('📋 Renderizando diagnósticos:', diagnosticos);
+    
     if (!diagnosticos || diagnosticos.length === 0) {
-        renderizarVacio('diagnosticosList', 'No hay diagnósticos pendientes');
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-check-circle" style="font-size: 2rem; color: #4CAF50;"></i>
+                <p>No hay diagnósticos pendientes</p>
+            </div>
+        `;
         return;
     }
     
-    container.innerHTML = diagnosticos.map(d => {
-        const vehiculo = d.vehiculo || 'Vehículo';
+    let html = '';
+    
+    diagnosticos.forEach(d => {
+        // Asegurar que todos los campos tengan valores
+        const vehiculo = d.vehiculo || 'Vehículo sin marca';
         const placa = d.placa || '';
         const informe = d.informe || 'Sin informe';
-        const fecha = formatearFecha(d.fecha_envio);
+        const fecha = d.fecha_envio ? formatearFecha(d.fecha_envio) : 'Fecha no disponible';
         const tecnico = d.tecnico_nombre || 'Sin técnico';
         const diagnosticoId = d.diagnostico_id || d.id;
+        const version = d.version || 1;
         
-        return `
+        console.log(`   📝 Diagnóstico ${diagnosticoId}: ${vehiculo} - Técnico: ${tecnico} - Informe: ${informe.substring(0, 30)}...`);
+        
+        html += `
             <div class="diagnostico-item" onclick="window.revisarDiagnostico(${diagnosticoId})">
-                <div class="diagnostico-icon"><i class="fas fa-stethoscope"></i></div>
+                <div class="diagnostico-icon">
+                    <i class="fas fa-stethoscope"></i>
+                    <span class="version-badge">v${version}</span>
+                </div>
                 <div class="diagnostico-content">
-                    <h4>${escapeHtml(vehiculo)} ${placa ? `<span class="placa">${escapeHtml(placa)}</span>` : ''}</h4>
-                    <p class="informe-preview">${escapeHtml(informe.substring(0, 80))}${informe.length > 80 ? '...' : ''}</p>
+                    <h4>
+                        ${escapeHtml(vehiculo)}
+                        ${placa ? `<span class="placa-tag">${escapeHtml(placa)}</span>` : ''}
+                    </h4>
+                    <p class="informe-preview">
+                        <i class="fas fa-file-alt" style="color: #6B7280; margin-right: 4px;"></i>
+                        ${escapeHtml(informe.substring(0, 80))}${informe.length > 80 ? '...' : ''}
+                    </p>
                     <div class="diagnostico-meta">
-                        <span class="tecnico"><i class="fas fa-user"></i> ${escapeHtml(tecnico)}</span>
-                        <span class="fecha"><i class="far fa-calendar"></i> ${fecha}</span>
+                        <span class="tecnico">
+                            <i class="fas fa-user-cog"></i> 
+                            ${escapeHtml(tecnico)}
+                        </span>
+                        <span class="fecha">
+                            <i class="far fa-calendar"></i> 
+                            ${fecha}
+                        </span>
                     </div>
                 </div>
                 <div class="diagnostico-action">
-                    <button class="btn-revisar">Revisar</button>
+                    <button class="btn-revisar">
+                        <i class="fas fa-eye"></i> Revisar
+                    </button>
                 </div>
             </div>
         `;
-    }).join('');
+    });
+    
+    container.innerHTML = html;
 }
 
 // =====================================================

@@ -104,7 +104,7 @@ def mis_bahias_estado(current_user):
 
 
 # =====================================================
-# ENDPOINT 3: DIAGNÓSTICOS PENDIENTES
+# ENDPOINT 3: DIAGNÓSTICOS PENDIENTES - VERSIÓN CORREGIDA
 # =====================================================
 
 @dashboard_bp.route('/mis-diagnosticos', methods=['GET'])
@@ -114,62 +114,115 @@ def mis_diagnosticos(current_user):
     print("📡 /mis-diagnosticos llamado")
     
     try:
+        # PASO 1: Obtener todos los diagnósticos pendientes
         diagnosticos = supabase.table('diagnostico_tecnico') \
-            .select('''
-                id,
-                informe,
-                fecha_envio,
-                version,
-                estado,
-                id_tecnico,
-                id_orden_trabajo,
-                usuario!id_tecnico(nombre),
-                ordentrabajo!inner(
-                    id,
-                    codigo_unico,
-                    id_vehiculo,
-                    vehiculo!inner(
-                        placa,
-                        marca,
-                        modelo
-                    )
-                )
-            ''') \
+            .select('id, informe, fecha_envio, version, estado, id_tecnico, id_orden_trabajo') \
             .eq('estado', 'pendiente') \
             .order('fecha_envio', desc=True) \
             .execute()
         
+        print(f"📊 Diagnósticos encontrados: {len(diagnosticos.data or [])}")
+        
         resultado = []
+        
         for diag in (diagnosticos.data or []):
-            orden_data = diag.get('ordentrabajo', {})
-            vehiculo_data = orden_data.get('vehiculo', {}) if isinstance(orden_data, dict) else {}
+            diagnostico_id = diag.get('id')
+            id_tecnico = diag.get('id_tecnico')
+            id_orden = diag.get('id_orden_trabajo')
             
-            marca = vehiculo_data.get('marca', '') if isinstance(vehiculo_data, dict) else ''
-            modelo = vehiculo_data.get('modelo', '') if isinstance(vehiculo_data, dict) else ''
-            placa = vehiculo_data.get('placa', '') if isinstance(vehiculo_data, dict) else ''
+            print(f"🔍 Procesando diagnóstico ID: {diagnostico_id}, Técnico ID: {id_tecnico}, Orden ID: {id_orden}")
             
-            tecnico_data = diag.get('usuario', {})
-            tecnico_nombre = tecnico_data.get('nombre', 'Sin técnico') if isinstance(tecnico_data, dict) else 'Sin técnico'
+            # PASO 2: Obtener el nombre del técnico
+            tecnico_nombre = 'Sin técnico'
+            if id_tecnico:
+                try:
+                    tecnico_result = supabase.table('usuario') \
+                        .select('nombre') \
+                        .eq('id', id_tecnico) \
+                        .execute()
+                    
+                    if tecnico_result.data and len(tecnico_result.data) > 0:
+                        tecnico_nombre = tecnico_result.data[0].get('nombre', 'Sin técnico')
+                        print(f"   ✅ Técnico encontrado: {tecnico_nombre}")
+                    else:
+                        print(f"   ⚠️ No se encontró técnico con ID: {id_tecnico}")
+                except Exception as e:
+                    print(f"   ❌ Error al obtener técnico: {e}")
             
+            # PASO 3: Obtener datos del vehículo
+            vehiculo_info = {'placa': '', 'marca': '', 'modelo': ''}
+            orden_codigo = None
+            
+            if id_orden:
+                try:
+                    # Obtener la orden de trabajo
+                    orden_result = supabase.table('ordentrabajo') \
+                        .select('codigo_unico, id_vehiculo') \
+                        .eq('id', id_orden) \
+                        .execute()
+                    
+                    if orden_result.data and len(orden_result.data) > 0:
+                        orden_data = orden_result.data[0]
+                        orden_codigo = orden_data.get('codigo_unico')
+                        id_vehiculo = orden_data.get('id_vehiculo')
+                        
+                        print(f"   📝 Orden: {orden_codigo}, Vehículo ID: {id_vehiculo}")
+                        
+                        # Obtener el vehículo
+                        if id_vehiculo:
+                            vehiculo_result = supabase.table('vehiculo') \
+                                .select('placa, marca, modelo') \
+                                .eq('id', id_vehiculo) \
+                                .execute()
+                            
+                            if vehiculo_result.data and len(vehiculo_result.data) > 0:
+                                v = vehiculo_result.data[0]
+                                vehiculo_info = {
+                                    'placa': v.get('placa', ''),
+                                    'marca': v.get('marca', ''),
+                                    'modelo': v.get('modelo', '')
+                                }
+                                print(f"   🚗 Vehículo: {vehiculo_info['marca']} {vehiculo_info['modelo']} - {vehiculo_info['placa']}")
+                            else:
+                                print(f"   ⚠️ No se encontró vehículo con ID: {id_vehiculo}")
+                    else:
+                        print(f"   ⚠️ No se encontró orden con ID: {id_orden}")
+                        
+                except Exception as e:
+                    print(f"   ❌ Error al obtener orden/vehículo: {e}")
+            
+            # PASO 4: Obtener el informe
+            informe = diag.get('informe')
+            if informe is None:
+                informe = 'Sin informe'
+            
+            # PASO 5: Construir el resultado
             resultado.append({
-                'diagnostico_id': diag.get('id'),
-                'id_orden_trabajo': diag.get('id_orden_trabajo'),
-                'orden_codigo': orden_data.get('codigo_unico') if isinstance(orden_data, dict) else None,
-                'vehiculo': f"{marca} {modelo}".strip() or 'Vehículo',
-                'placa': placa,
-                'informe': diag.get('informe', 'Sin informe'),
+                'diagnostico_id': diagnostico_id,
+                'id_orden_trabajo': id_orden,
+                'orden_codigo': orden_codigo,
+                'vehiculo': f"{vehiculo_info.get('marca', '')} {vehiculo_info.get('modelo', '')}".strip() or 'Vehículo sin marca',
+                'placa': vehiculo_info.get('placa', ''),
+                'informe': informe,
                 'fecha_envio': diag.get('fecha_envio'),
                 'tecnico_nombre': tecnico_nombre,
-                'version': diag.get('version', 1)
+                'version': diag.get('version', 1),
+                'estado': diag.get('estado', 'pendiente')
             })
         
-        print(f"✅ {len(resultado)} diagnósticos pendientes")
+        print(f"✅ {len(resultado)} diagnósticos procesados correctamente")
+        
+        # Mostrar los primeros 3 para debug
+        for d in resultado[:3]:
+            print(f"   📋 ID: {d['diagnostico_id']}, Vehículo: {d['vehiculo']}, Técnico: {d['tecnico_nombre']}, Informe: {d['informe'][:50]}...")
+        
         return jsonify({'success': True, 'diagnosticos': resultado}), 200
         
     except Exception as e:
         print(f"❌ Error en diagnósticos: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': True, 'diagnosticos': []}), 200
-
 
 # =====================================================
 # ENDPOINT 4: COTIZACIONES (PRÓXIMAS ENTREGAS)

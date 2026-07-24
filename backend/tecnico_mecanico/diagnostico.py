@@ -1,9 +1,11 @@
 # =====================================================
 # DIAGNÓSTICO TÉCNICO - TÉCNICO MECÁNICO
 # FURIA MOTOR COMPANY SRL
+# MIGRADO A GOOGLE DRIVE
+# ESTRUCTURA: {CODIGO_ORDEN}/DIAGNOSTICO_TECNICO/{fotos|audios}
 # =====================================================
 
-from flask import Blueprint, request, jsonify, send_from_directory
+from flask import Blueprint, request, jsonify
 from functools import wraps
 from config import config
 import jwt
@@ -11,32 +13,19 @@ import datetime
 import logging
 import uuid
 import os
-import cloudinary
-import cloudinary.uploader
 import tempfile
+import io
 
 logger = logging.getLogger(__name__)
 
-diagnostico_bp = Blueprint('diagnostico', __name__) 
+diagnostico_bp = Blueprint('diagnostico', __name__)
 
 # Configuración
 SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
 
-# Configurar Cloudinary
-CLOUDINARY_CONFIGURED = False
-try:
-    if hasattr(config, 'CLOUDINARY_CLOUD_NAME') and config.CLOUDINARY_CLOUD_NAME:
-        cloudinary.config(
-            cloud_name=config.CLOUDINARY_CLOUD_NAME,
-            api_key=config.CLOUDINARY_API_KEY,
-            api_secret=config.CLOUDINARY_API_SECRET,
-            secure=True
-        )
-        CLOUDINARY_CONFIGURED = True
-        logger.info(f"✅ Cloudinary configurado correctamente")
-except Exception as e:
-    logger.warning(f"⚠️ Cloudinary no configurado: {str(e)}")
+# Importar Google Drive
+from google_drive import google_drive
 
 # Intentar importar Whisper
 WHISPER_AVAILABLE = False
@@ -134,94 +123,22 @@ def tecnico_required(f):
 
 
 # =====================================================
-# FUNCIONES DE CLOUDINARY
+# FUNCIÓN AUXILIAR: OBTENER CÓDIGO DE ORDEN
 # =====================================================
-def subir_foto_cloudinary(archivo, carpeta="diagnosticos"):
+def obtener_codigo_orden(id_orden):
+    """Obtiene el código único de una orden de trabajo"""
     try:
-        if not CLOUDINARY_CONFIGURED:
-            return {'success': False, 'error': 'Cloudinary no configurado'}
+        orden = supabase.table('ordentrabajo') \
+            .select('codigo_unico') \
+            .eq('id', id_orden) \
+            .execute()
         
-        resultado = cloudinary.uploader.upload(
-            archivo,
-            folder=carpeta,
-            resource_type="image",
-            transformation=[
-                {'width': 800, 'height': 600, 'crop': 'limit'},
-                {'quality': 'auto'}
-            ]
-        )
-        return {
-            'success': True,
-            'url': resultado['secure_url'],
-            'public_id': resultado['public_id']
-        }
-    except Exception as e:
-        logger.error(f"Error subiendo a Cloudinary: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-
-def subir_audio_cloudinary(archivo, carpeta="audios_diagnosticos"):
-    try:
-        if not CLOUDINARY_CONFIGURED:
-            return {'success': False, 'error': 'Cloudinary no configurado'}
-        
-        resultado = cloudinary.uploader.upload(
-            archivo,
-            folder=carpeta,
-            resource_type="video",
-            format="mp3"
-        )
-        return {
-            'success': True,
-            'url': resultado['secure_url'],
-            'public_id': resultado['public_id']
-        }
-    except Exception as e:
-        logger.error(f"Error subiendo audio: {str(e)}")
-        return {'success': False, 'error': str(e)}
-
-
-def transcribir_audio_local(audio_url):
-    """Transcribir audio usando Whisper local"""
-    if not WHISPER_AVAILABLE:
+        if orden.data:
+            return orden.data[0]['codigo_unico']
         return None
-    
-    temp_path = None
-    try:
-        import requests
-        response = requests.get(audio_url)
-        if response.status_code != 200:
-            logger.error(f"Error descargando audio: {response.status_code}")
-            return None
-        
-        temp_dir = tempfile.gettempdir()
-        temp_path = os.path.join(temp_dir, f"whisper_audio_{uuid.uuid4().hex}.mp3")
-        
-        with open(temp_path, 'wb') as f:
-            f.write(response.content)
-        
-        model = whisper.load_model("base")
-        resultado = model.transcribe(
-            temp_path,
-            language="es",
-            task="transcribe",
-            verbose=False,
-            fp16=False
-        )
-        
-        texto = resultado["text"].strip()
-        logger.info(f"✅ Transcripción completada: {len(texto)} caracteres")
-        return texto
-        
     except Exception as e:
-        logger.error(f"Error en transcripción: {str(e)}")
+        logger.error(f"Error obteniendo código de orden: {str(e)}")
         return None
-    finally:
-        if temp_path and os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except Exception as e:
-                logger.warning(f"Error eliminando archivo temporal: {e}")
 
 
 # =====================================================
@@ -404,7 +321,8 @@ def obtener_diagnostico(current_user, id_orden):
 
 
 # =====================================================
-# API: SUBIR FOTO
+# API: SUBIR FOTO A GOOGLE DRIVE
+# ESTRUCTURA: {CODIGO_ORDEN}/DIAGNOSTICO_TECNICO/fotos/
 # =====================================================
 @diagnostico_bp.route('/api/diagnostico/subir-foto', methods=['POST'])
 @tecnico_required
@@ -423,6 +341,11 @@ def subir_foto_diagnostico(current_user):
             return jsonify({'error': 'No se seleccionó ningún archivo'}), 400
         
         tecnico_id = current_user['id']
+        
+        # Obtener código de la orden
+        codigo_orden = obtener_codigo_orden(id_orden)
+        if not codigo_orden:
+            return jsonify({'error': 'No se encontró la orden'}), 404
         
         # Obtener o crear diagnóstico
         diagnostico = supabase.table('diagnostico_tecnico') \
@@ -453,7 +376,7 @@ def subir_foto_diagnostico(current_user):
         
         # Verificar límite de fotos
         fotos_existentes = supabase.table('foto_diagnostico') \
-            .select('id') \
+            .select('id, public_id') \
             .eq('id_diagnostico_tecnico', diagnostico_id) \
             .execute()
         
@@ -462,34 +385,54 @@ def subir_foto_diagnostico(current_user):
         if fotos_count >= max_fotos:
             return jsonify({'error': f'Máximo {max_fotos} fotos por diagnóstico'}), 400
         
-        # Subir a Cloudinary
-        resultado_cloudinary = subir_foto_cloudinary(foto)
+        # =============================================
+        # SUBIR A GOOGLE DRIVE
+        # ESTRUCTURA: {CODIGO_ORDEN}/DIAGNOSTICO_TECNICO/fotos/
+        # =============================================
+        folder_path = f"{codigo_orden}/DIAGNOSTICO_TECNICO/fotos"
         
-        if not resultado_cloudinary['success']:
-            return jsonify({'error': resultado_cloudinary['error']}), 500
+        # Generar nombre de archivo único
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        extension = foto.filename.split('.')[-1] if '.' in foto.filename else 'jpg'
+        filename = f"foto_{timestamp}_{uuid.uuid4().hex[:8]}.{extension}"
+        
+        # Subir a Google Drive
+        resultado_drive = google_drive.upload_file(
+            file_data=foto,
+            filename=filename,
+            folder_path=folder_path,
+            public=True
+        )
+        
+        if not resultado_drive or not resultado_drive.get('id'):
+            return jsonify({'error': 'Error al subir la foto a Google Drive'}), 500
         
         # Guardar en BD
         resultado_foto = supabase.table('foto_diagnostico').insert({
             'id_diagnostico_tecnico': diagnostico_id,
-            'url_foto': resultado_cloudinary['url'],
-            'public_id': resultado_cloudinary['public_id'],
+            'url_foto': resultado_drive['url'],
+            'public_id': resultado_drive['id'],  # Guardamos el ID de Drive
             'descripcion_tecnico': f"Foto {fotos_count + 1}"
         }).execute()
         
+        logger.info(f"✅ Foto subida a Drive: {resultado_drive['url']}")
+        
         return jsonify({
             'success': True,
-            'url': resultado_cloudinary['url'],
+            'url': resultado_drive['url'],
             'foto_id': resultado_foto.data[0]['id'],
-            'message': 'Foto subida correctamente'
+            'message': 'Foto subida correctamente a Google Drive'
         }), 200
         
     except Exception as e:
         logger.error(f"Error subiendo foto: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
 # =====================================================
-# API: ELIMINAR FOTO
+# API: ELIMINAR FOTO DE GOOGLE DRIVE
 # =====================================================
 @diagnostico_bp.route('/api/diagnostico/eliminar-foto/<int:foto_id>', methods=['DELETE'])
 @tecnico_required
@@ -518,14 +461,14 @@ def eliminar_foto_diagnostico(current_user, foto_id):
         if diagnostico.data[0]['id_tecnico'] != current_user['id']:
             return jsonify({'error': 'No autorizado'}), 403
         
-        # Eliminar de Cloudinary
-        public_id = foto_data.get('public_id')
-        if public_id and CLOUDINARY_CONFIGURED:
-            try:
-                cloudinary.uploader.destroy(public_id)
-                logger.info(f"✅ Foto eliminada de Cloudinary: {public_id}")
-            except Exception as e:
-                logger.error(f"Error eliminando de Cloudinary: {str(e)}")
+        # Eliminar de Google Drive usando el public_id (que es el file_id)
+        file_id = foto_data.get('public_id')
+        if file_id:
+            eliminado = google_drive.delete_file(file_id)
+            if eliminado:
+                logger.info(f"✅ Foto eliminada de Drive: {file_id}")
+            else:
+                logger.warning(f"⚠️ No se pudo eliminar de Drive: {file_id}")
         
         # Eliminar de BD
         supabase.table('foto_diagnostico').delete().eq('id', foto_id).execute()
@@ -538,7 +481,8 @@ def eliminar_foto_diagnostico(current_user, foto_id):
 
 
 # =====================================================
-# API: SUBIR AUDIO
+# API: SUBIR AUDIO A GOOGLE DRIVE
+# ESTRUCTURA: {CODIGO_ORDEN}/DIAGNOSTICO_TECNICO/audios/
 # =====================================================
 @diagnostico_bp.route('/api/diagnostico/subir-audio', methods=['POST'])
 @tecnico_required
@@ -556,24 +500,97 @@ def subir_audio_diagnostico(current_user):
         if audio.filename == '':
             return jsonify({'error': 'No se seleccionó ningún archivo'}), 400
         
-        resultado_cloudinary = subir_audio_cloudinary(audio)
+        tecnico_id = current_user['id']
         
-        if not resultado_cloudinary['success']:
-            return jsonify({'error': resultado_cloudinary['error']}), 500
+        # Obtener código de la orden
+        codigo_orden = obtener_codigo_orden(id_orden)
+        if not codigo_orden:
+            return jsonify({'error': 'No se encontró la orden'}), 404
         
+        # Obtener o crear diagnóstico (para tener el id)
+        diagnostico = supabase.table('diagnostico_tecnico') \
+            .select('id') \
+            .eq('id_orden_trabajo', id_orden) \
+            .eq('id_tecnico', tecnico_id) \
+            .order('version', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if not diagnostico.data:
+            # Crear nuevo diagnóstico
+            resultado = supabase.table('diagnostico_tecnico').insert({
+                'id_orden_trabajo': id_orden,
+                'id_tecnico': tecnico_id,
+                'informe': '',
+                'estado': 'borrador',
+                'fecha_envio': datetime.datetime.now().isoformat(),
+                'version': 1,
+                'es_borrador': True,
+                'max_fotos': 2
+            }).execute()
+            diagnostico_id = resultado.data[0]['id']
+        else:
+            diagnostico_id = diagnostico.data[0]['id']
+        
+        # =============================================
+        # SUBIR A GOOGLE DRIVE
+        # ESTRUCTURA: {CODIGO_ORDEN}/DIAGNOSTICO_TECNICO/audios/
+        # =============================================
+        folder_path = f"{codigo_orden}/DIAGNOSTICO_TECNICO/audios"
+        
+        # Generar nombre de archivo único
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"audio_{timestamp}_{uuid.uuid4().hex[:8]}.mp3"
+        
+        # Subir a Google Drive
+        resultado_drive = google_drive.upload_file(
+            file_data=audio,
+            filename=filename,
+            folder_path=folder_path,
+            public=True
+        )
+        
+        if not resultado_drive or not resultado_drive.get('id'):
+            return jsonify({'error': 'Error al subir el audio a Google Drive'}), 500
+        
+        # =============================================
+        # TRANSCRIBIR CON WHISPER
+        # =============================================
         transcripcion = None
         if WHISPER_AVAILABLE:
-            transcripcion = transcribir_audio_local(resultado_cloudinary['url'])
+            try:
+                # Usar el método de google_drive para transcribir
+                resultado_transcripcion = google_drive.transcribir_audio(
+                    url_audio=resultado_drive['url']
+                )
+                if resultado_transcripcion.get('success'):
+                    transcripcion = resultado_transcripcion.get('transcripcion')
+                    logger.info(f"✅ Audio transcrito: {len(transcripcion)} caracteres")
+                else:
+                    logger.warning(f"⚠️ Error en transcripción: {resultado_transcripcion.get('error')}")
+            except Exception as e:
+                logger.error(f"Error en transcripción: {str(e)}")
+        
+        # Actualizar diagnóstico con el audio y transcripción
+        supabase.table('diagnostico_tecnico').update({
+            'url_grabacion_informe': resultado_drive['url'],
+            'transcripcion_informe': transcripcion or '',
+            'fecha_modificacion': datetime.datetime.now().isoformat()
+        }).eq('id', diagnostico_id).execute()
+        
+        logger.info(f"✅ Audio subido a Drive: {resultado_drive['url']}")
         
         return jsonify({
             'success': True,
-            'url': resultado_cloudinary['url'],
+            'url': resultado_drive['url'],
             'transcripcion': transcripcion,
-            'message': 'Audio subido correctamente'
+            'message': 'Audio subido correctamente a Google Drive'
         }), 200
         
     except Exception as e:
         logger.error(f"Error subiendo audio: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -717,6 +734,10 @@ def notificar_jefes_taller(id_orden, tecnico_nombre):
     except Exception as e:
         logger.error(f"Error enviando notificaciones: {str(e)}")
 
+
+# =====================================================
+# API: OBTENER DETALLES COMPLETOS DE UNA ORDEN
+# =====================================================
 @diagnostico_bp.route('/api/orden/<int:id_orden>/detalles-completos', methods=['GET'])
 @tecnico_required
 def obtener_detalles_completos_orden(current_user, id_orden):
@@ -871,3 +892,90 @@ def obtener_detalles_completos_orden(current_user, id_orden):
     except Exception as e:
         logger.error(f"Error obteniendo detalles completos: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# API: MARCAR ARMADO COMPLETADO
+# =====================================================
+@diagnostico_bp.route('/api/armado/completar/<int:id_orden>', methods=['PUT'])
+@tecnico_required
+def marcar_armado_completado(current_user, id_orden):
+    """Marca que el técnico ha completado el armado del vehículo"""
+    try:
+        tecnico_id = current_user['id']
+        
+        # Verificar asignación
+        asignacion = supabase.table('asignaciontecnico') \
+            .select('id') \
+            .eq('id_orden_trabajo', id_orden) \
+            .eq('id_tecnico', tecnico_id) \
+            .eq('tipo_asignacion', 'diagnostico') \
+            .is_('fecha_hora_final', 'null') \
+            .execute()
+        
+        if not asignacion.data:
+            return jsonify({'error': 'No tienes acceso a esta orden'}), 403
+        
+        # Obtener la orden
+        orden = supabase.table('ordentrabajo') \
+            .select('codigo_unico') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if not orden.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
+        
+        codigo_orden = orden.data[0]['codigo_unico']
+        
+        # Actualizar orden
+        ahora = datetime.datetime.now().isoformat()
+        supabase.table('ordentrabajo').update({
+            'estado_global': 'ArmadoCompletado',
+            'fecha_fin_armado': ahora
+        }).eq('id', id_orden).execute()
+        
+        # Finalizar asignación del técnico
+        supabase.table('asignaciontecnico').update({
+            'fecha_hora_final': ahora
+        }).eq('id_orden_trabajo', id_orden).eq('id_tecnico', tecnico_id).execute()
+        
+        # Notificar al Jefe de Taller
+        notificar_armado_completado(id_orden, codigo_orden, current_user.get('nombre', 'Técnico'))
+        
+        return jsonify({
+            'success': True,
+            'message': 'Armado completado correctamente'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error marcando armado completado: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+def notificar_armado_completado(id_orden, codigo_orden, tecnico_nombre):
+    """Notificar al Jefe de Taller que el armado fue completado"""
+    try:
+        jefes_result = supabase.table('usuario_rol') \
+            .select('id_usuario') \
+            .eq('id_rol', 2) \
+            .execute()
+        
+        jefes_ids = [j['id_usuario'] for j in (jefes_result.data or [])]
+        
+        if not jefes_ids:
+            logger.warning("No se encontraron jefes de taller para notificar")
+            return
+        
+        for jefe_id in jefes_ids:
+            supabase.table('notificacion').insert({
+                'id_usuario_destino': jefe_id,
+                'tipo': 'armado_completado',
+                'mensaje': f"🔧 {tecnico_nombre} ha completado el armado del vehículo de la orden #{codigo_orden}",
+                'fecha_envio': datetime.datetime.now().isoformat(),
+                'leida': False
+            }).execute()
+        
+        logger.info(f"Notificaciones de armado enviadas a {len(jefes_ids)} jefes de taller")
+        
+    except Exception as e:
+        logger.error(f"Error enviando notificaciones de armado: {str(e)}")

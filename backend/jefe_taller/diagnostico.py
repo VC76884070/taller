@@ -1,7 +1,8 @@
 # =====================================================
 # DIAGNÓSTICO - JEFE DE TALLER
 # Gestión completa de diagnósticos técnicos
-# Versión: CORREGIDA - SIN columnas inexistentes
+# MIGRADO A GOOGLE DRIVE
+# ESTRUCTURA: {CODIGO_ORDEN}/DIAGNOSTICO_JEFE_TALLER/RECHAZADO/
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -12,6 +13,7 @@ import logging
 import base64
 import io
 import os
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
@@ -24,60 +26,81 @@ jefe_taller_diagnostico_bp = Blueprint('jefe_taller_diagnostico', __name__, url_
 # Configuración
 supabase = config.supabase
 
-# Configuración Cloudinary (opcional)
-CLOUDINARY_CONFIGURED = False
-try:
-    if hasattr(config, 'CLOUDINARY_CLOUD_NAME') and config.CLOUDINARY_CLOUD_NAME:
-        import cloudinary
-        import cloudinary.uploader
-        cloudinary.config(
-            cloud_name=config.CLOUDINARY_CLOUD_NAME,
-            api_key=config.CLOUDINARY_API_KEY,
-            api_secret=config.CLOUDINARY_API_SECRET,
-            secure=True
-        )
-        CLOUDINARY_CONFIGURED = True
-        logger.info(f"✅ Cloudinary configurado: {config.CLOUDINARY_CLOUD_NAME}")
-except Exception as e:
-    logger.warning(f"⚠️ Cloudinary no configurado: {e}")
+# Importar Google Drive
+from google_drive import google_drive
 
 
 # =====================================================
 # FUNCIONES AUXILIARES
 # =====================================================
 
-def subir_audio_cloudinary(audio_base64, carpeta, nombre):
-    """Subir audio a Cloudinary"""
+def obtener_codigo_orden(id_orden):
+    """Obtiene el código único de una orden de trabajo"""
     try:
-        if not audio_base64:
+        orden = supabase.table('ordentrabajo') \
+            .select('codigo_unico') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if orden.data:
+            return orden.data[0]['codigo_unico']
+        return None
+    except Exception as e:
+        logger.error(f"Error obteniendo código de orden: {str(e)}")
+        return None
+
+
+def obtener_id_orden_por_diagnostico(diagnostico_id):
+    """Obtiene el id_orden_trabajo a partir de un diagnostico_id"""
+    try:
+        diagnostico = supabase.table('diagnostico_tecnico') \
+            .select('id_orden_trabajo') \
+            .eq('id', diagnostico_id) \
+            .execute()
+        
+        if diagnostico.data:
+            return diagnostico.data[0]['id_orden_trabajo']
+        return None
+    except Exception as e:
+        logger.error(f"Error obteniendo orden por diagnóstico: {str(e)}")
+        return None
+
+
+def subir_audio_rechazo_drive(audio_file, codigo_orden):
+    """
+    Sube un audio de rechazo a Google Drive
+    ESTRUCTURA: {CODIGO_ORDEN}/DIAGNOSTICO_JEFE_TALLER/RECHAZADO/
+    El audio se guarda directamente en la carpeta RECHAZADO
+    """
+    try:
+        if not audio_file:
             return None
         
-        if 'base64,' in audio_base64:
-            audio_base64 = audio_base64.split('base64,')[1]
+        # Ruta: {CODIGO_ORDEN}/DIAGNOSTICO_JEFE_TALLER/RECHAZADO
+        folder_path = f"{codigo_orden}/DIAGNOSTICO_JEFE_TALLER/RECHAZADO"
         
-        audio_bytes = base64.b64decode(audio_base64)
-        audio_file = io.BytesIO(audio_bytes)
-        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S%f')
-        audio_file.name = f"{nombre}_{timestamp}.wav"
+        # Generar nombre de archivo único
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"rechazo_audio_{timestamp}_{uuid.uuid4().hex[:8]}.mp3"
         
-        if CLOUDINARY_CONFIGURED:
-            resultado = cloudinary.uploader.upload(
-                audio_file,
-                folder=f"furia_motor/{carpeta}",
-                public_id=f"{nombre}_{timestamp}",
-                resource_type="video"
-            )
-            return resultado.get('secure_url')
+        # Subir a Google Drive
+        resultado = google_drive.upload_file(
+            file_data=audio_file,
+            filename=filename,
+            folder_path=folder_path,
+            public=True
+        )
+        
+        if resultado and resultado.get('url'):
+            logger.info(f"✅ Audio de rechazo subido a Drive: {resultado['url']}")
+            logger.info(f"   📁 Ruta: {folder_path}/{filename}")
+            return resultado['url']
         else:
-            upload_dir = os.path.join('uploads', 'audios', carpeta)
-            os.makedirs(upload_dir, exist_ok=True)
-            filename = f"{nombre}_{timestamp}.wav"
-            filepath = os.path.join(upload_dir, filename)
-            with open(filepath, 'wb') as f:
-                f.write(audio_bytes)
-            return f"/uploads/audios/{carpeta}/{filename}"
+            logger.error("❌ Error subiendo audio de rechazo a Drive")
+            return None
+            
     except Exception as e:
-        logger.error(f"Error subiendo audio: {e}")
+        logger.error(f"Error subiendo audio de rechazo: {str(e)}")
         return None
 
 
@@ -171,7 +194,7 @@ def procesar_diagnosticos(diagnosticos):
 
 
 # =====================================================
-# 1. LISTAR DIAGNÓSTICOS - ÚLTIMOS 10 POR ESTADO (CORREGIDO)
+# 1. LISTAR DIAGNÓSTICOS
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/diagnosticos', methods=['GET'])
 @jefe_taller_required
@@ -179,9 +202,8 @@ def listar_diagnosticos(current_user):
     """Lista los últimos 10 diagnósticos por estado"""
     try:
         estado_filtro = request.args.get('estado', 'todos')
-        logger.info(f"📋 Listando diagnósticos - Últimos 10 por estado - Filtro: {estado_filtro}")
+        logger.info(f"📋 Listando diagnósticos - Filtro: {estado_filtro}")
         
-        # Si hay filtro específico, solo mostrar últimos 10 de ese estado
         if estado_filtro != 'todos':
             diagnosticos = supabase.table('diagnostico_tecnico') \
                 .select('*') \
@@ -193,7 +215,6 @@ def listar_diagnosticos(current_user):
             resultado = procesar_diagnosticos(diagnosticos.data or [])
             return jsonify({'success': True, 'diagnosticos': resultado}), 200
         
-        # Si no hay filtro, obtener últimos 10 de cada estado en PARALELO
         estados = ['pendiente', 'aprobado', 'rechazado', 'borrador']
         
         def fetch_por_estado(estado):
@@ -204,7 +225,6 @@ def listar_diagnosticos(current_user):
                 .limit(10) \
                 .execute()
         
-        # Ejecutar consultas en paralelo
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = {executor.submit(fetch_por_estado, estado): estado for estado in estados}
             resultados = {}
@@ -217,14 +237,11 @@ def listar_diagnosticos(current_user):
                     logger.error(f"Error fetching {estado}: {e}")
                     resultados[estado] = []
         
-        # Combinar resultados
         todos_diagnosticos = []
         for estado in estados:
             todos_diagnosticos.extend(resultados.get(estado, []))
         
-        logger.info(f"✅ {len(todos_diagnosticos)} diagnósticos (últimos 10 por estado)")
-        
-        # Procesar y enriquecer datos
+        logger.info(f"✅ {len(todos_diagnosticos)} diagnósticos")
         resultado = procesar_diagnosticos(todos_diagnosticos)
         
         return jsonify({'success': True, 'diagnosticos': resultado}), 200
@@ -237,12 +254,12 @@ def listar_diagnosticos(current_user):
 
 
 # =====================================================
-# 2. LISTAR DIAGNÓSTICOS PENDIENTES (Endpoint legacy)
+# 2. LISTAR DIAGNÓSTICOS PENDIENTES (Legacy)
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/diagnosticos-pendientes', methods=['GET'])
 @jefe_taller_required
 def listar_diagnosticos_pendientes(current_user):
-    """Endpoint legacy - redirige al nuevo endpoint con filtro pendiente - Últimos 10"""
+    """Endpoint legacy - Últimos 10 pendientes/borradores"""
     try:
         diagnosticos = supabase.table('diagnostico_tecnico') \
             .select('*') \
@@ -269,7 +286,6 @@ def obtener_diagnostico(current_user, diagnostico_id):
     try:
         logger.info(f"🔍 Obteniendo diagnóstico {diagnostico_id}")
         
-        # Obtener diagnóstico
         diagnostico = supabase.table('diagnostico_tecnico') \
             .select('*') \
             .eq('id', diagnostico_id) \
@@ -402,14 +418,13 @@ def obtener_diagnostico(current_user, diagnostico_id):
 
 
 # =====================================================
-# 4. ESTADÍSTICAS (CONTEO TOTAL)
+# 4. ESTADÍSTICAS
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/diagnosticos-stats', methods=['GET'])
 @jefe_taller_required
 def diagnosticos_stats(current_user):
-    """Obtener estadísticas totales (para el contador)"""
+    """Obtener estadísticas totales"""
     try:
-        # Contar todos los diagnósticos por estado
         diagnosticos = supabase.table('diagnostico_tecnico') \
             .select('estado') \
             .execute()
@@ -436,14 +451,13 @@ def diagnosticos_stats(current_user):
 
 
 # =====================================================
-# 5. APROBAR DIAGNÓSTICO - CORREGIDO (SIN COLUMNAS INEXISTENTES)
+# 5. APROBAR DIAGNÓSTICO
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/aprobar-diagnostico-simple', methods=['POST'])
 @jefe_taller_required
 def aprobar_diagnostico_simple(current_user):
-    """Aprobar diagnóstico - CORREGIDO (sin columnas que no existen)"""
+    """Aprobar diagnóstico"""
     try:
-        # Obtener ID
         diagnostico_id = None
         if request.is_json:
             data = request.get_json()
@@ -456,7 +470,6 @@ def aprobar_diagnostico_simple(current_user):
         
         diagnostico_id = int(diagnostico_id)
         
-        # Verificar diagnóstico
         diagnostico = supabase.table('diagnostico_tecnico') \
             .select('id, estado, id_orden_trabajo, id_tecnico') \
             .eq('id', diagnostico_id) \
@@ -472,8 +485,6 @@ def aprobar_diagnostico_simple(current_user):
         
         ahora = datetime.datetime.now().isoformat()
         
-        # ACTUALIZAR DIAGNÓSTICO - SOLO COLUMNAS QUE EXISTEN
-        # NOTA: NO usar 'fecha_aprobacion' porque no existe en la tabla
         supabase.table('diagnostico_tecnico') \
             .update({
                 'estado': 'aprobado',
@@ -482,7 +493,6 @@ def aprobar_diagnostico_simple(current_user):
             .eq('id', diagnostico_id) \
             .execute()
         
-        # Actualizar orden de trabajo
         supabase.table('ordentrabajo') \
             .update({
                 'estado_global': 'DiagnosticoAprobado'
@@ -490,7 +500,6 @@ def aprobar_diagnostico_simple(current_user):
             .eq('id', dt['id_orden_trabajo']) \
             .execute()
         
-        # Notificar al técnico
         supabase.table('notificacion').insert({
             'id_usuario_destino': dt['id_tecnico'],
             'tipo': 'diagnostico_aprobado',
@@ -516,27 +525,21 @@ def aprobar_diagnostico_simple(current_user):
 
 
 # =====================================================
-# 6. RECHAZAR DIAGNÓSTICO - CORREGIDO (SIN COLUMNAS INEXISTENTES)
+# 6. RECHAZAR DIAGNÓSTICO - CON GOOGLE DRIVE
+# ESTRUCTURA: {CODIGO_ORDEN}/DIAGNOSTICO_JEFE_TALLER/RECHAZADO/
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/rechazar-diagnostico', methods=['POST'])
 @jefe_taller_required
 def rechazar_diagnostico(current_user):
-    """Rechazar diagnóstico con observación - CORREGIDO"""
+    """
+    Rechazar diagnóstico con observación y audio subido a Google Drive
+    ESTRUCTURA: {CODIGO_ORDEN}/DIAGNOSTICO_JEFE_TALLER/RECHAZADO/
+    """
     try:
-        # Obtener datos
-        diagnostico_id = None
-        observacion = ''
-        grabacion_url = None
-        
-        if request.is_json:
-            data = request.get_json()
-            diagnostico_id = data.get('diagnostico_id')
-            observacion = data.get('observacion', '')
-            grabacion_url = data.get('grabacion_url')
-        elif request.form:
-            diagnostico_id = request.form.get('diagnostico_id')
-            observacion = request.form.get('observacion', '')
-            grabacion_url = request.form.get('grabacion_url')
+        # Obtener datos del formulario
+        diagnostico_id = request.form.get('diagnostico_id')
+        observacion = request.form.get('observacion', '')
+        grabacion_url = request.form.get('grabacion_url')
         
         if not diagnostico_id:
             return jsonify({'success': False, 'error': 'ID de diagnóstico requerido'}), 400
@@ -560,22 +563,57 @@ def rechazar_diagnostico(current_user):
         if dt['estado'] != 'pendiente':
             return jsonify({'success': False, 'error': f'El diagnóstico está en estado "{dt["estado"]}", no se puede rechazar'}), 400
         
+        # Obtener código de la orden para la carpeta
+        codigo_orden = obtener_codigo_orden(dt['id_orden_trabajo'])
+        if not codigo_orden:
+            logger.warning(f"No se encontró código para orden {dt['id_orden_trabajo']}, usando ID")
+            codigo_orden = f"ORDEN_{dt['id_orden_trabajo']}"
+        
+        # =============================================
+        # PROCESAR AUDIO
+        # ESTRUCTURA: {CODIGO_ORDEN}/DIAGNOSTICO_JEFE_TALLER/RECHAZADO/
+        # =============================================
+        audio_url_drive = None
+        
+        # Verificar si hay audio en el request (como archivo)
+        if 'audio' in request.files:
+            audio_file = request.files['audio']
+            if audio_file and audio_file.filename != '':
+                audio_url_drive = subir_audio_rechazo_drive(audio_file, codigo_orden)
+        elif grabacion_url:
+            # Si ya viene una URL (de Cloudinary), la usamos
+            audio_url_drive = grabacion_url
+        else:
+            # Revisar si viene audio en base64
+            audio_base64 = request.form.get('audio_base64')
+            if audio_base64:
+                try:
+                    if 'base64,' in audio_base64:
+                        audio_base64 = audio_base64.split('base64,')[1]
+                    audio_bytes = base64.b64decode(audio_base64)
+                    
+                    audio_file = io.BytesIO(audio_bytes)
+                    audio_file.name = f"rechazo_audio_{uuid.uuid4().hex[:8]}.wav"
+                    
+                    audio_url_drive = subir_audio_rechazo_drive(audio_file, codigo_orden)
+                except Exception as e:
+                    logger.error(f"Error procesando audio base64: {str(e)}")
+        
         ahora = datetime.datetime.now().isoformat()
         nueva_version = dt.get('version', 1) + 1
         
-        # Guardar observación
+        # Guardar observación con la URL de Drive
         observacion_data = {
             'id_diagnostico_tecnico': diagnostico_id,
             'id_jefe_taller': current_user['id'],
             'observacion': observacion,
-            'url_grabacion_observacion': grabacion_url,
+            'url_grabacion_observacion': audio_url_drive or grabacion_url,
             'fecha_hora': ahora,
             'version_diagnostico': nueva_version
         }
         supabase.table('observaciondiagnostico').insert(observacion_data).execute()
         
-        # ACTUALIZAR DIAGNÓSTICO - SOLO COLUMNAS QUE EXISTEN
-        # NOTA: NO usar 'fecha_rechazo' ni 'motivo_rechazo' porque no existen
+        # Actualizar diagnóstico
         supabase.table('diagnostico_tecnico') \
             .update({
                 'estado': 'rechazado',
@@ -603,10 +641,13 @@ def rechazar_diagnostico(current_user):
         }).execute()
         
         logger.info(f"✅ Diagnóstico {diagnostico_id} rechazado correctamente")
+        logger.info(f"   📁 Audio en: {codigo_orden}/DIAGNOSTICO_JEFE_TALLER/RECHAZADO/")
+        logger.info(f"   🔗 URL: {audio_url_drive}")
         
         return jsonify({
             'success': True,
             'message': 'Diagnóstico rechazado correctamente',
+            'audio_url': audio_url_drive,
             'nuevo_estado_diagnostico': 'rechazado',
             'nuevo_estado_orden': 'DiagnosticoRechazado'
         }), 200
@@ -619,33 +660,100 @@ def rechazar_diagnostico(current_user):
 
 
 # =====================================================
-# 7. SUBIR AUDIO DE OBSERVACIÓN
+# 7. SUBIR AUDIO DE OBSERVACIÓN (LEGACY - CORREGIDO)
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/subir-audio-observacion', methods=['POST'])
 @jefe_taller_required
 def subir_audio_observacion(current_user):
-    """Subir audio de observación a Cloudinary"""
+    """
+    CORREGIDO: Ahora obtiene el diagnóstico_id correctamente
+    y sube el audio a la carpeta correcta
+    """
     try:
-        data = request.get_json(force=True, silent=True)
-        if not data:
-            data = request.form.to_dict()
+        # OBTENER DIAGNOSTICO_ID (MÉTODO CORREGIDO)
+        diagnostico_id = request.form.get('diagnostico_id')
         
-        audio_base64 = data.get('audio')
-        tipo = data.get('tipo', 'observacion')
+        # Si no viene en form, buscar en JSON
+        if not diagnostico_id and request.is_json:
+            data = request.get_json(force=True, silent=True) or {}
+            diagnostico_id = data.get('diagnostico_id')
         
-        if not audio_base64:
+        # Si no viene en ninguna parte, buscar en args
+        if not diagnostico_id:
+            diagnostico_id = request.args.get('diagnostico_id')
+        
+        logger.info(f"🔍 Diagnóstico ID obtenido: {diagnostico_id}")
+        
+        # Obtener audio
+        audio_base64 = None
+        audio_file = None
+        
+        # Verificar si viene como archivo
+        if 'audio' in request.files:
+            audio_file = request.files['audio']
+            if audio_file and audio_file.filename != '':
+                logger.info(f"🎵 Audio recibido como archivo: {audio_file.filename}")
+        
+        # Si no hay archivo, buscar base64
+        if not audio_file:
+            if request.is_json:
+                data = request.get_json(force=True, silent=True) or {}
+                audio_base64 = data.get('audio')
+            else:
+                audio_base64 = request.form.get('audio')
+        
+        if not audio_file and not audio_base64:
             return jsonify({'error': 'Audio no proporcionado'}), 400
         
-        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-        url = subir_audio_cloudinary(audio_base64, f'observaciones/{current_user["id"]}', f'{tipo}_{timestamp}')
+        # OBTENER CÓDIGO DE ORDEN
+        codigo_orden = None
         
-        if url:
-            return jsonify({'success': True, 'url': url}), 200
+        if diagnostico_id:
+            try:
+                diagnostico_id = int(diagnostico_id)
+                id_orden = obtener_id_orden_por_diagnostico(diagnostico_id)
+                if id_orden:
+                    codigo_orden = obtener_codigo_orden(id_orden)
+                    logger.info(f"📋 Código de orden obtenido: {codigo_orden}")
+            except Exception as e:
+                logger.error(f"Error obteniendo orden: {str(e)}")
+        
+        # Si no se pudo obtener, usar TEMP
+        if not codigo_orden:
+            logger.warning("⚠️ No se pudo obtener código de orden, usando TEMP")
+            codigo_orden = "TEMP"
+        
+        # SUBIR AUDIO
+        audio_url = None
+        
+        if audio_file:
+            audio_url = subir_audio_rechazo_drive(audio_file, codigo_orden)
+        elif audio_base64:
+            try:
+                if 'base64,' in audio_base64:
+                    audio_base64 = audio_base64.split('base64,')[1]
+                audio_bytes = base64.b64decode(audio_base64)
+                audio_file = io.BytesIO(audio_bytes)
+                audio_file.name = f"observacion_audio_{uuid.uuid4().hex[:8]}.wav"
+                audio_url = subir_audio_rechazo_drive(audio_file, codigo_orden)
+            except Exception as e:
+                logger.error(f"Error procesando base64: {str(e)}")
+                return jsonify({'error': f'Error procesando audio: {str(e)}'}), 400
+        
+        if audio_url:
+            logger.info(f"✅ Audio subido correctamente a Drive")
+            return jsonify({
+                'success': True,
+                'url': audio_url,
+                'folder': f"{codigo_orden}/DIAGNOSTICO_JEFE_TALLER/RECHAZADO/"
+            }), 200
         else:
             return jsonify({'error': 'Error subiendo audio'}), 500
             
     except Exception as e:
         logger.error(f"Error subiendo audio: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -670,7 +778,6 @@ def solicitar_cotizacion_repuesto(current_user):
         if not orden_id or not descripcion_pieza:
             return jsonify({'error': 'Faltan datos requeridos'}), 400
         
-        # Verificar orden
         orden = supabase.table('ordentrabajo') \
             .select('id, codigo_unico') \
             .eq('id', orden_id) \
@@ -679,7 +786,6 @@ def solicitar_cotizacion_repuesto(current_user):
         if not orden.data:
             return jsonify({'error': 'Orden de trabajo no encontrada'}), 404
         
-        # Obtener encargado de repuestos
         try:
             encargado_result = supabase.rpc('obtener_encargado_repuestos').execute()
             encargado_id = encargado_result.data if encargado_result.data else None
@@ -700,7 +806,6 @@ def solicitar_cotizacion_repuesto(current_user):
         
         result = supabase.table('solicitud_cotizacion_repuesto').insert(solicitud_data).execute()
         
-        # Notificar al encargado de repuestos
         if encargado_id:
             supabase.table('notificacion').insert({
                 'id_usuario_destino': encargado_id,
@@ -724,10 +829,10 @@ def solicitar_cotizacion_repuesto(current_user):
 # =====================================================
 @jefe_taller_diagnostico_bp.route('/test', methods=['GET'])
 def test_endpoint():
-    """Endpoint de prueba para verificar que el blueprint funciona"""
+    """Endpoint de prueba"""
     return jsonify({
         'success': True,
         'message': 'Endpoint de diagnóstico funcionando correctamente',
-        'version': '3.0',
-        'features': ['Últimos 5 por estado', 'Aprobación optimizada', 'Rechazo con observación']
+        'version': '3.1',
+        'features': ['Google Drive', 'Rechazo con carpeta correcta']
     }), 200

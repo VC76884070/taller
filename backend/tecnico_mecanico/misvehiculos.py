@@ -1553,3 +1553,42 @@ def marcar_instruccion_leida(current_user, instruccion_id):
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+# =====================================================
+# API: OBTENER CÓDIGO DE ORDEN (PARA FOTOS)
+# =====================================================
+@mis_vehiculos_bp.route('/orden-codigo/<int:orden_id>', methods=['GET'])
+@tecnico_required
+def obtener_codigo_orden_tecnico(current_user, orden_id):
+    """Obtener el código único de una orden para subir fotos"""
+    try:
+        tecnico_id = current_user['id']
+        
+        # Verificar acceso
+        asignacion = supabase.table('asignaciontecnico') \
+            .select('id') \
+            .eq('id_orden_trabajo', orden_id) \
+            .eq('id_tecnico', tecnico_id) \
+            .execute()
+        
+        if not asignacion.data:
+            return jsonify({'success': False, 'error': 'No tienes acceso a esta orden'}), 403
+        
+        # Obtener código
+        orden = supabase.table('ordentrabajo') \
+            .select('codigo_unico') \
+            .eq('id', orden_id) \
+            .execute()
+        
+        if not orden.data:
+            return jsonify({'success': False, 'error': 'Orden no encontrada'}), 404
+        
+        return jsonify({
+            'success': True,
+            'codigo_unico': orden.data[0].get('codigo_unico')
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+

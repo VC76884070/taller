@@ -414,7 +414,84 @@ def obtener_estadisticas(current_user):
         logger.error(f"Error obteniendo estadísticas: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+# =====================================================
+# 🆕 ENDPOINT: SUBIR COMPROBANTE A GOOGLE DRIVE
+# =====================================================
 
+@solicitudes_compra_bp.route('/subir-comprobante-drive', methods=['POST'])
+@encargado_repuestos_required
+def subir_comprobante_drive(current_user):
+    """Subir comprobante de compra a Google Drive"""
+    try:
+        from google_drive import google_drive
+        
+        # Verificar archivo
+        if 'comprobante' not in request.files:
+            return jsonify({'success': False, 'error': 'No se envió comprobante'}), 400
+        
+        file = request.files['comprobante']
+        if not file.filename:
+            return jsonify({'success': False, 'error': 'Archivo vacío'}), 400
+        
+        # Obtener datos
+        id_orden = request.form.get('id_orden')
+        codigo_orden = request.form.get('codigo_orden')
+        
+        if not codigo_orden:
+            # Si no viene, buscarlo
+            if id_orden:
+                orden = supabase.table('ordentrabajo') \
+                    .select('codigo_unico') \
+                    .eq('id', id_orden) \
+                    .execute()
+                if orden.data:
+                    codigo_orden = orden.data[0].get('codigo_unico')
+        
+        if not codigo_orden:
+            return jsonify({'success': False, 'error': 'No se pudo obtener el código de la orden'}), 400
+        
+        # Validar tipo de archivo
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'}
+        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({'error': f'Formato no permitido. Use: {", ".join(allowed_extensions)}'}), 400
+        
+        # Validar tamaño (5MB)
+        if len(file.read()) > 5 * 1024 * 1024:
+            return jsonify({'error': 'El archivo no debe superar los 5MB'}), 400
+        file.seek(0)
+        
+        # Generar nombre único
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"comprobante_{timestamp}_{file.filename}"
+        
+        # 🔥 SUBIR A GOOGLE DRIVE
+        # Ruta: {codigo_orden}/COTIZACION/SOLICITUD_COMPRA/comprobantes/
+        folder_path = google_drive.get_ruta_solicitud_compra(codigo_orden, 'comprobantes')
+        
+        logger.info(f"📁 Subiendo comprobante a: {folder_path}")
+        
+        result = google_drive.upload_file(
+            file_data=file,
+            filename=filename,
+            folder_path=folder_path,
+            public=False  # Solo para el taller
+        )
+        
+        return jsonify({
+            'success': True,
+            'url': result['url'],
+            'file_id': result['id'],
+            'filename': filename,
+            'folder_path': folder_path
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error subiendo comprobante: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 # =====================================================
 # ENDPOINT DE PRUEBA
 # =====================================================

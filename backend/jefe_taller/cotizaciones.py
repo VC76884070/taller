@@ -169,16 +169,15 @@ def obtener_encargados_repuestos():
         return []
 
 # =====================================================
-# 🆕 APARTADO 23: SUBIR FOTO DE ITEM
+# APARTADO 23: SUBIR FOTO DE ITEM (VERSIÓN DRIVE - CORREGIDA)
 # =====================================================
 
 @cotizaciones_bp.route('/subir-foto-item', methods=['POST'])
 @jefe_taller_required
 def subir_foto_item(current_user):
-    """Subir foto de un item a Cloudinary"""
+    """Subir foto de un item a Google Drive en la carpeta de la orden"""
     try:
-        import cloudinary.uploader
-        import cloudinary
+        from google_drive import google_drive
         
         # Verificar si hay archivo
         if 'foto' not in request.files:
@@ -188,6 +187,29 @@ def subir_foto_item(current_user):
         if file.filename == '':
             return jsonify({'error': 'Nombre de archivo vacío'}), 400
         
+        # 🔥 OBTENER CÓDIGO DE ORDEN DEL FRONTEND
+        codigo_orden = request.form.get('codigo_orden')
+        id_orden = request.form.get('id_orden')
+        
+        # Si no viene codigo_orden, buscarlo
+        if not codigo_orden and id_orden:
+            orden = supabase.table('ordentrabajo') \
+                .select('codigo_unico') \
+                .eq('id', id_orden) \
+                .execute()
+            
+            if orden.data:
+                codigo_orden = orden.data[0].get('codigo_unico')
+        
+        if not codigo_orden:
+            # Si no hay código de orden, usar carpeta global
+            logger.warning("⚠️ No se proporcionó codigo_orden, usando carpeta global")
+            folder_path = 'IMAGENES_ITEMS'
+        else:
+            # 🔥 USAR LA RUTA CORRECTA DE COTIZACIONES
+            folder_path = google_drive.get_ruta_solicitud_cotizacion(codigo_orden, 'fotos')
+            logger.info(f"📁 Subiendo foto a: {folder_path}")
+        
         # Validar tipo de archivo
         allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
         file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
@@ -195,26 +217,24 @@ def subir_foto_item(current_user):
         if file_ext not in allowed_extensions:
             return jsonify({'error': f'Formato no permitido. Use: {", ".join(allowed_extensions)}'}), 400
         
-        # Subir a Cloudinary
+        # Generar nombre único
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-        public_id = f"furia_motor/items_fotos/{current_user['id']}_{timestamp}_{file_ext}"
+        filename = f"item_{current_user['id']}_{timestamp}.{file_ext}"
         
-        upload_result = cloudinary.uploader.upload(
-            file,
-            folder="furia_motor/items_fotos",
-            public_id=public_id,
-            resource_type="image",
-            transformation=[
-                {'width': 500, 'height': 500, 'crop': 'limit', 'quality': 'auto'}
-            ]
+        # ✅ SUBIR A GOOGLE DRIVE
+        result = google_drive.upload_file(
+            file_data=file,
+            filename=filename,
+            folder_path=folder_path,  # 🔥 AHORA USA LA RUTA CORRECTA
+            public=True
         )
-        
-        foto_url = upload_result.get('secure_url', '')
         
         return jsonify({
             'success': True,
-            'url': foto_url,
-            'public_id': upload_result.get('public_id')
+            'url': result['url'],
+            'public_id': result['id'],
+            'filename': filename,
+            'folder_path': folder_path
         }), 200
         
     except Exception as e:
@@ -223,17 +243,16 @@ def subir_foto_item(current_user):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-
 # =====================================================
-# 🆕 APARTADO 24: ELIMINAR FOTO DE ITEM
+# APARTADO 24: ELIMINAR FOTO DE ITEM (VERSIÓN DRIVE)
 # =====================================================
 
 @cotizaciones_bp.route('/eliminar-foto-item', methods=['POST'])
 @jefe_taller_required
 def eliminar_foto_item(current_user):
-    """Eliminar foto de un item de Cloudinary"""
+    """Eliminar foto de un item de Google Drive"""
     try:
-        import cloudinary.uploader
+        from google_drive import google_drive
         
         data = request.get_json()
         public_id = data.get('public_id')
@@ -241,9 +260,10 @@ def eliminar_foto_item(current_user):
         if not public_id:
             return jsonify({'error': 'public_id requerido'}), 400
         
-        result = cloudinary.uploader.destroy(public_id, resource_type="image")
+        # ✅ ELIMINAR DE GOOGLE DRIVE
+        resultado = google_drive.delete_file(public_id)
         
-        if result.get('result') == 'ok':
+        if resultado:
             return jsonify({'success': True, 'message': 'Foto eliminada'}), 200
         else:
             return jsonify({'error': 'Error al eliminar foto'}), 500
@@ -251,7 +271,6 @@ def eliminar_foto_item(current_user):
     except Exception as e:
         logger.error(f"Error eliminando foto: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
 
 # =====================================================
 # APARTADO 1: ÓRDENES CON DIAGNÓSTICO APROBADO
@@ -1478,7 +1497,7 @@ def obtener_cotizaciones_enviadas(current_user):
 @cotizaciones_bp.route('/detalle-cotizacion/<int:id_cotizacion>', methods=['GET'])
 @jefe_taller_required
 def obtener_detalle_cotizacion(current_user, id_cotizacion):
-    """Obtener detalle de una cotización específica"""
+    """Obtener detalle de una cotización específica - CON URL DE DRIVE"""
     try:
         cotizacion = supabase.table('cotizacion') \
             .select('*') \
@@ -1491,6 +1510,7 @@ def obtener_detalle_cotizacion(current_user, id_cotizacion):
         cot = cotizacion.data[0]
         id_orden = cot.get('id_orden_trabajo')
         
+        # Obtener información de la orden
         orden = supabase.table('ordentrabajo') \
             .select('codigo_unico, estado_global, id_vehiculo') \
             .eq('id', id_orden) \
@@ -1498,6 +1518,7 @@ def obtener_detalle_cotizacion(current_user, id_cotizacion):
         
         orden_info = orden.data[0] if orden.data else {}
         
+        # Obtener vehículo y cliente
         vehiculo_info = {}
         vehiculo_marca = ''
         vehiculo_modelo = ''
@@ -1531,6 +1552,7 @@ def obtener_detalle_cotizacion(current_user, id_cotizacion):
                         if usuario.data:
                             cliente_nombre = usuario.data[0].get('nombre', 'No registrado')
         
+        # Servicios
         servicios = []
         if cot.get('servicios_json'):
             try:
@@ -1556,7 +1578,9 @@ def obtener_detalle_cotizacion(current_user, id_cotizacion):
                 'estado': cot.get('estado', 'enviada'),
                 'notas': cot.get('notas'),
                 'nombre_archivo': cot.get('nombre_archivo'),
-                'archivo_base64': cot.get('archivo_base64'),
+                # 🔥 EN VEZ DE BASE64, RETORNAMOS LA URL DE DRIVE
+                'archivo_url': cot.get('archivo_url'),
+                'archivo_id': cot.get('archivo_id'),
                 'motivo_rechazo': cot.get('motivo_rechazo'),
                 'fecha_rechazo': cot.get('fecha_rechazo'),
                 'comentarios_rechazo': cot.get('comentarios_rechazo')
@@ -1655,14 +1679,17 @@ def obtener_detalle_cotizacion_por_orden(current_user, id_orden):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# APARTADO 12: ENVIAR/ACTUALIZAR COTIZACIÓN
+# APARTADO 12: ENVIAR COTIZACIÓN (VERSIÓN DRIVE)
 # =====================================================
 
 @cotizaciones_bp.route('/enviar-cotizacion', methods=['POST'])
 @jefe_taller_required
 def enviar_cotizacion(current_user):
-    """Enviar cotización al cliente con archivo adjunto"""
+    """Enviar cotización al cliente con archivo adjunto - GUARDADO EN DRIVE"""
     try:
+        from google_drive import google_drive
+        import base64
+        
         data = request.get_json()
         
         id_orden = data.get('id_orden')
@@ -1679,21 +1706,41 @@ def enviar_cotizacion(current_user):
         total = sum(s.get('precio', 0) for s in servicios)
         ahora = datetime.datetime.now().isoformat()
         
-        orden_actual = supabase.table('ordentrabajo') \
-            .select('estado_global') \
+        # 1. OBTENER CÓDIGO DE LA ORDEN
+        orden = supabase.table('ordentrabajo') \
+            .select('codigo_unico, estado_global') \
             .eq('id', id_orden) \
             .execute()
         
-        estado_anterior = orden_actual.data[0]['estado_global'] if orden_actual.data else None
+        if not orden.data:
+            return jsonify({'error': 'Orden no encontrada'}), 404
         
-        existente = supabase.table('cotizacion') \
-            .select('id') \
-            .eq('id_orden_trabajo', id_orden) \
-            .execute()
+        codigo_orden = orden.data[0].get('codigo_unico')
+        estado_anterior = orden.data[0].get('estado_global')
         
+        # 2. SUBIR ARCHIVO A DRIVE
+        folder_path = google_drive.get_ruta_cotizacion_cliente(codigo_orden, 'documentos')
+        logger.info(f"📁 Subiendo cotización a: {folder_path}")
+        
+        # Decodificar base64
+        if archivo_base64.startswith('data:'):
+            archivo_base64 = archivo_base64.split(',')[1]
+        
+        file_bytes = base64.b64decode(archivo_base64)
+        
+        result = google_drive.upload_file(
+            file_data=file_bytes,
+            filename=nombre_archivo,
+            folder_path=folder_path,
+            public=True
+        )
+        
+        # 3. GUARDAR EN BASE DE DATOS
         cotizacion_data = {
             'id_orden_trabajo': id_orden,
-            'archivo_base64': archivo_base64,
+            'archivo_base64': archivo_base64,      # Mantener por compatibilidad
+            'archivo_url': result['url'],          # 🔥 URL de Drive
+            'archivo_id': result['id'],            # 🔥 ID de Drive
             'nombre_archivo': nombre_archivo,
             'notas': notas,
             'servicios_json': json.dumps(servicios),
@@ -1704,37 +1751,52 @@ def enviar_cotizacion(current_user):
             'estado': 'enviada'
         }
         
+        # Verificar si ya existe cotización
+        existente = supabase.table('cotizacion') \
+            .select('id') \
+            .eq('id_orden_trabajo', id_orden) \
+            .execute()
+        
         if existente.data:
+            # Actualizar
             supabase.table('cotizacion').update(cotizacion_data).eq('id', existente.data[0]['id']).execute()
             cotizacion_id = existente.data[0]['id']
+            logger.info(f"📝 Cotización actualizada: {cotizacion_id}")
         else:
+            # Crear nueva
             cotizacion_data['fecha_creacion'] = ahora
-            result = supabase.table('cotizacion').insert(cotizacion_data).execute()
-            cotizacion_id = result.data[0]['id'] if result.data else None
+            result_insert = supabase.table('cotizacion').insert(cotizacion_data).execute()
+            cotizacion_id = result_insert.data[0]['id'] if result_insert.data else None
+            logger.info(f"📝 Cotización creada: {cotizacion_id}")
         
+        # 4. ACTUALIZAR ESTADO
         supabase.table('ordentrabajo').update({
             'estado_global': ESTADOS_ORDEN['COTIZACION_ENVIADA']
         }).eq('id', id_orden).execute()
         
-        registrar_historial_estado(
-            id_orden, 
-            estado_anterior, 
-            ESTADOS_ORDEN['COTIZACION_ENVIADA'], 
-            current_user['id']
-        )
-        
-        return jsonify({'success': True, 'message': 'Cotización enviada exitosamente', 'id': cotizacion_id}), 200
+        return jsonify({
+            'success': True, 
+            'message': 'Cotización enviada exitosamente', 
+            'id': cotizacion_id,
+            'drive_url': result['url'],
+            'drive_id': result['id']
+        }), 200
         
     except Exception as e:
         logger.error(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
 @cotizaciones_bp.route('/actualizar-cotizacion/<int:id_cotizacion>', methods=['POST'])
 @jefe_taller_required
 def actualizar_cotizacion(current_user, id_cotizacion):
-    """Actualizar una cotización existente"""
+    """Actualizar cotización - REEMPLAZA ARCHIVO EN DRIVE"""
     try:
+        from google_drive import google_drive
+        import base64
+        
         data = request.get_json()
         
         id_orden = data.get('id_orden')
@@ -1748,11 +1810,56 @@ def actualizar_cotizacion(current_user, id_cotizacion):
         if not archivo_base64:
             return jsonify({'error': 'Debe subir un archivo PDF o Word'}), 400
         
+        # 1. OBTENER COTIZACIÓN EXISTENTE
+        cotizacion = supabase.table('cotizacion') \
+            .select('archivo_id, archivo_url, id_orden_trabajo') \
+            .eq('id', id_cotizacion) \
+            .execute()
+        
+        if not cotizacion.data:
+            return jsonify({'error': 'Cotización no encontrada'}), 404
+        
+        cot_data = cotizacion.data[0]
+        
+        # 2. ELIMINAR ARCHIVO ANTERIOR DE DRIVE
+        if cot_data.get('archivo_id'):
+            google_drive.delete_file(cot_data['archivo_id'])
+            logger.info(f"🗑️ Archivo anterior eliminado: {cot_data['archivo_id']}")
+        
+        # 3. OBTENER CÓDIGO DE LA ORDEN
+        orden = supabase.table('ordentrabajo') \
+            .select('codigo_unico') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        codigo_orden = orden.data[0].get('codigo_unico') if orden.data else None
+        
+        # 4. SUBIR NUEVO ARCHIVO A DRIVE
+        folder_path = google_drive.get_orden_folder_path(
+            codigo_orden=codigo_orden,
+            subcarpeta='COTIZACIONES',
+            tipo='documentos'
+        )
+        
+        if archivo_base64.startswith('data:'):
+            archivo_base64 = archivo_base64.split(',')[1]
+        
+        file_bytes = base64.b64decode(archivo_base64)
+        
+        result = google_drive.upload_file(
+            file_data=file_bytes,
+            filename=nombre_archivo,
+            folder_path=folder_path,
+            public=True
+        )
+        
+        # 5. ACTUALIZAR EN BASE DE DATOS
         total = sum(s.get('precio', 0) for s in servicios)
         ahora = datetime.datetime.now().isoformat()
         
         cotizacion_data = {
-            'archivo_base64': archivo_base64,
+            'archivo_url': result['url'],
+            'archivo_id': result['id'],
             'nombre_archivo': nombre_archivo,
             'notas': notas,
             'servicios_json': json.dumps(servicios),
@@ -1764,16 +1871,23 @@ def actualizar_cotizacion(current_user, id_cotizacion):
         
         supabase.table('cotizacion').update(cotizacion_data).eq('id', id_cotizacion).execute()
         
+        # 6. ACTUALIZAR ESTADO DE LA ORDEN
         supabase.table('ordentrabajo').update({
             'estado_global': ESTADOS_ORDEN['COTIZACION_ENVIADA']
         }).eq('id', id_orden).execute()
         
-        return jsonify({'success': True, 'message': 'Cotización actualizada y reenviada'}), 200
+        return jsonify({
+            'success': True, 
+            'message': 'Cotización actualizada y reenviada',
+            'drive_url': result['url'],
+            'drive_id': result['id']
+        }), 200
         
     except Exception as e:
         logger.error(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
 # =====================================================
 # APARTADO 13: HISTORIAL DE COTIZACIONES
 # =====================================================
@@ -2436,3 +2550,29 @@ def test_version():
         'version': 'VERSION_CORREGIDA_6.0',
         'message': 'Backend funcionando correctamente'
     }), 200
+
+# =====================================================
+# ENDPOINT: OBTENER CÓDIGO DE ORDEN
+# =====================================================
+
+@cotizaciones_bp.route('/orden/<int:id_orden>/codigo', methods=['GET'])
+@jefe_taller_required
+def obtener_codigo_orden(current_user, id_orden):
+    """Obtener el código único de una orden"""
+    try:
+        orden = supabase.table('ordentrabajo') \
+            .select('codigo_unico') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if not orden.data:
+            return jsonify({'success': False, 'error': 'Orden no encontrada'}), 404
+        
+        return jsonify({
+            'success': True,
+            'codigo_unico': orden.data[0].get('codigo_unico')
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
+        return jsonify({'error': str(e)}), 500

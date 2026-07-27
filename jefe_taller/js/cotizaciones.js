@@ -371,6 +371,10 @@ function eliminarItemServicio(id_servicio, index) {
     }
 }
 
+// =====================================================
+// SUBIR FOTO DE ITEM (SERVICIO) - CON CÓDIGO DE ORDEN
+// =====================================================
+
 async function subirFotoItemServicio(id_servicio, index, input) {
     const file = input.files[0];
     if (!file) return;
@@ -392,6 +396,16 @@ async function subirFotoItemServicio(id_servicio, index, input) {
     try {
         const formData = new FormData();
         formData.append('foto', file);
+        
+        // 🔥 ENVIAR CÓDIGO DE ORDEN AL BACKEND
+        const ordenInfo = ordenesDiagnosticoAprobado.find(o => o.id_orden === ordenActualSolicitud);
+        if (ordenInfo && ordenInfo.codigo_unico) {
+            formData.append('codigo_orden', ordenInfo.codigo_unico);
+            formData.append('id_orden', ordenActualSolicitud);
+            console.log(`📤 Enviando foto para orden: ${ordenInfo.codigo_unico}`);
+        } else {
+            console.warn('⚠️ No se encontró código de orden, se usará carpeta global');
+        }
         
         const response = await fetch(`${API_URL}/subir-foto-item`, {
             method: 'POST',
@@ -718,7 +732,7 @@ function limpiarItemsCompraDirecta() {
 }
 
 // =====================================================
-// FUNCIONES PARA SUBIR FOTO DE ITEM - COMPRA DIRECTA
+// SUBIR FOTO DE ITEM (COMPRA DIRECTA) - CON CÓDIGO DE ORDEN
 // =====================================================
 
 async function subirFotoItemCompra(index, input) {
@@ -742,6 +756,27 @@ async function subirFotoItemCompra(index, input) {
     try {
         const formData = new FormData();
         formData.append('foto', file);
+        
+        // 🔥 OBTENER CÓDIGO DE ORDEN DEL SELECT
+        const selectOrden = document.getElementById('compraDirecta_id_orden');
+        const selectedOption = selectOrden?.options[selectOrden.selectedIndex];
+        
+        if (selectedOption && selectedOption.value) {
+            // Buscar el código de orden
+            const ordenId = selectedOption.value;
+            const orden = await fetch(`${API_URL}/orden/${ordenId}/codigo`, {
+                headers: getAuthHeaders()
+            });
+            const ordenData = await orden.json();
+            
+            if (ordenData.success && ordenData.codigo_unico) {
+                formData.append('codigo_orden', ordenData.codigo_unico);
+                formData.append('id_orden', ordenId);
+                console.log(`📤 Enviando foto para orden: ${ordenData.codigo_unico}`);
+            }
+        } else {
+            console.warn('⚠️ No se encontró orden seleccionada');
+        }
         
         const response = await fetch(`${API_URL}/subir-foto-item`, {
             method: 'POST',
@@ -1973,7 +2008,9 @@ async function editarCotizacionExistente(id_orden) {
 async function editarCotizacionPorId(id_cotizacion) {
     mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/detalle-cotizacion/${id_cotizacion}`, { headers: getAuthHeaders() });
+        const response = await fetch(`${API_URL}/detalle-cotizacion/${id_cotizacion}`, { 
+            headers: getAuthHeaders() 
+        });
         const data = await response.json();
         
         if (!data.success) {
@@ -2002,6 +2039,53 @@ async function editarCotizacionPorId(id_cotizacion) {
         
         if (cotizacion.notas) {
             document.getElementById('notasAdicionales').value = cotizacion.notas;
+        }
+        
+        // 🔥 SI HAY ARCHIVO EN DRIVE, MOSTRAR INFORMACIÓN
+        if (cotizacion.archivo_url) {
+            const fileInfo = document.getElementById('fileInfo');
+            const fileName = document.getElementById('fileName');
+            const fileSize = document.getElementById('fileSize');
+            
+            if (fileInfo && fileName) {
+                fileName.textContent = cotizacion.nombre_archivo || 'Documento en Drive';
+                fileInfo.style.display = 'block';
+                
+                // Mostrar icono según extensión
+                const fileIconPdf = document.getElementById('fileIconPdf');
+                const fileIconWord = document.getElementById('fileIconWord');
+                const nombreArchivo = (cotizacion.nombre_archivo || '').toLowerCase();
+                
+                if (fileIconPdf && fileIconWord) {
+                    if (nombreArchivo.endsWith('.pdf')) {
+                        fileIconPdf.style.display = 'block';
+                        fileIconWord.style.display = 'none';
+                    } else if (nombreArchivo.endsWith('.doc') || nombreArchivo.endsWith('.docx')) {
+                        fileIconPdf.style.display = 'none';
+                        fileIconWord.style.display = 'block';
+                    }
+                }
+                
+                // 🔥 BOTÓN PARA VER/ABRIR EL ARCHIVO EN DRIVE
+                const fileActions = document.getElementById('fileActions');
+                if (!fileActions) {
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.id = 'fileActions';
+                    actionsDiv.style.marginTop = '8px';
+                    actionsDiv.innerHTML = `
+                        <button class="btn-outline btn-sm" onclick="window.open('${cotizacion.archivo_url}', '_blank')">
+                            <i class="fas fa-external-link-alt"></i> Ver en Drive
+                        </button>
+                        <button class="btn-primary btn-sm" onclick="descargarDocumentoCotizacion(${id_cotizacion})">
+                            <i class="fas fa-download"></i> Descargar
+                        </button>
+                        <small style="display:block; margin-top:4px; color:var(--gris-texto);">
+                            <i class="fas fa-info-circle"></i> Archivo actual en Drive. Puedes reemplazarlo subiendo uno nuevo.
+                        </small>
+                    `;
+                    fileInfo.appendChild(actionsDiv);
+                }
+            }
         }
         
         clearFileSelection();
@@ -2089,7 +2173,9 @@ async function reutilizarCotizacionRechazada(id_orden) {
             return;
         }
         
-        const response = await fetch(`${API_URL}/detalle-cotizacion/${cotizacionId}`, { headers: getAuthHeaders() });
+        const response = await fetch(`${API_URL}/detalle-cotizacion/${cotizacionId}`, { 
+            headers: getAuthHeaders() 
+        });
         const data = await response.json();
         
         if (!data.success) {
@@ -2118,7 +2204,18 @@ async function reutilizarCotizacionRechazada(id_orden) {
         
         const ordenInfoDiv = document.getElementById('ordenInfoPreview');
         if (ordenInfoDiv && orden) {
-            ordenInfoDiv.innerHTML = `<div><strong>Orden:</strong> ${escapeHtml(orden.codigo_unico)}<br><strong>Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}<br><strong>Vehículo:</strong> ${escapeHtml(orden.vehiculo)}</div><small>Basado en cotización rechazada el ${formatDate(cotizacion.fecha_rechazo)}</small>`;
+            ordenInfoDiv.innerHTML = `
+                <div>
+                    <strong>Orden:</strong> ${escapeHtml(orden.codigo_unico)}<br>
+                    <strong>Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}<br>
+                    <strong>Vehículo:</strong> ${escapeHtml(orden.vehiculo)}
+                </div>
+                <small style="color: var(--gris-texto);">
+                    <i class="fas fa-info-circle"></i> 
+                    Basado en cotización rechazada el ${formatDate(cotizacion.fecha_rechazo)}
+                    ${cotizacion.archivo_url ? ` - <a href="${cotizacion.archivo_url}" target="_blank">Ver documento anterior</a>` : ''}
+                </small>
+            `;
         }
         
         clearFileSelection();
@@ -2139,12 +2236,28 @@ async function reutilizarCotizacionRechazada(id_orden) {
 async function verDetalleCotizacion(id_cotizacion) {
     mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/detalle-cotizacion/${id_cotizacion}`, { headers: getAuthHeaders() });
+        const response = await fetch(`${API_URL}/detalle-cotizacion/${id_cotizacion}`, { 
+            headers: getAuthHeaders() 
+        });
         const data = await response.json();
         
         if (data.success) {
             const d = data.detalle;
             const container = document.getElementById('detalleCotizacionContainer');
+            
+            // 🔥 AGREGAR LINK AL DOCUMENTO EN DRIVE
+            const documentoHtml = d.archivo_url ? `
+                <div style="margin-top: 1rem; padding: 0.75rem; background: var(--gris-oscuro); border-radius: 8px;">
+                    <strong><i class="fas fa-file"></i> Documento:</strong>
+                    <a href="${d.archivo_url}" target="_blank" style="color: var(--rojo-primario); font-weight: 500;">
+                        ${escapeHtml(d.nombre_archivo || 'Ver documento')}
+                        <i class="fas fa-external-link-alt" style="font-size: 0.7rem;"></i>
+                    </a>
+                    <button class="btn-primary btn-sm" onclick="descargarDocumentoCotizacion(${id_cotizacion})" style="margin-left: 0.5rem; padding: 0.2rem 0.5rem; font-size: 0.7rem;">
+                        <i class="fas fa-download"></i> Descargar
+                    </button>
+                </div>
+            ` : '<div style="margin-top: 1rem; color: var(--gris-texto);"><i class="fas fa-info-circle"></i> No hay documento adjunto</div>';
             
             container.innerHTML = `
                 <div class="orden-info-card">
@@ -2155,6 +2268,7 @@ async function verDetalleCotizacion(id_cotizacion) {
                     <p><strong>Estado:</strong> ${statusBadge(d.estado || 'enviada')}</p>
                     <p><strong>Total:</strong> ${formatCurrency(d.total)}</p>
                     ${d.notas ? `<p><strong>Mensaje:</strong> ${escapeHtml(d.notas)}</p>` : ''}
+                    ${documentoHtml}
                 </div>
             `;
             
@@ -2167,7 +2281,6 @@ async function verDetalleCotizacion(id_cotizacion) {
         mostrarLoading(false);
     }
 }
-
 async function verDetalleCotizacionByOrden(id_orden) {
     const cotizacion = cotizacionesMap[id_orden];
     if (cotizacion) {
@@ -2758,6 +2871,7 @@ function verDetalleSolicitudCompra(id) {
         itemsHtml = `<p>${escapeHtml(solicitud.descripcion_pieza || 'Item')} x${solicitud.cantidad || 1}</p>`;
     }
     
+    // 🔥 BUSCAR LA COTIZACIÓN PARA VER SI TIENE DOCUMENTO EN DRIVE
     const cotizacion = cotizacionesMap[solicitud.id_orden_trabajo];
     const tieneDocumento = cotizacion && cotizacion.id;
     
@@ -2850,6 +2964,9 @@ function verDetalleSolicitudCompra(id) {
     
     abrirModal('modalDetalleCotizacion');
 }
+// =====================================================
+// FUNCIÓN: DESCARGAR DOCUMENTO DESDE DRIVE
+// =====================================================
 
 async function descargarDocumentoCotizacion(idCotizacion) {
     mostrarLoading(true);
@@ -2868,42 +2985,29 @@ async function descargarDocumentoCotizacion(idCotizacion) {
         
         const cotizacion = data.detalle;
         
-        if (!cotizacion.archivo_base64) {
+        // 🔥 AHORA USAMOS archivo_url EN VEZ DE archivo_base64
+        if (!cotizacion.archivo_url) {
             showToast('No hay documento asociado a esta cotización', 'warning');
             return;
         }
         
-        let base64String = cotizacion.archivo_base64;
-        if (base64String.includes(',')) {
-            base64String = base64String.split(',')[1];
+        // 🔥 ABRIR LA URL DE DRIVE PARA DESCARGAR
+        const downloadUrl = cotizacion.archivo_url;
+        
+        // Si es la URL de vista de Drive, convertir a descarga directa
+        let directDownloadUrl = downloadUrl;
+        if (downloadUrl.includes('drive.google.com')) {
+            // Extraer ID de la URL
+            const fileIdMatch = downloadUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+            if (fileIdMatch) {
+                directDownloadUrl = `https://drive.google.com/uc?export=download&id=${fileIdMatch[1]}`;
+            }
         }
         
-        const byteCharacters = atob(base64String);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
+        // Abrir en nueva ventana para descargar
+        window.open(directDownloadUrl, '_blank');
         
-        let mimeType = 'application/pdf';
-        const nombreArchivo = cotizacion.nombre_archivo || 'documento_cotizacion.pdf';
-        if (nombreArchivo.toLowerCase().endsWith('.doc')) {
-            mimeType = 'application/msword';
-        } else if (nombreArchivo.toLowerCase().endsWith('.docx')) {
-            mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-        }
-        
-        const blob = new Blob([byteArray], { type: mimeType });
-        const blobUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = nombreArchivo;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(blobUrl);
-        
-        showToast('✅ Documento descargado correctamente', 'success');
+        showToast('✅ Descarga iniciada', 'success');
         
     } catch (error) {
         console.error('Error descargando documento:', error);
@@ -3105,7 +3209,29 @@ async function verificarDiasGuardados(id_orden) {
         return { success: false, error: error.message };
     }
 }
+// =====================================================
+// FUNCIÓN: COPIAR URL DE DRIVE
+// =====================================================
 
+function copiarUrlDrive(url) {
+    if (!url) {
+        showToast('No hay URL para copiar', 'warning');
+        return;
+    }
+    
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('✅ URL copiada al portapapeles', 'success');
+    }).catch(() => {
+        // Fallback: seleccionar manual
+        const input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        showToast('✅ URL copiada al portapapeles', 'success');
+    });
+}
 // =====================================================
 // EXPORTAR FUNCIONES GLOBALES
 // =====================================================
@@ -3155,6 +3281,8 @@ window.eliminarItemServicio = eliminarItemServicio;
 window.subirFotoItemServicio = subirFotoItemServicio;
 window.eliminarFotoItemServicio = eliminarFotoItemServicio;
 window.guardarSolicitudCotizacion = guardarSolicitudCotizacion;
+
+window.copiarUrlDrive = copiarUrlDrive;
 
 console.log('✅ Funciones globales de cotizaciones.js exportadas correctamente');
 document.addEventListener('DOMContentLoaded', inicializar);

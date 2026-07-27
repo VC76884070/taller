@@ -786,6 +786,10 @@ function abrirModalComprar(idSolicitud) {
     abrirModal('modalComprar');
 }
 
+// =====================================================
+// 🔥 MODIFICAR confirmarCompra() para usar Drive
+// =====================================================
+
 async function confirmarCompra() {
     const fechaCompra = document.getElementById('fechaCompra')?.value || new Date().toISOString().split('T')[0];
     const numeroFactura = document.getElementById('numeroFactura')?.value || '';
@@ -798,6 +802,16 @@ async function confirmarCompra() {
         return;
     }
     
+    // 🔥 OBTENER CÓDIGO DE ORDEN Y ID DE ORDEN
+    const solicitud = solicitudesPendientes.find(s => s.id === currentSolicitudId);
+    if (!solicitud) {
+        showToast('No se encontró la solicitud', 'error');
+        return;
+    }
+    
+    const id_orden = solicitud.id_orden_trabajo;
+    const codigo_orden = solicitud.orden_codigo;
+    
     mostrarLoading(true);
     
     try {
@@ -805,10 +819,15 @@ async function confirmarCompra() {
         
         if (currentComprobanteFile) {
             try {
-                comprobanteUrl = await subirACloudinary(currentComprobanteFile);
-                console.log('✅ Comprobante subido a Cloudinary:', comprobanteUrl);
-            } catch (cloudError) {
-                console.error('Error al subir a Cloudinary:', cloudError);
+                // ✅ SUBIR A GOOGLE DRIVE (NO A CLOUDINARY)
+                comprobanteUrl = await subirComprobanteADrive(
+                    currentComprobanteFile, 
+                    id_orden, 
+                    codigo_orden
+                );
+                console.log('✅ Comprobante subido a Drive:', comprobanteUrl);
+            } catch (driveError) {
+                console.error('Error al subir a Drive:', driveError);
                 showToast('Error al subir el comprobante. Intenta nuevamente.', 'error');
                 mostrarLoading(false);
                 return;
@@ -831,7 +850,7 @@ async function confirmarCompra() {
         const data = await response.json();
         
         if (data.success) {
-            showToast('✅ Compra registrada exitosamente con comprobante', 'success');
+            showToast('✅ Compra registrada exitosamente con comprobante en Drive', 'success');
             cerrarModal('modalComprar');
             currentComprobanteFile = null;
             await cargarSolicitudes();
@@ -1061,6 +1080,46 @@ async function inicializar() {
     setupEventListeners();
     
     console.log('✅ solicitudes_compra.js inicializado correctamente');
+}
+// =====================================================
+// 🔥 NUEVO: SUBIR COMPROBANTE A GOOGLE DRIVE
+// =====================================================
+
+async function subirComprobanteADrive(file, id_orden, codigo_orden) {
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('comprobante', file);
+        formData.append('id_orden', id_orden);
+        formData.append('codigo_orden', codigo_orden);
+        
+        // ✅ ENDPOINT QUE SUBE A DRIVE (lo crearemos en el backend)
+        const uploadUrl = `${API_URL}/subir-comprobante-drive`;
+        
+        console.log('📤 Subiendo comprobante a Google Drive...');
+        console.log(`📁 Para orden: ${codigo_orden}`);
+        
+        fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': getAuthHeaders()['Authorization']
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.url) {
+                console.log('✅ Comprobante subido a Drive:', data.url);
+                resolve(data.url);
+            } else {
+                console.error('❌ Error Drive:', data.error);
+                reject(new Error(data.error || 'Error al subir a Google Drive'));
+            }
+        })
+        .catch(err => {
+            console.error('❌ Error de red:', err);
+            reject(new Error('Error de conexión con Google Drive'));
+        });
+    });
 }
 
 // Exponer funciones globales

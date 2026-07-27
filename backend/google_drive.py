@@ -1,8 +1,7 @@
 # =====================================================
 # GOOGLE DRIVE - CON OAUTH 2.0 VÍA VARIABLES DE ENTORNO
 # ESTRUCTURA: {codigo_orden}/{modulo}/{subcarpeta}
-# VERSIÓN MEJORADA CON RENOVACIÓN AUTOMÁTICA DE TOKENS
-# Y SOPORTE PARA ELIMINAR/REEMPLAZAR ARCHIVOS
+# VERSIÓN COMPLETA CON SOPORTE PARA COTIZACIONES
 # =====================================================
 
 import os
@@ -55,20 +54,16 @@ UPLOAD_TIMEOUT = 120
 # =====================================================
 # CONFIGURACIÓN DE WHISPER - OPTIMIZADA PARA RENDER
 # =====================================================
-# 🔥 RUTA DEL DISCO PERSISTENTE EN RENDER
 CACHE_DIR = os.getenv('WHISPER_CACHE_DIR', '/app/.cache/whisper')
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-# 🔥 FORZAR WHISPER A USAR EL CACHÉ PERSISTENTE
 os.environ['XDG_CACHE_HOME'] = '/app/.cache'
 
-# 🔥 CONFIGURACIÓN OPTIMIZADA PARA 512 MB RAM
-WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'tiny')  # tiny = ~150-200 MB RAM
+WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'tiny')
 WHISPER_LANGUAGE = os.getenv('WHISPER_LANGUAGE', 'es')
 WHISPER_USE_FP16 = os.getenv('WHISPER_USE_FP16', 'true').lower() == 'true'
 WHISPER_DEVICE = os.getenv('WHISPER_DEVICE', 'cpu')
 
-# 🔥 VARIABLE GLOBAL PARA MANTENER EL MODELO EN MEMORIA
 _whisper_model = None
 _whisper_model_loaded = False
 _whisper_load_error = None
@@ -81,22 +76,17 @@ logger.info(f"   💻 Dispositivo: {WHISPER_DEVICE}")
 
 
 def get_whisper_model():
-    """
-    Carga el modelo Whisper UNA SOLA VEZ y lo mantiene en memoria.
-    Usa el disco persistente de Render para el caché.
-    """
+    """Carga el modelo Whisper UNA SOLA VEZ y lo mantiene en memoria."""
     global _whisper_model, _whisper_model_loaded, _whisper_load_error
     
     if not WHISPER_AVAILABLE:
         logger.warning("⚠️ Whisper no está disponible")
         return None
     
-    # 🔥 SI YA ESTÁ CARGADO, DEVOLVERLO INMEDIATAMENTE
     if _whisper_model_loaded and _whisper_model is not None:
         logger.debug("🎙️ Modelo Whisper ya cargado, reutilizando...")
         return _whisper_model
     
-    # Si hubo un error previo, no intentar de nuevo
     if _whisper_load_error:
         logger.warning(f"⚠️ Modelo Whisper falló previamente: {_whisper_load_error}")
         return None
@@ -107,14 +97,12 @@ def get_whisper_model():
         logger.info(f"   🔢 FP16: {WHISPER_USE_FP16}")
         logger.info(f"   💻 Dispositivo: {WHISPER_DEVICE}")
         
-        # 🔥 CARGAR MODELO (esto solo ocurre UNA VEZ)
         _whisper_model = whisper.load_model(
             WHISPER_MODEL,
             device=WHISPER_DEVICE,
-            download_root=CACHE_DIR  # 🔥 USA EL DISCO PERSISTENTE
+            download_root=CACHE_DIR
         )
         
-        # 🔥 CONVERTIR A FP16 PARA AHORRAR MEMORIA (mitad de RAM)
         if WHISPER_USE_FP16:
             try:
                 _whisper_model = _whisper_model.half()
@@ -125,7 +113,6 @@ def get_whisper_model():
         _whisper_model_loaded = True
         _whisper_load_error = None
         
-        # 🔥 ESTIMAR MEMORIA USADA
         try:
             if WHISPER_DEVICE == 'cuda' and torch.cuda.is_available():
                 mem = torch.cuda.memory_allocated() / (1024**3)
@@ -145,10 +132,7 @@ def get_whisper_model():
 
 
 def limpiar_modelo_whisper():
-    """
-    🔥 OPCIÓN: Libera el modelo de memoria si es necesario
-    (útil si quieres liberar RAM después de usarlo)
-    """
+    """Libera el modelo de memoria si es necesario"""
     global _whisper_model, _whisper_model_loaded
     if _whisper_model is not None:
         try:
@@ -160,6 +144,52 @@ def limpiar_modelo_whisper():
             logger.info("🧹 Modelo Whisper liberado de memoria")
         except:
             pass
+
+
+# =====================================================
+# CONSTANTES PARA MÓDULOS DE COTIZACIONES
+# =====================================================
+
+SUBMODULOS_COTIZACION = {
+    'SOLICITUD_COTIZACION': 'SOLICITUD_COTIZACION',
+    'COTIZACION_CLIENTE': 'COTIZACION_CLIENTE',
+    'SOLICITUD_COMPRA': 'SOLICITUD_COMPRA',
+}
+
+TIPOS_ARCHIVO_COTIZACION = {
+    # Para SOLICITUD_COTIZACION
+    'foto_item': 'fotos',
+    'foto_repuesto': 'fotos',
+    'imagen_item': 'fotos',
+    'fotos': 'fotos',
+    'imagenes': 'fotos',
+    
+    # Para COTIZACION_CLIENTE
+    'cotizacion_pdf': 'documentos',
+    'cotizacion_word': 'documentos',
+    'documentos': 'documentos',
+    'pdf': 'documentos',
+    'word': 'documentos',
+    
+    # Para SOLICITUD_COMPRA
+    'comprobante': 'comprobantes',
+    'factura': 'comprobantes',
+    'foto_compra': 'fotos',
+    'documento_compra': 'documentos',
+    'comprobantes': 'comprobantes',
+}
+
+TIPOS_ARCHIVO_GENERAL = {
+    'imagen': 'fotos',
+    'imagenes': 'fotos',
+    'audio': 'audios',
+    'audios': 'audios',
+    'pdf': 'documentos',
+    'documento': 'documentos',
+    'documentos': 'documentos',
+    'video': 'videos',
+    'videos': 'videos'
+}
 
 
 # =====================================================
@@ -177,7 +207,7 @@ class GoogleDriveService:
     def __init__(self, app=None):
         self.service = None
         self.folder_id = None
-        self._creds = None  # Guardar credenciales internamente
+        self._creds = None
         self._token_file = Path(__file__).parent / 'token.pickle'
         if app:
             self.init_app(app)
@@ -187,36 +217,27 @@ class GoogleDriveService:
     # =====================================================
     
     def _ensure_valid_token(self):
-        """
-        🔥 MÉTODO CLAVE: Verifica y renueva el token si es necesario
-        Este método se llama ANTES de cada operación con Drive
-        """
+        """Verifica y renueva el token si es necesario"""
         try:
             if not self._creds:
                 logger.warning("⚠️ No hay credenciales, recargando...")
                 self._reload_credentials()
                 return
             
-            # Si el token expiró Y tenemos refresh_token, renovar
             if self._creds.expired and self._creds.refresh_token:
                 logger.info("🔄 Token expirado, renovando automáticamente...")
                 try:
                     self._creds.refresh(Request())
-                    # Guardar token actualizado
                     self._save_token()
                     logger.info("✅ Token renovado exitosamente")
-                    
-                    # Reconstruir el servicio con las nuevas credenciales
                     self.service = build('drive', 'v3', credentials=self._creds)
                 except Exception as e:
                     logger.error(f"❌ Error renovando token: {str(e)}")
-                    # Si falla la renovación, recargar desde variables de entorno
                     self._reload_credentials()
             
-            # Verificar si el token está próximo a expirar (menos de 5 minutos)
             if self._creds and hasattr(self._creds, 'expiry') and self._creds.expiry:
                 tiempo_restante = (self._creds.expiry - datetime.now()).total_seconds()
-                if tiempo_restante < 300:  # 5 minutos
+                if tiempo_restante < 300:
                     logger.info(f"⏰ Token expira en {tiempo_restante:.0f} segundos, renovando preventivamente...")
                     try:
                         self._creds.refresh(Request())
@@ -228,7 +249,6 @@ class GoogleDriveService:
             
         except Exception as e:
             logger.error(f"❌ Error verificando token: {str(e)}")
-            # Intentar recuperación
             self._reload_credentials()
     
     def _reload_credentials(self):
@@ -258,7 +278,6 @@ class GoogleDriveService:
                 scopes=['https://www.googleapis.com/auth/drive.file']
             )
             
-            # Si el token está expirado, refrescar
             if self._creds.expired and self._creds.refresh_token:
                 logger.info("🔄 Token expirado, refrescando...")
                 self._creds.refresh(Request())
@@ -289,20 +308,14 @@ class GoogleDriveService:
     # =====================================================
     
     def init_app(self, app):
-        """
-        Inicializa el servicio con variables de entorno
-        """
+        """Inicializa el servicio con variables de entorno"""
         try:
-            # =============================================
-            # OBTENER VARIABLES DE ENTORNO
-            # =============================================
             token = os.getenv('GOOGLE_DRIVE_TOKEN')
             refresh_token = os.getenv('GOOGLE_DRIVE_REFRESH_TOKEN')
             client_id = os.getenv('GOOGLE_DRIVE_CLIENT_ID')
             client_secret = os.getenv('GOOGLE_DRIVE_CLIENT_SECRET')
             self.folder_id = app.config.get('GOOGLE_DRIVE_FOLDER_ID')
             
-            # Verificar que todas las variables existen
             if not all([token, refresh_token, client_id, client_secret]):
                 missing = []
                 if not token: missing.append('GOOGLE_DRIVE_TOKEN')
@@ -314,9 +327,6 @@ class GoogleDriveService:
             if not self.folder_id:
                 raise ValueError("GOOGLE_DRIVE_FOLDER_ID no configurado")
             
-            # =============================================
-            # CREAR CREDENCIALES DESDE VARIABLES
-            # =============================================
             self._creds = Credentials(
                 token=token,
                 refresh_token=refresh_token,
@@ -326,7 +336,6 @@ class GoogleDriveService:
                 scopes=['https://www.googleapis.com/auth/drive.file']
             )
             
-            # Refrescar token si está expirado
             if self._creds.expired and self._creds.refresh_token:
                 logger.info("🔄 Token expirado, refrescando...")
                 self._creds.refresh(Request())
@@ -334,8 +343,6 @@ class GoogleDriveService:
                 logger.info("✅ Token refrescado correctamente")
             
             self.service = build('drive', 'v3', credentials=self._creds)
-            
-            # Verificar carpeta
             self._verify_folder_access()
             
             logger.info(f"✅ Google Drive inicializado correctamente (OAuth 2.0 vía variables de entorno)")
@@ -350,7 +357,6 @@ class GoogleDriveService:
     def _verify_folder_access(self):
         """Verifica que la carpeta existe y es accesible"""
         try:
-            # Asegurar token válido antes de verificar
             self._ensure_valid_token()
             
             folder = self.service.files().get(
@@ -379,7 +385,6 @@ class GoogleDriveService:
                     public=True, share_email=None):
         """
         Sube un archivo a Google Drive con reintentos automáticos
-        Y RENOVACIÓN AUTOMÁTICA DE TOKEN
         
         Args:
             file_data: bytes o FileStorage
@@ -392,9 +397,7 @@ class GoogleDriveService:
         Returns:
             dict: {id, url, web_view_link, filename, folder_path}
         """
-        # 🔥 Asegurar token válido ANTES de cualquier operación
         self._ensure_valid_token()
-        
         socket.setdefaulttimeout(UPLOAD_TIMEOUT)
         
         last_error = None
@@ -415,11 +418,7 @@ class GoogleDriveService:
                     folder_id = self._get_or_create_folder(folder_path)
                     file_metadata['parents'] = [folder_id]
                 
-                # =============================================
-                # MANEJAR DIFERENTES TIPOS DE ENTRADA
-                # =============================================
                 if hasattr(file_data, 'read'):
-                    # Es un FileStorage de Flask
                     file_data.seek(0)
                     media = MediaIoBaseUpload(file_data, mimetype=mime_type, resumable=True)
                 elif isinstance(file_data, bytes):
@@ -431,7 +430,6 @@ class GoogleDriveService:
                 else:
                     raise ValueError(f"Tipo de archivo no soportado: {type(file_data)}")
                 
-                # Subir archivo
                 file = self.service.files().create(
                     body=file_metadata,
                     media_body=media,
@@ -463,7 +461,6 @@ class GoogleDriveService:
                 last_error = e
                 logger.warning(f"⚠️ Intento {attempt} falló: {str(e)}")
                 
-                # Si es error de autenticación, intentar renovar token
                 if isinstance(e, HttpError) and e.resp.status in [401, 403]:
                     logger.info("🔄 Error de autenticación, renovando token...")
                     self._ensure_valid_token()
@@ -483,11 +480,7 @@ class GoogleDriveService:
     # =====================================================
     
     def _get_or_create_folder(self, folder_path):
-        """
-        Obtiene o crea una carpeta por ruta con reintentos
-        Ejemplo: 'OT-20260723-001/DIAGNOSTICO_JEFE_TALLER/audios'
-        """
-        # 🔥 Asegurar token válido
+        """Obtiene o crea una carpeta por ruta con reintentos"""
         self._ensure_valid_token()
         
         last_error = None
@@ -500,7 +493,6 @@ class GoogleDriveService:
                     if not folder_name:
                         continue
                     
-                    # Buscar si la carpeta ya existe
                     query = (
                         f"name='{self._escape_string(folder_name)}' and "
                         f"mimeType='application/vnd.google-apps.folder' and "
@@ -518,7 +510,6 @@ class GoogleDriveService:
                     if files:
                         folder_id = files[0]['id']
                     else:
-                        # Crear carpeta
                         folder_metadata = {
                             'name': folder_name,
                             'mimeType': 'application/vnd.google-apps.folder',
@@ -539,7 +530,6 @@ class GoogleDriveService:
                 last_error = e
                 logger.warning(f"⚠️ Error creando carpeta (intento {attempt}): {str(e)}")
                 
-                # Si es error de autenticación, renovar token
                 if isinstance(e, HttpError) and e.resp.status in [401, 403]:
                     self._ensure_valid_token()
                 
@@ -557,23 +547,18 @@ class GoogleDriveService:
         return value
     
     # =====================================================
-    # 🆕 GENERAR RUTA DE CARPETA DE ORDEN (CON RENOMBRE)
+    # MÉTODOS DE RUTAS (EXISTENTES)
     # =====================================================
     
     def get_orden_folder_path(self, codigo_orden, subcarpeta=None, tipo=None):
         """
         Obtiene la ruta de la carpeta de una orden de trabajo.
-        La carpeta ya existe con el código de orden (renombrada desde código de sesión).
-        
         ESTRUCTURA: {codigo_orden}/{subcarpeta}/{tipo}
         
         Args:
-            codigo_orden: Código de la orden de trabajo (ej: 'OT-20260723-001')
+            codigo_orden: Código de la orden (ej: 'OT-20260723-001')
             subcarpeta: 'RECEPCION', 'DIAGNOSTICO_JEFE_TALLER', 'AVANCES', etc.
             tipo: 'fotos', 'audios', 'documentos', 'videos'
-        
-        Returns:
-            str: Ruta de carpetas (ej: 'OT-20260723-001/DIAGNOSTICO_JEFE_TALLER/audios')
         """
         path_parts = [codigo_orden]
         
@@ -581,49 +566,16 @@ class GoogleDriveService:
             path_parts.append(subcarpeta)
         
         if tipo:
-            tipo_map = {
-                'imagen': 'fotos',
-                'imagenes': 'fotos',
-                'audio': 'audios',
-                'audios': 'audios',
-                'pdf': 'documentos',
-                'documento': 'documentos',
-                'documentos': 'documentos',
-                'video': 'videos',
-                'videos': 'videos'
-            }
+            tipo_map = TIPOS_ARCHIVO_GENERAL
             path_parts.append(tipo_map.get(tipo.lower(), tipo))
         
         return '/'.join(path_parts)
     
-    # =====================================================
-    # GENERAR RUTAS (LEGACY - PARA COMPATIBILIDAD)
-    # =====================================================
-    
     def generate_folder_path(self, modulo, codigo_orden=None, referencia_id=None, 
                              fecha=None, subcarpeta=None, tipo=None):
-        """
-        Genera una ruta de carpeta consistente para una orden de trabajo.
-        
-        ESTRUCTURA: {codigo_orden}/{modulo}/{subcarpeta}
-        
-        Args:
-            modulo: 'RECEPCION', 'DIAGNOSTICO_JEFE_TALLER', 'AVANCES', 'COMPRAS'
-            codigo_orden: código de la orden de trabajo (ej: 'OT-260701-001')
-            referencia_id: ID adicional (fallback si no hay codigo_orden)
-            fecha: fecha (opcional)
-            subcarpeta: 'fotos', 'audios', 'comprobantes', 'repuestos'
-            tipo: 'imagen', 'audio', 'pdf' (opcional)
-        
-        Returns:
-            str: ruta de carpetas
-        """
-        # =============================================
-        # ESTRUCTURA: {codigo_orden}/{modulo}/{subcarpeta}
-        # =============================================
+        """Genera una ruta de carpeta (legacy - para compatibilidad)"""
         path_parts = []
         
-        # 1. Carpeta de la sesión/orden de trabajo
         if codigo_orden:
             path_parts.append(codigo_orden)
         elif referencia_id:
@@ -633,14 +585,11 @@ class GoogleDriveService:
                 fecha = datetime.now()
             path_parts.append(f"orden_{fecha.strftime('%Y%m%d_%H%M%S')}")
         
-        # 2. Módulo
         path_parts.append(modulo)
         
-        # 3. Subcarpeta (fotos, audios, etc.)
         if subcarpeta:
             path_parts.append(subcarpeta)
         
-        # 4. Tipo (opcional)
         if tipo:
             tipo_map = {
                 'imagen': 'imagenes',
@@ -653,22 +602,135 @@ class GoogleDriveService:
         return '/'.join(path_parts)
     
     # =====================================================
+    # 🆕 MÉTODOS PARA COTIZACIONES
+    # =====================================================
+    
+    def get_ruta_cotizacion(self, codigo_orden, submodulo, tipo=None):
+        """
+        Genera la ruta para archivos del módulo de cotizaciones
+        
+        ESTRUCTURA: {codigo_orden}/COTIZACION/{submodulo}/{tipo}
+        
+        ARGS:
+            codigo_orden: 'OT-20260723-001'
+            submodulo: 'SOLICITUD_COTIZACION', 'COTIZACION_CLIENTE', 'SOLICITUD_COMPRA'
+            tipo: 'fotos', 'documentos', 'comprobantes'
+        """
+        path_parts = [codigo_orden, 'COTIZACION']
+        
+        if submodulo:
+            submodulo_normalizado = SUBMODULOS_COTIZACION.get(submodulo, submodulo)
+            path_parts.append(submodulo_normalizado)
+        
+        if tipo:
+            tipo_normalizado = TIPOS_ARCHIVO_COTIZACION.get(tipo.lower(), tipo)
+            path_parts.append(tipo_normalizado)
+        
+        return '/'.join(path_parts)
+    
+    def get_ruta_solicitud_cotizacion(self, codigo_orden, tipo='fotos'):
+        """
+        {codigo_orden}/COTIZACION/SOLICITUD_COTIZACION/{tipo}
+        Tipo por defecto: 'fotos' (para fotos de items)
+        """
+        return self.get_ruta_cotizacion(codigo_orden, 'SOLICITUD_COTIZACION', tipo)
+    
+    def get_ruta_cotizacion_cliente(self, codigo_orden, tipo='documentos'):
+        """
+        {codigo_orden}/COTIZACION/COTIZACION_CLIENTE/{tipo}
+        Tipo por defecto: 'documentos' (para PDF/Word)
+        """
+        return self.get_ruta_cotizacion(codigo_orden, 'COTIZACION_CLIENTE', tipo)
+    
+    def get_ruta_solicitud_compra(self, codigo_orden, tipo='comprobantes'):
+        """
+        {codigo_orden}/COTIZACION/SOLICITUD_COMPRA/{tipo}
+        Tipo por defecto: 'comprobantes' (para facturas)
+        """
+        return self.get_ruta_cotizacion(codigo_orden, 'SOLICITUD_COMPRA', tipo)
+    
+    def get_ruta_items_cotizacion(self, codigo_orden):
+        """
+        {codigo_orden}/COTIZACION/SOLICITUD_COTIZACION/fotos/
+        Atajo para fotos de items de solicitud de cotización
+        """
+        return self.get_ruta_solicitud_cotizacion(codigo_orden, 'fotos')
+    
+    # =====================================================
+    # 🆕 MÉTODOS PARA SUBIR ARCHIVOS DE COTIZACIÓN
+    # =====================================================
+    
+    def upload_cotizacion_file(self, file_data, filename, codigo_orden, 
+                               submodulo, tipo, public=True):
+        """
+        Sube un archivo al módulo de cotizaciones
+        
+        ARGS:
+            file_data: bytes o FileStorage
+            filename: nombre del archivo
+            codigo_orden: 'OT-20260723-001'
+            submodulo: 'SOLICITUD_COTIZACION', 'COTIZACION_CLIENTE', 'SOLICITUD_COMPRA'
+            tipo: 'fotos', 'documentos', 'comprobantes'
+            public: True para que sea público
+        """
+        folder_path = self.get_ruta_cotizacion(codigo_orden, submodulo, tipo)
+        return self.upload_file(
+            file_data=file_data,
+            filename=filename,
+            folder_path=folder_path,
+            public=public
+        )
+    
+    def upload_foto_item_cotizacion(self, file_data, filename, codigo_orden, public=True):
+        """
+        Sube una foto de un item para solicitud de cotización
+        Ruta: {codigo_orden}/COTIZACION/SOLICITUD_COTIZACION/fotos/
+        """
+        folder_path = self.get_ruta_items_cotizacion(codigo_orden)
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        nombre_final = f"{timestamp}_{filename}"
+        
+        return self.upload_file(
+            file_data=file_data,
+            filename=nombre_final,
+            folder_path=folder_path,
+            public=public
+        )
+    
+    def upload_cotizacion_cliente(self, file_data, filename, codigo_orden, public=True):
+        """
+        Sube el documento de cotización para el cliente
+        Ruta: {codigo_orden}/COTIZACION/COTIZACION_CLIENTE/documentos/
+        """
+        folder_path = self.get_ruta_cotizacion_cliente(codigo_orden, 'documentos')
+        return self.upload_file(
+            file_data=file_data,
+            filename=filename,
+            folder_path=folder_path,
+            public=public
+        )
+    
+    def upload_comprobante_compra(self, file_data, filename, codigo_orden, public=False):
+        """
+        Sube un comprobante de compra (factura, ticket, etc.)
+        Ruta: {codigo_orden}/COTIZACION/SOLICITUD_COMPRA/comprobantes/
+        """
+        folder_path = self.get_ruta_solicitud_compra(codigo_orden, 'comprobantes')
+        return self.upload_file(
+            file_data=file_data,
+            filename=filename,
+            folder_path=folder_path,
+            public=public
+        )
+    
+    # =====================================================
     # RENOMBRAR CARPETAS
     # =====================================================
     
     def rename_folder(self, folder_id, new_name):
-        """
-        Renombra una carpeta en Google Drive
-        
-        Args:
-            folder_id: ID de la carpeta
-            new_name: Nuevo nombre
-        
-        Returns:
-            bool: True si se renombró correctamente
-        """
+        """Renombra una carpeta en Google Drive"""
         try:
-            # 🔥 Asegurar token válido
             self._ensure_valid_token()
             
             folder_metadata = {
@@ -690,18 +752,8 @@ class GoogleDriveService:
     # =====================================================
     
     def get_folder_id_by_name(self, folder_name, parent_id=None):
-        """
-        Busca una carpeta por nombre
-        
-        Args:
-            folder_name: nombre de la carpeta
-            parent_id: ID de la carpeta padre (opcional)
-        
-        Returns:
-            str: ID de la carpeta o None si no se encuentra
-        """
+        """Busca una carpeta por nombre"""
         try:
-            # 🔥 Asegurar token válido
             self._ensure_valid_token()
             
             if parent_id:
@@ -719,7 +771,6 @@ class GoogleDriveService:
             if files:
                 return files[0]['id']
             
-            # Si no se encontró, buscar recursivamente en todas las carpetas
             if not parent_id:
                 all_folders = self.service.files().list(
                     q="mimeType='application/vnd.google-apps.folder' and trashed=false",
@@ -737,24 +788,14 @@ class GoogleDriveService:
             return None
     
     # =====================================================
-    # ELIMINAR CARPETAS
+    # ELIMINAR CARPETAS Y ARCHIVOS
     # =====================================================
     
     def delete_folder(self, folder_id):
-        """
-        Elimina una carpeta y todo su contenido de Google Drive
-        
-        Args:
-            folder_id: ID de la carpeta
-        
-        Returns:
-            bool: True si se eliminó correctamente
-        """
+        """Elimina una carpeta y todo su contenido"""
         try:
-            # 🔥 Asegurar token válido
             self._ensure_valid_token()
             
-            # Primero, listar todos los archivos en la carpeta
             results = self.service.files().list(
                 q=f"'{folder_id}' in parents and trashed=false",
                 fields="files(id, name)",
@@ -763,7 +804,6 @@ class GoogleDriveService:
             
             files = results.get('files', [])
             
-            # Eliminar cada archivo
             for file in files:
                 try:
                     self.service.files().delete(fileId=file['id']).execute()
@@ -771,7 +811,6 @@ class GoogleDriveService:
                 except Exception as e:
                     logger.warning(f"⚠️ No se pudo eliminar archivo {file['name']}: {str(e)}")
             
-            # Finalmente, eliminar la carpeta vacía
             self.service.files().delete(fileId=folder_id).execute()
             logger.info(f"🗑️ Carpeta eliminada: {folder_id}")
             return True
@@ -780,31 +819,17 @@ class GoogleDriveService:
             logger.error(f"❌ Error eliminando carpeta {folder_id}: {str(e)}")
             return False
     
-    # =====================================================
-    # ELIMINAR ARCHIVOS (PARA REEMPLAZO DE FOTOS)
-    # =====================================================
-    
     def delete_file(self, file_id):
-        """
-        Elimina un archivo de Google Drive por su ID
-        
-        Args:
-            file_id: ID del archivo a eliminar
-        
-        Returns:
-            bool: True si se eliminó correctamente
-        """
+        """Elimina un archivo de Google Drive por su ID"""
         try:
-            # 🔥 Asegurar token válido
             self._ensure_valid_token()
-            
             self.service.files().delete(fileId=file_id).execute()
             logger.info(f"🗑️ Archivo eliminado de Drive: {file_id}")
             return True
         except HttpError as e:
             if e.resp.status == 404:
                 logger.warning(f"⚠️ Archivo no encontrado (ya eliminado): {file_id}")
-                return True  # Considerar como éxito si ya no existe
+                return True
             logger.error(f"❌ Error eliminando archivo {file_id}: {str(e)}")
             return False
         except Exception as e:
@@ -812,15 +837,7 @@ class GoogleDriveService:
             return False
     
     def delete_file_by_url(self, url):
-        """
-        Elimina un archivo usando su URL de Google Drive
-        
-        Args:
-            url: URL del archivo en Google Drive
-        
-        Returns:
-            bool: True si se eliminó correctamente
-        """
+        """Elimina un archivo usando su URL de Google Drive"""
         file_id = self.extract_file_id_from_url(url)
         if not file_id:
             logger.warning(f"⚠️ No se pudo extraer ID de: {url[:50]}...")
@@ -832,16 +849,7 @@ class GoogleDriveService:
     # =====================================================
     
     def extract_file_id_from_url(self, url):
-        """
-        Extrae el file_id de una URL de Google Drive
-        SOPORTA MÚLTIPLES FORMATOS
-        
-        Args:
-            url: URL de Google Drive
-        
-        Returns:
-            str: file_id o None si no se pudo extraer
-        """
+        """Extrae el file_id de una URL de Google Drive"""
         if not url:
             return None
         
@@ -867,7 +875,7 @@ class GoogleDriveService:
         if match:
             return match.group(1)
         
-        # Formato 5: ID directo (si es solo el ID)
+        # Formato 5: ID directo
         if re.match(r'^[a-zA-Z0-9_-]{10,}$', url):
             return url
         
@@ -878,15 +886,7 @@ class GoogleDriveService:
     # =====================================================
     
     def file_exists(self, file_id):
-        """
-        Verifica si un archivo existe en Google Drive
-        
-        Args:
-            file_id: ID del archivo
-        
-        Returns:
-            bool: True si existe, False si no
-        """
+        """Verifica si un archivo existe en Google Drive"""
         try:
             self._ensure_valid_token()
             self.service.files().get(fileId=file_id, fields='id').execute()
@@ -901,15 +901,7 @@ class GoogleDriveService:
             return False
     
     def get_file_metadata(self, file_id):
-        """
-        Obtiene los metadatos de un archivo en Google Drive
-        
-        Args:
-            file_id: ID del archivo
-        
-        Returns:
-            dict: Metadatos del archivo o None si hay error
-        """
+        """Obtiene los metadatos de un archivo en Google Drive"""
         try:
             self._ensure_valid_token()
             file = self.service.files().get(
@@ -925,22 +917,11 @@ class GoogleDriveService:
             return None
     
     # =====================================================
-    # TRANSCRIPCIÓN DE AUDIO CON WHISPER (OPTIMIZADO)
+    # TRANSCRIPCIÓN DE AUDIO CON WHISPER
     # =====================================================
     
     def transcribir_audio(self, url_audio, language=None, model_name=None):
-        """
-        Descarga un audio desde una URL y lo transcribe usando Whisper.
-        🔥 USA EL MODELO EN CACHÉ (no lo recarga)
-        
-        Args:
-            url_audio (str): URL del audio en Google Drive
-            language (str): Código de idioma (ej: 'es', 'en')
-            model_name (str): Nombre del modelo (ej: 'tiny', 'base', 'small')
-        
-        Returns:
-            dict: {'success': bool, 'transcripcion': str, 'error': str}
-        """
+        """Descarga un audio desde una URL y lo transcribe usando Whisper."""
         if not WHISPER_AVAILABLE:
             return {
                 'success': False,
@@ -953,7 +934,6 @@ class GoogleDriveService:
                 'error': 'URL de audio no proporcionada'
             }
         
-        # Normalizar URL
         file_id = self.extract_file_id_from_url(url_audio)
         if not file_id:
             return {
@@ -965,7 +945,6 @@ class GoogleDriveService:
         language = language or WHISPER_LANGUAGE
         model_name = model_name or WHISPER_MODEL
         
-        # 🔥 OBTENER EL MODELO (USA EL CACHÉ EN MEMORIA)
         model = get_whisper_model()
         if model is None:
             return {
@@ -988,13 +967,12 @@ class GoogleDriveService:
             logger.info(f"🎙️ Audio descargado: {temp_file} ({len(response.content)} bytes)")
             logger.info(f"🎙️ Transcribiendo con modelo '{model_name}', idioma '{language}'...")
             
-            # 🔥 TRANSCRIBIR (usa el modelo ya cargado en memoria)
             result = model.transcribe(
                 temp_file,
                 language=language,
                 task='transcribe',
                 verbose=False,
-                fp16=WHISPER_USE_FP16  # Usa FP16 si está habilitado
+                fp16=WHISPER_USE_FP16
             )
             
             texto = result.get('text', '').strip()
@@ -1030,26 +1008,13 @@ class GoogleDriveService:
                     logger.warning(f"⚠️ No se pudo eliminar archivo temporal: {str(e)}")
     
     def transcribir_audio_desde_file(self, file_data, filename=None, language=None, model_name=None):
-        """
-        Transcribe un audio directamente desde un objeto de archivo (FileStorage o bytes)
-        🔥 USA EL MODELO EN CACHÉ (no lo recarga)
-        
-        Args:
-            file_data: FileStorage de Flask o bytes
-            filename: Nombre del archivo (opcional)
-            language: Código de idioma
-            model_name: Nombre del modelo
-        
-        Returns:
-            dict: {success, transcripcion, error}
-        """
+        """Transcribe un audio directamente desde un objeto de archivo"""
         if not WHISPER_AVAILABLE:
             return {
                 'success': False,
                 'error': 'Whisper no está instalado'
             }
         
-        # 🔥 OBTENER EL MODELO (USA EL CACHÉ EN MEMORIA)
         model = get_whisper_model()
         if model is None:
             return {
@@ -1078,7 +1043,6 @@ class GoogleDriveService:
             
             logger.info(f"🎙️ Archivo temporal creado: {temp_file}")
             
-            # 🔥 TRANSCRIBIR (usa el modelo ya cargado en memoria)
             result = model.transcribe(
                 temp_file,
                 language=language,
@@ -1118,7 +1082,6 @@ class GoogleDriveService:
     def _set_file_public(self, file_id):
         """Hace un archivo público"""
         try:
-            # 🔥 Asegurar token válido
             self._ensure_valid_token()
             
             permission = {
@@ -1136,7 +1099,6 @@ class GoogleDriveService:
     def _share_file_with_email(self, file_id, email):
         """Comparte un archivo con un email específico"""
         try:
-            # 🔥 Asegurar token válido
             self._ensure_valid_token()
             
             permission = {
@@ -1154,16 +1116,11 @@ class GoogleDriveService:
             logger.warning(f"⚠️ No se pudo compartir el archivo con {email}: {str(e)}")
     
     # =====================================================
-    # ESTADO DEL TOKEN
+    # ESTADO DEL TOKEN Y WHISPER
     # =====================================================
     
     def get_token_status(self):
-        """
-        Retorna el estado actual del token
-        
-        Returns:
-            dict: {valid, expiry, has_refresh_token}
-        """
+        """Retorna el estado actual del token"""
         if not self._creds:
             return {
                 'valid': False,
@@ -1180,12 +1137,7 @@ class GoogleDriveService:
         }
     
     def get_whisper_status(self):
-        """
-        Retorna el estado de Whisper
-        
-        Returns:
-            dict: {available, model_loaded, model_name, language, device, fp16, cache_dir}
-        """
+        """Retorna el estado de Whisper"""
         global _whisper_model_loaded, _whisper_load_error
         
         return {

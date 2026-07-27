@@ -636,7 +636,8 @@ async function confirmarPausaManual() {
 }
 
 // =====================================================
-// 🆕 FUNCIONES PARA SUBIR FOTO EN SOLICITUD DE REPUESTOS
+// SUBIR FOTO DE ITEM - SOLICITUD DE REPUESTOS (TÉCNICO)
+// CORREGIDO PARA USAR LA CARPETA CORRECTA EN DRIVE
 // =====================================================
 
 async function subirFotoItemSolicitudTecnico(index, input) {
@@ -661,6 +662,33 @@ async function subirFotoItemSolicitudTecnico(index, input) {
         const formData = new FormData();
         formData.append('foto', file);
         
+        // 🔥 OBTENER EL CÓDIGO DE ORDEN
+        const ordenId = document.getElementById('ordenIdSolicitud')?.value;
+        if (ordenId) {
+            // Buscar el código de orden en los vehículos asignados
+            const vehiculo = vehiculosAsignados.find(v => v.orden_id === parseInt(ordenId));
+            if (vehiculo && vehiculo.codigo_unico) {
+                formData.append('codigo_orden', vehiculo.codigo_unico);
+                formData.append('id_orden', ordenId);
+                console.log(`📤 Enviando foto para orden: ${vehiculo.codigo_unico}`);
+            } else {
+                // Si no está en la lista, obtenerlo del backend
+                try {
+                    const response = await fetch(`/tecnico/orden-codigo/${ordenId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await response.json();
+                    if (data.success && data.codigo_unico) {
+                        formData.append('codigo_orden', data.codigo_unico);
+                        formData.append('id_orden', ordenId);
+                        console.log(`📤 Enviando foto para orden (backend): ${data.codigo_unico}`);
+                    }
+                } catch (e) {
+                    console.warn('⚠️ No se pudo obtener código de orden del backend');
+                }
+            }
+        }
+        
         const response = await fetch('/api/jefe-taller/subir-foto-item', {
             method: 'POST',
             headers: {
@@ -671,7 +699,6 @@ async function subirFotoItemSolicitudTecnico(index, input) {
         
         const data = await response.json();
         
-        // 🔧 VERIFICAR: Debe actualizar itemsSolicitud con la URL
         if (data.success && data.url) {
             if (itemsSolicitud[index]) {
                 itemsSolicitud[index].foto_url = data.url;
@@ -1542,7 +1569,7 @@ function verComunicadoCompleto(id) {
 }
 
 // =====================================================
-// 🆕 MANEJO DE ÍTEMS DE SOLICITUD DE REPUESTOS (CON FOTOS)
+// RENDERIZAR ITEMS DE SOLICITUD CON FOTOS
 // =====================================================
 
 function renderItemsSolicitud() {
@@ -1555,9 +1582,17 @@ function renderItemsSolicitud() {
     }
 
     container.innerHTML = itemsSolicitud.map((item, index) => {
-        // 🔧 VERIFICAR: La foto debe mostrarse si existe
+        // 🔥 VERIFICAR: La foto debe mostrarse si existe
         const fotoPreview = item.foto_url ? 
-            `<img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);">` : '';
+            `<div class="foto-preview-container" style="position:relative;display:inline-block;">
+                <img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);cursor:pointer;" 
+                     onclick="verFotoAmpliadaTecnico('${item.foto_url}')" 
+                     onerror="this.style.display='none'">
+                <button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemSolicitudTecnico(${index})" 
+                        style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>` : '';
         
         return `
             <div class="item-row" data-index="${index}">
@@ -1567,13 +1602,12 @@ function renderItemsSolicitud() {
                     <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle (marca, especificaciones...)" onchange="actualizarItemSolicitud(${index}, 'detalle', this.value)">
                 </div>
                 <div class="item-foto-upload">
-                    <!-- 🔧 VERIFICAR: El input file debe tener el onchange correcto -->
                     <input type="file" class="item-foto-input-solicitud-tecnico" accept="image/*" onchange="subirFotoItemSolicitudTecnico(${index}, this)" style="display:none;">
                     <button type="button" class="btn-foto-item" onclick="event.preventDefault(); document.querySelectorAll('.item-foto-input-solicitud-tecnico')[${index}]?.click()">
-                        <i class="fas fa-camera"></i> Foto
+                        <i class="fas fa-camera"></i> ${item.foto_url ? 'Cambiar Foto' : 'Agregar Foto'}
                     </button>
                     <span class="item-foto-preview" id="fotoPreviewSolicitudTecnico_${index}">
-                        ${fotoPreview ? `<div class="foto-preview-container"><img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);"><button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemSolicitudTecnico(${index})" style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;">×</button></div>` : ''}
+                        ${fotoPreview}
                     </span>
                 </div>
                 <div class="item-actions">

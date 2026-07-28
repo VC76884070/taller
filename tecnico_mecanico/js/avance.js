@@ -381,6 +381,10 @@ function configurarSubidaFotos() {
     }
 }
 
+// =====================================================
+// PROCESAR FOTO - USANDO GOOGLE DRIVE
+// =====================================================
+
 async function procesarFoto(index, event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -398,28 +402,28 @@ async function procesarFoto(index, event) {
     mostrarLoading(true);
 
     try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-        formData.append('folder', 'avances_trabajo');
+        // 🔥 OBTENER CÓDIGO DE ORDEN
+        const codigo_orden = await obtenerCodigoOrden(currentOrdenId);
+        if (!codigo_orden) {
+            showToast('No se pudo obtener el código de la orden', 'error');
+            mostrarLoading(false);
+            return;
+        }
 
-        const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`;
-        const response = await fetch(cloudinaryUrl, {
-            method: 'POST',
-            body: formData
-        });
-        const data = await response.json();
+        // ✅ SUBIR A DRIVE
+        const result = await subirFotoADrive(file, codigo_orden);
 
-        if (data.secure_url) {
+        if (result.url) {
             const comentarioInput = document.getElementById(`comentario_${index}`);
             fotosData[index] = {
-                url: data.secure_url,
+                url: result.url,
+                public_id: result.public_id,
                 comentario: comentarioInput ? comentarioInput.value : ''
             };
 
             const preview = document.querySelector(`.foto-upload-item[data-index="${index}"] .foto-preview`);
             if (preview) {
-                preview.style.backgroundImage = `url('${data.secure_url}')`;
+                preview.style.backgroundImage = `url('${result.url}')`;
                 preview.style.backgroundSize = 'cover';
                 preview.style.backgroundPosition = 'center';
                 preview.classList.add('has-image');
@@ -429,33 +433,87 @@ async function procesarFoto(index, event) {
             const removeBtn = document.querySelector(`.foto-upload-item[data-index="${index}"] .btn-remove-foto`);
             if (removeBtn) removeBtn.style.display = 'block';
 
-            showToast(`Foto ${index + 1} subida correctamente`, 'success');
+            showToast(`Foto ${index + 1} subida correctamente a Drive`, 'success');
         }
     } catch (error) {
         console.error('Error subiendo foto:', error);
-        showToast('Error al subir la foto', 'error');
+        showToast('Error al subir la foto: ' + error.message, 'error');
     } finally {
         mostrarLoading(false);
     }
 }
+// =====================================================
+// OBTENER CÓDIGO DE ORDEN
+// =====================================================
 
-function eliminarFoto(index) {
-    delete fotosData[index];
+async function obtenerCodigoOrden(ordenId) {
+    try {
+        const response = await fetch(`${API_URL}/orden-codigo/${ordenId}`, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.success && data.codigo_unico) {
+            return data.codigo_unico;
+        }
+        return null;
+    } catch (error) {
+        console.error('Error obteniendo código de orden:', error);
+        return null;
+    }
+}
+// =====================================================
+// ELIMINAR FOTO DE DRIVE
+// =====================================================
 
-    const input = document.getElementById(`fotoInput_${index}`);
-    if (input) input.value = '';
-
-    const preview = document.querySelector(`.foto-upload-item[data-index="${index}"] .foto-preview`);
-    if (preview) {
-        preview.style.backgroundImage = '';
-        preview.classList.remove('has-image');
-        preview.innerHTML = '<i class="fas fa-plus-circle"></i><span>Foto ' + (index + 1) + '</span>';
+async function eliminarFoto(index) {
+    const fotoData = fotosData[index];
+    if (!fotoData || !fotoData.public_id) {
+        showToast('No hay foto para eliminar', 'warning');
+        return;
     }
 
-    const removeBtn = document.querySelector(`.foto-upload-item[data-index="${index}"] .btn-remove-foto`);
-    if (removeBtn) removeBtn.style.display = 'none';
+    if (!confirm('¿Eliminar esta foto de Drive?')) return;
 
-    showToast(`Foto ${index + 1} eliminada`, 'info');
+    mostrarLoading(true);
+    
+    try {
+        const response = await fetch(`${API_URL}/eliminar-foto-avance-drive`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                public_id: fotoData.public_id
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            delete fotosData[index];
+
+            const input = document.getElementById(`fotoInput_${index}`);
+            if (input) input.value = '';
+
+            const preview = document.querySelector(`.foto-upload-item[data-index="${index}"] .foto-preview`);
+            if (preview) {
+                preview.style.backgroundImage = '';
+                preview.classList.remove('has-image');
+                preview.innerHTML = '<i class="fas fa-plus-circle"></i><span>Foto ' + (index + 1) + '</span>';
+            }
+
+            const removeBtn = document.querySelector(`.foto-upload-item[data-index="${index}"] .btn-remove-foto`);
+            if (removeBtn) removeBtn.style.display = 'none';
+
+            showToast(`Foto ${index + 1} eliminada de Drive`, 'info');
+        } else {
+            showToast(data.error || 'Error al eliminar foto', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
 }
 
 // =====================================================
@@ -751,6 +809,46 @@ function setupEventListeners() {
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) modal.classList.remove('show');
+        });
+    });
+}
+// =====================================================
+// 🔥 NUEVO: SUBIR FOTO A GOOGLE DRIVE (AVANCES)
+// =====================================================
+
+async function subirFotoADrive(file, codigo_orden) {
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('foto', file);
+        formData.append('codigo_orden', codigo_orden);
+        formData.append('tipo', 'avance');  // Para identificar que es un avance
+        
+        // ✅ ENDPOINT QUE SUBE A DRIVE
+        const uploadUrl = `${API_URL}/subir-foto-avance-drive`;
+        
+        console.log('📤 Subiendo foto de avance a Google Drive...');
+        console.log(`📁 Para orden: ${codigo_orden}`);
+        
+        fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': getAuthHeaders()['Authorization']
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.url) {
+                console.log('✅ Foto de avance subida a Drive:', data.url);
+                resolve(data);
+            } else {
+                console.error('❌ Error Drive:', data.error);
+                reject(new Error(data.error || 'Error al subir a Google Drive'));
+            }
+        })
+        .catch(err => {
+            console.error('❌ Error de red:', err);
+            reject(new Error('Error de conexión con Google Drive'));
         });
     });
 }

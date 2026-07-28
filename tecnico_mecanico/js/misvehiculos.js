@@ -1,6 +1,7 @@
 // =====================================================
 // MIS VEHÍCULOS - TÉCNICO MECÁNICO
-// VERSIÓN CORREGIDA - CON FOTOS EN SOLICITUD DE REPUESTOS
+// VERSIÓN COMPLETA CON SOPORTE PARA MÚLTIPLES FOTOS (HASTA 3)
+// CORREGIDO: PREVIEW LOCAL DE FOTOS (ELIMINADO ERROR 401)
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
@@ -21,9 +22,43 @@ let usuarioActual = null;
 let rolesUsuario = [];
 let comunicadosVistos = [];
 
-// Variable para items de solicitud (NO redeclarar si ya existe)
+// Variable para items de solicitud (MÚLTIPLES FOTOS)
 if (typeof itemsSolicitud === 'undefined') {
     var itemsSolicitud = [];
+}
+
+// =====================================================
+// FUNCIÓN: CARGAR IMAGEN DESDE PROXY (SOLO PARA HISTORIAL/DETALLES)
+// =====================================================
+async function cargarImagenRepuestoDesdeProxy(url) {
+    if (!url || url === 'null' || url === '' || url === 'undefined') {
+        return null;
+    }
+
+    try {
+        const token = getToken();
+        const proxyUrl = `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(url)}`;
+        
+        const response = await fetch(proxyUrl, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (data.success && data.base64) {
+            return data.base64;
+        } else {
+            throw new Error(data.error || 'Error al obtener la imagen');
+        }
+    } catch (error) {
+        console.warn(`⚠️ Error cargando imagen desde proxy: ${error.message}`);
+        return null;
+    }
 }
 
 // =====================================================
@@ -636,11 +671,10 @@ async function confirmarPausaManual() {
 }
 
 // =====================================================
-// SUBIR FOTO DE ITEM - SOLICITUD DE REPUESTOS (TÉCNICO)
-// CORREGIDO PARA USAR LA CARPETA CORRECTA EN DRIVE
+// SUBIR FOTO DE REPUESTO - SOPORTE PARA MÚLTIPLES FOTOS (HASTA 3)
+// CORREGIDO: PREVIEW LOCAL CON URL.createObjectURL
 // =====================================================
-
-async function subirFotoItemSolicitudTecnico(index, input) {
+async function subirFotoItemSolicitudTecnico(index, fotoNumero, input) {
     const file = input.files[0];
     if (!file) return;
     
@@ -656,23 +690,62 @@ async function subirFotoItemSolicitudTecnico(index, input) {
         return;
     }
     
-    showToast('Subiendo foto...', 'info');
+    // Verificar que el item existe
+    if (!itemsSolicitud[index]) {
+        showToast('Error: Item no encontrado', 'error');
+        return;
+    }
+    
+    // Inicializar array de fotos si no existe
+    if (!itemsSolicitud[index].fotos) {
+        itemsSolicitud[index].fotos = [];
+    }
+    
+    // Verificar límite de 3 fotos
+    if (itemsSolicitud[index].fotos.length >= 3) {
+        showToast('Máximo 3 fotos por repuesto', 'warning');
+        input.value = '';
+        return;
+    }
+    
+    // ------------------------------------------------
+    // CREAR EL PREVIEW LOCAL EN EL NAVEGADOR (SIN PROXY)
+    // ------------------------------------------------
+    const previewContainer = document.getElementById(`fotoPreviewSolicitudTecnico_${index}_${fotoNumero}`);
+    
+    // Usamos URL.createObjectURL para generar una URL local (blob:)
+    // ESTO ELIMINA EL ERROR 401 Y LA IMAGEN NEGRA
+    const localPreviewUrl = URL.createObjectURL(file);
+    
+    if (previewContainer) {
+        previewContainer.innerHTML = `
+            <div style="position:relative;display:inline-block;">
+                <img src="${localPreviewUrl}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;border:2px solid var(--ambar-alerta);cursor:pointer;" 
+                     onclick="verFotoAmpliadaTecnico('${localPreviewUrl}')">
+                <span style="position:absolute;top:-4px;right:-4px;background:var(--ambar-alerta);color:white;border-radius:50%;width:16px;height:16px;font-size:8px;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </span>
+            </div>
+        `;
+    }
+    
+    showToast(`Subiendo foto ${fotoNumero}...`, 'info');
     
     try {
         const formData = new FormData();
         formData.append('foto', file);
+        formData.append('foto_numero', fotoNumero);
+        formData.append('index', index);
         
-        // 🔥 OBTENER EL CÓDIGO DE ORDEN
+        // Obtener el código de orden
         const ordenId = document.getElementById('ordenIdSolicitud')?.value;
         if (ordenId) {
-            // Buscar el código de orden en los vehículos asignados
             const vehiculo = vehiculosAsignados.find(v => v.orden_id === parseInt(ordenId));
             if (vehiculo && vehiculo.codigo_unico) {
                 formData.append('codigo_orden', vehiculo.codigo_unico);
                 formData.append('id_orden', ordenId);
                 console.log(`📤 Enviando foto para orden: ${vehiculo.codigo_unico}`);
             } else {
-                // Si no está en la lista, obtenerlo del backend
                 try {
                     const response = await fetch(`/tecnico/orden-codigo/${ordenId}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
@@ -681,15 +754,14 @@ async function subirFotoItemSolicitudTecnico(index, input) {
                     if (data.success && data.codigo_unico) {
                         formData.append('codigo_orden', data.codigo_unico);
                         formData.append('id_orden', ordenId);
-                        console.log(`📤 Enviando foto para orden (backend): ${data.codigo_unico}`);
                     }
                 } catch (e) {
-                    console.warn('⚠️ No se pudo obtener código de orden del backend');
+                    console.warn('⚠️ No se pudo obtener código de orden');
                 }
             }
         }
         
-        const response = await fetch('/api/jefe-taller/subir-foto-item', {
+        const response = await fetch('/tecnico/subir-foto-repuesto', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -700,65 +772,243 @@ async function subirFotoItemSolicitudTecnico(index, input) {
         const data = await response.json();
         
         if (data.success && data.url) {
-            if (itemsSolicitud[index]) {
-                itemsSolicitud[index].foto_url = data.url;
-                itemsSolicitud[index].foto_public_id = data.public_id;
+            // Agregar la foto al array del item (GUARDAMOS LA URL LOCAL Y LA URL DEL SERVIDOR)
+            itemsSolicitud[index].fotos.push({
+                url: data.url,
+                public_id: data.public_id,
+                localUrl: localPreviewUrl // Guardamos la URL local para que no se pierda el preview
+            });
+            
+            // Actualizamos el preview para que muestre la foto y el botón de eliminar, pero manteniendo la imagen local
+            // (la URL local ya se puso arriba, solo cambiamos el borde a verde para indicar éxito)
+            if (previewContainer) {
+                previewContainer.innerHTML = `
+                    <div style="position:relative;display:inline-block;">
+                        <img src="${localPreviewUrl}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);cursor:pointer;" 
+                             onclick="verFotoAmpliadaTecnico('${localPreviewUrl}')">
+                        <button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemSolicitudTecnico(${index}, ${itemsSolicitud[index].fotos.length - 1})" 
+                                style="position:absolute;top:-6px;right:-6px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 4px rgba(0,0,0,0.3);">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
             }
             
             renderItemsSolicitud();
             showToast('✅ Foto subida correctamente', 'success');
         } else {
             showToast(data.error || 'Error al subir foto', 'error');
+            // Si falla, revertimos el preview a vacío
+            if (previewContainer) {
+                previewContainer.innerHTML = `<div style="width:50px;height:50px;border:2px dashed var(--border-color);border-radius:6px;display:flex;align-items:center;justify-content:center;background:var(--gris-oscuro);">
+                    <span style="color:var(--gris-texto);font-size:10px;text-align:center;line-height:1.2;"><i class="fas fa-plus"></i><br>${fotoNumero}</span>
+                </div>`;
+            }
+            renderItemsSolicitud();
         }
     } catch (error) {
         console.error('Error subiendo foto:', error);
         showToast('Error de conexión al subir foto', 'error');
+        renderItemsSolicitud();
     } finally {
         input.value = '';
     }
 }
 
-async function eliminarFotoItemSolicitudTecnico(index) {
-    if (!itemsSolicitud[index] || !itemsSolicitud[index].foto_public_id) {
+// =====================================================
+// ELIMINAR FOTO DE ITEM (ESPECÍFICA)
+// =====================================================
+async function eliminarFotoItemSolicitudTecnico(index, fotoIndex) {
+    if (!itemsSolicitud[index] || !itemsSolicitud[index].fotos || !itemsSolicitud[index].fotos[fotoIndex]) {
         showToast('No hay foto para eliminar', 'warning');
         return;
     }
     
-    if (!confirm('¿Eliminar esta foto?')) return;
-    
-    showToast('Eliminando foto...', 'info');
-    
-    try {
-        const response = await fetch('/api/jefe-taller/eliminar-foto-item', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                public_id: itemsSolicitud[index].foto_public_id
-            })
-        });
+    const foto = itemsSolicitud[index].fotos[fotoIndex];
+    // Si tiene public_id, intentamos eliminarla del servidor, si no, solo la borramos del array
+    if (foto.public_id) {
+        if (!confirm('¿Eliminar esta foto?')) return;
         
-        const data = await response.json();
+        showToast('Eliminando foto...', 'info');
         
-        if (data.success) {
-            delete itemsSolicitud[index].foto_url;
-            delete itemsSolicitud[index].foto_public_id;
+        try {
+            const response = await fetch('/tecnico/eliminar-foto-repuesto', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    public_id: foto.public_id
+                })
+            });
             
-            renderItemsSolicitud();
-            showToast('✅ Foto eliminada', 'success');
-        } else {
-            showToast(data.error || 'Error al eliminar foto', 'error');
+            const data = await response.json();
+            
+            if (data.success) {
+                // Liberamos la memoria de la URL local creada con createObjectURL
+                if (foto.localUrl) {
+                    URL.revokeObjectURL(foto.localUrl);
+                }
+                
+                itemsSolicitud[index].fotos.splice(fotoIndex, 1);
+                renderItemsSolicitud();
+                showToast('✅ Foto eliminada', 'success');
+            } else {
+                showToast(data.error || 'Error al eliminar foto', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('Error de conexión', 'error');
         }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
+    } else {
+        // Si no tiene public_id, solo la borramos del frontend
+        if (!confirm('¿Eliminar esta foto local?')) return;
+        if (foto.localUrl) {
+            URL.revokeObjectURL(foto.localUrl);
+        }
+        itemsSolicitud[index].fotos.splice(fotoIndex, 1);
+        renderItemsSolicitud();
+        showToast('✅ Foto local eliminada', 'success');
     }
 }
 
 // =====================================================
-// SOLICITAR REPUESTOS SIN PAUSA (CON FOTOS)
+// RENDERIZAR ITEMS DE SOLICITUD CON MÚLTIPLES FOTOS
+// CORREGIDO: RENDERIZADO DE FOTOS SIN PROXY (USA LOCALURL)
+// =====================================================
+function renderItemsSolicitud() {
+    const container = document.getElementById('itemsListSolicitud');
+    if (!container) return;
+
+    if (itemsSolicitud.length === 0) {
+        container.innerHTML = `<div class="item-empty"><i class="fas fa-box-open"></i><p>No hay repuestos agregados</p><small>Haz clic en "Agregar repuesto" para comenzar</small></div>`;
+        return;
+    }
+
+    container.innerHTML = itemsSolicitud.map((item, index) => {
+        // Asegurar que item.fotos exista
+        if (!item.fotos) {
+            item.fotos = [];
+        }
+        
+        const cantidadFotos = item.fotos.length;
+        const puedeAgregarFoto = cantidadFotos < 3;
+        
+        // Generar HTML para cada foto (hasta 3)
+        let fotosHtml = '';
+        for (let f = 0; f < 3; f++) {
+            const foto = item.fotos[f] || null;
+            const tieneFoto = foto && (foto.localUrl || foto.url);
+            const fotoNumero = f + 1;
+            
+            if (tieneFoto) {
+                // Usamos la URL local (blob:) si existe, para evitar el error 401
+                const srcImg = foto.localUrl || foto.url; 
+                fotosHtml += `
+                    <div class="foto-item-container" style="position:relative;display:inline-block;margin-right:4px;">
+                        <img src="${srcImg}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);cursor:pointer;" 
+                             onclick="verFotoAmpliadaTecnico('${srcImg}')" 
+                             onerror="this.style.display='none'; this.parentElement.innerHTML='<span style=\\'color:var(--gris-texto);font-size:10px;padding:0 8px;\\'>❌</span>'">
+                        <button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemSolicitudTecnico(${index}, ${f})" 
+                                style="position:absolute;top:-6px;right:-6px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 4px rgba(0,0,0,0.3);">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+            } else {
+                // Espacio para agregar foto
+                const inputId = `fotoInput_${index}_${fotoNumero}`;
+                const previewId = `fotoPreviewSolicitudTecnico_${index}_${fotoNumero}`;
+                const disabled = !puedeAgregarFoto && f >= cantidadFotos;
+                
+                fotosHtml += `
+                    <div class="foto-item-container" style="position:relative;display:inline-block;margin-right:4px;" id="fotoContainer_${index}_${fotoNumero}">
+                        <div id="${previewId}" style="width:50px;height:50px;border:2px dashed var(--border-color);border-radius:6px;display:flex;align-items:center;justify-content:center;background:var(--gris-oscuro);${disabled ? 'opacity:0.3;' : ''}">
+                            ${disabled ? '<span style="color:var(--gris-texto);font-size:10px;">📷</span>' : `
+                                <span style="color:var(--gris-texto);font-size:10px;text-align:center;line-height:1.2;">
+                                    <i class="fas fa-plus"></i><br>
+                                    ${fotoNumero}
+                                </span>
+                            `}
+                        </div>
+                        <input type="file" id="${inputId}" class="item-foto-input-solicitud-tecnico" accept="image/*" 
+                               style="display:none;" 
+                               onchange="subirFotoItemSolicitudTecnico(${index}, ${fotoNumero}, this)" 
+                               ${disabled ? 'disabled' : ''}>
+                        ${!disabled ? `
+                            <button type="button" class="btn-foto-item-mini" onclick="event.preventDefault(); document.getElementById('${inputId}').click()" 
+                                    style="position:absolute;bottom:-4px;right:-4px;background:var(--azul-acento);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 4px rgba(0,0,0,0.3);">
+                                <i class="fas fa-camera"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+            }
+        }
+        
+        return `
+            <div class="item-row" data-index="${index}">
+                <div class="item-fields">
+                    <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Nombre del repuesto" onchange="actualizarItemSolicitud(${index}, 'descripcion', this.value)">
+                    <input type="number" class="item-cantidad" value="${item.cantidad}" min="1" onchange="actualizarItemSolicitud(${index}, 'cantidad', parseInt(this.value))">
+                    <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle (marca, especificaciones...)" onchange="actualizarItemSolicitud(${index}, 'detalle', this.value)">
+                </div>
+                <div class="item-fotos-container">
+                    <div class="item-fotos-grid">
+                        ${fotosHtml}
+                    </div>
+                    <div style="font-size:9px;color:var(--gris-texto);margin-top:4px;">
+                        ${cantidadFotos}/3 fotos
+                    </div>
+                </div>
+                <div class="item-actions">
+                    <button type="button" class="btn-remove-item" onclick="event.preventDefault(); eliminarItemSolicitud(${index})"><i class="fas fa-trash-alt"></i></button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function agregarItemSolicitud() {
+    itemsSolicitud.push({ descripcion: '', cantidad: 1, detalle: '', fotos: [] });
+    renderItemsSolicitud();
+    setTimeout(() => {
+        const lastInput = document.querySelector('#itemsListSolicitud .item-row:last-child .item-descripcion');
+        if (lastInput) lastInput.focus();
+    }, 100);
+}
+
+function actualizarItemSolicitud(index, campo, valor) {
+    if (itemsSolicitud[index]) itemsSolicitud[index][campo] = valor;
+}
+
+function eliminarItemSolicitud(index) {
+    // Limpiar URLs locales de las fotos del item antes de borrar
+    if (itemsSolicitud[index] && itemsSolicitud[index].fotos) {
+        itemsSolicitud[index].fotos.forEach(foto => {
+            if (foto.localUrl) URL.revokeObjectURL(foto.localUrl);
+        });
+    }
+    itemsSolicitud.splice(index, 1);
+    renderItemsSolicitud();
+}
+
+function limpiarItemsSolicitud() {
+    // Limpiar todas las URLs locales de los items
+    itemsSolicitud.forEach(item => {
+        if (item.fotos) {
+            item.fotos.forEach(foto => {
+                if (foto.localUrl) URL.revokeObjectURL(foto.localUrl);
+            });
+        }
+    });
+    itemsSolicitud = [];
+    renderItemsSolicitud();
+}
+
+// =====================================================
+// SOLICITAR REPUESTOS SIN PAUSA (CON MÚLTIPLES FOTOS)
 // =====================================================
 window.solicitarRepuestosSinPausa = function(ordenId) {
     limpiarItemsSolicitud();
@@ -777,7 +1027,7 @@ async function confirmarSolicitarRepuestos() {
     const ordenId = document.getElementById('ordenIdSolicitud').value;
     const motivo = document.getElementById('motivoSolicitud').value.trim();
     
-    // 🔧 VERIFICAR: Los items deben incluir foto_url
+    // Verificar items con descripción
     const itemsValidos = itemsSolicitud.filter(item => item.descripcion && item.descripcion.trim() !== '');
     
     if (itemsValidos.length === 0) {
@@ -785,8 +1035,7 @@ async function confirmarSolicitarRepuestos() {
         return;
     }
     
-    // 🔧 LOG: Ver qué se está enviando
-    console.log('📤 Enviando items:', itemsValidos);
+    console.log('📤 Enviando items con fotos:', JSON.stringify(itemsValidos, null, 2));
     
     cerrarSolicitarRepuestosModal();
     showToast('Enviando solicitud de repuestos...', 'info');
@@ -812,6 +1061,7 @@ async function confirmarSolicitarRepuestos() {
             showToast(data.error || 'Error al enviar solicitud', 'error');
         }
     } catch (error) {
+        console.error('Error:', error);
         showToast('Error de conexión', 'error');
     }
 }
@@ -961,7 +1211,7 @@ window.marcarArmadoCompletado = async function(ordenId) {
 };
 
 // =====================================================
-// 🆕 FUNCIÓN PARA VER FOTO AMPLIADA DESDE EL HISTORIAL
+// FUNCIÓN PARA VER FOTO AMPLIADA (CORREGIDA SIN ERROR 401)
 // =====================================================
 function verFotoAmpliadaTecnico(url) {
     if (!url) {
@@ -997,15 +1247,53 @@ function verFotoAmpliadaTecnico(url) {
     // Actualizar imagen
     const img = document.getElementById('fotoAmpliadaTecnicoImg');
     if (img) {
-        img.src = url;
+        // *** TRUCO PARA GOOGLE DRIVE: Convertir a URL pública directa ***
+        let srcToUse = url;
+        
+        if (url.includes('drive.google.com')) {
+            // Si la URL es de tipo "file/d/..." o "id=", la convertimos a vista previa pública
+            let fileId = null;
+            
+            // Caso 1: URL larga tipo: https://drive.google.com/file/d/ID/view
+            const matchFile = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/);
+            if (matchFile && matchFile[1]) {
+                fileId = matchFile[1];
+            } 
+            // Caso 2: URL corta tipo: https://drive.google.com/uc?id=ID
+            else {
+                const matchId = url.match(/id=([a-zA-Z0-9-_]+)/);
+                if (matchId && matchId[1]) {
+                    fileId = matchId[1];
+                }
+            }
+
+            if (fileId) {
+                // Esta es la URL mágica que permite ver la imagen sin autenticación
+                srcToUse = `https://drive.google.com/uc?export=view&id=${fileId}`;
+            } else {
+                // Fallback si no se pudo extraer el ID
+                srcToUse = url; 
+            }
+        }
+        
+        img.src = srcToUse;
         img.alt = 'Foto ampliada';
+        
+        // Manejador de errores si la imagen no carga
         img.onerror = function() {
-            this.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="%238E8E93" stroke-width="2"%3E%3Crect x="3" y="3" width="18" height="18" rx="2"/%3E%3Ccircle cx="8.5" cy="8.5" r="1.5"/%3E%3Cpolyline points="21 15 16 10 5 21"/%3E%3C/svg%3E';
-            this.style.objectFit = 'contain';
+            // Si falla el truco de Google, intentamos usar el proxy como último recurso
+            if (url.includes('drive.google.com')) {
+                console.warn('Falló la carga directa de Google, intentando con proxy...');
+                this.src = `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(url)}`;
+            } else {
+                // Imagen de relleno si todo falla
+                this.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="%238E8E93" stroke-width="2"%3E%3Crect x="3" y="3" width="18" height="18" rx="2"/%3E%3Ccircle cx="8.5" cy="8.5" r="1.5"/%3E%3Cpolyline points="21 15 16 10 5 21"/%3E%3C/svg%3E';
+                this.style.objectFit = 'contain';
+            }
         };
     }
     
-    // Guardar URL para descarga
+    // Guardar URL original para descarga
     window._fotoAmpliadaTecnicoUrl = url;
     
     // Abrir modal
@@ -1043,7 +1331,7 @@ function descargarFotoAmpliadaTecnico() {
 }
 
 // =====================================================
-// HISTORIAL DE SOLICITUDES DE REPUESTOS (CON FOTOS)
+// HISTORIAL DE SOLICITUDES DE REPUESTOS (SIN ERRORES 401)
 // =====================================================
 window.verHistorialSolicitudes = async function(ordenId) {
     showToast('Cargando historial de solicitudes...', 'info');
@@ -1085,19 +1373,36 @@ window.verHistorialSolicitudes = async function(ordenId) {
                 try { items = JSON.parse(items); } catch(e) { items = []; }
             }
             
-            // =====================================================
-            // 🔧 RENDERIZAR ITEMS CON FOTOS EN EL HISTORIAL
-            // =====================================================
+            // Renderizar items con múltiples fotos en el historial (SIN PROXY EN EL SRC)
             if (items && items.length > 0) {
                 itemsHtml = '<ul style="margin: 0.5rem 0 0 1rem; list-style: none; padding: 0;">' + 
                     items.map(item => {
-                        const fotoUrl = item.foto_url;
-                        const fotoHtml = fotoUrl 
-                            ? `<img src="${fotoUrl}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);margin-right:8px;vertical-align:middle;cursor:pointer;" onclick="verFotoAmpliadaTecnico('${fotoUrl}')" onerror="this.style.display='none'">`
-                            : '<span style="display:inline-block;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;border:1px dashed var(--border-color);text-align:center;line-height:40px;color:var(--gris-texto);font-size:0.8rem;margin-right:8px;vertical-align:middle;"><i class="fas fa-camera"></i></span>';
+                        let fotosHtml = '';
+                        const fotos = item.fotos || [];
+                        
+                        if (fotos.length > 0) {
+                            // Múltiples fotos - Mostramos un botón/ícono en lugar de la imagen para evitar error 401
+                            fotosHtml = fotos.map((foto, fi) => {
+                                return `<span onclick="verFotoAmpliadaTecnico('${foto.url}')" 
+                                             style="display:inline-flex;align-items:center;justify-content:center;width:35px;height:35px;background:var(--gris-oscuro);border:2px solid var(--azul-acento);border-radius:4px;margin-right:4px;cursor:pointer;color:var(--azul-acento);font-size:14px;" 
+                                             title="Ver foto">
+                                            <i class="fas fa-camera"></i>
+                                        </span>`;
+                            }).join('');
+                        } else if (item.foto_url) {
+                            fotosHtml = `<span onclick="verFotoAmpliadaTecnico('${item.foto_url}')" 
+                                             style="display:inline-flex;align-items:center;justify-content:center;width:35px;height:35px;background:var(--gris-oscuro);border:2px solid var(--azul-acento);border-radius:4px;margin-right:4px;cursor:pointer;color:var(--azul-acento);font-size:14px;" 
+                                             title="Ver foto">
+                                            <i class="fas fa-camera"></i>
+                                        </span>`;
+                        } else {
+                            fotosHtml = '<span style="color:var(--gris-texto);font-size:10px;">Sin foto</span>';
+                        }
                         
                         return `<li style="display:flex;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--border-color);">
-                            ${fotoHtml}
+                            <div style="display:flex;gap:3px;margin-right:8px;flex-wrap:wrap;min-width:80px;">
+                                ${fotosHtml}
+                            </div>
                             <div style="flex:1;">
                                 <strong>${escapeHtml(item.descripcion)}</strong>
                                 <span style="color:var(--gris-texto);font-size:0.8rem;margin-left:0.5rem;">x${item.cantidad}</span>
@@ -1267,11 +1572,9 @@ window.verDetalle = async function(ordenId) {
         // =====================================================
         // OBTENER AUDIOS (DOS GRABACIONES)
         // =====================================================
-        // Audio 1: Grabación del problema (recepción)
         const audioProblemaUrl = detalle.recepcion?.audio_url || '';
         const transcripcionProblema = detalle.recepcion?.transcripcion_problema || 'No hay descripción del problema';
         
-        // Audio 2: Grabación del diagnóstico (Jefe de Taller)
         const audioDiagnosticoUrl = detalle.diagnostico_taller?.audio_url || '';
         const diagnosticoTexto = detalle.diagnostico_taller?.diagnostigo || '';
         
@@ -1279,19 +1582,22 @@ window.verDetalle = async function(ordenId) {
             `<div><strong>Bahía asignada:</strong> ${detalle.planificacion.bahia_asignada}</div>` : '';
         
         // =====================================================
-        // FUNCIÓN PARA CREAR HTML DE AUDIO
+        // FUNCIÓN PARA CREAR HTML DE AUDIO (CON PROXY)
         // =====================================================
         function crearAudioHtml(url, titulo, icono, color) {
             if (!url || url === '') return '';
+            // Usar proxy para audio si es de Drive
+            const proxyUrl = url.includes('drive.google.com') ? 
+                `/tecnico/proxy-audio?url=${encodeURIComponent(url)}` : url;
             return `
                 <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(59, 130, 246, 0.05); border-radius: var(--radius-md); border-left: 3px solid ${color};">
                     <div style="font-size: 0.75rem; color: ${color}; margin-bottom: 0.5rem;">
                         <i class="fas ${icono}"></i> ${titulo}:
                     </div>
                     <audio controls preload="metadata" style="width: 100%;">
-                        <source src="${url}" type="audio/mpeg">
-                        <source src="${url}" type="audio/wav">
-                        <source src="${url}" type="audio/webm">
+                        <source src="${proxyUrl}" type="audio/mpeg">
+                        <source src="${proxyUrl}" type="audio/wav">
+                        <source src="${proxyUrl}" type="audio/webm">
                         Tu navegador no soporta el elemento de audio.
                     </audio>
                 </div>
@@ -1305,7 +1611,7 @@ window.verDetalle = async function(ordenId) {
             audioProblemaUrl,
             'Grabación del problema (Cliente)',
             'fa-microphone',
-            '#3B82F6'  // Azul
+            '#3B82F6'
         );
         
         const problemaHtml = `
@@ -1325,7 +1631,7 @@ window.verDetalle = async function(ordenId) {
             audioDiagnosticoUrl,
             'Grabación del diagnóstico (Jefe de Taller)',
             'fa-clipboard-list',
-            '#F59E0B'  // Amarillo
+            '#F59E0B'
         );
         
         const diagnosticoTallerHtml = `
@@ -1350,7 +1656,7 @@ window.verDetalle = async function(ordenId) {
         `;
         
         // =====================================================
-        // CONSTRUIR HTML DE FOTOS
+        // CONSTRUIR HTML DE FOTOS (CON PROXY)
         // =====================================================
         let fotosHtml = '';
         if (fotosArray.length > 0) {
@@ -1358,12 +1664,17 @@ window.verDetalle = async function(ordenId) {
                 <div class="modal-section">
                     <h3><i class="fas fa-images"></i> Fotos del Vehículo (${fotosArray.length})</h3>
                     <div class="fotos-grid">
-                        ${fotosArray.map(([nombre, url]) => `
-                            <div class="foto-item" onclick="verFoto('${url}')" style="cursor: pointer;">
-                                <img src="${url}" alt="${nombre}" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%22%20height%3D%22100%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%238E8E93%22%20stroke-width%3D%222%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%2218%22%20height%3D%2218%22%20rx%3D%222%22%2F%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%221.5%22%2F%3E%3Cpolyline%20points%3D%2221%2015%2016%2010%205%2021%22%2F%3E%3C%2Fsvg%3E'">
-                                <div style="font-size: 0.6rem; text-align: center; padding: 0.25rem;">${escapeHtml(nombre)}</div>
-                            </div>
-                        `).join('')}
+                        ${fotosArray.map(([nombre, url]) => {
+                            const proxyUrl = url.includes('drive.google.com') ? 
+                                `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(url)}` : url;
+                            return `
+                                <div class="foto-item" onclick="verFoto('${url}')" style="cursor: pointer;">
+                                    <img src="${proxyUrl}" alt="${nombre}" loading="lazy" 
+                                         onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%22%20height%3D%22100%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%238E8E93%22%20stroke-width%3D%222%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%2218%22%20height%3D%2218%22%20rx%3D%222%22%2F%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%221.5%22%2F%3E%3Cpolyline%20points%3D%2221%2015%2016%2010%205%2021%22%2F%3E%3C%2Fsvg%3E'">
+                                    <div style="font-size: 0.6rem; text-align: center; padding: 0.25rem;">${escapeHtml(nombre)}</div>
+                                </div>
+                            `;
+                        }).join('')}
                     </div>
                 </div>
             `;
@@ -1427,7 +1738,14 @@ window.verDetalle = async function(ordenId) {
 };
 
 window.verFoto = function(url) {
-    document.getElementById('fotoAmpliada').src = url;
+    const img = document.getElementById('fotoAmpliada');
+    // Si es de Drive, usar proxy
+    if (url.includes('drive.google.com')) {
+        const proxyUrl = `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(url)}`;
+        img.src = proxyUrl;
+    } else {
+        img.src = url;
+    }
     document.getElementById('fotoModal').classList.add('show');
 };
 
@@ -1569,79 +1887,6 @@ function verComunicadoCompleto(id) {
 }
 
 // =====================================================
-// RENDERIZAR ITEMS DE SOLICITUD CON FOTOS
-// =====================================================
-
-function renderItemsSolicitud() {
-    const container = document.getElementById('itemsListSolicitud');
-    if (!container) return;
-
-    if (itemsSolicitud.length === 0) {
-        container.innerHTML = `<div class="item-empty"><i class="fas fa-box-open"></i><p>No hay repuestos agregados</p><small>Haz clic en "Agregar repuesto" para comenzar</small></div>`;
-        return;
-    }
-
-    container.innerHTML = itemsSolicitud.map((item, index) => {
-        // 🔥 VERIFICAR: La foto debe mostrarse si existe
-        const fotoPreview = item.foto_url ? 
-            `<div class="foto-preview-container" style="position:relative;display:inline-block;">
-                <img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);cursor:pointer;" 
-                     onclick="verFotoAmpliadaTecnico('${item.foto_url}')" 
-                     onerror="this.style.display='none'">
-                <button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemSolicitudTecnico(${index})" 
-                        style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>` : '';
-        
-        return `
-            <div class="item-row" data-index="${index}">
-                <div class="item-fields">
-                    <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Nombre del repuesto" onchange="actualizarItemSolicitud(${index}, 'descripcion', this.value)">
-                    <input type="number" class="item-cantidad" value="${item.cantidad}" min="1" onchange="actualizarItemSolicitud(${index}, 'cantidad', parseInt(this.value))">
-                    <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle (marca, especificaciones...)" onchange="actualizarItemSolicitud(${index}, 'detalle', this.value)">
-                </div>
-                <div class="item-foto-upload">
-                    <input type="file" class="item-foto-input-solicitud-tecnico" accept="image/*" onchange="subirFotoItemSolicitudTecnico(${index}, this)" style="display:none;">
-                    <button type="button" class="btn-foto-item" onclick="event.preventDefault(); document.querySelectorAll('.item-foto-input-solicitud-tecnico')[${index}]?.click()">
-                        <i class="fas fa-camera"></i> ${item.foto_url ? 'Cambiar Foto' : 'Agregar Foto'}
-                    </button>
-                    <span class="item-foto-preview" id="fotoPreviewSolicitudTecnico_${index}">
-                        ${fotoPreview}
-                    </span>
-                </div>
-                <div class="item-actions">
-                    <button type="button" class="btn-remove-item" onclick="event.preventDefault(); eliminarItemSolicitud(${index})"><i class="fas fa-trash-alt"></i></button>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-function agregarItemSolicitud() {
-    itemsSolicitud.push({ descripcion: '', cantidad: 1, detalle: '', foto_url: null, foto_public_id: null });
-    renderItemsSolicitud();
-    setTimeout(() => {
-        const lastInput = document.querySelector('#itemsListSolicitud .item-row:last-child .item-descripcion');
-        if (lastInput) lastInput.focus();
-    }, 100);
-}
-
-function actualizarItemSolicitud(index, campo, valor) {
-    if (itemsSolicitud[index]) itemsSolicitud[index][campo] = valor;
-}
-
-function eliminarItemSolicitud(index) {
-    itemsSolicitud.splice(index, 1);
-    renderItemsSolicitud();
-}
-
-function limpiarItemsSolicitud() {
-    itemsSolicitud = [];
-    renderItemsSolicitud();
-}
-
-// =====================================================
 // CIERRE DE SESIÓN
 // =====================================================
 window.cerrarSesion = function() {
@@ -1682,28 +1927,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =====================================================
     // EXPORTAR FUNCIONES GLOBALES PARA EL HTML
     // =====================================================
-
-    // Funciones de solicitud de repuestos
     window.subirFotoItemSolicitudTecnico = subirFotoItemSolicitudTecnico;
     window.eliminarFotoItemSolicitudTecnico = eliminarFotoItemSolicitudTecnico;
     window.solicitarRepuestosSinPausa = solicitarRepuestosSinPausa;
     window.cerrarSolicitarRepuestosModal = cerrarSolicitarRepuestosModal;
     window.confirmarSolicitarRepuestos = confirmarSolicitarRepuestos;
-
-    // Historial y detalle
     window.verHistorialSolicitudes = verHistorialSolicitudes;
     window.cerrarHistorialModal = cerrarHistorialModal;
     window.verDetalle = verDetalle;
     window.cerrarDetalleModal = cerrarDetalleModal;
-
-    // Fotos ampliadas
     window.verFotoAmpliadaTecnico = verFotoAmpliadaTecnico;
     window.cerrarFotoAmpliadaTecnico = cerrarFotoAmpliadaTecnico;
     window.descargarFotoAmpliadaTecnico = descargarFotoAmpliadaTecnico;
     window.verFoto = verFoto;
     window.cerrarFotoModal = cerrarFotoModal;
-
-    // Diagnóstico y reparación
     window.empezarTrabajoDiagnostico = empezarTrabajoDiagnostico;
     window.cerrarEmpezarModal = cerrarEmpezarModal;
     window.iniciarReparacion = iniciarReparacion;
@@ -1715,8 +1952,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.mostrarFinalizarModal = mostrarFinalizarModal;
     window.cerrarFinalizarModal = cerrarFinalizarModal;
     window.marcarArmadoCompletado = marcarArmadoCompletado;
-
-    // Otras utilidades
     window.recargarDatos = recargarDatos;
     window.cerrarSesion = cerrarSesion;
 

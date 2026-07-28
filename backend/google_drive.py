@@ -1,7 +1,7 @@
 # =====================================================
 # GOOGLE DRIVE - CON OAUTH 2.0 VÍA VARIABLES DE ENTORNO
 # ESTRUCTURA: {codigo_orden}/{modulo}/{subcarpeta}
-# VERSIÓN COMPLETA CON SOPORTE PARA COTIZACIONES
+# VERSIÓN COMPLETA CON SOPORTE PARA COTIZACIONES Y TÉCNICO
 # =====================================================
 
 import os
@@ -147,36 +147,40 @@ def limpiar_modelo_whisper():
 
 
 # =====================================================
-# CONSTANTES PARA MÓDULOS DE COTIZACIONES
+# CONSTANTES PARA MÓDULOS DE COTIZACIONES - CORREGIDO
 # =====================================================
 
 SUBMODULOS_COTIZACION = {
+    # 🆕 Nuevos submódulos para técnico y jefe de taller
+    'TECNICO': 'TECNICO',
+    'JEFE_TALLER': 'JEFE_TALLER',
+    'CLIENTE': 'CLIENTE',
+    # Módulos existentes
     'SOLICITUD_COTIZACION': 'SOLICITUD_COTIZACION',
     'COTIZACION_CLIENTE': 'COTIZACION_CLIENTE',
     'SOLICITUD_COMPRA': 'SOLICITUD_COMPRA',
 }
 
 TIPOS_ARCHIVO_COTIZACION = {
+    # 🆕 Para TECNICO y JEFE_TALLER
+    'fotos': 'fotos',
+    'imagenes': 'fotos',
+    'documentos': 'documentos',
+    'comprobantes': 'comprobantes',
     # Para SOLICITUD_COTIZACION
     'foto_item': 'fotos',
     'foto_repuesto': 'fotos',
     'imagen_item': 'fotos',
-    'fotos': 'fotos',
-    'imagenes': 'fotos',
-    
     # Para COTIZACION_CLIENTE
     'cotizacion_pdf': 'documentos',
     'cotizacion_word': 'documentos',
-    'documentos': 'documentos',
     'pdf': 'documentos',
     'word': 'documentos',
-    
     # Para SOLICITUD_COMPRA
     'comprobante': 'comprobantes',
     'factura': 'comprobantes',
     'foto_compra': 'fotos',
     'documento_compra': 'documentos',
-    'comprobantes': 'comprobantes',
 }
 
 TIPOS_ARCHIVO_GENERAL = {
@@ -613,8 +617,11 @@ class GoogleDriveService:
         
         ARGS:
             codigo_orden: 'OT-20260723-001'
-            submodulo: 'SOLICITUD_COTIZACION', 'COTIZACION_CLIENTE', 'SOLICITUD_COMPRA'
+            submodulo: 'TECNICO', 'JEFE_TALLER', 'CLIENTE', 'SOLICITUD_COTIZACION', 'COTIZACION_CLIENTE', 'SOLICITUD_COMPRA'
             tipo: 'fotos', 'documentos', 'comprobantes'
+        
+        RETORNA:
+            'OT-20260723-001/COTIZACION/TECNICO/fotos'
         """
         path_parts = [codigo_orden, 'COTIZACION']
         
@@ -657,6 +664,36 @@ class GoogleDriveService:
         return self.get_ruta_solicitud_cotizacion(codigo_orden, 'fotos')
     
     # =====================================================
+    # 🆕 MÉTODOS PARA TÉCNICO Y JEFE DE TALLER
+    # =====================================================
+    
+    def get_ruta_tecnico(self, codigo_orden, tipo='fotos'):
+        """
+        Ruta para archivos del técnico:
+        {codigo_orden}/COTIZACION/TECNICO/{tipo}
+        """
+        return self.get_ruta_cotizacion(codigo_orden, 'TECNICO', tipo)
+    
+    def get_ruta_jefe_taller(self, codigo_orden, tipo='fotos'):
+        """
+        Ruta para archivos del jefe de taller:
+        {codigo_orden}/COTIZACION/JEFE_TALLER/{tipo}
+        """
+        return self.get_ruta_cotizacion(codigo_orden, 'JEFE_TALLER', tipo)
+    
+    def get_ruta_fotos_tecnico(self, codigo_orden):
+        """
+        {codigo_orden}/COTIZACION/TECNICO/fotos/
+        """
+        return self.get_ruta_tecnico(codigo_orden, 'fotos')
+    
+    def get_ruta_fotos_jefe_taller(self, codigo_orden):
+        """
+        {codigo_orden}/COTIZACION/JEFE_TALLER/fotos/
+        """
+        return self.get_ruta_jefe_taller(codigo_orden, 'fotos')
+    
+    # =====================================================
     # 🆕 MÉTODOS PARA SUBIR ARCHIVOS DE COTIZACIÓN
     # =====================================================
     
@@ -669,7 +706,7 @@ class GoogleDriveService:
             file_data: bytes o FileStorage
             filename: nombre del archivo
             codigo_orden: 'OT-20260723-001'
-            submodulo: 'SOLICITUD_COTIZACION', 'COTIZACION_CLIENTE', 'SOLICITUD_COMPRA'
+            submodulo: 'TECNICO', 'JEFE_TALLER', 'CLIENTE', 'SOLICITUD_COTIZACION', 'COTIZACION_CLIENTE', 'SOLICITUD_COMPRA'
             tipo: 'fotos', 'documentos', 'comprobantes'
             public: True para que sea público
         """

@@ -564,3 +564,152 @@ def serve_js(filename):
     except Exception as e:
         logger.error(f"Error sirviendo JS {filename}: {e}")
         return jsonify({'error': 'Archivo no encontrado'}), 404
+
+# =====================================================
+# ENDPOINT: SUBIR FOTO DE AVANCE A GOOGLE DRIVE
+# =====================================================
+
+@avance_bp.route('/subir-foto-avance-drive', methods=['POST'])
+@tecnico_required
+def subir_foto_avance_drive(current_user):
+    """Subir foto de avance a Google Drive"""
+    try:
+        from google_drive import google_drive
+        
+        # Verificar archivo
+        if 'foto' not in request.files:
+            return jsonify({'success': False, 'error': 'No se envió foto'}), 400
+        
+        file = request.files['foto']
+        if not file.filename:
+            return jsonify({'success': False, 'error': 'Archivo vacío'}), 400
+        
+        # Obtener código de orden
+        codigo_orden = request.form.get('codigo_orden')
+        
+        if not codigo_orden:
+            # Si no viene, buscar por id_orden
+            id_orden = request.form.get('id_orden')
+            if id_orden:
+                orden = supabase.table('ordentrabajo') \
+                    .select('codigo_unico') \
+                    .eq('id', id_orden) \
+                    .execute()
+                if orden.data:
+                    codigo_orden = orden.data[0].get('codigo_unico')
+        
+        if not codigo_orden:
+            return jsonify({'success': False, 'error': 'No se pudo obtener el código de la orden'}), 400
+        
+        # Validar tipo de archivo
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({'error': f'Formato no permitido. Use: {", ".join(allowed_extensions)}'}), 400
+        
+        # Validar tamaño (5MB)
+        if len(file.read()) > 5 * 1024 * 1024:
+            return jsonify({'error': 'El archivo no debe superar los 5MB'}), 400
+        file.seek(0)
+        
+        # Generar nombre único
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"avance_{timestamp}_{file.filename}"
+        
+        # 🔥 SUBIR A GOOGLE DRIVE
+        # Ruta: {codigo_orden}/AVANCES_TECNICO/fotos/
+        folder_path = google_drive.get_orden_folder_path(codigo_orden, 'AVANCES_TECNICO', 'fotos')
+        
+        logger.info(f"📁 Subiendo foto de avance a: {folder_path}")
+        
+        result = google_drive.upload_file(
+            file_data=file,
+            filename=filename,
+            folder_path=folder_path,
+            public=True  # El jefe de taller debe poder verlo
+        )
+        
+        return jsonify({
+            'success': True,
+            'url': result['url'],
+            'public_id': result['id'],
+            'filename': filename,
+            'folder_path': folder_path
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error subiendo foto de avance: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT: ELIMINAR FOTO DE AVANCE DE DRIVE
+# =====================================================
+
+@avance_bp.route('/eliminar-foto-avance-drive', methods=['POST'])
+@tecnico_required
+def eliminar_foto_avance_drive(current_user):
+    """Eliminar foto de avance de Google Drive"""
+    try:
+        from google_drive import google_drive
+        
+        data = request.get_json()
+        public_id = data.get('public_id')
+        
+        if not public_id:
+            return jsonify({'success': False, 'error': 'public_id requerido'}), 400
+        
+        # ✅ ELIMINAR DE DRIVE
+        resultado = google_drive.delete_file(public_id)
+        
+        if resultado:
+            return jsonify({'success': True, 'message': 'Foto eliminada de Drive'}), 200
+        else:
+            return jsonify({'success': False, 'error': 'Error al eliminar foto'}), 500
+        
+    except Exception as e:
+        logger.error(f"Error eliminando foto de avance: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT: OBTENER CÓDIGO DE ORDEN
+# =====================================================
+
+@avance_bp.route('/orden-codigo/<int:orden_id>', methods=['GET'])
+@tecnico_required
+def obtener_codigo_orden_avance(current_user, orden_id):
+    """Obtener código de orden para subir fotos"""
+    try:
+        tecnico_id = current_user['id']
+        
+        # Verificar acceso
+        asignacion = supabase.table('asignaciontecnico') \
+            .select('id') \
+            .eq('id_orden_trabajo', orden_id) \
+            .eq('id_tecnico', tecnico_id) \
+            .execute()
+        
+        if not asignacion.data:
+            return jsonify({'success': False, 'error': 'No tienes acceso a esta orden'}), 403
+        
+        # Obtener código
+        orden = supabase.table('ordentrabajo') \
+            .select('codigo_unico') \
+            .eq('id', orden_id) \
+            .execute()
+        
+        if not orden.data:
+            return jsonify({'success': False, 'error': 'Orden no encontrada'}), 404
+        
+        return jsonify({
+            'success': True,
+            'codigo_unico': orden.data[0].get('codigo_unico')
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500

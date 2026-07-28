@@ -2767,7 +2767,7 @@ async function inicializar() {
 }
 
 // =====================================================
-// FUNCIONES RESTANTES (Solicitudes de Compra, etc.)
+// RENDERIZAR SOLICITUDES DE COMPRA CON FOTOS
 // =====================================================
 
 function renderSolicitudesCompra() {
@@ -2789,10 +2789,17 @@ function renderSolicitudesCompra() {
             }
         }
         
+        // 🔥 MOSTRAR ITEMS CON FOTOS
         const itemsHtml = itemsList && itemsList.length > 0 
             ? itemsList.map(item => {
-                const fotoHtml = item.foto_url ? `<img src="${item.foto_url}" style="width:25px;height:25px;object-fit:cover;border-radius:4px;margin-left:4px;">` : '';
-                return `<div style="font-size: 0.7rem;">• ${escapeHtml(item.descripcion)} x${item.cantidad} ${fotoHtml}</div>`;
+                const fotoHtml = item.foto_url ? 
+                    `<img src="${item.foto_url}" style="width:25px;height:25px;object-fit:cover;border-radius:4px;margin-left:4px;cursor:pointer;" 
+                          onclick="verFotoAmpliadaJefeTaller('${item.foto_url}')" 
+                          onerror="this.style.display='none'"
+                          title="Haz clic para ver ampliada">` : '';
+                return `<div style="font-size: 0.7rem; display:flex; align-items:center; gap:4px;">
+                    • ${escapeHtml(item.descripcion)} x${item.cantidad} ${fotoHtml}
+                </div>`;
               }).join('')
             : `<div class="text-muted">${escapeHtml(s.descripcion_pieza || 'Item')} x${s.cantidad || 1}</div>`;
         
@@ -2843,7 +2850,6 @@ function renderSolicitudesCompra() {
         `;
     }).join('');
 }
-
 function verDetalleSolicitudCompra(id) {
     const solicitud = solicitudesCompra.find(s => s.id === id);
     if (!solicitud) return;
@@ -3231,6 +3237,85 @@ function copiarUrlDrive(url) {
         document.body.removeChild(input);
         showToast('✅ URL copiada al portapapeles', 'success');
     });
+}
+// =====================================================
+// FUNCIÓN PARA VER FOTO AMPLIADA (JEFE DE TALLER)
+// =====================================================
+
+function verFotoAmpliadaJefeTaller(url) {
+    if (!url) {
+        showToast('No hay foto para mostrar', 'warning');
+        return;
+    }
+    
+    // Crear modal si no existe
+    let modal = document.getElementById('modalFotoAmpliadaJefeTaller');
+    if (!modal) {
+        const modalHtml = `
+            <div class="modal" id="modalFotoAmpliadaJefeTaller" onclick="cerrarFotoAmpliadaJefeTaller()">
+                <div class="modal-content" style="max-width: 800px; background: var(--bg-card);" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-image"></i> Foto del Repuesto</h3>
+                        <button class="modal-close" onclick="cerrarFotoAmpliadaJefeTaller()">&times;</button>
+                    </div>
+                    <div class="modal-body" style="display:flex;justify-content:center;align-items:center;padding:1.5rem;background:var(--negro);min-height:300px;">
+                        <img id="fotoAmpliadaJefeTallerImg" src="" alt="Foto ampliada" loading="lazy" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:var(--radius-md);">
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="cerrarFotoAmpliadaJefeTaller()">Cerrar</button>
+                        <button class="btn-primary" onclick="descargarFotoAmpliadaJefeTaller()">
+                            <i class="fas fa-download"></i> Descargar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    const img = document.getElementById('fotoAmpliadaJefeTallerImg');
+    if (img) {
+        img.src = url;
+        img.alt = 'Foto ampliada';
+        img.onerror = function() {
+            this.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="%238E8E93" stroke-width="2"%3E%3Crect x="3" y="3" width="18" height="18" rx="2"/%3E%3Ccircle cx="8.5" cy="8.5" r="1.5"/%3E%3Cpolyline points="21 15 16 10 5 21"/%3E%3C/svg%3E';
+            this.style.objectFit = 'contain';
+        };
+    }
+    
+    window._fotoAmpliadaJefeTallerUrl = url;
+    
+    modal = document.getElementById('modalFotoAmpliadaJefeTaller');
+    if (modal) {
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function cerrarFotoAmpliadaJefeTaller() {
+    const modal = document.getElementById('modalFotoAmpliadaJefeTaller');
+    if (modal) {
+        modal.classList.remove('show');
+        document.body.style.overflow = '';
+    }
+}
+
+function descargarFotoAmpliadaJefeTaller() {
+    const url = window._fotoAmpliadaJefeTallerUrl;
+    if (!url) {
+        showToast('No hay foto para descargar', 'warning');
+        return;
+    }
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.download = `repuesto_${Date.now()}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('✅ Descargando foto...', 'success');
 }
 // =====================================================
 // EXPORTAR FUNCIONES GLOBALES

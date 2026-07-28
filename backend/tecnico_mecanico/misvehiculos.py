@@ -5,7 +5,8 @@
 # CORREGIDO: DEDUPLICACIÓN DE VEHÍCULOS Y EXCLUSIÓN DE ENTREGADOS
 # CORREGIDO: AÑO Y KILOMETRAJE EN DETALLE
 # CORREGIDO: AUDIO DEL PROBLEMA Y AUDIO DEL DIAGNÓSTICO
-# CORREGIDO: SOPORTE PARA FOTOS EN SOLICITUDES DE REPUESTOS
+# CORREGIDO: SOPORTE PARA MÚLTIPLES FOTOS EN SOLICITUDES DE REPUESTOS (HASTA 3)
+# CORREGIDO: PROXY PARA IMÁGENES DE REPUESTOS (IGUAL QUE EN RECEPCIÓN)
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
@@ -17,6 +18,9 @@ import datetime
 import logging
 import os
 import json
+import re
+import base64
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +130,70 @@ def tecnico_required(f):
             return jsonify({'error': 'No autorizado - Se requiere rol de Técnico'}), 403
         return f(current_user, *args, **kwargs)
     return decorated
+
+
+# =====================================================
+# FUNCIÓN AUXILIAR: OBTENER FILE_ID DE GOOGLE DRIVE
+# =====================================================
+def obtener_file_id_drive(url):
+    """
+    Extrae el file_id de una URL de Google Drive
+    SOPORTA MÚLTIPLES FORMATOS
+    """
+    if not url:
+        return None
+    
+    url = url.strip()
+    
+    # Formato 1: https://drive.google.com/uc?export=view&id=XXX
+    if 'id=' in url:
+        match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', url)
+        if match:
+            return match.group(1)
+    
+    # Formato 2: https://drive.google.com/file/d/XXX/view
+    if '/d/' in url:
+        parts = url.split('/d/')
+        if len(parts) > 1:
+            file_id = parts[1].split('/')[0]
+            if file_id and len(file_id) > 10:
+                return file_id
+    
+    # Formato 3: https://drive.google.com/open?id=XXX
+    if 'open?id=' in url:
+        match = re.search(r'open\?id=([a-zA-Z0-9_-]+)', url)
+        if match:
+            return match.group(1)
+    
+    # Formato 4: thumbnail
+    if 'thumbnail' in url:
+        match = re.search(r'id=([a-zA-Z0-9_-]+)', url)
+        if match:
+            return match.group(1)
+    
+    # Formato 5: ID directo
+    if re.match(r'^[a-zA-Z0-9_-]{10,}$', url):
+        return url
+    
+    return None
+
+
+def normalizar_url_drive(url):
+    """Normaliza URL de Drive para obtener la URL de visualización"""
+    if not url:
+        return None
+    
+    if url == 'null' or url == 'None' or url == '' or url == 'undefined':
+        return None
+    
+    if 'uc?export=view' in url or 'export=download' in url:
+        return url
+    
+    file_id = obtener_file_id_drive(url)
+    if file_id:
+        return f"https://drive.google.com/uc?export=view&id={file_id}"
+    
+    return url
 
 
 # =====================================================
@@ -660,7 +728,7 @@ def pausar_reparacion_manual(current_user):
 
 
 # =====================================================
-# API: SOLICITAR REPUESTOS SIN PAUSA (CORREGIDO CON FOTOS)
+# API: SOLICITAR REPUESTOS SIN PAUSA (CORREGIDO CON MÚLTIPLES FOTOS)
 # =====================================================
 @mis_vehiculos_bp.route('/solicitar-repuestos-sin-pausa', methods=['POST'])
 @tecnico_required
@@ -696,7 +764,7 @@ def solicitar_repuestos_sin_pausa(current_user):
             return jsonify({'error': f'No se pueden solicitar repuestos. Estado actual: {estado_actual}'}), 400
         
         # =====================================================
-        # 🔧 PROCESAR ITEMS CON FOTOS (CORREGIDO)
+        # 🔧 PROCESAR ITEMS CON MÚLTIPLES FOTOS (HASTA 3)
         # =====================================================
         items_validos = []
         for item in items:
@@ -708,14 +776,25 @@ def solicitar_repuestos_sin_pausa(current_user):
                     'detalle': item.get('detalle', '').strip()
                 }
                 
-                # ✅ GUARDAR FOTO SI EXISTE
-                if item.get('foto_url'):
-                    item_data['foto_url'] = item.get('foto_url')
-                    logger.info(f"✅ Foto URL guardada: {item_data['foto_url']}")
+                # ✅ GUARDAR MÚLTIPLES FOTOS (HASTA 3)
+                fotos = item.get('fotos', [])
+                if fotos and len(fotos) > 0:
+                    fotos_validas = []
+                    for foto in fotos:
+                        if foto.get('url') and foto['url'] != 'null' and foto['url'] != '' and foto['url'] != 'undefined':
+                            fotos_validas.append({
+                                'url': foto['url'],
+                                'public_id': foto.get('public_id', '')
+                            })
+                    if fotos_validas:
+                        item_data['fotos'] = fotos_validas
+                        logger.info(f"✅ {len(fotos_validas)} fotos guardadas para repuesto")
                 
-                if item.get('foto_public_id'):
-                    item_data['foto_public_id'] = item.get('foto_public_id')
-                    logger.info(f"✅ Public ID guardado: {item_data['foto_public_id']}")
+                # Fallback para compatibilidad con versiones anteriores (una sola foto)
+                if not fotos and item.get('foto_url'):
+                    item_data['foto_url'] = item.get('foto_url')
+                    if item.get('foto_public_id'):
+                        item_data['foto_public_id'] = item.get('foto_public_id')
                 
                 items_validos.append(item_data)
         
@@ -729,7 +808,7 @@ def solicitar_repuestos_sin_pausa(current_user):
         solicitud = {
             'id_orden_trabajo': id_orden,
             'id_tecnico': tecnico_id,
-            'items': json.dumps(items_validos),  # ✅ Guarda los items con fotos
+            'items': json.dumps(items_validos),
             'observaciones': observaciones,
             'estado': 'pendiente',
             'fecha_solicitud': ahora
@@ -791,8 +870,14 @@ def notificar_jefe_taller_solicitud(id_orden, items, observaciones, tecnico_nomb
             linea = f"- {item['descripcion']} x{item['cantidad']}"
             if item.get('detalle'):
                 linea += f" ({item['detalle']})"
-            if item.get('foto_url'):
-                linea += f" 📷 [Ver foto: {item['foto_url']}]"
+            
+            # Verificar si tiene fotos
+            fotos = item.get('fotos', [])
+            if fotos:
+                linea += f" 📷 [{len(fotos)} foto(s)]"
+            elif item.get('foto_url'):
+                linea += f" 📷 [1 foto]"
+            
             items_texto.append(linea)
         
         items_texto_str = "\n".join(items_texto)
@@ -1399,7 +1484,7 @@ def obtener_detalle_orden(current_user, orden_id):
 
 
 # =====================================================
-# API: HISTORIAL DE SOLICITUDES DE REPUESTOS (CON FOTOS)
+# API: HISTORIAL DE SOLICITUDES DE REPUESTOS (CON MÚLTIPLES FOTOS)
 # =====================================================
 @mis_vehiculos_bp.route('/historial-solicitudes/<int:orden_id>', methods=['GET'])
 @tecnico_required
@@ -1453,6 +1538,15 @@ def obtener_historial_solicitudes(current_user, orden_id):
                     items = json.loads(items)
                 except:
                     items = []
+            
+            # Normalizar items para asegurar que las fotos estén en el formato correcto
+            for item in items:
+                # Si tiene fotos en el formato antiguo (foto_url), convertirlo
+                if item.get('foto_url') and not item.get('fotos'):
+                    item['fotos'] = [{
+                        'url': item['foto_url'],
+                        'public_id': item.get('foto_public_id', '')
+                    }]
             
             resultado.append({
                 'id': s.get('id'),
@@ -1554,6 +1648,7 @@ def marcar_instruccion_leida(current_user, instruccion_id):
         logger.error(f"Error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
 # API: OBTENER CÓDIGO DE ORDEN (PARA FOTOS)
 # =====================================================
@@ -1592,3 +1687,160 @@ def obtener_codigo_orden_tecnico(current_user, orden_id):
         logger.error(f"Error: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+# =====================================================
+# SUBIR FOTO DE REPUESTO (TÉCNICO MECÁNICO) - RUTA CORREGIDA
+# AHORA USA: {codigo_orden}/COTIZACION/TECNICO/FOTOS
+# =====================================================
+@mis_vehiculos_bp.route('/subir-foto-repuesto', methods=['POST'])
+@tecnico_required
+def subir_foto_repuesto(current_user):
+    try:
+        from google_drive import google_drive
+        from datetime import datetime
+        
+        file = request.files.get('foto')
+        codigo_orden = request.form.get('codigo_orden')
+        id_orden = request.form.get('id_orden')
+        index = request.form.get('index')
+        foto_numero = request.form.get('foto_numero', '1')
+        
+        if not file:
+            return jsonify({'error': 'No se envió el archivo'}), 400
+        
+        if not codigo_orden and not id_orden:
+            return jsonify({'error': 'Se requiere código de orden o ID de orden'}), 400
+        
+        referencia_id = codigo_orden or f"OT-{id_orden}"
+        
+        if not file.content_type.startswith('image/'):
+            return jsonify({'error': 'Solo se permiten imágenes'}), 400
+        
+        if file.content_length > 5 * 1024 * 1024:
+            return jsonify({'error': 'La imagen no debe superar los 5MB'}), 400
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        user_id = current_user['id']
+        filename = f"repuesto_{user_id}_{timestamp}_foto{foto_numero}.jpg"
+        
+        # 🔥 RUTA CORRECTA: {codigo_orden}/COTIZACION/TECNICO/FOTOS
+        # Usamos el nuevo método get_ruta_fotos_tecnico
+        folder_path = google_drive.get_ruta_fotos_tecnico(referencia_id)
+        
+        logger.info(f"📤 Subiendo foto {foto_numero} de repuesto a: {folder_path}")
+        
+        result = google_drive.upload_file(
+            file_data=file,
+            filename=filename,
+            folder_path=folder_path,
+            mime_type='image/jpeg',
+            public=True
+        )
+        
+        logger.info(f"✅ Foto de repuesto subida: {result['url']}")
+        
+        return jsonify({
+            'success': True,
+            'url': result['url'],
+            'public_id': result.get('id', ''),
+            'foto_numero': foto_numero,
+            'web_view_link': result.get('web_view_link', '')
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error subiendo foto de repuesto: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# PROXY PARA IMÁGENES DE REPUESTOS (TÉCNICO) - IGUAL QUE EN RECEPCIÓN
+# =====================================================
+@mis_vehiculos_bp.route('/proxy-imagen-repuesto', methods=['GET'])
+@tecnico_required
+def proxy_imagen_repuesto(current_user):
+    """
+    Endpoint para servir imágenes de repuestos en Base64.
+    MISMA SOLUCIÓN QUE EN RECEPCIÓN
+    """
+    try:
+        url = request.args.get('url')
+        if not url:
+            return jsonify({'error': 'URL requerida'}), 400
+        
+        # Extraer file_id de la URL
+        file_id = obtener_file_id_drive(url)
+        if not file_id:
+            url_normalizada = normalizar_url_drive(url)
+            file_id = obtener_file_id_drive(url_normalizada)
+        
+        if not file_id:
+            logger.error(f"❌ No se pudo extraer file_id de: {url}")
+            return jsonify({'error': 'No se pudo identificar el archivo en Google Drive'}), 400
+        
+        # USAR MINIATURA DE GOOGLE DRIVE (MUCHO MÁS RÁPIDO)
+        download_url = f"https://drive.google.com/thumbnail?id={file_id}&sz=w400"
+        logger.info(f"📥 Usando miniatura: {download_url}")
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        response = requests.get(download_url, headers=headers, timeout=10)
+        
+        if response.status_code != 200:
+            # Fallback a descarga completa
+            download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            response = requests.get(download_url, headers=headers, timeout=10)
+            if response.status_code != 200:
+                return jsonify({'error': f'Error descargando imagen: {response.status_code}'}), 400
+        
+        content_type = response.headers.get('content-type', 'image/jpeg')
+        img_base64 = base64.b64encode(response.content).decode('utf-8')
+        base64_data = f"data:{content_type};base64,{img_base64}"
+        
+        logger.info(f"✅ Imagen convertida a base64: {len(base64_data)} bytes")
+        
+        return jsonify({
+            'success': True,
+            'base64': base64_data
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error en proxy-imagen-repuesto: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ELIMINAR FOTO DE REPUESTO (TÉCNICO MECÁNICO)
+# =====================================================
+@mis_vehiculos_bp.route('/eliminar-foto-repuesto', methods=['POST'])
+@tecnico_required
+def eliminar_foto_repuesto(current_user):
+    try:
+        from google_drive import google_drive
+        
+        data = request.get_json()
+        public_id = data.get('public_id')
+        
+        if not public_id:
+            return jsonify({'error': 'Se requiere el ID público de la foto'}), 400
+        
+        result = google_drive.delete_file(public_id)
+        
+        if result:
+            logger.info(f"✅ Foto eliminada de Drive: {public_id}")
+            return jsonify({
+                'success': True,
+                'message': 'Foto eliminada correctamente'
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'No se pudo eliminar la foto'
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"❌ Error eliminando foto: {str(e)}")
+        return jsonify({'error': str(e)}), 500

@@ -1954,3 +1954,280 @@ body.sidebar-open {
         -webkit-overflow-scrolling: touch;
     }
 }
+/* =====================================================
+   MÚLTIPLES FOTOS POR REPUESTO (SOLICITUD DE REPUESTOS)
+   ===================================================== */
+
+/* Contenedor principal de fotos en el item */
+.item-fotos-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 170px;
+    padding: 0.25rem 0;
+}
+
+.item-fotos-grid {
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Cada contenedor de foto individual */
+.foto-item-container {
+    position: relative;
+    display: inline-block;
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm, 8px);
+    overflow: hidden;
+}
+
+.foto-item-container .foto-placeholder {
+    width: 56px;
+    height: 56px;
+    border: 2px dashed var(--border-color, #2C2C2E);
+    border-radius: var(--radius-sm, 8px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--gris-oscuro, #1A1A1C);
+    color: var(--gris-texto, #8E8E93);
+    font-size: 8px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.foto-item-container .foto-placeholder:hover {
+    border-color: var(--azul-acento, #2563EB);
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.foto-item-container .foto-placeholder i {
+    font-size: 14px;
+    margin-bottom: 2px;
+}
+
+/* Mini botón para agregar foto (sobre el placeholder) */
+.btn-foto-item-mini {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    background: var(--azul-acento, #2563EB);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    transition: all 0.2s ease;
+    z-index: 2;
+}
+
+.btn-foto-item-mini:hover {
+    transform: scale(1.15);
+    background: var(--verde-exito, #10B981);
+}
+
+/* Imagen de foto cargada */
+.foto-item-container img {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: var(--radius-sm, 8px);
+    border: 2px solid var(--verde-exito, #10B981);
+    display: block;
+}
+
+/* Botón eliminar foto (sobre la imagen) */
+.foto-item-container .btn-remove-foto {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: var(--rojo-primario, #C1121F);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    font-size: 9px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    transition: all 0.2s ease;
+    z-index: 3;
+}
+
+.foto-item-container .btn-remove-foto:hover {
+    transform: scale(1.2);
+    background: #dc3545;
+}
+
+/* Texto contador de fotos */
+.item-fotos-count {
+    font-size: 9px;
+    color: var(--gris-texto, #8E8E93);
+    margin-top: 4px;
+    text-align: center;
+}
+
+/* =====================================================
+   ESTILOS PARA EL HISTORIAL CON MÚLTIPLES FOTOS
+   ===================================================== */
+
+/* Miniatura de foto en el historial */
+.historial-foto-thumb {
+    width: 35px;
+    height: 35px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 2px solid var(--verde-exito, #10B981);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.historial-foto-thumb:hover {
+    transform: scale(1.1);
+    border-color: var(--azul-acento, #2563EB);
+}
+
+/* Contenedor de fotos en historial */
+.historial-fotos-container {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    min-width: 80px;
+    align-items: center;
+}
+
+.historial-sin-foto {
+    color: var(--gris-texto, #8E8E93);
+    font-size: 10px;
+}
+
+/* =====================================================
+   RESPONSIVE - MÚLTIPLES FOTOS
+   ===================================================== */
+
+@media (max-width: 768px) {
+    .item-fotos-container {
+        min-width: 100%;
+        align-items: flex-start;
+    }
+    
+    .item-fotos-grid {
+        gap: 8px;
+    }
+    
+    .foto-item-container {
+        width: 48px;
+        height: 48px;
+    }
+    
+    .foto-item-container .foto-placeholder {
+        width: 48px;
+        height: 48px;
+        font-size: 7px;
+    }
+    
+    .foto-item-container .foto-placeholder i {
+        font-size: 12px;
+    }
+    
+    .foto-item-container img {
+        width: 48px;
+        height: 48px;
+    }
+    
+    .btn-foto-item-mini {
+        width: 18px;
+        height: 18px;
+        font-size: 8px;
+    }
+    
+    .foto-item-container .btn-remove-foto {
+        width: 16px;
+        height: 16px;
+        font-size: 7px;
+        top: -5px;
+        right: -5px;
+    }
+}
+
+@media (max-width: 480px) {
+    .item-fotos-grid {
+        gap: 6px;
+    }
+    
+    .foto-item-container {
+        width: 42px;
+        height: 42px;
+    }
+    
+    .foto-item-container .foto-placeholder {
+        width: 42px;
+        height: 42px;
+        font-size: 6px;
+    }
+    
+    .foto-item-container .foto-placeholder i {
+        font-size: 10px;
+    }
+    
+    .foto-item-container img {
+        width: 42px;
+        height: 42px;
+    }
+    
+    .btn-foto-item-mini {
+        width: 16px;
+        height: 16px;
+        font-size: 7px;
+        bottom: -3px;
+        right: -3px;
+    }
+    
+    .foto-item-container .btn-remove-foto {
+        width: 14px;
+        height: 14px;
+        font-size: 6px;
+        top: -4px;
+        right: -4px;
+    }
+}
+
+/* =====================================================
+   ANIMACIONES PARA FOTOS
+   ===================================================== */
+
+@keyframes fotoSubiendo {
+    0% { opacity: 0.5; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.05); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+.foto-item-container.cargando {
+    animation: fotoSubiendo 0.6s ease;
+}
+
+@keyframes pulse-foto {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+.foto-item-container .loading {
+    animation: pulse-foto 1s ease-in-out infinite;
+}

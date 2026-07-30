@@ -516,7 +516,7 @@ def listar_ordenes_finalizadas(current_user):
 
 
 # =====================================================
-# ENDPOINT 5: DETALLE DE ORDEN (CORREGIDO)
+# ENDPOINT 5: DETALLE DE ORDEN (CORREGIDO CON FOTOS Y AUDIO)
 # =====================================================
 
 @jefe_taller_ordenes_bp.route('/detalle-orden/<int:id_orden>', methods=['GET'])
@@ -583,19 +583,36 @@ def detalle_orden(current_user, id_orden):
         if planif_resp.data:
             planificacion = planif_resp.data[0]
         
+        # =====================================================
+        # 🔥 CORREGIDO: OBTENER TODOS LOS DATOS DE RECEPCIÓN
+        # =====================================================
         recepcion = {}
         recep_resp = supabase.table('recepcion') \
-            .select('transcripcion_problema') \
+            .select('''
+                transcripcion_problema,
+                url_grabacion_problema,
+                url_lateral_izquierda,
+                url_lateral_derecha,
+                url_foto_frontal,
+                url_foto_trasera,
+                url_foto_superior,
+                url_foto_inferior,
+                url_foto_tablero
+            ''') \
             .eq('id_orden_trabajo', id_orden) \
             .execute()
+        
         if recep_resp.data:
             recepcion = recep_resp.data[0]
+            logger.info(f"📸 Recepción encontrada para orden {id_orden}")
+        else:
+            logger.warning(f"⚠️ No hay recepción para orden {id_orden}")
         
         # =====================================================
-        # 🔧 CORREGIDO: Declarar variables ANTES del if
+        # OBTENER DIAGNÓSTICO DEL JEFE DE TALLER
         # =====================================================
         diagnostico_taller = ''
-        url_grabacion = ''  # ✅ Declaración ANTES del bloque if
+        url_grabacion = ''
         
         diag_resp = supabase.table('diagnostigoinicial') \
             .select('diagnostigo, url_grabacion') \
@@ -605,6 +622,9 @@ def detalle_orden(current_user, id_orden):
             diagnostico_taller = diag_resp.data[0].get('diagnostigo', '')
             url_grabacion = diag_resp.data[0].get('url_grabacion', '')
         
+        # =====================================================
+        # CONSTRUIR DETALLE CON TODAS LAS FOTOS
+        # =====================================================
         detalle = {
             'id': orden['id'],
             'codigo_unico': orden['codigo_unico'],
@@ -620,9 +640,23 @@ def detalle_orden(current_user, id_orden):
             'tecnicos': tecnicos,
             'planificacion': planificacion,
             'transcripcion_problema': recepcion.get('transcripcion_problema', ''),
+            # 🔥 NUEVO: Fotos de la recepción
+            'fotos': {
+                'url_lateral_izquierda': recepcion.get('url_lateral_izquierda'),
+                'url_lateral_derecha': recepcion.get('url_lateral_derecha'),
+                'url_foto_frontal': recepcion.get('url_foto_frontal'),
+                'url_foto_trasera': recepcion.get('url_foto_trasera'),
+                'url_foto_superior': recepcion.get('url_foto_superior'),
+                'url_foto_inferior': recepcion.get('url_foto_inferior'),
+                'url_foto_tablero': recepcion.get('url_foto_tablero')
+            },
+            # 🔥 NUEVO: Audio de la recepción
+            'audio_recepcion': recepcion.get('url_grabacion_problema'),
             'diagnostigo_taller': diagnostico_taller,
-            'url_grabacion': url_grabacion  # ✅ Ahora está definida
+            'url_grabacion': url_grabacion
         }
+        
+        logger.info(f"✅ Detalle de orden {id_orden} preparado con fotos y audio")
         
         return jsonify({'success': True, 'detalle': detalle}), 200
         
@@ -631,8 +665,165 @@ def detalle_orden(current_user, id_orden):
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+# =====================================================
+# ENDPOINTS PROXY PARA GOOGLE DRIVE (JEFE TALLER)
+# =====================================================
+
+@jefe_taller_ordenes_bp.route('/proxy-imagen', methods=['GET'])
+@jefe_taller_required
+def proxy_imagen_jefe_taller(current_user):
+    """
+    Proxy para imágenes de Google Drive - Jefe Taller
+    """
+    from flask import Response
+    import requests
+    import re
+    import base64
+    
+    url = request.args.get('url')
+    
+    if not url:
+        return jsonify({'success': False, 'error': 'URL no proporcionada'}), 400
+    
+    # Extraer file_id
+    file_id = extraer_file_id_drive(url)
+    
+    if not file_id:
+        return jsonify({'success': False, 'error': 'No se pudo extraer el ID de la URL'}), 400
+    
+    try:
+        # Estrategias de descarga para imágenes
+        urls = [
+            f"https://drive.google.com/thumbnail?id={file_id}&sz=w800",
+            f"https://drive.google.com/uc?export=view&id={file_id}",
+            f"https://drive.google.com/uc?export=download&id={file_id}",
+        ]
+        
+        image_data = None
+        mime_type = 'image/jpeg'
+        
+        for download_url in urls:
+            try:
+                response = requests.get(download_url, timeout=30, allow_redirects=True)
+                
+                if 'confirm' in response.url and 'download' in response.url:
+                    confirm_match = re.search(r'confirm=([^&]+)', response.text)
+                    if confirm_match:
+                        confirm_token = confirm_match.group(1)
+                        download_url_confirm = f"{response.url}&confirm={confirm_token}"
+                        response = requests.get(download_url_confirm, timeout=30, allow_redirects=True)
+                
+                if response.status_code == 200:
+                    content_type = response.headers.get('Content-Type', '')
+                    if content_type.startswith('image/'):
+                        image_data = response.content
+                        mime_type = content_type
+                        break
+                    elif len(response.content) > 1000:
+                        image_data = response.content
+                        break
+                            
+            except Exception as e:
+                logger.warning(f"Error descargando imagen: {str(e)}")
+        
+        if not image_data:
+            return jsonify({'success': False, 'error': 'No se pudo descargar la imagen'}), 404
+        
+        # Convertir a Base64
+        base64_data = base64.b64encode(image_data).decode('utf-8')
+        
+        return jsonify({
+            'success': True,
+            'base64': f'data:{mime_type};base64,{base64_data}'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en proxy-imagen: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@jefe_taller_ordenes_bp.route('/proxy-audio', methods=['GET'])
+@jefe_taller_required
+def proxy_audio_jefe_taller(current_user):
+    """
+    Proxy para audios de Google Drive - Jefe Taller
+    """
+    from flask import Response
+    import requests
+    import re
+    
+    url = request.args.get('url')
+    
+    if not url:
+        return jsonify({'error': 'URL requerida'}), 400
+    
+    file_id = extraer_file_id_drive(url)
+    if not file_id:
+        return jsonify({'error': 'No se pudo extraer el ID'}), 400
+    
+    try:
+        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        
+        response = requests.get(download_url, stream=True, timeout=30, allow_redirects=True)
+        
+        if 'confirm' in response.url and 'download' in response.url:
+            confirm_match = re.search(r'confirm=([^&]+)', response.text)
+            if confirm_match:
+                confirm_token = confirm_match.group(1)
+                download_url_confirm = f"{response.url}&confirm={confirm_token}"
+                response = requests.get(download_url_confirm, stream=True, timeout=30, allow_redirects=True)
+        
+        if response.status_code != 200:
+            return jsonify({'error': f'Error: {response.status_code}'}), 400
+        
+        content_type = response.headers.get('content-type', 'audio/mpeg')
+        
+        def generate():
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+        
+        return Response(
+            generate(),
+            status=200,
+            headers={
+                'Content-Type': content_type,
+                'Content-Disposition': 'inline',
+                'Cache-Control': 'no-cache',
+                'Access-Control-Allow-Origin': '*'
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error en proxy-audio: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+def extraer_file_id_drive(url):
+    """Extrae el file_id de cualquier URL de Google Drive"""
+    if not url:
+        return None
+    
+    import re
+    url = url.strip()
+    
+    patterns = [
+        r'[?&]id=([a-zA-Z0-9_-]+)',
+        r'/file/d/([a-zA-Z0-9_-]+)',
+        r'open\?id=([a-zA-Z0-9_-]+)',
+        r'/d/([a-zA-Z0-9_-]+)',
+        r'thumbnail\?id=([a-zA-Z0-9_-]+)',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    
+    if re.match(r'^[a-zA-Z0-9_-]{10,}$', url):
+        return url
+    
+    return None
 # =====================================================
 # ENDPOINT 6: ASIGNAR TÉCNICOS (CORREGIDO CON INSTRUCCIONES)
 # =====================================================

@@ -1412,7 +1412,7 @@ function cerrarModalGestionOrden() {
 }
 
 // =====================================================
-// VER DETALLE DE ORDEN
+// VER DETALLE DE ORDEN (CON FOTOS Y AUDIO)
 // =====================================================
 
 async function verDetalleOrden(idOrden) {
@@ -1432,86 +1432,353 @@ async function verDetalleOrden(idOrden) {
         const orden = data.detalle;
         const body = document.getElementById('modalDetalleOrdenBody');
         
-        if (body) {
-            body.innerHTML = `
-                <div class="detalle-orden">
-                    <div class="detalle-seccion">
-                        <h4><i class="fas fa-info-circle"></i> Información General</h4>
-                        <div class="detalle-grid">
-                            <div class="detalle-item"><span class="detalle-label">Código</span><span class="detalle-value">${escapeHtml(orden.codigo_unico)}</span></div>
-                            <div class="detalle-item"><span class="detalle-label">Estado</span><span class="detalle-value estado-${orden.estado_global}">${orden.estado_global}</span></div>
-                            <div class="detalle-item"><span class="detalle-label">Fecha Ingreso</span><span class="detalle-value">${new Date(orden.fecha_ingreso).toLocaleString()}</span></div>
-                        </div>
+        if (!body) {
+            console.error('❌ No se encontró modalDetalleOrdenBody');
+            return;
+        }
+        
+        // =============================================
+        // CONSTRUIR HTML CON FOTOS Y AUDIO
+        // =============================================
+        
+        // Obtener fotos de la recepción (si existen)
+        // Nota: Necesitamos obtener las fotos de la tabla recepcion
+        // El endpoint detalle-orden debería incluir las fotos
+        // Vamos a hacer una llamada adicional para obtener las fotos
+        let fotos = {};
+        let recepcionData = {};
+        
+        try {
+            // Intentar obtener la recepción completa
+            const recepResponse = await fetch(`${API_URL}/jefe-operativo/detalle-recepcion/${idOrden}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('furia_token')}` }
+            });
+            
+            if (recepResponse.ok) {
+                const recepData = await recepResponse.json();
+                if (recepData.success && recepData.detalle) {
+                    recepcionData = recepData.detalle;
+                    fotos = recepcionData.fotos || {};
+                }
+            }
+        } catch (error) {
+            console.warn('⚠️ No se pudieron cargar las fotos de recepción:', error);
+        }
+        
+        // Generar HTML de fotos
+        const fotosArray = Object.entries(fotos).filter(([_, url]) => url && url !== '' && url !== 'null' && url !== 'undefined');
+        let fotosHtml = '';
+        if (fotosArray.length > 0) {
+            fotosHtml = `
+                <div class="detalle-seccion">
+                    <h4><i class="fas fa-images"></i> Fotos de la Recepción (${fotosArray.length})</h4>
+                    <div class="fotos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem; margin-top: 0.5rem;">
+                        ${fotosArray.map(([nombre, url]) => `
+                            <div class="foto-item" onclick="verFotoAmpliada('${url}')" style="cursor: pointer; background: var(--gris-oscuro); border-radius: var(--radius-sm); overflow: hidden; position: relative;">
+                                <div class="foto-loader" style="display: flex; align-items: center; justify-content: center; height: 80px; background: var(--gris-oscuro);">
+                                    <i class="fas fa-spinner fa-spin" style="color: var(--texto-muted);"></i>
+                                </div>
+                                <img src="" alt="${escapeHtml(nombre)}" style="width: 100%; height: 80px; object-fit: cover; display: none;" data-url="${url}">
+                                <div style="font-size: 0.6rem; text-align: center; padding: 0.25rem; background: var(--gris-oscuro); color: var(--texto-muted);">
+                                    ${escapeHtml(nombre.replace(/_/g, ' '))}
+                                </div>
+                            </div>
+                        `).join('')}
                     </div>
-                    
-                    <div class="detalle-seccion">
-                        <h4><i class="fas fa-car"></i> Vehículo</h4>
-                        <div class="detalle-grid">
-                            <div class="detalle-item"><span class="detalle-label">Placa</span><span class="detalle-value">${escapeHtml(orden.placa)}</span></div>
-                            <div class="detalle-item"><span class="detalle-label">Marca/Modelo</span><span class="detalle-value">${escapeHtml(orden.marca)} ${escapeHtml(orden.modelo)}</span></div>
-                            <div class="detalle-item"><span class="detalle-label">Año</span><span class="detalle-value">${orden.anio || 'N/A'}</span></div>
-                            <div class="detalle-item"><span class="detalle-label">Kilometraje</span><span class="detalle-value">${orden.kilometraje?.toLocaleString() || '0'} km</span></div>
-                        </div>
-                    </div>
-                    
-                    <div class="detalle-seccion">
-                        <h4><i class="fas fa-user"></i> Cliente</h4>
-                        <div class="detalle-grid">
-                            <div class="detalle-item"><span class="detalle-label">Nombre</span><span class="detalle-value">${escapeHtml(orden.cliente?.nombre || 'No registrado')}</span></div>
-                            <div class="detalle-item"><span class="detalle-label">Teléfono</span><span class="detalle-value">${escapeHtml(orden.cliente?.telefono || 'N/A')}</span></div>
-                        </div>
-                    </div>
-                    
-                    <div class="detalle-seccion">
-                        <h4><i class="fas fa-users"></i> Técnicos Asignados</h4>
-                        <div class="orden-tecnicos">
-                            ${orden.tecnicos?.length > 0 ? 
-                                orden.tecnicos.map(t => `<span class="tecnico-badge"><i class="fas fa-user"></i> ${escapeHtml(t.nombre)}</span>`).join('') :
-                                '<span class="tecnico-badge sin-asignar">Sin técnicos asignados</span>'}
-                        </div>
-                    </div>
-                    
-                    <div class="detalle-seccion">
-                        <h4><i class="fas fa-calendar"></i> Planificación</h4>
-                        <div class="detalle-grid">
-                            <div class="detalle-item"><span class="detalle-label">Bahía</span><span class="detalle-value">${orden.planificacion?.bahia_asignada || 'No asignada'}</span></div>
-                            <div class="detalle-item"><span class="detalle-label">Inicio Estimado</span><span class="detalle-value">${orden.planificacion?.fecha_hora_inicio_estimado ? new Date(orden.planificacion.fecha_hora_inicio_estimado).toLocaleString() : 'N/A'}</span></div>
-                            <div class="detalle-item"><span class="detalle-label">Horas Estimadas</span><span class="detalle-value">${orden.planificacion?.horas_estimadas || 'N/A'} h</span></div>
-                        </div>
-                    </div>
-                    
-                    <div class="detalle-seccion">
-                        <h4><i class="fas fa-headset"></i> Diagnóstico del Cliente</h4>
-                        <div class="detalle-descripcion">${escapeHtml(orden.transcripcion_problema) || 'No registrado'}</div>
-                    </div>
-                    
-                    ${orden.diagnostigo_taller ? `
-                    <div class="detalle-seccion">
-                        <h4><i class="fas fa-stethoscope"></i> Diagnóstico del Jefe Taller</h4>
-                        <div class="detalle-descripcion" style="background: rgba(193,18,31,0.1);">${escapeHtml(orden.diagnostigo_taller)}</div>
-                        ${orden.url_grabacion ? `
-                        <div style="margin-top: 0.5rem;">
-                            <audio controls style="width: 100%;">
-                                <source src="${orden.url_grabacion}" type="audio/wav">
-                                Tu navegador no soporta audio.
-                            </audio>
-                            <br>
-                            <small><i class="fas fa-link"></i> <a href="${orden.url_grabacion}" target="_blank">Abrir en Google Drive</a></small>
-                        </div>
-                        ` : ''}
-                    </div>
-                    ` : ''}
                 </div>
             `;
         }
         
+        // Generar HTML de audio
+        let audioHtml = '';
+        const audioUrl = orden.url_grabacion || recepcionData.audio_url;
+        if (audioUrl && audioUrl !== '' && audioUrl !== 'null' && audioUrl !== 'undefined') {
+            // Usar proxy para audio (como en recepcion)
+            const audioId = `audio_detalle_${idOrden}`;
+            const loaderId = `audioLoader_detalle_${idOrden}`;
+            const proxyUrl = `${API_URL}/jefe-operativo/proxy-audio?url=${encodeURIComponent(audioUrl)}`;
+            
+            audioHtml = `
+                <div class="detalle-seccion">
+                    <h4><i class="fas fa-microphone"></i> Grabación del Problema</h4>
+                    <div style="margin-top: 0.5rem; width: 100%;">
+                        <div id="${loaderId}" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm);">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Cargando audio...</span>
+                        </div>
+                        <audio id="${audioId}" controls style="width: 100%; display: none;" preload="metadata">
+                            <source id="${audioId}_source" src="">
+                            Tu navegador no soporta el elemento de audio.
+                        </audio>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Construir HTML completo
+        body.innerHTML = `
+            <div class="detalle-orden">
+                <div class="detalle-seccion">
+                    <h4><i class="fas fa-info-circle"></i> Información General</h4>
+                    <div class="detalle-grid">
+                        <div class="detalle-item"><span class="detalle-label">Código</span><span class="detalle-value">${escapeHtml(orden.codigo_unico)}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Estado</span><span class="detalle-value estado-${orden.estado_global}">${orden.estado_global}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Fecha Ingreso</span><span class="detalle-value">${orden.fecha_ingreso ? new Date(orden.fecha_ingreso).toLocaleString() : 'N/A'}</span></div>
+                    </div>
+                </div>
+                
+                <div class="detalle-seccion">
+                    <h4><i class="fas fa-car"></i> Vehículo</h4>
+                    <div class="detalle-grid">
+                        <div class="detalle-item"><span class="detalle-label">Placa</span><span class="detalle-value">${escapeHtml(orden.placa || 'N/A')}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Marca/Modelo</span><span class="detalle-value">${escapeHtml(orden.marca || '')} ${escapeHtml(orden.modelo || '')}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Año</span><span class="detalle-value">${orden.anio || 'N/A'}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Kilometraje</span><span class="detalle-value">${orden.kilometraje?.toLocaleString() || '0'} km</span></div>
+                    </div>
+                </div>
+                
+                <div class="detalle-seccion">
+                    <h4><i class="fas fa-user"></i> Cliente</h4>
+                    <div class="detalle-grid">
+                        <div class="detalle-item"><span class="detalle-label">Nombre</span><span class="detalle-value">${escapeHtml(orden.cliente?.nombre || 'No registrado')}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Teléfono</span><span class="detalle-value">${escapeHtml(orden.cliente?.telefono || 'N/A')}</span></div>
+                    </div>
+                </div>
+                
+                <div class="detalle-seccion">
+                    <h4><i class="fas fa-users"></i> Técnicos Asignados</h4>
+                    <div class="orden-tecnicos">
+                        ${orden.tecnicos?.length > 0 ? 
+                            orden.tecnicos.map(t => `<span class="tecnico-badge"><i class="fas fa-user"></i> ${escapeHtml(t.nombre)}</span>`).join('') :
+                            '<span class="tecnico-badge sin-asignar">Sin técnicos asignados</span>'}
+                    </div>
+                </div>
+                
+                <div class="detalle-seccion">
+                    <h4><i class="fas fa-calendar"></i> Planificación</h4>
+                    <div class="detalle-grid">
+                        <div class="detalle-item"><span class="detalle-label">Bahía</span><span class="detalle-value">${orden.planificacion?.bahia_asignada || 'No asignada'}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Inicio Estimado</span><span class="detalle-value">${orden.planificacion?.fecha_hora_inicio_estimado ? new Date(orden.planificacion.fecha_hora_inicio_estimado).toLocaleString() : 'N/A'}</span></div>
+                        <div class="detalle-item"><span class="detalle-label">Horas Estimadas</span><span class="detalle-value">${orden.planificacion?.horas_estimadas || 'N/A'} h</span></div>
+                    </div>
+                </div>
+                
+                <div class="detalle-seccion">
+                    <h4><i class="fas fa-headset"></i> Diagnóstico del Cliente</h4>
+                    <div class="detalle-descripcion">${escapeHtml(orden.transcripcion_problema || 'No registrado')}</div>
+                    ${audioHtml}
+                </div>
+                
+                ${orden.diagnostigo_taller ? `
+                <div class="detalle-seccion">
+                    <h4><i class="fas fa-stethoscope"></i> Diagnóstico del Jefe Taller</h4>
+                    <div class="detalle-descripcion" style="background: rgba(193,18,31,0.1);">${escapeHtml(orden.diagnostigo_taller)}</div>
+                </div>
+                ` : ''}
+                
+                ${fotosHtml}
+            </div>
+        `;
+        
+        // Mostrar modal
         const modal = document.getElementById('modalDetalleOrden');
         if (modal) modal.classList.add('show');
+        
+        // Cargar imágenes después de renderizar
+        setTimeout(() => {
+            document.querySelectorAll('.foto-item img[data-url]').forEach(img => {
+                const url = img.getAttribute('data-url');
+                const loader = img.parentElement.querySelector('.foto-loader');
+                cargarImagenDetalle(url, img, loader);
+            });
+        }, 100);
+        
+        // Cargar audio después de renderizar
+        if (audioUrl && audioUrl !== '' && audioUrl !== 'null' && audioUrl !== 'undefined') {
+            setTimeout(() => {
+                const audioId = `audio_detalle_${idOrden}`;
+                const loaderId = `audioLoader_detalle_${idOrden}`;
+                cargarAudioDetalle(audioUrl, audioId, loaderId);
+            }, 100);
+        }
         
     } catch (error) {
         console.error('Error:', error);
         mostrarNotificacion('Error al cargar detalle: ' + error.message, 'error');
     }
+}
+// =====================================================
+// FUNCIONES PARA CARGAR IMÁGENES Y AUDIO EN DETALLE
+// =====================================================
+
+async function cargarImagenDetalle(url, imgElement, loaderElement = null) {
+    if (!url) {
+        if (imgElement) imgElement.style.display = 'none';
+        return null;
+    }
+    
+    if (loaderElement) loaderElement.style.display = 'flex';
+    if (imgElement) {
+        imgElement.style.display = 'none';
+        imgElement.style.opacity = '0';
+    }
+    
+    try {
+        // ✅ CORREGIDO: Usar jefe-taller en lugar de jefe-operativo
+        const proxyUrl = `${API_URL}/jefe-taller/proxy-imagen?url=${encodeURIComponent(url)}`;
+        const token = localStorage.getItem('furia_token');
+        const response = await fetch(proxyUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            const nuevaImg = new Image();
+            return new Promise((resolve) => {
+                nuevaImg.onload = function() {
+                    if (imgElement) {
+                        imgElement.src = data.base64;
+                        imgElement.style.display = 'block';
+                        imgElement.style.opacity = '1';
+                    }
+                    if (loaderElement) loaderElement.style.display = 'none';
+                    resolve(data.base64);
+                };
+                nuevaImg.onerror = function() {
+                    if (loaderElement) {
+                        loaderElement.innerHTML = '<i class="fas fa-image" style="color: var(--texto-muted);"></i>';
+                        loaderElement.style.display = 'flex';
+                    }
+                    resolve(null);
+                };
+                nuevaImg.src = data.base64;
+            });
+        } else {
+            if (loaderElement) loaderElement.style.display = 'none';
+            return null;
+        }
+    } catch (error) {
+        console.error('Error cargando imagen:', error);
+        if (loaderElement) loaderElement.style.display = 'none';
+        return null;
+    }
+}
+
+async function cargarAudioDetalle(url, audioId, loaderId) {
+    if (!url) {
+        const loader = document.getElementById(loaderId);
+        if (loader) {
+            loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--danger);"></i> No hay audio disponible';
+        }
+        return;
+    }
+    
+    const loader = document.getElementById(loaderId);
+    const audio = document.getElementById(audioId);
+    const source = document.getElementById(`${audioId}_source`);
+    
+    if (!audio || !source) {
+        console.warn('⚠️ Elementos de audio no encontrados');
+        return;
+    }
+    
+    try {
+        // ✅ CORREGIDO: Usar jefe-taller en lugar de jefe-operativo
+        const proxyUrl = `${API_URL}/jefe-taller/proxy-audio?url=${encodeURIComponent(url)}`;
+        const token = localStorage.getItem('furia_token');
+        
+        const response = await fetch(proxyUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        const localUrl = URL.createObjectURL(blob);
+        
+        source.src = localUrl;
+        audio.style.display = 'block';
+        audio.load();
+        
+        if (loader) loader.style.display = 'none';
+        
+        audio.addEventListener('error', function(e) {
+            console.warn('⚠️ Error reproduciendo audio:', e);
+            if (loader) {
+                loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--danger);"></i> Error al reproducir audio';
+                loader.style.display = 'flex';
+            }
+            audio.style.display = 'none';
+        });
+        
+    } catch (error) {
+        console.error('❌ Error cargando audio:', error);
+        if (loader) {
+            loader.innerHTML = `<i class="fas fa-exclamation-triangle" style="color: var(--danger);"></i> Error: ${error.message}`;
+            loader.style.display = 'flex';
+        }
+        audio.style.display = 'none';
+    }
+}
+
+// =====================================================
+// VER FOTO AMPLIADA EN DETALLE
+// =====================================================
+
+function verFotoAmpliada(url) {
+    if (!url) return;
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal show';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:10000;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:20px;';
+    modal.onclick = function() { this.remove(); };
+    
+    modal.innerHTML = `
+        <div style="position:relative;max-width:90%;max-height:90%;">
+            <button style="position:absolute;top:-40px;right:0;background:none;border:none;color:white;font-size:32px;cursor:pointer;padding:8px 12px;" onclick="this.closest('.modal').remove()">&times;</button>
+            <div id="fotoModalLoader" style="display:flex;align-items:center;justify-content:center;min-height:200px;">
+                <i class="fas fa-spinner fa-spin" style="font-size:2rem;color:white;"></i>
+            </div>
+            <img id="fotoAmpliada" src="" alt="Foto ampliada" style="max-width:100%;max-height:80vh;border-radius:8px;object-fit:contain;display:none;">
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // ✅ CORREGIDO: Usar jefe-taller en lugar de jefe-operativo
+    const proxyUrl = `${API_URL}/jefe-taller/proxy-imagen?url=${encodeURIComponent(url)}`;
+    const token = localStorage.getItem('furia_token');
+    
+    fetch(proxyUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(r => r.json())
+    .then(data => {
+        const loader = document.getElementById('fotoModalLoader');
+        const img = document.getElementById('fotoAmpliada');
+        if (data.success && data.base64) {
+            const nuevaImg = new Image();
+            nuevaImg.onload = function() {
+                img.src = data.base64;
+                img.style.display = 'block';
+                if (loader) loader.style.display = 'none';
+            };
+            nuevaImg.src = data.base64;
+        } else {
+            if (loader) {
+                loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:#ef4444;font-size:2rem;"></i>';
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error cargando foto ampliada:', error);
+        const loader = document.getElementById('fotoModalLoader');
+        if (loader) {
+            loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:#ef4444;font-size:2rem;"></i>';
+        }
+    });
 }
 
 function cerrarModalDetalleOrden() {
@@ -1662,6 +1929,9 @@ window.solicitarCambiosDiagnostico = (idOrden) => {
 // =====================================================
 
 window.verDetalleOrden = verDetalleOrden;
+window.verFotoAmpliada = verFotoAmpliada;
+window.cargarImagenDetalle = cargarImagenDetalle;
+window.cargarAudioDetalle = cargarAudioDetalle;
 window.cerrarModalDetalleOrden = cerrarModalDetalleOrden;
 window.cerrarModalHistorialDiagnostico = cerrarModalHistorialDiagnostico;
 window.abrirModalGestionOrden = abrirModalGestionOrden;
@@ -1674,5 +1944,6 @@ window.cargarOrdenesFinalizadas = cargarOrdenesFinalizadas;
 window.verDiagnosticoPendiente = verDiagnosticoPendiente;
 window.verOrdenEnBahia = verOrdenEnBahia;
 window.cargarEstadoBahias = cargarEstadoBahias;
-window.transcribirAudioTaller = transcribirAudioTaller; 
+window.transcribirAudioTaller = transcribirAudioTaller;
+
 console.log('✅ orden_trabajo.js cargado - Versión con Google Drive');

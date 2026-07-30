@@ -314,9 +314,188 @@ function renderizarOrdenesFinalizadas() {
         </div>
     `}).join('');
 }
+// =====================================================
+// FUNCIONES PROXY PARA IMÁGENES Y AUDIO
+// =====================================================
+
+async function cargarImagenProxy(url, imgElement, loaderElement = null) {
+    if (!url) {
+        if (imgElement) imgElement.style.display = 'none';
+        if (loaderElement) loaderElement.style.display = 'none';
+        return null;
+    }
+    
+    // Mostrar loader
+    if (loaderElement) loaderElement.style.display = 'flex';
+    if (imgElement) {
+        imgElement.style.display = 'none';
+        imgElement.style.opacity = '0';
+    }
+    
+    try {
+        const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            // Pre-cargar la imagen antes de mostrarla
+            const nuevaImg = new Image();
+            return new Promise((resolve) => {
+                nuevaImg.onload = function() {
+                    if (imgElement) {
+                        imgElement.src = data.base64;
+                        imgElement.style.display = 'block';
+                        imgElement.style.opacity = '1';
+                    }
+                    if (loaderElement) loaderElement.style.display = 'none';
+                    resolve(data.base64);
+                };
+                nuevaImg.onerror = function() {
+                    if (loaderElement) {
+                        loaderElement.innerHTML = '<i class="fas fa-image" style="color: var(--texto-muted);"></i>';
+                        loaderElement.style.display = 'flex';
+                    }
+                    if (imgElement) imgElement.style.display = 'none';
+                    resolve(null);
+                };
+                nuevaImg.src = data.base64;
+            });
+        } else {
+            if (loaderElement) {
+                loaderElement.innerHTML = '<i class="fas fa-image" style="color: var(--texto-muted);"></i>';
+                loaderElement.style.display = 'flex';
+            }
+            if (imgElement) imgElement.style.display = 'none';
+            console.warn('No se pudo cargar la imagen:', data.error);
+            return null;
+        }
+    } catch (error) {
+        console.error('Error cargando imagen:', error);
+        if (loaderElement) {
+            loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--danger);"></i>';
+            loaderElement.style.display = 'flex';
+        }
+        if (imgElement) imgElement.style.display = 'none';
+        return null;
+    }
+}
 
 // =====================================================
-// VER DETALLE DE ORDEN
+// VER FOTO AMPLIADA CON PROXY
+// =====================================================
+
+window.verFotoAmpliadaProxy = async function(url) {
+    if (!url) return;
+    
+    const modalImg = document.getElementById('fotoAmpliada');
+    const loader = document.getElementById('fotoModalLoader');
+    const modal = document.getElementById('fotoModal');
+    
+    if (!modalImg) return;
+    
+    // Mostrar loader
+    if (loader) loader.style.display = 'flex';
+    modalImg.style.display = 'none';
+    modalImg.style.opacity = '0';
+    
+    abrirModal('fotoModal');
+    
+    try {
+        const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            // Pre-cargar antes de mostrar
+            const nuevaImg = new Image();
+            nuevaImg.onload = function() {
+                modalImg.src = data.base64;
+                modalImg.style.display = 'block';
+                modalImg.style.opacity = '1';
+                if (loader) loader.style.display = 'none';
+            };
+            nuevaImg.onerror = function() {
+                if (loader) {
+                    loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--danger); font-size: 2rem;"></i>';
+                    loader.style.display = 'flex';
+                }
+                showToast('Error al cargar la imagen ampliada', 'error');
+            };
+            nuevaImg.src = data.base64;
+        } else {
+            if (loader) {
+                loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--danger); font-size: 2rem;"></i>';
+                loader.style.display = 'flex';
+            }
+            showToast('No se pudo cargar la imagen', 'error');
+        }
+    } catch (error) {
+        console.error('Error cargando imagen ampliada:', error);
+        if (loader) {
+            loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--danger); font-size: 2rem;"></i>';
+            loader.style.display = 'flex';
+        }
+        showToast('Error al cargar la imagen', 'error');
+    }
+};
+
+// =====================================================
+// TRANSCRIBIR AUDIO CON PROXY
+// =====================================================
+
+window.transcribirAudioProxy = async function(url) {
+    if (!url) {
+        showToast('No hay audio para transcribir', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/transcribir-audio`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ url: url })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.transcripcion) {
+            showToast('✅ Transcripción generada correctamente', 'success');
+            
+            // Buscar el contenedor de descripción
+            const descContainer = document.querySelector('.orden-info-card:has(h3 i.fa-clipboard-list)');
+            if (descContainer) {
+                let transDiv = descContainer.querySelector('.transcripcion-container');
+                if (!transDiv) {
+                    transDiv = document.createElement('div');
+                    transDiv.className = 'transcripcion-container';
+                    transDiv.style.marginTop = '0.5rem';
+                    transDiv.style.padding = '0.5rem';
+                    transDiv.style.background = 'var(--gris-oscuro)';
+                    transDiv.style.borderRadius = 'var(--radius-sm)';
+                    descContainer.appendChild(transDiv);
+                }
+                transDiv.innerHTML = `
+                    <strong><i class="fas fa-file-alt"></i> Transcripción automática:</strong>
+                    <p style="margin-top: 0.25rem;">${escapeHtml(data.transcripcion)}</p>
+                `;
+            }
+        } else {
+            showToast(data.error || 'Error al transcribir el audio', 'error');
+        }
+    } catch (error) {
+        console.error('Error transcribiendo audio:', error);
+        showToast('Error al transcribir el audio', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+};
+// =====================================================
+// VER DETALLE DE ORDEN - CON PROXY PARA IMÁGENES Y AUDIO
 // =====================================================
 
 window.verDetalleOrden = async function(ordenId) {
@@ -337,6 +516,59 @@ window.verDetalleOrden = async function(ordenId) {
         const fotos = detalle.recepcion?.fotos || {};
         const fotosArray = Object.entries(fotos).filter(([_, url]) => url && url !== '');
         
+        // GENERAR URLs PROXY PARA CADA IMAGEN
+        let fotosHtml = '';
+        if (fotosArray.length > 0) {
+            fotosHtml = `
+                <div class="orden-info-card">
+                    <h3><i class="fas fa-images"></i> Fotos del Vehículo (${fotosArray.length})</h3>
+                    <div class="fotos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.75rem; margin-top: 0.5rem;">
+                        ${fotosArray.map(([nombre, url]) => `
+                            <div class="foto-item" onclick="verFotoAmpliada('${url}')" style="cursor: pointer; background: var(--gris-oscuro); border-radius: var(--radius-sm); overflow: hidden; position: relative;">
+                                <div class="foto-loader" style="display: flex; align-items: center; justify-content: center; height: 80px; background: var(--gris-oscuro);">
+                                    <i class="fas fa-spinner fa-spin" style="color: var(--texto-muted);"></i>
+                                </div>
+                                <img src="" alt="${escapeHtml(nombre)}" style="width: 100%; height: 80px; object-fit: cover; display: none;" data-url="${url}" data-nombre="${escapeHtml(nombre)}">
+                                <div style="font-size: 0.6rem; text-align: center; padding: 0.25rem; background: var(--gris-oscuro); color: var(--texto-muted);">
+                                    ${escapeHtml(nombre.replace(/_/g, ' '))}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 🔥 GENERAR HTML PARA AUDIO CON ID FIJO
+        let audioHtml = '';
+        if (detalle.recepcion?.audio_url) {
+            // Usar ID fijo basado en el ordenId
+            const audioId = `audio_${ordenId}`;
+            const loaderId = `audioLoader_${ordenId}`;
+            
+            audioHtml = `
+                <div style="margin-top: 0.5rem;">
+                    <p><strong><i class="fas fa-microphone"></i> Grabación del problema:</strong></p>
+                    <div id="audioContainer_${ordenId}" style="width: 100%;">
+                        <div id="${loaderId}" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm);">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Cargando audio...</span>
+                        </div>
+                        <audio id="${audioId}" controls style="width: 100%; display: none;" preload="metadata">
+                            <source id="${audioId}_source" src="">
+                            Tu navegador no soporta el elemento de audio.
+                        </audio>
+                    </div>
+                    <div style="margin-top: 0.25rem;">
+                        <button class="action-btn secondary" onclick="transcribirAudioProxy('${detalle.recepcion.audio_url}')" style="font-size: 0.75rem; padding: 0.25rem 0.75rem;">
+                            <i class="fas fa-file-alt"></i> Generar transcripción
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // CONSTRUIR HTML COMPLETO
         const detalleHtml = `
             <div style="display: grid; gap: 1rem;">
                 <div class="orden-info-card">
@@ -371,10 +603,17 @@ window.verDetalleOrden = async function(ordenId) {
                 ${detalle.recepcion?.transcripcion_problema ? `
                     <div class="orden-info-card">
                         <h3><i class="fas fa-clipboard-list"></i> Descripción del Problema</h3>
-                        <div style="margin-top: 0.5rem;">${escapeHtml(detalle.recepcion.transcripcion_problema)}</div>
-                        ${detalle.recepcion?.audio_url ? `<div style="margin-top: 0.5rem;"><audio controls src="${detalle.recepcion.audio_url}" style="width: 100%;"></audio></div>` : ''}
+                        <div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm);">
+                            ${escapeHtml(detalle.recepcion.transcripcion_problema)}
+                        </div>
+                        ${audioHtml}
                     </div>
-                ` : ''}
+                ` : (detalle.recepcion?.audio_url ? `
+                    <div class="orden-info-card">
+                        <h3><i class="fas fa-microphone"></i> Grabación del Problema</h3>
+                        ${audioHtml}
+                    </div>
+                ` : '')}
                 
                 ${detalle.servicios && detalle.servicios.length > 0 ? `
                     <div class="orden-info-card">
@@ -388,24 +627,29 @@ window.verDetalleOrden = async function(ordenId) {
                     </div>
                 ` : ''}
                 
-                ${fotosArray.length > 0 ? `
-                    <div class="orden-info-card">
-                        <h3><i class="fas fa-images"></i> Fotos del Vehículo (${fotosArray.length})</h3>
-                        <div class="fotos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem; margin-top: 0.5rem;">
-                            ${fotosArray.map(([nombre, url]) => `
-                                <div class="foto-item" onclick="verFotoAmpliada('${url}')" style="cursor: pointer;">
-                                    <img src="${url}" alt="${nombre}" style="width: 100%; height: 80px; object-fit: cover; border-radius: var(--radius-sm);">
-                                    <div style="font-size: 0.6rem; text-align: center; padding: 0.25rem;">${escapeHtml(nombre)}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                ` : ''}
+                ${fotosHtml}
             </div>
         `;
         
         document.getElementById('detalleBody').innerHTML = detalleHtml;
         abrirModal('modalDetalle');
+        
+        // CARGAR IMÁGENES Y AUDIO DESPUÉS DE MOSTRAR EL MODAL (LAZY LOADING)
+        setTimeout(() => {
+            // Cargar imágenes
+            document.querySelectorAll('.foto-item img[data-url]').forEach(img => {
+                const url = img.getAttribute('data-url');
+                const loader = img.parentElement.querySelector('.foto-loader');
+                cargarImagenProxy(url, img, loader);
+            });
+            
+            // 🔥 CARGAR AUDIO si existe - CON ID FIJO
+            if (detalle.recepcion?.audio_url) {
+                const audioId = `audio_${ordenId}`;
+                const loaderId = `audioLoader_${ordenId}`;
+                cargarAudioProxy(detalle.recepcion.audio_url, audioId, loaderId);
+            }
+        }, 100);
         
     } catch (error) {
         console.error('Error:', error);
@@ -415,10 +659,6 @@ window.verDetalleOrden = async function(ordenId) {
     }
 };
 
-window.verFotoAmpliada = function(url) {
-    document.getElementById('fotoAmpliada').src = url;
-    abrirModal('fotoModal');
-};
 
 function cerrarFotoModal() {
     cerrarModal('fotoModal');
@@ -719,10 +959,78 @@ async function inicializar() {
     
     console.log('✅ control_calidad.js inicializado correctamente');
 }
+// =====================================================
+// CARGAR AUDIO CON PROXY Y TOKEN (PARA CONTROL DE CALIDAD)
+// =====================================================
+
+async function cargarAudioProxy(url, audioId, loaderId) {
+    if (!url) {
+        const loader = document.getElementById(loaderId);
+        if (loader) {
+            loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--danger);"></i> No hay audio disponible';
+        }
+        return;
+    }
+    
+    const loader = document.getElementById(loaderId);
+    const audio = document.getElementById(audioId);
+    const source = document.getElementById(`${audioId}_source`);
+    
+    if (!audio || !source) {
+        console.warn('⚠️ Elementos de audio no encontrados');
+        return;
+    }
+    
+    try {
+        // 🔥 1. OBTENER EL AUDIO CON FETCH Y TOKEN
+        const proxyUrl = `${API_URL}/proxy-audio?url=${encodeURIComponent(url)}`;
+        console.log('🎵 Descargando audio con fetch:', proxyUrl);
+        
+        const response = await fetch(proxyUrl, {
+            headers: getAuthHeaders()  // 🔥 ESTO ES LA CLAVE
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        // 🔥 2. CONVERTIR A BLOB Y CREAR URL LOCAL
+        const blob = await response.blob();
+        const localUrl = URL.createObjectURL(blob);
+        
+        console.log('✅ Audio descargado, tamaño:', blob.size, 'bytes');
+        
+        // 🔥 3. ASIGNAR AL ELEMENTO DE AUDIO
+        source.src = localUrl;
+        audio.style.display = 'block';
+        audio.load();
+        
+        // Ocultar loader
+        if (loader) loader.style.display = 'none';
+        
+        // 🔥 4. MANEJAR ERRORES DE REPRODUCCIÓN
+        audio.addEventListener('error', function(e) {
+            console.warn('⚠️ Error reproduciendo audio:', e);
+            if (loader) {
+                loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--danger);"></i> Error al reproducir audio';
+                loader.style.display = 'flex';
+            }
+            audio.style.display = 'none';
+        });
+        
+    } catch (error) {
+        console.error('❌ Error cargando audio:', error);
+        if (loader) {
+            loader.innerHTML = `<i class="fas fa-exclamation-triangle" style="color: var(--danger);"></i> Error: ${error.message}`;
+            loader.style.display = 'flex';
+        }
+        audio.style.display = 'none';
+    }
+}
 
 // Exponer funciones globales
 window.verDetalleOrden = verDetalleOrden;
-window.verFotoAmpliada = verFotoAmpliada;
+window.verFotoAmpliada = window.verFotoAmpliadaProxy;
 window.cerrarFotoModal = cerrarFotoModal;
 window.abrirModalFinalizar = abrirModalFinalizar;
 window.confirmarFinalizar = confirmarFinalizar;

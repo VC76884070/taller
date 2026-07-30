@@ -9,6 +9,9 @@ from decorators import jefe_operativo_required
 import datetime
 import logging
 import json
+import base64
+import requests
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -784,3 +787,306 @@ def historial_bahias_orden(current_user, id_orden):
     except Exception as e:
         logger.error(f"Error en historial bahías: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+def extraer_file_id_drive(url):
+    """Extrae el file_id de cualquier URL de Google Drive"""
+    if not url:
+        return None
+    
+    url = url.strip()
+    
+    # Patrones de URL de Google Drive
+    patterns = [
+        r'[?&]id=([a-zA-Z0-9_-]+)',           # ?id=XXX o &id=XXX
+        r'/file/d/([a-zA-Z0-9_-]+)',          # /file/d/XXX
+        r'open\?id=([a-zA-Z0-9_-]+)',         # open?id=XXX
+        r'/d/([a-zA-Z0-9_-]+)',               # /d/XXX
+        r'thumbnail\?id=([a-zA-Z0-9_-]+)',    # thumbnail?id=XXX
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    
+    # Si es un ID directo (solo caracteres alfanuméricos y guiones)
+    if re.match(r'^[a-zA-Z0-9_-]{10,}$', url):
+        return url
+    
+    return None
+
+
+@control_calidad_operativo_bp.route('/proxy-imagen', methods=['GET'])
+@jefe_operativo_required
+def proxy_imagen(current_user):
+    """
+    Proxy para imágenes de Google Drive
+    
+    Recibe una URL de Drive, extrae el file_id,
+    descarga la imagen y la devuelve en Base64.
+    """
+    url = request.args.get('url')
+    
+    if not url:
+        return jsonify({
+            'success': False,
+            'error': 'URL no proporcionada'
+        }), 400
+    
+    # Extraer file_id
+    file_id = extraer_file_id_drive(url)
+    
+    if not file_id:
+        return jsonify({
+            'success': False,
+            'error': 'No se pudo extraer el ID de la URL'
+        }), 400
+    
+    try:
+        # Estrategias de descarga para imágenes
+        urls = [
+            f"https://drive.google.com/thumbnail?id={file_id}&sz=w800",  # Miniatura
+            f"https://drive.google.com/uc?export=view&id={file_id}",     # Vista
+            f"https://drive.google.com/uc?export=download&id={file_id}", # Descarga directa
+        ]
+        
+        image_data = None
+        mime_type = 'image/jpeg'  # Por defecto
+        
+        for download_url in urls:
+            try:
+                response = requests.get(download_url, timeout=30, allow_redirects=True)
+                
+                # Manejar redirecciones de confirmación de Google
+                if 'confirm' in response.url and 'download' in response.url:
+                    confirm_match = re.search(r'confirm=([^&]+)', response.text)
+                    if confirm_match:
+                        confirm_token = confirm_match.group(1)
+                        download_url_confirm = f"{response.url}&confirm={confirm_token}"
+                        response = requests.get(download_url_confirm, timeout=30, allow_redirects=True)
+                
+                if response.status_code == 200:
+                    # Verificar que sea una imagen
+                    content_type = response.headers.get('Content-Type', '')
+                    if content_type.startswith('image/'):
+                        image_data = response.content
+                        mime_type = content_type
+                        break
+                    elif len(response.content) > 1000:  # Probablemente es una imagen
+                        image_data = response.content
+                        break
+                            
+            except requests.exceptions.Timeout:
+                logger.warning(f"⏰ Timeout descargando: {download_url[:50]}...")
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"⚠️ Error descargando: {str(e)}")
+        
+        if not image_data:
+            return jsonify({
+                'success': False,
+                'error': 'No se pudo descargar la imagen'
+            }), 404
+        
+        # Determinar tipo MIME si no se detectó
+        if not mime_type or mime_type == 'image/jpeg':
+            # Intentar detectar por extensión
+            url_lower = url.lower()
+            if url_lower.endswith('.png'):
+                mime_type = 'image/png'
+            elif url_lower.endswith('.gif'):
+                mime_type = 'image/gif'
+            elif url_lower.endswith('.webp'):
+                mime_type = 'image/webp'
+            elif url_lower.endswith('.svg'):
+                mime_type = 'image/svg+xml'
+            elif url_lower.endswith('.bmp'):
+                mime_type = 'image/bmp'
+        
+        # Convertir a Base64
+        base64_data = base64.b64encode(image_data).decode('utf-8')
+        
+        return jsonify({
+            'success': True,
+            'base64': f'data:{mime_type};base64,{base64_data}'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en proxy-imagen: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Error al procesar la imagen: {str(e)}'
+        }), 500
+
+
+@control_calidad_operativo_bp.route('/proxy-audio', methods=['GET'])
+@jefe_operativo_required
+def proxy_audio(current_user):
+    """
+    Proxy para audios de Google Drive
+    
+    Recibe una URL de Drive, extrae el file_id,
+    descarga el audio y lo devuelve como archivo de audio.
+    """
+    url = request.args.get('url')
+    
+    if not url:
+        return jsonify({
+            'success': False,
+            'error': 'URL no proporcionada'
+        }), 400
+    
+    # Extraer file_id
+    file_id = extraer_file_id_drive(url)
+    
+    if not file_id:
+        return jsonify({
+            'success': False,
+            'error': 'No se pudo extraer el ID de la URL'
+        }), 400
+    
+    try:
+        # Estrategias de descarga para audio
+        urls = [
+            f"https://drive.google.com/uc?export=download&id={file_id}",
+            f"https://drive.google.com/uc?export=view&id={file_id}",
+        ]
+        
+        audio_data = None
+        mime_type = 'audio/mpeg'  # Por defecto
+        
+        for download_url in urls:
+            try:
+                response = requests.get(download_url, timeout=60, allow_redirects=True)
+                
+                # Manejar redirecciones de confirmación de Google
+                if 'confirm' in response.url and 'download' in response.url:
+                    confirm_match = re.search(r'confirm=([^&]+)', response.text)
+                    if confirm_match:
+                        confirm_token = confirm_match.group(1)
+                        download_url_confirm = f"{response.url}&confirm={confirm_token}"
+                        response = requests.get(download_url_confirm, timeout=60, allow_redirects=True)
+                
+                if response.status_code == 200:
+                    content_type = response.headers.get('Content-Type', '')
+                    if content_type.startswith('audio/'):
+                        audio_data = response.content
+                        mime_type = content_type
+                        break
+                    elif len(response.content) > 1000:  # Probablemente es audio
+                        audio_data = response.content
+                        break
+                            
+            except requests.exceptions.Timeout:
+                logger.warning(f"⏰ Timeout descargando audio: {download_url[:50]}...")
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"⚠️ Error descargando audio: {str(e)}")
+        
+        if not audio_data:
+            return jsonify({
+                'success': False,
+                'error': 'No se pudo descargar el audio'
+            }), 404
+        
+        # Determinar tipo MIME por extensión si no se detectó
+        url_lower = url.lower()
+        if url_lower.endswith('.wav'):
+            mime_type = 'audio/wav'
+        elif url_lower.endswith('.ogg'):
+            mime_type = 'audio/ogg'
+        elif url_lower.endswith('.m4a') or url_lower.endswith('.aac'):
+            mime_type = 'audio/mp4'
+        elif url_lower.endswith('.flac'):
+            mime_type = 'audio/flac'
+        elif url_lower.endswith('.wma'):
+            mime_type = 'audio/x-ms-wma'
+        elif url_lower.endswith('.mp3'):
+            mime_type = 'audio/mpeg'
+        
+        # Devolver el audio como respuesta binaria
+        from flask import Response
+        return Response(
+            audio_data,
+            status=200,
+            headers={
+                'Content-Type': mime_type,
+                'Content-Disposition': f'inline; filename="audio_{file_id}.mp3"',
+                'Cache-Control': 'public, max-age=3600'
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error en proxy-audio: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Error al procesar el audio: {str(e)}'
+        }), 500
+
+
+@control_calidad_operativo_bp.route('/transcribir-audio', methods=['POST'])
+@jefe_operativo_required
+def transcribir_audio(current_user):
+    """
+    Transcribe un audio de Google Drive usando Whisper
+    """
+    try:
+        data = request.get_json() or {}
+        url = data.get('url')
+        
+        if not url:
+            return jsonify({
+                'success': False,
+                'error': 'URL de audio no proporcionada'
+            }), 400
+        
+        # Extraer file_id
+        file_id = extraer_file_id_drive(url)
+        
+        if not file_id:
+            return jsonify({
+                'success': False,
+                'error': 'No se pudo extraer el ID de la URL'
+            }), 400
+        
+        # Usar el servicio de Google Drive para transcribir
+        from google_drive import google_drive
+        
+        result = google_drive.transcribir_audio(url)
+        
+        if result.get('success'):
+            # Si la transcripción es exitosa, actualizar la recepción
+            try:
+                # Buscar la recepción con este audio
+                recepcion = supabase.table('recepcion') \
+                    .select('id_orden_trabajo') \
+                    .eq('url_grabacion_problema', url) \
+                    .execute()
+                
+                if recepcion.data:
+                    supabase.table('recepcion') \
+                        .update({
+                            'transcripcion_problema': result.get('transcripcion')
+                        }) \
+                        .eq('id_orden_trabajo', recepcion.data[0]['id_orden_trabajo']) \
+                        .execute()
+                    logger.info(f"✅ Transcripción guardada para orden {recepcion.data[0]['id_orden_trabajo']}")
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo guardar la transcripción: {str(e)}")
+            
+            return jsonify({
+                'success': True,
+                'transcripcion': result.get('transcripcion'),
+                'idioma': result.get('idioma'),
+                'modelo': result.get('modelo')
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Error al transcribir el audio')
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error en transcribir-audio: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

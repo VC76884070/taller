@@ -338,22 +338,27 @@ def obtener_ordenes_diagnostico_aprobado(current_user):
                     .execute()
                 
                 for serv in (servicios_data.data or []):
+                    # 🔥 CORREGIDO - Sin maybe_single()
                     solicitud_result = supabase.table('solicitud_cotizacion_repuesto') \
                         .select('id, estado, precio_cotizado') \
                         .eq('id_orden_trabajo', orden['id']) \
                         .eq('id_servicio', serv['id']) \
-                        .maybe_single() \
                         .execute()
                     
                     estado_cotizacion = 'pendiente'
                     precio_cotizado = 0
                     
-                    if solicitud_result and solicitud_result.data:
-                        if solicitud_result.data.get('estado') == 'pendiente':
-                            estado_cotizacion = 'solicitado'
-                        elif solicitud_result.data.get('estado') == 'cotizado':
-                            estado_cotizacion = 'cotizado'
-                            precio_cotizado = float(solicitud_result.data.get('precio_cotizado', 0))
+                    # 🔥 Procesar resultados correctamente
+                    if solicitud_result.data:
+                        for sol in solicitud_result.data:
+                            estado = sol.get('estado')
+                            if estado == 'pendiente':
+                                estado_cotizacion = 'solicitado'
+                            elif estado == 'cotizado':
+                                estado_cotizacion = 'cotizado'
+                                precio_cotizado = float(sol.get('precio_cotizado', 0))
+                                # Priorizar estado cotizado
+                                break
                     
                     servicios.append({
                         'id_servicio': serv['id'],
@@ -506,7 +511,7 @@ def obtener_ordenes_con_servicios(current_user):
         
     except Exception as e:
         logger.error(f"Error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500  
 
 # =====================================================
 # APARTADO 3: ÓRDENES APROBADAS
@@ -2575,4 +2580,117 @@ def obtener_codigo_orden(current_user, id_orden):
         
     except Exception as e:
         logger.error(f"Error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500  
+
+
+# =====================================================
+# PROXY IMAGEN - SOPORTE PARA GOOGLE DRIVE Y CLOUDINARY
+# =====================================================
+
+@cotizaciones_bp.route('/proxy-imagen', methods=['GET'])
+@jefe_taller_required
+def proxy_imagen_cotizacion(current_user):
+    """
+    Proxy para imágenes de Google Drive y Cloudinary.
+    Devuelve la imagen en Base64 para uso en <img>
+    """
+    import requests
+    import base64
+    import re
+    
+    url = request.args.get('url')
+    if not url:
+        return jsonify({'success': False, 'error': 'URL no proporcionada'}), 400
+    
+    # 🔥 DETECTAR SI ES CLOUDINARY
+    if 'cloudinary.com' in url:
+        try:
+            logger.info(f"📸 Proxy: Cargando imagen desde Cloudinary: {url[:80]}...")
+            
+            # Descargar directamente de Cloudinary
+            response = requests.get(url, timeout=30, allow_redirects=True)
+            
+            if response.status_code == 200:
+                content_type = response.headers.get('Content-Type', 'image/jpeg')
+                
+                # Si no tiene content-type, intentar adivinar
+                if not content_type or content_type == 'application/octet-stream':
+                    if url.lower().endswith('.png'):
+                        content_type = 'image/png'
+                    elif url.lower().endswith('.jpg') or url.lower().endswith('.jpeg'):
+                        content_type = 'image/jpeg'
+                    elif url.lower().endswith('.webp'):
+                        content_type = 'image/webp'
+                    elif url.lower().endswith('.gif'):
+                        content_type = 'image/gif'
+                    else:
+                        content_type = 'image/jpeg'
+                
+                # Verificar que sea una imagen válida
+                if len(response.content) > 500:
+                    base64_data = base64.b64encode(response.content).decode('utf-8')
+                    return jsonify({
+                        'success': True,
+                        'base64': f'data:{content_type};base64,{base64_data}'
+                    })
+                else:
+                    return jsonify({'success': False, 'error': 'Imagen demasiado pequeña o corrupta'}), 404
+            else:
+                return jsonify({'success': False, 'error': f'Error Cloudinary: {response.status_code}'}), 404
+                
+        except requests.exceptions.Timeout:
+            logger.error("❌ Timeout al descargar de Cloudinary")
+            return jsonify({'success': False, 'error': 'Timeout al descargar la imagen'}), 408
+        except Exception as e:
+            logger.error(f"❌ Error descargando de Cloudinary: {str(e)}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    # 🔥 SI ES GOOGLE DRIVE - Usar el código existente
+    from google_drive import google_drive
+    
+    # Extraer file_id
+    file_id = google_drive.extract_file_id_from_url(url)
+    if not file_id:
+        return jsonify({'success': False, 'error': 'No se pudo extraer el ID de Google Drive'}), 400
+    
+    # Estrategias de descarga
+    estrategias = [
+        f"https://drive.google.com/thumbnail?id={file_id}&sz=w800",
+        f"https://drive.google.com/uc?export=view&id={file_id}",
+        f"https://drive.google.com/uc?export=download&id={file_id}",
+    ]
+    
+    image_data = None
+    mime_type = 'image/jpeg'
+    
+    for download_url in estrategias:
+        try:
+            response = requests.get(download_url, timeout=30, allow_redirects=True)
+            
+            # Manejar confirmación de Google
+            if 'confirm' in response.url and 'download' in response.url:
+                confirm_match = re.search(r'confirm=([^&]+)', response.text)
+                if confirm_match:
+                    confirm_token = confirm_match.group(1)
+                    download_url_confirm = f"{response.url}&confirm={confirm_token}"
+                    response = requests.get(download_url_confirm, timeout=30, allow_redirects=True)
+            
+            if response.status_code == 200:
+                content_type = response.headers.get('Content-Type', '')
+                if content_type.startswith('image/') or len(response.content) > 500:
+                    image_data = response.content
+                    mime_type = content_type if content_type.startswith('image/') else 'image/jpeg'
+                    break
+        except Exception as e:
+            continue
+    
+    if not image_data:
+        return jsonify({'success': False, 'error': 'No se pudo descargar la imagen'}), 404
+    
+    # Convertir a Base64
+    base64_data = base64.b64encode(image_data).decode('utf-8')
+    
+    return jsonify({
+        'success': True,
+        'base64': f'data:{mime_type};base64,{base64_data}'
+    })

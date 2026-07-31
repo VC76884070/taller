@@ -836,3 +836,146 @@ def test_endpoint():
         'version': '3.1',
         'features': ['Google Drive', 'Rechazo con carpeta correcta']
     }), 200
+
+# =====================================================
+# NUEVO ENDPOINT: PROXY DE IMAGEN PARA DIAGNÓSTICO
+# =====================================================
+@jefe_taller_diagnostico_bp.route('/proxy-imagen-diagnostico', methods=['GET'])
+@jefe_taller_required
+def proxy_imagen_diagnostico(current_user):
+    """
+    Proxy para obtener imágenes de Google Drive en Base64
+    """
+    import requests
+    import re
+    import base64
+    
+    url = request.args.get('url')
+    if not url:
+        return jsonify({'success': False, 'error': 'URL no proporcionada'}), 400
+    
+    # Extraer file_id
+    file_id = None
+    patterns = [
+        r'[?&]id=([a-zA-Z0-9_-]+)',
+        r'/file/d/([a-zA-Z0-9_-]+)',
+        r'open\?id=([a-zA-Z0-9_-]+)',
+        r'/d/([a-zA-Z0-9_-]+)',
+        r'thumbnail\?id=([a-zA-Z0-9_-]+)',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            file_id = match.group(1)
+            break
+    
+    if not file_id:
+        return jsonify({'success': False, 'error': 'No se pudo extraer el ID'}), 400
+    
+    # Intentar descargar con múltiples estrategias
+    urls = [
+        f"https://drive.google.com/thumbnail?id={file_id}&sz=w800",
+        f"https://drive.google.com/uc?export=view&id={file_id}",
+        f"https://drive.google.com/uc?export=download&id={file_id}",
+    ]
+    
+    image_data = None
+    mime_type = 'image/jpeg'
+    
+    for download_url in urls:
+        try:
+            response = requests.get(download_url, timeout=30, allow_redirects=True)
+            
+            # Manejar redirecciones de confirmación
+            if 'confirm' in response.url and 'download' in response.url:
+                confirm_match = re.search(r'confirm=([^&]+)', response.text)
+                if confirm_match:
+                    confirm_token = confirm_match.group(1)
+                    download_url_confirm = f"{response.url}&confirm={confirm_token}"
+                    response = requests.get(download_url_confirm, timeout=30, allow_redirects=True)
+            
+            if response.status_code == 200:
+                content_type = response.headers.get('Content-Type', '')
+                if content_type.startswith('image/') or len(response.content) > 1000:
+                    image_data = response.content
+                    mime_type = content_type if content_type.startswith('image/') else 'image/jpeg'
+                    break
+        except Exception as e:
+            continue
+    
+    if not image_data:
+        return jsonify({'success': False, 'error': 'No se pudo descargar la imagen'}), 404
+    
+    # Convertir a Base64
+    base64_data = base64.b64encode(image_data).decode('utf-8')
+    
+    return jsonify({
+        'success': True,
+        'base64': f'data:{mime_type};base64,{base64_data}'
+    })
+
+
+# =====================================================
+# NUEVO ENDPOINT: PROXY DE AUDIO PARA DIAGNÓSTICO
+# =====================================================
+@jefe_taller_diagnostico_bp.route('/proxy-audio-diagnostico', methods=['GET'])
+@jefe_taller_required
+def proxy_audio_diagnostico(current_user):
+    """
+    Proxy para audios de Google Drive - Retorna stream
+    """
+    import requests
+    import re
+    
+    url = request.args.get('url')
+    if not url:
+        return jsonify({'error': 'URL requerida'}), 400
+    
+    # Extraer file_id
+    file_id = None
+    patterns = [
+        r'[?&]id=([a-zA-Z0-9_-]+)',
+        r'/file/d/([a-zA-Z0-9_-]+)',
+        r'open\?id=([a-zA-Z0-9_-]+)',
+        r'/d/([a-zA-Z0-9_-]+)',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            file_id = match.group(1)
+            break
+    
+    if not file_id:
+        return jsonify({'error': 'No se pudo extraer el ID'}), 400
+    
+    download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    
+    try:
+        response = requests.get(download_url, stream=True, timeout=30)
+        
+        if response.status_code != 200:
+            return jsonify({'error': f'Error: {response.status_code}'}), 400
+        
+        content_type = response.headers.get('content-type', 'audio/mpeg')
+        
+        def generate():
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+        
+        from flask import Response, stream_with_context
+        return Response(
+            stream_with_context(generate()),
+            status=200,
+            headers={
+                'Content-Type': content_type,
+                'Content-Disposition': 'inline',
+                'Cache-Control': 'no-cache',
+                'Access-Control-Allow-Origin': '*'
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error descargando audio: {str(e)}")
+        return jsonify({'error': str(e)}), 500

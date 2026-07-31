@@ -272,6 +272,10 @@ function renderServiciosAcordeon(servicios, id_orden) {
     }).join('');
 }
 
+// =====================================================
+// RENDERIZAR ITEMS DE SERVICIO CON SOPORTE PARA 3 FOTOS
+// =====================================================
+
 function renderItemsServicio(id_servicio, items) {
     if (!items || items.length === 0) {
         return `
@@ -284,8 +288,44 @@ function renderItemsServicio(id_servicio, items) {
     }
     
     return items.map((item, index) => {
-        const fotoPreview = item.foto_url ? 
-            `<img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;">` : '';
+        const fotos = item.fotos || [];
+        const tieneFotos = fotos.length > 0;
+        
+        // 🔥 GENERAR PREVIEWS PARA CADA FOTO (hasta 3)
+        let fotosPreviewsHtml = '';
+        for (let i = 0; i < 3; i++) {
+            const fotoUrl = fotos[i] || '';
+            const tieneFoto = !!fotoUrl;
+            const fotoId = `fotoPreviewServicio_${id_servicio}_${index}_${i}`;
+            const loaderId = `fotoLoaderServicio_${id_servicio}_${index}_${i}`;
+            const inputId = `fotoInputServicio_${id_servicio}_${index}_${i}`;
+            
+            fotosPreviewsHtml += `
+                <div class="foto-slot" data-slot="${i}" style="position:relative;display:inline-block;width:40px;height:40px;margin:2px;">
+                    <input type="file" class="item-foto-input-servicio" id="${inputId}" accept="image/*" 
+                           onchange="subirFotoItemServicio(${id_servicio}, ${index}, ${i}, this)" style="display:none;">
+                    <div id="${loaderId}" style="display:${tieneFoto ? 'none' : 'flex'};align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;border:1px dashed var(--gris-texto);cursor:pointer;" 
+                         onclick="document.getElementById('${inputId}').click()">
+                        <i class="fas fa-plus" style="color:var(--gris-texto);font-size:12px;"></i>
+                    </div>
+                    <div id="${fotoId}" style="display:${tieneFoto ? 'block' : 'none'};position:relative;">
+                        ${tieneFoto ? `
+                            <div style="position:relative;display:inline-block;">
+                                <img src="" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);" 
+                                     data-loaded="false" data-url="${fotoUrl}"
+                                     onerror="this.style.display='none'">
+                                <button type="button" class="btn-remove-foto" 
+                                        onclick="event.preventDefault(); eliminarFotoItemServicio(${id_servicio}, ${index}, ${i})" 
+                                        style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
+                    ${!tieneFoto ? `<span style="position:absolute;bottom:-12px;left:50%;transform:translateX(-50%);font-size:7px;color:var(--gris-texto);">${i+1}</span>` : ''}
+                </div>
+            `;
+        }
         
         return `
             <div class="item-row" data-servicio="${id_servicio}" data-index="${index}">
@@ -294,14 +334,9 @@ function renderItemsServicio(id_servicio, items) {
                     <input type="number" class="item-cantidad" value="${item.cantidad}" min="1" onchange="actualizarItemServicio(${id_servicio}, ${index}, 'cantidad', parseInt(this.value))">
                     <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle (marca, especificaciones...)" onchange="actualizarItemServicio(${id_servicio}, ${index}, 'detalle', this.value)">
                 </div>
-                <div class="item-foto-upload">
-                    <input type="file" class="item-foto-input-servicio" accept="image/*" onchange="subirFotoItemServicio(${id_servicio}, ${index}, this)" style="display:none;">
-                    <button type="button" class="btn-foto-item" onclick="event.preventDefault(); document.querySelectorAll('.item-foto-input-servicio')[${index}]?.click()">
-                        <i class="fas fa-camera"></i> Foto
-                    </button>
-                    <span class="item-foto-preview" id="fotoPreviewServicio_${id_servicio}_${index}">
-                        ${fotoPreview ? `<div class="foto-preview-container"><img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;"><button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemServicio(${id_servicio}, ${index})" style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;">×</button></div>` : ''}
-                    </span>
+                <div class="item-foto-upload" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+                    ${fotosPreviewsHtml}
+                    <span style="font-size:0.6rem;color:var(--gris-texto);margin-left:2px;">(${fotos.length}/3)</span>
                 </div>
                 <div class="item-actions">
                     <button type="button" class="btn-remove-item" onclick="event.preventDefault(); eliminarItemServicio(${id_servicio}, ${index})">
@@ -334,6 +369,11 @@ function toggleServicioAcordeon(id_servicio) {
     }
 }
 
+// =====================================================
+// MODIFICAR LA ESTRUCTURA DEL ITEM PARA SOPORTAR MÚLTIPLES FOTOS
+// =====================================================
+
+// Al agregar un item, ahora tiene un array de fotos
 function agregarItemServicio(id_servicio) {
     if (!itemsPorServicio[id_servicio]) {
         itemsPorServicio[id_servicio] = [];
@@ -342,8 +382,8 @@ function agregarItemServicio(id_servicio) {
         descripcion: '', 
         cantidad: 1, 
         detalle: '', 
-        foto_url: null, 
-        foto_public_id: null 
+        fotos: [],           // 🔥 ARRAY DE FOTOS (hasta 3)
+        foto_public_ids: []  // 🔥 ARRAY DE PUBLIC IDs
     });
     
     const container = document.getElementById(`itemsListServicio_${id_servicio}`);
@@ -370,12 +410,34 @@ function eliminarItemServicio(id_servicio, index) {
         container.innerHTML = renderItemsServicio(id_servicio, itemsPorServicio[id_servicio] || []);
     }
 }
-
 // =====================================================
-// SUBIR FOTO DE ITEM (SERVICIO) - CON CÓDIGO DE ORDEN
+// ELIMINAR FOTO DE DRIVE (AUXILIAR)
 // =====================================================
 
-async function subirFotoItemServicio(id_servicio, index, input) {
+async function eliminarFotoDeDrive(publicId) {
+    if (!publicId) return true;
+    
+    try {
+        const response = await fetch(`${API_URL}/eliminar-foto-item`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                public_id: publicId
+            })
+        });
+        
+        const data = await response.json();
+        return data.success;
+    } catch (error) {
+        console.error('Error eliminando foto de Drive:', error);
+        return false;
+    }
+}
+// =====================================================
+// SUBIR FOTO DE ITEM (SERVICIO) - SOPORTE PARA 3 FOTOS
+// =====================================================
+
+async function subirFotoItemServicio(id_servicio, index, slotIndex, input) {
     const file = input.files[0];
     if (!file) return;
     
@@ -389,6 +451,16 @@ async function subirFotoItemServicio(id_servicio, index, input) {
         showToast('La imagen no debe superar los 5MB', 'error');
         input.value = '';
         return;
+    }
+    
+    // Verificar que no exceda 3 fotos
+    if (itemsPorServicio[id_servicio] && itemsPorServicio[id_servicio][index]) {
+        const fotosActuales = itemsPorServicio[id_servicio][index].fotos || [];
+        if (fotosActuales.length >= 3) {
+            showToast('Ya tienes 3 fotos para este item. Elimina una para agregar otra.', 'warning');
+            input.value = '';
+            return;
+        }
     }
     
     mostrarLoading(true);
@@ -418,22 +490,39 @@ async function subirFotoItemServicio(id_servicio, index, input) {
         const data = await response.json();
         
         if (data.success && data.url) {
+            // ✅ Guardar URL en el item (array de fotos)
             if (itemsPorServicio[id_servicio] && itemsPorServicio[id_servicio][index]) {
-                itemsPorServicio[id_servicio][index].foto_url = data.url;
-                itemsPorServicio[id_servicio][index].foto_public_id = data.public_id;
+                if (!itemsPorServicio[id_servicio][index].fotos) {
+                    itemsPorServicio[id_servicio][index].fotos = [];
+                }
+                if (!itemsPorServicio[id_servicio][index].foto_public_ids) {
+                    itemsPorServicio[id_servicio][index].foto_public_ids = [];
+                }
+                
+                // Si el slot ya tiene foto, reemplazar
+                if (itemsPorServicio[id_servicio][index].fotos[slotIndex]) {
+                    // Eliminar la foto anterior de Drive
+                    const oldPublicId = itemsPorServicio[id_servicio][index].foto_public_ids[slotIndex];
+                    if (oldPublicId) {
+                        await eliminarFotoDeDrive(oldPublicId);
+                    }
+                    itemsPorServicio[id_servicio][index].fotos[slotIndex] = data.url;
+                    itemsPorServicio[id_servicio][index].foto_public_ids[slotIndex] = data.public_id;
+                } else {
+                    // Agregar nueva foto
+                    itemsPorServicio[id_servicio][index].fotos.push(data.url);
+                    itemsPorServicio[id_servicio][index].foto_public_ids.push(data.public_id);
+                }
             }
             
-            const previewSpan = document.getElementById(`fotoPreviewServicio_${id_servicio}_${index}`);
-            if (previewSpan) {
-                previewSpan.innerHTML = `
-                    <div class="foto-preview-container" style="position:relative;display:inline-block;">
-                        <img src="${data.url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);">
-                        <button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemServicio(${id_servicio}, ${index})" 
-                                style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                `;
+            // ✅ CARGAR PREVIEW CON PROXY
+            await cargarPreviewFotoServicio(id_servicio, index, slotIndex, data.url);
+            
+            // ✅ ACTUALIZAR CONTADOR
+            const contador = document.querySelector(`[data-servicio="${id_servicio}"] [data-index="${index}"] .item-foto-upload span`);
+            if (contador) {
+                const fotos = itemsPorServicio[id_servicio][index].fotos || [];
+                contador.textContent = `(${fotos.length}/3)`;
             }
             
             showToast('✅ Foto subida correctamente', 'success');
@@ -449,10 +538,27 @@ async function subirFotoItemServicio(id_servicio, index, input) {
     }
 }
 
-async function eliminarFotoItemServicio(id_servicio, index) {
-    if (!itemsPorServicio[id_servicio] || !itemsPorServicio[id_servicio][index] || 
-        !itemsPorServicio[id_servicio][index].foto_public_id) {
-        showToast('No hay foto para eliminar', 'warning');
+// =====================================================
+// ELIMINAR FOTO DE ITEM (SERVICIO) - MÚLTIPLES FOTOS
+// =====================================================
+
+async function eliminarFotoItemServicio(id_servicio, index, slotIndex) {
+    if (!itemsPorServicio[id_servicio] || !itemsPorServicio[id_servicio][index]) {
+        showToast('Item no encontrado', 'warning');
+        return;
+    }
+    
+    const item = itemsPorServicio[id_servicio][index];
+    const fotos = item.fotos || [];
+    const publicIds = item.foto_public_ids || [];
+    
+    if (slotIndex >= fotos.length || !fotos[slotIndex]) {
+        showToast('No hay foto en esta posición', 'warning');
+        return;
+    }
+    
+    if (!publicIds[slotIndex]) {
+        showToast('No se puede eliminar esta foto', 'warning');
         return;
     }
     
@@ -461,29 +567,53 @@ async function eliminarFotoItemServicio(id_servicio, index) {
     mostrarLoading(true);
     
     try {
+        // Eliminar de Drive
         const response = await fetch(`${API_URL}/eliminar-foto-item`, {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({
-                public_id: itemsPorServicio[id_servicio][index].foto_public_id
+                public_id: publicIds[slotIndex]
             })
         });
         
         const data = await response.json();
         
         if (data.success) {
-            delete itemsPorServicio[id_servicio][index].foto_url;
-            delete itemsPorServicio[id_servicio][index].foto_public_id;
+            // Eliminar del array
+            fotos.splice(slotIndex, 1);
+            publicIds.splice(slotIndex, 1);
             
-            const previewSpan = document.getElementById(`fotoPreviewServicio_${id_servicio}_${index}`);
-            if (previewSpan) previewSpan.innerHTML = '';
+            // ✅ LIMPIAR PREVIEW
+            const fotoId = `fotoPreviewServicio_${id_servicio}_${index}_${slotIndex}`;
+            const loaderId = `fotoLoaderServicio_${id_servicio}_${index}_${slotIndex}`;
+            const inputId = `fotoInputServicio_${id_servicio}_${index}_${slotIndex}`;
+            
+            // Ocultar imagen y mostrar loader
+            const previewDiv = document.getElementById(fotoId);
+            const loaderDiv = document.getElementById(loaderId);
+            
+            if (previewDiv) {
+                previewDiv.style.display = 'none';
+                previewDiv.innerHTML = '';
+            }
+            
+            if (loaderDiv) {
+                loaderDiv.style.display = 'flex';
+                loaderDiv.innerHTML = `
+                    <i class="fas fa-plus" style="color:var(--gris-texto);font-size:12px;"></i>
+                `;
+                loaderDiv.onclick = function() {
+                    document.getElementById(inputId).click();
+                };
+            }
+            
+            // ✅ ACTUALIZAR CONTADOR
+            const contador = document.querySelector(`[data-servicio="${id_servicio}"] [data-index="${index}"] .item-foto-upload span`);
+            if (contador) {
+                contador.textContent = `(${fotos.length}/3)`;
+            }
             
             showToast('✅ Foto eliminada', 'success');
-            
-            const container = document.getElementById(`itemsListServicio_${id_servicio}`);
-            if (container) {
-                container.innerHTML = renderItemsServicio(id_servicio, itemsPorServicio[id_servicio]);
-            }
         } else {
             showToast(data.error || 'Error al eliminar foto', 'error');
         }
@@ -492,6 +622,33 @@ async function eliminarFotoItemServicio(id_servicio, index) {
         showToast('Error de conexión', 'error');
     } finally {
         mostrarLoading(false);
+    }
+}
+// =====================================================
+// HELPER PARA OBTENER EL INPUT DE FOTO CORRECTO
+// =====================================================
+
+function getInputFileServicio(id_servicio, index) {
+    const container = document.getElementById(`itemsListServicio_${id_servicio}`);
+    if (!container) return null;
+    
+    const rows = container.querySelectorAll('.item-row');
+    if (index >= rows.length) return null;
+    
+    return rows[index].querySelector('.item-foto-input-servicio');
+}
+// =====================================================
+// CARGAR TODOS LOS PREVIEWS DE FOTOS EN SERVICIOS
+// =====================================================
+
+function cargarPreviewsFotosServicios() {
+    for (const serv of serviciosParaSolicitud) {
+        const items = itemsPorServicio[serv.id_servicio] || [];
+        items.forEach((item, index) => {
+            if (item.foto_url) {
+                cargarPreviewFotoServicio(serv.id_servicio, index, item.foto_url);
+            }
+        });
     }
 }
 
@@ -528,6 +685,11 @@ async function abrirModalSolicitudCotizacion(id_orden) {
         // Renderizar acordeón de servicios
         renderServiciosAcordeon(servicios, id_orden);
         
+        // ✅ CARGAR PREVIEWS DE FOTOS EXISTENTES
+        setTimeout(() => {
+            cargarPreviewsFotosServicios();
+        }, 300);
+        
         // Cargar encargados de repuestos
         await cargarEncargadosRepuestos();
         
@@ -539,7 +701,6 @@ async function abrirModalSolicitudCotizacion(id_orden) {
         mostrarLoading(false);
     }
 }
-
 async function guardarSolicitudCotizacion() {
     const id_orden = document.getElementById('solicitud_id_orden_trabajo')?.value;
     const id_encargado = document.getElementById('solicitud_id_encargado')?.value;
@@ -668,7 +829,7 @@ async function eliminarFotoItemSolicitud(index) {
 }
 
 // =====================================================
-// FUNCIONES PARA LISTA DINÁMICA DE ITEMS - COMPRA DIRECTA
+// RENDERIZAR ITEMS DE COMPRA DIRECTA CON PROXY
 // =====================================================
 
 function renderItemsCompraDirecta() {
@@ -681,8 +842,7 @@ function renderItemsCompraDirecta() {
     }
     
     container.innerHTML = itemsCompraDirecta.map((item, index) => {
-        const fotoPreview = item.foto_url ? 
-            `<img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;">` : '';
+        const tieneFoto = item.foto_url ? true : false;
         
         return `
             <div class="item-row" data-index="${index}">
@@ -697,15 +857,34 @@ function renderItemsCompraDirecta() {
                         <i class="fas fa-camera"></i> Foto
                     </button>
                     <span class="item-foto-preview" id="fotoPreviewCompra_${index}">
-                        ${fotoPreview ? `<div class="foto-preview-container"><img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;"><button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemCompra(${index})" style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;">×</button></div>` : ''}
+                        ${tieneFoto ? `
+                            <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+                                <i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);font-size:14px;"></i>
+                            </div>
+                        ` : `
+                            <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;border:1px dashed var(--gris-texto);">
+                                <i class="fas fa-plus" style="color:var(--gris-texto);font-size:12px;"></i>
+                            </div>
+                        `}
                     </span>
                 </div>
                 <div class="item-actions">
-                    <button type="button" class="btn-remove-item" onclick="event.preventDefault(); eliminarItemCompraDirecta(${index})"><i class="fas fa-trash-alt"></i></button>
+                    <button type="button" class="btn-remove-item" onclick="event.preventDefault(); eliminarItemCompraDirecta(${index})">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
                 </div>
             </div>
         `;
     }).join('');
+    
+    // 🔥 CARGAR PREVIEWS DE FOTOS EXISTENTES
+    setTimeout(() => {
+        itemsCompraDirecta.forEach((item, index) => {
+            if (item.foto_url) {
+                cargarPreviewFotoCompra(index, item.foto_url);
+            }
+        });
+    }, 100);
 }
 
 function agregarItemCompraDirecta() {
@@ -732,7 +911,7 @@ function limpiarItemsCompraDirecta() {
 }
 
 // =====================================================
-// SUBIR FOTO DE ITEM (COMPRA DIRECTA) - CON CÓDIGO DE ORDEN
+// SUBIR FOTO DE ITEM (COMPRA DIRECTA) - CON PREVIEW
 // =====================================================
 
 async function subirFotoItemCompra(index, input) {
@@ -762,7 +941,6 @@ async function subirFotoItemCompra(index, input) {
         const selectedOption = selectOrden?.options[selectOrden.selectedIndex];
         
         if (selectedOption && selectedOption.value) {
-            // Buscar el código de orden
             const ordenId = selectedOption.value;
             const orden = await fetch(`${API_URL}/orden/${ordenId}/codigo`, {
                 headers: getAuthHeaders()
@@ -794,18 +972,8 @@ async function subirFotoItemCompra(index, input) {
                 itemsCompraDirecta[index].foto_public_id = data.public_id;
             }
             
-            const previewSpan = document.getElementById(`fotoPreviewCompra_${index}`);
-            if (previewSpan) {
-                previewSpan.innerHTML = `
-                    <div class="foto-preview-container" style="position:relative;display:inline-block;">
-                        <img src="${data.url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);">
-                        <button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemCompra(${index})" 
-                                style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                `;
-            }
+            // ✅ CARGAR PREVIEW CON PROXY
+            await cargarPreviewFotoCompra(index, data.url);
             
             showToast('✅ Foto subida correctamente', 'success');
         } else {
@@ -819,6 +987,10 @@ async function subirFotoItemCompra(index, input) {
         input.value = '';
     }
 }
+
+// =====================================================
+// ELIMINAR FOTO DE ITEM (COMPRA DIRECTA)
+// =====================================================
 
 async function eliminarFotoItemCompra(index) {
     if (!itemsCompraDirecta[index] || !itemsCompraDirecta[index].foto_public_id) {
@@ -845,11 +1017,17 @@ async function eliminarFotoItemCompra(index) {
             delete itemsCompraDirecta[index].foto_url;
             delete itemsCompraDirecta[index].foto_public_id;
             
+            // ✅ LIMPIAR PREVIEW
             const previewSpan = document.getElementById(`fotoPreviewCompra_${index}`);
-            if (previewSpan) previewSpan.innerHTML = '';
+            if (previewSpan) {
+                previewSpan.innerHTML = `
+                    <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;border:1px dashed var(--gris-texto);">
+                        <i class="fas fa-plus" style="color:var(--gris-texto);font-size:12px;"></i>
+                    </div>
+                `;
+            }
             
             showToast('✅ Foto eliminada', 'success');
-            renderItemsCompraDirecta();
         } else {
             showToast(data.error || 'Error al eliminar foto', 'error');
         }
@@ -1419,7 +1597,7 @@ async function actualizarEstadoSolicitudTecnico(id_solicitud, nuevoEstado, respu
 }
 
 // =====================================================
-// RENDERIZADO PRIMER APARTADO (TAB 1)
+// RENDERIZADO PRIMER APARTADO (TAB 1) - CON BOTÓN VER FOTOS
 // =====================================================
 
 function renderOrdenesSolicitarCotizacion() {
@@ -1460,6 +1638,25 @@ function renderOrdenesSolicitarCotizacion() {
     }
     
     container.innerHTML = ordenesFiltradas.map(orden => {
+        // 🔥 CONTAR TOTAL DE FOTOS EN LA ORDEN
+        let totalFotos = 0;
+        if (orden.servicios) {
+            orden.servicios.forEach(serv => {
+                if (serv.items && serv.items.length > 0) {
+                    serv.items.forEach(item => {
+                        // Soporte para versión anterior (foto_url)
+                        if (item.foto_url) {
+                            totalFotos += 1;
+                        }
+                        // Soporte para nueva versión (fotos array)
+                        if (item.fotos && Array.isArray(item.fotos)) {
+                            totalFotos += item.fotos.length;
+                        }
+                    });
+                }
+            });
+        }
+        
         const serviciosPendientes = orden.servicios.filter(s => s.estado_cotizacion === 'pendiente').length;
         const serviciosSolicitados = orden.servicios.filter(s => s.estado_cotizacion === 'solicitado').length;
         
@@ -1468,10 +1665,28 @@ function renderOrdenesSolicitarCotizacion() {
         
         if (serviciosSolicitados > 0) {
             estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> ${serviciosSolicitados} solicitud(es) enviada(s)</span>`;
-            botonesHtml = `<button class="btn-outline" disabled style="opacity:0.7;"><i class="fas fa-clock"></i> Esperando respuesta</button>`;
+            botonesHtml = `
+                <button class="btn-outline" disabled style="opacity:0.7;"><i class="fas fa-clock"></i> Esperando respuesta</button>
+                ${totalFotos > 0 ? `
+                    <button class="btn-ver-fotos-orden" onclick="abrirModalFotosOrden(${orden.id_orden})" 
+                            style="padding:0.3rem 0.8rem;font-size:0.75rem;background:var(--rojo-primario);color:white;border:none;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem;">
+                        <i class="fas fa-images"></i> Ver ${totalFotos} foto(s)
+                    </button>
+                ` : ''}
+            `;
         } else if (serviciosPendientes > 0) {
             estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> ${serviciosPendientes} servicio(s) pendiente(s)</span>`;
-            botonesHtml = `<button class="btn-primary" onclick="abrirModalSolicitudCotizacion(${orden.id_orden})"><i class="fas fa-paper-plane"></i> Solicitar Cotización</button>`;
+            botonesHtml = `
+                <button class="btn-primary" onclick="abrirModalSolicitudCotizacion(${orden.id_orden})" style="display:inline-flex;align-items:center;gap:0.4rem;">
+                    <i class="fas fa-paper-plane"></i> Solicitar Cotización
+                </button>
+                ${totalFotos > 0 ? `
+                    <button class="btn-ver-fotos-orden" onclick="abrirModalFotosOrden(${orden.id_orden})" 
+                            style="padding:0.3rem 0.8rem;font-size:0.75rem;background:var(--rojo-primario);color:white;border:none;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem;">
+                        <i class="fas fa-images"></i> Ver ${totalFotos} foto(s)
+                    </button>
+                ` : ''}
+            `;
         }
         
         return `
@@ -1480,6 +1695,11 @@ function renderOrdenesSolicitarCotizacion() {
                 <div>
                     <span class="orden-codigo"><i class="fas fa-tag"></i> ${escapeHtml(orden.codigo_unico)}</span>
                     <span class="orden-vehiculo"><i class="fas fa-car"></i> ${escapeHtml(orden.vehiculo)}</span>
+                    ${totalFotos > 0 ? `
+                        <span class="badge-fotos" style="background:var(--rojo-primario);color:white;padding:0.1rem 0.5rem;border-radius:12px;font-size:0.6rem;margin-left:0.5rem;">
+                            <i class="fas fa-camera"></i> ${totalFotos}
+                        </span>
+                    ` : ''}
                 </div>
                 <div>
                     <span class="orden-cliente"><i class="fas fa-user"></i> ${escapeHtml(orden.cliente_nombre)}</span>
@@ -1488,23 +1708,388 @@ function renderOrdenesSolicitarCotizacion() {
             <div class="orden-body" style="padding: 0.75rem 1.25rem;">
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">${estadoBadge}</div>
                 <div class="servicios-container" style="margin-top: 0.5rem;">
-                    ${orden.servicios.map(serv => `
+                    ${orden.servicios.map(serv => {
+                        // Contar fotos del servicio
+                        let fotosServicio = 0;
+                        if (serv.items) {
+                            serv.items.forEach(item => {
+                                if (item.foto_url) fotosServicio++;
+                                if (item.fotos && Array.isArray(item.fotos)) fotosServicio += item.fotos.length;
+                            });
+                        }
+                        return `
                         <div class="servicio-row" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--border-color);">
-                            <div class="servicio-info"><div class="servicio-nombre" style="font-weight: 500;">${escapeHtml(serv.descripcion)}</div></div>
+                            <div class="servicio-info">
+                                <div class="servicio-nombre" style="font-weight: 500;">${escapeHtml(serv.descripcion)}</div>
+                                ${fotosServicio > 0 ? `<span style="font-size:0.6rem;color:var(--gris-texto);margin-left:0.5rem;"><i class="fas fa-camera"></i> ${fotosServicio}</span>` : ''}
+                            </div>
                             <div class="servicio-estado estado-${serv.estado_cotizacion}" style="font-size: 0.75rem;">
                                 <i class="fas ${serv.estado_cotizacion === 'cotizado' ? 'fa-check-circle' : (serv.estado_cotizacion === 'solicitado' ? 'fa-paper-plane' : 'fa-clock')}"></i>
                                 ${serv.estado_cotizacion === 'cotizado' ? 'Cotizado' : (serv.estado_cotizacion === 'solicitado' ? 'Solicitud enviada' : 'Pendiente')}
                             </div>
                             ${serv.precio_cotizado > 0 ? `<div class="servicio-precio" style="font-weight: 600; color: var(--verde-exito);">${formatCurrency(serv.precio_cotizado)}</div>` : ''}
                         </div>
-                    `).join('')}
+                    `}).join('')}
                 </div>
             </div>
-            <div class="orden-footer" style="padding: 0.75rem 1.25rem; border-top: 1px solid var(--border-color);">${botonesHtml}</div>
+            <div class="orden-footer" style="padding: 0.75rem 1.25rem; border-top: 1px solid var(--border-color); display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+                ${botonesHtml}
+            </div>
         </div>`;
     }).join('');
 }
+// =====================================================
+// ABRIR MODAL DE FOTOS DE LA ORDEN (DESDE TAB 1)
+// =====================================================
 
+async function abrirModalFotosOrden(id_orden) {
+    // Buscar la orden en los datos
+    const orden = ordenesDiagnosticoAprobado.find(o => o.id_orden === id_orden);
+    if (!orden) {
+        showToast('Orden no encontrada', 'error');
+        return;
+    }
+    
+    // Recolectar todas las fotos de todos los servicios
+    let todasLasFotos = [];
+    
+    if (orden.servicios) {
+        orden.servicios.forEach(serv => {
+            if (serv.items && serv.items.length > 0) {
+                serv.items.forEach(item => {
+                    // Soporte para versión anterior (foto_url)
+                    if (item.foto_url) {
+                        todasLasFotos.push({
+                            url: item.foto_url,
+                            descripcion: item.descripcion || 'Item',
+                            cantidad: item.cantidad || 1,
+                            servicio: serv.descripcion
+                        });
+                    }
+                    // Soporte para nueva versión (fotos array)
+                    if (item.fotos && Array.isArray(item.fotos)) {
+                        item.fotos.forEach(fotoUrl => {
+                            todasLasFotos.push({
+                                url: fotoUrl,
+                                descripcion: item.descripcion || 'Item',
+                                cantidad: item.cantidad || 1,
+                                servicio: serv.descripcion
+                            });
+                        });
+                    }
+                });
+            }
+        });
+    }
+    
+    if (todasLasFotos.length === 0) {
+        showToast('Esta orden no tiene fotos disponibles', 'warning');
+        return;
+    }
+    
+    // Crear el modal si no existe
+    let modal = document.getElementById('modalFotosOrden');
+    if (!modal) {
+        const modalHtml = `
+            <div class="modal" id="modalFotosOrden" onclick="cerrarModalFotosOrden()">
+                <div class="modal-content" style="max-width: 850px; max-height: 90vh; background: var(--bg-card);" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-images"></i> Fotos de la Orden</h3>
+                        <button class="modal-close" onclick="cerrarModalFotosOrden()">&times;</button>
+                    </div>
+                    <div class="modal-body" style="padding: 1.5rem; max-height: 60vh; overflow-y: auto;">
+                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--gris-oscuro); border-radius: 8px; display:grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap:0.5rem;">
+                            <div><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(orden.codigo_unico)}</div>
+                            <div><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(orden.vehiculo)}</div>
+                            <div><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}</div>
+                            <div><strong><i class="fas fa-camera"></i> Total:</strong> ${todasLasFotos.length} foto(s)</div>
+                        </div>
+                        <div id="fotosOrdenContainer" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;">
+                            <!-- Las fotos se cargarán aquí -->
+                        </div>
+                        <div id="fotosOrdenLoader" style="display:flex;justify-content:center;align-items:center;padding:2rem;">
+                            <i class="fas fa-spinner fa-spin fa-2x"></i>
+                            <span style="margin-left:1rem;">Cargando fotos...</span>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <div style="display:flex;justify-content:space-between;align-items:center;width:100%;flex-wrap:wrap;gap:0.5rem;">
+                            <span id="fotosOrdenCounter" style="font-size:0.85rem;color:var(--gris-texto);"></span>
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                <button class="btn-secondary" onclick="cerrarModalFotosOrden()">
+                                    <i class="fas fa-times"></i> Cerrar
+                                </button>
+                                <button class="btn-primary" onclick="descargarTodasFotosOrden(${id_orden})">
+                                    <i class="fas fa-download"></i> Descargar Todas
+                                </button>
+                                <button class="btn-outline" onclick="copiarUrlsFotosOrden(${id_orden})">
+                                    <i class="fas fa-copy"></i> Copiar URLs
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    // Mostrar loader
+    const container = document.getElementById('fotosOrdenContainer');
+    const loader = document.getElementById('fotosOrdenLoader');
+    const counter = document.getElementById('fotosOrdenCounter');
+    
+    if (container) container.innerHTML = '';
+    if (loader) loader.style.display = 'flex';
+    if (counter) counter.textContent = `Cargando ${todasLasFotos.length} foto(s)...`;
+    
+    // Abrir modal
+    modal = document.getElementById('modalFotosOrden');
+    if (modal) modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+    
+    // Cargar fotos con proxy
+    let fotosCargadas = 0;
+    
+    for (let i = 0; i < todasLasFotos.length; i++) {
+        const foto = todasLasFotos[i];
+        const fotoId = `foto_orden_${id_orden}_${i}`;
+        
+        // Crear contenedor para la foto
+        const fotoDiv = document.createElement('div');
+        fotoDiv.className = 'foto-item-modal';
+        fotoDiv.style.cssText = `
+            background: var(--gris-oscuro);
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--border-color);
+            transition: transform 0.2s;
+            cursor: pointer;
+        `;
+        fotoDiv.onclick = function() {
+            verFotoAmpliadaJefeTaller(foto.url);
+        };
+        
+        fotoDiv.innerHTML = `
+            <div id="loader_foto_orden_${id_orden}_${i}" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;">
+                <i class="fas fa-spinner fa-spin" style="font-size:1.5rem;color:var(--gris-texto);"></i>
+            </div>
+            <img id="${fotoId}" src="" alt="Foto ${i+1}" style="width:100%;height:100%;object-fit:cover;display:none;">
+            <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent, rgba(0,0,0,0.8));padding:8px;color:white;font-size:0.7rem;text-align:center;pointer-events:none;">
+                <strong>${escapeHtml(foto.descripcion)}</strong><br>
+                <small><i class="fas fa-tag"></i> ${escapeHtml(foto.servicio || 'Item')} ×${foto.cantidad || 1}</small>
+            </div>
+            <span style="position:absolute;top:5px;right:8px;background:rgba(0,0,0,0.7);color:white;padding:2px 8px;border-radius:4px;font-size:0.7rem;z-index:5;pointer-events:none;">
+                ${i+1}/${todasLasFotos.length}
+            </span>
+        `;
+        
+        if (container) container.appendChild(fotoDiv);
+        
+        // Cargar la imagen con proxy
+        const imgElement = document.getElementById(fotoId);
+        const loaderElement = document.getElementById(`loader_foto_orden_${id_orden}_${i}`);
+        
+        if (imgElement) {
+            try {
+                const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(foto.url)}`;
+                const response = await fetch(proxyUrl, {
+                    headers: getAuthHeaders()
+                });
+                const data = await response.json();
+                
+                if (data.success && data.base64) {
+                    const img = new Image();
+                    img.onload = function() {
+                        if (imgElement) {
+                            imgElement.src = data.base64;
+                            imgElement.style.display = 'block';
+                            imgElement.setAttribute('data-loaded', 'true');
+                        }
+                        if (loaderElement) loaderElement.style.display = 'none';
+                        fotosCargadas++;
+                        if (counter) counter.textContent = `${fotosCargadas}/${todasLasFotos.length} foto(s) cargadas`;
+                    };
+                    img.onerror = function() {
+                        if (loaderElement) {
+                            loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:1.5rem;"></i>';
+                        }
+                        fotosCargadas++;
+                        if (counter) counter.textContent = `${fotosCargadas}/${todasLasFotos.length} foto(s) cargadas`;
+                    };
+                    img.src = data.base64;
+                } else {
+                    if (loaderElement) {
+                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:1.5rem;"></i>';
+                    }
+                    fotosCargadas++;
+                    if (counter) counter.textContent = `${fotosCargadas}/${todasLasFotos.length} foto(s) cargadas`;
+                }
+            } catch (error) {
+                console.error('Error cargando foto:', error);
+                if (loaderElement) {
+                    loaderElement.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:1.5rem;"></i>';
+                }
+                fotosCargadas++;
+                if (counter) counter.textContent = `${fotosCargadas}/${todasLasFotos.length} foto(s) cargadas`;
+            }
+        }
+    }
+    
+    // Ocultar loader principal cuando todas las fotos estén cargadas
+    const checkFotosCargadas = setInterval(() => {
+        if (fotosCargadas >= todasLasFotos.length) {
+            if (loader) loader.style.display = 'none';
+            clearInterval(checkFotosCargadas);
+        }
+    }, 500);
+    
+    // Timeout de seguridad
+    setTimeout(() => {
+        if (loader) loader.style.display = 'none';
+        if (counter) {
+            const cargadas = document.querySelectorAll('#fotosOrdenContainer img[data-loaded="true"]').length;
+            counter.textContent = `${cargadas}/${todasLasFotos.length} foto(s) cargadas`;
+        }
+    }, 10000);
+}
+
+// =====================================================
+// CERRAR MODAL DE FOTOS DE LA ORDEN
+// =====================================================
+
+function cerrarModalFotosOrden() {
+    const modal = document.getElementById('modalFotosOrden');
+    if (modal) modal.classList.remove('show');
+    document.body.style.overflow = '';
+}
+
+// =====================================================
+// DESCARGAR TODAS LAS FOTOS DE LA ORDEN
+// =====================================================
+
+async function descargarTodasFotosOrden(id_orden) {
+    const orden = ordenesDiagnosticoAprobado.find(o => o.id_orden === id_orden);
+    if (!orden) {
+        showToast('Orden no encontrada', 'error');
+        return;
+    }
+    
+    // Recolectar todas las fotos
+    let todasLasFotos = [];
+    if (orden.servicios) {
+        orden.servicios.forEach(serv => {
+            if (serv.items && serv.items.length > 0) {
+                serv.items.forEach(item => {
+                    if (item.foto_url) {
+                        todasLasFotos.push(item.foto_url);
+                    }
+                    if (item.fotos && Array.isArray(item.fotos)) {
+                        item.fotos.forEach(fotoUrl => {
+                            todasLasFotos.push(fotoUrl);
+                        });
+                    }
+                });
+            }
+        });
+    }
+    
+    if (todasLasFotos.length === 0) {
+        showToast('No hay fotos para descargar', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    
+    try {
+        let descargasExitosas = 0;
+        
+        for (let i = 0; i < todasLasFotos.length; i++) {
+            const fotoUrl = todasLasFotos[i];
+            
+            const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(fotoUrl)}`;
+            const response = await fetch(proxyUrl, {
+                headers: getAuthHeaders()
+            });
+            const data = await response.json();
+            
+            if (data.success && data.base64) {
+                const link = document.createElement('a');
+                link.href = data.base64;
+                link.download = `orden_${orden.codigo_unico}_foto_${i+1}.jpg`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                descargasExitosas++;
+                
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+        }
+        
+        showToast(`✅ ${descargasExitosas} foto(s) descargadas`, 'success');
+    } catch (error) {
+        console.error('Error descargando fotos:', error);
+        showToast('Error al descargar las fotos', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// =====================================================
+// COPIAR URLs DE LAS FOTOS DE LA ORDEN
+// =====================================================
+
+function copiarUrlsFotosOrden(id_orden) {
+    const orden = ordenesDiagnosticoAprobado.find(o => o.id_orden === id_orden);
+    if (!orden) {
+        showToast('Orden no encontrada', 'error');
+        return;
+    }
+    
+    // Recolectar todas las URLs
+    let urls = [];
+    if (orden.servicios) {
+        orden.servicios.forEach(serv => {
+            if (serv.items && serv.items.length > 0) {
+                serv.items.forEach(item => {
+                    if (item.foto_url) {
+                        urls.push(item.foto_url);
+                    }
+                    if (item.fotos && Array.isArray(item.fotos)) {
+                        item.fotos.forEach(fotoUrl => {
+                            urls.push(fotoUrl);
+                        });
+                    }
+                });
+            }
+        });
+    }
+    
+    if (urls.length === 0) {
+        showToast('No hay URLs para copiar', 'warning');
+        return;
+    }
+    
+    const texto = `📸 Fotos de la orden ${orden.codigo_unico}\n\n${urls.map((url, i) => `${i+1}. ${url}`).join('\n')}`;
+    
+    navigator.clipboard.writeText(texto).then(() => {
+        showToast(`✅ ${urls.length} URL(s) copiadas al portapapeles`, 'success');
+    }).catch(() => {
+        // Fallback
+        const input = document.createElement('textarea');
+        input.value = texto;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        showToast(`✅ ${urls.length} URL(s) copiadas al portapapeles`, 'success');
+    });
+}
 // =====================================================
 // RENDERIZADO SEGUNDO APARTADO (TAB 2)
 // =====================================================
@@ -1656,6 +2241,10 @@ function renderHistorialCotizaciones() {
     `).join('');
 }
 
+// =====================================================
+// RENDERIZAR SOLICITUDES DE COTIZACIÓN CON BOTÓN VER FOTOS (SIN COLUMNA ITEMS)
+// =====================================================
+
 function renderSolicitudesCotizacion() {
     const tbody = document.getElementById('tablaSolicitudesCotizacion');
     if (!tbody) return;
@@ -1666,31 +2255,418 @@ function renderSolicitudesCotizacion() {
     }
     
     tbody.innerHTML = solicitudesCotizacion.map(s => {
-        let itemsHtml = '';
+        // Contar cuántas fotos tiene esta solicitud
+        let totalFotos = 0;
+        
         if (s.items && s.items.length > 0) {
-            itemsHtml = s.items.map(item => {
-                const fotoHtml = item.foto_url ? `<img src="${item.foto_url}" style="width:25px;height:25px;object-fit:cover;border-radius:4px;margin-left:4px;">` : '';
-                return `<div style="font-size: 0.7rem;">• ${escapeHtml(item.descripcion)} x${item.cantidad} ${fotoHtml}</div>`;
-            }).join('');
-        } else {
-            itemsHtml = `<span class="text-muted">No especificado</span>`;
+            s.items.forEach(item => {
+                // Soporte para versión anterior (foto_url)
+                if (item.foto_url) {
+                    totalFotos++;
+                }
+                // Soporte para nueva versión (fotos array)
+                if (item.fotos && Array.isArray(item.fotos)) {
+                    totalFotos += item.fotos.length;
+                }
+            });
         }
+        
+        // Contar cantidad total de items
+        const totalItems = s.items ? s.items.length : 0;
+        
+        // Botón "Ver Fotos" solo si hay fotos
+        const verFotosBtn = totalFotos > 0 ? `
+            <button class="btn-ver-fotos-tabla" onclick="abrirModalFotosSolicitud(${s.id})" 
+                    style="padding:0.3rem 0.8rem;font-size:0.7rem;background:var(--rojo-primario);color:white;border:none;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem;transition:all 0.2s;white-space:nowrap;">
+                <i class="fas fa-images"></i> ${totalFotos} foto(s)
+            </button>
+        ` : `<span style="font-size:0.7rem;color:var(--gris-texto);"><i class="fas fa-camera"></i> Sin fotos</span>`;
+        
+        // Badge de cantidad de items
+        const itemsBadge = totalItems > 0 ? `
+            <span style="background:var(--gris-oscuro);padding:0.1rem 0.5rem;border-radius:10px;font-size:0.65rem;color:var(--gris-texto);">
+                ${totalItems} item(s)
+            </span>
+        ` : `<span style="font-size:0.65rem;color:var(--gris-texto);">-</span>`;
         
         return `
             <tr>
-                <td>${s.id}</td>
-                <td><strong>${escapeHtml(s.orden_codigo)}</strong></td>
-                <td>${escapeHtml(s.vehiculo)}</td>
-                <td>${escapeHtml(s.servicio_descripcion || '-')}</td>
-                <td style="max-width: 200px;">${itemsHtml}</td>
+                <td style="font-weight:600;font-size:0.85rem;">${s.id}</td>
+                <td><strong style="font-size:0.85rem;">${escapeHtml(s.orden_codigo)}</strong></td>
+                <td style="font-size:0.8rem;">${escapeHtml(s.vehiculo)}</td>
+                <td style="font-size:0.8rem;">${escapeHtml(s.servicio_descripcion || '-')}</td>
+                <td style="text-align:center;">${itemsBadge}</td>
                 <td>${statusBadge(s.estado)}</td>
-                <td>${s.precio_cotizado ? formatCurrency(s.precio_cotizado) : '-'}</td>
-                <td>${formatDate(s.fecha_solicitud)}</td>
+                <td style="font-weight:600;color:var(--verde-exito);">${s.precio_cotizado ? formatCurrency(s.precio_cotizado) : '-'}</td>
+                <td style="font-size:0.75rem;">${formatDate(s.fecha_solicitud)}</td>
+                <td style="text-align:center;">${verFotosBtn}</td>
             </tr>
         `;
     }).join('');
 }
+// =====================================================
+// ABRIR MODAL DE FOTOS DE LA SOLICITUD - CARGA PARALELA
+// =====================================================
 
+async function abrirModalFotosSolicitud(id_solicitud) {
+    // Buscar la solicitud en los datos
+    const solicitud = solicitudesCotizacion.find(s => s.id === id_solicitud);
+    if (!solicitud) {
+        showToast('Solicitud no encontrada', 'error');
+        return;
+    }
+    
+    // Recolectar todas las fotos de los items
+    let todasLasFotos = [];
+    
+    if (solicitud.items && solicitud.items.length > 0) {
+        solicitud.items.forEach(item => {
+            // Soporte para versión anterior (foto_url)
+            if (item.foto_url) {
+                todasLasFotos.push({
+                    url: item.foto_url,
+                    descripcion: item.descripcion || 'Item',
+                    cantidad: item.cantidad || 1
+                });
+            }
+            // Soporte para nueva versión (fotos array)
+            if (item.fotos && Array.isArray(item.fotos)) {
+                item.fotos.forEach(fotoUrl => {
+                    todasLasFotos.push({
+                        url: fotoUrl,
+                        descripcion: item.descripcion || 'Item',
+                        cantidad: item.cantidad || 1
+                    });
+                });
+            }
+        });
+    }
+    
+    if (todasLasFotos.length === 0) {
+        showToast('Esta solicitud no tiene fotos', 'warning');
+        return;
+    }
+    
+    // Crear el modal si no existe
+    let modal = document.getElementById('modalFotosSolicitud');
+    if (!modal) {
+        const modalHtml = `
+            <div class="modal" id="modalFotosSolicitud" onclick="cerrarModalFotosSolicitud()">
+                <div class="modal-content" style="max-width: 850px; max-height: 90vh; background: var(--bg-card);" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-images"></i> Fotos de la Solicitud #${id_solicitud}</h3>
+                        <button class="modal-close" onclick="cerrarModalFotosSolicitud()">&times;</button>
+                    </div>
+                    <div class="modal-body" style="padding: 1.5rem; max-height: 60vh; overflow-y: auto;">
+                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--gris-oscuro); border-radius: 8px; display:grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap:0.5rem;">
+                            <div><strong><i class="fas fa-tag"></i> Orden:</strong> ${escapeHtml(solicitud.orden_codigo)}</div>
+                            <div><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(solicitud.vehiculo)}</div>
+                            <div><strong><i class="fas fa-camera"></i> Total:</strong> ${todasLasFotos.length} foto(s)</div>
+                            <div><strong><i class="fas fa-clock"></i> Estado:</strong> ${statusBadge(solicitud.estado)}</div>
+                        </div>
+                        <div id="fotosSolicitudContainer" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;">
+                            <!-- Las fotos se cargarán aquí -->
+                        </div>
+                        <div id="fotosSolicitudLoader" style="display:flex;justify-content:center;align-items:center;padding:2rem;">
+                            <i class="fas fa-spinner fa-spin fa-2x"></i>
+                            <span style="margin-left:1rem;">Cargando ${todasLasFotos.length} foto(s)...</span>
+                        </div>
+                        <div id="fotosSolicitudProgress" style="display:none;margin-top:0.5rem;text-align:center;font-size:0.85rem;color:var(--gris-texto);">
+                            <span id="fotosSolicitudProgressText">0/${todasLasFotos.length} cargadas</span>
+                            <div style="width:100%;height:4px;background:var(--gris-oscuro);border-radius:2px;margin-top:0.25rem;overflow:hidden;">
+                                <div id="fotosSolicitudProgressBar" style="width:0%;height:100%;background:var(--rojo-primario);border-radius:2px;transition:width 0.3s;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <div style="display:flex;justify-content:space-between;align-items:center;width:100%;flex-wrap:wrap;gap:0.5rem;">
+                            <span id="fotosSolicitudCounter" style="font-size:0.85rem;color:var(--gris-texto);"></span>
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                <button class="btn-secondary" onclick="cerrarModalFotosSolicitud()">
+                                    <i class="fas fa-times"></i> Cerrar
+                                </button>
+                                <button class="btn-primary" onclick="descargarTodasFotosSolicitud(${id_solicitud})">
+                                    <i class="fas fa-download"></i> Descargar Todas
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    // Mostrar loader
+    const container = document.getElementById('fotosSolicitudContainer');
+    const loader = document.getElementById('fotosSolicitudLoader');
+    const counter = document.getElementById('fotosSolicitudCounter');
+    const progress = document.getElementById('fotosSolicitudProgress');
+    const progressText = document.getElementById('fotosSolicitudProgressText');
+    const progressBar = document.getElementById('fotosSolicitudProgressBar');
+    
+    if (container) container.innerHTML = '';
+    if (loader) loader.style.display = 'flex';
+    if (counter) counter.textContent = `Cargando ${todasLasFotos.length} foto(s)...`;
+    if (progress) progress.style.display = 'block';
+    if (progressText) progressText.textContent = `0/${todasLasFotos.length} cargadas`;
+    if (progressBar) progressBar.style.width = '0%';
+    
+    // Abrir modal
+    modal = document.getElementById('modalFotosSolicitud');
+    if (modal) modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+    
+    // 🔥 CREAR TODOS LOS CONTENEDORES PRIMERO
+    const fotosPorCargar = todasLasFotos.length;
+    let fotosCargadas = 0;
+    let fotosExitosas = 0;
+    let fotosFallidas = 0;
+    
+    for (let i = 0; i < todasLasFotos.length; i++) {
+        const foto = todasLasFotos[i];
+        const fotoId = `foto_solicitud_${id_solicitud}_${i}`;
+        const loaderId = `loader_foto_solicitud_${id_solicitud}_${i}`;
+        
+        const fotoDiv = document.createElement('div');
+        fotoDiv.className = 'foto-item-modal';
+        fotoDiv.style.cssText = `
+            background: var(--gris-oscuro);
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--border-color);
+            transition: transform 0.2s;
+            cursor: pointer;
+        `;
+        fotoDiv.onclick = function() {
+            verFotoAmpliadaJefeTaller(foto.url);
+        };
+        
+        fotoDiv.innerHTML = `
+            <div id="${loaderId}" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;">
+                <i class="fas fa-spinner fa-spin" style="font-size:1.5rem;color:var(--gris-texto);"></i>
+            </div>
+            <img id="${fotoId}" src="" alt="Foto ${i+1}" style="width:100%;height:100%;object-fit:cover;display:none;">
+            <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent, rgba(0,0,0,0.8));padding:8px;color:white;font-size:0.7rem;text-align:center;pointer-events:none;">
+                <strong>${escapeHtml(foto.descripcion)}</strong><br>
+                <small>×${foto.cantidad || 1}</small>
+            </div>
+            <span style="position:absolute;top:5px;right:8px;background:rgba(0,0,0,0.7);color:white;padding:2px 8px;border-radius:4px;font-size:0.7rem;z-index:5;pointer-events:none;">
+                ${i+1}/${todasLasFotos.length}
+            </span>
+        `;
+        
+        if (container) container.appendChild(fotoDiv);
+    }
+    
+    // 🔥 FUNCIÓN PARA ACTUALIZAR PROGRESO
+    function actualizarProgreso() {
+        const porcentaje = Math.round((fotosCargadas / fotosPorCargar) * 100);
+        if (progressText) progressText.textContent = `${fotosCargadas}/${fotosPorCargar} cargadas (${fotosExitosas} OK, ${fotosFallidas} ❌)`;
+        if (progressBar) progressBar.style.width = `${porcentaje}%`;
+        if (counter) counter.textContent = `${fotosExitosas}/${fotosPorCargar} foto(s) cargadas (${fotosFallidas} fallidas)`;
+        
+        if (fotosCargadas >= fotosPorCargar) {
+            if (loader) loader.style.display = 'none';
+            if (progress) {
+                setTimeout(() => {
+                    progress.style.display = 'none';
+                }, 2000);
+            }
+        }
+    }
+    
+    // 🔥 CARGAR TODAS LAS FOTOS EN PARALELO CON PROMISE.ALLSETTLED
+    const promesas = todasLasFotos.map((foto, i) => {
+        return new Promise((resolve) => {
+            const fotoId = `foto_solicitud_${id_solicitud}_${i}`;
+            const loaderId = `loader_foto_solicitud_${id_solicitud}_${i}`;
+            const imgElement = document.getElementById(fotoId);
+            const loaderElement = document.getElementById(loaderId);
+            
+            if (!imgElement) {
+                fotosCargadas++;
+                fotosFallidas++;
+                actualizarProgreso();
+                resolve({ success: false, index: i });
+                return;
+            }
+            
+            // Timeout para no esperar más de 10 segundos por foto
+            const timeoutId = setTimeout(() => {
+                if (loaderElement) {
+                    loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:1.5rem;"></i>';
+                }
+                fotosCargadas++;
+                fotosFallidas++;
+                actualizarProgreso();
+                resolve({ success: false, index: i, error: 'timeout' });
+            }, 10000);
+            
+            // 🔥 CARGAR CON PROXY
+            const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(foto.url)}`;
+            fetch(proxyUrl, {
+                headers: getAuthHeaders()
+            })
+            .then(response => response.json())
+            .then(data => {
+                clearTimeout(timeoutId);
+                
+                if (data.success && data.base64) {
+                    const img = new Image();
+                    img.onload = function() {
+                        if (imgElement) {
+                            imgElement.src = data.base64;
+                            imgElement.style.display = 'block';
+                            imgElement.setAttribute('data-loaded', 'true');
+                        }
+                        if (loaderElement) loaderElement.style.display = 'none';
+                        fotosCargadas++;
+                        fotosExitosas++;
+                        actualizarProgreso();
+                        resolve({ success: true, index: i });
+                    };
+                    img.onerror = function() {
+                        if (loaderElement) {
+                            loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:1.5rem;"></i>';
+                        }
+                        fotosCargadas++;
+                        fotosFallidas++;
+                        actualizarProgreso();
+                        resolve({ success: false, index: i, error: 'load_error' });
+                    };
+                    img.src = data.base64;
+                } else {
+                    if (loaderElement) {
+                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:1.5rem;"></i>';
+                    }
+                    fotosCargadas++;
+                    fotosFallidas++;
+                    actualizarProgreso();
+                    resolve({ success: false, index: i, error: 'no_data' });
+                }
+            })
+            .catch(error => {
+                clearTimeout(timeoutId);
+                console.error(`Error cargando foto ${i}:`, error);
+                if (loaderElement) {
+                    loaderElement.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:1.5rem;"></i>';
+                }
+                fotosCargadas++;
+                fotosFallidas++;
+                actualizarProgreso();
+                resolve({ success: false, index: i, error: error.message });
+            });
+        });
+    });
+    
+    // Esperar a que todas las promesas terminen (éxito o error)
+    const resultados = await Promise.allSettled(promesas);
+    
+    // Resumen final
+    const exitosas = resultados.filter(r => r.status === 'fulfilled' && r.value.success).length;
+    const fallidas = resultados.length - exitosas;
+    
+    if (counter) {
+        counter.textContent = `✅ ${exitosas}/${todasLasFotos.length} foto(s) cargadas ${fallidas > 0 ? `❌ ${fallidas} fallidas` : ''}`;
+    }
+    if (loader) loader.style.display = 'none';
+    if (progress) {
+        setTimeout(() => {
+            progress.style.display = 'none';
+        }, 3000);
+    }
+    
+    // Mostrar toast con resumen
+    if (fallidas > 0 && exitosas > 0) {
+        showToast(`⚠️ ${exitosas} fotos cargadas, ${fallidas} fallaron. Reintenta más tarde.`, 'warning');
+    } else if (fallidas === todasLasFotos.length) {
+        showToast('❌ No se pudieron cargar las fotos. Verifica tu conexión.', 'error');
+    } else if (exitosas === todasLasFotos.length) {
+        showToast(`✅ ${exitosas} fotos cargadas correctamente`, 'success');
+    }
+}
+// =====================================================
+// CERRAR MODAL DE FOTOS DE LA SOLICITUD
+// =====================================================
+
+function cerrarModalFotosSolicitud() {
+    const modal = document.getElementById('modalFotosSolicitud');
+    if (modal) modal.classList.remove('show');
+    document.body.style.overflow = '';
+}
+
+// =====================================================
+// DESCARGAR TODAS LAS FOTOS DE LA SOLICITUD
+// =====================================================
+
+async function descargarTodasFotosSolicitud(id_solicitud) {
+    const solicitud = solicitudesCotizacion.find(s => s.id === id_solicitud);
+    if (!solicitud) {
+        showToast('Solicitud no encontrada', 'error');
+        return;
+    }
+    
+    // Recolectar todas las fotos
+    let todasLasFotos = [];
+    if (solicitud.items && solicitud.items.length > 0) {
+        solicitud.items.forEach(item => {
+            if (item.foto_url) {
+                todasLasFotos.push(item.foto_url);
+            }
+            if (item.fotos && Array.isArray(item.fotos)) {
+                item.fotos.forEach(fotoUrl => {
+                    todasLasFotos.push(fotoUrl);
+                });
+            }
+        });
+    }
+    
+    if (todasLasFotos.length === 0) {
+        showToast('No hay fotos para descargar', 'warning');
+        return;
+    }
+    
+    mostrarLoading(true);
+    
+    try {
+        let descargasExitosas = 0;
+        
+        for (let i = 0; i < todasLasFotos.length; i++) {
+            const fotoUrl = todasLasFotos[i];
+            
+            const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(fotoUrl)}`;
+            const response = await fetch(proxyUrl, {
+                headers: getAuthHeaders()
+            });
+            const data = await response.json();
+            
+            if (data.success && data.base64) {
+                const link = document.createElement('a');
+                link.href = data.base64;
+                link.download = `solicitud_${id_solicitud}_foto_${i+1}.jpg`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                descargasExitosas++;
+                
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+        }
+        
+        showToast(`✅ ${descargasExitosas} foto(s) descargadas`, 'success');
+    } catch (error) {
+        console.error('Error descargando fotos:', error);
+        showToast('Error al descargar las fotos', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
 // =====================================================
 // SUBIDA DE ARCHIVOS
 // =====================================================
@@ -2767,7 +3743,7 @@ async function inicializar() {
 }
 
 // =====================================================
-// RENDERIZAR SOLICITUDES DE COMPRA CON FOTOS
+// RENDERIZAR SOLICITUDES DE COMPRA CON PROXY
 // =====================================================
 
 function renderSolicitudesCompra() {
@@ -2789,17 +3765,49 @@ function renderSolicitudesCompra() {
             }
         }
         
-        // 🔥 MOSTRAR ITEMS CON FOTOS
+        // 🔥 MOSTRAR ITEMS CON FOTOS USANDO PROXY
         const itemsHtml = itemsList && itemsList.length > 0 
-            ? itemsList.map(item => {
-                const fotoHtml = item.foto_url ? 
-                    `<img src="${item.foto_url}" style="width:25px;height:25px;object-fit:cover;border-radius:4px;margin-left:4px;cursor:pointer;" 
-                          onclick="verFotoAmpliadaJefeTaller('${item.foto_url}')" 
-                          onerror="this.style.display='none'"
-                          title="Haz clic para ver ampliada">` : '';
-                return `<div style="font-size: 0.7rem; display:flex; align-items:center; gap:4px;">
-                    • ${escapeHtml(item.descripcion)} x${item.cantidad} ${fotoHtml}
-                </div>`;
+            ? itemsList.map((item, idx) => {
+                const fotoUrl = item.foto_url || '';
+                const fotoId = `foto_compra_${s.id}_${idx}`;
+                const loaderId = `loader_compra_${s.id}_${idx}`;
+                
+                const fotoHtml = fotoUrl ? `
+                    <div style="display:flex;align-items:center;gap:4px;margin:2px 0;">
+                        <div id="${loaderId}" style="display:flex;align-items:center;gap:4px;font-size:0.7rem;color:var(--gris-texto);">
+                            <i class="fas fa-spinner fa-spin"></i>
+                        </div>
+                        <img id="${fotoId}" 
+                             src="" 
+                             alt="Item ${idx+1}" 
+                             style="width:25px;height:25px;object-fit:cover;border-radius:4px;cursor:pointer;display:none;border:1px solid var(--border-color);"
+                             onclick="verFotoAmpliadaJefeTaller('${fotoUrl}')"
+                             data-url="${fotoUrl}"
+                             data-loaded="false">
+                        <span style="font-size:0.7rem;">${escapeHtml(item.descripcion)} x${item.cantidad}</span>
+                    </div>
+                ` : `
+                    <div style="display:flex;align-items:center;gap:4px;margin:2px 0;">
+                        <i class="fas fa-image" style="color:var(--gris-texto);font-size:0.7rem;"></i>
+                        <span style="font-size:0.7rem;">${escapeHtml(item.descripcion)} x${item.cantidad}</span>
+                    </div>
+                `;
+                
+                // ✅ CARGAR LA IMAGEN CON PROXY
+                setTimeout(() => {
+                    if (fotoUrl) {
+                        const imgEl = document.getElementById(fotoId);
+                        const loaderEl = document.getElementById(loaderId);
+                        if (imgEl && !imgEl.getAttribute('data-loaded') === 'true') {
+                            cargarImagenProxy(fotoUrl, imgEl, loaderEl);
+                        }
+                    } else {
+                        const loaderEl = document.getElementById(loaderId);
+                        if (loaderEl) loaderEl.style.display = 'none';
+                    }
+                }, 50);
+                
+                return `<div>${fotoHtml}</div>`;
               }).join('')
             : `<div class="text-muted">${escapeHtml(s.descripcion_pieza || 'Item')} x${s.cantidad || 1}</div>`;
         
@@ -2850,13 +3858,20 @@ function renderSolicitudesCompra() {
         `;
     }).join('');
 }
+// =====================================================
+// VER DETALLE DE SOLICITUD DE COMPRA CON PROXY
+// =====================================================
+
 function verDetalleSolicitudCompra(id) {
     const solicitud = solicitudesCompra.find(s => s.id === id);
-    if (!solicitud) return;
+    if (!solicitud) {
+        showToast('Solicitud no encontrada', 'error');
+        return;
+    }
     
     window.currentSolicitudCompraId = id;
     
-    let itemsHtml = '';
+    // Parsear items
     let itemsList = solicitud.items;
     if (typeof itemsList === 'string') {
         try {
@@ -2866,79 +3881,234 @@ function verDetalleSolicitudCompra(id) {
         }
     }
     
+    // Construir HTML de items con fotos usando proxy
+    let itemsHtml = '';
     if (itemsList && itemsList.length > 0) {
-        itemsHtml = '<ul style="margin: 0.5rem 0 0 1rem;">' + 
-            itemsList.map(item => {
-                const fotoHtml = item.foto_url ? `<img src="${item.foto_url}" style="width:30px;height:30px;object-fit:cover;border-radius:4px;margin-left:4px;">` : '';
-                return `<li><strong>${escapeHtml(item.descripcion)}</strong> x${item.cantidad}${item.detalle ? ` (${escapeHtml(item.detalle)})` : ''} ${fotoHtml}</li>`;
+        itemsHtml = '<ul style="margin: 0.5rem 0 0 0; list-style: none; padding: 0;">' + 
+            itemsList.map((item, idx) => {
+                const fotoUrl = item.foto_url || item.foto || '';
+                const fotoId = `detalle_foto_${solicitud.id}_${idx}`;
+                const loaderId = `detalle_loader_${solicitud.id}_${idx}`;
+                
+                // HTML para la foto con loader
+                let fotoHtml = '';
+                if (fotoUrl) {
+                    fotoHtml = `
+                        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+                            <div id="${loaderId}" style="display:flex;align-items:center;gap:4px;font-size:0.7rem;color:var(--gris-texto);">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <span>Cargando imagen...</span>
+                            </div>
+                            <img id="${fotoId}" 
+                                 src="" 
+                                 alt="Foto del item" 
+                                 style="width:60px;height:60px;object-fit:cover;border-radius:6px;cursor:pointer;display:none;border:2px solid var(--border-color);"
+                                 onclick="verFotoAmpliadaJefeTaller('${fotoUrl}')"
+                                 data-url="${fotoUrl}"
+                                 data-loaded="false"
+                                 title="Haz clic para ver ampliada">
+                        </div>
+                    `;
+                }
+                
+                // Elemento del item
+                const itemHtml = `
+                    <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-color);">
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                            <span style="font-weight:600;">${escapeHtml(item.descripcion || 'Item')}</span>
+                            <span style="background:var(--gris-oscuro);padding:0.1rem 0.5rem;border-radius:4px;font-size:0.8rem;">
+                                ×${item.cantidad || 1}
+                            </span>
+                            ${item.detalle ? `<span style="color:var(--gris-texto);font-size:0.8rem;">(${escapeHtml(item.detalle)})</span>` : ''}
+                            ${item.precio ? `<span style="color:var(--verde-exito);font-weight:600;font-size:0.85rem;">${formatCurrency(item.precio)}</span>` : ''}
+                        </div>
+                        ${fotoHtml}
+                    </li>
+                `;
+                
+                // Programar carga de imagen con proxy
+                setTimeout(() => {
+                    if (fotoUrl) {
+                        const imgEl = document.getElementById(fotoId);
+                        const loaderEl = document.getElementById(loaderId);
+                        if (imgEl && imgEl.getAttribute('data-loaded') !== 'true') {
+                            cargarImagenProxy(fotoUrl, imgEl, loaderEl);
+                        }
+                    } else {
+                        const loaderEl = document.getElementById(loaderId);
+                        if (loaderEl) loaderEl.style.display = 'none';
+                    }
+                }, 100);
+                
+                return itemHtml;
             }).join('') + 
             '</ul>';
     } else {
-        itemsHtml = `<p>${escapeHtml(solicitud.descripcion_pieza || 'Item')} x${solicitud.cantidad || 1}</p>`;
+        // Items legacy (sin array)
+        const fotoUrl = solicitud.foto_url || solicitud.foto || '';
+        const fotoId = `detalle_foto_${solicitud.id}_0`;
+        const loaderId = `detalle_loader_${solicitud.id}_0`;
+        
+        let fotoHtml = '';
+        if (fotoUrl) {
+            fotoHtml = `
+                <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+                    <div id="${loaderId}" style="display:flex;align-items:center;gap:4px;font-size:0.7rem;color:var(--gris-texto);">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span>Cargando imagen...</span>
+                    </div>
+                    <img id="${fotoId}" 
+                         src="" 
+                         alt="Foto del item" 
+                         style="width:80px;height:80px;object-fit:cover;border-radius:6px;cursor:pointer;display:none;border:2px solid var(--border-color);"
+                         onclick="verFotoAmpliadaJefeTaller('${fotoUrl}')"
+                         data-url="${fotoUrl}"
+                         data-loaded="false"
+                         title="Haz clic para ver ampliada">
+                </div>
+            `;
+            
+            setTimeout(() => {
+                const imgEl = document.getElementById(fotoId);
+                const loaderEl = document.getElementById(loaderId);
+                if (imgEl && imgEl.getAttribute('data-loaded') !== 'true') {
+                    cargarImagenProxy(fotoUrl, imgEl, loaderEl);
+                }
+            }, 100);
+        }
+        
+        itemsHtml = `
+            <div style="margin: 0.5rem 0 0 0; padding: 0.5rem; background: var(--bg-card); border-radius: 8px; border-left: 3px solid var(--rojo-primario);">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <span style="font-weight:600;">${escapeHtml(solicitud.descripcion_pieza || 'Item')}</span>
+                    <span style="background:var(--gris-oscuro);padding:0.1rem 0.5rem;border-radius:4px;font-size:0.8rem;">
+                        ×${solicitud.cantidad || 1}
+                    </span>
+                    ${solicitud.precio_cotizado ? `<span style="color:var(--verde-exito);font-weight:600;">${formatCurrency(solicitud.precio_cotizado)}</span>` : ''}
+                </div>
+                ${fotoHtml}
+            </div>
+        `;
     }
     
-    // 🔥 BUSCAR LA COTIZACIÓN PARA VER SI TIENE DOCUMENTO EN DRIVE
-    const cotizacion = cotizacionesMap[solicitud.id_orden_trabajo];
+    // Buscar la cotización relacionada (si existe)
+    const cotizacion = cotizacionesMap ? cotizacionesMap[solicitud.id_orden_trabajo] : null;
     const tieneDocumento = cotizacion && cotizacion.id;
     
+    // Construir HTML del modal de detalle
     const container = document.getElementById('detalleCotizacionContainer');
+    if (!container) {
+        console.error('❌ Contenedor detalleCotizacionContainer no encontrado');
+        showToast('Error al mostrar el detalle', 'error');
+        return;
+    }
+    
     container.innerHTML = `
-        <div class="orden-info-card">
-            <p><strong><i class="fas fa-tag"></i> Solicitud ID:</strong> ${solicitud.id}</p>
-            <p><strong><i class="fas fa-clipboard-list"></i> Orden:</strong> ${escapeHtml(solicitud.orden_codigo)}</p>
-            <p><strong><i class="fas fa-car"></i> Vehículo:</strong> ${escapeHtml(solicitud.vehiculo)}</p>
-            <p><strong><i class="fas fa-boxes"></i> Items solicitados:</strong>${itemsHtml}</p>
-            <p><strong><i class="fas fa-clock"></i> Fecha solicitud:</strong> ${formatDate(solicitud.fecha_solicitud)}</p>
-            <p><strong><i class="fas fa-chart-line"></i> Estado:</strong> ${statusBadge(solicitud.estado)}</p>
+        <div class="orden-info-card" style="padding: 1rem; background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color);">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1.5rem; margin-bottom: 1rem;">
+                <div>
+                    <label style="font-size: 0.65rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Solicitud ID</label>
+                    <p style="margin: 0; font-weight: 600;">#${solicitud.id}</p>
+                </div>
+                <div>
+                    <label style="font-size: 0.65rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Estado</label>
+                    <p style="margin: 0;">${statusBadge(solicitud.estado)}</p>
+                </div>
+                <div>
+                    <label style="font-size: 0.65rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Orden de Trabajo</label>
+                    <p style="margin: 0; font-weight: 600;">${escapeHtml(solicitud.orden_codigo || 'N/A')}</p>
+                </div>
+                <div>
+                    <label style="font-size: 0.65rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Vehículo</label>
+                    <p style="margin: 0;">${escapeHtml(solicitud.vehiculo || 'N/A')}</p>
+                </div>
+                <div>
+                    <label style="font-size: 0.65rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Fecha Solicitud</label>
+                    <p style="margin: 0;">${formatDate(solicitud.fecha_solicitud)}</p>
+                </div>
+                ${solicitud.fecha_respuesta ? `
+                    <div>
+                        <label style="font-size: 0.65rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Fecha Respuesta</label>
+                        <p style="margin: 0;">${formatDate(solicitud.fecha_respuesta)}</p>
+                    </div>
+                ` : ''}
+            </div>
             
-            ${solicitud.mensaje_jefe_taller ? `<p><strong><i class="fas fa-comment"></i> Mensaje del Jefe de Taller:</strong> ${escapeHtml(solicitud.mensaje_jefe_taller)}</p>` : ''}
+            <div style="margin-top: 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                <label style="font-size: 0.65rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 0.5rem;">
+                    <i class="fas fa-boxes"></i> Items Solicitados
+                </label>
+                ${itemsHtml}
+            </div>
             
+            ${solicitud.mensaje_jefe_taller ? `
+                <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(193,18,31,0.08); border-radius: 8px; border-left: 3px solid var(--rojo-primario);">
+                    <label style="font-size: 0.65rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">
+                        <i class="fas fa-comment"></i> Mensaje del Jefe de Taller
+                    </label>
+                    <p style="margin: 0.25rem 0 0 0; white-space: pre-wrap;">${escapeHtml(solicitud.mensaje_jefe_taller)}</p>
+                </div>
+            ` : ''}
+            
+            ${solicitud.respuesta_encargado ? `
+                <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(16,185,129,0.08); border-radius: 8px; border-left: 3px solid var(--verde-exito);">
+                    <label style="font-size: 0.65rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">
+                        <i class="fas fa-reply"></i> Respuesta del Encargado
+                    </label>
+                    <p style="margin: 0.25rem 0 0 0; white-space: pre-wrap;">${escapeHtml(solicitud.respuesta_encargado)}</p>
+                </div>
+            ` : ''}
+            
+            ${solicitud.observacion_jefe_taller ? `
+                <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(245,158,11,0.08); border-radius: 8px; border-left: 3px solid var(--amarillo);">
+                    <label style="font-size: 0.65rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">
+                        <i class="fas fa-sticky-note"></i> Observación
+                    </label>
+                    <p style="margin: 0.25rem 0 0 0;">${escapeHtml(solicitud.observacion_jefe_taller)}</p>
+                </div>
+            ` : ''}
+            
+            <!-- Sección de compra (si está completada) -->
             ${solicitud.estado === 'comprado' || solicitud.estado === 'entregado' ? `
                 <div style="margin-top: 1rem; padding-top: 1rem; border-top: 2px solid var(--border-color);">
-                    <h4 style="color: var(--verde-exito); margin-bottom: 0.75rem;">
+                    <h4 style="color: var(--verde-exito); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
                         <i class="fas fa-receipt"></i> Detalles de la Compra
                     </h4>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem 1rem;">
                         ${solicitud.fecha_compra ? `
                             <div>
-                                <label style="font-size: 0.65rem; color: var(--gris-texto);">Fecha de Compra</label>
+                                <label style="font-size: 0.6rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Fecha de Compra</label>
                                 <p style="margin: 0; font-weight: 500;">${formatDate(solicitud.fecha_compra)}</p>
                             </div>
                         ` : ''}
                         ${solicitud.numero_factura ? `
                             <div>
-                                <label style="font-size: 0.65rem; color: var(--gris-texto);">N° Factura/Comprobante</label>
+                                <label style="font-size: 0.6rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">N° Factura/Comprobante</label>
                                 <p style="margin: 0; font-weight: 500;">${escapeHtml(solicitud.numero_factura)}</p>
                             </div>
                         ` : ''}
                         ${solicitud.proveedor_nombre ? `
                             <div>
-                                <label style="font-size: 0.65rem; color: var(--gris-texto);">Proveedor</label>
+                                <label style="font-size: 0.6rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Proveedor</label>
                                 <p style="margin: 0; font-weight: 500;">${escapeHtml(solicitud.proveedor_nombre)}</p>
                             </div>
                         ` : ''}
                         ${solicitud.precio_cotizado ? `
                             <div>
-                                <label style="font-size: 0.65rem; color: var(--gris-texto);">Monto Total</label>
+                                <label style="font-size: 0.6rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Monto Total</label>
                                 <p style="margin: 0; font-weight: 700; color: var(--verde-exito);">${formatCurrency(solicitud.precio_cotizado)}</p>
                             </div>
                         ` : ''}
                     </div>
                     ${solicitud.notas_compra ? `
-                        <div style="margin-top: 0.75rem;">
-                            <label style="font-size: 0.65rem; color: var(--gris-texto);">Notas de compra</label>
+                        <div style="margin-top: 0.5rem;">
+                            <label style="font-size: 0.6rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Notas de compra</label>
                             <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem;">${escapeHtml(solicitud.notas_compra)}</p>
                         </div>
                     ` : ''}
-                    ${solicitud.respuesta_encargado ? `
-                        <div style="margin-top: 0.75rem;">
-                            <label style="font-size: 0.65rem; color: var(--gris-texto);">Respuesta del Encargado</label>
-                            <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem;">${escapeHtml(solicitud.respuesta_encargado)}</p>
-                        </div>
-                    ` : ''}
                     ${solicitud.comprobante_url ? `
-                        <div style="margin-top: 1rem;">
-                            <button class="btn-outline" onclick="verComprobanteCompra(${solicitud.id})" style="width: 100%;">
+                        <div style="margin-top: 0.75rem;">
+                            <button class="btn-outline" onclick="verComprobanteCompra(${solicitud.id})" style="width: 100%; padding: 0.5rem;">
                                 <i class="fas fa-image"></i> Ver Comprobante de Compra
                             </button>
                         </div>
@@ -2947,27 +4117,66 @@ function verDetalleSolicitudCompra(id) {
             ` : ''}
             
             ${solicitud.fecha_entrega ? `
-                <div style="margin-top: 1rem; padding-top: 0.5rem;">
-                    <p><strong><i class="fas fa-truck"></i> Fecha de entrega:</strong> ${formatDate(solicitud.fecha_entrega)}</p>
-                    ${solicitud.notas_entrega ? `<p><strong>Notas de entrega:</strong> ${escapeHtml(solicitud.notas_entrega)}</p>` : ''}
+                <div style="margin-top: 1rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1rem;">
+                        <div>
+                            <label style="font-size: 0.6rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">
+                                <i class="fas fa-truck"></i> Fecha de entrega
+                            </label>
+                            <p style="margin: 0; font-weight: 500;">${formatDate(solicitud.fecha_entrega)}</p>
+                        </div>
+                        ${solicitud.fecha_entrega_estimada ? `
+                            <div>
+                                <label style="font-size: 0.6rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Fecha estimada de entrega</label>
+                                <p style="margin: 0;">${formatDate(solicitud.fecha_entrega_estimada)}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                    ${solicitud.notas_entrega ? `
+                        <div style="margin-top: 0.5rem;">
+                            <label style="font-size: 0.6rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Notas de entrega</label>
+                            <p style="margin: 0.25rem 0 0 0;">${escapeHtml(solicitud.notas_entrega)}</p>
+                        </div>
+                    ` : ''}
                 </div>
             ` : ''}
         </div>
     `;
     
+    // Configurar botón de descarga de documento
     const modalFooter = document.querySelector('#modalDetalleCotizacion .modal-footer');
     if (modalFooter) {
-        const btnDescargar = modalFooter.querySelector('#descargarDocumentoBtn');
-        if (cotizacion && cotizacion.id) {
-            if (btnDescargar) {
-                btnDescargar.style.display = 'flex';
-                btnDescargar.onclick = () => descargarDocumentoCotizacion(cotizacion.id);
-            }
-        } else {
-            if (btnDescargar) btnDescargar.style.display = 'none';
+        // Limpiar botones existentes (excepto cerrar)
+        const closeBtn = modalFooter.querySelector('.btn-secondary');
+        modalFooter.innerHTML = '';
+        
+        // Botón cerrar
+        const closeButton = document.createElement('button');
+        closeButton.className = 'btn-secondary';
+        closeButton.innerHTML = '<i class="fas fa-times"></i> Cerrar';
+        closeButton.onclick = () => cerrarModal('modalDetalleCotizacion');
+        modalFooter.appendChild(closeButton);
+        
+        // Botón descargar documento (si existe cotización)
+        if (tieneDocumento) {
+            const downloadBtn = document.createElement('button');
+            downloadBtn.className = 'btn-primary';
+            downloadBtn.innerHTML = '<i class="fas fa-download"></i> Descargar Documento';
+            downloadBtn.onclick = () => descargarDocumentoCotizacion(cotizacion.id);
+            modalFooter.appendChild(downloadBtn);
+        }
+        
+        // Botón ver en Drive (si existe URL)
+        if (solicitud.comprobante_url) {
+            const driveBtn = document.createElement('button');
+            driveBtn.className = 'btn-outline';
+            driveBtn.innerHTML = '<i class="fas fa-external-link-alt"></i> Ver en Drive';
+            driveBtn.onclick = () => window.open(solicitud.comprobante_url, '_blank');
+            modalFooter.appendChild(driveBtn);
         }
     }
     
+    // Abrir el modal
     abrirModal('modalDetalleCotizacion');
 }
 // =====================================================
@@ -3238,6 +4447,220 @@ function copiarUrlDrive(url) {
         showToast('✅ URL copiada al portapapeles', 'success');
     });
 }
+async function cargarImagenProxy(url, imgElement, loaderElement = null) {
+    if (!url) {
+        if (imgElement) {
+            imgElement.style.display = 'none';
+            imgElement.src = '';
+        }
+        return null;
+    }
+    
+    // Mostrar loader
+    if (loaderElement) {
+        loaderElement.style.display = 'flex';
+        loaderElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando imagen...';
+    }
+    if (imgElement) {
+        imgElement.style.display = 'none';
+        imgElement.style.opacity = '0';
+    }
+    
+    try {
+        const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            return new Promise((resolve) => {
+                const nuevaImg = new Image();
+                nuevaImg.onload = function() {
+                    if (imgElement) {
+                        imgElement.src = data.base64;
+                        imgElement.style.display = 'block';
+                        imgElement.style.opacity = '1';
+                        imgElement.setAttribute('data-loaded', 'true');
+                    }
+                    if (loaderElement) loaderElement.style.display = 'none';
+                    resolve(data.base64);
+                };
+                nuevaImg.onerror = function() {
+                    console.error('Error al cargar imagen:', url);
+                    if (loaderElement) {
+                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al cargar';
+                        loaderElement.style.display = 'flex';
+                    }
+                    if (imgElement) {
+                        imgElement.style.display = 'none';
+                    }
+                    resolve(null);
+                };
+                nuevaImg.src = data.base64;
+            });
+        } else {
+            if (loaderElement) {
+                loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> No se pudo cargar';
+                loaderElement.style.display = 'flex';
+            }
+            return null;
+        }
+    } catch (error) {
+        console.error('Error cargando imagen:', error);
+        if (loaderElement) {
+            loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error de conexión';
+            loaderElement.style.display = 'flex';
+        }
+        return null;
+    }
+}
+// =====================================================
+// CARGAR PREVIEW DE FOTO EN SERVICIO (CON PROXY)
+// =====================================================
+
+async function cargarPreviewFotoServicio(id_servicio, index, slotIndex, fotoUrl) {
+    if (!fotoUrl) {
+        return;
+    }
+    
+    const fotoId = `fotoPreviewServicio_${id_servicio}_${index}_${slotIndex}`;
+    const loaderId = `fotoLoaderServicio_${id_servicio}_${index}_${slotIndex}`;
+    const inputId = `fotoInputServicio_${id_servicio}_${index}_${slotIndex}`;
+    
+    const previewContainer = document.getElementById(fotoId);
+    const loaderContainer = document.getElementById(loaderId);
+    
+    if (!previewContainer) return;
+    
+    // Mostrar loader en el preview
+    if (loaderContainer) {
+        loaderContainer.style.display = 'flex';
+        loaderContainer.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);font-size:14px;"></i>';
+    }
+    
+    previewContainer.style.display = 'none';
+    
+    try {
+        const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(fotoUrl)}`;
+        const response = await fetch(proxyUrl, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            // Precargar la imagen
+            const img = new Image();
+            img.onload = function() {
+                previewContainer.innerHTML = `
+                    <div style="position:relative;display:inline-block;">
+                        <img src="${data.base64}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);" 
+                             data-loaded="true" data-url="${fotoUrl}">
+                        <button type="button" class="btn-remove-foto" 
+                                onclick="event.preventDefault(); eliminarFotoItemServicio(${id_servicio}, ${index}, ${slotIndex})" 
+                                style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                previewContainer.style.display = 'block';
+                if (loaderContainer) loaderContainer.style.display = 'none';
+            };
+            img.onerror = function() {
+                previewContainer.innerHTML = `
+                    <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+                        <i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:14px;"></i>
+                    </div>
+                `;
+                previewContainer.style.display = 'block';
+                if (loaderContainer) loaderContainer.style.display = 'none';
+            };
+            img.src = data.base64;
+        } else {
+            previewContainer.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+                    <i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:14px;"></i>
+                </div>
+            `;
+            previewContainer.style.display = 'block';
+            if (loaderContainer) loaderContainer.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error cargando preview:', error);
+        previewContainer.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+                <i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:14px;"></i>
+            </div>
+        `;
+        previewContainer.style.display = 'block';
+        if (loaderContainer) loaderContainer.style.display = 'none';
+    }
+}
+// =====================================================
+// CARGAR PREVIEW DE FOTO EN COMPRA DIRECTA (CON PROXY)
+// =====================================================
+
+async function cargarPreviewFotoCompra(index, fotoUrl) {
+    if (!fotoUrl) {
+        const previewSpan = document.getElementById(`fotoPreviewCompra_${index}`);
+        if (previewSpan) previewSpan.innerHTML = '';
+        return;
+    }
+    
+    const previewSpan = document.getElementById(`fotoPreviewCompra_${index}`);
+    if (!previewSpan) return;
+    
+    // Mostrar loader en el preview
+    previewSpan.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+            <i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);font-size:14px;"></i>
+        </div>
+    `;
+    
+    try {
+        const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(fotoUrl)}`;
+        const response = await fetch(proxyUrl, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            const img = new Image();
+            img.onload = function() {
+                previewSpan.innerHTML = `
+                    <div class="foto-preview-container" style="position:relative;display:inline-block;">
+                        <img src="${data.base64}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);">
+                        <button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemCompra(${index})" 
+                                style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+            };
+            img.onerror = function() {
+                previewSpan.innerHTML = `
+                    <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+                        <i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:14px;"></i>
+                    </div>
+                `;
+            };
+            img.src = data.base64;
+        } else {
+            previewSpan.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+                    <i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:14px;"></i>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error cargando preview:', error);
+        previewSpan.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+                <i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:14px;"></i>
+            </div>
+        `;
+    }
+}
 // =====================================================
 // FUNCIÓN PARA VER FOTO AMPLIADA (JEFE DE TALLER)
 // =====================================================
@@ -3320,7 +4743,15 @@ function descargarFotoAmpliadaJefeTaller() {
 // =====================================================
 // EXPORTAR FUNCIONES GLOBALES
 // =====================================================
-
+// Agregar junto a las otras exportaciones
+window.cargarPreviewFotoCompra = cargarPreviewFotoCompra;
+window.abrirModalFotosSolicitud = abrirModalFotosSolicitud;
+window.cerrarModalFotosSolicitud = cerrarModalFotosSolicitud;
+window.descargarTodasFotosSolicitud = descargarTodasFotosSolicitud;
+window.abrirModalFotosOrden = abrirModalFotosOrden;
+window.cerrarModalFotosOrden = cerrarModalFotosOrden;
+window.descargarTodasFotosOrden = descargarTodasFotosOrden;
+window.copiarUrlsFotosOrden = copiarUrlsFotosOrden;
 window.descargarDocumentoCotizacion = descargarDocumentoCotizacion;
 window.verDetalleSolicitudCompra = verDetalleSolicitudCompra;
 window.verComprobanteCompra = verComprobanteCompra;

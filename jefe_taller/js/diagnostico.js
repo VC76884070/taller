@@ -578,9 +578,53 @@ function mostrarModalDiagnostico(diagnostico) {
     if (!modalBody) return;
     
     const servicios = diagnostico.servicios || [];
-    const solicitudes = diagnostico.solicitudes_repuestos || [];
     const fotos = diagnostico.fotos || [];
     const observaciones = diagnostico.observaciones || [];
+    const diagnosticoId = diagnostico.diagnostico_id;
+    
+    // Generar IDs fijos
+    const audioId = `diagnostico_audio_${diagnosticoId}`;
+    const audioLoaderId = `diagnostico_audio_loader_${diagnosticoId}`;
+    
+    // Construir HTML con placeholders para imágenes y audio
+    let fotosHtml = '';
+    if (fotos.length > 0) {
+        fotosHtml = `
+            <div style="background: var(--gris-oscuro); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1rem;">
+                <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-camera"></i> Fotos (${fotos.length})</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.5rem;">
+                    ${fotos.map((f, index) => `
+                        <div style="position: relative; background: var(--gris-medio); border-radius: var(--radius-sm); aspect-ratio: 1; overflow: hidden; cursor: pointer;" 
+                             onclick="verImagenAmpliadaProxy('${encodeURIComponent(f.url_foto)}')">
+                            <div id="imgLoader_${diagnosticoId}_${index}" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;">
+                                <i class="fas fa-spinner fa-spin" style="color: var(--gris-texto);"></i>
+                            </div>
+                            <img id="img_${diagnosticoId}_${index}" 
+                                 data-url="${f.url_foto}"
+                                 style="width: 100%; height: 100%; object-fit: cover; display: none; opacity: 0; transition: opacity 0.3s;">
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    let audioHtml = '';
+    if (diagnostico.url_grabacion_informe) {
+        audioHtml = `
+            <div style="background: var(--gris-oscuro); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1rem;">
+                <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-microphone"></i> Grabación del Técnico</h4>
+                <div id="${audioLoaderId}" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--gris-medio); border-radius: var(--radius-sm);">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Cargando audio...</span>
+                </div>
+                <audio id="${audioId}" controls style="width: 100%; display: none;" preload="metadata">
+                    <source id="${audioId}_source" src="">
+                    Tu navegador no soporta el elemento de audio.
+                </audio>
+            </div>
+        `;
+    }
     
     modalBody.innerHTML = `
         <div class="diagnostico-detalle-modern" style="padding: 1rem;">
@@ -592,40 +636,100 @@ function mostrarModalDiagnostico(diagnostico) {
                     <div><i class="fas fa-car"></i> ${escapeHtml(diagnostico.placa || 'N/A')}</div>
                     <div><i class="fas fa-tag"></i> ${escapeHtml(diagnostico.marca || '')} ${escapeHtml(diagnostico.modelo || '')}</div>
                     <div><i class="fas fa-user"></i> Técnico: ${escapeHtml(diagnostico.tecnico_nombre || 'N/A')}</div>
+                    <div><span class="estado-badge ${diagnostico.estado}">${getEstadoTexto(diagnostico.estado)}</span></div>
                 </div>
             </div>
             
-            <!-- Información -->
+            <!-- Informe -->
             <div style="background: var(--gris-oscuro); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1rem;">
                 <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-file-alt"></i> Informe del Técnico</h4>
-                <p style="color: var(--gris-texto);">${escapeHtml(diagnostico.informe || 'Sin informe')}</p>
-                ${diagnostico.url_grabacion_informe ? `<audio controls src="${diagnostico.url_grabacion_informe}" style="width: 100%; margin-top: 0.5rem;"></audio>` : ''}
+                <p style="color: var(--gris-texto); white-space: pre-wrap;">${escapeHtml(diagnostico.informe || 'Sin informe')}</p>
+                ${diagnostico.transcripcion_informe ? `
+                    <div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--gris-medio); border-radius: var(--radius-sm);">
+                        <small style="color: var(--gris-texto);"><i class="fas fa-file-alt"></i> Transcripción:</small>
+                        <p style="margin: 0.25rem 0 0 0; color: var(--blanco);">${escapeHtml(diagnostico.transcripcion_informe)}</p>
+                    </div>
+                ` : ''}
             </div>
+            
+            <!-- Audio -->
+            ${audioHtml}
             
             <!-- Servicios -->
             <div style="background: var(--gris-oscuro); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1rem;">
                 <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-tools"></i> Servicios (${servicios.length})</h4>
                 ${servicios.length > 0 ? servicios.map(s => `
-                    <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);">
-                        <strong>${escapeHtml(s.descripcion)}</strong>
-                        ${s.precio_estimado ? `<span style="float: right;">Bs. ${s.precio_estimado}</span>` : ''}
+                    <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                        <span><strong>${escapeHtml(s.descripcion)}</strong></span>
+                        ${s.precio_estimado ? `<span style="color: var(--verde);">Bs. ${s.precio_estimado}</span>` : ''}
                     </div>
                 `).join('') : '<p class="text-muted">No hay servicios registrados</p>'}
             </div>
             
             <!-- Fotos -->
-            ${fotos.length > 0 ? `
-                <div style="background: var(--gris-oscuro); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1rem;">
-                    <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-camera"></i> Fotos (${fotos.length})</h4>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem;">
-                        ${fotos.map(f => `
-                            <img src="${f.url_foto}" style="width: 100%; height: 80px; object-fit: cover; border-radius: var(--radius-sm); cursor: pointer;" onclick="verImagenAmpliada('${f.url_foto}')">
-                        `).join('')}
-                    </div>
+            ${fotosHtml}
+            
+            <!-- Observaciones -->
+            ${observaciones.length > 0 ? `
+                <div style="background: var(--gris-oscuro); border-radius: var(--radius-lg); padding: 1rem;">
+                    <h4 style="margin-bottom: 0.5rem;"><i class="fas fa-comment"></i> Observaciones del Jefe de Taller</h4>
+                    ${observaciones.map(obs => `
+                        <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                                <span style="color: var(--gris-texto); font-size: 0.8rem;">
+                                    <i class="fas fa-user"></i> ${escapeHtml(obs.jefe_taller_nombre || 'Jefe de Taller')}
+                                </span>
+                                <span style="color: var(--gris-texto); font-size: 0.7rem;">
+                                    ${formatDate(obs.fecha_hora)}
+                                </span>
+                            </div>
+                            <p style="margin: 0.25rem 0; color: var(--blanco);">${escapeHtml(obs.observacion || '')}</p>
+                            ${obs.url_grabacion ? `
+                                <div style="margin-top: 0.5rem;">
+                                    <div id="obs_audio_loader_${obs.id}" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; background: var(--gris-medio); border-radius: var(--radius-sm);">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        <span style="font-size: 0.8rem;">Cargando audio...</span>
+                                    </div>
+                                    <audio id="obs_audio_${obs.id}" controls style="width: 100%; display: none;" preload="metadata">
+                                        <source id="obs_audio_${obs.id}_source" src="">
+                                        Tu navegador no soporta audio.
+                                    </audio>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
                 </div>
             ` : ''}
         </div>
     `;
+    
+    // =============================================
+    // CARGAR IMÁGENES DESPUÉS DE RENDERIZAR
+    // =============================================
+    setTimeout(() => {
+        // Cargar fotos
+        fotos.forEach((f, index) => {
+            const imgElement = document.getElementById(`img_${diagnosticoId}_${index}`);
+            const loaderElement = document.getElementById(`imgLoader_${diagnosticoId}_${index}`);
+            if (imgElement) {
+                cargarImagenDiagnostico(f.url_foto, imgElement, loaderElement);
+            }
+        });
+        
+        // Cargar audio del informe
+        if (diagnostico.url_grabacion_informe) {
+            cargarAudioDiagnostico(diagnostico.url_grabacion_informe, audioId, audioLoaderId);
+        }
+        
+        // Cargar audios de observaciones
+        observaciones.forEach(obs => {
+            if (obs.url_grabacion) {
+                const audioId = `obs_audio_${obs.id}`;
+                const loaderId = `obs_audio_loader_${obs.id}`;
+                cargarAudioDiagnostico(obs.url_grabacion, audioId, loaderId);
+            }
+        });
+    }, 100);
 }
 
 window.cerrarModalDiagnostico = function() {
@@ -894,6 +998,153 @@ async function enviarSolicitudRepuesto(event) {
         mostrarNotificacion('Error de conexión', 'error');
     }
 }
+// =====================================================
+// FUNCIÓN PARA CARGAR IMÁGENES CON PROXY
+// =====================================================
+const imageCache = new Map();
+
+async function cargarImagenDiagnostico(url, imgElement, loaderElement = null) {
+    if (!url) {
+        if (imgElement) imgElement.style.display = 'none';
+        return null;
+    }
+    
+    // Verificar caché
+    if (imageCache.has(url)) {
+        const cached = imageCache.get(url);
+        if (imgElement) {
+            imgElement.src = cached;
+            imgElement.style.display = 'block';
+        }
+        return cached;
+    }
+    
+    if (loaderElement) loaderElement.style.display = 'flex';
+    if (imgElement) {
+        imgElement.style.display = 'none';
+        imgElement.style.opacity = '0';
+    }
+    
+    try {
+        const proxyUrl = `${API_URL}/jefe-taller/proxy-imagen-diagnostico?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl, {
+            headers: getHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            // Guardar en caché
+            imageCache.set(url, data.base64);
+            
+            const nuevaImg = new Image();
+            return new Promise((resolve) => {
+                nuevaImg.onload = function() {
+                    if (imgElement) {
+                        imgElement.src = data.base64;
+                        imgElement.style.display = 'block';
+                        imgElement.style.opacity = '1';
+                    }
+                    if (loaderElement) loaderElement.style.display = 'none';
+                    resolve(data.base64);
+                };
+                nuevaImg.onerror = function() {
+                    if (loaderElement) {
+                        loaderElement.innerHTML = '<i class="fas fa-image"></i>';
+                        loaderElement.style.display = 'flex';
+                    }
+                    resolve(null);
+                };
+                nuevaImg.src = data.base64;
+            });
+        } else {
+            if (loaderElement) loaderElement.style.display = 'none';
+            return null;
+        }
+    } catch (error) {
+        console.error('Error cargando imagen:', error);
+        if (loaderElement) loaderElement.style.display = 'none';
+        return null;
+    }
+}
+
+// =====================================================
+// FUNCIÓN PARA CARGAR AUDIO CON PROXY
+// =====================================================
+const audioCache = new Map();
+
+async function cargarAudioDiagnostico(url, audioId, loaderId) {
+    if (!url) {
+        const loader = document.getElementById(loaderId);
+        if (loader) {
+            loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> No hay audio disponible';
+        }
+        return;
+    }
+    
+    const loader = document.getElementById(loaderId);
+    const audio = document.getElementById(audioId);
+    const source = document.getElementById(`${audioId}_source`);
+    
+    if (!audio || !source) {
+        console.warn('⚠️ Elementos de audio no encontrados');
+        return;
+    }
+    
+    // Verificar caché de Blob URLs
+    if (audioCache.has(url)) {
+        const cachedUrl = audioCache.get(url);
+        source.src = cachedUrl;
+        audio.style.display = 'block';
+        audio.load();
+        if (loader) loader.style.display = 'none';
+        return;
+    }
+    
+    try {
+        const proxyUrl = `${API_URL}/jefe-taller/proxy-audio-diagnostico?url=${encodeURIComponent(url)}`;
+        
+        const response = await fetch(proxyUrl, {
+            headers: getHeaders()
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        const localUrl = URL.createObjectURL(blob);
+        
+        // Guardar en caché
+        audioCache.set(url, localUrl);
+        
+        source.src = localUrl;
+        audio.style.display = 'block';
+        audio.load();
+        
+        if (loader) loader.style.display = 'none';
+        
+        // Revocar URL cuando termine
+        audio.addEventListener('ended', function() {
+            // No revocar inmediatamente por si se reproduce de nuevo
+        }, { once: true });
+        
+        audio.addEventListener('error', function(e) {
+            if (loader) {
+                loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al reproducir audio';
+                loader.style.display = 'flex';
+            }
+            audio.style.display = 'none';
+        });
+        
+    } catch (error) {
+        console.error('❌ Error cargando audio:', error);
+        if (loader) {
+            loader.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error: ${error.message}`;
+            loader.style.display = 'flex';
+        }
+        audio.style.display = 'none';
+    }
+}
 
 // =====================================================
 // FUNCIONES AUXILIARES
@@ -986,7 +1237,67 @@ function logout() {
     localStorage.removeItem('furia_user');
     window.location.href = window.API_BASE_URL + '/';
 }
+// =====================================================
+// VER IMAGEN AMPLIADA CON PROXY
+// =====================================================
+window.verImagenAmpliadaProxy = async function(encodedUrl) {
+    const url = decodeURIComponent(encodedUrl);
+    if (!url) return;
+    
+    // Crear modal
+    const modal = document.createElement('div');
+    modal.className = 'modal-imagen-ampliada';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:1rem;';
+    
+    // Loader
+    const loader = document.createElement('div');
+    loader.style.cssText = 'color:white;font-size:2rem;';
+    loader.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
+    modal.appendChild(loader);
+    
+    document.body.appendChild(modal);
+    
+    try {
+        const proxyUrl = `${API_URL}/jefe-taller/proxy-imagen-diagnostico?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl, {
+            headers: getHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            const img = document.createElement('img');
+            img.src = data.base64;
+            img.style.cssText = 'max-width:90%;max-height:90vh;object-fit:contain;border-radius:8px;';
+            
+            modal.innerHTML = '';
+            modal.appendChild(img);
+            
+            // Cerrar al hacer clic
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
+            
+            // Cerrar con ESC
+            const escHandler = (e) => {
+                if (e.key === 'Escape') {
+                    modal.remove();
+                    document.removeEventListener('keydown', escHandler);
+                }
+            };
+            document.addEventListener('keydown', escHandler);
+        } else {
+            loader.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error al cargar la imagen';
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        loader.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error de conexión';
+    }
+};
 
+// Mantener la función original para compatibilidad
+window.verImagenAmpliada = function(url) {
+    verImagenAmpliadaProxy(encodeURIComponent(url));
+};
 // =====================================================
 // EXPORTAR FUNCIONES GLOBALES
 // =====================================================

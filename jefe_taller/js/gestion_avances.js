@@ -48,7 +48,149 @@ console.log('📍 API_URL configurada:', API_URL);
 // =====================================================
 // FUNCIONES DE UTILIDAD
 // =====================================================
+// =====================================================
+// FUNCIONES PARA ARCHIVOS DE GOOGLE DRIVE
+// =====================================================
 
+/**
+ * Extrae el file_id de una URL de Google Drive
+ */
+function extraerFileIdDrive(url) {
+    if (!url) return null;
+    url = url.trim();
+    
+    const patterns = [
+        /[?&]id=([a-zA-Z0-9_-]+)/,
+        /\/file\/d\/([a-zA-Z0-9_-]+)/,
+        /open\?id=([a-zA-Z0-9_-]+)/,
+        /\/d\/([a-zA-Z0-9_-]+)/,
+        /thumbnail\?id=([a-zA-Z0-9_-]+)/
+    ];
+    
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match) return match[1];
+    }
+    
+    if (/^[a-zA-Z0-9_-]{10,}$/.test(url)) return url;
+    return null;
+}
+
+/**
+ * Carga una imagen desde Google Drive usando el proxy
+ */
+async function cargarImagenProxy(url, imgElement, loaderElement = null) {
+    if (!url) {
+        if (imgElement) imgElement.style.display = 'none';
+        return null;
+    }
+    
+    if (loaderElement) loaderElement.style.display = 'flex';
+    if (imgElement) {
+        imgElement.style.display = 'none';
+        imgElement.style.opacity = '0';
+    }
+    
+    try {
+        const proxyUrl = `${API_URL.replace('/avances', '')}/proxy-imagen?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl, { headers: getAuthHeaders() });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            const nuevaImg = new Image();
+            return new Promise((resolve) => {
+                nuevaImg.onload = function() {
+                    if (imgElement) {
+                        imgElement.src = data.base64;
+                        imgElement.style.display = 'block';
+                        imgElement.style.opacity = '1';
+                    }
+                    if (loaderElement) loaderElement.style.display = 'none';
+                    resolve(data.base64);
+                };
+                nuevaImg.onerror = function() {
+                    if (loaderElement) {
+                        loaderElement.innerHTML = '<i class="fas fa-image"></i>';
+                        loaderElement.style.display = 'flex';
+                    }
+                    resolve(null);
+                };
+                nuevaImg.src = data.base64;
+            });
+        } else {
+            if (loaderElement) loaderElement.style.display = 'none';
+            return null;
+        }
+    } catch (error) {
+        console.error('Error cargando imagen:', error);
+        if (loaderElement) loaderElement.style.display = 'none';
+        return null;
+    }
+}
+
+/**
+ * Carga múltiples imágenes en un contenedor
+ */
+async function cargarImagenesEnContenedor(containerId, fotos) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    // Limpiar el contenedor y mostrar loaders
+    container.innerHTML = '';
+    
+    if (!fotos || fotos.length === 0) {
+        container.innerHTML = '<p class="no-fotos">No hay fotos registradas</p>';
+        return;
+    }
+    
+    // Crear contenedor de grid
+    const grid = document.createElement('div');
+    grid.className = 'detalle-fotos-grid';
+    container.appendChild(grid);
+    
+    fotos.forEach((foto, index) => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'detalle-foto-item';
+        
+        // Loader
+        const loaderDiv = document.createElement('div');
+        loaderDiv.className = 'foto-loader';
+        loaderDiv.id = `loader_${index}`;
+        loaderDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        loaderDiv.style.display = 'flex';
+        loaderDiv.style.alignItems = 'center';
+        loaderDiv.style.justifyContent = 'center';
+        loaderDiv.style.minHeight = '100px';
+        loaderDiv.style.background = 'var(--gris-oscuro)';
+        loaderDiv.style.borderRadius = 'var(--radius-sm)';
+        itemDiv.appendChild(loaderDiv);
+        
+        // Imagen
+        const img = document.createElement('img');
+        img.id = `img_${index}`;
+        img.style.display = 'none';
+        img.style.width = '100%';
+        img.style.height = '200px';
+        img.style.objectFit = 'cover';
+        img.style.borderRadius = 'var(--radius-sm)';
+        img.style.cursor = 'pointer';
+        img.onclick = () => verFotoAmpliada(foto.url);
+        itemDiv.appendChild(img);
+        
+        // Comentario
+        if (foto.comentario) {
+            const commentDiv = document.createElement('div');
+            commentDiv.className = 'detalle-foto-comentario';
+            commentDiv.textContent = foto.comentario;
+            itemDiv.appendChild(commentDiv);
+        }
+        
+        grid.appendChild(itemDiv);
+        
+        // Cargar imagen
+        cargarImagenProxy(foto.url, img, loaderDiv);
+    });
+}
 function getAuthHeaders() {
     let token = localStorage.getItem('furia_token');
     if (!token) token = localStorage.getItem('token');
@@ -291,10 +433,6 @@ async function cargarAvancesProcesados(forceRefresh = false) {
     }
 }
 
-// =====================================================
-// RENDERIZADO OPTIMIZADO
-// =====================================================
-
 function renderizarAvancesPendientes() {
     const container = document.getElementById('avancesPendientesContainer');
     if (!container) return;
@@ -311,7 +449,6 @@ function renderizarAvancesPendientes() {
         return;
     }
 
-    // Mostrar indicador si hay más avances (basado en el contador)
     const totalBadge = document.getElementById('pendientesCount');
     const hayMas = totalBadge && parseInt(totalBadge.textContent) > 10;
     
@@ -322,26 +459,37 @@ function renderizarAvancesPendientes() {
         </div>
     ` : '';
 
-    container.innerHTML = hayMasHtml + avancesPendientes.map(avance => {
-        let fotosPreview = '';
-        if (avance.fotos && avance.fotos.length > 0) {
-            fotosPreview = avance.fotos.slice(0, 3).map(f => `
-                <img src="${f.url}" class="avance-foto-mini" onclick="event.stopPropagation(); verFotoAmpliada('${f.url}')">
-            `).join('');
-            if (avance.fotos.length > 3) {
-                fotosPreview += `<span class="avance-foto-mas">+${avance.fotos.length - 3}</span>`;
-            }
-        }
+    container.innerHTML = hayMasHtml + avancesPendientes.map((avance, index) => {
+        const fotos = avance.fotos || [];
+        const fotosHtml = fotos.length > 0 ? `
+            <div class="avance-fotos" id="fotosPreview_${avance.id}">
+                ${fotos.slice(0, 3).map((f, i) => `
+                    <div class="foto-mini-wrapper" style="display:inline-block; position:relative; width:50px; height:50px; margin-right:4px; border-radius:4px; overflow:hidden; background:var(--gris-oscuro);">
+                        <div id="miniLoader_${avance.id}_${i}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%;">
+                            <i class="fas fa-spinner fa-spin" style="font-size:12px; color:var(--gris-texto);"></i>
+                        </div>
+                        <img id="miniImg_${avance.id}_${i}" 
+                             src="" 
+                             style="display:none; width:100%; height:100%; object-fit:cover; cursor:pointer;"
+                             onclick="event.stopPropagation(); verFotoAmpliada('${f.url}')"
+                             data-url="${f.url}"
+                             data-avance-id="${avance.id}"
+                             data-index="${i}">
+                    </div>
+                `).join('')}
+                ${fotos.length > 3 ? `<span class="avance-foto-mas">+${fotos.length - 3}</span>` : ''}
+            </div>
+        ` : '';
 
         return `
-            <div class="avance-card">
+            <div class="avance-card" data-avance-id="${avance.id}">
                 <div class="avance-card-header">
                     <span class="avance-titulo">${escapeHtml(avance.titulo)}</span>
                     <span class="avance-fecha">${formatDate(avance.fecha_creacion)}</span>
                 </div>
                 <div class="avance-card-body">
                     <div class="avance-descripcion">${escapeHtml(avance.descripcion || 'Sin descripción')}</div>
-                    <div class="avance-fotos">${fotosPreview}</div>
+                    ${fotosHtml}
                     <div class="avance-info-row">
                         <span class="avance-tecnico"><i class="fas fa-user"></i> ${escapeHtml(avance.tecnico_nombre)}</span>
                         <span class="avance-orden"><i class="fas fa-tag"></i> ${escapeHtml(avance.orden_codigo)}</span>
@@ -361,8 +509,21 @@ function renderizarAvancesPendientes() {
             </div>
         `;
     }).join('');
-}
 
+    // 🔥 Cargar las miniaturas después de renderizar
+    setTimeout(() => {
+        avancesPendientes.forEach(avance => {
+            const fotos = avance.fotos || [];
+            fotos.slice(0, 3).forEach((f, i) => {
+                const imgElement = document.getElementById(`miniImg_${avance.id}_${i}`);
+                const loaderElement = document.getElementById(`miniLoader_${avance.id}_${i}`);
+                if (imgElement && f.url) {
+                    cargarImagenProxy(f.url, imgElement, loaderElement);
+                }
+            });
+        });
+    }, 100);
+}
 function renderizarAvancesProcesados() {
     const container = document.getElementById('avancesAprobadosContainer');
     if (!container) return;
@@ -379,16 +540,27 @@ function renderizarAvancesProcesados() {
         return;
     }
 
-    container.innerHTML = avancesProcesados.map(avance => {
-        let fotosPreview = '';
-        if (avance.fotos && avance.fotos.length > 0) {
-            fotosPreview = avance.fotos.slice(0, 3).map(f => `
-                <img src="${f.url}" class="avance-foto-mini" onclick="event.stopPropagation(); verFotoAmpliada('${f.url}')">
-            `).join('');
-            if (avance.fotos.length > 3) {
-                fotosPreview += `<span class="avance-foto-mas">+${avance.fotos.length - 3}</span>`;
-            }
-        }
+    container.innerHTML = avancesProcesados.map((avance) => {
+        const fotos = avance.fotos || [];
+        const fotosHtml = fotos.length > 0 ? `
+            <div class="avance-fotos" id="fotosPreviewProc_${avance.id}">
+                ${fotos.slice(0, 3).map((f, i) => `
+                    <div class="foto-mini-wrapper" style="display:inline-block; position:relative; width:50px; height:50px; margin-right:4px; border-radius:4px; overflow:hidden; background:var(--gris-oscuro);">
+                        <div id="miniLoaderProc_${avance.id}_${i}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%;">
+                            <i class="fas fa-spinner fa-spin" style="font-size:12px; color:var(--gris-texto);"></i>
+                        </div>
+                        <img id="miniImgProc_${avance.id}_${i}" 
+                             src="" 
+                             style="display:none; width:100%; height:100%; object-fit:cover; cursor:pointer;"
+                             onclick="event.stopPropagation(); verFotoAmpliada('${f.url}')"
+                             data-url="${f.url}"
+                             data-avance-id="${avance.id}"
+                             data-index="${i}">
+                    </div>
+                `).join('')}
+                ${fotos.length > 3 ? `<span class="avance-foto-mas">+${fotos.length - 3}</span>` : ''}
+            </div>
+        ` : '';
 
         return `
             <div class="avance-card">
@@ -398,7 +570,7 @@ function renderizarAvancesProcesados() {
                 </div>
                 <div class="avance-card-body">
                     <div class="avance-descripcion">${escapeHtml(avance.descripcion || 'Sin descripción')}</div>
-                    <div class="avance-fotos">${fotosPreview}</div>
+                    ${fotosHtml}
                     <div class="avance-info-row">
                         <span class="avance-tecnico"><i class="fas fa-user"></i> ${escapeHtml(avance.tecnico_nombre)}</span>
                         <span class="avance-orden"><i class="fas fa-tag"></i> ${escapeHtml(avance.orden_codigo)}</span>
@@ -420,6 +592,20 @@ function renderizarAvancesProcesados() {
             </div>
         `;
     }).join('');
+
+    // 🔥 Cargar las miniaturas después de renderizar
+    setTimeout(() => {
+        avancesProcesados.forEach(avance => {
+            const fotos = avance.fotos || [];
+            fotos.slice(0, 3).forEach((f, i) => {
+                const imgElement = document.getElementById(`miniImgProc_${avance.id}_${i}`);
+                const loaderElement = document.getElementById(`miniLoaderProc_${avance.id}_${i}`);
+                if (imgElement && f.url) {
+                    cargarImagenProxy(f.url, imgElement, loaderElement);
+                }
+            });
+        });
+    }, 100);
 }
 
 // =====================================================
@@ -441,10 +627,6 @@ function iniciarPolling() {
         }
     }, 30000); // 30 segundos
 }
-
-// =====================================================
-// VER DETALLE AVANCE
-// =====================================================
 
 window.verDetalleAvance = async function(avanceId) {
     console.log(`🔍 Ver detalle del avance ${avanceId}`);
@@ -468,17 +650,7 @@ window.verDetalleAvance = async function(avanceId) {
         }
 
         const avance = data.avance;
-        
-        const fotosHtml = avance.fotos && avance.fotos.length > 0 ? `
-            <div class="detalle-fotos-grid">
-                ${avance.fotos.map(foto => `
-                    <div class="detalle-foto-item">
-                        <img src="${foto.url}" onclick="verFotoAmpliada('${foto.url}')">
-                        <div class="detalle-foto-comentario">${escapeHtml(foto.comentario || 'Sin comentario')}</div>
-                    </div>
-                `).join('')}
-            </div>
-        ` : '<p>No hay fotos registradas</p>';
+        const fotos = avance.fotos || [];
 
         const modalBody = document.getElementById('detalleAvanceBody');
         modalBody.innerHTML = `
@@ -493,10 +665,17 @@ window.verDetalleAvance = async function(avanceId) {
                 ${avance.fecha_aprobacion ? `<p><strong><i class="fas fa-check-circle"></i> Fecha de aprobación:</strong> ${formatDate(avance.fecha_aprobacion)}</p>` : ''}
             </div>
             <div class="fotos-section">
-                <h4><i class="fas fa-images"></i> Fotos del avance (${avance.fotos?.length || 0})</h4>
-                ${fotosHtml}
+                <h4><i class="fas fa-images"></i> Fotos del avance (${fotos.length})</h4>
+                <div id="detalleFotosContainer"></div>
             </div>
         `;
+
+        // 🔥 Cargar las fotos usando la función mejorada
+        if (fotos.length > 0) {
+            await cargarImagenesEnContenedor('detalleFotosContainer', fotos);
+        } else {
+            document.getElementById('detalleFotosContainer').innerHTML = '<p class="no-fotos">No hay fotos registradas</p>';
+        }
 
         abrirModal('modalDetalleAvance');
     } catch (error) {

@@ -24,6 +24,7 @@ from googleapiclient.errors import HttpError
 from flask import current_app
 import logging
 import torch
+torch.set_num_threads(2)
 
 logger = logging.getLogger(__name__)
 
@@ -52,17 +53,29 @@ RETRY_DELAY = 2
 UPLOAD_TIMEOUT = 120
 
 # =====================================================
-# CONFIGURACIÓN DE WHISPER - OPTIMIZADA PARA RENDER
+# CONFIGURACIÓN DE WHISPER - COMPATIBLE CON VPS Y RENDER
 # =====================================================
-CACHE_DIR = os.getenv('WHISPER_CACHE_DIR', '/app/.cache/whisper')
+
+DEFAULT_CACHE = os.path.join(tempfile.gettempdir(), "whisper_cache")
+
+CACHE_DIR = os.getenv(
+    "WHISPER_CACHE_DIR",
+    DEFAULT_CACHE
+)
+
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-os.environ['XDG_CACHE_HOME'] = '/app/.cache'
+os.environ["XDG_CACHE_HOME"] = os.path.dirname(CACHE_DIR)
 
 WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'tiny')
 WHISPER_LANGUAGE = os.getenv('WHISPER_LANGUAGE', 'es')
-WHISPER_USE_FP16 = os.getenv('WHISPER_USE_FP16', 'true').lower() == 'true'
-WHISPER_DEVICE = os.getenv('WHISPER_DEVICE', 'cpu')
+WHISPER_USE_FP16 = (
+    os.getenv("WHISPER_USE_FP16", "false").lower() == "true"
+)
+WHISPER_DEVICE = os.getenv(
+    "WHISPER_DEVICE",
+    "cuda" if torch.cuda.is_available() else "cpu"
+)
 
 _whisper_model = None
 _whisper_model_loaded = False
@@ -102,8 +115,8 @@ def get_whisper_model():
             device=WHISPER_DEVICE,
             download_root=CACHE_DIR
         )
-        
-        if WHISPER_USE_FP16:
+
+        if WHISPER_DEVICE == "cuda" and WHISPER_USE_FP16:
             try:
                 _whisper_model = _whisper_model.half()
                 logger.info("✅ Modelo convertido a FP16 (mitad de memoria)")

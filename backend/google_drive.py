@@ -2,6 +2,7 @@
 # GOOGLE DRIVE - CON OAUTH 2.0 VÍA VARIABLES DE ENTORNO
 # ESTRUCTURA: {codigo_orden}/{modulo}/{subcarpeta}
 # VERSIÓN COMPLETA CON SOPORTE PARA COTIZACIONES Y TÉCNICO
+# CORREGIDO: FFMPEG PATH PARA VPS
 # =====================================================
 
 import os
@@ -13,6 +14,7 @@ import socket
 import ssl
 import re
 import tempfile
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from google.auth.transport.requests import Request
@@ -27,6 +29,25 @@ import torch
 torch.set_num_threads(2)
 
 logger = logging.getLogger(__name__)
+
+# =====================================================
+# 🔧 CONFIGURAR FFMPEG PARA WHISPER EN VPS
+# =====================================================
+
+# FORZAR RUTA DE FFMPEG
+os.environ['PATH'] = '/usr/bin:/usr/local/bin:' + os.environ.get('PATH', '')
+os.environ['LD_LIBRARY_PATH'] = '/usr/lib/x86_64-linux-gnu:' + os.environ.get('LD_LIBRARY_PATH', '')
+
+# Verificar que FFmpeg está disponible
+try:
+    result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True)
+    if result.returncode == 0:
+        ffmpeg_version = result.stdout.split()[2] if len(result.stdout.split()) > 2 else "desconocida"
+        logger.info(f"✅ FFmpeg disponible para Whisper: {ffmpeg_version}")
+    else:
+        logger.error("❌ FFmpeg no responde")
+except Exception as e:
+    logger.error(f"❌ FFmpeg no encontrado: {str(e)}")
 
 # =====================================================
 # WHISPER - TRANSCRIPCIÓN DE AUDIO (OPTIMIZADO PARA RENDER)
@@ -86,6 +107,7 @@ logger.info(f"   📁 Caché: {CACHE_DIR}")
 logger.info(f"   📦 Modelo: {WHISPER_MODEL}")
 logger.info(f"   🔢 FP16: {WHISPER_USE_FP16}")
 logger.info(f"   💻 Dispositivo: {WHISPER_DEVICE}")
+logger.info(f"   🔧 PATH FFmpeg: {os.environ.get('PATH', 'No definido')[:100]}...")
 
 
 def get_whisper_model():
@@ -94,6 +116,18 @@ def get_whisper_model():
     
     if not WHISPER_AVAILABLE:
         logger.warning("⚠️ Whisper no está disponible")
+        return None
+    
+    # Verificar FFmpeg nuevamente antes de cargar
+    try:
+        result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error("❌ FFmpeg no disponible al cargar Whisper")
+            _whisper_load_error = "FFmpeg no disponible"
+            return None
+    except Exception as e:
+        logger.error(f"❌ Error verificando FFmpeg: {str(e)}")
+        _whisper_load_error = str(e)
         return None
     
     if _whisper_model_loaded and _whisper_model is not None:
@@ -967,7 +1001,7 @@ class GoogleDriveService:
             return None
     
     # =====================================================
-    # TRANSCRIPCIÓN DE AUDIO CON WHISPER
+    # TRANSCRIPCIÓN DE AUDIO CON WHISPER (CORREGIDO)
     # =====================================================
     
     def transcribir_audio(self, url_audio, language=None, model_name=None):
@@ -976,6 +1010,26 @@ class GoogleDriveService:
             return {
                 'success': False,
                 'error': 'Whisper no está instalado. Ejecuta: pip install openai-whisper'
+            }
+        
+        # 🔧 FORZAR FFMPEG EN EL ENTORNO DE WHISPER
+        os.environ['PATH'] = '/usr/bin:/usr/local/bin:' + os.environ.get('PATH', '')
+        os.environ['LD_LIBRARY_PATH'] = '/usr/lib/x86_64-linux-gnu:' + os.environ.get('LD_LIBRARY_PATH', '')
+        
+        # Verificar FFmpeg antes de continuar
+        try:
+            result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True)
+            if result.returncode != 0:
+                logger.error("❌ FFmpeg no disponible en transcribir_audio")
+                return {
+                    'success': False,
+                    'error': 'FFmpeg no disponible en el sistema'
+                }
+        except Exception as e:
+            logger.error(f"❌ Error verificando FFmpeg: {str(e)}")
+            return {
+                'success': False,
+                'error': f'FFmpeg no encontrado: {str(e)}'
             }
         
         if not url_audio:
@@ -1064,6 +1118,9 @@ class GoogleDriveService:
                 'success': False,
                 'error': 'Whisper no está instalado'
             }
+        
+        # 🔧 FORZAR FFMPEG
+        os.environ['PATH'] = '/usr/bin:/usr/local/bin:' + os.environ.get('PATH', '')
         
         model = get_whisper_model()
         if model is None:

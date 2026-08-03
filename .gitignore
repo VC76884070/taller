@@ -1,10 +1,120 @@
+# ============================================================
+# 🐍 PYTHON
+# ============================================================
 venv/
 .venv/
-.env
-__pycache__/
+env/
+ENV/
+env.bak/
+venv.bak/
+pythonenv*
+pyvenv.cfg
 *.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ============================================================
+# 🔐 AMBIENTES Y CREDENCIALES
+# ============================================================
+# ⚠️ NUNCA SUBIR ARCHIVOS CON CREDENCIALES REALES
+# Ambientes con credenciales reales
+.env
+.env.produccion
+.env.local
+.env.*.local
+.env.backup
+.env.desarrollo
+.env.example
+
+# Credenciales y tokens
 credentials/
-# Tokens de autenticación
 backend/token.pickle
 *.pickle
-backend/generar_token.py
+*.token
+*.key
+*.pem
+*.crt
+oauth-credentials.json
+google-drive-credentials.json
+service-account.json
+
+# ============================================================
+# 📁 CACHÉ Y TEMPORALES
+# ============================================================
+*.log
+logs/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+*.db
+*.sqlite
+*.sqlite3
+
+# ============================================================
+# 🖥️ IDE Y EDITORES
+# ============================================================
+.vscode/
+.idea/
+*.iml
+.sublime-*
+.project
+.classpath
+.settings/
+*.code-workspace
+
+# ============================================================
+# 📦 DEPENDENCIAS
+# ============================================================
+node_modules/
+package-lock.json
+yarn.lock
+bower_components/
+
+# ============================================================
+# 📁 ARCHIVOS SUBIDOS (LOCALES)
+# ============================================================
+uploads/
+media/
+static/uploads/
+static/media/
+downloads/
+
+# ============================================================
+# 🧪 TESTING
+# ============================================================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+*.cover
+nosetests.xml
+coverage.xml
+
+# ============================================================
+# 📋 OTROS
+# ============================================================
+*.bak
+*.backup
+*.orig
+*.rej
+*.patch
+*.diff
+*.sublime-project
+*.sublime-workspace

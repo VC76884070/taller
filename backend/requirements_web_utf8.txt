@@ -1,0 +1,84 @@
+# =====================================================
+# DEPENDENCIAS PRINCIPALES
+# =====================================================
+Flask
+Flask-Cors
+Werkzeug
+Jinja2
+click
+itsdangerous
+MarkupSafe
+blinker
+
+# =====================================================
+# AUTENTICACIÓN Y SEGURIDAD
+# =====================================================
+PyJWT
+bcrypt
+annotated-types
+pydantic
+pydantic_core
+typing-inspection
+typing_extensions
+
+# =====================================================
+# SUPABASE Y CLIENTES
+# =====================================================
+supabase
+postgrest
+gotrue
+realtime
+storage3
+supafunc
+
+# =====================================================
+# HTTP
+# =====================================================
+httpx
+httpcore
+httplib2
+
+# =====================================================
+# GOOGLE DRIVE / CLOUD
+# =====================================================
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+cloudinary
+
+# =====================================================
+# HTTP Y UTILIDADES
+# =====================================================
+requests
+certifi
+charset-normalizer
+idna
+urllib3
+
+# =====================================================
+# PDF Y REPORTES (SIN DEPENDENCIAS EXTERNAS)
+# =====================================================
+reportlab
+
+# =====================================================
+# UTILIDADES GENERALES
+# =====================================================
+python-dotenv
+python-dateutil
+six
+colorama
+deprecation
+packaging
+more-itertools
+setuptools
+
+# =====================================================
+# SERVICIOS ADICIONALES
+# =====================================================
+gunicorn
+
+
+openai-whisper
+torch
+torchaudio

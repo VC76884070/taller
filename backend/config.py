@@ -1,4 +1,4 @@
-# config.py - Configuración por entorno usando APP_ENV (sin detección de rama)
+# config.py - Configuración por entorno usando APP_ENV (sin detección de rama)NUEVOOO
 import os
 import logging
 from pathlib import Path

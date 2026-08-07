@@ -12,7 +12,7 @@ import datetime
 # CONFIGURACIÓN INICIAL
 # =====================================================
 
-# Cargar variables de entorno (config.py ya lo maneja, pero mantenemos por compatibilidad)
+# Cargar variables de entorno (config.py ya lo maneja, pero mantenemos por compatibilidad)NUEVOOO
 load_dotenv()
 
 # Agregar el directorio actual al path para importar módulos

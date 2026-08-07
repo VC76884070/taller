@@ -8,18 +8,23 @@ from dotenv import load_dotenv
 import jwt
 import datetime
 
-# Cargar variables de entorno
+# =====================================================
+# CONFIGURACIÓN INICIAL
+# =====================================================
+
+# Cargar variables de entorno (config.py ya lo maneja, pero mantenemos por compatibilidad)
 load_dotenv()
 
 # Agregar el directorio actual al path para importar módulos
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Configurar logging
-logging.basicConfig(level=logging.DEBUG)
+# Configurar logging según el entorno
+log_level = logging.DEBUG if config.IS_DEVELOPMENT else logging.WARNING
+logging.basicConfig(level=log_level)
 logger = logging.getLogger(__name__)
 
 # =====================================================
-# CONFIGURACIÓN DE RUTAS PARA RAILWAY
+# CONFIGURACIÓN DE RUTAS
 # =====================================================
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(BACKEND_DIR)
@@ -32,7 +37,7 @@ app = Flask(__name__,
             static_url_path='')
 
 # =====================================================
-# CONFIGURACIÓN
+# CONFIGURACIÓN DE LA APP
 # =====================================================
 app.config['SECRET_KEY'] = config.SECRET_KEY
 app.config['CORS_HEADERS'] = 'Content-Type'
@@ -40,6 +45,7 @@ app.config['JSON_SORT_KEYS'] = False
 app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 app.config['JSON_AS_ASCII'] = False
+app.config['DEBUG'] = config.DEBUG  # ← USA LA CONFIGURACIÓN DEL ENTORNO
 
 # =====================================================
 # GOOGLE DRIVE CONFIGURATION
@@ -53,10 +59,29 @@ if not app.config['GOOGLE_DRIVE_CREDENTIALS_FILE']:
 if not app.config['GOOGLE_DRIVE_FOLDER_ID']:
     logger.warning("⚠️ GOOGLE_DRIVE_FOLDER_ID no configurado")
 
-CORS(app, 
-     resources={r"/api/*": {"origins": "*"}}, 
-     supports_credentials=True,
-     expose_headers=['Content-Type', 'Authorization'])
+# =====================================================
+# CORS CONFIGURADO SEGÚN ENTORNO
+# =====================================================
+if config.IS_DEVELOPMENT:
+    # Desarrollo: permitir todo
+    CORS(app, 
+         resources={r"/api/*": {"origins": "*"}}, 
+         supports_credentials=True,
+         expose_headers=['Content-Type', 'Authorization'])
+    logger.info("🔓 CORS: Modo desarrollo (todos los orígenes permitidos)")
+else:
+    # Producción: solo dominios específicos
+    allowed_origins = [
+        f"https://{config.SERVER_NAME}",
+        f"http://{config.SERVER_NAME}",
+        f"https://www.{config.SERVER_NAME}",
+        f"http://www.{config.SERVER_NAME}",
+    ]
+    CORS(app, 
+         resources={r"/api/*": {"origins": allowed_origins}}, 
+         supports_credentials=True,
+         expose_headers=['Content-Type', 'Authorization'])
+    logger.info(f"🔒 CORS: Modo producción (solo {allowed_origins})")
 
 # =====================================================
 # MIDDLEWARE
@@ -64,21 +89,47 @@ CORS(app,
 
 @app.after_request
 def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = '*'
+    # En desarrollo, permitir todo; en producción, solo origen específico
+    if config.IS_DEVELOPMENT:
+        response.headers['Access-Control-Allow-Origin'] = '*'
+    else:
+        origin = request.headers.get('Origin')
+        if origin:
+            allowed = [
+                f"https://{config.SERVER_NAME}",
+                f"http://{config.SERVER_NAME}",
+                f"https://www.{config.SERVER_NAME}",
+                f"http://www.{config.SERVER_NAME}",
+            ]
+            if origin in allowed:
+                response.headers['Access-Control-Allow-Origin'] = origin
+    
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     return response
 
 @app.route('/api-config.js')
 def serve_api_config():
+    # Determinar la URL base según entorno
+    if config.IS_PRODUCTION:
+        api_base = f"https://{config.SERVER_NAME}"
+    else:
+        # En desarrollo, usar localhost con el puerto correcto
+        api_base = os.getenv('API_BASE_URL', 'http://localhost:5000')
+    
     config_js = f"""// Configuración automática de API - Generada por Flask
 (function() {{
     const isProduction = window.location.hostname !== 'localhost' && 
                         !window.location.hostname.includes('127.0.0.1') &&
                         !window.location.hostname.includes('192.168.');
     
-    window.API_BASE_URL = isProduction ? '' : 'http://localhost:5000';
+    window.API_BASE_URL = isProduction ? '' : '{api_base}';
     window.IS_PRODUCTION = isProduction;
+    window.APP_ENV = '{config.APP_ENV}';  // ← EXPONER EL ENTORNO
+    
+    console.log('🌍 APP_ENV:', window.APP_ENV);
+    console.log('🔗 API_BASE_URL:', window.API_BASE_URL);
+    console.log('📡 IS_PRODUCTION:', window.IS_PRODUCTION);
     
     const originalFetch = window.fetch;
     window.fetch = function(url, options) {{
@@ -594,7 +645,9 @@ def test_api():
         'status': 'ok',
         'message': 'API de FURIA MOTOR funcionando correctamente',
         'version': '2.0.0',
-        'environment': 'railway' if is_railway() else 'local',
+        'environment': config.APP_ENV,  # ← USAR CONFIG
+        'is_production': config.IS_PRODUCTION,
+        'is_development': config.IS_DEVELOPMENT,
         'google_drive_configured': bool(app.config.get('GOOGLE_DRIVE_CREDENTIALS_FILE') and app.config.get('GOOGLE_DRIVE_FOLDER_ID'))
     }), 200
 
@@ -602,6 +655,7 @@ def test_api():
 def health_check():
     return jsonify({
         'status': 'healthy',
+        'environment': config.APP_ENV,
         'timestamp': __import__('datetime').datetime.now().isoformat()
     }), 200
 
@@ -632,17 +686,21 @@ def internal_error(error):
 # =====================================================
 
 if __name__ == '__main__':
+    # Usar config para determinar puerto y debug
     port = int(os.environ.get('PORT', 5000))
-    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    debug_mode = config.DEBUG  # ← USA LA CONFIGURACIÓN DEL ENTORNO
     
+    # En Railway, forzar debug=False
     if is_railway():
         debug_mode = False
     
     print("="*60)
     print("🚀 FURIA MOTOR COMPANY - Sistema de Gestión")
     print("="*60)
-    print(f"📡 Servidor iniciado en: http://0.0.0.0:{port}")
+    print(f"🌍 AMBIENTE: {config.APP_ENV.upper()}")
+    print(f"📡 Servidor: http://0.0.0.0:{port}")
     print(f"🔧 Modo debug: {debug_mode}")
+    print(f"🔗 Supabase: {config.SUPABASE_URL}")
     print("="*60)
     
     app.run(debug=debug_mode, host='0.0.0.0', port=port, threaded=True)

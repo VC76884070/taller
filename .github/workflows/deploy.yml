@@ -1,0 +1,62 @@
+name: Deploy Furia Motor
+
+on:
+  push:
+    branches:
+      - master
+      - ia-desarrollo
+
+jobs:
+  deploy-development:
+    name: Deploy a Desarrollo
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/ia-desarrollo'
+    
+    steps:
+      - name: Deploy to Development
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_PORT || 22 }}
+          script: |
+            echo "🚀 Desplegando en DESARROLLO..."
+            cd /home/vania/apps/taller-desarrollo/backend
+            echo "📥 Pull de cambios..."
+            git pull origin ia-desarrollo
+            echo "🐍 Activando virtualenv..."
+            source /home/vania/apps/taller-desarrollo/venv/bin/activate
+            echo "📦 Instalando dependencias..."
+            pip install -r requirements.txt
+            echo "🔄 Reiniciando Gunicorn..."
+            sudo systemctl restart taller-dev
+            echo "✅ Despliegue completado!"
+            echo "🌐 https://dev.furiamotorcompany.com"
+
+  deploy-production:
+    name: Deploy a Producción
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    
+    steps:
+      - name: Deploy to Production
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_PORT || 22 }}
+          script: |
+            echo "🚀 Desplegando en PRODUCCIÓN..."
+            cd /home/vania/apps/taller/production/backend
+            echo "📥 Pull de cambios..."
+            git pull origin master
+            echo "🐍 Activando virtualenv..."
+            source /home/vania/apps/taller/production/venv/bin/activate
+            echo "📦 Instalando dependencias..."
+            pip install -r requirements.txt
+            echo "🔄 Reiniciando Gunicorn..."
+            sudo systemctl restart taller-prod
+            echo "✅ Despliegue completado!"
+            echo "🌐 https://www.furiamotorcompany.com"

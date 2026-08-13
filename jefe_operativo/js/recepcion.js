@@ -3262,60 +3262,68 @@ function generarHTMLReporte(detalle) {
     const jefeNombre2 = detalle.jefe_operativo_2?.nombre || null;
 
     // ============================================================
-    // HTML CORREGIDO - SIN ESPACIOS EN BLANCO
+    // HTML MEJORADO - 2 LINEAS DE FOTOS Y FIRMAS CON MÁS ESPACIO
     // ============================================================
     return `<div class="reporte-container" style="
         width: 100%;
-        padding: 8mm 8mm 6mm 8mm;
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 4mm 5mm 4mm 5mm;
         font-family: 'Segoe UI', Arial, sans-serif;
         background: white;
         color: #222;
-        font-size: 10.5px;
-        line-height: 1.5;
+        font-size: 10px;
+        line-height: 1.4;
         box-sizing: border-box;
     ">
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:3px solid #C1121F; padding-bottom:8px; margin-bottom:10px;">
+        <!-- HEADER -->
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:3px solid #C1121F; padding-bottom:6px; margin-bottom:8px;">
             <div>
-                <h1 style="font-size:20px; color:#C1121F; margin:0;">FURIA <span style="color:#222;">MOTOR</span></h1>
-                <div style="font-size:7px; color:#888; margin-top:1px;">TALLER AUTOMOTRIZ ESPECIALIZADO</div>
+                <h1 style="font-size:18px; color:#C1121F; margin:0;">FURIA <span style="color:#222;">MOTOR</span></h1>
+                <div style="font-size:6.5px; color:#888; margin-top:1px;">TALLER AUTOMOTRIZ ESPECIALIZADO</div>
             </div>
-            <div style="text-align:right; font-size:7px; line-height:1.4;">
-                <strong style="font-size:8px; color:#C1121F;">FURIA MOTOR COMPANY</strong><br>Cochabamba, Bolivia<br>
+            <div style="text-align:right; font-size:6.5px; line-height:1.3;">
+                <strong style="font-size:7.5px; color:#C1121F;">FURIA MOTOR COMPANY</strong><br>Cochabamba, Bolivia<br>
                 <span style="font-size:6px; color:#999;">Tel: +591 4 1234567</span>
             </div>
         </div>
         
-        <div style="text-align:center; margin-bottom:10px;">
-            <h2 style="font-size:13px; color:#C1121F; margin:0; letter-spacing:2px; text-transform:uppercase;">Orden de Trabajo - Recepción</h2>
-            <div style="font-size:12px; font-weight:bold; background:#f0f0f0; display:inline-block; padding:3px 18px; border-radius:4px; margin-top:3px; color:#C1121F; border:1px solid #ddd;">
+        <!-- TÍTULO -->
+        <div style="text-align:center; margin-bottom:8px;">
+            <h2 style="font-size:12px; color:#C1121F; margin:0; letter-spacing:2px; text-transform:uppercase;">Orden de Trabajo - Recepción</h2>
+            <div style="font-size:11px; font-weight:bold; background:#f0f0f0; display:inline-block; padding:2px 16px; border-radius:4px; margin-top:2px; color:#C1121F; border:1px solid #ddd;">
                 # ${detalle.codigo_unico || 'OT-N/A'}
             </div>
         </div>
         
-        <div style="background:#f8f8f8; border-radius:4px; padding:6px 10px; margin-bottom:8px; border:1px solid #eee;">
-            <div style="display:flex; flex-wrap:wrap; gap:4px 16px; font-size:9px;">
+        <!-- INFORMACIÓN GENERAL -->
+        <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; margin-bottom:6px; border:1px solid #eee;">
+            <div style="display:flex; flex-wrap:wrap; gap:3px 14px; font-size:8.5px;">
                 <span><strong>📅 Fecha:</strong> ${fechaIngreso}</span>
-                <span><strong>📊 Estado:</strong> <span style="background:#ffc107; color:#222; padding:1px 10px; border-radius:12px; font-size:7.5px; font-weight:600;">${detalle.estado_global || 'En Recepción'}</span></span>
+                <span><strong>📊 Estado:</strong> <span style="background:#ffc107; color:#222; padding:1px 10px; border-radius:12px; font-size:7px; font-weight:600;">${detalle.estado_global || 'En Recepción'}</span></span>
                 <span><strong>🆔 ID:</strong> #${detalle.id || 'N/A'}</span>
                 ${jefeNombre1 ? `<span><strong>👨‍💼 Jefe Op.:</strong> ${jefeNombre1}</span>` : ''}
                 ${jefeNombre2 ? `<span><strong>👨‍💼 Jefe Op. 2:</strong> ${jefeNombre2}</span>` : ''}
             </div>
         </div>
         
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
-            <div style="background:#f8f8f8; border-radius:4px; padding:6px 10px; border:1px solid #eee;">
-                <div style="font-weight:700; font-size:9px; color:#C1121F; margin-bottom:4px; border-bottom:1px solid #ddd; padding-bottom:3px;">👤 Datos del Cliente</div>
-                <div style="font-size:9px; line-height:1.6;">
+        <!-- CLIENTE + VEHÍCULO (2 COLUMNAS) -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:6px;">
+            <!-- CLIENTE -->
+            <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; border:1px solid #eee;">
+                <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:3px; border-bottom:1px solid #ddd; padding-bottom:2px;">👤 Datos del Cliente</div>
+                <div style="font-size:8.5px; line-height:1.6;">
                     <div><strong>Nombre:</strong> ${detalle.cliente_nombre || 'No registrado'}</div>
                     <div><strong>Teléfono:</strong> ${detalle.cliente_telefono || 'No registrado'}</div>
                     <div><strong>Ubicación:</strong> ${detalle.cliente_ubicacion || 'No especificada'}</div>
                 </div>
             </div>
             
-            <div style="background:#f8f8f8; border-radius:4px; padding:6px 10px; border:1px solid #eee;">
-                <div style="font-weight:700; font-size:9px; color:#C1121F; margin-bottom:4px; border-bottom:1px solid #ddd; padding-bottom:3px;">🚗 Datos del Vehículo</div>
-                <div style="font-size:9px; line-height:1.6;">
-                    <div><strong style="color:#C1121F; font-size:10px;">Placa:</strong> <strong style="color:#C1121F; font-size:10px;">${detalle.placa || 'No registrada'}</strong></div>
+            <!-- VEHÍCULO -->
+            <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; border:1px solid #eee;">
+                <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:3px; border-bottom:1px solid #ddd; padding-bottom:2px;">🚗 Datos del Vehículo</div>
+                <div style="font-size:8.5px; line-height:1.6;">
+                    <div><strong style="color:#C1121F; font-size:9.5px;">Placa:</strong> <strong style="color:#C1121F; font-size:9.5px;">${detalle.placa || 'No registrada'}</strong></div>
                     <div><strong>Marca:</strong> ${detalle.marca || 'No registrada'}</div>
                     <div><strong>Modelo:</strong> ${detalle.modelo || 'No registrado'}</div>
                     <div><strong>Año:</strong> ${detalle.anio || 'No especificado'} | <strong>Km:</strong> ${detalle.kilometraje ? Number(detalle.kilometraje).toLocaleString() : '0'}</div>
@@ -3323,69 +3331,102 @@ function generarHTMLReporte(detalle) {
             </div>
         </div>
         
-        <div style="background:#f8f8f8; border-radius:4px; padding:6px 10px; margin-bottom:8px; border:1px solid #eee;">
-            <div style="font-weight:700; font-size:9px; color:#C1121F; margin-bottom:4px; border-bottom:1px solid #ddd; padding-bottom:3px;">📸 Fotos (${fotosArray.length}/7)</div>
+        <!-- 🔥 FOTOS - 2 LÍNEAS: 4 + 3 CENTRADAS -->
+        <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; margin-bottom:6px; border:1px solid #eee;">
+            <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:4px; border-bottom:1px solid #ddd; padding-bottom:2px;">📸 Fotos (${fotosArray.length}/7)</div>
             ${fotosArray.length > 0 ? `
-                <div style="display:flex; flex-wrap:wrap; gap:4px; margin:3px 0; justify-content:flex-start;">
-                    ${fotosArray.map(f => `
+                <!-- PRIMERA FILA: 4 FOTOS -->
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:4px; margin-bottom:3px;">
+                    ${fotosArray.slice(0, 4).map(f => `
                         <div style="
                             border:1px solid #ddd; 
                             border-radius:4px; 
                             overflow:hidden; 
                             background:#f5f5f5; 
-                            text-align:center; 
-                            width:${Math.min(100, 580 / Math.min(fotosArray.length, 7))}px; 
-                            max-width:130px; 
-                            flex:1 0 auto;
+                            text-align:center;
                         ">
                             <img src="${f.url}" alt="${f.label}" style="
                                 width:100%; 
-                                height:75px; 
+                                height:65px; 
                                 object-fit:cover; 
                                 display:block; 
                                 background:#eee;
                                 border-bottom:1px solid #ddd;
                             " onerror="this.style.display='none'">
-                            <div style="padding:2px; font-size:6.5px; font-weight:bold; color:#555; background:#f9f9f9;">${f.label}</div>
+                            <div style="padding:2px; font-size:6px; font-weight:bold; color:#555; background:#f9f9f9;">${f.label}</div>
                         </div>
                     `).join('')}
+                    ${fotosArray.length < 4 ? Array(4 - fotosArray.length).fill(`
+                        <div style="border:1px dashed #ddd; border-radius:4px; background:#fafafa; min-height:65px; display:flex; align-items:center; justify-content:center; color:#ccc; font-size:7px;">
+                            <span>Sin foto</span>
+                        </div>
+                    `).join('') : ''}
                 </div>
-            ` : '<p style="color:#999; font-style:italic; font-size:10px; text-align:center; padding:6px;">No se registraron fotos</p>'}
+                <!-- SEGUNDA FILA: 3 FOTOS CENTRADAS -->
+                ${fotosArray.length > 4 ? `
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; max-width:75%; margin:0 auto;">
+                        ${fotosArray.slice(4, 7).map(f => `
+                            <div style="
+                                border:1px solid #ddd; 
+                                border-radius:4px; 
+                                overflow:hidden; 
+                                background:#f5f5f5; 
+                                text-align:center;
+                            ">
+                                <img src="${f.url}" alt="${f.label}" style="
+                                    width:100%; 
+                                    height:65px; 
+                                    object-fit:cover; 
+                                    display:block; 
+                                    background:#eee;
+                                    border-bottom:1px solid #ddd;
+                                " onerror="this.style.display='none'">
+                                <div style="padding:2px; font-size:6px; font-weight:bold; color:#555; background:#f9f9f9;">${f.label}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            ` : '<p style="color:#999; font-style:italic; font-size:9px; text-align:center; padding:4px;">No se registraron fotos</p>'}
         </div>
         
-        <div style="background:#f8f8f8; border-radius:4px; padding:6px 10px; margin-bottom:8px; border:1px solid #eee;">
-            <div style="font-weight:700; font-size:9px; color:#C1121F; margin-bottom:4px; border-bottom:1px solid #ddd; padding-bottom:3px;">📝 Descripción del Problema</div>
+        <!-- DESCRIPCIÓN -->
+        <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; margin-bottom:6px; border:1px solid #eee;">
+            <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:3px; border-bottom:1px solid #ddd; padding-bottom:2px;">📝 Descripción del Problema</div>
             <div style="
                 background:white; 
-                padding:6px 8px; 
+                padding:5px 8px; 
                 border-radius:4px; 
-                font-size:9px; 
-                min-height:25px; 
+                font-size:8.5px; 
+                min-height:22px; 
                 border:1px solid #e8e8e8; 
                 white-space:pre-wrap; 
                 line-height:1.5;
             ">${detalle.transcripcion_problema || 'No se registró descripción'}</div>
         </div>
         
-        <div style="margin-top:12px; padding-top:8px; border-top:2px solid #ddd;">
-            <div style="font-weight:700; font-size:10px; color:#C1121F; text-align:center; margin-bottom:8px; letter-spacing:2px; text-transform:uppercase;">✍️ Firmas de Conformidad</div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:30px;">
+        <!-- 🔥 FIRMAS - CON MÁS ESPACIO Y MEJOR PRESENTACIÓN -->
+        <div style="margin-top:10px; padding-top:8px; border-top:2px solid #ddd;">
+            <div style="font-weight:700; font-size:10px; color:#C1121F; text-align:center; margin-bottom:10px; letter-spacing:2px; text-transform:uppercase;">✍️ Firmas de Conformidad</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:50px;">
+                <!-- FIRMA CLIENTE -->
                 <div style="text-align:center; padding:0 5px;">
-                    <div style="font-weight:600; color:#333; margin-bottom:6px; font-size:8px; text-transform:uppercase; letter-spacing:1px;">Firma del Cliente</div>
-                    <div style="border-bottom:2px solid #333; height:40px; margin-bottom:4px;"></div>
-                    <div style="font-size:9px; color:#555; font-weight:600;">${detalle.cliente_nombre || '____________________'}</div>
+                    <div style="font-weight:600; color:#333; margin-bottom:8px; font-size:8.5px; text-transform:uppercase; letter-spacing:1px;">Firma del Cliente</div>
+                    <div style="border-bottom:2px solid #333; height:60px; margin-bottom:5px;"></div>
+                    <div style="font-size:9px; color:#555; font-weight:600; margin-top:4px;">${detalle.cliente_nombre || '____________________'}</div>
                     <div style="font-size:7px; color:#999; margin-top:2px;">${fechaActual}</div>
                 </div>
+                <!-- FIRMA JEFE OPERATIVO -->
                 <div style="text-align:center; padding:0 5px;">
-                    <div style="font-weight:600; color:#333; margin-bottom:6px; font-size:8px; text-transform:uppercase; letter-spacing:1px;">Firma del Jefe Operativo</div>
-                    <div style="border-bottom:2px solid #333; height:40px; margin-bottom:4px;"></div>
-                    <div style="font-size:9px; color:#555; font-weight:600;">${jefeNombre1}</div>
+                    <div style="font-weight:600; color:#333; margin-bottom:8px; font-size:8.5px; text-transform:uppercase; letter-spacing:1px;">Firma del Jefe Operativo</div>
+                    <div style="border-bottom:2px solid #333; height:60px; margin-bottom:5px;"></div>
+                    <div style="font-size:9px; color:#555; font-weight:600; margin-top:4px;">${jefeNombre1}</div>
                     <div style="font-size:7px; color:#999; margin-top:2px;">${fechaActual}</div>
                 </div>
             </div>
         </div>
         
-        <div style="text-align:center; margin-top:14px; padding-top:6px; border-top:1px solid #eee; font-size:6.5px; color:#bbb; line-height:1.3;">
+        <!-- FOOTER -->
+        <div style="text-align:center; margin-top:12px; padding-top:5px; border-top:1px solid #eee; font-size:6px; color:#bbb; line-height:1.3;">
             <span>Documento generado automáticamente por <strong style="color:#C1121F;">FURIA MOTOR</strong></span> | 
             <span>Código: <strong>${detalle.codigo_unico || 'N/A'}</strong></span> | 
             <span>${new Date().toLocaleString('es-ES')}</span>

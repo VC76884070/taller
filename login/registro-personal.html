@@ -155,8 +155,9 @@
             font-size: 0.85rem;
         }
 
+        /* Badge oculto por defecto - solo visible en desarrollo */
         .env-badge {
-            display: inline-block;
+            display: none;
             margin-top: 0.5rem;
             padding: 0.2rem 0.8rem;
             border-radius: 20px;
@@ -166,13 +167,8 @@
             letter-spacing: 1px;
         }
 
-        .env-badge.production {
-            background: rgba(46, 204, 113, 0.2);
-            color: var(--verde-exito);
-            border: 1px solid rgba(46, 204, 113, 0.3);
-        }
-
         .env-badge.development {
+            display: inline-block;
             background: rgba(243, 156, 18, 0.2);
             color: var(--ambar-alerta);
             border: 1px solid rgba(243, 156, 18, 0.3);
@@ -391,10 +387,6 @@
             font-size: 0.6rem;
         }
 
-        .role-icon-select {
-            margin-right: 0.5rem;
-        }
-
         @keyframes slideInRight {
             from {
                 transform: translateX(100%);
@@ -471,7 +463,8 @@
                 <i class="fas fa-user-tie"></i>
                 <h2>Solicitar acceso como personal</h2>
                 <p>Completa el formulario para solicitar tu registro en el sistema</p>
-                <span class="env-badge" id="envBadge">🌐 CARGANDO...</span>
+                <!-- Badge solo visible en desarrollo -->
+                <span class="env-badge" id="envBadge">🧪 ENTORNO: DESARROLLO</span>
             </div>
 
             <form id="registroForm" novalidate>
@@ -574,16 +567,20 @@
         const API_URL = `${API_BASE_URL}/api`;
         const toastContainer = document.getElementById('toastContainer');
 
-        // Detectar entorno para mostrar badge
-        const isDevelopment = window.location.hostname.includes('dev');
+        // Detectar entorno para mostrar badge SOLO EN DESARROLLO
+        const isDevelopment = window.location.hostname.includes('dev') || 
+                            window.location.hostname === 'localhost' || 
+                            window.location.hostname === '127.0.0.1';
+        
         const envBadge = document.getElementById('envBadge');
         if (envBadge) {
             if (isDevelopment) {
-                envBadge.textContent = '🧪 ENTORNO: DESARROLLO';
                 envBadge.className = 'env-badge development';
+                envBadge.textContent = '🧪 ENTORNO: DESARROLLO';
+                envBadge.style.display = 'inline-block';
             } else {
-                envBadge.textContent = '🚀 ENTORNO: PRODUCCIÓN';
-                envBadge.className = 'env-badge production';
+                // En producción: oculto completamente
+                envBadge.style.display = 'none';
             }
         }
 

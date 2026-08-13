@@ -3115,7 +3115,7 @@ async function descargarPDFFinal() {
         
         updateProgressBar(50);
         updateProgressMessage('Renderizando PDF...');
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 800));
         
         // Cargar librerías si no existen
         if (typeof html2canvas === 'undefined') {
@@ -3144,43 +3144,60 @@ async function descargarPDFFinal() {
         const elemento = container.querySelector('.reporte-container');
         if (!elemento) throw new Error('No se encontró el contenido del reporte');
         
-        // 🔥 FORZAR QUE EL ELEMENTO OCUPE TODO EL ANCHO
+        // 🔥 FORZAR QUE EL ELEMENTO MUESTRE TODO SU CONTENIDO
         elemento.style.width = '100%';
         elemento.style.padding = '0';
         elemento.style.margin = '0';
         elemento.style.boxSizing = 'border-box';
+        elemento.style.height = 'auto';
+        elemento.style.overflow = 'visible';
+        elemento.style.maxHeight = 'none';
         
-        // 🔥 ESPERAR A QUE SE RENDERICE
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // 🔥 CALCULAR LA ALTURA REAL DEL CONTENIDO
+        const alturaReal = elemento.scrollHeight;
+        const anchoReal = 780;
         
-        // 🔥 USAR html2canvas DIRECTAMENTE
+        console.log(`📄 Ancho: ${anchoReal}px, Altura real: ${alturaReal}px`);
+        
+        // 🔥 ESPERAR UN POCO PARA QUE SE RENDERICE
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // 🔥 USAR html2canvas CON LA ALTURA CORRECTA
         const canvas = await html2canvas(elemento, {
             scale: 2,
             useCORS: true,
             allowTaint: true,
             backgroundColor: '#ffffff',
             logging: false,
-            width: 780,
-            height: elemento.scrollHeight,
+            width: anchoReal,
+            height: alturaReal + 20,
             scrollY: 0,
             scrollX: 0,
-            windowHeight: elemento.scrollHeight,
-            windowWidth: 780
+            windowHeight: alturaReal + 20,
+            windowWidth: anchoReal,
+            onclone: (clonedDoc, clonedElement) => {
+                clonedElement.style.height = 'auto';
+                clonedElement.style.overflow = 'visible';
+                clonedElement.style.maxHeight = 'none';
+            }
         });
+        
+        console.log(`📸 Canvas generado: ${canvas.width}x${canvas.height}px`);
         
         updateProgressBar(80);
         updateProgressMessage('Convirtiendo a PDF...');
         
-        // 🔥 USAR jsPDF DIRECTAMENTE
+        // 🔥 CREAR PDF CON EL TAMAÑO EXACTO DEL CANVAS
         const { jsPDF } = window.jspdf || jspdf;
         const pdf = new jsPDF({
             orientation: 'portrait',
             unit: 'px',
             format: [canvas.width, canvas.height],
-            compress: true
+            compress: true,
+            hotfixes: ['px_scaling']
         });
         
-        // 🔥 AGREGAR LA IMAGEN DEL CANVAS AL PDF
+        // 🔥 AGREGAR LA IMAGEN - OCUPA TODO EL PDF
         const imgData = canvas.toDataURL('image/jpeg', 0.95);
         pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
         
@@ -3250,7 +3267,6 @@ async function descargarPDFFinal() {
     }
     descargandoPDF = false;
 }
-
 function generarHTMLReporte(detalle) {
     if (!detalle) return '<div class="loading-preview"><i class="fas fa-exclamation-triangle"></i><p>No hay datos</p></div>';
 

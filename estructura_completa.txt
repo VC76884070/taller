@@ -1,12 +1,12 @@
 ================================================================================
 📊 ESTRUCTURA DEL PROYECTO FLASK
 ================================================================================
-📅 Generado: 2026-08-02 19:59:02
-📍 Ruta: D:\ESCRITORIO\DOCUMENTOS PROYECTO\PROYECTO
+📅 Generado: 2026-08-13 11:51:43
+📍 Ruta: C:\Users\i5_2\Desktop\taller
 🐍 Framework: Flask
 ================================================================================
 
-📁 PROYECTO/
+📁 taller/
 ├── 📁 backend/
 │   ├── 📁 cliente/
 │   │   ├── 🐍 avances.py
@@ -15,6 +15,9 @@
 │   │   ├── 🐍 misreservas.py
 │   │   ├── 🐍 misvehiculos.py
 │   │   └── 🐍 perfil.py
+│   ├── 📁 credentials/
+│   │   ├── 📦 google-drive-credentials.json
+│   │   └── 📦 oauth-credentials.json
 │   ├── 📁 encargado_rep_almacen/
 │   │   ├── 🐍 dashboard.py
 │   │   ├── 🐍 historial.py
@@ -52,7 +55,6 @@
 │   │   ├── 📁 avatars/
 │   │   │   ├── 🖼️ avatar_26_1cac6c1c.jpeg
 │   │   │   └── 🖼️ avatar_26_9e3326de.jpeg
-│   │   ├── 📁 diagnosticos/
 │   │   └── 📁 sesion/
 │   │       ├── 📁 S-0314S0/
 │   │       │   ├── 🖼️ lateral_derecha_20260325_151924.jpg
@@ -76,7 +78,6 @@
 │   │           └── 🖼️ lateral_izquierda_20260325_173613.jpg
 │   ├── 📄 .env
 │   ├── 📄 .env.desarrollo
-│   ├── 📄 .env.example
 │   ├── 📄 .env.produccion
 │   ├── 🐍 app.py
 │   ├── 🐍 config.py
@@ -84,6 +85,8 @@
 │   ├── 🐍 google_drive.py
 │   ├── 🐍 login.py
 │   ├── 📄 requirements.txt
+│   ├── 📄 requirements_web.txt
+│   ├── 📄 requirements_web_utf8.txt
 │   ├── 🐍 test_env.py
 │   ├── 🐍 test_supabase.py
 │   └── 📄 token.pickle
@@ -237,6 +240,7 @@
 ├── 📄 estructura_completa_base_de_datos.txt
 ├── 📘 GEMINI.md
 ├── 🐍 generar_estructura.py
+├── 📄 git
 ├── 🖼️ icono.png
 ├── 📦 manifest.json
 ├── 📄 Procfile
@@ -255,4 +259,4 @@
 🎨 CSS      : 36
 📜 JS       : 42
 🖼️ Imágenes : 20
-📄 Otros    : 15
+📄 Otros    : 19

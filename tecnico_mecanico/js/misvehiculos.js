@@ -1706,6 +1706,19 @@ function cerrarHistorialModal() {
 // DETALLE DE ORDEN - CORREGIDO CON CARGA PROXY
 // =====================================================
 window.verDetalle = async function(ordenId) {
+      console.log('========================================');
+    console.log('🔍 VER DETALLE - INICIO');
+    console.log(`📌 Orden ID: ${ordenId}`);
+    console.log(`🔑 Token: ${token ? '✅ Presente' : '❌ NO HAY TOKEN'}`);
+    console.log(`🔑 Token valor: ${token ? token.substring(0, 20) + '...' : 'null'}`);
+    console.log(`📸 Fotos a cargar: ${fotosArray ? fotosArray.length : '0'}`);
+    console.log('========================================');
+    const tokenActual = getToken();
+    if (!tokenActual) {
+        showToast('No hay sesión activa', 'error');
+        window.location.href = '/';
+        return;
+    }
     showToast('Cargando detalles...', 'info');
     
     try {
@@ -1898,7 +1911,93 @@ window.verDetalle = async function(ordenId) {
         showToast(error.message, 'error');
     }
 };
-
+// =====================================================
+// CARGAR IMAGEN EN DETALLE - CON FETCH Y TOKEN (MEJORADA)
+// =====================================================
+async function cargarImagenDetalle(url, imgId, loaderId) {
+    if (!url || url === '' || url === 'null' || url === 'undefined') {
+        const loader = document.getElementById(loaderId);
+        if (loader) {
+            loader.innerHTML = '<i class="fas fa-image"></i><span style="font-size:0.7rem;">Sin imagen</span>';
+            loader.style.display = 'flex';
+        }
+        return;
+    }
+    
+    const img = document.getElementById(imgId);
+    const loader = document.getElementById(loaderId);
+    
+    if (!img) {
+        console.warn(`⚠️ No se encontró el elemento img: ${imgId}`);
+        return;
+    }
+    
+    // 🔥 VERIFICAR TOKEN
+    const tokenActual = getToken();
+    if (!tokenActual) {
+        console.error('❌ No hay token disponible');
+        if (loader) {
+            loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span style="font-size:0.7rem;">Sin autenticación</span>';
+            loader.style.display = 'flex';
+        }
+        return;
+    }
+    
+    // Mostrar loader
+    if (loader) {
+        loader.style.display = 'flex';
+        loader.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:1.2rem;"></i><span style="font-size:0.7rem;">Cargando...</span>';
+    }
+    img.style.display = 'none';
+    img.src = '';
+    
+    try {
+        const proxyUrl = `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(url)}`;
+        
+        console.log(`📸 [${imgId}] Cargando imagen con fetch...`);
+        console.log(`   🔑 Token: ${tokenActual.substring(0, 20)}...`);
+        console.log(`   📡 URL: ${proxyUrl.substring(0, 80)}...`);
+        
+        // 🔥 TIMEOUT DE 10 SEGUNDOS
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        
+        const response = await fetch(proxyUrl, {
+            headers: {
+                'Authorization': `Bearer ${tokenActual}`
+            },
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status} - ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            img.src = data.base64;
+            img.style.display = 'block';
+            if (loader) loader.style.display = 'none';
+            console.log(`✅ [${imgId}] Imagen cargada (${data.base64.length} bytes)`);
+        } else {
+            throw new Error(data.error || 'Error al obtener imagen');
+        }
+    } catch (error) {
+        console.error(`❌ [${imgId}] Error:`, error.message);
+        if (loader) {
+            if (error.name === 'AbortError') {
+                loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span style="font-size:0.7rem;">Timeout (10s)</span>';
+            } else {
+                loader.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span style="font-size:0.7rem;">${error.message}</span>`;
+            }
+            loader.style.display = 'flex';
+        }
+        img.style.display = 'none';
+    }
+}
 // =====================================================
 // VER FOTO AMPLIADA - CON FETCH Y TOKEN
 // =====================================================

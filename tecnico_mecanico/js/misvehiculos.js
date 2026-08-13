@@ -1703,7 +1703,7 @@ function cerrarHistorialModal() {
 }
 
 // =====================================================
-// DETALLE DE ORDEN - CORREGIDO
+// DETALLE DE ORDEN - CORREGIDO CON CARGA PROXY
 // =====================================================
 window.verDetalle = async function(ordenId) {
     showToast('Cargando detalles...', 'info');
@@ -1813,20 +1813,29 @@ window.verDetalle = async function(ordenId) {
             </div>
         `;
         
+        // 🔥 SECCIÓN DE FOTOS CORREGIDA - CON LOADER Y IDS ÚNICOS
         let fotosHtml = '';
         if (fotosArray.length > 0) {
             fotosHtml = `
-                <div class="modal-section">
+                <div class="modal-section" id="fotosSeccion_${ordenId}">
                     <h3><i class="fas fa-images"></i> Fotos del Vehículo (${fotosArray.length})</h3>
-                    <div class="fotos-grid">
-                        ${fotosArray.map(([nombre, url]) => {
-                            // 🔥 CORREGIDO: Usar proxy-imagen-repuesto
-                            const proxyUrl = url.includes('drive.google.com') ? 
-                                `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(url)}` : url;
+                    <div class="fotos-grid" id="fotosGrid_${ordenId}" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; margin-top: 0.5rem;">
+                        ${fotosArray.map(([nombre, url], index) => {
+                            const imgId = `detalle_img_${ordenId}_${index}`;
+                            const loaderId = `detalle_loader_${ordenId}_${index}`;
+                            const nombreFormateado = nombre.replace(/_/g, ' ').replace('url ', '').replace('foto ', '').trim();
                             return `
-                                <div class="foto-item" onclick="verFoto('${url}')" style="cursor: pointer;">
-                                    <img src="${proxyUrl}" alt="${nombre}" loading="lazy">
-                                    <div style="font-size: 0.6rem; text-align: center; padding: 0.25rem;">${escapeHtml(nombre)}</div>
+                                <div class="foto-item" style="position:relative; background: var(--gris-oscuro); border-radius: var(--radius-md); overflow: hidden; border: 2px solid var(--border-color); aspect-ratio: 4/3; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                                    <div id="${loaderId}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; gap:0.5rem; flex-direction:column; color:var(--gris-texto);">
+                                        <i class="fas fa-spinner fa-spin" style="font-size:1.5rem;"></i>
+                                        <span style="font-size:0.7rem;">Cargando...</span>
+                                    </div>
+                                    <img id="${imgId}" src="" alt="${nombreFormateado}" loading="lazy" 
+                                         style="display:none; width:100%; height:100%; object-fit:cover; cursor:pointer;"
+                                         onclick="verFoto('${url}')">
+                                    <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.7);color:white;font-size:0.6rem;padding:0.25rem;text-align:center;z-index:2;">
+                                        ${escapeHtml(nombreFormateado)}
+                                    </div>
                                 </div>
                             `;
                         }).join('')}
@@ -1875,6 +1884,15 @@ window.verDetalle = async function(ordenId) {
         document.getElementById('detalleBody').innerHTML = detalleHtml;
         document.getElementById('detalleModal').classList.add('show');
         
+        // 🔥 CARGAR FOTOS CON FETCH DESPUÉS DE RENDERIZAR
+        setTimeout(() => {
+            fotosArray.forEach(([nombre, url], index) => {
+                const imgId = `detalle_img_${ordenId}_${index}`;
+                const loaderId = `detalle_loader_${ordenId}_${index}`;
+                cargarImagenDetalle(url, imgId, loaderId);
+            });
+        }, 150);
+        
     } catch (error) {
         console.error('Error:', error);
         showToast(error.message, 'error');
@@ -1882,24 +1900,104 @@ window.verDetalle = async function(ordenId) {
 };
 
 // =====================================================
-// VER FOTO - CORREGIDO
+// VER FOTO AMPLIADA - CON FETCH Y TOKEN
 // =====================================================
-window.verFoto = function(url) {
-    const img = document.getElementById('fotoAmpliada');
-    if (url.includes('drive.google.com')) {
-        // 🔥 CORREGIDO: Usar proxy-imagen-repuesto
-        const proxyUrl = `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(url)}`;
-        img.src = proxyUrl;
-    } else {
-        img.src = url;
+window.verFoto = async function(url) {
+    if (!url) return;
+    
+    const modalImg = document.getElementById('fotoAmpliada');
+    const modal = document.getElementById('fotoModal');
+    const loader = document.getElementById('fotoModalLoader');
+    
+    // Crear loader si no existe
+    let loaderElement = loader;
+    if (!loaderElement) {
+        const imgContainer = modalImg?.parentElement;
+        if (imgContainer) {
+            const div = document.createElement('div');
+            div.id = 'fotoModalLoader';
+            div.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:white;font-size:1.2rem;z-index:5;';
+            div.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
+            imgContainer.style.position = 'relative';
+            imgContainer.appendChild(div);
+            loaderElement = div;
+        }
     }
-    document.getElementById('fotoModal').classList.add('show');
+    
+    if (modalImg) {
+        modalImg.style.display = 'none';
+        modalImg.src = '';
+    }
+    if (loaderElement) {
+        loaderElement.style.display = 'block';
+        loaderElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
+    }
+    
+    if (modal) modal.classList.add('show');
+    
+    try {
+        // 🔥 USAR FETCH CON TOKEN
+        const proxyUrl = `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(url)}`;
+        
+        const response = await fetch(proxyUrl, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            // Pre-cargar
+            const nuevaImg = new Image();
+            nuevaImg.onload = function() {
+                if (modalImg) {
+                    modalImg.src = data.base64;
+                    modalImg.style.display = 'block';
+                    modalImg.style.objectFit = 'contain';
+                }
+                if (loaderElement) loaderElement.style.display = 'none';
+            };
+            nuevaImg.onerror = function() {
+                if (modalImg) {
+                    modalImg.src = data.base64;
+                    modalImg.style.display = 'block';
+                    modalImg.style.objectFit = 'contain';
+                }
+                if (loaderElement) loaderElement.style.display = 'none';
+            };
+            nuevaImg.src = data.base64;
+        } else {
+            throw new Error(data.error || 'Error al obtener imagen');
+        }
+    } catch (error) {
+        console.error('Error cargando foto ampliada:', error);
+        if (loaderElement) {
+            loaderElement.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error: ${error.message}`;
+            loaderElement.style.display = 'block';
+        }
+        showToast('Error al cargar la imagen', 'error');
+    }
 };
 
 window.cerrarFotoModal = function() {
-    document.getElementById('fotoModal').classList.remove('show');
+    const modal = document.getElementById('fotoModal');
+    if (modal) modal.classList.remove('show');
+    const loader = document.getElementById('fotoModalLoader');
+    if (loader) {
+        loader.style.display = 'none';
+        loader.innerHTML = '';
+    }
+    const img = document.getElementById('fotoAmpliada');
+    if (img) {
+        img.src = '';
+        img.style.display = 'none';
+    }
 };
-
 window.cerrarDetalleModal = function() {
     document.getElementById('detalleModal').classList.remove('show');
 };

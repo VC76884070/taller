@@ -3067,7 +3067,11 @@ async function descargarPDFFinal() {
             '<i class="fas fa-spinner fa-spin"></i> Generando...';
     }
 
-    showProgress('Generando PDF', 'Preparando el documento...');
+    showProgress(
+        'Generando PDF',
+        'Preparando el documento...'
+    );
+
     updateProgressBar(10);
 
     let container = null;
@@ -3081,7 +3085,8 @@ async function descargarPDFFinal() {
         const detalleParaPDF =
             JSON.parse(JSON.stringify(datosReporteFinal));
 
-        const fotos = datosReporteFinal.fotos || {};
+        const fotos =
+            datosReporteFinal.fotos || {};
 
         const camposFotos = [
             'url_lateral_izquierda',
@@ -3093,21 +3098,31 @@ async function descargarPDFFinal() {
             'url_foto_tablero'
         ];
 
-        updateProgressMessage('Convirtiendo fotos...');
+        updateProgressMessage(
+            'Convirtiendo fotos...'
+        );
 
-        const fotosNecesitanConversion = camposFotos.filter(c => {
-            const url = fotos[c];
 
-            return (
-                url &&
-                url !== 'null' &&
-                url !== 'None' &&
-                url !== '' &&
-                url !== null &&
-                url !== 'undefined' &&
-                !url.startsWith('data:image')
-            );
-        });
+        // ============================================================
+        // 2. CONVERTIR FOTOS A BASE64
+        // ============================================================
+
+        const fotosNecesitanConversion =
+            camposFotos.filter(c => {
+
+                const url = fotos[c];
+
+                return (
+                    url &&
+                    url !== 'null' &&
+                    url !== 'None' &&
+                    url !== '' &&
+                    url !== null &&
+                    url !== 'undefined' &&
+                    !url.startsWith('data:image')
+                );
+            });
+
 
         for (const campo of fotosNecesitanConversion) {
 
@@ -3115,19 +3130,26 @@ async function descargarPDFFinal() {
 
             try {
 
-                const base64 = await convertirImagenABase64(url);
+                const base64 =
+                    await convertirImagenABase64(url);
 
-                if (base64 && base64.startsWith('data:image')) {
-                    detalleParaPDF.fotos[campo] = base64;
+                if (
+                    base64 &&
+                    base64.startsWith('data:image')
+                ) {
+                    detalleParaPDF.fotos[campo] =
+                        base64;
                 }
 
             } catch (error) {
+
                 console.warn(
                     `Error convirtiendo ${campo}:`,
                     error
                 );
             }
         }
+
 
         detalleParaPDF.fotos_base64 =
             detalleParaPDF.fotos;
@@ -3136,7 +3158,7 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 2. GENERAR HTML DEL REPORTE
+        // 3. GENERAR HTML DEL REPORTE
         // ============================================================
 
         updateProgressMessage(
@@ -3144,16 +3166,20 @@ async function descargarPDFFinal() {
         );
 
         const reporteHTML =
-            generarHTMLReporte(detalleParaPDF);
+            generarHTMLReporte(
+                detalleParaPDF
+            );
 
 
         // ============================================================
-        // 3. CREAR CONTENEDOR TEMPORAL
+        // 4. CREAR CONTENEDOR TEMPORAL
         // ============================================================
 
-        container = document.createElement('div');
+        container =
+            document.createElement('div');
 
-        container.id = 'pdfContainer';
+        container.id =
+            'pdfContainer';
 
         container.style.cssText = `
             position: fixed;
@@ -3177,9 +3203,12 @@ async function descargarPDFFinal() {
             overflow: visible;
         `;
 
-        container.innerHTML = reporteHTML;
+        container.innerHTML =
+            reporteHTML;
 
-        document.body.appendChild(container);
+        document.body.appendChild(
+            container
+        );
 
 
         updateProgressBar(50);
@@ -3188,55 +3217,79 @@ async function descargarPDFFinal() {
             'Renderizando PDF...'
         );
 
+
         await new Promise(resolve =>
             setTimeout(resolve, 800)
         );
 
 
         // ============================================================
-        // 4. CARGAR HTML2CANVAS
+        // 5. CARGAR html2canvas
         // ============================================================
 
-        if (typeof html2canvas === 'undefined') {
+        if (
+            typeof html2canvas ===
+            'undefined'
+        ) {
 
-            await new Promise((resolve, reject) => {
+            await new Promise(
+                (resolve, reject) => {
 
-                const script =
-                    document.createElement('script');
+                    const script =
+                        document.createElement(
+                            'script'
+                        );
 
-                script.src =
-                    'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+                    script.src =
+                        'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
 
-                script.onload = resolve;
-                script.onerror = reject;
+                    script.onload =
+                        resolve;
 
-                document.head.appendChild(script);
-            });
+                    script.onerror =
+                        reject;
+
+                    document.head.appendChild(
+                        script
+                    );
+                }
+            );
         }
 
 
         // ============================================================
-        // 5. CARGAR jsPDF
+        // 6. CARGAR jsPDF
         // ============================================================
 
         if (
-            typeof jspdf === 'undefined' &&
-            typeof window.jspdf === 'undefined'
+            typeof jspdf ===
+                'undefined' &&
+            typeof window.jspdf ===
+                'undefined'
         ) {
 
-            await new Promise((resolve, reject) => {
+            await new Promise(
+                (resolve, reject) => {
 
-                const script =
-                    document.createElement('script');
+                    const script =
+                        document.createElement(
+                            'script'
+                        );
 
-                script.src =
-                    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                    script.src =
+                        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 
-                script.onload = resolve;
-                script.onerror = reject;
+                    script.onload =
+                        resolve;
 
-                document.head.appendChild(script);
-            });
+                    script.onerror =
+                        reject;
+
+                    document.head.appendChild(
+                        script
+                    );
+                }
+            );
         }
 
 
@@ -3248,11 +3301,13 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 6. OBTENER CONTENEDOR DEL REPORTE
+        // 7. OBTENER EL REPORTE
         // ============================================================
 
         const elemento =
-            container.querySelector('.reporte-container');
+            container.querySelector(
+                '.reporte-container'
+            );
 
         if (!elemento) {
             throw new Error(
@@ -3262,17 +3317,23 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 7. FORZAR CONTENIDO COMPLETO
+        // 8. FORZAR CONTENIDO COMPLETO
         // ============================================================
 
-        elemento.style.width = '100%';
-        elemento.style.padding = '0';
-        elemento.style.margin = '0';
+        elemento.style.width =
+            '100%';
+
+        elemento.style.padding =
+            '0';
+
+        elemento.style.margin =
+            '0';
 
         elemento.style.boxSizing =
             'border-box';
 
-        elemento.style.height = 'auto';
+        elemento.style.height =
+            'auto';
 
         elemento.style.overflow =
             'visible';
@@ -3287,74 +3348,85 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 8. CALCULAR DIMENSIONES
+        // 9. CALCULAR DIMENSIONES
         // ============================================================
 
-        const anchoContenido = 780;
+        const anchoContenido =
+            780;
 
         const alturaContenido =
             elemento.scrollHeight;
 
+
         console.log(
-            `📄 Ancho: ${anchoContenido}px, ` +
-            `Altura: ${alturaContenido}px`
+            `📄 Ancho: ${anchoContenido}px`
+        );
+
+        console.log(
+            `📄 Altura: ${alturaContenido}px`
         );
 
 
         // ============================================================
-        // 9. GENERAR CANVAS
+        // 10. GENERAR CANVAS
         // ============================================================
 
-        const canvas = await html2canvas(
-            elemento,
-            {
-                scale: 2,
+        const canvas =
+            await html2canvas(
+                elemento,
+                {
+                    scale: 2,
 
-                useCORS: true,
-                allowTaint: true,
+                    useCORS: true,
 
-                backgroundColor: '#ffffff',
+                    allowTaint: true,
 
-                logging: false,
+                    backgroundColor:
+                        '#ffffff',
 
-                width: anchoContenido,
+                    logging: false,
 
-                height: alturaContenido + 10,
+                    width:
+                        anchoContenido,
 
-                scrollY: 0,
-                scrollX: 0,
+                    height:
+                        alturaContenido + 10,
 
-                windowHeight:
-                    alturaContenido + 10,
+                    scrollY: 0,
 
-                windowWidth:
-                    anchoContenido,
+                    scrollX: 0,
 
-                onclone: (
-                    clonedDoc,
-                    clonedElement
-                ) => {
+                    windowHeight:
+                        alturaContenido + 10,
 
-                    clonedElement.style.height =
-                        'auto';
+                    windowWidth:
+                        anchoContenido,
 
-                    clonedElement.style.overflow =
-                        'visible';
+                    onclone: (
+                        clonedDoc,
+                        clonedElement
+                    ) => {
 
-                    clonedElement.style.maxHeight =
-                        'none';
+                        clonedElement.style.height =
+                            'auto';
 
-                    clonedElement.style.width =
-                        '100%';
+                        clonedElement.style.overflow =
+                            'visible';
 
-                    clonedElement.style.margin =
-                        '0';
+                        clonedElement.style.maxHeight =
+                            'none';
 
-                    clonedElement.style.padding =
-                        '0';
+                        clonedElement.style.width =
+                            '100%';
+
+                        clonedElement.style.margin =
+                            '0';
+
+                        clonedElement.style.padding =
+                            '0';
+                    }
                 }
-            }
-        );
+            );
 
 
         console.log(
@@ -3371,75 +3443,79 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 10. CONFIGURACIÓN DEL PDF A4
+        // 11. CONFIGURACIÓN DEL PDF
         // ============================================================
 
         const { jsPDF } =
             window.jspdf || jspdf;
 
-        const A4_WIDTH_MM = 210;
-        const A4_HEIGHT_MM = 297;
 
-        // 🔥 MARGEN PEQUEÑO Y PROFESIONAL
-        const MARGEN_LATERAL_MM = 10;
-        const MARGEN_SUPERIOR_MM = 10;
-        const MARGEN_INFERIOR_MM = 10;
+        // ============================================================
+        // 📄 TAMAÑO CARTA
+        // ============================================================
+        //
+        // Carta:
+        // 8.5 x 11 pulgadas
+        // 215.9 x 279.4 mm
+        // ============================================================
+
+        const CARTA_WIDTH_MM =
+            215.9;
+
+        const CARTA_HEIGHT_MM =
+            279.4;
 
 
         // ============================================================
-        // 11. CALCULAR TAMAÑO REAL DEL CONTENIDO
+        // 📐 MÁRGENES
+        // ============================================================
+        //
+        // Márgenes pequeños para aprovechar
+        // prácticamente toda la hoja.
+        // ============================================================
+
+        const MARGEN_LATERAL_MM =
+            8;
+
+        const MARGEN_SUPERIOR_MM =
+            8;
+
+        const MARGEN_INFERIOR_MM =
+            8;
+
+
+        // ============================================================
+        // 📏 ÁREA DISPONIBLE
         // ============================================================
 
         const ANCHO_UTIL_MM =
-            A4_WIDTH_MM -
+            CARTA_WIDTH_MM -
             (MARGEN_LATERAL_MM * 2);
 
-
-        // El contenido ocupará TODO el ancho disponible
-        const imgWidthMm =
-            ANCHO_UTIL_MM;
-
-
-        // Mantener proporción original
-        const imgHeightMm =
-            (canvas.height / canvas.width) *
-            imgWidthMm;
-
-
-        console.log(
-            `📐 PDF: ${imgWidthMm.toFixed(2)}mm x ` +
-            `${imgHeightMm.toFixed(2)}mm`
-        );
+        const ALTO_UTIL_MM =
+            CARTA_HEIGHT_MM -
+            MARGEN_SUPERIOR_MM -
+            MARGEN_INFERIOR_MM;
 
 
         // ============================================================
-        // 12. CREAR PDF
+        // 🖨️ CREAR PDF CARTA
         // ============================================================
 
-        const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'a4',
-            compress: true
-        });
+        const pdf =
+            new jsPDF({
+                orientation: 'portrait',
 
+                unit: 'mm',
 
-        // ============================================================
-        // 13. POSICIÓN DEL CONTENIDO
-        // ============================================================
+                format: 'letter',
 
-        // 🔥 YA NO CENTRAMOS VERTICALMENTE
-        // El documento empieza arriba.
-
-        const offsetX =
-            MARGEN_LATERAL_MM;
-
-        const offsetY =
-            MARGEN_SUPERIOR_MM;
+                compress: true
+            });
 
 
         // ============================================================
-        // 14. CONVERTIR CANVAS A IMAGEN
+        // 🖼️ CONVERTIR CANVAS A IMAGEN
         // ============================================================
 
         const imgData =
@@ -3450,66 +3526,160 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 15. CONTROL DE ALTURA
+        // 📐 CALCULAR PROPORCIÓN
         // ============================================================
 
-        const ALTO_DISPONIBLE_MM =
-            A4_HEIGHT_MM -
-            MARGEN_SUPERIOR_MM -
-            MARGEN_INFERIOR_MM;
+        const proporcion =
+            canvas.height /
+            canvas.width;
 
 
         // ============================================================
-        // 16. SI CABE EN UNA HOJA
+        // 📏 TAMAÑO BASE
         // ============================================================
 
-        if (imgHeightMm <= ALTO_DISPONIBLE_MM) {
+        let imgWidthMm =
+            ANCHO_UTIL_MM;
 
-            pdf.addImage(
-                imgData,
-                'JPEG',
-                offsetX,
-                offsetY,
-                imgWidthMm,
-                imgHeightMm
-            );
+        let imgHeightMm =
+            imgWidthMm *
+            proporcion;
 
-        } else {
 
-            // ========================================================
-            // SI ES MÁS ALTO QUE A4
-            // ========================================================
-            // Lo reducimos proporcionalmente para intentar
-            // mantenerlo en una sola página.
+        // ============================================================
+        // 🔥 HACER QUE APROVECHE MEJOR LA HOJA
+        // ============================================================
+        //
+        // Como este informe tiene una cantidad de información
+        // conocida y siempre cabe en una sola hoja, podemos
+        // aumentarlo proporcionalmente.
+        //
+        // IMPORTANTE:
+        // No deformamos las fotos ni el texto.
+        // Se mantiene la misma proporción.
+        // ============================================================
 
-            const escalaVertical =
-                ALTO_DISPONIBLE_MM /
-                imgHeightMm;
+        const escalaMaxima =
+            ALTO_UTIL_MM /
+            imgHeightMm;
 
-            const nuevoAncho =
+
+        if (escalaMaxima > 1) {
+
+            // Aumentamos hasta un máximo de 1.35x
+            // para que no llegue pegado a los bordes.
+
+            const escalaObjetivo =
+                Math.min(
+                    1.35,
+                    escalaMaxima
+                );
+
+
+            imgWidthMm =
                 imgWidthMm *
-                escalaVertical;
+                escalaObjetivo;
 
-            const nuevaAltura =
-                ALTO_DISPONIBLE_MM;
 
-            // Centrar horizontalmente si fue necesario reducir
-            const nuevoOffsetX =
-                (A4_WIDTH_MM - nuevoAncho) / 2;
-
-            pdf.addImage(
-                imgData,
-                'JPEG',
-                nuevoOffsetX,
-                offsetY,
-                nuevoAncho,
-                nuevaAltura
-            );
+            imgHeightMm =
+                imgHeightMm *
+                escalaObjetivo;
         }
 
 
         // ============================================================
-        // 17. OBTENER PDF COMO BLOB
+        // 🛡️ SEGURIDAD:
+        // SI POR ALGUNA RAZÓN SUPERA EL ALTO DE CARTA
+        // ============================================================
+
+        if (
+            imgHeightMm >
+            ALTO_UTIL_MM
+        ) {
+
+            const escalaVertical =
+                ALTO_UTIL_MM /
+                imgHeightMm;
+
+
+            imgWidthMm =
+                imgWidthMm *
+                escalaVertical;
+
+
+            imgHeightMm =
+                ALTO_UTIL_MM;
+        }
+
+
+        // ============================================================
+        // 📍 CENTRAR HORIZONTALMENTE
+        // ============================================================
+
+        const offsetX =
+            (CARTA_WIDTH_MM -
+                imgWidthMm) / 2;
+
+
+        // ============================================================
+        // 🔝 EMPEZAR CERCA DE ARRIBA
+        // ============================================================
+
+        const offsetY =
+            MARGEN_SUPERIOR_MM;
+
+
+        // ============================================================
+        // 📊 DEBUG
+        // ============================================================
+
+        console.log(
+            '================================'
+        );
+
+        console.log(
+            '📄 PDF CARTA'
+        );
+
+        console.log(
+            `📐 Hoja: ${CARTA_WIDTH_MM} x ${CARTA_HEIGHT_MM} mm`
+        );
+
+        console.log(
+            `📏 Área útil: ${ANCHO_UTIL_MM} x ${ALTO_UTIL_MM} mm`
+        );
+
+        console.log(
+            `🖼️ Reporte: ${imgWidthMm.toFixed(2)} x ${imgHeightMm.toFixed(2)} mm`
+        );
+
+        console.log(
+            `📍 Posición: X=${offsetX.toFixed(2)}, Y=${offsetY.toFixed(2)}`
+        );
+
+        console.log(
+            '================================'
+        );
+
+
+        // ============================================================
+        // 🖨️ AGREGAR REPORTE
+        // ============================================================
+
+        pdf.addImage(
+            imgData,
+            'JPEG',
+
+            offsetX,
+            offsetY,
+
+            imgWidthMm,
+            imgHeightMm
+        );
+
+
+        // ============================================================
+        // 12. OBTENER PDF COMO BLOB
         // ============================================================
 
         const pdfBlob =
@@ -3524,25 +3694,36 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 18. DESCARGAR PDF
+        // 13. DESCARGAR PDF
         // ============================================================
 
         const link =
             document.createElement('a');
 
         link.href =
-            URL.createObjectURL(pdfBlob);
+            URL.createObjectURL(
+                pdfBlob
+            );
 
         link.download =
-            `Recepcion_${detalleParaPDF.codigo_unico || 'orden'}.pdf`;
+            `Recepcion_${
+                detalleParaPDF.codigo_unico ||
+                'orden'
+            }.pdf`;
 
-        document.body.appendChild(link);
+        document.body.appendChild(
+            link
+        );
 
         link.click();
 
-        document.body.removeChild(link);
+        document.body.removeChild(
+            link
+        );
 
-        URL.revokeObjectURL(link.href);
+        URL.revokeObjectURL(
+            link.href
+        );
 
 
         mostrarNotificacion(
@@ -3552,7 +3733,7 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 19. SUBIR PDF A GOOGLE DRIVE
+        // 14. SUBIR PDF A GOOGLE DRIVE
         // ============================================================
 
         updateProgressBar(95);
@@ -3565,14 +3746,21 @@ async function descargarPDFFinal() {
         const reader =
             new FileReader();
 
+
         const pdfBase64 =
-            await new Promise((resolve) => {
+            await new Promise(
+                (resolve) => {
 
-                reader.onload = () =>
-                    resolve(reader.result);
+                    reader.onload =
+                        () => resolve(
+                            reader.result
+                        );
 
-                reader.readAsDataURL(pdfBlob);
-            });
+                    reader.readAsDataURL(
+                        pdfBlob
+                    );
+                }
+            );
 
 
         const response =
@@ -3581,17 +3769,19 @@ async function descargarPDFFinal() {
                 {
                     method: 'POST',
 
-                    body: JSON.stringify({
-                        pdf_base64: pdfBase64,
+                    body:
+                        JSON.stringify({
+                            pdf_base64:
+                                pdfBase64,
 
-                        id_orden:
-                            detalleParaPDF.id ||
-                            detalleParaPDF.id_orden,
+                            id_orden:
+                                detalleParaPDF.id ||
+                                detalleParaPDF.id_orden,
 
-                        codigo_unico:
-                            detalleParaPDF.codigo_unico ||
-                            'orden'
-                    })
+                            codigo_unico:
+                                detalleParaPDF.codigo_unico ||
+                                'orden'
+                        })
                 }
             );
 
@@ -3612,6 +3802,10 @@ async function descargarPDFFinal() {
             await response.json();
 
 
+        // ============================================================
+        // 15. FINALIZAR PROGRESO
+        // ============================================================
+
         updateProgressBar(100);
 
         updateProgressMessage(
@@ -3620,15 +3814,18 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 20. LIMPIAR CONTENEDOR
+        // 16. LIMPIAR CONTENEDOR
         // ============================================================
 
         setTimeout(() => {
 
             if (
                 container &&
-                document.body.contains(container)
+                document.body.contains(
+                    container
+                )
             ) {
+
                 document.body.removeChild(
                     container
                 );
@@ -3656,7 +3853,9 @@ async function descargarPDFFinal() {
             error
         );
 
+
         completeProgress(false);
+
 
         mostrarNotificacion(
             '❌ Error al generar PDF: ' +
@@ -3665,30 +3864,37 @@ async function descargarPDFFinal() {
         );
 
 
-        // Limpiar contenedor aunque haya error
+        // ============================================================
+        // LIMPIAR CONTENEDOR SI HAY ERROR
+        // ============================================================
+
         if (
             container &&
-            document.body.contains(container)
+            document.body.contains(
+                container
+            )
         ) {
+
             document.body.removeChild(
                 container
             );
         }
-
     }
 
 
-    // ================================================================
-    // 21. RESTAURAR BOTÓN
-    // ================================================================
+    // ============================================================
+    // 17. RESTAURAR BOTÓN
+    // ============================================================
 
     if (btnDescargar) {
 
-        btnDescargar.disabled = false;
+        btnDescargar.disabled =
+            false;
 
         btnDescargar.innerHTML =
             '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
     }
+
 
     descargandoPDF = false;
 }

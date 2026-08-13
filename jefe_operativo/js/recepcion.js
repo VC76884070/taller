@@ -3072,7 +3072,6 @@ async function descargarPDFFinal() {
         const fotos = datosReporteFinal.fotos || {};
         const camposFotos = ['url_lateral_izquierda', 'url_lateral_derecha', 'url_foto_frontal', 'url_foto_trasera', 'url_foto_superior', 'url_foto_inferior', 'url_foto_tablero'];
         
-        // 🔥 CONVERTIR FOTOS A BASE64 PARA EL PDF
         updateProgressMessage('Convirtiendo fotos...');
         const fotosNecesitanConversion = camposFotos.filter(c => {
             const url = fotos[c];
@@ -3094,14 +3093,27 @@ async function descargarPDFFinal() {
         detalleParaPDF.fotos_base64 = detalleParaPDF.fotos;
         updateProgressBar(40);
         
-        // 🔥 GENERAR HTML DEL REPORTE
         updateProgressMessage('Generando contenido del reporte...');
         const reporteHTML = generarHTMLReporte(detalleParaPDF);
         
         // Crear contenedor temporal
         const container = document.createElement('div');
         container.id = 'pdfContainer';
-        container.style.cssText = `position:fixed;left:0;top:0;width:100%;max-width:800px;margin:0 auto;padding:30px;background:white;font-family:Arial,sans-serif;z-index:-1;opacity:0;pointer-events:none;overflow:visible;`;
+        container.style.cssText = `
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0;
+            background: white;
+            font-family: Arial, sans-serif;
+            z-index: -1;
+            opacity: 0;
+            pointer-events: none;
+            overflow: visible;
+        `;
         container.innerHTML = reporteHTML;
         document.body.appendChild(container);
         
@@ -3109,7 +3121,6 @@ async function descargarPDFFinal() {
         updateProgressMessage('Renderizando PDF...');
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        // 🔥 CARGAR html2pdf.js SI ES NECESARIO
         if (typeof html2pdf === 'undefined') {
             await new Promise((resolve, reject) => {
                 const script = document.createElement('script');
@@ -3126,10 +3137,10 @@ async function descargarPDFFinal() {
         const elemento = container.querySelector('.reporte-container');
         if (!elemento) throw new Error('No se encontró el contenido del reporte');
         
-        // 🔥 GENERAR PDF COMO BLOB
+        // 🔥 GENERAR PDF CON MÁRGENES REDUCIDOS
         const pdfBlob = await html2pdf()
             .set({
-                margin: [9, 9, 9, 9],
+                margin: [2, 2, 2, 2],  // 🔥 REDUCIDO DE 9mm a 2mm
                 filename: `Reporte_${detalleParaPDF.codigo_unico || 'orden'}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { 
@@ -3137,7 +3148,9 @@ async function descargarPDFFinal() {
                     useCORS: true, 
                     allowTaint: true, 
                     backgroundColor: '#ffffff', 
-                    logging: false 
+                    logging: false,
+                    width: 800,
+                    height: elemento.scrollHeight
                 },
                 jsPDF: { 
                     unit: 'mm', 
@@ -3151,7 +3164,7 @@ async function descargarPDFFinal() {
         updateProgressBar(75);
         updateProgressMessage('Preparando para descargar...');
         
-        // 🔥 1. DESCARGAR EL PDF LOCALMENTE
+        // 🔥 DESCARGAR EL PDF
         const link = document.createElement('a');
         link.href = URL.createObjectURL(pdfBlob);
         link.download = `Recepcion_${detalleParaPDF.codigo_unico || 'orden'}.pdf`;
@@ -3165,14 +3178,12 @@ async function descargarPDFFinal() {
         updateProgressBar(85);
         updateProgressMessage('Subiendo PDF a Google Drive...');
         
-        // 🔥 2. CONVERTIR BLOB A BASE64 PARA SUBIR A DRIVE
         const reader = new FileReader();
         const pdfBase64 = await new Promise((resolve) => {
             reader.onload = () => resolve(reader.result);
             reader.readAsDataURL(pdfBlob);
         });
         
-        // 🔥 3. ENVIAR AL BACKEND PARA SUBIR A GOOGLE DRIVE
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/subir-pdf-recepcion`, {
             method: 'POST',
             body: JSON.stringify({
@@ -3192,7 +3203,6 @@ async function descargarPDFFinal() {
         updateProgressBar(100);
         updateProgressMessage('¡PDF guardado en Google Drive!');
         
-        // 🔥 LIMPIAR CONTENEDOR
         setTimeout(() => {
             if (container && document.body.contains(container)) {
                 document.body.removeChild(container);

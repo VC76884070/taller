@@ -22,18 +22,27 @@ jobs:
           port: ${{ secrets.HETZNER_PORT || 22 }}
           script: |
             echo "🚀 Desplegando en DESARROLLO..."
+            
+            # ============================================
+            # 1. ACTUALIZAR TODO EL REPOSITORIO
+            # ============================================
             cd /home/vania/apps/taller-desarrollo
             echo "📥 Pull de cambios..."
             git pull origin ia-desarrollo
             
+            # ============================================
+            # 2. BACKEND
+            # ============================================
             echo "🐍 Activando virtualenv..."
             source /home/vania/apps/taller-desarrollo/venv/bin/activate
             echo "📦 Instalando dependencias..."
             pip install -r backend/requirements.txt
-            
             echo "🔄 Reiniciando Gunicorn..."
             sudo systemctl restart taller-dev
             
+            # ============================================
+            # 3. RECARGAR NGINX (para que tome los cambios del frontend)
+            # ============================================
             echo "🔄 Recargando Nginx..."
             sudo systemctl reload nginx
             
@@ -55,18 +64,27 @@ jobs:
           port: ${{ secrets.HETZNER_PORT || 22 }}
           script: |
             echo "🚀 Desplegando en PRODUCCIÓN..."
+            
+            # ============================================
+            # 1. ACTUALIZAR TODO EL REPOSITORIO
+            # ============================================
             cd /home/vania/apps/taller
             echo "📥 Pull de cambios..."
             git pull origin master
             
+            # ============================================
+            # 2. BACKEND
+            # ============================================
             echo "🐍 Activando virtualenv..."
             source /home/vania/apps/taller/venv/bin/activate
             echo "📦 Instalando dependencias..."
             pip install -r backend/requirements.txt
-            
             echo "🔄 Reiniciando Gunicorn..."
             sudo systemctl restart taller-prod
             
+            # ============================================
+            # 3. RECARGAR NGINX (para que tome los cambios del frontend)
+            # ============================================
             echo "🔄 Recargando Nginx..."
             sudo systemctl reload nginx
             

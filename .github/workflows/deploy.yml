@@ -22,42 +22,19 @@ jobs:
           port: ${{ secrets.HETZNER_PORT || 22 }}
           script: |
             echo "🚀 Desplegando en DESARROLLO..."
-<<<<<<< HEAD
             
-            # ============================================
-            # 1. ACTUALIZAR TODO EL REPOSITORIO
-            # ============================================
-=======
->>>>>>> ia-desarrollo
             cd /home/vania/apps/taller-desarrollo
             echo "📥 Pull de cambios..."
             git pull origin ia-desarrollo
             
-<<<<<<< HEAD
-            # ============================================
-            # 2. BACKEND
-            # ============================================
-=======
->>>>>>> ia-desarrollo
             echo "🐍 Activando virtualenv..."
             source /home/vania/apps/taller-desarrollo/venv/bin/activate
             echo "📦 Instalando dependencias..."
             pip install -r backend/requirements.txt
-<<<<<<< HEAD
-=======
             
->>>>>>> ia-desarrollo
             echo "🔄 Reiniciando Gunicorn..."
             sudo systemctl restart taller-dev
             
-            # ============================================
-<<<<<<< HEAD
-            # 3. RECARGAR NGINX (para que tome los cambios del frontend)
-=======
-            # ¡NO HAY QUE COPIAR NADA! Nginx ya apunta al repo
-            # Solo recargar Nginx para que tome los cambios
->>>>>>> ia-desarrollo
-            # ============================================
             echo "🔄 Recargando Nginx..."
             sudo systemctl reload nginx
             
@@ -79,42 +56,19 @@ jobs:
           port: ${{ secrets.HETZNER_PORT || 22 }}
           script: |
             echo "🚀 Desplegando en PRODUCCIÓN..."
-<<<<<<< HEAD
             
-            # ============================================
-            # 1. ACTUALIZAR TODO EL REPOSITORIO
-            # ============================================
-=======
->>>>>>> ia-desarrollo
             cd /home/vania/apps/taller
             echo "📥 Pull de cambios..."
             git pull origin master
             
-<<<<<<< HEAD
-            # ============================================
-            # 2. BACKEND
-            # ============================================
-=======
->>>>>>> ia-desarrollo
             echo "🐍 Activando virtualenv..."
             source /home/vania/apps/taller/venv/bin/activate
             echo "📦 Instalando dependencias..."
             pip install -r backend/requirements.txt
-<<<<<<< HEAD
-=======
             
->>>>>>> ia-desarrollo
             echo "🔄 Reiniciando Gunicorn..."
             sudo systemctl restart taller-prod
             
-            # ============================================
-<<<<<<< HEAD
-            # 3. RECARGAR NGINX (para que tome los cambios del frontend)
-=======
-            # ¡NO HAY QUE COPIAR NADA! Nginx ya apunta al repo
-            # Solo recargar Nginx para que tome los cambios
->>>>>>> ia-desarrollo
-            # ============================================
             echo "🔄 Recargando Nginx..."
             sudo systemctl reload nginx
             

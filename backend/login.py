@@ -1,6 +1,6 @@
 # =====================================================
 # LOGIN Y AUTENTICACIÓN - FURIA MOTOR COMPANY SRL
-# VERSIÓN COMPLETA CON APROBACIÓN DE SOLICITUDES
+# VERSIÓN CON ROLES ACTUALIZADOS
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -15,6 +15,11 @@ import string
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import os
+from dotenv import load_dotenv
+
+# Cargar variables de entorno
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,13 +30,35 @@ SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
 
 # =====================================================
+# CONFIGURACIÓN DE ENTORNOS - HETZNER
+# =====================================================
+
+ENVIRONMENT = os.environ.get('FLASK_ENV', 'development')
+
+if ENVIRONMENT == 'production':
+    # PRODUCCIÓN
+    FRONTEND_URL = 'https://www.furiamotorcompany.com'
+    BACKEND_URL = 'https://www.furiamotorcompany.com'
+    ADMIN_EMAIL = 'vaniacarrasco68056530@gmail.com'
+    logger.info("🚀 Entorno: PRODUCCIÓN")
+else:
+    # DESARROLLO
+    FRONTEND_URL = 'https://dev.furiamotorcompany.com'
+    BACKEND_URL = 'https://dev.furiamotorcompany.com'
+    ADMIN_EMAIL = 'vaniacarrasco68056530@gmail.com'
+    logger.info("🧪 Entorno: DESARROLLO")
+
+logger.info(f"📡 FRONTEND_URL: {FRONTEND_URL}")
+logger.info(f"📡 BACKEND_URL: {BACKEND_URL}")
+
+# =====================================================
 # CONFIGURACIÓN DE CORREO
 # =====================================================
 EMAIL_CONFIG = {
     'smtp_server': 'smtp.gmail.com',
     'smtp_port': 587,
-    'email_user': 'vaniacarrasco68056530@gmail.com',
-    'email_password': 'uahnoblikntnqlbk',  # Cambiar por tu contraseña
+    'email_user': os.environ.get('EMAIL_USER', 'vaniacarrasco68056530@gmail.com'),
+    'email_password': os.environ.get('EMAIL_PASSWORD', 'uahnoblikntnqlbk'),
     'from_name': 'FURIA MOTOR COMPANY'
 }
 
@@ -75,7 +102,7 @@ def enviar_email(destinatario, asunto, cuerpo_html):
         return False
 
 def obtener_roles_usuario(id_usuario):
-    """Obtener roles de un usuario desde la tabla usuario_rol - CON LOGS Y NORMALIZACIÓN"""
+    """Obtener roles de un usuario desde la tabla usuario_rol - CON ROLES ACTUALIZADOS"""
     try:
         logger.info(f"🔍 [LOGIN] Buscando roles para usuario ID: {id_usuario}")
         
@@ -104,26 +131,10 @@ def obtener_roles_usuario(id_usuario):
         
         logger.info(f"📊 [LOGIN] Datos de roles desde tabla rol: {roles_data.data}")
         
-        roles_originales = [r['nombre_rol'] for r in (roles_data.data or [])]
-        logger.info(f"📋 [LOGIN] Roles originales desde BD: {roles_originales}")
+        roles = [r['nombre_rol'] for r in (roles_data.data or [])]
+        logger.info(f"📋 [LOGIN] Roles desde BD: {roles}")
         
-        roles_normalizados = []
-        for rol in roles_originales:
-            rol_lower = rol.lower()
-            if rol_lower == 'tecnico_mecanico':
-                roles_normalizados.append('tecnico')
-                logger.info(f"🔄 [LOGIN] Normalizado: '{rol}' → 'tecnico'")
-            elif rol_lower == 'tecnico':
-                roles_normalizados.append('tecnico')
-                logger.info(f"✅ [LOGIN] Manteniendo: '{rol}'")
-            else:
-                roles_normalizados.append(rol_lower)
-                logger.info(f"✅ [LOGIN] Manteniendo: '{rol}'")
-        
-        roles_normalizados = list(set(roles_normalizados))
-        logger.info(f"✅ [LOGIN] Roles finales normalizados: {roles_normalizados}")
-        
-        return roles_normalizados
+        return roles
         
     except Exception as e:
         logger.error(f"❌ [LOGIN] Error obteniendo roles: {str(e)}")
@@ -365,7 +376,8 @@ def health_check():
     return jsonify({
         'status': 'ok',
         'message': 'Servidor FURIA MOTOR funcionando',
-        'timestamp': datetime.datetime.now().isoformat()
+        'timestamp': datetime.datetime.now().isoformat(),
+        'environment': ENVIRONMENT
     }), 200
 
 # =====================================================
@@ -496,7 +508,7 @@ def cambiar_contrasena():
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# REGISTRO DE PERSONAL (SOLICITUD)
+# REGISTRO DE PERSONAL (SOLICITUD) - CON ROLES ACTUALIZADOS
 # =====================================================
 
 @login_bp.route('/api/registro/personal/solicitar', methods=['POST'])
@@ -546,26 +558,27 @@ def solicitar_registro_personal():
         solicitud_id = solicitud_result.data[0]['id']
         
         # =====================================================
-        # ENVIAR CORREO CON BOTONES
+        # GENERAR TOKEN Y ENLACES
         # =====================================================
         
-        # Generar token para aprobación
         token = generar_token_aprobacion(solicitud_id)
-        base_url = "http://localhost:5000"
-        link_aprobar = f"{base_url}/api/registro/aprobar/{token}"
-        link_rechazar = f"{base_url}/api/registro/rechazar/{token}"
+        link_aprobar = f"{BACKEND_URL}/api/registro/aprobar/{token}"
+        link_rechazar = f"{BACKEND_URL}/api/registro/rechazar/{token}"
         
-        # Mapeo de roles
+        # Mapeo de roles actualizado
         roles_nombres = {
-            1: 'Administrador General',
-            2: 'Jefe Operativo',
-            3: 'Jefe de Taller',
-            4: 'Técnico Mecánico',
-            5: 'Encargado de Repuestos/Almacén'
+            1: 'Jefe Operativo',
+            2: 'Jefe de Taller',
+            3: 'Técnico Mecánico',
+            4: 'Encargado de Repuestos'
         }
         rol_nombre = roles_nombres.get(id_rol, 'Desconocido')
         
-        admin_email = 'vaniacarrasco68056530@gmail.com'
+        # =====================================================
+        # ENVIAR CORREO AL ADMINISTRADOR
+        # =====================================================
+        
+        admin_email = ADMIN_EMAIL
         asunto = f"🔔 NUEVA SOLICITUD DE REGISTRO - {nombre}"
         
         cuerpo_html = f"""
@@ -575,111 +588,26 @@ def solicitar_registro_personal():
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    background-color: #f4f4f4;
-                    margin: 0;
-                    padding: 0;
-                }}
-                .container {{
-                    max-width: 600px;
-                    margin: 20px auto;
-                    background-color: #ffffff;
-                    border-radius: 10px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                    overflow: hidden;
-                }}
-                .header {{
-                    background: linear-gradient(135deg, #C1121F, #8B0000);
-                    padding: 30px 20px;
-                    text-align: center;
-                }}
-                .header h1 {{
-                    color: #ffffff;
-                    margin: 0;
-                    font-size: 24px;
-                    font-weight: 700;
-                    letter-spacing: 2px;
-                }}
-                .header p {{
-                    color: rgba(255,255,255,0.8);
-                    margin: 5px 0 0;
-                    font-size: 14px;
-                }}
-                .content {{
-                    padding: 30px;
-                }}
-                .content h2 {{
-                    color: #333;
-                    margin-top: 0;
-                    font-size: 20px;
-                }}
-                .info-item {{
-                    padding: 8px 0;
-                    border-bottom: 1px solid #eee;
-                    display: flex;
-                }}
-                .info-label {{
-                    font-weight: bold;
-                    color: #555;
-                    width: 120px;
-                    flex-shrink: 0;
-                }}
-                .info-value {{
-                    color: #333;
-                }}
-                .button-group {{
-                    margin: 30px 0 20px;
-                    text-align: center;
-                }}
-                .btn {{
-                    display: inline-block;
-                    padding: 12px 30px;
-                    text-decoration: none;
-                    border-radius: 25px;
-                    font-weight: bold;
-                    margin: 5px 10px;
-                    transition: all 0.3s ease;
-                    font-size: 14px;
-                }}
-                .btn-approve {{
-                    background-color: #28a745;
-                    color: white;
-                    border: 2px solid #28a745;
-                }}
-                .btn-approve:hover {{
-                    background-color: #218838;
-                    border-color: #1e7e34;
-                    transform: scale(1.05);
-                }}
-                .btn-reject {{
-                    background-color: #dc3545;
-                    color: white;
-                    border: 2px solid #dc3545;
-                }}
-                .btn-reject:hover {{
-                    background-color: #c82333;
-                    border-color: #bd2130;
-                    transform: scale(1.05);
-                }}
-                .footer {{
-                    background-color: #f8f9fa;
-                    padding: 15px 20px;
-                    text-align: center;
-                    font-size: 12px;
-                    color: #888;
-                    border-top: 1px solid #eee;
-                }}
-                .footer a {{
-                    color: #C1121F;
-                    text-decoration: none;
-                }}
-                .expiry {{
-                    color: #888;
-                    font-size: 12px;
-                    text-align: center;
-                    margin-top: 15px;
-                }}
+                body {{ font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }}
+                .container {{ max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden; }}
+                .header {{ background: linear-gradient(135deg, #C1121F, #8B0000); padding: 30px 20px; text-align: center; }}
+                .header h1 {{ color: #ffffff; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: 2px; }}
+                .header p {{ color: rgba(255,255,255,0.8); margin: 5px 0 0; font-size: 14px; }}
+                .content {{ padding: 30px; }}
+                .content h2 {{ color: #333; margin-top: 0; font-size: 20px; }}
+                .info-item {{ padding: 8px 0; border-bottom: 1px solid #eee; display: flex; }}
+                .info-label {{ font-weight: bold; color: #555; width: 130px; flex-shrink: 0; }}
+                .info-value {{ color: #333; }}
+                .button-group {{ margin: 30px 0 20px; text-align: center; }}
+                .btn {{ display: inline-block; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; margin: 5px 10px; transition: all 0.3s ease; font-size: 14px; }}
+                .btn-approve {{ background-color: #28a745; color: white; border: 2px solid #28a745; }}
+                .btn-approve:hover {{ background-color: #218838; border-color: #1e7e34; transform: scale(1.05); }}
+                .btn-reject {{ background-color: #dc3545; color: white; border: 2px solid #dc3545; }}
+                .btn-reject:hover {{ background-color: #c82333; border-color: #bd2130; transform: scale(1.05); }}
+                .footer {{ background-color: #f8f9fa; padding: 15px 20px; text-align: center; font-size: 12px; color: #888; border-top: 1px solid #eee; }}
+                .footer a {{ color: #C1121F; text-decoration: none; }}
+                .expiry {{ color: #888; font-size: 12px; text-align: center; margin-top: 15px; }}
+                .badge {{ display: inline-block; background: #f0f0f0; padding: 2px 10px; border-radius: 12px; font-size: 11px; color: #666; }}
             </style>
         </head>
         <body>
@@ -697,7 +625,7 @@ def solicitar_registro_personal():
                     <div class="info-item"><span class="info-label">📄 Documento:</span><span class="info-value">{documento}</span></div>
                     <div class="info-item"><span class="info-label">📱 Teléfono:</span><span class="info-value">{telefono or 'N/A'}</span></div>
                     <div class="info-item"><span class="info-label">📍 Dirección:</span><span class="info-value">{direccion or 'N/A'}</span></div>
-                    <div class="info-item"><span class="info-label">🎯 Rol solicitado:</span><span class="info-value">{rol_nombre}</span></div>
+                    <div class="info-item"><span class="info-label">🎯 Rol solicitado:</span><span class="info-value"><strong>{rol_nombre}</strong></span></div>
                     
                     <div class="button-group">
                         <a href="{link_aprobar}" class="btn btn-approve">✅ APROBAR SOLICITUD</a>
@@ -705,9 +633,10 @@ def solicitar_registro_personal():
                     </div>
                     
                     <div class="expiry">⏰ Este enlace expirará en 7 días.</div>
+                    <div class="expiry" style="margin-top:5px;">🌐 Entorno: <span class="badge">{ENVIRONMENT.upper()}</span></div>
                 </div>
                 <div class="footer">
-                    FURIA MOTOR COMPANY &copy; 2026 - <a href="http://localhost:5000">Sistema de Gestión de Taller</a>
+                    FURIA MOTOR COMPANY &copy; 2026 - <a href="{FRONTEND_URL}">Sistema de Gestión de Taller</a>
                 </div>
             </div>
         </body>
@@ -716,14 +645,43 @@ def solicitar_registro_personal():
         
         enviar_email(admin_email, asunto, cuerpo_html)
         
+        # =====================================================
+        # ENVIAR CORREO DE CONFIRMACIÓN AL SOLICITANTE
+        # =====================================================
+        
+        email_confirmacion = f"""
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"></head>
+        <body style="font-family: Arial; text-align: center; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; border: 1px solid #eee;">
+                <div style="background: #C1121F; padding: 20px;"><h1 style="color: white; margin: 0;">FURIA MOTOR</h1></div>
+                <div style="padding: 30px;">
+                    <h2>📩 Solicitud Recibida</h2>
+                    <p>Hola <strong>{nombre}</strong>,</p>
+                    <p>Hemos recibido tu solicitud de registro en el sistema como <strong>{rol_nombre}</strong>.</p>
+                    <p>El administrador revisará tu solicitud y te notificaremos cuando sea aprobada.</p>
+                    <p style="color: #888; font-size: 14px;">Este proceso puede tomar hasta 24 horas hábiles.</p>
+                    <br>
+                    <a href="{FRONTEND_URL}" style="background: #C1121F; color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px;">Volver al inicio</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        enviar_email(email, "📩 Solicitud de Registro Recibida - FURIA MOTOR", email_confirmacion)
+        
         return jsonify({
             'success': True,
             'message': 'Solicitud de registro enviada. Espera aprobación del administrador.',
-            'solicitud_id': solicitud_id
+            'solicitud_id': solicitud_id,
+            'environment': ENVIRONMENT
         }), 200
         
     except Exception as e:
         logger.error(f"Error en solicitud de registro personal: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
@@ -787,14 +745,34 @@ def aprobar_solicitud_desde_link(token):
                 'fecha_asignacion': datetime.datetime.now().isoformat()
             }).execute()
         
+        # Mapeo de roles actualizado para el correo
+        roles_nombres = {
+            1: 'Jefe Operativo',
+            2: 'Jefe de Taller',
+            3: 'Técnico Mecánico',
+            4: 'Encargado de Repuestos'
+        }
+        rol_nombre = roles_nombres.get(solicitud_data['id_rol_solicitado'], 'Desconocido')
+        
         # Enviar correo de confirmación al usuario
         email_confirmacion = f"""
-        <h2>✅ ¡Tu solicitud ha sido aprobada!</h2>
-        <p>Hola <strong>{solicitud_data['nombre']}</strong>,</p>
-        <p>Tu solicitud de registro en FURIA MOTOR ha sido <strong style="color: green;">APROBADA</strong>.</p>
-        <p>Ya puedes iniciar sesión en el sistema.</p>
-        <p><a href="http://localhost:5000" style="background: #C1121F; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Iniciar Sesión</a></p>
-        <p><small>FURIA MOTOR - Sistema de Gestión de Taller</small></p>
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"></head>
+        <body style="font-family: Arial; text-align: center; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; border: 1px solid #eee;">
+                <div style="background: #28a745; padding: 20px;"><h1 style="color: white; margin: 0;">✅ APROBADO</h1></div>
+                <div style="padding: 30px;">
+                    <h2>¡Tu solicitud ha sido aprobada!</h2>
+                    <p>Hola <strong>{solicitud_data['nombre']}</strong>,</p>
+                    <p>Tu solicitud de registro en FURIA MOTOR como <strong>{rol_nombre}</strong> ha sido <strong style="color: green;">APROBADA</strong>.</p>
+                    <p>Ya puedes iniciar sesión en el sistema con tu documento y contraseña.</p>
+                    <br>
+                    <a href="{FRONTEND_URL}" style="background: #C1121F; color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px;">Iniciar Sesión</a>
+                </div>
+            </div>
+        </body>
+        </html>
         """
         enviar_email(solicitud_data['email'], "✅ Solicitud Aprobada - FURIA MOTOR", email_confirmacion)
         
@@ -807,50 +785,26 @@ def aprobar_solicitud_desde_link(token):
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>✅ Solicitud Aprobada - FURIA MOTOR</title>
             <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    background-color: #f4f4f4;
-                    margin: 0;
-                    padding: 0;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    min-height: 100vh;
-                }}
-                .container {{
-                    max-width: 500px;
-                    background: white;
-                    border-radius: 16px;
-                    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-                    overflow: hidden;
-                    text-align: center;
-                    padding: 40px 30px;
-                }}
+                body {{ font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }}
+                .container {{ max-width: 500px; background: white; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); overflow: hidden; text-align: center; padding: 40px 30px; }}
                 .icon {{ font-size: 64px; margin-bottom: 20px; }}
                 .title {{ color: #28a745; font-size: 28px; margin-bottom: 10px; }}
                 .subtitle {{ color: #555; font-size: 16px; margin-bottom: 30px; }}
-                .btn {{
-                    display: inline-block;
-                    background: #C1121F;
-                    color: white;
-                    padding: 14px 40px;
-                    text-decoration: none;
-                    border-radius: 25px;
-                    font-weight: bold;
-                    transition: background 0.3s;
-                }}
+                .btn {{ display: inline-block; background: #C1121F; color: white; padding: 14px 40px; text-decoration: none; border-radius: 25px; font-weight: bold; transition: background 0.3s; }}
                 .btn:hover {{ background: #8B0000; }}
                 .footer {{ margin-top: 30px; font-size: 12px; color: #999; }}
+                .env-badge {{ display: inline-block; background: #f0f0f0; padding: 2px 12px; border-radius: 12px; font-size: 11px; color: #666; margin-top: 10px; }}
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="icon">✅</div>
                 <h1 class="title">¡Solicitud Aprobada!</h1>
-                <p class="subtitle">La solicitud de <strong>{solicitud_data['nombre']}</strong> ha sido aprobada exitosamente.</p>
+                <p class="subtitle">La solicitud de <strong>{solicitud_data['nombre']}</strong> como <strong>{rol_nombre}</strong> ha sido aprobada exitosamente.</p>
                 <p>El usuario ya puede iniciar sesión en el sistema.</p>
                 <br>
-                <a href="http://localhost:5000" class="btn">Ir al sistema</a>
+                <a href="{FRONTEND_URL}" class="btn">Ir al sistema</a>
+                <div class="env-badge">🌐 {ENVIRONMENT.upper()}</div>
                 <div class="footer">FURIA MOTOR - Sistema de Gestión de Taller</div>
             </div>
         </body>
@@ -883,7 +837,8 @@ def rechazar_solicitud_desde_link(token):
             .execute()
         
         if not solicitud.data:
-            return "<h2>❌ Error: Solicitud no encontrada</h2>", 404        
+            return "<h2>❌ Error: Solicitud no encontrada</h2>", 404
+        
         solicitud_data = solicitud.data[0]
         
         if solicitud_data['estado'] != 'pendiente':
@@ -901,11 +856,23 @@ def rechazar_solicitud_desde_link(token):
         
         # Enviar correo de rechazo al usuario
         email_rechazo = f"""
-        <h2>❌ Tu solicitud ha sido rechazada</h2>
-        <p>Hola <strong>{solicitud_data['nombre']}</strong>,</p>
-        <p>Tu solicitud de registro en FURIA MOTOR ha sido <strong style="color: red;">RECHAZADA</strong>.</p>
-        <p>Si crees que esto es un error, por favor contacta al administrador.</p>
-        <p><small>FURIA MOTOR - Sistema de Gestión de Taller</small></p>
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"></head>
+        <body style="font-family: Arial; text-align: center; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; border: 1px solid #eee;">
+                <div style="background: #dc3545; padding: 20px;"><h1 style="color: white; margin: 0;">❌ RECHAZADO</h1></div>
+                <div style="padding: 30px;">
+                    <h2>Tu solicitud ha sido rechazada</h2>
+                    <p>Hola <strong>{solicitud_data['nombre']}</strong>,</p>
+                    <p>Tu solicitud de registro en FURIA MOTOR ha sido <strong style="color: red;">RECHAZADA</strong>.</p>
+                    <p>Si crees que esto es un error, por favor contacta al administrador.</p>
+                    <br>
+                    <a href="{FRONTEND_URL}" style="background: #C1121F; color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px;">Volver al inicio</a>
+                </div>
+            </div>
+        </body>
+        </html>
         """
         enviar_email(solicitud_data['email'], "❌ Solicitud Rechazada - FURIA MOTOR", email_rechazo)
         
@@ -917,40 +884,15 @@ def rechazar_solicitud_desde_link(token):
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>❌ Solicitud Rechazada - FURIA MOTOR</title>
             <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    background-color: #f4f4f4;
-                    margin: 0;
-                    padding: 0;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    min-height: 100vh;
-                }}
-                .container {{
-                    max-width: 500px;
-                    background: white;
-                    border-radius: 16px;
-                    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-                    overflow: hidden;
-                    text-align: center;
-                    padding: 40px 30px;
-                }}
+                body {{ font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }}
+                .container {{ max-width: 500px; background: white; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); overflow: hidden; text-align: center; padding: 40px 30px; }}
                 .icon {{ font-size: 64px; margin-bottom: 20px; }}
                 .title {{ color: #dc3545; font-size: 28px; margin-bottom: 10px; }}
                 .subtitle {{ color: #555; font-size: 16px; margin-bottom: 30px; }}
-                .btn {{
-                    display: inline-block;
-                    background: #C1121F;
-                    color: white;
-                    padding: 14px 40px;
-                    text-decoration: none;
-                    border-radius: 25px;
-                    font-weight: bold;
-                    transition: background 0.3s;
-                }}
+                .btn {{ display: inline-block; background: #C1121F; color: white; padding: 14px 40px; text-decoration: none; border-radius: 25px; font-weight: bold; transition: background 0.3s; }}
                 .btn:hover {{ background: #8B0000; }}
                 .footer {{ margin-top: 30px; font-size: 12px; color: #999; }}
+                .env-badge {{ display: inline-block; background: #f0f0f0; padding: 2px 12px; border-radius: 12px; font-size: 11px; color: #666; margin-top: 10px; }}
             </style>
         </head>
         <body>
@@ -960,7 +902,8 @@ def rechazar_solicitud_desde_link(token):
                 <p class="subtitle">La solicitud de <strong>{solicitud_data['nombre']}</strong> ha sido rechazada.</p>
                 <p>Si crees que esto es un error, contacta al administrador.</p>
                 <br>
-                <a href="http://localhost:5000" class="btn">Volver al inicio</a>
+                <a href="{FRONTEND_URL}" class="btn">Volver al inicio</a>
+                <div class="env-badge">🌐 {ENVIRONMENT.upper()}</div>
                 <div class="footer">FURIA MOTOR - Sistema de Gestión de Taller</div>
             </div>
         </body>
@@ -1036,7 +979,7 @@ def listar_solicitudes(current_user):
     try:
         # Verificar que el usuario sea admin o jefe
         roles = current_user.get('roles', [])
-        if 'admin_general' not in roles and 'jefe_operativo' not in roles:
+        if 'jefe_operativo' not in roles and 'jefe_taller' not in roles:
             return jsonify({'error': 'No autorizado'}), 403
         
         response = supabase.table('solicitudregistropersonal')\
@@ -1049,3 +992,8 @@ def listar_solicitudes(current_user):
     except Exception as e:
         logger.error(f"Error listando solicitudes: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+logger.info("✅ login.py cargado correctamente")
+logger.info(f"📡 Entorno: {ENVIRONMENT}")
+logger.info(f"📡 FRONTEND_URL: {FRONTEND_URL}")
+logger.info(f"📡 BACKEND_URL: {BACKEND_URL}")

@@ -1,46 +1,50 @@
 // =====================================================
-// LOGIN - FURIA MOTOR COMPANY - VERSIÓN COMPLETA CORREGIDA
+// LOGIN - FURIA MOTOR COMPANY - CON DETECCIÓN DE ENTORNO
+// VERSIÓN CON ROLES ACTUALIZADOS
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
+// CONFIGURACIÓN DE API - DETECCIÓN AUTOMÁTICA
 // =====================================================
 const API_BASE_URL = (() => {
-    // Si estamos en localhost o 127.0.0.1
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.')) {
-        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
-        return 'http://localhost:5000';
+    const hostname = window.location.hostname;
+    
+    // Lista de dominios de desarrollo
+    const devDomains = ['dev.furiamotorcompany.com', 'localhost', '127.0.0.1', '192.168.'];
+    
+    if (devDomains.some(domain => hostname.includes(domain) || hostname === domain)) {
+        console.log('📡 [DESARROLLO] Usando API de desarrollo');
+        return 'https://dev.furiamotorcompany.com';
     }
-    // En producción (Render, Railway, etc.), usar URL relativa
-    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
-    return '';
+    
+    // PRODUCCIÓN
+    console.log('📡 [PRODUCCIÓN] Usando API de producción');
+    return 'https://www.furiamotorcompany.com';
 })();
 
 // URL de API con el path completo
 const API_URL = `${API_BASE_URL}/api`;
 
+console.log('🚀 Login - API_URL:', API_URL);
+console.log('🌐 Entorno:', API_BASE_URL.includes('dev') ? 'DESARROLLO' : 'PRODUCCIÓN');
+
+// =====================================================
+// CONFIGURACIÓN DE ROLES - ACTUALIZADA
+// =====================================================
 const ROLE_CONFIG = {
-    'jefe_taller': {
-        nombre: 'Jefe de Taller',
-        icono: 'fa-user-tie',
-        redirect: '/jefe_taller/dashboard.html',
-        descripcion: 'Gestión de órdenes, diagnóstico y control de calidad'
-    },
     'jefe_operativo': {
         nombre: 'Jefe Operativo',
         icono: 'fa-chart-line',
         redirect: '/jefe_operativo/dashboard.html',
         descripcion: 'Recepción de vehículos y gestión de clientes'
     },
-    'tecnico': {
-        nombre: 'Técnico Mecánico',
-        icono: 'fa-wrench',
-        redirect: '/tecnico_mecanico/misvehiculos.html',
-        descripcion: 'Diagnóstico y reparación de vehículos'
+    'jefe_taller': {
+        nombre: 'Jefe de Taller',
+        icono: 'fa-user-tie',
+        redirect: '/jefe_taller/dashboard.html',
+        descripcion: 'Gestión de órdenes, diagnóstico y control de calidad'
     },
-    'tecnico_mecanico': {
+    'tecnico': {
         nombre: 'Técnico Mecánico',
         icono: 'fa-wrench',
         redirect: '/tecnico_mecanico/misvehiculos.html',
@@ -60,16 +64,29 @@ const ROLE_CONFIG = {
     }
 };
 
-// Función para normalizar roles
+// =====================================================
+// FUNCIÓN PARA NORMALIZAR ROLES
+// =====================================================
 function normalizarRol(rol) {
     if (!rol) return null;
-    const rolLower = rol.toLowerCase();
-    if (rolLower === 'tecnico_mecanico') return 'tecnico';
-    if (rolLower === 'tecnico') return 'tecnico';
-    return rolLower;
+    const rolLower = rol.toLowerCase().trim();
+    
+    // Mapeo de roles - coincide con la BD
+    const roleMap = {
+        'jefe_operativo': 'jefe_operativo',
+        'jefe_taller': 'jefe_taller',
+        'tecnico': 'tecnico',
+        'tecnico_mecanico': 'tecnico',
+        'encargado_repuestos': 'encargado_repuestos',
+        'cliente': 'cliente'
+    };
+    
+    return roleMap[rolLower] || rolLower;
 }
 
-// Elementos DOM
+// =====================================================
+// ELEMENTOS DOM
+// =====================================================
 const tabBtns = document.querySelectorAll('.tab-btn');
 const documentGroup = document.getElementById('documentGroup');
 const plateGroup = document.getElementById('plateGroup');
@@ -95,6 +112,7 @@ let pendingToken = null;
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Inicializando login');
     console.log('📡 API URL:', API_URL);
+    console.log('📋 Roles disponibles:', Object.keys(ROLE_CONFIG));
     setupEventListeners();
     checkSavedSession();
 });
@@ -141,7 +159,7 @@ function toggleLoginFields() {
 }
 
 // =====================================================
-// LOGIN - CORREGIDO CON API_URL DINÁMICA
+// LOGIN
 // =====================================================
 async function handleLogin(e) {
     e.preventDefault();
@@ -190,7 +208,7 @@ async function handleLogin(e) {
             
             // Normalizar roles del usuario
             let userRoles = data.user.roles || [];
-            userRoles = userRoles.map(r => normalizarRol(r));
+            userRoles = userRoles.map(r => normalizarRol(r)).filter(r => r !== null);
             
             console.log('Roles normalizados en frontend:', userRoles);
             
@@ -236,6 +254,7 @@ async function handleLogin(e) {
             }
             
             if (!redirectUrl) {
+                console.error('❌ No se encontró URL de redirección para el rol:', selectedRole);
                 throw new Error('No se pudo determinar la redirección');
             }
             
@@ -278,7 +297,7 @@ function setLoadingState(loading) {
 }
 
 // =====================================================
-// MODAL DE SELECCIÓN DE ROL (CORREGIDO)
+// MODAL DE SELECCIÓN DE ROL
 // =====================================================
 function showRoleModal() {
     const modal = document.getElementById('roleSelectionModal');
@@ -292,13 +311,16 @@ function showRoleModal() {
     }
     
     const userRoles = pendingLoginData.roles || [];
-    const availableRoles = userRoles.filter(rol => ROLE_CONFIG[rol] || ROLE_CONFIG['tecnico']);
+    const availableRoles = userRoles.filter(rol => ROLE_CONFIG[rol]);
     
-    if (availableRoles.length === 0) return;
+    if (availableRoles.length === 0) {
+        console.error('❌ No hay roles disponibles en ROLE_CONFIG para:', userRoles);
+        return;
+    }
     
     if (rolesGrid) {
         rolesGrid.innerHTML = availableRoles.map(rol => {
-            const config = ROLE_CONFIG[rol] || ROLE_CONFIG['tecnico'];
+            const config = ROLE_CONFIG[rol];
             return `
                 <div class="role-card" data-role="${rol}" onclick="selectRoleHandler('${rol}')">
                     <div class="role-icon">
@@ -341,7 +363,7 @@ window.selectRoleHandler = function(selectedRole) {
     console.log('Rol normalizado:', rolNormalizado);
     
     // Verificar roles normalizados
-    const rolesNormalizados = pendingLoginData.roles.map(r => normalizarRol(r));
+    const rolesNormalizados = pendingLoginData.roles.map(r => normalizarRol(r)).filter(r => r !== null);
     console.log('Roles disponibles normalizados:', rolesNormalizados);
     
     if (!rolesNormalizados.includes(rolNormalizado)) {
@@ -359,7 +381,7 @@ window.selectRoleHandler = function(selectedRole) {
         console.log('✅ Rol guardado en localStorage:', rolNormalizado);
     }
     
-    const roleConfig = ROLE_CONFIG[rolNormalizado] || ROLE_CONFIG['tecnico'];
+    const roleConfig = ROLE_CONFIG[rolNormalizado];
     const redirectUrl = roleConfig?.redirect;
     
     console.log('Configuración del rol:', roleConfig);
@@ -386,7 +408,7 @@ window.selectRoleHandler = function(selectedRole) {
 };
 
 // =====================================================
-// VERIFICAR SESIÓN GUARDADA - CORREGIDA (EVITA BUCLE)
+// VERIFICAR SESIÓN GUARDADA
 // =====================================================
 async function checkSavedSession() {
     const token = localStorage.getItem('furia_token');
@@ -425,7 +447,7 @@ async function checkSavedSession() {
                 
                 // Normalizar roles del usuario
                 if (user.roles) {
-                    user.roles = user.roles.map(r => normalizarRol(r));
+                    user.roles = user.roles.map(r => normalizarRol(r)).filter(r => r !== null);
                 }
                 
                 const savedUser = localStorage.getItem('furia_user');
@@ -523,3 +545,4 @@ window.logout = () => {
 
 console.log('✅ login.js cargado correctamente');
 console.log('📡 API URL configurada:', API_URL);
+console.log('📋 Roles configurados:', Object.keys(ROLE_CONFIG));

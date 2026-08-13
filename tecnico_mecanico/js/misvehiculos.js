@@ -1703,7 +1703,7 @@ function cerrarHistorialModal() {
 }
 
 // =====================================================
-// DETALLE DE ORDEN - CORREGIDO
+// DETALLE DE ORDEN - COMPLETO Y CORREGIDO
 // =====================================================
 window.verDetalle = async function(ordenId) {
     // 🔥 VERIFICAR TOKEN
@@ -1714,7 +1714,6 @@ window.verDetalle = async function(ordenId) {
         return;
     }
     
-    // ✅ LOGS CORREGIDOS (sin fotosArray)
     console.log('========================================');
     console.log('🔍 VER DETALLE - INICIO');
     console.log(`📌 Orden ID: ${ordenId}`);
@@ -1756,14 +1755,15 @@ window.verDetalle = async function(ordenId) {
         const instruccionesArmado = detalle.orden?.instrucciones_armado || '';
         
         // =============================================
-        // 🔥 FOTOS - DEFINIDAS AQUÍ
+        // FOTOS
         // =============================================
         const fotos = detalle.recepcion?.fotos || {};
         const fotosArray = Object.entries(fotos).filter(([_, url]) => url && url !== '');
-        
-        // ✅ AHORA SÍ PODEMOS USAR fotosArray
         console.log(`📸 Fotos a cargar: ${fotosArray.length}`);
         
+        // =============================================
+        // AUDIOS
+        // =============================================
         const audioProblemaUrl = detalle.recepcion?.audio_url || '';
         const transcripcionProblema = detalle.recepcion?.transcripcion_problema || 'No hay descripción del problema';
         
@@ -1774,21 +1774,25 @@ window.verDetalle = async function(ordenId) {
             `<div><strong>Bahía asignada:</strong> ${detalle.planificacion.bahia_asignada}</div>` : '';
         
         // =============================================
-        // FUNCIÓN PARA AUDIO
+        // 🎵 FUNCIÓN PARA CREAR AUDIO CON IDS ÚNICOS
         // =============================================
         function crearAudioHtml(url, titulo, icono, color) {
             if (!url || url === '') return '';
-            const proxyUrl = url.includes('drive.google.com') ? 
-                `/tecnico/proxy-audio?url=${encodeURIComponent(url)}` : url;
+            
+            const audioId = `audio_${ordenId}_${titulo.replace(/\s/g, '_').toLowerCase()}`;
+            const loaderId = `audioLoader_${ordenId}_${titulo.replace(/\s/g, '_').toLowerCase()}`;
+            
             return `
                 <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(59, 130, 246, 0.05); border-radius: var(--radius-md); border-left: 3px solid ${color};">
                     <div style="font-size: 0.75rem; color: ${color}; margin-bottom: 0.5rem;">
                         <i class="fas ${icono}"></i> ${titulo}:
                     </div>
-                    <audio controls preload="metadata" style="width: 100%;">
-                        <source src="${proxyUrl}" type="audio/mpeg">
-                        <source src="${proxyUrl}" type="audio/wav">
-                        <source src="${proxyUrl}" type="audio/webm">
+                    <div id="${loaderId}" style="display:flex; align-items:center; gap:0.5rem; padding:0.5rem; background:var(--gris-oscuro); border-radius:var(--radius-sm);">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span style="font-size:0.8rem;">Cargando audio...</span>
+                    </div>
+                    <audio id="${audioId}" controls style="width: 100%; display: none;" preload="metadata">
+                        <source id="${audioId}_source" src="">
                         Tu navegador no soporta el elemento de audio.
                     </audio>
                 </div>
@@ -1796,7 +1800,7 @@ window.verDetalle = async function(ordenId) {
         }
         
         // =============================================
-        // HTML DEL MODAL
+        // HTML - PROBLEMA REPORTADO
         // =============================================
         const audioProblemaHtml = crearAudioHtml(
             audioProblemaUrl,
@@ -1815,6 +1819,9 @@ window.verDetalle = async function(ordenId) {
             </div>
         `;
         
+        // =============================================
+        // HTML - DIAGNÓSTICO DEL JEFE DE TALLER
+        // =============================================
         const audioDiagnosticoHtml = crearAudioHtml(
             audioDiagnosticoUrl,
             'Grabación del diagnóstico (Jefe de Taller)',
@@ -1844,7 +1851,7 @@ window.verDetalle = async function(ordenId) {
         `;
         
         // =============================================
-        // SECCIÓN DE FOTOS
+        // HTML - SECCIÓN DE FOTOS
         // =============================================
         let fotosHtml = '';
         if (fotosArray.length > 0) {
@@ -1876,6 +1883,9 @@ window.verDetalle = async function(ordenId) {
             `;
         }
         
+        // =============================================
+        // HTML - MODAL COMPLETO
+        // =============================================
         const detalleHtml = `
             <div style="display: grid; gap: 1rem;">
                 <div class="modal-section">
@@ -1920,7 +1930,7 @@ window.verDetalle = async function(ordenId) {
         document.getElementById('detalleModal').classList.add('show');
         
         // =============================================
-        // 🔥 CARGAR FOTOS CON FETCH
+        // 🔥 CARGAR FOTOS Y AUDIOS CON FETCH
         // =============================================
         setTimeout(() => {
             // Asegurar que el token existe
@@ -1928,11 +1938,27 @@ window.verDetalle = async function(ordenId) {
                 token = getToken();
             }
             
+            // 📸 Cargar fotos
             fotosArray.forEach(([nombre, url], index) => {
                 const imgId = `detalle_img_${ordenId}_${index}`;
                 const loaderId = `detalle_loader_${ordenId}_${index}`;
                 cargarImagenDetalle(url, imgId, loaderId);
             });
+            
+            // 🎵 Cargar audio del problema
+            if (audioProblemaUrl) {
+                const audioId = `audio_${ordenId}_grabacion_del_problema_cliente`;
+                const loaderId = `audioLoader_${ordenId}_grabacion_del_problema_cliente`;
+                cargarAudioDetalle(audioProblemaUrl, audioId, loaderId);
+            }
+            
+            // 🎵 Cargar audio del diagnóstico
+            if (audioDiagnosticoUrl) {
+                const audioId = `audio_${ordenId}_grabacion_del_diagnostico_jefe_de_taller`;
+                const loaderId = `audioLoader_${ordenId}_grabacion_del_diagnostico_jefe_de_taller`;
+                cargarAudioDetalle(audioDiagnosticoUrl, audioId, loaderId);
+            }
+            
         }, 200);
         
     } catch (error) {
@@ -1941,7 +1967,90 @@ window.verDetalle = async function(ordenId) {
     }
 };
 // =====================================================
-// CARGAR IMAGEN EN DETALLE - CON FETCH Y TOKEN (MEJORADA)
+// CARGAR AUDIO EN DETALLE - CON FETCH Y TOKEN
+// =====================================================
+async function cargarAudioDetalle(url, audioId, loaderId) {
+    if (!url || url === '' || url === 'null' || url === 'undefined') {
+        const loader = document.getElementById(loaderId);
+        if (loader) {
+            loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span style="font-size:0.7rem;">Sin audio</span>';
+            loader.style.display = 'flex';
+        }
+        return;
+    }
+    
+    const audio = document.getElementById(audioId);
+    const source = audio ? document.getElementById(`${audioId}_source`) : null;
+    const loader = document.getElementById(loaderId);
+    
+    if (!audio || !source) {
+        console.warn(`⚠️ No se encontró el elemento audio: ${audioId}`);
+        return;
+    }
+    
+    // Mostrar loader
+    if (loader) {
+        loader.style.display = 'flex';
+        loader.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:1.2rem;"></i><span style="font-size:0.7rem;">Cargando audio...</span>';
+    }
+    audio.style.display = 'none';
+    audio.pause();
+    source.src = '';
+    audio.load();
+    
+    try {
+        const tokenActual = getToken();
+        if (!tokenActual) {
+            throw new Error('No hay token para Google Drive');
+        }
+        
+        // 🔥 USAR PROXY CON TOKEN
+        const proxyUrl = `/tecnico/proxy-audio?url=${encodeURIComponent(url)}`;
+        console.log(`🎵 [${audioId}] Cargando audio vía proxy...`);
+        
+        const response = await fetch(proxyUrl, {
+            headers: {
+                'Authorization': `Bearer ${tokenActual}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        // 🔥 CONVERTIR A BLOB Y CREAR URL LOCAL
+        const blob = await response.blob();
+        const localUrl = URL.createObjectURL(blob);
+        
+        // Asignar al elemento de audio
+        source.src = localUrl;
+        audio.style.display = 'block';
+        audio.load();
+        if (loader) loader.style.display = 'none';
+        
+        // Manejar errores de reproducción
+        audio.addEventListener('error', function(e) {
+            console.warn(`⚠️ [${audioId}] Error al reproducir audio`);
+            if (loader) {
+                loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span style="font-size:0.7rem;">Error al reproducir</span>';
+                loader.style.display = 'flex';
+            }
+            audio.style.display = 'none';
+        }, { once: true });
+        
+        console.log(`✅ [${audioId}] Audio cargado correctamente`);
+        
+    } catch (error) {
+        console.error(`❌ [${audioId}] Error:`, error.message);
+        if (loader) {
+            loader.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span style="font-size:0.7rem;">${error.message}</span>`;
+            loader.style.display = 'flex';
+        }
+        audio.style.display = 'none';
+    }
+}
+// =====================================================
+// CARGAR IMAGEN EN DETALLE - CON DETECCIÓN DE TIPO
 // =====================================================
 async function cargarImagenDetalle(url, imgId, loaderId) {
     if (!url || url === '' || url === 'null' || url === 'undefined') {
@@ -1961,17 +2070,6 @@ async function cargarImagenDetalle(url, imgId, loaderId) {
         return;
     }
     
-    // 🔥 VERIFICAR TOKEN
-    const tokenActual = getToken();
-    if (!tokenActual) {
-        console.error('❌ No hay token disponible');
-        if (loader) {
-            loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span style="font-size:0.7rem;">Sin autenticación</span>';
-            loader.style.display = 'flex';
-        }
-        return;
-    }
-    
     // Mostrar loader
     if (loader) {
         loader.style.display = 'flex';
@@ -1981,54 +2079,74 @@ async function cargarImagenDetalle(url, imgId, loaderId) {
     img.src = '';
     
     try {
-        const proxyUrl = `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(url)}`;
+        // 🔥 DETECTAR TIPO DE URL
+        const esCloudinary = url.includes('res.cloudinary.com');
+        const esGoogleDrive = url.includes('drive.google.com') || url.includes('googleusercontent.com');
         
-        console.log(`📸 [${imgId}] Cargando imagen con fetch...`);
-        console.log(`   🔑 Token: ${tokenActual.substring(0, 20)}...`);
-        console.log(`   📡 URL: ${proxyUrl.substring(0, 80)}...`);
+        let imagenUrl;
         
-        // 🔥 TIMEOUT DE 10 SEGUNDOS
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        
-        const response = await fetch(proxyUrl, {
-            headers: {
-                'Authorization': `Bearer ${tokenActual}`
-            },
-            signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status} - ${response.statusText}`);
+        if (esCloudinary) {
+            // ✅ Cloudinary - URL directa
+            imagenUrl = url;
+            console.log(`📸 [${imgId}] Cloudinary directa`);
+            
+        } else if (esGoogleDrive) {
+            // ✅ Google Drive - Usar proxy con token
+            const tokenActual = getToken();
+            if (!tokenActual) {
+                throw new Error('No hay token para Google Drive');
+            }
+            
+            const proxyUrl = `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(url)}`;
+            console.log(`📸 [${imgId}] Google Drive vía proxy`);
+            
+            const response = await fetch(proxyUrl, {
+                headers: { 'Authorization': `Bearer ${tokenActual}` }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            if (data.success && data.base64) {
+                imagenUrl = data.base64;
+            } else {
+                throw new Error(data.error || 'Error al obtener imagen');
+            }
+        } else {
+            // ✅ Otros URLs (directo)
+            imagenUrl = url;
+            console.log(`📸 [${imgId}] URL directa`);
         }
         
-        const data = await response.json();
-        
-        if (data.success && data.base64) {
-            img.src = data.base64;
+        // Cargar la imagen
+        const nuevaImg = new Image();
+        nuevaImg.onload = function() {
+            img.src = this.src;
             img.style.display = 'block';
             if (loader) loader.style.display = 'none';
-            console.log(`✅ [${imgId}] Imagen cargada (${data.base64.length} bytes)`);
-        } else {
-            throw new Error(data.error || 'Error al obtener imagen');
-        }
+            console.log(`✅ [${imgId}] Imagen cargada correctamente`);
+        };
+        nuevaImg.onerror = function() {
+            img.src = imagenUrl;
+            img.style.display = 'block';
+            if (loader) loader.style.display = 'none';
+            console.warn(`⚠️ [${imgId}] Imagen cargada con fallback`);
+        };
+        nuevaImg.src = imagenUrl;
+        
     } catch (error) {
         console.error(`❌ [${imgId}] Error:`, error.message);
         if (loader) {
-            if (error.name === 'AbortError') {
-                loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span style="font-size:0.7rem;">Timeout (10s)</span>';
-            } else {
-                loader.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span style="font-size:0.7rem;">${error.message}</span>`;
-            }
+            loader.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span style="font-size:0.7rem;">${error.message}</span>`;
             loader.style.display = 'flex';
         }
         img.style.display = 'none';
     }
 }
 // =====================================================
-// VER FOTO AMPLIADA - CON FETCH Y TOKEN
+// VER FOTO AMPLIADA - CON DETECCIÓN DE TIPO
 // =====================================================
 window.verFoto = async function(url) {
     if (!url) return;
@@ -2064,48 +2182,63 @@ window.verFoto = async function(url) {
     if (modal) modal.classList.add('show');
     
     try {
-        // 🔥 USAR FETCH CON TOKEN
-        const proxyUrl = `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(url)}`;
+        // 🔥 DETECTAR TIPO DE URL
+        const esCloudinary = url.includes('res.cloudinary.com');
+        const esGoogleDrive = url.includes('drive.google.com') || url.includes('googleusercontent.com');
         
-        const response = await fetch(proxyUrl, {
-            headers: {
-                'Authorization': `Bearer ${token}`
+        let imagenUrl;
+        
+        if (esCloudinary) {
+            imagenUrl = url;
+            console.log('📸 Ver foto: Cloudinary directa');
+        } else if (esGoogleDrive) {
+            const tokenActual = getToken();
+            if (!tokenActual) {
+                throw new Error('No hay token para Google Drive');
             }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.base64) {
-            // Pre-cargar
-            const nuevaImg = new Image();
-            nuevaImg.onload = function() {
-                if (modalImg) {
-                    modalImg.src = data.base64;
-                    modalImg.style.display = 'block';
-                    modalImg.style.objectFit = 'contain';
-                }
-                if (loaderElement) loaderElement.style.display = 'none';
-            };
-            nuevaImg.onerror = function() {
-                if (modalImg) {
-                    modalImg.src = data.base64;
-                    modalImg.style.display = 'block';
-                    modalImg.style.objectFit = 'contain';
-                }
-                if (loaderElement) loaderElement.style.display = 'none';
-            };
-            nuevaImg.src = data.base64;
+            
+            const proxyUrl = `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(url)}`;
+            const response = await fetch(proxyUrl, {
+                headers: { 'Authorization': `Bearer ${tokenActual}` }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            if (data.success && data.base64) {
+                imagenUrl = data.base64;
+            } else {
+                throw new Error(data.error || 'Error al obtener imagen');
+            }
         } else {
-            throw new Error(data.error || 'Error al obtener imagen');
+            imagenUrl = url;
         }
+        
+        const nuevaImg = new Image();
+        nuevaImg.onload = function() {
+            if (modalImg) {
+                modalImg.src = this.src;
+                modalImg.style.display = 'block';
+                modalImg.style.objectFit = 'contain';
+            }
+            if (loaderElement) loaderElement.style.display = 'none';
+        };
+        nuevaImg.onerror = function() {
+            if (modalImg) {
+                modalImg.src = imagenUrl;
+                modalImg.style.display = 'block';
+                modalImg.style.objectFit = 'contain';
+            }
+            if (loaderElement) loaderElement.style.display = 'none';
+        };
+        nuevaImg.src = imagenUrl;
+        
     } catch (error) {
-        console.error('Error cargando foto ampliada:', error);
+        console.error('❌ Error en verFoto:', error);
         if (loaderElement) {
-            loaderElement.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error: ${error.message}`;
+            loaderElement.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${error.message}`;
             loaderElement.style.display = 'block';
         }
         showToast('Error al cargar la imagen', 'error');

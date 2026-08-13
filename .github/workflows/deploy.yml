@@ -22,16 +22,26 @@ jobs:
           port: ${{ secrets.HETZNER_PORT || 22 }}
           script: |
             echo "🚀 Desplegando en DESARROLLO..."
-            cd /home/vania/apps/taller-desarrollo/backend
+            cd /home/vania/apps/taller-desarrollo
             echo "📥 Pull de cambios..."
             git pull origin ia-desarrollo
+            
             echo "🐍 Activando virtualenv..."
             source /home/vania/apps/taller-desarrollo/venv/bin/activate
             echo "📦 Instalando dependencias..."
-            pip install -r requirements.txt
+            pip install -r backend/requirements.txt
+            
             echo "🔄 Reiniciando Gunicorn..."
             sudo systemctl restart taller-dev
-            echo "✅ Despliegue completado!"
+            
+            # ============================================
+            # ¡NO HAY QUE COPIAR NADA! Nginx ya apunta al repo
+            # Solo recargar Nginx para que tome los cambios
+            # ============================================
+            echo "🔄 Recargando Nginx..."
+            sudo systemctl reload nginx
+            
+            echo "✅ Despliegue en DESARROLLO completado!"
             echo "🌐 https://dev.furiamotorcompany.com"
 
   deploy-production:
@@ -49,14 +59,24 @@ jobs:
           port: ${{ secrets.HETZNER_PORT || 22 }}
           script: |
             echo "🚀 Desplegando en PRODUCCIÓN..."
-            cd /home/vania/apps/taller/production/backend
+            cd /home/vania/apps/taller
             echo "📥 Pull de cambios..."
             git pull origin master
+            
             echo "🐍 Activando virtualenv..."
-            source /home/vania/apps/taller/production/venv/bin/activate
+            source /home/vania/apps/taller/venv/bin/activate
             echo "📦 Instalando dependencias..."
-            pip install -r requirements.txt
+            pip install -r backend/requirements.txt
+            
             echo "🔄 Reiniciando Gunicorn..."
             sudo systemctl restart taller-prod
-            echo "✅ Despliegue completado!"
+            
+            # ============================================
+            # ¡NO HAY QUE COPIAR NADA! Nginx ya apunta al repo
+            # Solo recargar Nginx para que tome los cambios
+            # ============================================
+            echo "🔄 Recargando Nginx..."
+            sudo systemctl reload nginx
+            
+            echo "✅ Despliegue en PRODUCCIÓN completado!"
             echo "🌐 https://www.furiamotorcompany.com"

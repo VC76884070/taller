@@ -3115,7 +3115,7 @@ async function descargarPDFFinal() {
         
         updateProgressBar(50);
         updateProgressMessage('Renderizando PDF...');
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         if (typeof html2pdf === 'undefined') {
             await new Promise((resolve, reject) => {
@@ -3133,46 +3133,31 @@ async function descargarPDFFinal() {
         const elemento = container.querySelector('.reporte-container');
         if (!elemento) throw new Error('No se encontró el contenido del reporte');
         
-        // 🔥 FORZAR RENDERIZADO PARA CALCULAR ALTURA CORRECTA
+        // 🔥 FORZAR RENDERIZADO
         elemento.style.height = 'auto';
         elemento.style.overflow = 'visible';
+        await new Promise(resolve => setTimeout(resolve, 300));
         
-        // Esperar a que se renderice completamente
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // 🔥 CALCULAR ALTURA EXACTA DEL CONTENIDO
-        const alturaContenido = elemento.scrollHeight;
-        const anchoContenido = elemento.scrollWidth;
-        
-        console.log(`📄 Altura contenido: ${alturaContenido}px, Ancho: ${anchoContenido}px`);
-        
-        // 🔥 CONFIGURAR HTML2PDF CON ALTURA DINÁMICA
-        const opt = {
-            margin: [0, 0, 0, 0],
-            filename: `Reporte_${detalleParaPDF.codigo_unico || 'orden'}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { 
-                scale: 2,
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: '#ffffff',
-                logging: false,
-                width: anchoContenido,
-                height: alturaContenido,
-                scrollY: 0,
-                scrollX: 0
-            },
-            jsPDF: { 
-                unit: 'px',
-                format: [anchoContenido * 0.75, alturaContenido * 0.75],
-                orientation: alturaContenido > anchoContenido ? 'portrait' : 'landscape'
-            }
-        };
-        
-        console.log(`📄 Formato PDF: ${opt.jsPDF.format[0]} x ${opt.jsPDF.format[1]}px`);
-        
+        // 🔥 USAR FORMATO A4 CON MÁRGENES CERO
         const pdfBlob = await html2pdf()
-            .set(opt)
+            .set({
+                margin: [0, 0, 0, 0],
+                filename: `Reporte_${detalleParaPDF.codigo_unico || 'orden'}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { 
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    width: 780
+                },
+                jsPDF: { 
+                    unit: 'mm', 
+                    format: 'a4',  // 🔥 CAMBIADO A A4
+                    orientation: 'portrait'
+                }
+            })
             .from(elemento)
             .outputPdf('blob');
         

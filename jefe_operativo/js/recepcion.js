@@ -3104,7 +3104,7 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 2. CONVERTIR FOTOS A BASE64
+        // 2. CONVERTIR FOTOS
         // ============================================================
 
         const fotosNecesitanConversion =
@@ -3158,7 +3158,7 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 3. GENERAR HTML DEL REPORTE
+        // 3. GENERAR HTML
         // ============================================================
 
         updateProgressMessage(
@@ -3216,7 +3216,6 @@ async function descargarPDFFinal() {
         updateProgressMessage(
             'Renderizando PDF...'
         );
-
 
         await new Promise(resolve =>
             setTimeout(resolve, 800)
@@ -3301,7 +3300,7 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 7. OBTENER EL REPORTE
+        // 7. OBTENER REPORTE
         // ============================================================
 
         const elemento =
@@ -3317,7 +3316,7 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 8. FORZAR CONTENIDO COMPLETO
+        // 8. ASEGURAR QUE SE MUESTRE COMPLETO
         // ============================================================
 
         elemento.style.width =
@@ -3348,7 +3347,7 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 9. CALCULAR DIMENSIONES
+        // 9. DIMENSIONES
         // ============================================================
 
         const anchoContenido =
@@ -3359,11 +3358,11 @@ async function descargarPDFFinal() {
 
 
         console.log(
-            `📄 Ancho: ${anchoContenido}px`
+            `📄 Ancho contenido: ${anchoContenido}px`
         );
 
         console.log(
-            `📄 Altura: ${alturaContenido}px`
+            `📄 Alto contenido: ${alturaContenido}px`
         );
 
 
@@ -3443,22 +3442,14 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 11. CONFIGURACIÓN DEL PDF
+        // 11. CONFIGURACIÓN CARTA
         // ============================================================
 
         const { jsPDF } =
             window.jspdf || jspdf;
 
 
-        // ============================================================
-        // 📄 TAMAÑO CARTA
-        // ============================================================
-        //
-        // Carta:
-        // 8.5 x 11 pulgadas
-        // 215.9 x 279.4 mm
-        // ============================================================
-
+        // Carta = 215.9 x 279.4 mm
         const CARTA_WIDTH_MM =
             215.9;
 
@@ -3466,28 +3457,18 @@ async function descargarPDFFinal() {
             279.4;
 
 
-        // ============================================================
-        // 📐 MÁRGENES
-        // ============================================================
-        //
-        // Márgenes pequeños para aprovechar
-        // prácticamente toda la hoja.
-        // ============================================================
-
+        // Márgenes pequeños
         const MARGEN_LATERAL_MM =
-            8;
+            7;
 
         const MARGEN_SUPERIOR_MM =
-            8;
+            7;
 
         const MARGEN_INFERIOR_MM =
-            8;
+            7;
 
 
-        // ============================================================
-        // 📏 ÁREA DISPONIBLE
-        // ============================================================
-
+        // Área útil
         const ANCHO_UTIL_MM =
             CARTA_WIDTH_MM -
             (MARGEN_LATERAL_MM * 2);
@@ -3499,7 +3480,7 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 🖨️ CREAR PDF CARTA
+        // 12. CREAR PDF CARTA
         // ============================================================
 
         const pdf =
@@ -3515,7 +3496,7 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 🖼️ CONVERTIR CANVAS A IMAGEN
+        // 13. IMAGEN
         // ============================================================
 
         const imgData =
@@ -3526,119 +3507,56 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 📐 CALCULAR PROPORCIÓN
+        // 14. AJUSTAR EL REPORTE AL RECTÁNGULO CARTA
         // ============================================================
-
-        const proporcion =
-            canvas.height /
-            canvas.width;
-
-
-        // ============================================================
-        // 📏 TAMAÑO BASE
-        // ============================================================
-
-        let imgWidthMm =
-            ANCHO_UTIL_MM;
-
-        let imgHeightMm =
-            imgWidthMm *
-            proporcion;
-
-
-        // ============================================================
-        // 🔥 HACER QUE APROVECHE MEJOR LA HOJA
-        // ============================================================
-        //
-        // Como este informe tiene una cantidad de información
-        // conocida y siempre cabe en una sola hoja, podemos
-        // aumentarlo proporcionalmente.
         //
         // IMPORTANTE:
-        // No deformamos las fotos ni el texto.
-        // Se mantiene la misma proporción.
+        //
+        // NO usamos 1.35x.
+        //
+        // El reporte debe entrar completamente en el ancho
+        // de la hoja.
+        //
+        // Como tú confirmaste que este reporte siempre tendrá
+        // la misma cantidad de información y debe ocupar una
+        // sola hoja, ajustamos el contenido al área completa.
+        //
+        // Esto evita:
+        //
+        // ❌ que se corte a los lados
+        // ❌ que aparezca fuera de la página
+        // ❌ que se genere una segunda página
+        //
         // ============================================================
 
-        const escalaMaxima =
-            ALTO_UTIL_MM /
-            imgHeightMm;
+        const imgWidthMm =
+            ANCHO_UTIL_MM;
 
-
-        if (escalaMaxima > 1) {
-
-            // Aumentamos hasta un máximo de 1.35x
-            // para que no llegue pegado a los bordes.
-
-            const escalaObjetivo =
-                Math.min(
-                    1.35,
-                    escalaMaxima
-                );
-
-
-            imgWidthMm =
-                imgWidthMm *
-                escalaObjetivo;
-
-
-            imgHeightMm =
-                imgHeightMm *
-                escalaObjetivo;
-        }
+        const imgHeightMm =
+            ALTO_UTIL_MM;
 
 
         // ============================================================
-        // 🛡️ SEGURIDAD:
-        // SI POR ALGUNA RAZÓN SUPERA EL ALTO DE CARTA
-        // ============================================================
-
-        if (
-            imgHeightMm >
-            ALTO_UTIL_MM
-        ) {
-
-            const escalaVertical =
-                ALTO_UTIL_MM /
-                imgHeightMm;
-
-
-            imgWidthMm =
-                imgWidthMm *
-                escalaVertical;
-
-
-            imgHeightMm =
-                ALTO_UTIL_MM;
-        }
-
-
-        // ============================================================
-        // 📍 CENTRAR HORIZONTALMENTE
+        // 15. POSICIÓN
         // ============================================================
 
         const offsetX =
-            (CARTA_WIDTH_MM -
-                imgWidthMm) / 2;
-
-
-        // ============================================================
-        // 🔝 EMPEZAR CERCA DE ARRIBA
-        // ============================================================
+            MARGEN_LATERAL_MM;
 
         const offsetY =
             MARGEN_SUPERIOR_MM;
 
 
         // ============================================================
-        // 📊 DEBUG
+        // 16. INFORMACIÓN DEBUG
         // ============================================================
 
         console.log(
-            '================================'
+            '===================================='
         );
 
         console.log(
-            '📄 PDF CARTA'
+            '📄 GENERANDO PDF CARTA'
         );
 
         console.log(
@@ -3650,20 +3568,20 @@ async function descargarPDFFinal() {
         );
 
         console.log(
-            `🖼️ Reporte: ${imgWidthMm.toFixed(2)} x ${imgHeightMm.toFixed(2)} mm`
+            `🖼️ Reporte: ${imgWidthMm} x ${imgHeightMm} mm`
         );
 
         console.log(
-            `📍 Posición: X=${offsetX.toFixed(2)}, Y=${offsetY.toFixed(2)}`
+            `📍 Posición: X=${offsetX}, Y=${offsetY}`
         );
 
         console.log(
-            '================================'
+            '===================================='
         );
 
 
         // ============================================================
-        // 🖨️ AGREGAR REPORTE
+        // 17. AGREGAR REPORTE
         // ============================================================
 
         pdf.addImage(
@@ -3679,7 +3597,7 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 12. OBTENER PDF COMO BLOB
+        // 18. OBTENER PDF COMO BLOB
         // ============================================================
 
         const pdfBlob =
@@ -3694,7 +3612,7 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 13. DESCARGAR PDF
+        // 19. DESCARGAR PDF
         // ============================================================
 
         const link =
@@ -3733,7 +3651,7 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 14. SUBIR PDF A GOOGLE DRIVE
+        // 20. SUBIR A GOOGLE DRIVE
         // ============================================================
 
         updateProgressBar(95);
@@ -3803,7 +3721,7 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 15. FINALIZAR PROGRESO
+        // 21. FINALIZAR
         // ============================================================
 
         updateProgressBar(100);
@@ -3814,7 +3732,7 @@ async function descargarPDFFinal() {
 
 
         // ============================================================
-        // 16. LIMPIAR CONTENEDOR
+        // 22. LIMPIAR CONTENEDOR
         // ============================================================
 
         setTimeout(() => {
@@ -3864,10 +3782,7 @@ async function descargarPDFFinal() {
         );
 
 
-        // ============================================================
-        // LIMPIAR CONTENEDOR SI HAY ERROR
-        // ============================================================
-
+        // Limpiar si ocurrió un error
         if (
             container &&
             document.body.contains(
@@ -3883,7 +3798,7 @@ async function descargarPDFFinal() {
 
 
     // ============================================================
-    // 17. RESTAURAR BOTÓN
+    // 23. RESTAURAR BOTÓN
     // ============================================================
 
     if (btnDescargar) {

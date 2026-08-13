@@ -3093,7 +3093,7 @@ async function descargarPDFFinal() {
         updateProgressMessage('Generando contenido del reporte...');
         const reporteHTML = generarHTMLReporte(detalleParaPDF);
         
-        // Crear contenedor temporal - SIN NINGÚN PADDING
+        // Crear contenedor temporal
         const container = document.createElement('div');
         container.id = 'pdfContainer';
         container.style.cssText = `
@@ -3153,28 +3153,27 @@ async function descargarPDFFinal() {
         elemento.style.overflow = 'visible';
         elemento.style.maxHeight = 'none';
         
-        // 🔥 CALCULAR LA ALTURA REAL DEL CONTENIDO
-        const alturaReal = elemento.scrollHeight;
-        const anchoReal = 780;
+        await new Promise(resolve => setTimeout(resolve, 300));
         
-        console.log(`📄 Ancho: ${anchoReal}px, Altura real: ${alturaReal}px`);
+        // 🔥 CALCULAR DIMENSIONES
+        const anchoContenido = 780;
+        const alturaContenido = elemento.scrollHeight;
         
-        // 🔥 ESPERAR UN POCO PARA QUE SE RENDERICE
-        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log(`📄 Ancho: ${anchoContenido}px, Altura: ${alturaContenido}px`);
         
-        // 🔥 USAR html2canvas CON LA ALTURA CORRECTA
+        // 🔥 GENERAR CANVAS CON EL CONTENIDO COMPLETO
         const canvas = await html2canvas(elemento, {
             scale: 2,
             useCORS: true,
             allowTaint: true,
             backgroundColor: '#ffffff',
             logging: false,
-            width: anchoReal,
-            height: alturaReal + 20,
+            width: anchoContenido,
+            height: alturaContenido + 10,
             scrollY: 0,
             scrollX: 0,
-            windowHeight: alturaReal + 20,
-            windowWidth: anchoReal,
+            windowHeight: alturaContenido + 10,
+            windowWidth: anchoContenido,
             onclone: (clonedDoc, clonedElement) => {
                 clonedElement.style.height = 'auto';
                 clonedElement.style.overflow = 'visible';
@@ -3187,19 +3186,44 @@ async function descargarPDFFinal() {
         updateProgressBar(80);
         updateProgressMessage('Convirtiendo a PDF...');
         
-        // 🔥 CREAR PDF CON EL TAMAÑO EXACTO DEL CANVAS
+        // 🔥 CONFIGURACIÓN DEL PDF - A4 CON MÁRGENES
         const { jsPDF } = window.jspdf || jspdf;
+        
+        // Tamaño A4 en mm
+        const A4_WIDTH_MM = 210;
+        const A4_HEIGHT_MM = 297;
+        const MARGEN_MM = 15; // Márgenes de 15mm
+        
+        // Área útil en mm
+        const ANCHO_UTIL_MM = A4_WIDTH_MM - (MARGEN_MM * 2);
+        const ALTO_UTIL_MM = A4_HEIGHT_MM - (MARGEN_MM * 2);
+        
+        // Calcular escala para que el contenido quepa en el área útil
+        const escalaAncho = ANCHO_UTIL_MM / (canvas.width / 2); // dividido por 2 por el scale de html2canvas
+        const escalaAlto = ALTO_UTIL_MM / (canvas.height / 2);
+        const escala = Math.min(escalaAncho, escalaAlto, 1); // no escalar más de 1x
+        
+        console.log(`📐 Escala: ${escala}, Ancho útil: ${ANCHO_UTIL_MM}mm, Alto útil: ${ALTO_UTIL_MM}mm`);
+        
+        // Crear PDF con tamaño A4
         const pdf = new jsPDF({
             orientation: 'portrait',
-            unit: 'px',
-            format: [canvas.width, canvas.height],
-            compress: true,
-            hotfixes: ['px_scaling']
+            unit: 'mm',
+            format: 'a4',
+            compress: true
         });
         
-        // 🔥 AGREGAR LA IMAGEN - OCUPA TODO EL PDF
+        // Calcular dimensiones de la imagen en mm
+        const imgWidthMm = canvas.width / 2 * escala;
+        const imgHeightMm = canvas.height / 2 * escala;
+        
+        // Centrar la imagen en la página
+        const offsetX = (A4_WIDTH_MM - imgWidthMm) / 2;
+        const offsetY = (A4_HEIGHT_MM - imgHeightMm) / 2;
+        
+        // Agregar la imagen al PDF
         const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+        pdf.addImage(imgData, 'JPEG', offsetX, offsetY, imgWidthMm, imgHeightMm);
         
         // 🔥 OBTENER EL PDF COMO BLOB
         const pdfBlob = pdf.output('blob');

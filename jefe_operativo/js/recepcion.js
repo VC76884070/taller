@@ -3093,7 +3093,7 @@ async function descargarPDFFinal() {
         updateProgressMessage('Generando contenido del reporte...');
         const reporteHTML = generarHTMLReporte(detalleParaPDF);
         
-        // Crear contenedor temporal
+        // Crear contenedor temporal - SIN NINGÚN PADDING
         const container = document.createElement('div');
         container.id = 'pdfContainer';
         container.style.cssText = `
@@ -3101,8 +3101,8 @@ async function descargarPDFFinal() {
             left: -9999px;
             top: 0;
             width: 780px;
-            padding: 0;
-            margin: 0;
+            padding: 0 !important;
+            margin: 0 !important;
             background: white;
             font-family: Arial, sans-serif;
             z-index: -1;
@@ -3117,10 +3117,21 @@ async function descargarPDFFinal() {
         updateProgressMessage('Renderizando PDF...');
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        if (typeof html2pdf === 'undefined') {
+        // Cargar librerías si no existen
+        if (typeof html2canvas === 'undefined') {
             await new Promise((resolve, reject) => {
                 const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+                script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+        
+        if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
                 script.onload = resolve;
                 script.onerror = reject;
                 document.head.appendChild(script);
@@ -3133,35 +3144,50 @@ async function descargarPDFFinal() {
         const elemento = container.querySelector('.reporte-container');
         if (!elemento) throw new Error('No se encontró el contenido del reporte');
         
-        // 🔥 FORZAR RENDERIZADO
-        elemento.style.height = 'auto';
-        elemento.style.overflow = 'visible';
+        // 🔥 FORZAR QUE EL ELEMENTO OCUPE TODO EL ANCHO
+        elemento.style.width = '100%';
+        elemento.style.padding = '0';
+        elemento.style.margin = '0';
+        elemento.style.boxSizing = 'border-box';
+        
+        // 🔥 ESPERAR A QUE SE RENDERICE
         await new Promise(resolve => setTimeout(resolve, 300));
         
-        // 🔥 USAR FORMATO A4 CON MÁRGENES CERO
-        const pdfBlob = await html2pdf()
-            .set({
-                margin: [0, 0, 0, 0],
-                filename: `Reporte_${detalleParaPDF.codigo_unico || 'orden'}.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { 
-                    scale: 2,
-                    useCORS: true,
-                    allowTaint: true,
-                    backgroundColor: '#ffffff',
-                    logging: false,
-                    width: 780
-                },
-                jsPDF: { 
-                    unit: 'mm', 
-                    format: 'a4',  // 🔥 CAMBIADO A A4
-                    orientation: 'portrait'
-                }
-            })
-            .from(elemento)
-            .outputPdf('blob');
+        // 🔥 USAR html2canvas DIRECTAMENTE
+        const canvas = await html2canvas(elemento, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            logging: false,
+            width: 780,
+            height: elemento.scrollHeight,
+            scrollY: 0,
+            scrollX: 0,
+            windowHeight: elemento.scrollHeight,
+            windowWidth: 780
+        });
         
-        updateProgressBar(85);
+        updateProgressBar(80);
+        updateProgressMessage('Convirtiendo a PDF...');
+        
+        // 🔥 USAR jsPDF DIRECTAMENTE
+        const { jsPDF } = window.jspdf || jspdf;
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'px',
+            format: [canvas.width, canvas.height],
+            compress: true
+        });
+        
+        // 🔥 AGREGAR LA IMAGEN DEL CANVAS AL PDF
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+        
+        // 🔥 OBTENER EL PDF COMO BLOB
+        const pdfBlob = pdf.output('blob');
+        
+        updateProgressBar(90);
         updateProgressMessage('Preparando para descargar...');
         
         // 🔥 DESCARGAR EL PDF
@@ -3175,7 +3201,7 @@ async function descargarPDFFinal() {
         
         mostrarNotificacion('📥 PDF descargado', 'success');
         
-        updateProgressBar(90);
+        updateProgressBar(95);
         updateProgressMessage('Subiendo PDF a Google Drive...');
         
         const reader = new FileReader();

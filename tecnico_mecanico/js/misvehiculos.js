@@ -1777,10 +1777,24 @@ window.verDetalle = async function(ordenId) {
         // 🎵 FUNCIÓN PARA CREAR AUDIO CON IDS ÚNICOS
         // =============================================
         function crearAudioHtml(url, titulo, icono, color) {
-            if (!url || url === '') return '';
-            
+            // 🔥 SIEMPRE GENERAR EL HTML, aunque la URL esté vacía
             const audioId = `audio_${ordenId}_${titulo.replace(/\s/g, '_').toLowerCase()}`;
             const loaderId = `audioLoader_${ordenId}_${titulo.replace(/\s/g, '_').toLowerCase()}`;
+            
+            // Si no hay URL, mostrar mensaje
+            if (!url || url === '') {
+                return `
+                    <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(59, 130, 246, 0.05); border-radius: var(--radius-md); border-left: 3px solid ${color};">
+                        <div style="font-size: 0.75rem; color: ${color}; margin-bottom: 0.5rem;">
+                            <i class="fas ${icono}"></i> ${titulo}:
+                        </div>
+                        <div style="display:flex; align-items:center; gap:0.5rem; padding:0.5rem; background:var(--gris-oscuro); border-radius:var(--radius-sm); color:var(--gris-texto);">
+                            <i class="fas fa-info-circle"></i>
+                            <span style="font-size:0.8rem;">No hay audio disponible</span>
+                        </div>
+                    </div>
+                `;
+            }
             
             return `
                 <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(59, 130, 246, 0.05); border-radius: var(--radius-md); border-left: 3px solid ${color};">

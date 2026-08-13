@@ -3044,9 +3044,6 @@ function setupTranscripcionFormulario() {
         btnTranscribirForm.addEventListener('click', transcribirAudioFormulario);
     }
 }
-// =====================================================
-// GENERAR PDF - DESCARGA Y SUBE A GOOGLE DRIVE
-// =====================================================
 async function descargarPDFFinal() {
     if (descargandoPDF) {
         mostrarNotificacion('⏳ Ya se está generando el PDF...', 'warning');
@@ -3096,17 +3093,16 @@ async function descargarPDFFinal() {
         updateProgressMessage('Generando contenido del reporte...');
         const reporteHTML = generarHTMLReporte(detalleParaPDF);
         
-        // Crear contenedor temporal
+        // Crear contenedor temporal - SIN PADDING Y CON ALTURA COMPLETA
         const container = document.createElement('div');
         container.id = 'pdfContainer';
         container.style.cssText = `
             position: fixed;
             left: 0;
             top: 0;
-            width: 100%;
-            max-width: 800px;
-            margin: 0 auto;
+            width: 800px;
             padding: 0;
+            margin: 0;
             background: white;
             font-family: Arial, sans-serif;
             z-index: -1;
@@ -3137,20 +3133,33 @@ async function descargarPDFFinal() {
         const elemento = container.querySelector('.reporte-container');
         if (!elemento) throw new Error('No se encontró el contenido del reporte');
         
-        // 🔥 GENERAR PDF CON MÁRGENES REDUCIDOS
+        // 🔥 FORZAR QUE EL CONTENIDO OCUPE TODA LA PÁGINA
+        const alturaContenido = elemento.scrollHeight;
+        const alturaPagina = 279; // Altura carta en mm (297mm - 18mm de margen)
+        
+        // Calcular si necesitamos ajustar la escala
+        let escala = 1;
+        if (alturaContenido > alturaPagina * 3.78) { // 3.78 es factor px->mm
+            escala = (alturaPagina * 3.78) / alturaContenido;
+            if (escala < 0.6) escala = 0.6;
+        }
+        
+        console.log(`📄 Altura contenido: ${alturaContenido}px, Altura página: ${alturaPagina}mm, Escala: ${escala}`);
+        
+        // 🔥 GENERAR PDF CON MÁRGENES CASI CERO Y ESCALA AJUSTADA
         const pdfBlob = await html2pdf()
             .set({
-                margin: [2, 2, 2, 2],  // 🔥 REDUCIDO DE 9mm a 2mm
+                margin: [0, 0, 0, 0],  // 🔥 CERO MÁRGENES
                 filename: `Reporte_${detalleParaPDF.codigo_unico || 'orden'}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { 
-                    scale: 2, 
+                    scale: 2 * escala,  // Ajustar escala para que quepa
                     useCORS: true, 
                     allowTaint: true, 
                     backgroundColor: '#ffffff', 
                     logging: false,
                     width: 800,
-                    height: elemento.scrollHeight
+                    height: alturaContenido
                 },
                 jsPDF: { 
                     unit: 'mm', 
@@ -3224,7 +3233,6 @@ async function descargarPDFFinal() {
     }
     descargandoPDF = false;
 }
-
 function generarHTMLReporte(detalle) {
     if (!detalle) return '<div class="loading-preview"><i class="fas fa-exclamation-triangle"></i><p>No hay datos</p></div>';
 

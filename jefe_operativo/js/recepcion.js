@@ -3224,6 +3224,7 @@ async function descargarPDFFinal() {
     }
     descargandoPDF = false;
 }
+
 function generarHTMLReporte(detalle) {
     if (!detalle) return '<div class="loading-preview"><i class="fas fa-exclamation-triangle"></i><p>No hay datos</p></div>';
 

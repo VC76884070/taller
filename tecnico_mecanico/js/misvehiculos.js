@@ -1703,28 +1703,30 @@ function cerrarHistorialModal() {
 }
 
 // =====================================================
-// DETALLE DE ORDEN - CORREGIDO CON CARGA PROXY
+// DETALLE DE ORDEN - CORREGIDO
 // =====================================================
 window.verDetalle = async function(ordenId) {
-      console.log('========================================');
-    console.log('🔍 VER DETALLE - INICIO');
-    console.log(`📌 Orden ID: ${ordenId}`);
-    console.log(`🔑 Token: ${token ? '✅ Presente' : '❌ NO HAY TOKEN'}`);
-    console.log(`🔑 Token valor: ${token ? token.substring(0, 20) + '...' : 'null'}`);
-    console.log(`📸 Fotos a cargar: ${fotosArray ? fotosArray.length : '0'}`);
-    console.log('========================================');
+    // 🔥 VERIFICAR TOKEN
     const tokenActual = getToken();
     if (!tokenActual) {
         showToast('No hay sesión activa', 'error');
         window.location.href = '/';
         return;
     }
+    
+    // ✅ LOGS CORREGIDOS (sin fotosArray)
+    console.log('========================================');
+    console.log('🔍 VER DETALLE - INICIO');
+    console.log(`📌 Orden ID: ${ordenId}`);
+    console.log(`🔑 Token: ${tokenActual ? '✅ Presente' : '❌ NO HAY TOKEN'}`);
+    console.log('========================================');
+    
     showToast('Cargando detalles...', 'info');
     
     try {
         const response = await fetch(`/tecnico/detalle-orden/${ordenId}`, {
             method: 'GET',
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${tokenActual}` }
         });
         
         if (response.status === 401) {
@@ -1741,6 +1743,9 @@ window.verDetalle = async function(ordenId) {
         
         const detalle = data.detalle;
         
+        // =============================================
+        // DATOS DEL VEHÍCULO
+        // =============================================
         const vehiculo = detalle.vehiculo || {};
         const kilometraje = vehiculo.kilometraje ? `${parseInt(vehiculo.kilometraje).toLocaleString()} km` : 'N/A';
         const anio = vehiculo.anio && vehiculo.anio !== 'N/A' && vehiculo.anio !== null ? vehiculo.anio : 'No especificado';
@@ -1750,8 +1755,14 @@ window.verDetalle = async function(ordenId) {
         const instruccionesTecnico = detalle.orden?.instrucciones_tecnico || 'No hay instrucciones del Jefe de Taller';
         const instruccionesArmado = detalle.orden?.instrucciones_armado || '';
         
+        // =============================================
+        // 🔥 FOTOS - DEFINIDAS AQUÍ
+        // =============================================
         const fotos = detalle.recepcion?.fotos || {};
         const fotosArray = Object.entries(fotos).filter(([_, url]) => url && url !== '');
+        
+        // ✅ AHORA SÍ PODEMOS USAR fotosArray
+        console.log(`📸 Fotos a cargar: ${fotosArray.length}`);
         
         const audioProblemaUrl = detalle.recepcion?.audio_url || '';
         const transcripcionProblema = detalle.recepcion?.transcripcion_problema || 'No hay descripción del problema';
@@ -1762,6 +1773,9 @@ window.verDetalle = async function(ordenId) {
         const bahiaInfo = detalle.planificacion?.bahia_asignada ? 
             `<div><strong>Bahía asignada:</strong> ${detalle.planificacion.bahia_asignada}</div>` : '';
         
+        // =============================================
+        // FUNCIÓN PARA AUDIO
+        // =============================================
         function crearAudioHtml(url, titulo, icono, color) {
             if (!url || url === '') return '';
             const proxyUrl = url.includes('drive.google.com') ? 
@@ -1781,6 +1795,9 @@ window.verDetalle = async function(ordenId) {
             `;
         }
         
+        // =============================================
+        // HTML DEL MODAL
+        // =============================================
         const audioProblemaHtml = crearAudioHtml(
             audioProblemaUrl,
             'Grabación del problema (Cliente)',
@@ -1826,7 +1843,9 @@ window.verDetalle = async function(ordenId) {
             </div>
         `;
         
-        // 🔥 SECCIÓN DE FOTOS CORREGIDA - CON LOADER Y IDS ÚNICOS
+        // =============================================
+        // SECCIÓN DE FOTOS
+        // =============================================
         let fotosHtml = '';
         if (fotosArray.length > 0) {
             fotosHtml = `
@@ -1894,21 +1913,31 @@ window.verDetalle = async function(ordenId) {
             </div>
         `;
         
+        // =============================================
+        // MOSTRAR MODAL
+        // =============================================
         document.getElementById('detalleBody').innerHTML = detalleHtml;
         document.getElementById('detalleModal').classList.add('show');
         
-        // 🔥 CARGAR FOTOS CON FETCH DESPUÉS DE RENDERIZAR
+        // =============================================
+        // 🔥 CARGAR FOTOS CON FETCH
+        // =============================================
         setTimeout(() => {
+            // Asegurar que el token existe
+            if (!token) {
+                token = getToken();
+            }
+            
             fotosArray.forEach(([nombre, url], index) => {
                 const imgId = `detalle_img_${ordenId}_${index}`;
                 const loaderId = `detalle_loader_${ordenId}_${index}`;
                 cargarImagenDetalle(url, imgId, loaderId);
             });
-        }, 150);
+        }, 200);
         
     } catch (error) {
-        console.error('Error:', error);
-        showToast(error.message, 'error');
+        console.error('❌ Error en verDetalle:', error);
+        showToast(error.message || 'Error al cargar detalles', 'error');
     }
 };
 // =====================================================

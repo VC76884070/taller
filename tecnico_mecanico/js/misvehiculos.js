@@ -1706,6 +1706,7 @@ function cerrarHistorialModal() {
 // DETALLE DE ORDEN - COMPLETO Y CORREGIDO
 // =====================================================
 window.verDetalle = async function(ordenId) {
+    // 🔥 VERIFICAR TOKEN
     const tokenActual = getToken();
     if (!tokenActual) {
         showToast('No hay sesión activa', 'error');
@@ -1772,7 +1773,7 @@ window.verDetalle = async function(ordenId) {
             `<div><strong>Bahía asignada:</strong> ${detalle.planificacion.bahia_asignada}</div>` : '';
         
         // =============================================
-        // 🎵 FUNCIÓN PARA CREAR AUDIO CON IDS FIJOS - NO USAR replace()
+        // 🎵 FUNCIÓN PARA CREAR AUDIO CON IDS FIJOS
         // =============================================
         function crearAudioHtml(url, titulo, icono, color) {
             // 🔥 USAR IDs FIJOS, NO GENERADOS DINÁMICAMENTE
@@ -1969,19 +1970,18 @@ window.verDetalle = async function(ordenId) {
                 cargarImagenDetalle(url, imgId, loaderId);
             });
             
-            // 🎵 Cargar audio del problema - USAR IDs SIN ORDEN
+            // 🎵 Cargar audio del problema - USAR IDs FIJOS
             if (audioProblemaUrl) {
-                // 🔥 CORREGIDO: Usar los mismos IDs que generó crearAudioHtml()
-                const audioId = 'audio_grabacion_del_problema_cliente';
-                const loaderId = 'audioLoader_grabacion_del_problema_cliente';
+                const audioId = 'audio_problema_cliente';
+                const loaderId = 'audioLoader_problema_cliente';
                 console.log(`🎵 Cargando audio del problema: ${audioId}`);
                 cargarAudioDetalle(audioProblemaUrl, audioId, loaderId);
             }
             
-            // 🎵 Cargar audio del diagnóstico - USAR IDs SIN ORDEN
+            // 🎵 Cargar audio del diagnóstico - USAR IDs FIJOS
             if (audioDiagnosticoUrl) {
-                const audioId = 'audio_grabacion_del_diagnostico_jefe_de_taller';
-                const loaderId = 'audioLoader_grabacion_del_diagnostico_jefe_de_taller';
+                const audioId = 'audio_diagnostico_jefe_taller';
+                const loaderId = 'audioLoader_diagnostico_jefe_taller';
                 console.log(`🎵 Cargando audio del diagnóstico: ${audioId}`);
                 cargarAudioDetalle(audioDiagnosticoUrl, audioId, loaderId);
             }

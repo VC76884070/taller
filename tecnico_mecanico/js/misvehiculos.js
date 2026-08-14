@@ -1772,18 +1772,24 @@ window.verDetalle = async function(ordenId) {
             `<div><strong>Bahía asignada:</strong> ${detalle.planificacion.bahia_asignada}</div>` : '';
         
         // =============================================
-        // 🎵 FUNCIÓN PARA CREAR AUDIO CON IDS ÚNICOS - CORREGIDA
+        // 🎵 FUNCIÓN PARA CREAR AUDIO CON IDS FIJOS - NO USAR replace()
         // =============================================
         function crearAudioHtml(url, titulo, icono, color) {
-            // 🔥 GENERAR IDS SIN EL ORDEN ID (para que sean predecibles)
-            const baseId = titulo.toLowerCase()
-                .replace(/[()]/g, '')
-                .replace(/\s+/g, '_')
-                .replace(/[^a-z0-9_]/g, '');
+            // 🔥 USAR IDs FIJOS, NO GENERADOS DINÁMICAMENTE
+            let audioId, loaderId;
             
-            const audioId = `audio_${baseId}`;
-            const sourceId = `audio_${baseId}_source`;
-            const loaderId = `audioLoader_${baseId}`;
+            if (titulo.includes('problema')) {
+                audioId = 'audio_problema_cliente';
+                loaderId = 'audioLoader_problema_cliente';
+            } else if (titulo.includes('diagnóstico') || titulo.includes('diagnostico')) {
+                audioId = 'audio_diagnostico_jefe_taller';
+                loaderId = 'audioLoader_diagnostico_jefe_taller';
+            } else {
+                // Fallback
+                const baseId = titulo.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                audioId = `audio_${baseId}`;
+                loaderId = `audioLoader_${baseId}`;
+            }
             
             console.log(`🎵 Generando audio: audioId=${audioId}, loaderId=${loaderId}`);
             
@@ -1811,7 +1817,7 @@ window.verDetalle = async function(ordenId) {
                         <span style="font-size:0.8rem;">Cargando audio...</span>
                     </div>
                     <audio id="${audioId}" controls style="width: 100%; display: none;" preload="metadata">
-                        <source id="${sourceId}" src="">
+                        <source id="${audioId}_source" src="">
                         Tu navegador no soporta el elemento de audio.
                     </audio>
                 </div>

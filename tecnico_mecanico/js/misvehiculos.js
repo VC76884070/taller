@@ -1981,17 +1981,21 @@ window.verDetalle = async function(ordenId) {
     }
 };
 // =====================================================
-// CARGAR AUDIO EN DETALLE - CON FETCH Y TOKEN
+// CARGAR AUDIO EN DETALLE - VERSIÓN CORREGIDA
 // =====================================================
 async function cargarAudioDetalle(url, audioId, loaderId) {
-    if (!url || url === '' || url === 'null' || url === 'undefined') {
+    // Normalizar URL
+    if (!url || url === '' || url === 'null' || url === 'undefined' || url === 'None') {
         const loader = document.getElementById(loaderId);
         if (loader) {
-            loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span style="font-size:0.7rem;">Sin audio</span>';
+            loader.innerHTML = '<i class="fas fa-microphone-slash"></i><span style="font-size:0.7rem;">Sin audio</span>';
             loader.style.display = 'flex';
         }
         return;
     }
+    
+    // Limpiar URL
+    url = url.trim();
     
     const audio = document.getElementById(audioId);
     const source = audio ? document.getElementById(`${audioId}_source`) : null;
@@ -2015,12 +2019,17 @@ async function cargarAudioDetalle(url, audioId, loaderId) {
     try {
         const tokenActual = getToken();
         if (!tokenActual) {
-            throw new Error('No hay token para Google Drive');
+            throw new Error('No hay token de autenticación');
         }
         
-        // 🔥 USAR PROXY CON TOKEN
+        // 🔥 EXTRAER FILE_ID
+        const fileId = extraerFileIdDrive(url);
+        console.log(`🎵 [${audioId}] URL: ${url}`);
+        console.log(`🎵 [${audioId}] File ID: ${fileId || 'NO EXTRAÍDO'}`);
+        
+        // 🔥 USAR EL PROXY DE AUDIO
         const proxyUrl = `/tecnico/proxy-audio?url=${encodeURIComponent(url)}`;
-        console.log(`🎵 [${audioId}] Cargando audio vía proxy...`);
+        console.log(`🎵 [${audioId}] Llamando a: ${proxyUrl}`);
         
         const response = await fetch(proxyUrl, {
             headers: {
@@ -2029,30 +2038,79 @@ async function cargarAudioDetalle(url, audioId, loaderId) {
         });
         
         if (!response.ok) {
+            // Si el proxy falla, intentar con URL directa de descarga
+            if (fileId) {
+                console.log(`🎵 [${audioId}] Proxy falló (${response.status}), intentando URL directa`);
+                const directUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+                
+                // Probar la URL directa
+                const directResponse = await fetch(directUrl, {
+                    headers: {
+                        'Authorization': `Bearer ${tokenActual}`
+                    }
+                });
+                
+                if (directResponse.ok) {
+                    const blob = await directResponse.blob();
+                    if (blob.size > 0) {
+                        const localUrl = URL.createObjectURL(blob);
+                        source.src = localUrl;
+                        audio.style.display = 'block';
+                        audio.load();
+                        if (loader) loader.style.display = 'none';
+                        console.log(`✅ [${audioId}] Audio cargado por URL directa (${blob.size} bytes)`);
+                        return;
+                    }
+                }
+                throw new Error('No se pudo cargar el audio');
+            }
             throw new Error(`HTTP ${response.status}`);
         }
         
-        // 🔥 CONVERTIR A BLOB Y CREAR URL LOCAL
-        const blob = await response.blob();
-        const localUrl = URL.createObjectURL(blob);
+        // 🔥 PROCESAR RESPUESTA DEL PROXY
+        const data = await response.json();
         
-        // Asignar al elemento de audio
-        source.src = localUrl;
-        audio.style.display = 'block';
-        audio.load();
-        if (loader) loader.style.display = 'none';
-        
-        // Manejar errores de reproducción
-        audio.addEventListener('error', function(e) {
-            console.warn(`⚠️ [${audioId}] Error al reproducir audio`);
-            if (loader) {
-                loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span style="font-size:0.7rem;">Error al reproducir</span>';
-                loader.style.display = 'flex';
+        if (data.success && data.base64) {
+            // Crear URL de datos desde base64
+            const base64Data = data.base64;
+            const contentType = data.content_type || 'audio/mpeg';
+            
+            // Convertir base64 a blob
+            const byteCharacters = atob(base64Data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
             }
-            audio.style.display = 'none';
-        }, { once: true });
-        
-        console.log(`✅ [${audioId}] Audio cargado correctamente`);
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: contentType });
+            
+            if (blob.size === 0) {
+                throw new Error('El archivo de audio está vacío');
+            }
+            
+            // Crear URL local
+            const localUrl = URL.createObjectURL(blob);
+            
+            // Asignar al elemento de audio
+            source.src = localUrl;
+            audio.style.display = 'block';
+            audio.load();
+            if (loader) loader.style.display = 'none';
+            
+            // Manejar errores de reproducción
+            audio.addEventListener('error', function(e) {
+                console.warn(`⚠️ [${audioId}] Error al reproducir audio:`, e);
+                if (loader) {
+                    loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span style="font-size:0.7rem;">Error al reproducir</span>';
+                    loader.style.display = 'flex';
+                }
+                audio.style.display = 'none';
+            }, { once: true });
+            
+            console.log(`✅ [${audioId}] Audio cargado correctamente (${blob.size} bytes)`);
+        } else {
+            throw new Error(data.error || 'Error al obtener el audio');
+        }
         
     } catch (error) {
         console.error(`❌ [${audioId}] Error:`, error.message);

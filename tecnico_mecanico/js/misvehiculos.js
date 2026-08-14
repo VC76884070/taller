@@ -1994,7 +1994,7 @@ window.verDetalle = async function(ordenId) {
     }
 };
 // =====================================================
-// CARGAR AUDIO EN DETALLE - VERSIÓN CORREGIDA
+// CARGAR AUDIO EN DETALLE - VERSIÓN CORREGIDAa
 // =====================================================
 async function cargarAudioDetalle(url, audioId, loaderId) {
     // Normalizar URL

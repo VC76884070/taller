@@ -1184,3 +1184,61 @@ def notificar_armado_completado(id_orden, codigo_orden, tecnico_nombre):
         
     except Exception as e:
         logger.error(f"Error enviando notificaciones de armado: {str(e)}")
+
+# =====================================================
+# API: OBTENER INSTRUCCIONES DE ARMADO
+# =====================================================
+@diagnostico_bp.route('/api/orden/<int:id_orden>/instrucciones-armado', methods=['GET'])
+@tecnico_required
+def obtener_instrucciones_armado(current_user, id_orden):
+    """Obtiene las instrucciones de armado para una orden"""
+    try:
+        tecnico_id = current_user['id']
+        
+        # Verificar que el técnico tiene acceso a esta orden
+        asignacion = supabase.table('asignaciontecnico') \
+            .select('id') \
+            .eq('id_orden_trabajo', id_orden) \
+            .eq('id_tecnico', tecnico_id) \
+            .execute()
+        
+        if not asignacion.data:
+            return jsonify({'error': 'No tienes acceso a esta orden'}), 403
+        
+        # Buscar instrucciones en el historial
+        instrucciones_result = supabase.table('instrucciones_tecnico_historial') \
+            .select('instrucciones, fecha_envio') \
+            .eq('id_orden_trabajo', id_orden) \
+            .order('fecha_envio', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if instrucciones_result.data:
+            return jsonify({
+                'success': True,
+                'instrucciones': instrucciones_result.data[0]['instrucciones'],
+                'fecha_envio': instrucciones_result.data[0]['fecha_envio']
+            }), 200
+        
+        # Si no hay en el historial, buscar en la orden
+        orden = supabase.table('ordentrabajo') \
+            .select('instrucciones_armado, fecha_instrucciones') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if orden.data and orden.data[0].get('instrucciones_armado'):
+            return jsonify({
+                'success': True,
+                'instrucciones': orden.data[0]['instrucciones_armado'],
+                'fecha_envio': orden.data[0].get('fecha_instrucciones')
+            }), 200
+        
+        return jsonify({
+            'success': True,
+            'instrucciones': None,
+            'fecha_envio': None
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo instrucciones de armado: {str(e)}")
+        return jsonify({'error': str(e)}), 500

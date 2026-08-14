@@ -33,20 +33,11 @@ let diagnosticoActual = null;
 
 // =====================================================
 // FUNCIONES PARA CARGAR IMÁGENES Y AUDIOS CON PROXY
-// (DEFINIDAS AL INICIO PARA QUE ESTÉN DISPONIBLES)
 // =====================================================
 
 /**
  * Carga una imagen desde Google Drive usando el proxy
- * @param {string} url - URL de la imagen en Google Drive
- * @param {HTMLElement} imgElement - Elemento <img> donde mostrar la imagen
- * @param {HTMLElement} loaderElement - Elemento para mostrar el loader (opcional)
- * @returns {Promise<string|null>} - Base64 de la imagen o null si falla
  */
-// =====================================================
-// FUNCIÓN PARA CARGAR IMÁGENES CON PROXY - CORREGIDA
-// =====================================================
-
 async function cargarImagenProxy(url, imgElement, loaderElement = null) {
     if (!url) {
         if (imgElement) {
@@ -57,7 +48,6 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
         return null;
     }
     
-    // Mostrar loader
     if (loaderElement) {
         loaderElement.style.display = 'flex';
         loaderElement.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Cargando...';
@@ -69,11 +59,9 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
     }
     
     try {
-        // 🔥 CORREGIDO: Usar la ruta relativa correcta
-        // En producción: /api/proxy-imagen?url=...
-        // En desarrollo: http://localhost:5000/api/proxy-imagen?url=...
+        // 🔥 RUTA CORRECTA: /tecnico/api/proxy-imagen
         const baseUrl = window.API_BASE_URL || '';
-        const proxyUrl = `${baseUrl}/api/proxy-imagen?url=${encodeURIComponent(url)}`;
+        const proxyUrl = `${baseUrl}/tecnico/api/proxy-imagen?url=${encodeURIComponent(url)}`;
         console.log('📸 Proxy URL:', proxyUrl);
         
         const response = await fetch(proxyUrl, {
@@ -83,7 +71,6 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
             }
         });
         
-        // Verificar si la respuesta es OK
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -92,7 +79,6 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
         console.log('📸 Respuesta proxy:', data);
         
         if (data.success && data.base64) {
-            // Pre-cargar la imagen antes de mostrarla
             return new Promise((resolve) => {
                 const nuevaImg = new Image();
                 nuevaImg.onload = function() {
@@ -137,9 +123,6 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
 
 /**
  * Carga un audio desde Google Drive usando el proxy
- * @param {string} url - URL del audio en Google Drive
- * @param {HTMLElement} audioElement - Elemento <audio> donde cargar el audio
- * @param {HTMLElement} loaderElement - Elemento para mostrar el loader (opcional)
  */
 async function cargarAudioProxy(url, audioElement, loaderElement = null) {
     if (!url) {
@@ -158,7 +141,9 @@ async function cargarAudioProxy(url, audioElement, loaderElement = null) {
     if (audioElement) audioElement.style.display = 'none';
     
     try {
-        const proxyUrl = `${window.API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(url)}`;
+        // 🔥 RUTA CORRECTA: /tecnico/api/proxy-audio
+        const baseUrl = window.API_BASE_URL || '';
+        const proxyUrl = `${baseUrl}/tecnico/api/proxy-audio?url=${encodeURIComponent(url)}`;
         console.log('🎵 Cargando audio desde proxy:', proxyUrl);
         
         const response = await fetch(proxyUrl, {
@@ -173,7 +158,6 @@ async function cargarAudioProxy(url, audioElement, loaderElement = null) {
         const localUrl = URL.createObjectURL(blob);
         
         if (audioElement) {
-            // Limpiar src anterior si existía
             if (audioElement.src && audioElement.src.startsWith('blob:')) {
                 URL.revokeObjectURL(audioElement.src);
             }
@@ -181,7 +165,6 @@ async function cargarAudioProxy(url, audioElement, loaderElement = null) {
             audioElement.style.display = 'block';
             audioElement.load();
             
-            // Manejar errores de reproducción
             audioElement.onerror = function(e) {
                 console.error('❌ Error reproduciendo audio:', e);
                 if (loaderElement) {
@@ -204,12 +187,8 @@ async function cargarAudioProxy(url, audioElement, loaderElement = null) {
     }
 }
 
-/**
- * Ver foto ampliada en modal usando proxy
- * @param {string} url - URL de la imagen en Google Drive
- */
 // =====================================================
-// VER FOTO AMPLIADA CON PROXY - CORREGIDA
+// VER FOTO AMPLIADA CON PROXY
 // =====================================================
 
 window.verFotoAmpliada = async function(url) {
@@ -218,7 +197,6 @@ window.verFotoAmpliada = async function(url) {
         return;
     }
     
-    // Crear modal si no existe
     let modal = document.getElementById('fotoAmpliadaModal');
     if (!modal) {
         modal = document.createElement('div');
@@ -244,7 +222,6 @@ window.verFotoAmpliada = async function(url) {
         `;
         document.body.appendChild(modal);
         
-        // Cerrar al hacer clic fuera
         modal.addEventListener('click', (e) => {
             if (e.target === modal) modal.style.display = 'none';
         });
@@ -255,7 +232,6 @@ window.verFotoAmpliada = async function(url) {
     
     if (!modalImg) return;
     
-    // Mostrar modal y loader
     modal.style.display = 'flex';
     if (loader) {
         loader.style.display = 'flex';
@@ -266,9 +242,9 @@ window.verFotoAmpliada = async function(url) {
     modalImg.src = '';
     
     try {
-        // 🔥 Usar proxy para cargar la imagen
+        // 🔥 RUTA CORRECTA: /tecnico/api/proxy-imagen
         const baseUrl = window.API_BASE_URL || '';
-        const proxyUrl = `${baseUrl}/api/proxy-imagen?url=${encodeURIComponent(url)}`;
+        const proxyUrl = `${baseUrl}/tecnico/api/proxy-imagen?url=${encodeURIComponent(url)}`;
         console.log('📸 Proxy ampliada:', proxyUrl);
         
         const response = await fetch(proxyUrl, {
@@ -443,7 +419,8 @@ async function verificarToken() {
             userInfo = JSON.parse(userData);
         }
         
-        const response = await fetch(`${window.API_BASE_URL}/api/verify-token`, {
+        const baseUrl = window.API_BASE_URL || '';
+        const response = await fetch(`${baseUrl}/api/verify-token`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -496,7 +473,9 @@ async function cargarOrdenes() {
     
     try {
         console.log('Cargando órdenes...');
-        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/ordenes-tecnico`, {
+        const baseUrl = window.API_BASE_URL || '';
+        // 🔥 RUTA CORRECTA: /tecnico/api/ordenes-tecnico
+        const response = await fetch(`${baseUrl}/tecnico/api/ordenes-tecnico`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -512,11 +491,10 @@ async function cargarOrdenes() {
         if (data.success) {
             ordenesTecnico = data.ordenes || [];
             
-            // Para cada orden en estado EN_ARMADO, cargar instrucciones
             for (let orden of ordenesTecnico) {
                 if (orden.estado_global === 'EnArmadoVehiculo') {
                     try {
-                        const instruccionesResp = await fetch(`${window.API_BASE_URL}/tecnico/api/orden/${orden.orden_id}/instrucciones-armado`, {
+                        const instruccionesResp = await fetch(`${baseUrl}/tecnico/api/orden/${orden.orden_id}/instrucciones-armado`, {
                             headers: { 'Authorization': `Bearer ${token}` }
                         });
                         const instruccionesData = await instruccionesResp.json();
@@ -722,7 +700,9 @@ async function verDetallesOrden(id_orden, codigo) {
     mostrarLoading(true);
     
     try {
-        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/orden/${id_orden}/detalles-completos`, {
+        const baseUrl = window.API_BASE_URL || '';
+        // 🔥 RUTA CORRECTA: /tecnico/api/orden/${id_orden}/detalles-completos
+        const response = await fetch(`${baseUrl}/tecnico/api/orden/${id_orden}/detalles-completos`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -757,7 +737,6 @@ function mostrarModalDetalles(data) {
                 <span class="estado-badge estado-${(orden.estado_global || 'pendiente').toLowerCase()}">${escapeHtml(orden.estado_global || 'Pendiente')}</span>
             </div>
             
-            <!-- Información del Vehículo -->
             <div class="detalles-seccion">
                 <h4><i class="fas fa-car"></i> Información del Vehículo</h4>
                 <div class="info-grid">
@@ -769,7 +748,6 @@ function mostrarModalDetalles(data) {
             </div>
     `;
     
-    // SECCIÓN: INSTRUCCIONES DEL JEFE DE TALLER (para armado)
     if (instruccionesArmado) {
         html += `
             <div class="detalles-seccion seccion-armado">
@@ -789,7 +767,6 @@ function mostrarModalDetalles(data) {
         `;
     }
     
-    // SECCIÓN: COTIZACIÓN (si existe)
     if (cotizacion) {
         let cotizacionEstado = '';
         let cotizacionColor = '';
@@ -832,7 +809,7 @@ function mostrarModalDetalles(data) {
                     <div class="cotizacion-fecha">
                         <i class="far fa-calendar-alt"></i> Enviada: ${formatFecha(cotizacion.fecha_envio)}
                     </div>
-            `;
+        `;
         
         if (cotizacion.servicios && cotizacion.servicios.length > 0) {
             html += `
@@ -871,7 +848,6 @@ function mostrarModalDetalles(data) {
         html += `</div></div>`;
     }
     
-    // SECCIÓN: RECEPCIÓN
     if (recepcion) {
         html += `
             <div class="detalles-seccion">
@@ -905,7 +881,6 @@ function mostrarModalDetalles(data) {
         html += `</div>`;
     }
     
-    // SECCIÓN: DIAGNÓSTICO APROBADO
     if (diagnosticoActual && diagnosticoActual.estado === 'aprobado') {
         html += `
             <div class="detalles-seccion seccion-aprobada">
@@ -948,7 +923,6 @@ function mostrarModalDetalles(data) {
         html += `</div></div>`;
     }
     
-    // SECCIÓN: VERSIONES ANTERIORES
     if (diagnosticosAnteriores.length > 0) {
         html += `
             <div class="detalles-seccion">
@@ -979,7 +953,6 @@ function mostrarModalDetalles(data) {
         `;
     }
     
-    // SECCIÓN: OBSERVACIONES
     if (observaciones.length > 0) {
         html += `
             <div class="detalles-seccion">
@@ -1084,7 +1057,9 @@ async function cargarDiagnosticoSeleccionado() {
 async function cargarDiagnosticoExistente(ordenId) {
     try {
         console.log(`Cargando diagnóstico para orden ${ordenId}`);
-        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/diagnostico/${ordenId}`, {
+        const baseUrl = window.API_BASE_URL || '';
+        // 🔥 RUTA CORRECTA: /tecnico/api/diagnostico/${ordenId}
+        const response = await fetch(`${baseUrl}/tecnico/api/diagnostico/${ordenId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -1100,14 +1075,12 @@ async function cargarDiagnosticoExistente(ordenId) {
         if (data.success) {
             diagnosticoActual = data.diagnostico;
             
-            // Cargar transcripción
             if (data.diagnostico && data.diagnostico.transcripcion_informe) {
                 document.getElementById('transcripcionDiagnostico').value = data.diagnostico.transcripcion_informe;
             } else {
                 document.getElementById('transcripcionDiagnostico').value = '';
             }
             
-            // Cargar audio usando proxy
             if (data.diagnostico && data.diagnostico.url_grabacion_informe) {
                 audioUrlSubido = data.diagnostico.url_grabacion_informe;
                 document.getElementById('audioUrl').value = data.diagnostico.url_grabacion_informe;
@@ -1115,7 +1088,6 @@ async function cargarDiagnosticoExistente(ordenId) {
                 const audioPreview = document.getElementById('audioPreview');
                 const audioLoader = document.getElementById('audioLoader');
                 
-                // Usar el proxy para cargar el audio
                 await cargarAudioProxy(data.diagnostico.url_grabacion_informe, audioPreview, audioLoader);
                 document.getElementById('btnEliminarAudio').style.display = 'inline-flex';
                 document.getElementById('grabacionStatus').innerHTML = '<i class="fas fa-check-circle"></i> Audio disponible';
@@ -1127,23 +1099,19 @@ async function cargarDiagnosticoExistente(ordenId) {
                 if (audioLoader) audioLoader.style.display = 'none';
             }
             
-            // Cargar servicios
             serviciosLista = data.servicios || [];
             renderizarServicios();
             
-            // Cargar fotos usando proxy
             if (data.fotos && data.fotos.length > 0) {
                 await cargarFotosDesdeServidor(data.fotos);
             } else {
                 limpiarFotos();
             }
             
-            // Mostrar estado
             if (data.diagnostico) {
                 mostrarEstadoDiagnostico(data.diagnostico);
             }
             
-            // Mostrar historial
             if (data.observaciones && data.observaciones.length > 0) {
                 mostrarHistorial(data.observaciones);
             } else {
@@ -1204,17 +1172,11 @@ function limpiarFotos() {
 // CARGA DE FOTOS DESDE EL SERVIDOR CON PROXY
 // =====================================================
 
-// =====================================================
-// CARGA DE FOTOS DESDE EL SERVIDOR - CORREGIDA
-// =====================================================
-
 async function cargarFotosDesdeServidor(fotos) {
     console.log('📸 Cargando fotos desde servidor:', fotos);
     
-    // Resetear fotos subidas
     fotosSubidas = [{}, {}];
     
-    // Limpiar previews
     for (let i = 0; i < 2; i++) {
         const uploadCard = document.getElementById(`fotoUpload${i + 1}`);
         if (!uploadCard) continue;
@@ -1235,12 +1197,10 @@ async function cargarFotosDesdeServidor(fotos) {
         if (loaderEl) loaderEl.style.display = 'none';
     }
     
-    // Cargar fotos existentes con el proxy
     for (let idx = 0; idx < fotos.length && idx < 2; idx++) {
         const foto = fotos[idx];
         if (!foto || !foto.url_foto) continue;
         
-        // 🔥 NO convertir la URL aquí, dejar que el proxy la maneje
         const urlImagen = foto.url_foto;
         console.log(`📸 Cargando foto ${idx + 1}:`, urlImagen);
         
@@ -1261,7 +1221,6 @@ async function cargarFotosDesdeServidor(fotos) {
         if (fotoPreview) {
             fotoPreview.style.display = 'block';
             if (previewImg) {
-                // 🔥 Usar el proxy para cargar la imagen
                 await cargarImagenProxy(urlImagen, previewImg, loaderEl);
             }
         }
@@ -1271,7 +1230,6 @@ async function cargarFotosDesdeServidor(fotos) {
     console.log('✅ Fotos cargadas:', fotosSubidas);
 }
 
-// Función auxiliar para crear loader si no existe
 function createLoaderElement(uploadCard) {
     let loader = uploadCard.querySelector('.foto-loader');
     if (!loader) {
@@ -1516,7 +1474,9 @@ async function subirAudio(audioBlob) {
     
     try {
         showToast('Subiendo audio...', 'info');
-        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/diagnostico/subir-audio`, {
+        const baseUrl = window.API_BASE_URL || '';
+        // 🔥 RUTA CORRECTA: /tecnico/api/diagnostico/subir-audio
+        const response = await fetch(`${baseUrl}/tecnico/api/diagnostico/subir-audio`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` },
             body: formData
@@ -1583,7 +1543,6 @@ function setupFotosUpload() {
                     
                     const uploaded = await subirFoto(file, i);
                     if (uploaded) {
-                        // Mostrar preview local mientras se carga del proxy
                         const reader = new FileReader();
                         reader.onload = (e) => {
                             if (previewImg) {
@@ -1622,10 +1581,6 @@ function setupFotosUpload() {
 // SUBIR FOTO CON PROXY
 // =====================================================
 
-// =====================================================
-// SUBIR FOTO - CORREGIDA
-// =====================================================
-
 async function subirFoto(file, index) {
     if (!ordenSeleccionada) {
         showToast('Primero selecciona una orden', 'warning');
@@ -1639,6 +1594,7 @@ async function subirFoto(file, index) {
     try {
         showToast('Subiendo foto...', 'info');
         const baseUrl = window.API_BASE_URL || '';
+        // 🔥 RUTA CORRECTA: /tecnico/api/diagnostico/subir-foto
         const response = await fetch(`${baseUrl}/tecnico/api/diagnostico/subir-foto`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` },
@@ -1663,7 +1619,6 @@ async function subirFoto(file, index) {
                 url: urlFoto 
             };
             
-            // Actualizar preview usando el proxy
             const uploadCard = document.getElementById(`fotoUpload${index + 1}`);
             if (uploadCard) {
                 const uploadArea = uploadCard.querySelector('.upload-area');
@@ -1675,7 +1630,6 @@ async function subirFoto(file, index) {
                 if (fotoPreview) {
                     fotoPreview.style.display = 'block';
                     if (previewImg) {
-                        // 🔥 Usar proxy para cargar la imagen subida
                         await cargarImagenProxy(urlFoto, previewImg, loaderEl);
                     }
                 }
@@ -1697,7 +1651,9 @@ async function subirFoto(file, index) {
 
 async function eliminarFoto(fotoId) {
     try {
-        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/diagnostico/eliminar-foto/${fotoId}`, {
+        const baseUrl = window.API_BASE_URL || '';
+        // 🔥 RUTA CORRECTA: /tecnico/api/diagnostico/eliminar-foto/${fotoId}
+        const response = await fetch(`${baseUrl}/tecnico/api/diagnostico/eliminar-foto/${fotoId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -1790,7 +1746,9 @@ async function guardarDiagnostico(enviar = false) {
     try {
         showToast(enviar ? 'Enviando diagnóstico...' : 'Guardando borrador...', 'info');
         
-        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/diagnostico/guardar`, {
+        const baseUrl = window.API_BASE_URL || '';
+        // 🔥 RUTA CORRECTA: /tecnico/api/diagnostico/guardar
+        const response = await fetch(`${baseUrl}/tecnico/api/diagnostico/guardar`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1837,7 +1795,9 @@ async function marcarArmadoCompletadoDesdeTarjeta(id_orden, codigo) {
     mostrarLoading(true);
     
     try {
-        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/armado/completar/${id_orden}`, {
+        const baseUrl = window.API_BASE_URL || '';
+        // 🔥 RUTA CORRECTA: /tecnico/api/armado/completar/${id_orden}
+        const response = await fetch(`${baseUrl}/tecnico/api/armado/completar/${id_orden}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -1964,9 +1924,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (confirmarBtn) {
         confirmarBtn.addEventListener('click', () => guardarDiagnostico(true));
     }
-    
-    // IMPORTANTE: NO cargamos el sidebar manualmente aquí
-    // El sidebar se carga automáticamente desde include.js
     
     window.agregarServicio = agregarServicio;
     window.eliminarServicio = eliminarServicio;

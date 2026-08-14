@@ -3,9 +3,10 @@
 # FURIA MOTOR COMPANY SRL
 # MIGRADO A GOOGLE DRIVE
 # ESTRUCTURA: {CODIGO_ORDEN}/DIAGNOSTICO_TECNICO/{fotos|audios}
+# VERSIÓN COMPLETA CORREGIDA - CON PROXY PARA IMÁGENES Y AUDIOS
 # =====================================================
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response, stream_with_context
 from functools import wraps
 from config import config
 import jwt
@@ -15,6 +16,10 @@ import uuid
 import os
 import tempfile
 import io
+import json  # ← AGREGADO: faltaba esta importación
+import re
+import requests
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +144,38 @@ def obtener_codigo_orden(id_orden):
     except Exception as e:
         logger.error(f"Error obteniendo código de orden: {str(e)}")
         return None
+
+
+# =====================================================
+# FUNCIÓN AUXILIAR: EXTRAER FILE_ID DE GOOGLE DRIVE
+# =====================================================
+def extraer_file_id_drive(url):
+    """Extrae el file_id de cualquier URL de Google Drive"""
+    if not url:
+        return None
+    
+    url = url.strip()
+    
+    patterns = [
+        r'[?&]id=([a-zA-Z0-9_-]+)',           # ?id=XXX o &id=XXX
+        r'/file/d/([a-zA-Z0-9_-]+)',          # /file/d/XXX
+        r'open\?id=([a-zA-Z0-9_-]+)',         # open?id=XXX
+        r'/d/([a-zA-Z0-9_-]+)',               # /d/XXX
+        r'thumbnail\?id=([a-zA-Z0-9_-]+)',    # thumbnail?id=XXX
+        r'uc\?export=view&id=([a-zA-Z0-9_-]+)', # uc?export=view&id=XXX
+        r'uc\?export=download&id=([a-zA-Z0-9_-]+)', # uc?export=download&id=XXX
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    
+    # Si parece un ID directamente (cadena de 10+ caracteres alfanuméricos)
+    if re.match(r'^[a-zA-Z0-9_-]{10,}$', url):
+        return url
+    
+    return None
 
 
 # =====================================================
@@ -407,19 +444,33 @@ def subir_foto_diagnostico(current_user):
         if not resultado_drive or not resultado_drive.get('id'):
             return jsonify({'error': 'Error al subir la foto a Google Drive'}), 500
         
-        # Guardar en BD
+        # 🔥 CONVERTIR URL PARA VISUALIZACIÓN DIRECTA
+        url_imagen = resultado_drive['url']
+        file_id = resultado_drive['id']
+        
+        # Si es URL de Google Drive, convertir a formato de visualización directa
+        if 'drive.google.com' in url_imagen:
+            # Usar la función auxiliar para extraer el ID
+            extracted_id = extraer_file_id_drive(url_imagen)
+            if extracted_id:
+                file_id = extracted_id
+                # Guardamos la URL como thumbnail para mejor visualización
+                url_imagen = f"https://drive.google.com/uc?export=view&id={file_id}"
+                logger.info(f"🔗 URL convertida para vista directa: {url_imagen}")
+        
+        # Guardar en BD con la URL convertida
         resultado_foto = supabase.table('foto_diagnostico').insert({
             'id_diagnostico_tecnico': diagnostico_id,
-            'url_foto': resultado_drive['url'],
-            'public_id': resultado_drive['id'],  # Guardamos el ID de Drive
+            'url_foto': url_imagen,  # Guardamos la URL de vista directa
+            'public_id': file_id,    # Guardamos el ID de Drive
             'descripcion_tecnico': f"Foto {fotos_count + 1}"
         }).execute()
         
-        logger.info(f"✅ Foto subida a Drive: {resultado_drive['url']}")
+        logger.info(f"✅ Foto subida a Drive: {url_imagen}")
         
         return jsonify({
             'success': True,
-            'url': resultado_drive['url'],
+            'url': url_imagen,
             'foto_id': resultado_foto.data[0]['id'],
             'message': 'Foto subida correctamente a Google Drive'
         }), 200
@@ -553,6 +604,10 @@ def subir_audio_diagnostico(current_user):
         if not resultado_drive or not resultado_drive.get('id'):
             return jsonify({'error': 'Error al subir el audio a Google Drive'}), 500
         
+        # Obtener la URL del audio
+        url_audio = resultado_drive['url']
+        file_id = resultado_drive['id']
+        
         # =============================================
         # TRANSCRIBIR CON WHISPER
         # =============================================
@@ -561,7 +616,7 @@ def subir_audio_diagnostico(current_user):
             try:
                 # Usar el método de google_drive para transcribir
                 resultado_transcripcion = google_drive.transcribir_audio(
-                    url_audio=resultado_drive['url']
+                    url_audio=url_audio
                 )
                 if resultado_transcripcion.get('success'):
                     transcripcion = resultado_transcripcion.get('transcripcion')
@@ -573,16 +628,17 @@ def subir_audio_diagnostico(current_user):
         
         # Actualizar diagnóstico con el audio y transcripción
         supabase.table('diagnostico_tecnico').update({
-            'url_grabacion_informe': resultado_drive['url'],
+            'url_grabacion_informe': url_audio,
             'transcripcion_informe': transcripcion or '',
             'fecha_modificacion': datetime.datetime.now().isoformat()
         }).eq('id', diagnostico_id).execute()
         
-        logger.info(f"✅ Audio subido a Drive: {resultado_drive['url']}")
+        logger.info(f"✅ Audio subido a Drive: {url_audio}")
         
         return jsonify({
             'success': True,
-            'url': resultado_drive['url'],
+            'url': url_audio,
+            'file_id': file_id,
             'transcripcion': transcripcion,
             'message': 'Audio subido correctamente a Google Drive'
         }), 200
@@ -891,6 +947,155 @@ def obtener_detalles_completos_orden(current_user, id_orden):
         
     except Exception as e:
         logger.error(f"Error obteniendo detalles completos: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# PROXY PARA IMÁGENES DE GOOGLE DRIVE
+# =====================================================
+@diagnostico_bp.route('/api/proxy-imagen', methods=['GET'])
+@tecnico_required
+def proxy_imagen(current_user):
+    """
+    Proxy para imágenes de Google Drive.
+    Recibe una URL, extrae el file_id y devuelve la imagen en Base64.
+    """
+    url = request.args.get('url')
+    if not url:
+        return jsonify({'success': False, 'error': 'URL no proporcionada'}), 400
+    
+    # Extraer file_id
+    file_id = extraer_file_id_drive(url)
+    
+    if not file_id:
+        return jsonify({'success': False, 'error': 'No se pudo extraer el ID'}), 400
+    
+    logger.info(f"📸 Proxy imagen - ID: {file_id}")
+    
+    # Intentar descargar con diferentes estrategias
+    urls = [
+        f"https://drive.google.com/thumbnail?id={file_id}&sz=w800",
+        f"https://drive.google.com/uc?export=view&id={file_id}",
+        f"https://drive.google.com/uc?export=download&id={file_id}",
+    ]
+    
+    image_data = None
+    mime_type = 'image/jpeg'
+    
+    for download_url in urls:
+        try:
+            response = requests.get(download_url, timeout=30, allow_redirects=True)
+            
+            # Manejar redirecciones de confirmación de Google
+            if 'confirm' in response.url and 'download' in response.url:
+                confirm_match = re.search(r'confirm=([^&]+)', response.text)
+                if confirm_match:
+                    confirm_token = confirm_match.group(1)
+                    download_url_confirm = f"{response.url}&confirm={confirm_token}"
+                    response = requests.get(download_url_confirm, timeout=30, allow_redirects=True)
+            
+            if response.status_code == 200:
+                content_type = response.headers.get('Content-Type', '')
+                if content_type.startswith('image/') or len(response.content) > 1000:
+                    image_data = response.content
+                    mime_type = content_type if content_type.startswith('image/') else 'image/jpeg'
+                    logger.info(f"✅ Imagen descargada desde: {download_url}")
+                    break
+        except Exception as e:
+            logger.warning(f"⚠️ Error con URL {download_url}: {str(e)}")
+            continue
+    
+    if not image_data:
+        return jsonify({'success': False, 'error': 'No se pudo descargar la imagen'}), 404
+    
+    # Convertir a Base64
+    base64_data = base64.b64encode(image_data).decode('utf-8')
+    
+    return jsonify({
+        'success': True,
+        'base64': f'data:{mime_type};base64,{base64_data}'
+    })
+
+
+# =====================================================
+# PROXY PARA AUDIOS DE GOOGLE DRIVE
+# =====================================================
+@diagnostico_bp.route('/api/proxy-audio', methods=['GET'])
+@tecnico_required
+def proxy_audio(current_user):
+    """
+    Proxy para audios de Google Drive.
+    Retorna el audio como stream para que el frontend lo reproduzca.
+    """
+    url = request.args.get('url')
+    if not url:
+        return jsonify({'error': 'URL requerida'}), 400
+    
+    # Extraer file_id
+    file_id = extraer_file_id_drive(url)
+    
+    if not file_id:
+        return jsonify({'error': 'No se pudo extraer el ID'}), 400
+    
+    logger.info(f"🎵 Proxy audio - ID: {file_id}")
+    
+    download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    
+    try:
+        # Hacer la solicitud con stream=True para manejar archivos grandes
+        response = requests.get(download_url, stream=True, timeout=30, allow_redirects=True)
+        
+        # Manejar redirecciones de confirmación de Google
+        if 'confirm' in response.url and 'download' in response.url:
+            confirm_match = re.search(r'confirm=([^&]+)', response.text)
+            if confirm_match:
+                confirm_token = confirm_match.group(1)
+                download_url_confirm = f"{response.url}&confirm={confirm_token}"
+                response = requests.get(download_url_confirm, stream=True, timeout=30, allow_redirects=True)
+        
+        if response.status_code != 200:
+            logger.error(f"❌ Error descargando audio: {response.status_code}")
+            return jsonify({'error': f'Error: {response.status_code}'}), 400
+        
+        content_type = response.headers.get('content-type', 'audio/mpeg')
+        content_length = response.headers.get('content-length')
+        
+        def generate():
+            try:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        yield chunk
+            except Exception as e:
+                logger.error(f"Error generando stream de audio: {str(e)}")
+                raise
+        
+        # Crear respuesta con streaming
+        response_headers = {
+            'Content-Type': content_type,
+            'Content-Disposition': 'inline',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Expose-Headers': 'Content-Disposition'
+        }
+        
+        if content_length:
+            response_headers['Content-Length'] = content_length
+        
+        return Response(
+            stream_with_context(generate()),
+            status=200,
+            headers=response_headers
+        )
+        
+    except requests.exceptions.Timeout:
+        logger.error("❌ Timeout descargando audio")
+        return jsonify({'error': 'Timeout al descargar el audio'}), 408
+    except Exception as e:
+        logger.error(f"❌ Error en proxy de audio: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 

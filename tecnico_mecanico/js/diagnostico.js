@@ -16,9 +16,7 @@ if (typeof window.API_BASE_URL === 'undefined') {
 
 // =====================================================
 // DIAGNÓSTICO TÉCNICO - TÉCNICO MECÁNICO
-// FURIA MOTOR COMPANY SRL - VERSIÓN COMPLETA
-// INCLUYE: DIAGNÓSTICO + ARMADO DE VEHÍCULOS + DETALLES
-// VERSIÓN CORREGIDA - SIN CARGA MANUAL DEL SIDEBAR
+// FURIA MOTOR COMPANY SRL - VERSIÓN COMPLETA CORREGIDA
 // =====================================================
 
 let token = null;
@@ -32,6 +30,252 @@ let audioChunks = [];
 let grabando = false;
 let audioUrlSubido = null;
 let diagnosticoActual = null;
+
+// =====================================================
+// FUNCIONES PARA CARGAR IMÁGENES Y AUDIOS CON PROXY
+// (DEFINIDAS AL INICIO PARA QUE ESTÉN DISPONIBLES)
+// =====================================================
+
+/**
+ * Carga una imagen desde Google Drive usando el proxy
+ * @param {string} url - URL de la imagen en Google Drive
+ * @param {HTMLElement} imgElement - Elemento <img> donde mostrar la imagen
+ * @param {HTMLElement} loaderElement - Elemento para mostrar el loader (opcional)
+ * @returns {Promise<string|null>} - Base64 de la imagen o null si falla
+ */
+async function cargarImagenProxy(url, imgElement, loaderElement = null) {
+    if (!url) {
+        if (imgElement) {
+            imgElement.style.display = 'none';
+            imgElement.src = '';
+        }
+        if (loaderElement) loaderElement.style.display = 'none';
+        return null;
+    }
+    
+    // Mostrar loader
+    if (loaderElement) {
+        loaderElement.style.display = 'flex';
+        loaderElement.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Cargando...';
+    }
+    if (imgElement) {
+        imgElement.style.display = 'none';
+        imgElement.style.opacity = '0';
+        imgElement.src = '';
+    }
+    
+    try {
+        const proxyUrl = `${window.API_BASE_URL}/api/proxy-imagen?url=${encodeURIComponent(url)}`;
+        console.log('📸 Cargando imagen desde proxy:', proxyUrl);
+        
+        const response = await fetch(proxyUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            // Pre-cargar la imagen antes de mostrarla
+            return new Promise((resolve) => {
+                const nuevaImg = new Image();
+                nuevaImg.onload = function() {
+                    if (imgElement) {
+                        imgElement.src = data.base64;
+                        imgElement.style.display = 'block';
+                        imgElement.style.opacity = '1';
+                    }
+                    if (loaderElement) loaderElement.style.display = 'none';
+                    resolve(data.base64);
+                };
+                nuevaImg.onerror = function() {
+                    console.error('❌ Error al cargar imagen pre-cargada');
+                    if (loaderElement) {
+                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al cargar';
+                        loaderElement.style.display = 'flex';
+                    }
+                    if (imgElement) imgElement.style.display = 'none';
+                    resolve(null);
+                };
+                nuevaImg.src = data.base64;
+            });
+        } else {
+            if (loaderElement) {
+                loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> No se pudo cargar';
+                loaderElement.style.display = 'flex';
+            }
+            if (imgElement) imgElement.style.display = 'none';
+            return null;
+        }
+    } catch (error) {
+        console.error('❌ Error en proxy de imagen:', error);
+        if (loaderElement) {
+            loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error de conexión';
+            loaderElement.style.display = 'flex';
+        }
+        if (imgElement) imgElement.style.display = 'none';
+        return null;
+    }
+}
+
+/**
+ * Carga un audio desde Google Drive usando el proxy
+ * @param {string} url - URL del audio en Google Drive
+ * @param {HTMLElement} audioElement - Elemento <audio> donde cargar el audio
+ * @param {HTMLElement} loaderElement - Elemento para mostrar el loader (opcional)
+ */
+async function cargarAudioProxy(url, audioElement, loaderElement = null) {
+    if (!url) {
+        if (loaderElement) {
+            loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> No hay audio disponible';
+            loaderElement.style.display = 'flex';
+        }
+        if (audioElement) audioElement.style.display = 'none';
+        return;
+    }
+    
+    if (loaderElement) {
+        loaderElement.style.display = 'flex';
+        loaderElement.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Cargando audio...';
+    }
+    if (audioElement) audioElement.style.display = 'none';
+    
+    try {
+        const proxyUrl = `${window.API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(url)}`;
+        console.log('🎵 Cargando audio desde proxy:', proxyUrl);
+        
+        const response = await fetch(proxyUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        const localUrl = URL.createObjectURL(blob);
+        
+        if (audioElement) {
+            // Limpiar src anterior si existía
+            if (audioElement.src && audioElement.src.startsWith('blob:')) {
+                URL.revokeObjectURL(audioElement.src);
+            }
+            audioElement.src = localUrl;
+            audioElement.style.display = 'block';
+            audioElement.load();
+            
+            // Manejar errores de reproducción
+            audioElement.onerror = function(e) {
+                console.error('❌ Error reproduciendo audio:', e);
+                if (loaderElement) {
+                    loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al reproducir';
+                    loaderElement.style.display = 'flex';
+                }
+                audioElement.style.display = 'none';
+            };
+        }
+        
+        if (loaderElement) loaderElement.style.display = 'none';
+        
+    } catch (error) {
+        console.error('❌ Error cargando audio:', error);
+        if (loaderElement) {
+            loaderElement.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error: ${error.message}`;
+            loaderElement.style.display = 'flex';
+        }
+        if (audioElement) audioElement.style.display = 'none';
+    }
+}
+
+/**
+ * Ver foto ampliada en modal usando proxy
+ * @param {string} url - URL de la imagen en Google Drive
+ */
+window.verFotoAmpliada = async function(url) {
+    if (!url) return;
+    
+    // Crear modal si no existe
+    let modal = document.getElementById('fotoAmpliadaModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'fotoAmpliadaModal';
+        modal.className = 'modal';
+        modal.style.display = 'none';
+        modal.innerHTML = `
+            <div class="modal-content foto-ampliada-content">
+                <div class="modal-header">
+                    <h2><i class="fas fa-image"></i> Ver Foto</h2>
+                    <button class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</button>
+                </div>
+                <div class="modal-body foto-ampliada-body" style="text-align:center;">
+                    <div id="fotoModalLoader" style="display:flex;align-items:center;justify-content:center;gap:0.5rem;padding:1rem;color:var(--gris-texto);">
+                        <i class="fas fa-spinner fa-pulse"></i> Cargando...
+                    </div>
+                    <img id="fotoAmpliada" src="" alt="Foto ampliada" style="max-width:100%;max-height:70vh;display:none;">
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Cerrar al hacer clic fuera
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.style.display = 'none';
+        });
+    }
+    
+    const modalImg = document.getElementById('fotoAmpliada');
+    const loader = document.getElementById('fotoModalLoader');
+    
+    if (!modalImg) return;
+    
+    // Mostrar modal y loader
+    modal.style.display = 'flex';
+    if (loader) {
+        loader.style.display = 'flex';
+        loader.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Cargando imagen...';
+    }
+    modalImg.style.display = 'none';
+    modalImg.style.opacity = '0';
+    modalImg.src = '';
+    
+    try {
+        // Usar proxy para cargar la imagen
+        const proxyUrl = `${window.API_BASE_URL}/api/proxy-imagen?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            const nuevaImg = new Image();
+            nuevaImg.onload = function() {
+                modalImg.src = data.base64;
+                modalImg.style.display = 'block';
+                modalImg.style.opacity = '1';
+                if (loader) loader.style.display = 'none';
+            };
+            nuevaImg.onerror = function() {
+                if (loader) {
+                    loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al cargar imagen';
+                    loader.style.display = 'flex';
+                }
+                showToast('Error al cargar la imagen', 'error');
+            };
+            nuevaImg.src = data.base64;
+        } else {
+            if (loader) {
+                loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> No se pudo cargar la imagen';
+                loader.style.display = 'flex';
+            }
+        }
+    } catch (error) {
+        console.error('❌ Error:', error);
+        if (loader) {
+            loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error de conexión';
+            loader.style.display = 'flex';
+        }
+        showToast('Error al cargar la imagen', 'error');
+    }
+};
 
 // =====================================================
 // UTILIDADES
@@ -731,28 +975,6 @@ function mostrarModalDetalles(data) {
     abrirModal('modalDetalleOrden');
 }
 
-function verFotoAmpliada(url) {
-    const modal = document.createElement('div');
-    modal.className = 'modal foto-ampliada-modal';
-    modal.style.display = 'flex';
-    modal.innerHTML = `
-        <div class="modal-content foto-ampliada-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-image"></i> Ver Foto</h2>
-                <button class="modal-close" onclick="this.closest('.modal').remove()">&times;</button>
-            </div>
-            <div class="modal-body foto-ampliada-body">
-                <img src="${url}" alt="Foto ampliada" style="max-width: 100%; max-height: 70vh;">
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) modal.remove();
-    });
-}
-
 // =====================================================
 // FUNCIONES PARA NAVEGAR A DIAGNÓSTICO
 // =====================================================
@@ -837,39 +1059,50 @@ async function cargarDiagnosticoExistente(ordenId) {
         if (data.success) {
             diagnosticoActual = data.diagnostico;
             
+            // Cargar transcripción
             if (data.diagnostico && data.diagnostico.transcripcion_informe) {
                 document.getElementById('transcripcionDiagnostico').value = data.diagnostico.transcripcion_informe;
             } else {
                 document.getElementById('transcripcionDiagnostico').value = '';
             }
             
+            // Cargar audio usando proxy
             if (data.diagnostico && data.diagnostico.url_grabacion_informe) {
                 audioUrlSubido = data.diagnostico.url_grabacion_informe;
                 document.getElementById('audioUrl').value = data.diagnostico.url_grabacion_informe;
+                
                 const audioPreview = document.getElementById('audioPreview');
-                audioPreview.src = data.diagnostico.url_grabacion_informe;
-                audioPreview.style.display = 'block';
+                const audioLoader = document.getElementById('audioLoader');
+                
+                // Usar el proxy para cargar el audio
+                await cargarAudioProxy(data.diagnostico.url_grabacion_informe, audioPreview, audioLoader);
                 document.getElementById('btnEliminarAudio').style.display = 'inline-flex';
                 document.getElementById('grabacionStatus').innerHTML = '<i class="fas fa-check-circle"></i> Audio disponible';
             } else {
                 document.getElementById('audioPreview').style.display = 'none';
                 document.getElementById('btnEliminarAudio').style.display = 'none';
                 document.getElementById('grabacionStatus').innerHTML = '';
+                const audioLoader = document.getElementById('audioLoader');
+                if (audioLoader) audioLoader.style.display = 'none';
             }
             
+            // Cargar servicios
             serviciosLista = data.servicios || [];
             renderizarServicios();
             
+            // Cargar fotos usando proxy
             if (data.fotos && data.fotos.length > 0) {
-                cargarFotosDesdeServidor(data.fotos);
+                await cargarFotosDesdeServidor(data.fotos);
             } else {
                 limpiarFotos();
             }
             
+            // Mostrar estado
             if (data.diagnostico) {
                 mostrarEstadoDiagnostico(data.diagnostico);
             }
             
+            // Mostrar historial
             if (data.observaciones && data.observaciones.length > 0) {
                 mostrarHistorial(data.observaciones);
             } else {
@@ -901,6 +1134,8 @@ function limpiarFormularioDiagnostico() {
     document.getElementById('audioUrl').value = '';
     document.getElementById('btnEliminarAudio').style.display = 'none';
     document.getElementById('grabacionStatus').innerHTML = '';
+    const audioLoader = document.getElementById('audioLoader');
+    if (audioLoader) audioLoader.style.display = 'none';
     const historialContainer = document.getElementById('historialContainer');
     if (historialContainer) historialContainer.style.display = 'none';
     const estadoContainer = document.getElementById('estadoDiagnostico');
@@ -914,15 +1149,21 @@ function limpiarFotos() {
             const uploadArea = uploadCard.querySelector('.upload-area');
             const fotoPreview = uploadCard.querySelector('.foto-preview');
             const fotoInput = uploadCard.querySelector('.foto-input');
+            const loaderEl = uploadCard.querySelector('.foto-loader');
             if (uploadArea) uploadArea.style.display = 'block';
             if (fotoPreview) fotoPreview.style.display = 'none';
             if (fotoInput) fotoInput.value = '';
+            if (loaderEl) loaderEl.style.display = 'none';
         }
     }
     actualizarInfoFotos();
 }
 
-function cargarFotosDesdeServidor(fotos) {
+// =====================================================
+// CARGA DE FOTOS DESDE EL SERVIDOR CON PROXY
+// =====================================================
+
+async function cargarFotosDesdeServidor(fotos) {
     console.log('📸 Cargando fotos desde servidor:', fotos);
     
     // Resetear fotos subidas
@@ -937,45 +1178,77 @@ function cargarFotosDesdeServidor(fotos) {
         const fotoPreview = uploadCard.querySelector('.foto-preview');
         const previewImg = fotoPreview ? fotoPreview.querySelector('img') : null;
         const fotoInput = uploadCard.querySelector('.foto-input');
+        const loaderEl = uploadCard.querySelector('.foto-loader') || createLoaderElement(uploadCard);
         
-        // Resetear a estado inicial
         if (uploadArea) uploadArea.style.display = 'block';
         if (fotoPreview) fotoPreview.style.display = 'none';
         if (fotoInput) fotoInput.value = '';
-        if (previewImg) previewImg.src = '';
+        if (previewImg) {
+            previewImg.src = '';
+            previewImg.style.display = 'none';
+        }
+        if (loaderEl) loaderEl.style.display = 'none';
     }
     
-    // Cargar fotos existentes
-    fotos.forEach((foto, idx) => {
-        if (idx < 2 && foto && foto.url_foto) {
-            fotosSubidas[idx] = { 
-                id: foto.id || foto.foto_id || null, 
-                url: foto.url_foto 
-            };
-            
-            const uploadCard = document.getElementById(`fotoUpload${idx + 1}`);
-            if (!uploadCard) return;
-            
-            const uploadArea = uploadCard.querySelector('.upload-area');
-            const fotoPreview = uploadCard.querySelector('.foto-preview');
-            const previewImg = fotoPreview ? fotoPreview.querySelector('img') : null;
-            
-            if (uploadArea) uploadArea.style.display = 'none';
-            if (fotoPreview) {
-                fotoPreview.style.display = 'block';
-                if (previewImg) {
-                    previewImg.src = foto.url_foto;
-                    previewImg.onerror = function() {
-                        console.warn('⚠️ Error cargando imagen:', foto.url_foto);
-                        this.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23333" width="100" height="100"/><text x="50" y="55" text-anchor="middle" fill="%23666" font-size="14">Error</text></svg>';
-                    };
-                }
+    // Cargar fotos existentes con el proxy
+    for (let idx = 0; idx < fotos.length && idx < 2; idx++) {
+        const foto = fotos[idx];
+        if (!foto || !foto.url_foto) continue;
+        
+        const urlImagen = foto.url_foto;
+        
+        fotosSubidas[idx] = { 
+            id: foto.id || foto.foto_id || null, 
+            url: urlImagen 
+        };
+        
+        const uploadCard = document.getElementById(`fotoUpload${idx + 1}`);
+        if (!uploadCard) continue;
+        
+        const uploadArea = uploadCard.querySelector('.upload-area');
+        const fotoPreview = uploadCard.querySelector('.foto-preview');
+        const previewImg = fotoPreview ? fotoPreview.querySelector('img') : null;
+        const loaderEl = uploadCard.querySelector('.foto-loader') || createLoaderElement(uploadCard);
+        
+        if (uploadArea) uploadArea.style.display = 'none';
+        if (fotoPreview) {
+            fotoPreview.style.display = 'block';
+            if (previewImg) {
+                // Usar el proxy para cargar la imagen
+                await cargarImagenProxy(urlImagen, previewImg, loaderEl);
             }
         }
-    });
+    }
     
     actualizarInfoFotos();
     console.log('✅ Fotos cargadas:', fotosSubidas);
+}
+
+// Función auxiliar para crear loader si no existe
+function createLoaderElement(uploadCard) {
+    let loader = uploadCard.querySelector('.foto-loader');
+    if (!loader) {
+        loader = document.createElement('div');
+        loader.className = 'foto-loader';
+        loader.style.cssText = `
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--gris-oscuro);
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            color: var(--gris-texto);
+        `;
+        const fotoPreview = uploadCard.querySelector('.foto-preview');
+        if (fotoPreview) {
+            fotoPreview.appendChild(loader);
+        } else {
+            uploadCard.appendChild(loader);
+        }
+    }
+    return loader;
 }
 
 function mostrarEstadoDiagnostico(diagnostico) {
@@ -1167,6 +1440,7 @@ function eliminarGrabacion() {
     const transcripcion = document.getElementById('transcripcionDiagnostico');
     const statusEl = document.getElementById('grabacionStatus');
     const btnEliminar = document.getElementById('btnEliminarAudio');
+    const audioLoader = document.getElementById('audioLoader');
     
     if (audioUrlInput) audioUrlInput.value = '';
     if (audioPreview) {
@@ -1179,6 +1453,7 @@ function eliminarGrabacion() {
     if (transcripcion) transcripcion.value = '';
     if (statusEl) statusEl.innerHTML = 'Audio eliminado';
     if (btnEliminar) btnEliminar.style.display = 'none';
+    if (audioLoader) audioLoader.style.display = 'none';
     showToast('Audio eliminado', 'info');
 }
 
@@ -1238,6 +1513,7 @@ function setupFotosUpload() {
         const fotoPreview = uploadCard.querySelector('.foto-preview');
         const previewImg = fotoPreview.querySelector('img');
         const btnEliminar = fotoPreview.querySelector('.btn-eliminar-foto');
+        const loaderEl = uploadCard.querySelector('.foto-loader') || createLoaderElement(uploadCard);
         
         if (uploadArea) {
             uploadArea.addEventListener('click', () => fotoInput.click());
@@ -1260,11 +1536,16 @@ function setupFotosUpload() {
                     
                     const uploaded = await subirFoto(file, i);
                     if (uploaded) {
+                        // Mostrar preview local mientras se carga del proxy
                         const reader = new FileReader();
                         reader.onload = (e) => {
-                            if (previewImg) previewImg.src = e.target.result;
+                            if (previewImg) {
+                                previewImg.src = e.target.result;
+                                previewImg.style.display = 'block';
+                            }
                             if (uploadArea) uploadArea.style.display = 'none';
                             if (fotoPreview) fotoPreview.style.display = 'block';
+                            if (loaderEl) loaderEl.style.display = 'none';
                         };
                         reader.readAsDataURL(file);
                     } else {
@@ -1283,11 +1564,16 @@ function setupFotosUpload() {
                 if (uploadArea) uploadArea.style.display = 'block';
                 if (fotoPreview) fotoPreview.style.display = 'none';
                 if (fotoInput) fotoInput.value = '';
+                if (loaderEl) loaderEl.style.display = 'none';
                 actualizarInfoFotos();
             });
         }
     }
 }
+
+// =====================================================
+// SUBIR FOTO CON PROXY
+// =====================================================
 
 async function subirFoto(file, index) {
     if (!ordenSeleccionada) {
@@ -1308,18 +1594,50 @@ async function subirFoto(file, index) {
         });
         
         const data = await response.json();
+        console.log('📤 Respuesta subir foto:', data);
         
         if (data.success) {
-            fotosSubidas[index] = { id: data.foto_id, url: data.url };
+            const urlFoto = data.url || data.foto_url;
+            const fotoId = data.foto_id || data.id;
+            
+            if (!urlFoto) {
+                console.error('❌ No se recibió URL de la foto');
+                showToast('Error: No se recibió la URL de la foto', 'error');
+                return false;
+            }
+            
+            fotosSubidas[index] = { 
+                id: fotoId, 
+                url: urlFoto 
+            };
+            
+            // Actualizar preview usando el proxy
+            const uploadCard = document.getElementById(`fotoUpload${index + 1}`);
+            if (uploadCard) {
+                const uploadArea = uploadCard.querySelector('.upload-area');
+                const fotoPreview = uploadCard.querySelector('.foto-preview');
+                const previewImg = fotoPreview ? fotoPreview.querySelector('img') : null;
+                const loaderEl = uploadCard.querySelector('.foto-loader') || createLoaderElement(uploadCard);
+                
+                if (uploadArea) uploadArea.style.display = 'none';
+                if (fotoPreview) {
+                    fotoPreview.style.display = 'block';
+                    if (previewImg) {
+                        // Usar proxy para cargar la imagen subida
+                        await cargarImagenProxy(urlFoto, previewImg, loaderEl);
+                    }
+                }
+            }
+            
             actualizarInfoFotos();
-            showToast('Foto subida correctamente', 'success');
+            showToast('✅ Foto subida correctamente', 'success');
             return true;
         } else {
             showToast(data.error || 'Error al subir foto', 'error');
             return false;
         }
     } catch (error) {
-        console.error('Error subiendo foto:', error);
+        console.error('❌ Error subiendo foto:', error);
         showToast('Error al subir foto', 'error');
         return false;
     }
@@ -1609,6 +1927,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.verDetallesOrden = verDetallesOrden;
     window.verFotoAmpliada = verFotoAmpliada;
     window.cerrarModal = cerrarModal;
+    window.cargarImagenProxy = cargarImagenProxy;
+    window.cargarAudioProxy = cargarAudioProxy;
     
     console.log('✅ diagnostico.js cargado correctamente');
 });

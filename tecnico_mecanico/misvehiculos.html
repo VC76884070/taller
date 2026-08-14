@@ -233,7 +233,7 @@
     </div>
 
     <!-- ===================================================== -->
-    <!-- MODAL: VER DETALLE (CORREGIDO CON INSTRUCCIONES)      -->
+    <!-- MODAL: VER DETALLE - CON ELEMENTOS DE AUDIO INCLUIDOS -->
     <!-- ===================================================== -->
     <div class="modal" id="detalleModal">
         <div class="modal-content modal-lg">
@@ -320,7 +320,6 @@
             if (hamburgerBtn) {
                 hamburgerBtn.addEventListener('click', function(e) {
                     e.stopPropagation();
-                    // Usar la función global de include.js
                     if (typeof window.toggleSidebar === 'function') {
                         window.toggleSidebar();
                     } else {

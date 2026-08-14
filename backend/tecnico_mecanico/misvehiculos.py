@@ -1844,3 +1844,93 @@ def eliminar_foto_repuesto(current_user):
     except Exception as e:
         logger.error(f"❌ Error eliminando foto: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+# =====================================================
+# PROXY PARA AUDIOS (TÉCNICO MECÁNICO)
+# =====================================================
+@mis_vehiculos_bp.route('/proxy-audio', methods=['GET'])
+@tecnico_required
+def proxy_audio_tecnico(current_user):
+    """
+    Endpoint para servir audios desde Google Drive.
+    IGUAL QUE EN RECEPCIÓN - JEFE OPERATIVO
+    """
+    try:
+        from flask import Response, stream_with_context
+        import requests
+        import base64
+        import re
+        
+        url = request.args.get('url')
+        if not url:
+            return jsonify({'error': 'URL requerida'}), 400
+        
+        # Limpiar URL
+        url = url.strip()
+        logger.info(f"🎵 Proxy audio técnico - URL: {url[:100]}...")
+        
+        # Extraer file_id de la URL
+        file_id = obtener_file_id_drive(url)
+        
+        if not file_id:
+            # Intentar normalizar la URL primero
+            url_normalizada = normalizar_url_drive(url)
+            file_id = obtener_file_id_drive(url_normalizada)
+            
+        if not file_id:
+            logger.error(f"❌ No se pudo extraer file_id de: {url}")
+            return jsonify({'error': 'No se pudo identificar el archivo en Google Drive'}), 400
+        
+        logger.info(f"🎵 File ID extraído: {file_id}")
+        
+        # 🔥 USAR DESCARGA DIRECTA
+        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        logger.info(f"🎵 Descargando desde: {download_url}")
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        # Intentar descargar
+        response = requests.get(download_url, headers=headers, timeout=30, allow_redirects=True)
+        
+        if response.status_code == 200:
+            # Verificar si es HTML (página de confirmación de Drive)
+            content_type = response.headers.get('content-type', '')
+            
+            if 'text/html' in content_type:
+                # Intentar extraer el enlace de descarga real
+                import re
+                match = re.search(r'https://drive\.google\.com/uc\?export=download&id=' + file_id + r'&confirm=[a-zA-Z0-9]+', response.text)
+                if match:
+                    real_download_url = match.group(0)
+                    logger.info(f"🎵 Usando URL de confirmación")
+                    response = requests.get(real_download_url, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                content_type = response.headers.get('content-type', 'audio/mpeg')
+                
+                # Convertir a base64 para enviar al frontend
+                audio_base64 = base64.b64encode(response.content).decode('utf-8')
+                
+                logger.info(f"✅ Audio descargado: {len(response.content)} bytes")
+                
+                return jsonify({
+                    'success': True,
+                    'base64': audio_base64,
+                    'content_type': content_type,
+                    'size': len(response.content)
+                })
+            else:
+                return jsonify({'error': f'Error descargando audio: {response.status_code}'}), 400
+        else:
+            return jsonify({'error': f'Error descargando audio: {response.status_code}'}), 400
+        
+    except requests.exceptions.Timeout:
+        logger.error("⏰ Timeout descargando audio")
+        return jsonify({'error': 'Tiempo de espera agotado'}), 504
+    except Exception as e:
+        logger.error(f"❌ Error en proxy-audio técnico: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500

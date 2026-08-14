@@ -43,6 +43,10 @@ let diagnosticoActual = null;
  * @param {HTMLElement} loaderElement - Elemento para mostrar el loader (opcional)
  * @returns {Promise<string|null>} - Base64 de la imagen o null si falla
  */
+// =====================================================
+// FUNCIÓN PARA CARGAR IMÁGENES CON PROXY - CORREGIDA
+// =====================================================
+
 async function cargarImagenProxy(url, imgElement, loaderElement = null) {
     if (!url) {
         if (imgElement) {
@@ -65,14 +69,27 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
     }
     
     try {
-        const proxyUrl = `${window.API_BASE_URL}/api/proxy-imagen?url=${encodeURIComponent(url)}`;
-        console.log('📸 Cargando imagen desde proxy:', proxyUrl);
+        // 🔥 CORREGIDO: Usar la ruta relativa correcta
+        // En producción: /api/proxy-imagen?url=...
+        // En desarrollo: http://localhost:5000/api/proxy-imagen?url=...
+        const baseUrl = window.API_BASE_URL || '';
+        const proxyUrl = `${baseUrl}/api/proxy-imagen?url=${encodeURIComponent(url)}`;
+        console.log('📸 Proxy URL:', proxyUrl);
         
         const response = await fetch(proxyUrl, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+            }
         });
         
+        // Verificar si la respuesta es OK
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
+        console.log('📸 Respuesta proxy:', data);
         
         if (data.success && data.base64) {
             // Pre-cargar la imagen antes de mostrarla
@@ -99,6 +116,7 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
                 nuevaImg.src = data.base64;
             });
         } else {
+            console.error('❌ Proxy no devolvió imagen:', data);
             if (loaderElement) {
                 loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> No se pudo cargar';
                 loaderElement.style.display = 'flex';
@@ -190,8 +208,15 @@ async function cargarAudioProxy(url, audioElement, loaderElement = null) {
  * Ver foto ampliada en modal usando proxy
  * @param {string} url - URL de la imagen en Google Drive
  */
+// =====================================================
+// VER FOTO AMPLIADA CON PROXY - CORREGIDA
+// =====================================================
+
 window.verFotoAmpliada = async function(url) {
-    if (!url) return;
+    if (!url) {
+        showToast('No hay imagen para mostrar', 'warning');
+        return;
+    }
     
     // Crear modal si no existe
     let modal = document.getElementById('fotoAmpliadaModal');
@@ -201,16 +226,19 @@ window.verFotoAmpliada = async function(url) {
         modal.className = 'modal';
         modal.style.display = 'none';
         modal.innerHTML = `
-            <div class="modal-content foto-ampliada-content">
+            <div class="modal-content foto-ampliada-content" style="max-width: 600px; width: 95%;">
                 <div class="modal-header">
                     <h2><i class="fas fa-image"></i> Ver Foto</h2>
-                    <button class="modal-close" onclick="this.closest('.modal').style.display='none'">&times;</button>
+                    <button class="modal-close" onclick="document.getElementById('fotoAmpliadaModal').style.display='none'">&times;</button>
                 </div>
-                <div class="modal-body foto-ampliada-body" style="text-align:center;">
+                <div class="modal-body foto-ampliada-body" style="text-align:center; padding: 1rem;">
                     <div id="fotoModalLoader" style="display:flex;align-items:center;justify-content:center;gap:0.5rem;padding:1rem;color:var(--gris-texto);">
-                        <i class="fas fa-spinner fa-pulse"></i> Cargando...
+                        <i class="fas fa-spinner fa-pulse"></i> Cargando imagen...
                     </div>
-                    <img id="fotoAmpliada" src="" alt="Foto ampliada" style="max-width:100%;max-height:70vh;display:none;">
+                    <img id="fotoAmpliada" src="" alt="Foto ampliada" style="max-width:100%;max-height:70vh;display:none;border-radius:8px;">
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="document.getElementById('fotoAmpliadaModal').style.display='none'">Cerrar</button>
                 </div>
             </div>
         `;
@@ -238,12 +266,24 @@ window.verFotoAmpliada = async function(url) {
     modalImg.src = '';
     
     try {
-        // Usar proxy para cargar la imagen
-        const proxyUrl = `${window.API_BASE_URL}/api/proxy-imagen?url=${encodeURIComponent(url)}`;
+        // 🔥 Usar proxy para cargar la imagen
+        const baseUrl = window.API_BASE_URL || '';
+        const proxyUrl = `${baseUrl}/api/proxy-imagen?url=${encodeURIComponent(url)}`;
+        console.log('📸 Proxy ampliada:', proxyUrl);
+        
         const response = await fetch(proxyUrl, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+            }
         });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
+        console.log('📸 Respuesta ampliada:', data);
         
         if (data.success && data.base64) {
             const nuevaImg = new Image();
@@ -258,7 +298,7 @@ window.verFotoAmpliada = async function(url) {
                     loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al cargar imagen';
                     loader.style.display = 'flex';
                 }
-                showToast('Error al cargar la imagen', 'error');
+                showToast('Error al cargar la imagen ampliada', 'error');
             };
             nuevaImg.src = data.base64;
         } else {
@@ -266,14 +306,15 @@ window.verFotoAmpliada = async function(url) {
                 loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> No se pudo cargar la imagen';
                 loader.style.display = 'flex';
             }
+            showToast('No se pudo cargar la imagen ampliada', 'error');
         }
     } catch (error) {
-        console.error('❌ Error:', error);
+        console.error('❌ Error en foto ampliada:', error);
         if (loader) {
             loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error de conexión';
             loader.style.display = 'flex';
         }
-        showToast('Error al cargar la imagen', 'error');
+        showToast('Error al cargar la imagen ampliada', 'error');
     }
 };
 
@@ -1163,6 +1204,10 @@ function limpiarFotos() {
 // CARGA DE FOTOS DESDE EL SERVIDOR CON PROXY
 // =====================================================
 
+// =====================================================
+// CARGA DE FOTOS DESDE EL SERVIDOR - CORREGIDA
+// =====================================================
+
 async function cargarFotosDesdeServidor(fotos) {
     console.log('📸 Cargando fotos desde servidor:', fotos);
     
@@ -1195,7 +1240,9 @@ async function cargarFotosDesdeServidor(fotos) {
         const foto = fotos[idx];
         if (!foto || !foto.url_foto) continue;
         
+        // 🔥 NO convertir la URL aquí, dejar que el proxy la maneje
         const urlImagen = foto.url_foto;
+        console.log(`📸 Cargando foto ${idx + 1}:`, urlImagen);
         
         fotosSubidas[idx] = { 
             id: foto.id || foto.foto_id || null, 
@@ -1214,7 +1261,7 @@ async function cargarFotosDesdeServidor(fotos) {
         if (fotoPreview) {
             fotoPreview.style.display = 'block';
             if (previewImg) {
-                // Usar el proxy para cargar la imagen
+                // 🔥 Usar el proxy para cargar la imagen
                 await cargarImagenProxy(urlImagen, previewImg, loaderEl);
             }
         }
@@ -1575,6 +1622,10 @@ function setupFotosUpload() {
 // SUBIR FOTO CON PROXY
 // =====================================================
 
+// =====================================================
+// SUBIR FOTO - CORREGIDA
+// =====================================================
+
 async function subirFoto(file, index) {
     if (!ordenSeleccionada) {
         showToast('Primero selecciona una orden', 'warning');
@@ -1587,7 +1638,8 @@ async function subirFoto(file, index) {
     
     try {
         showToast('Subiendo foto...', 'info');
-        const response = await fetch(`${window.API_BASE_URL}/tecnico/api/diagnostico/subir-foto`, {
+        const baseUrl = window.API_BASE_URL || '';
+        const response = await fetch(`${baseUrl}/tecnico/api/diagnostico/subir-foto`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` },
             body: formData
@@ -1623,7 +1675,7 @@ async function subirFoto(file, index) {
                 if (fotoPreview) {
                     fotoPreview.style.display = 'block';
                     if (previewImg) {
-                        // Usar proxy para cargar la imagen subida
+                        // 🔥 Usar proxy para cargar la imagen subida
                         await cargarImagenProxy(urlFoto, previewImg, loaderEl);
                     }
                 }

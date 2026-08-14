@@ -1706,7 +1706,6 @@ function cerrarHistorialModal() {
 // DETALLE DE ORDEN - COMPLETO Y CORREGIDO
 // =====================================================
 window.verDetalle = async function(ordenId) {
-    // 🔥 VERIFICAR TOKEN
     const tokenActual = getToken();
     if (!tokenActual) {
         showToast('No hay sesión activa', 'error');
@@ -1717,7 +1716,6 @@ window.verDetalle = async function(ordenId) {
     console.log('========================================');
     console.log('🔍 VER DETALLE - INICIO');
     console.log(`📌 Orden ID: ${ordenId}`);
-    console.log(`🔑 Token: ${tokenActual ? '✅ Presente' : '❌ NO HAY TOKEN'}`);
     console.log('========================================');
     
     showToast('Cargando detalles...', 'info');
@@ -1774,15 +1772,22 @@ window.verDetalle = async function(ordenId) {
             `<div><strong>Bahía asignada:</strong> ${detalle.planificacion.bahia_asignada}</div>` : '';
         
         // =============================================
-        // 🎵 FUNCIÓN PARA CREAR AUDIO CON IDS ÚNICOS
+        // 🎵 FUNCIÓN PARA CREAR AUDIO CON IDS ÚNICOS - CORREGIDA
         // =============================================
         function crearAudioHtml(url, titulo, icono, color) {
-            // 🔥 SIEMPRE GENERAR EL HTML, aunque la URL esté vacía
-            const audioId = `audio_${ordenId}_${titulo.replace(/\s/g, '_').toLowerCase()}`;
-            const loaderId = `audioLoader_${ordenId}_${titulo.replace(/\s/g, '_').toLowerCase()}`;
+            // 🔥 GENERAR IDS SIN EL ORDEN ID (para que sean predecibles)
+            const baseId = titulo.toLowerCase()
+                .replace(/[()]/g, '')
+                .replace(/\s+/g, '_')
+                .replace(/[^a-z0-9_]/g, '');
             
-            // Si no hay URL, mostrar mensaje
-            if (!url || url === '') {
+            const audioId = `audio_${baseId}`;
+            const sourceId = `audio_${baseId}_source`;
+            const loaderId = `audioLoader_${baseId}`;
+            
+            console.log(`🎵 Generando audio: audioId=${audioId}, loaderId=${loaderId}`);
+            
+            if (!url || url === '' || url === 'null' || url === 'undefined') {
                 return `
                     <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(59, 130, 246, 0.05); border-radius: var(--radius-md); border-left: 3px solid ${color};">
                         <div style="font-size: 0.75rem; color: ${color}; margin-bottom: 0.5rem;">
@@ -1806,7 +1811,7 @@ window.verDetalle = async function(ordenId) {
                         <span style="font-size:0.8rem;">Cargando audio...</span>
                     </div>
                     <audio id="${audioId}" controls style="width: 100%; display: none;" preload="metadata">
-                        <source id="${audioId}_source" src="">
+                        <source id="${sourceId}" src="">
                         Tu navegador no soporta el elemento de audio.
                     </audio>
                 </div>
@@ -1944,10 +1949,9 @@ window.verDetalle = async function(ordenId) {
         document.getElementById('detalleModal').classList.add('show');
         
         // =============================================
-        // 🔥 CARGAR FOTOS Y AUDIOS CON FETCH
+        // 🔥 CARGAR FOTOS Y AUDIOS CON FETCH - CORREGIDO
         // =============================================
         setTimeout(() => {
-            // Asegurar que el token existe
             if (!token) {
                 token = getToken();
             }
@@ -1959,17 +1963,20 @@ window.verDetalle = async function(ordenId) {
                 cargarImagenDetalle(url, imgId, loaderId);
             });
             
-            // 🎵 Cargar audio del problema
+            // 🎵 Cargar audio del problema - USAR IDs SIN ORDEN
             if (audioProblemaUrl) {
-                const audioId = `audio_${ordenId}_grabacion_del_problema_cliente`;
-                const loaderId = `audioLoader_${ordenId}_grabacion_del_problema_cliente`;
+                // 🔥 CORREGIDO: Usar los mismos IDs que generó crearAudioHtml()
+                const audioId = 'audio_grabacion_del_problema_cliente';
+                const loaderId = 'audioLoader_grabacion_del_problema_cliente';
+                console.log(`🎵 Cargando audio del problema: ${audioId}`);
                 cargarAudioDetalle(audioProblemaUrl, audioId, loaderId);
             }
             
-            // 🎵 Cargar audio del diagnóstico
+            // 🎵 Cargar audio del diagnóstico - USAR IDs SIN ORDEN
             if (audioDiagnosticoUrl) {
-                const audioId = `audio_${ordenId}_grabacion_del_diagnostico_jefe_de_taller`;
-                const loaderId = `audioLoader_${ordenId}_grabacion_del_diagnostico_jefe_de_taller`;
+                const audioId = 'audio_grabacion_del_diagnostico_jefe_de_taller';
+                const loaderId = 'audioLoader_grabacion_del_diagnostico_jefe_de_taller';
+                console.log(`🎵 Cargando audio del diagnóstico: ${audioId}`);
                 cargarAudioDetalle(audioDiagnosticoUrl, audioId, loaderId);
             }
             

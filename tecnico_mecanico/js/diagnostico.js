@@ -923,26 +923,59 @@ function limpiarFotos() {
 }
 
 function cargarFotosDesdeServidor(fotos) {
+    console.log('📸 Cargando fotos desde servidor:', fotos);
+    
+    // Resetear fotos subidas
     fotosSubidas = [{}, {}];
     
+    // Limpiar previews
+    for (let i = 0; i < 2; i++) {
+        const uploadCard = document.getElementById(`fotoUpload${i + 1}`);
+        if (!uploadCard) continue;
+        
+        const uploadArea = uploadCard.querySelector('.upload-area');
+        const fotoPreview = uploadCard.querySelector('.foto-preview');
+        const previewImg = fotoPreview ? fotoPreview.querySelector('img') : null;
+        const fotoInput = uploadCard.querySelector('.foto-input');
+        
+        // Resetear a estado inicial
+        if (uploadArea) uploadArea.style.display = 'block';
+        if (fotoPreview) fotoPreview.style.display = 'none';
+        if (fotoInput) fotoInput.value = '';
+        if (previewImg) previewImg.src = '';
+    }
+    
+    // Cargar fotos existentes
     fotos.forEach((foto, idx) => {
-        if (idx < 2) {
-            fotosSubidas[idx] = { id: foto.id, url: foto.url_foto };
+        if (idx < 2 && foto && foto.url_foto) {
+            fotosSubidas[idx] = { 
+                id: foto.id || foto.foto_id || null, 
+                url: foto.url_foto 
+            };
             
             const uploadCard = document.getElementById(`fotoUpload${idx + 1}`);
-            if (uploadCard) {
-                const uploadArea = uploadCard.querySelector('.upload-area');
-                const fotoPreview = uploadCard.querySelector('.foto-preview');
-                const previewImg = fotoPreview.querySelector('img');
-                
-                if (previewImg) previewImg.src = foto.url_foto;
-                if (uploadArea) uploadArea.style.display = 'none';
-                if (fotoPreview) fotoPreview.style.display = 'block';
+            if (!uploadCard) return;
+            
+            const uploadArea = uploadCard.querySelector('.upload-area');
+            const fotoPreview = uploadCard.querySelector('.foto-preview');
+            const previewImg = fotoPreview ? fotoPreview.querySelector('img') : null;
+            
+            if (uploadArea) uploadArea.style.display = 'none';
+            if (fotoPreview) {
+                fotoPreview.style.display = 'block';
+                if (previewImg) {
+                    previewImg.src = foto.url_foto;
+                    previewImg.onerror = function() {
+                        console.warn('⚠️ Error cargando imagen:', foto.url_foto);
+                        this.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23333" width="100" height="100"/><text x="50" y="55" text-anchor="middle" fill="%23666" font-size="14">Error</text></svg>';
+                    };
+                }
             }
         }
     });
     
     actualizarInfoFotos();
+    console.log('✅ Fotos cargadas:', fotosSubidas);
 }
 
 function mostrarEstadoDiagnostico(diagnostico) {

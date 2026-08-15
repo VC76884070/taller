@@ -525,7 +525,7 @@ function showToast(message, type = 'info') {
 }
 
 // =====================================================
-// REDIRECCIONES EXTERNAS
+// REDIRECCIONES EXTERNAS____
 // =====================================================
 function goToRegister() {
     window.location.href = '/registro-personal.html';

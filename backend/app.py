@@ -430,6 +430,8 @@ def serve_js(filename):
 def serve_img(filename):
     return send_from_directory(os.path.join(PROJECT_DIR, 'img'), filename)
 
+
+
 @app.route('/')
 def serve_login():
     return send_from_directory(os.path.join(PROJECT_DIR, 'login'), 'index.html')

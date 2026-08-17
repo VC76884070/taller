@@ -1,7 +1,7 @@
 // sw.js - Service Worker para TORQUE
-// ⚠️ MODO SIN CACHÉ - SIEMPRE DESCARGA DEL SERVIDOR
+// ⚠️ MODO SIN CACHÉ - PERO SIN BLOQUEAR RECURSOS EXTERNOS
 // CAMBIA ESTA VERSIÓN EN CADA DESPLIEGUE
-const CACHE_VERSION = '1.0.8';
+const CACHE_VERSION = '1.0.9';
 const CACHE_NAME = `torque-v${CACHE_VERSION}`;
 
 console.log(`[SW] Iniciando ${CACHE_NAME} - MODO SIN CACHÉ`);
@@ -12,8 +12,6 @@ console.log(`[SW] Iniciando ${CACHE_NAME} - MODO SIN CACHÉ`);
 self.addEventListener('install', event => {
     console.log('[SW] Instalando versión:', CACHE_VERSION);
     console.log('[SW] ⚠️ Modo SIN CACHÉ - No se guardarán archivos');
-    
-    // 🔥 NO CACHEAMOS NADA - Solo saltamos a activación
     event.waitUntil(self.skipWaiting());
 });
 
@@ -27,7 +25,6 @@ self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys()
             .then(cacheNames => {
-                // Eliminar TODOS los cachés existentes
                 return Promise.all(
                     cacheNames.map(cacheName => {
                         console.log(`[SW] 🗑️ Eliminando caché: ${cacheName}`);
@@ -44,22 +41,27 @@ self.addEventListener('activate', event => {
 });
 
 // ============================================
-// FETCH - SIEMPRE IR A LA RED, NUNCA USAR CACHÉ
+// FETCH - SOLO INTERCEPTAR RECURSOS DEL MISMO DOMINIO
 // ============================================
 self.addEventListener('fetch', event => {
-    // 🔥 SIEMPRE IR A LA RED - NUNCA USAR CACHÉ
+    const url = new URL(event.request.url);
+    
+    // 🔥 SOLO interceptar peticiones del mismo dominio
+    // (NO interceptar CDN, Google Fonts, etc.)
+    if (url.origin !== self.location.origin) {
+        // Para recursos externos, solo dejar pasar (no interceptar)
+        event.respondWith(fetch(event.request));
+        return;
+    }
+    
+    // 🔥 Para recursos del mismo dominio: SIEMPRE IR A LA RED
     event.respondWith(
         fetch(event.request, {
-            cache: 'no-store',
-            headers: {
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-            }
+            cache: 'no-store'
         })
         .catch(() => {
-            // ⚠️ SOLO si NO hay internet, usar caché como fallback
-            console.warn('[SW] ⚠️ Sin conexión, intentando usar caché como fallback');
+            // SOLO si NO hay internet, usar caché como fallback
+            console.warn('[SW] ⚠️ Sin conexión, usando caché como fallback');
             return caches.match(event.request);
         })
     );
@@ -90,6 +92,5 @@ self.addEventListener('controllerchange', () => {
     });
 });
 
-console.log('[SW] ✅ Modo SIN CACHÉ activado correctamente');
-console.log('[SW] 📡 Todas las peticiones irán al servidor');
-console.log('[SW] 🔄 Solo usará caché si NO hay internet');
+console.log('[SW] ✅ Modo SIN CACHÉ activado (solo para recursos locales)');
+console.log('[SW] 📡 Recursos externos (CDN, Google Fonts) NO serán interceptados');

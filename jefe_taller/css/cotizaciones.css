@@ -2298,3 +2298,224 @@
 .btn-remove-item:hover {
     transform: scale(1.2);
 }
+/* =====================================================
+   RESPONSIVE MEJORADO PARA TAB 1 - TABLA DE SOLICITUDES
+   ===================================================== */
+
+@media (max-width: 768px) {
+    /* TAB 1 - Tabla de solicitudes de cotización */
+    #tab-solicitar-cotizacion .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    #tab-solicitar-cotizacion .data-table thead {
+        display: none;
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody tr {
+        display: block;
+        background: var(--bg-card);
+        border-radius: var(--radius-lg);
+        margin-bottom: 1rem;
+        border: 1px solid var(--border-color);
+        padding: 0.75rem;
+        box-shadow: var(--shadow-sm);
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border-color);
+        text-align: left;
+        font-size: 0.75rem;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody td:last-child {
+        border-bottom: none;
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--gris-texto);
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        min-width: 80px;
+        flex-shrink: 0;
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody td[data-label="Fotos"] {
+        justify-content: flex-start;
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody td[data-label="Fotos"]::before {
+        min-width: 60px;
+    }
+    
+    /* TAB 3 - Solicitudes de técnicos y compras */
+    #tab-solicitar-compra .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    #tab-solicitar-compra .data-table thead {
+        display: none;
+    }
+    
+    #tab-solicitar-compra .data-table tbody tr {
+        display: block;
+        background: var(--bg-card);
+        border-radius: var(--radius-lg);
+        margin-bottom: 1rem;
+        border: 1px solid var(--border-color);
+        padding: 0.75rem;
+        box-shadow: var(--shadow-sm);
+    }
+    
+    #tab-solicitar-compra .data-table tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border-color);
+        text-align: left;
+        font-size: 0.75rem;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    #tab-solicitar-compra .data-table tbody td:last-child {
+        border-bottom: none;
+    }
+    
+    #tab-solicitar-compra .data-table tbody td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--gris-texto);
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        min-width: 80px;
+        flex-shrink: 0;
+    }
+    
+    /* Acciones en TAB 3 */
+    #tab-solicitar-compra .data-table tbody td[data-label="Acciones"] {
+        justify-content: flex-start;
+        gap: 0.5rem;
+    }
+    
+    #tab-solicitar-compra .data-table tbody td[data-label="Acciones"]::before {
+        min-width: 80px;
+    }
+    
+    /* TAB 3 - segunda tabla (solicitudes de compra) */
+    #tab-solicitar-compra .panel-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+    
+    #tab-solicitar-compra .panel-header > div:last-child {
+        width: 100%;
+    }
+    
+    #tab-solicitar-compra .panel-header .btn-outline {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* Responsive muy pequeño */
+@media (max-width: 480px) {
+    #tab-solicitar-cotizacion .data-table tbody td::before,
+    #tab-solicitar-compra .data-table tbody td::before {
+        min-width: 70px;
+        font-size: 0.6rem;
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody td,
+    #tab-solicitar-compra .data-table tbody td {
+        font-size: 0.7rem;
+        padding: 0.4rem 0;
+    }
+    
+    .orden-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+    
+    .orden-header-info {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.25rem;
+        width: 100%;
+    }
+    
+    .orden-header-cliente {
+        width: 100%;
+    }
+    
+    .orden-footer {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+    }
+    
+    .orden-footer button {
+        width: 100%;
+        justify-content: center;
+        white-space: normal;
+        font-size: 0.7rem;
+        padding: 0.4rem 0.5rem;
+    }
+    
+    .servicio-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+        padding: 0.4rem;
+    }
+    
+    .servicio-info {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    
+    .btn-ver-fotos-orden {
+        font-size: 0.65rem !important;
+        padding: 0.2rem 0.5rem !important;
+    }
+    
+    .badge-fotos {
+        font-size: 0.55rem !important;
+        padding: 0.05rem 0.35rem !important;
+    }
+}
+
+/* Ajustes para tablets */
+@media (min-width: 769px) and (max-width: 992px) {
+    #tab-solicitar-cotizacion .data-table,
+    #tab-solicitar-compra .data-table {
+        min-width: 700px;
+    }
+    
+    .orden-header {
+        flex-wrap: wrap;
+    }
+    
+    .orden-footer {
+        flex-wrap: wrap;
+    }
+}

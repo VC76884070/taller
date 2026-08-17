@@ -1,6 +1,6 @@
 // sw.js - Service Worker para TORQUE con actualizaciones automáticas
 // ⚠️ CAMBIA ESTA VERSIÓN EN CADA DESPLIEGUE
-const CACHE_VERSION = '1.0.3';
+const CACHE_VERSION = '1.0.4';
 const CACHE_NAME = `torque-v${CACHE_VERSION}`;
 
 // ============================================

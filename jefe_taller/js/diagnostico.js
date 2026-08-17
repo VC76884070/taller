@@ -1327,5 +1327,45 @@ window.onclick = (event) => {
         event.target.classList.remove('show');
     }
 };
+// =====================================================
+// MEJORA: Ajuste automático de textos en móvil
+// =====================================================
+
+function ajustarTextosMovil() {
+    // Solo ejecutar en móvil
+    if (window.innerWidth > 768) return;
+    
+    // Buscar todas las tarjetas de diagnóstico
+    const cards = document.querySelectorAll('.diagnostico-card');
+    cards.forEach(card => {
+        // Buscar el valor de la placa o texto largo
+        const valueElements = card.querySelectorAll('.card-value, .vehiculo-info span, [style*="color: var(--blanco)"]');
+        valueElements.forEach(el => {
+            // Si el texto es muy largo, reducir tamaño de fuente
+            if (el.textContent && el.textContent.length > 25) {
+                el.style.fontSize = '0.6rem';
+            }
+        });
+    });
+}
+
+// Ejecutar después de renderizar
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(ajustarTextosMovil, 300);
+});
+
+// Ejecutar cada vez que se rendericen diagnósticos
+const originalRender = renderDiagnosticos;
+renderDiagnosticos = function(diagnosticos) {
+    originalRender(diagnosticos);
+    setTimeout(ajustarTextosMovil, 200);
+};
+
+// Ejecutar al cambiar tamaño de ventana
+let resizeTimeout;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(ajustarTextosMovil, 300);
+});
 
 console.log('✅ diagnostico.js cargado correctamente - Versión responsive con tarjetas en móvil');

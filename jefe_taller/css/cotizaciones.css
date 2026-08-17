@@ -418,6 +418,8 @@
     border-radius: var(--radius-sm);
     margin-bottom: 0.5rem;
     transition: all 0.3s ease;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .servicio-row:hover {
@@ -426,12 +428,27 @@
 
 .servicio-info {
     flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .servicio-nombre {
     font-size: 0.8rem;
     font-weight: 500;
     color: var(--blanco);
+}
+
+.servicio-fotos-badge {
+    font-size: 0.6rem;
+    color: var(--gris-texto);
+    background: var(--gris-oscuro);
+    padding: 0.05rem 0.4rem;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
 }
 
 .servicio-items {
@@ -506,6 +523,8 @@
     cursor: pointer;
     transition: var(--transition);
     user-select: none;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .servicio-acordeon-header:hover {
@@ -517,6 +536,7 @@
     align-items: center;
     gap: 0.75rem;
     flex: 1;
+    flex-wrap: wrap;
 }
 
 .servicio-acordeon-header .servicio-icono {
@@ -807,6 +827,8 @@
     background: var(--gris-oscuro);
     cursor: pointer;
     transition: var(--transition);
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .servicio-cotizable-header:hover {
@@ -1741,10 +1763,10 @@
 }
 
 /* =====================================================
-   CORRECCIONES RESPONSIVE PRINCIPALES
+   RESPONSIVE - TODOS LOS ESTILOS PARA MÓVIL Y TABLET
    ===================================================== */
 
-/* Contenedor de resultados - scroll horizontal en móvil */
+/* === CONTENEDORES CON SCROLL === */
 #ordenesSolicitarContainer,
 #ordenesCotizacionContainer,
 #historialCotizacionesContainer {
@@ -1752,7 +1774,7 @@
     overflow-x: auto;
 }
 
-/* RESPONSIVE GENERAL (max 768px) */
+/* === RESPONSIVE GENERAL (max 768px) === */
 @media (max-width: 768px) {
     .filters-bar {
         flex-direction: column;
@@ -1814,6 +1836,10 @@
         gap: 0.5rem;
     }
     
+    .servicio-info {
+        width: 100%;
+    }
+    
     .action-buttons {
         flex-wrap: wrap;
     }
@@ -1867,21 +1893,6 @@
         font-size: 0.75rem;
     }
     
-    .table-container {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-    
-    .data-table {
-        min-width: 650px;
-    }
-    
-    .data-table th,
-    .data-table td {
-        padding: 0.5rem;
-        font-size: 0.7rem;
-    }
-    
     .panel-header {
         flex-direction: column;
         align-items: flex-start;
@@ -1895,6 +1906,7 @@
         width: 100%;
         display: flex;
         gap: 0.5rem;
+        flex-wrap: wrap;
     }
     
     .panel-header > div:last-child button {
@@ -1955,9 +1967,140 @@
         font-size: 0.55rem;
         padding: 0.1rem 0.4rem;
     }
+    
+    /* === ESTILOS PARA TABLAS EN MÓVIL (TAB 1 Y TAB 3) === */
+    #tab-solicitar-cotizacion .table-container,
+    #tab-solicitar-compra .table-container {
+        overflow-x: visible !important;
+        -webkit-overflow-scrolling: touch;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+    }
+    
+    #tab-solicitar-cotizacion .data-table,
+    #tab-solicitar-compra .data-table {
+        min-width: unset !important;
+        width: 100% !important;
+        display: block !important;
+    }
+    
+    #tab-solicitar-cotizacion .data-table thead,
+    #tab-solicitar-compra .data-table thead {
+        display: none !important;
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody,
+    #tab-solicitar-compra .data-table tbody {
+        display: block !important;
+        width: 100% !important;
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody tr,
+    #tab-solicitar-compra .data-table tbody tr {
+        display: block !important;
+        background: var(--bg-card) !important;
+        border-radius: var(--radius-lg) !important;
+        margin-bottom: 1rem !important;
+        border: 1px solid var(--border-color) !important;
+        padding: 0.75rem !important;
+        box-shadow: var(--shadow-sm) !important;
+        width: 100% !important;
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody td,
+    #tab-solicitar-compra .data-table tbody td {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 0.5rem 0 !important;
+        border-bottom: 1px solid var(--border-color) !important;
+        text-align: left !important;
+        font-size: 0.75rem !important;
+        gap: 0.5rem !important;
+        flex-wrap: wrap !important;
+        width: 100% !important;
+        background: transparent !important;
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody td:last-child,
+    #tab-solicitar-compra .data-table tbody td:last-child {
+        border-bottom: none !important;
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody td::before,
+    #tab-solicitar-compra .data-table tbody td::before {
+        content: attr(data-label) !important;
+        font-weight: 600 !important;
+        color: var(--gris-texto) !important;
+        font-size: 0.65rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.3px !important;
+        min-width: 80px !important;
+        flex-shrink: 0 !important;
+        display: inline-block !important;
+    }
+    
+    /* TAB 1 - Columna Fotos */
+    #tab-solicitar-cotizacion .data-table tbody td[data-label="Fotos"] {
+        justify-content: flex-start !important;
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody td[data-label="Fotos"]::before {
+        min-width: 60px !important;
+    }
+    
+    /* TAB 3 - Acciones */
+    #tab-solicitar-compra .data-table tbody td[data-label="Acciones"] {
+        justify-content: flex-start !important;
+        gap: 0.5rem !important;
+        flex-wrap: wrap !important;
+    }
+    
+    #tab-solicitar-compra .data-table tbody td[data-label="Acciones"]::before {
+        min-width: 80px !important;
+    }
+    
+    #tab-solicitar-compra .data-table .action-buttons {
+        display: flex !important;
+        gap: 0.5rem !important;
+        flex-wrap: wrap !important;
+    }
+    
+    /* TAB 3 - Panel header */
+    #tab-solicitar-compra .panel-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+    
+    #tab-solicitar-compra .panel-header > div:last-child {
+        width: 100%;
+    }
+    
+    #tab-solicitar-compra .panel-header .btn-outline,
+    #tab-solicitar-compra .panel-header .btn-primary {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* TAB 3 - Filtros */
+    #tab-solicitar-compra .filters-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    #tab-solicitar-compra .filter-group {
+        width: 100%;
+    }
+    
+    #tab-solicitar-compra .search-box {
+        width: 100%;
+    }
 }
 
-/* RESPONSIVE MÓVIL PEQUEÑO (max 480px) */
+/* === RESPONSIVE MÓVIL PEQUEÑO (max 480px) === */
 @media (max-width: 480px) {
     .page-title h1 {
         font-size: 1.2rem;
@@ -1977,7 +2120,7 @@
     
     .status-badge {
         font-size: 0.6rem;
-        padding: 0.2rem 0.4rem;
+        padding: 0.15rem 0.4rem;
     }
     
     .action-btn {
@@ -2018,10 +2161,107 @@
         font-size: 0.6rem;
         padding: 0.2rem 0.5rem;
     }
+    
+    /* Tablas en móvil muy pequeño */
+    #tab-solicitar-cotizacion .data-table tbody td::before,
+    #tab-solicitar-compra .data-table tbody td::before {
+        min-width: 70px !important;
+        font-size: 0.6rem !important;
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody td,
+    #tab-solicitar-compra .data-table tbody td {
+        font-size: 0.7rem !important;
+        padding: 0.4rem 0 !important;
+        flex-wrap: wrap !important;
+        gap: 0.25rem !important;
+    }
+    
+    #tab-solicitar-cotizacion .data-table tbody td .status-badge,
+    #tab-solicitar-compra .data-table tbody td .status-badge {
+        font-size: 0.6rem !important;
+        padding: 0.15rem 0.4rem !important;
+    }
+    
+    #tab-solicitar-compra .data-table .action-btn {
+        padding: 0.3rem 0.5rem !important;
+        font-size: 0.65rem !important;
+    }
+    
+    #tab-solicitar-cotizacion .btn-ver-fotos-tabla {
+        font-size: 0.6rem !important;
+        padding: 0.2rem 0.5rem !important;
+    }
+    
+    /* Tarjetas de órdenes */
+    .orden-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+    
+    .orden-header-info {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.25rem;
+        width: 100%;
+    }
+    
+    .orden-header-cliente {
+        width: 100%;
+    }
+    
+    .orden-footer {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+    }
+    
+    .orden-footer button {
+        width: 100%;
+        justify-content: center;
+        white-space: normal;
+        font-size: 0.7rem;
+        padding: 0.4rem 0.5rem;
+    }
+    
+    .servicio-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+        padding: 0.4rem;
+    }
+    
+    .servicio-info {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    
+    .btn-ver-fotos-orden {
+        font-size: 0.65rem !important;
+        padding: 0.2rem 0.5rem !important;
+    }
+    
+    .badge-fotos {
+        font-size: 0.55rem !important;
+        padding: 0.05rem 0.35rem !important;
+    }
 }
 
-/* RESPONSIVE TABLET (max 992px) */
-@media (max-width: 992px) {
+/* === TAB 3 en tablets (max 992px) === */
+@media (min-width: 769px) and (max-width: 992px) {
+    #tab-solicitar-compra .table-container {
+        overflow-x: auto !important;
+    }
+    
+    #tab-solicitar-compra .data-table {
+        min-width: 800px !important;
+    }
+    
     .data-table th,
     .data-table td {
         padding: 0.6rem 0.8rem;
@@ -2037,152 +2277,7 @@
     }
 }
 
-/* =====================================================
-   CORRECCIONES ESPECÍFICAS PARA TAB 3 - SOLICITAR COMPRA
-   ===================================================== */
-
-/* Contenedor de tablas del TAB 3 */
-#tab-solicitar-compra .table-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    margin-bottom: 1.5rem;
-}
-
-#tab-solicitar-compra .data-table {
-    min-width: 700px;
-    width: 100%;
-}
-
-#tab-solicitar-compra .data-table th,
-#tab-solicitar-compra .data-table td {
-    padding: 0.75rem 0.5rem;
-    font-size: 0.75rem;
-    vertical-align: middle;
-}
-
-/* Tarjetas para móvil en el TAB 3 - convertir tabla en tarjetas */
-@media (max-width: 768px) {
-    #tab-solicitar-compra .data-table thead {
-        display: none;
-    }
-    
-    #tab-solicitar-compra .data-table tbody tr {
-        display: block;
-        background: var(--bg-card);
-        border-radius: var(--radius-lg);
-        margin-bottom: 1rem;
-        border: 1px solid var(--border-color);
-        padding: 0.75rem;
-    }
-    
-    #tab-solicitar-compra .data-table tbody td {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.5rem 0;
-        border-bottom: 1px solid var(--border-color);
-        text-align: left;
-        font-size: 0.75rem;
-    }
-    
-    #tab-solicitar-compra .data-table tbody td:last-child {
-        border-bottom: none;
-    }
-    
-    #tab-solicitar-compra .data-table tbody td::before {
-        content: attr(data-label);
-        font-weight: 600;
-        color: var(--gris-texto);
-        width: 100px;
-        flex-shrink: 0;
-    }
-    
-    #tab-solicitar-compra .action-buttons {
-        display: flex;
-        gap: 0.5rem;
-        justify-content: flex-end;
-    }
-    
-    #tab-solicitar-compra .action-btn {
-        padding: 0.4rem 0.6rem;
-        font-size: 0.7rem;
-    }
-    
-    /* Panel header del TAB 3 */
-    #tab-solicitar-compra .panel-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.75rem;
-    }
-    
-    #tab-solicitar-compra .panel-header-left {
-        width: 100%;
-    }
-    
-    #tab-solicitar-compra .panel-header-left h3 {
-        font-size: 0.9rem;
-    }
-    
-    #tab-solicitar-compra .panel-header-left p {
-        font-size: 0.7rem;
-    }
-    
-    #tab-solicitar-compra .panel-header > div:last-child {
-        width: 100%;
-    }
-    
-    #tab-solicitar-compra .btn-primary,
-    #tab-solicitar-compra .btn-outline {
-        width: 100%;
-        justify-content: center;
-    }
-    
-    /* Filtros del TAB 3 */
-    #tab-solicitar-compra .filters-bar {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    #tab-solicitar-compra .filter-group {
-        width: 100%;
-    }
-    
-    #tab-solicitar-compra .search-box {
-        width: 100%;
-    }
-}
-
-/* TAB 3 en móvil muy pequeño */
-@media (max-width: 480px) {
-    #tab-solicitar-compra .data-table tbody td::before {
-        width: 80px;
-        font-size: 0.65rem;
-    }
-    
-    #tab-solicitar-compra .data-table tbody td {
-        font-size: 0.65rem;
-        flex-wrap: wrap;
-        gap: 0.25rem;
-    }
-    
-    #tab-solicitar-compra .action-buttons {
-        width: 100%;
-        justify-content: center;
-    }
-}
-
-/* TAB 3 en tablets */
-@media (max-width: 992px) and (min-width: 769px) {
-    #tab-solicitar-compra .table-container {
-        overflow-x: auto;
-    }
-    
-    #tab-solicitar-compra .data-table {
-        min-width: 800px;
-    }
-}
-
-/* Estilos adicionales */
+/* === Estilos adicionales === */
 .form-input.error {
     border-color: #dc3545 !important;
     background-color: rgba(220, 53, 69, 0.05);
@@ -2193,6 +2288,7 @@
     margin-top: 0.25rem;
     animation: fadeIn 0.3s ease;
 }
+
 /* Estilos para el modal de fotos del item */
 #modalFotosItem .modal-content {
     max-width: 700px;

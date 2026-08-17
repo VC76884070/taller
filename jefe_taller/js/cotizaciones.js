@@ -1638,17 +1638,13 @@ function renderOrdenesSolicitarCotizacion() {
     }
     
     container.innerHTML = ordenesFiltradas.map(orden => {
-        // 🔥 CONTAR TOTAL DE FOTOS EN LA ORDEN
+        // Contar TOTAL DE FOTOS EN LA ORDEN
         let totalFotos = 0;
         if (orden.servicios) {
             orden.servicios.forEach(serv => {
                 if (serv.items && serv.items.length > 0) {
                     serv.items.forEach(item => {
-                        // Soporte para versión anterior (foto_url)
-                        if (item.foto_url) {
-                            totalFotos += 1;
-                        }
-                        // Soporte para nueva versión (fotos array)
+                        if (item.foto_url) totalFotos += 1;
                         if (item.fotos && Array.isArray(item.fotos)) {
                             totalFotos += item.fotos.length;
                         }
@@ -1666,50 +1662,52 @@ function renderOrdenesSolicitarCotizacion() {
         if (serviciosSolicitados > 0) {
             estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> ${serviciosSolicitados} solicitud(es) enviada(s)</span>`;
             botonesHtml = `
-                <button class="btn-outline" disabled style="opacity:0.7;"><i class="fas fa-clock"></i> Esperando respuesta</button>
+                <button class="btn-outline" disabled style="opacity:0.7; width:auto;"><i class="fas fa-clock"></i> Esperando respuesta</button>
                 ${totalFotos > 0 ? `
                     <button class="btn-ver-fotos-orden" onclick="abrirModalFotosOrden(${orden.id_orden})" 
-                            style="padding:0.3rem 0.8rem;font-size:0.75rem;background:var(--rojo-primario);color:white;border:none;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem;">
+                            style="padding:0.3rem 0.8rem;font-size:0.75rem;background:var(--rojo-primario);color:white;border:none;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem;white-space:nowrap;">
                         <i class="fas fa-images"></i> Ver ${totalFotos} foto(s)
                     </button>
                 ` : ''}
             `;
         } else if (serviciosPendientes > 0) {
-            estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> ${serviciosPendientes} servicio(s) pendiente(s)</span>`;
+            estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> ${serviciosPendientes} servicio(s) pendiente(s)`;
             botonesHtml = `
-                <button class="btn-primary" onclick="abrirModalSolicitudCotizacion(${orden.id_orden})" style="display:inline-flex;align-items:center;gap:0.4rem;">
+                <button class="btn-primary" onclick="abrirModalSolicitudCotizacion(${orden.id_orden})" style="display:inline-flex;align-items:center;gap:0.4rem;white-space:nowrap;">
                     <i class="fas fa-paper-plane"></i> Solicitar Cotización
                 </button>
                 ${totalFotos > 0 ? `
                     <button class="btn-ver-fotos-orden" onclick="abrirModalFotosOrden(${orden.id_orden})" 
-                            style="padding:0.3rem 0.8rem;font-size:0.75rem;background:var(--rojo-primario);color:white;border:none;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem;">
+                            style="padding:0.3rem 0.8rem;font-size:0.75rem;background:var(--rojo-primario);color:white;border:none;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem;white-space:nowrap;">
                         <i class="fas fa-images"></i> Ver ${totalFotos} foto(s)
                     </button>
                 ` : ''}
             `;
         }
         
+        // ✅ HTML RESPONSIVE CON CLASES CORRECTAS
         return `
         <div class="orden-card">
             <div class="orden-header">
-                <div>
+                <div class="orden-header-info">
                     <span class="orden-codigo"><i class="fas fa-tag"></i> ${escapeHtml(orden.codigo_unico)}</span>
                     <span class="orden-vehiculo"><i class="fas fa-car"></i> ${escapeHtml(orden.vehiculo)}</span>
                     ${totalFotos > 0 ? `
-                        <span class="badge-fotos" style="background:var(--rojo-primario);color:white;padding:0.1rem 0.5rem;border-radius:12px;font-size:0.6rem;margin-left:0.5rem;">
+                        <span class="badge-fotos" style="background:var(--rojo-primario);color:white;padding:0.1rem 0.5rem;border-radius:12px;font-size:0.6rem;margin-left:0.5rem;display:inline-block;">
                             <i class="fas fa-camera"></i> ${totalFotos}
                         </span>
                     ` : ''}
                 </div>
-                <div>
+                <div class="orden-header-cliente">
                     <span class="orden-cliente"><i class="fas fa-user"></i> ${escapeHtml(orden.cliente_nombre)}</span>
                 </div>
             </div>
-            <div class="orden-body" style="padding: 0.75rem 1.25rem;">
-                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">${estadoBadge}</div>
-                <div class="servicios-container" style="margin-top: 0.5rem;">
+            <div class="orden-body">
+                <div class="orden-estados">
+                    ${estadoBadge}
+                </div>
+                <div class="servicios-container">
                     ${orden.servicios.map(serv => {
-                        // Contar fotos del servicio
                         let fotosServicio = 0;
                         if (serv.items) {
                             serv.items.forEach(item => {
@@ -1718,21 +1716,21 @@ function renderOrdenesSolicitarCotizacion() {
                             });
                         }
                         return `
-                        <div class="servicio-row" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--border-color);">
+                        <div class="servicio-row">
                             <div class="servicio-info">
-                                <div class="servicio-nombre" style="font-weight: 500;">${escapeHtml(serv.descripcion)}</div>
-                                ${fotosServicio > 0 ? `<span style="font-size:0.6rem;color:var(--gris-texto);margin-left:0.5rem;"><i class="fas fa-camera"></i> ${fotosServicio}</span>` : ''}
+                                <div class="servicio-nombre">${escapeHtml(serv.descripcion)}</div>
+                                ${fotosServicio > 0 ? `<span class="servicio-fotos-badge"><i class="fas fa-camera"></i> ${fotosServicio}</span>` : ''}
                             </div>
-                            <div class="servicio-estado estado-${serv.estado_cotizacion}" style="font-size: 0.75rem;">
+                            <div class="servicio-estado estado-${serv.estado_cotizacion}">
                                 <i class="fas ${serv.estado_cotizacion === 'cotizado' ? 'fa-check-circle' : (serv.estado_cotizacion === 'solicitado' ? 'fa-paper-plane' : 'fa-clock')}"></i>
                                 ${serv.estado_cotizacion === 'cotizado' ? 'Cotizado' : (serv.estado_cotizacion === 'solicitado' ? 'Solicitud enviada' : 'Pendiente')}
                             </div>
-                            ${serv.precio_cotizado > 0 ? `<div class="servicio-precio" style="font-weight: 600; color: var(--verde-exito);">${formatCurrency(serv.precio_cotizado)}</div>` : ''}
+                            ${serv.precio_cotizado > 0 ? `<div class="servicio-precio">${formatCurrency(serv.precio_cotizado)}</div>` : ''}
                         </div>
                     `}).join('')}
                 </div>
             </div>
-            <div class="orden-footer" style="padding: 0.75rem 1.25rem; border-top: 1px solid var(--border-color); display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+            <div class="orden-footer">
                 ${botonesHtml}
             </div>
         </div>`;
@@ -2250,56 +2248,46 @@ function renderSolicitudesCotizacion() {
     if (!tbody) return;
     
     if (solicitudesCotizacion.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes</p></div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>No hay solicitudes</p></div></td></tr>`;
         return;
     }
     
     tbody.innerHTML = solicitudesCotizacion.map(s => {
-        // Contar cuántas fotos tiene esta solicitud
         let totalFotos = 0;
-        
         if (s.items && s.items.length > 0) {
             s.items.forEach(item => {
-                // Soporte para versión anterior (foto_url)
-                if (item.foto_url) {
-                    totalFotos++;
-                }
-                // Soporte para nueva versión (fotos array)
-                if (item.fotos && Array.isArray(item.fotos)) {
-                    totalFotos += item.fotos.length;
-                }
+                if (item.foto_url) totalFotos++;
+                if (item.fotos && Array.isArray(item.fotos)) totalFotos += item.fotos.length;
             });
         }
         
-        // Contar cantidad total de items
         const totalItems = s.items ? s.items.length : 0;
         
-        // Botón "Ver Fotos" solo si hay fotos
         const verFotosBtn = totalFotos > 0 ? `
             <button class="btn-ver-fotos-tabla" onclick="abrirModalFotosSolicitud(${s.id})" 
                     style="padding:0.3rem 0.8rem;font-size:0.7rem;background:var(--rojo-primario);color:white;border:none;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem;transition:all 0.2s;white-space:nowrap;">
-                <i class="fas fa-images"></i> ${totalFotos} foto(s)
+                <i class="fas fa-images"></i> ${totalFotos}
             </button>
-        ` : `<span style="font-size:0.7rem;color:var(--gris-texto);"><i class="fas fa-camera"></i> Sin fotos</span>`;
+        ` : `<span style="font-size:0.7rem;color:var(--gris-texto);"><i class="fas fa-camera"></i> 0</span>`;
         
-        // Badge de cantidad de items
         const itemsBadge = totalItems > 0 ? `
             <span style="background:var(--gris-oscuro);padding:0.1rem 0.5rem;border-radius:10px;font-size:0.65rem;color:var(--gris-texto);">
-                ${totalItems} item(s)
+                ${totalItems}
             </span>
         ` : `<span style="font-size:0.65rem;color:var(--gris-texto);">-</span>`;
         
+        // ✅ AGREGAR data-label PARA RESPONSIVE
         return `
             <tr>
-                <td style="font-weight:600;font-size:0.85rem;">${s.id}</td>
-                <td><strong style="font-size:0.85rem;">${escapeHtml(s.orden_codigo)}</strong></td>
-                <td style="font-size:0.8rem;">${escapeHtml(s.vehiculo)}</td>
-                <td style="font-size:0.8rem;">${escapeHtml(s.servicio_descripcion || '-')}</td>
-                <td style="text-align:center;">${itemsBadge}</td>
-                <td>${statusBadge(s.estado)}</td>
-                <td style="font-weight:600;color:var(--verde-exito);">${s.precio_cotizado ? formatCurrency(s.precio_cotizado) : '-'}</td>
-                <td style="font-size:0.75rem;">${formatDate(s.fecha_solicitud)}</td>
-                <td style="text-align:center;">${verFotosBtn}</td>
+                <td data-label="ID" style="font-weight:600;font-size:0.85rem;">${s.id}</td>
+                <td data-label="Orden"><strong style="font-size:0.85rem;">${escapeHtml(s.orden_codigo)}</strong></td>
+                <td data-label="Vehículo" style="font-size:0.8rem;">${escapeHtml(s.vehiculo)}</td>
+                <td data-label="Servicio" style="font-size:0.8rem;">${escapeHtml(s.servicio_descripcion || '-')}</td>
+                <td data-label="Items" style="text-align:center;">${itemsBadge}</td>
+                <td data-label="Estado">${statusBadge(s.estado)}</td>
+                <td data-label="Precio" style="font-weight:600;color:var(--verde-exito);">${s.precio_cotizado ? formatCurrency(s.precio_cotizado) : '-'}</td>
+                <td data-label="Fecha" style="font-size:0.75rem;">${formatDate(s.fecha_solicitud)}</td>
+                <td data-label="Fotos" style="text-align:center;">${verFotosBtn}</td>
             </tr>
         `;
     }).join('');

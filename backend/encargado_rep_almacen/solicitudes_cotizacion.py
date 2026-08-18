@@ -1,14 +1,19 @@
 # =====================================================
 # SOLICITUDES_COTIZACION.PY - ENCARGADO DE REPUESTOS
+# CON ENDPOINT PROXY PARA IMÁGENES
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 from config import config
 from decorators import encargado_repuestos_required
 import datetime
 import logging
 import json
+import re
+import requests
+import base64
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +27,139 @@ SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
 
 # =====================================================
-# FUNCIONES AUXILIARES
+# 🔥 FUNCIÓN AUXILIAR PARA EXTRAER FILE_ID DE DRIVE
+# =====================================================
+
+def extraer_file_id_drive(url):
+    """Extrae el file_id de cualquier URL de Google Drive"""
+    if not url:
+        return None
+    
+    url = url.strip()
+    
+    patterns = [
+        r'[?&]id=([a-zA-Z0-9_-]+)',           # ?id=XXX o &id=XXX
+        r'/file/d/([a-zA-Z0-9_-]+)',          # /file/d/XXX
+        r'open\?id=([a-zA-Z0-9_-]+)',         # open?id=XXX
+        r'/d/([a-zA-Z0-9_-]+)',               # /d/XXX
+        r'thumbnail\?id=([a-zA-Z0-9_-]+)',    # thumbnail?id=XXX
+        r'uc\?export=view&id=([a-zA-Z0-9_-]+)', # uc?export=view&id=XXX
+        r'uc\?export=download&id=([a-zA-Z0-9_-]+)', # uc?export=download&id=XXX
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    
+    # Si el string completo parece un ID de Drive
+    if re.match(r'^[a-zA-Z0-9_-]{10,}$', url):
+        return url
+    
+    return None
+
+
+# =====================================================
+# 🔥 ENDPOINT PROXY PARA IMÁGENES
+# =====================================================
+
+@solicitudes_cotizacion_bp.route('/proxy-imagen', methods=['GET'])
+@encargado_repuestos_required
+def proxy_imagen(current_user):
+    """
+    Descarga una imagen de Google Drive y la devuelve en Base64.
+    Esto evita problemas de CORS y autenticación.
+    """
+    url = request.args.get('url')
+    if not url:
+        return jsonify({'success': False, 'error': 'URL no proporcionada'}), 400
+    
+    file_id = extraer_file_id_drive(url)
+    if not file_id:
+        logger.warning(f"⚠️ No se pudo extraer ID de: {url[:80]}...")
+        return jsonify({'success': False, 'error': 'No se pudo extraer el ID del archivo'}), 400
+    
+    logger.debug(f"📸 Proxy imagen - file_id: {file_id}")
+    
+    # Estrategias de descarga (en orden de prioridad)
+    urls_descarga = [
+        f"https://drive.google.com/thumbnail?id={file_id}&sz=w800",  # Miniatura (más rápida)
+        f"https://drive.google.com/uc?export=view&id={file_id}",     # Vista
+        f"https://drive.google.com/uc?export=download&id={file_id}", # Descarga directa
+    ]
+    
+    image_data = None
+    mime_type = 'image/jpeg'
+    last_error = None
+    
+    for download_url in urls_descarga:
+        try:
+            logger.debug(f"🔄 Intentando descargar: {download_url[:60]}...")
+            
+            response = requests.get(download_url, timeout=30, allow_redirects=True)
+            
+            # Manejar redirecciones de confirmación de Google
+            if 'confirm' in response.url and 'download' in response.url:
+                confirm_match = re.search(r'confirm=([^&]+)', response.text)
+                if confirm_match:
+                    confirm_token = confirm_match.group(1)
+                    download_url_confirm = f"{response.url}&confirm={confirm_token}"
+                    logger.debug(f"🔄 Usando confirm token: {confirm_token}")
+                    response = requests.get(download_url_confirm, timeout=30, allow_redirects=True)
+            
+            if response.status_code == 200:
+                content_type = response.headers.get('Content-Type', '')
+                content_length = len(response.content)
+                
+                # Verificar que sea una imagen (por content-type o tamaño)
+                if content_type.startswith('image/') or content_length > 500:
+                    image_data = response.content
+                    if content_type.startswith('image/'):
+                        mime_type = content_type
+                    else:
+                        # Intentar detectar por extensión o usar jpeg por defecto
+                        mime_type = 'image/jpeg'
+                    logger.debug(f"✅ Imagen descargada: {content_length} bytes, {mime_type}")
+                    break
+                else:
+                    logger.debug(f"⚠️ No es imagen: {content_type}, {content_length} bytes")
+            else:
+                logger.debug(f"⚠️ HTTP {response.status_code} para {download_url[:60]}")
+                
+        except requests.exceptions.Timeout:
+            last_error = "Timeout descargando imagen"
+            logger.warning(f"⏱️ Timeout en {download_url[:60]}...")
+            continue
+        except Exception as e:
+            last_error = str(e)
+            logger.warning(f"⚠️ Error en descarga: {str(e)}")
+            continue
+    
+    if not image_data:
+        logger.error(f"❌ No se pudo descargar imagen para file_id: {file_id}")
+        return jsonify({
+            'success': False, 
+            'error': f'No se pudo descargar la imagen: {last_error or "desconocido"}'
+        }), 404
+    
+    # Convertir a Base64
+    try:
+        base64_data = base64.b64encode(image_data).decode('utf-8')
+        result = {
+            'success': True,
+            'base64': f'data:{mime_type};base64,{base64_data}',
+            'mime_type': mime_type,
+            'size': len(image_data)
+        }
+        logger.debug(f"✅ Imagen convertida a Base64: {len(base64_data)} chars")
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f"❌ Error convirtiendo a Base64: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =====================================================
+# FUNCIONES AUXILIARES EXISTENTES
 # =====================================================
 
 def parse_items(items_data):
@@ -36,8 +173,9 @@ def parse_items(items_data):
     except:
         return []
 
+
 # =====================================================
-# ENDPOINTS
+# ENDPOINTS EXISTENTES (sin cambios)
 # =====================================================
 
 @solicitudes_cotizacion_bp.route('/solicitudes-cotizacion', methods=['GET'])

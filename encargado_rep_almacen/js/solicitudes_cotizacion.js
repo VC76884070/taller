@@ -366,14 +366,12 @@ function descargarFotoAmpliada() {
         return;
     }
     
-    // Crear link de descarga
     const link = document.createElement('a');
     link.href = base64Url;
     link.download = `foto_item_${Date.now()}.jpg`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
     showToast('✅ Descargando foto...', 'success');
 }
 
@@ -791,7 +789,6 @@ async function abrirModalCotizar(idSolicitud) {
                 const uniqueId = `cotizar_${idx}_${Date.now()}`;
                 const imgId = `img_cotizar_${uniqueId}`;
                 const loaderId = `loader_cotizar_${uniqueId}`;
-                // Usar un timeout para asegurar que los elementos existen
                 setTimeout(() => {
                     cargarImagenProxy(fotoUrl, imgId, loaderId);
                 }, 50);

@@ -463,3 +463,83 @@ def obtener_estadisticas(current_user):
 def test_endpoint():
     """Endpoint de prueba"""
     return jsonify({'success': True, 'message': 'Endpoint de solicitudes_cotizacion funcionando'}), 200
+
+
+
+# =====================================================
+# PROXY IMAGEN - PARA ENCARGADO DE REPUESTOS
+# =====================================================
+
+@solicitudes_cotizacion_bp.route('/proxy-imagen', methods=['GET'])
+@encargado_repuestos_required
+def proxy_imagen_repuestos(current_user):
+    """
+    Proxy para imágenes de Google Drive y Cloudinary.
+    Devuelve la imagen en Base64 para uso en <img>
+    """
+    import requests
+    import base64
+    import re
+    
+    url = request.args.get('url')
+    if not url:
+        return jsonify({'success': False, 'error': 'URL no proporcionada'}), 400
+    
+    # 🔥 SI ES CLOUDINARY
+    if 'cloudinary.com' in url:
+        try:
+            response = requests.get(url, timeout=30, allow_redirects=True)
+            if response.status_code == 200:
+                content_type = response.headers.get('Content-Type', 'image/jpeg')
+                if len(response.content) > 500:
+                    base64_data = base64.b64encode(response.content).decode('utf-8')
+                    return jsonify({
+                        'success': True,
+                        'base64': f'data:{content_type};base64,{base64_data}'
+                    })
+            return jsonify({'success': False, 'error': 'Error Cloudinary'}), 404
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    # 🔥 SI ES GOOGLE DRIVE
+    from google_drive import google_drive
+    file_id = google_drive.extract_file_id_from_url(url)
+    if not file_id:
+        return jsonify({'success': False, 'error': 'No se pudo extraer el ID'}), 400
+    
+    estrategias = [
+        f"https://drive.google.com/thumbnail?id={file_id}&sz=w800",
+        f"https://drive.google.com/uc?export=view&id={file_id}",
+        f"https://drive.google.com/uc?export=download&id={file_id}",
+    ]
+    
+    image_data = None
+    mime_type = 'image/jpeg'
+    
+    for download_url in estrategias:
+        try:
+            response = requests.get(download_url, timeout=30, allow_redirects=True)
+            if 'confirm' in response.url and 'download' in response.url:
+                confirm_match = re.search(r'confirm=([^&]+)', response.text)
+                if confirm_match:
+                    confirm_token = confirm_match.group(1)
+                    download_url_confirm = f"{response.url}&confirm={confirm_token}"
+                    response = requests.get(download_url_confirm, timeout=30, allow_redirects=True)
+            
+            if response.status_code == 200:
+                content_type = response.headers.get('Content-Type', '')
+                if content_type.startswith('image/') or len(response.content) > 500:
+                    image_data = response.content
+                    mime_type = content_type if content_type.startswith('image/') else 'image/jpeg'
+                    break
+        except Exception as e:
+            continue
+    
+    if not image_data:
+        return jsonify({'success': False, 'error': 'No se pudo descargar la imagen'}), 404
+    
+    base64_data = base64.b64encode(image_data).decode('utf-8')
+    return jsonify({
+        'success': True,
+        'base64': f'data:{mime_type};base64,{base64_data}'
+    })

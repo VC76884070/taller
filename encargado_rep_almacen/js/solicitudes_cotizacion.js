@@ -777,7 +777,7 @@ function cambiarPagina(page) {
 }
 
 // =====================================================
-// COTIZAR SOLICITUD (CORREGIDO)
+// COTIZAR SOLICITUD (CORREGIDO CON ARRAY DE FOTOS)
 // =====================================================
 
 let currentSolicitudId = null;
@@ -818,46 +818,76 @@ async function abrirModalCotizar(idSolicitud) {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
     
-    // 🔥 RENDERIZAR ITEMS CON FOTOS EN EL MODAL DE COTIZACIÓN
+    // 🔥 RENDERIZAR ITEMS CON ARRAY DE FOTOS EN EL MODAL DE COTIZACIÓN
     const itemsHtml = items.map((item, idx) => {
         const fotos = item.fotos || [];
-        const fotoUrl = fotos.length > 0 ? fotos[0] : null;
+        const fotosCount = fotos.length;
+        const fotoUrl = fotosCount > 0 ? fotos[0] : null;
         const uniqueId = `cotizar_${idx}_${Date.now()}`;
         const imgId = `img_cotizar_${uniqueId}`;
         const loaderId = `loader_cotizar_${uniqueId}`;
         
+        // 🔥 CONTENEDOR DE FOTO CON LOADER
         const fotoHtml = fotoUrl ? `
-            <div class="precio-item-foto" style="position:relative; width:70px; height:70px; border-radius:8px; overflow:hidden; background:var(--gris-oscuro); flex-shrink:0;">
+            <div class="precio-item-foto" style="position:relative; width:80px; height:80px; border-radius:8px; overflow:hidden; background:var(--gris-oscuro); flex-shrink:0; border:2px solid var(--border-color);">
                 <div id="${loaderId}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); color:var(--gris-texto); font-size:0.7rem;">
                     <i class="fas fa-spinner fa-spin"></i>
                 </div>
-                <img id="${imgId}" alt="Foto" 
+                <img id="${imgId}" class="item-foto-modal" alt="Foto" 
                      style="display:none; width:100%; height:100%; object-fit:cover; cursor:pointer;"
                      onclick="verFotoAmpliada('${escapeHtml(fotoUrl)}')"
                      data-url="${escapeHtml(fotoUrl)}">
-                ${fotos.length > 1 ? `<span style="position:absolute;bottom:2px;right:4px;background:rgba(0,0,0,0.7);color:white;font-size:0.5rem;padding:0 3px;border-radius:2px;">+${fotos.length-1}</span>` : ''}
+                ${fotosCount > 1 ? `<span style="position:absolute;bottom:2px;right:4px;background:rgba(0,0,0,0.8);color:white;font-size:0.55rem;padding:0 5px;border-radius:3px;z-index:2;">+${fotosCount-1}</span>` : ''}
             </div>
         ` : `
-            <div class="item-foto-placeholder-modal" style="width:70px; height:70px; border-radius:8px; background:var(--gris-oscuro); display:flex; align-items:center; justify-content:center; color:var(--gris-texto); flex-shrink:0;">
+            <div class="item-foto-placeholder-modal" style="width:80px; height:80px; border-radius:8px; background:var(--gris-oscuro); display:flex; align-items:center; justify-content:center; color:var(--gris-texto); flex-shrink:0; border:2px dashed var(--border-color);">
                 <i class="fas fa-camera" style="font-size:1.5rem;"></i>
             </div>
         `;
         
-        return `
-            <div class="precio-item-row">
-                <div class="precio-item-info">
-                    ${fotoHtml}
-                    <div class="precio-item-desc">
-                        <strong>${escapeHtml(item.descripcion)}</strong>
-                        <small>(x${item.cantidad} uds)</small>
-                        ${item.detalle ? `<br><small class="text-muted">${escapeHtml(item.detalle)}</small>` : ''}
-                        ${fotos.length > 1 ? `<br><small class="text-muted"><i class="fas fa-images"></i> ${fotos.length} fotos</small>` : ''}
-                    </div>
+        // 🔥 MINIATURAS DE FOTOS ADICIONALES (si hay más de 1)
+        let miniaturasHtml = '';
+        if (fotosCount > 1) {
+            const extraFotos = fotos.slice(1, Math.min(fotosCount, 4));
+            miniaturasHtml = `
+                <div style="display:flex; gap:2px; margin-top:4px; flex-wrap:wrap;">
+                    ${extraFotos.map((f, fi) => {
+                        const miniId = `mini_cotizar_${idx}_${fi}_${Date.now()}`;
+                        const miniLoaderId = `mini_loader_cotizar_${idx}_${fi}_${Date.now()}`;
+                        return `
+                            <div style="position:relative; width:22px; height:22px; border-radius:3px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); cursor:pointer;"
+                                 onclick="event.stopPropagation(); verFotoAmpliada('${escapeHtml(f)}')">
+                                <div id="${miniLoaderId}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); font-size:5px; color:var(--gris-texto);">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                </div>
+                                <img id="${miniId}" src="" alt="Mini" 
+                                     style="display:none; width:100%; height:100%; object-fit:cover;"
+                                     data-url="${escapeHtml(f)}">
+                            </div>
+                        `;
+                    }).join('')}
+                    ${fotosCount > 4 ? `<span style="font-size:0.5rem; color:var(--gris-texto); align-self:center;">+${fotosCount-4}</span>` : ''}
                 </div>
-                <div class="precio-item-input">
-                    <label>Precio unitario (Bs.):</label>
-                    <input type="number" id="precio_item_${idx}" class="precio-input" step="0.01" min="0" placeholder="0.00">
-                    <span class="total-hint">Total: Bs. <span id="total_item_${idx}" class="total-item">0.00</span></span>
+            `;
+        }
+        
+        return `
+            <div class="precio-item-row" style="display:flex; align-items:center; gap:1rem; padding:0.75rem; background:var(--bg-card); border-radius:8px; margin-bottom:0.5rem; border:1px solid var(--border-color);">
+                <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                    ${fotoHtml}
+                    ${miniaturasHtml}
+                </div>
+                <div class="precio-item-desc" style="flex:1;">
+                    <strong>${escapeHtml(item.descripcion)}</strong>
+                    <small style="display:block; color:var(--gris-texto); font-size:0.75rem;">(x${item.cantidad} uds)</small>
+                    ${item.detalle ? `<small class="text-muted" style="display:block; font-size:0.7rem;">${escapeHtml(item.detalle)}</small>` : ''}
+                    ${fotosCount > 0 ? `<small style="display:block; color:var(--rojo-primario); font-size:0.65rem;"><i class="fas fa-images"></i> ${fotosCount} foto(s)</small>` : ''}
+                </div>
+                <div class="precio-item-input" style="min-width:180px;">
+                    <label style="font-size:0.7rem; color:var(--gris-texto);">Precio unitario (Bs.):</label>
+                    <input type="number" id="precio_item_${idx}" class="precio-input" step="0.01" min="0" placeholder="0.00" 
+                           style="width:100%; padding:0.4rem; border-radius:6px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white;">
+                    <span class="total-hint" style="font-size:0.7rem; color:var(--gris-texto);">Total: Bs. <span id="total_item_${idx}" class="total-item" style="color:var(--verde-exito); font-weight:600;">0.00</span></span>
                 </div>
             </div>
         `;
@@ -865,42 +895,55 @@ async function abrirModalCotizar(idSolicitud) {
     
     const modalBody = document.getElementById('modalCotizarBody');
     modalBody.innerHTML = `
-        <div class="orden-info" style="margin-bottom: 1.5rem;">
+        <div class="orden-info" style="margin-bottom: 1.5rem; display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:0.5rem 1rem; padding:0.75rem; background:var(--gris-oscuro); border-radius:8px;">
             <div class="orden-info-item">
-                <label><i class="fas fa-hashtag"></i> Solicitud #${solicitud.id}</label>
+                <label style="font-size:0.65rem; color:var(--gris-texto);"><i class="fas fa-hashtag"></i> Solicitud</label>
+                <span style="font-weight:600;">#${solicitud.id}</span>
+            </div>
+            <div class="orden-info-item">
+                <label style="font-size:0.65rem; color:var(--gris-texto);"><i class="fas fa-tag"></i> OT</label>
                 <span><strong>${escapeHtml(solicitud.orden_codigo || 'N/A')}</strong></span>
             </div>
             <div class="orden-info-item">
-                <label><i class="fas fa-car"></i> Vehículo</label>
+                <label style="font-size:0.65rem; color:var(--gris-texto);"><i class="fas fa-car"></i> Vehículo</label>
                 <span>${escapeHtml(solicitud.vehiculo || 'N/A')}</span>
             </div>
             <div class="orden-info-item">
-                <label><i class="fas fa-calendar"></i> Fecha</label>
+                <label style="font-size:0.65rem; color:var(--gris-texto);"><i class="fas fa-calendar"></i> Fecha</label>
                 <span>${formatDate(solicitud.fecha_solicitud)}</span>
             </div>
         </div>
         
         <div style="margin-bottom: 1.5rem;">
-            <h4>Items a cotizar (${items.length}):</h4>
-            ${itemsHtml}
+            <h4 style="margin-bottom:0.75rem;"><i class="fas fa-cubes"></i> Items a cotizar (${items.length}):</h4>
+            <div style="max-height:400px; overflow-y:auto; padding-right:4px;">
+                ${itemsHtml}
+            </div>
         </div>
         
-        <div class="form-group">
-            <label><i class="fas fa-truck"></i> Proveedor *</label>
-            <input type="text" id="proveedorInfo" class="form-control" placeholder="Ej: Autoparts Bolivia" autocomplete="off">
+        <div class="form-group" style="margin-bottom:1rem;">
+            <label style="font-weight:600;"><i class="fas fa-truck"></i> Proveedor *</label>
+            <input type="text" id="proveedorInfo" class="form-control" placeholder="Ej: Autoparts Bolivia" autocomplete="off" 
+                   style="width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white; margin-top:4px;">
         </div>
         
-        <div class="form-group">
-            <label><i class="fas fa-sticky-note"></i> Observaciones</label>
-            <textarea id="respuestaEncargado" class="form-control" rows="2" placeholder="Notas sobre la cotización..."></textarea>
+        <div class="form-group" style="margin-bottom:1.5rem;">
+            <label style="font-weight:600;"><i class="fas fa-sticky-note"></i> Observaciones</label>
+            <textarea id="respuestaEncargado" class="form-control" rows="2" placeholder="Notas sobre la cotización..." 
+                      style="width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white; margin-top:4px; resize:vertical;"></textarea>
         </div>
         
-        <div class="modal-actions">
-            <button class="btn-secondary" onclick="cerrarModal('modalCotizar')">Cancelar</button>
-            <button class="btn-cotizar" onclick="enviarCotizacion()">Enviar Cotización</button>
+        <div class="modal-actions" style="display:flex; gap:0.75rem; justify-content:flex-end; padding-top:1rem; border-top:1px solid var(--border-color);">
+            <button class="btn-secondary" onclick="cerrarModal('modalCotizar')" style="padding:0.5rem 1.5rem; border-radius:8px; border:none; cursor:pointer;">
+                Cancelar
+            </button>
+            <button class="btn-cotizar" onclick="enviarCotizacion()" style="padding:0.5rem 1.5rem; border-radius:8px; border:none; cursor:pointer; background:var(--rojo-primario); color:white; font-weight:600;">
+                <i class="fas fa-paper-plane"></i> Enviar Cotización
+            </button>
         </div>
     `;
     
+    // Configurar eventos de precio
     setTimeout(() => {
         items.forEach((item, idx) => {
             const precioInput = document.getElementById(`precio_item_${idx}`);
@@ -920,7 +963,8 @@ async function abrirModalCotizar(idSolicitud) {
         const firstInput = document.getElementById('precio_item_0');
         if (firstInput) firstInput.focus();
         
-        // Cargar imágenes en el modal
+        // 🔥 CARGAR TODAS LAS IMÁGENES EN EL MODAL
+        // 1. Imagen principal de cada item
         items.forEach((item, idx) => {
             const fotos = item.fotos || [];
             if (fotos.length > 0) {
@@ -929,12 +973,29 @@ async function abrirModalCotizar(idSolicitud) {
                 const loaderId = `loader_cotizar_${uniqueId}`;
                 const img = document.getElementById(imgId);
                 const loader = document.getElementById(loaderId);
-                if (img && loader && fotos[0]) {
+                if (img && loader) {
                     cargarImagenProxy(fotos[0], img, loader);
                 }
             }
         });
-    }, 150);
+        
+        // 2. Miniaturas adicionales
+        items.forEach((item, idx) => {
+            const fotos = item.fotos || [];
+            if (fotos.length > 1) {
+                fotos.slice(1, Math.min(fotos.length, 4)).forEach((f, fi) => {
+                    const miniId = `mini_cotizar_${idx}_${fi}_${Date.now()}`;
+                    const miniLoaderId = `mini_loader_cotizar_${idx}_${fi}_${Date.now()}`;
+                    const img = document.getElementById(miniId);
+                    const loader = document.getElementById(miniLoaderId);
+                    if (img && loader) {
+                        cargarImagenProxy(f, img, loader);
+                    }
+                });
+            }
+        });
+        
+    }, 200);
     
     abrirModal('modalCotizar');
 }

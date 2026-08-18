@@ -1,6 +1,6 @@
 // =====================================================
 // SOLICITUDES_COTIZACION.JS - ENCARGADO DE REPUESTOS
-// VERSIÓN CORREGIDA - CON PROXY PARA IMÁGENES
+// VERSIÓN CORREGIDA - MANEJA ARRAY DE FOTOS
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
@@ -9,11 +9,7 @@
 // =====================================================
 const API_URL = `${window.API_BASE_URL}/api/encargado-repuestos`;
 
-// Configuración de paginación
 const PAGE_SIZE = 10;
-const MAX_CACHE_AGE = 30000;
-
-// Estado global
 let currentUser = null;
 let solicitudesCache = {
     data: null,
@@ -28,8 +24,6 @@ let currentFilters = {
     page: 1
 };
 let isLoading = false;
-
-// Cache de imágenes cargadas
 let imageCache = {};
 
 // =====================================================
@@ -40,7 +34,6 @@ function getAuthHeaders() {
     let token = localStorage.getItem('furia_token');
     if (!token) token = localStorage.getItem('token');
     if (!token) token = sessionStorage.getItem('token');
-    
     return {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -133,14 +126,12 @@ function statusBadge(estado) {
         'aprobado': 'status-aprobado',
         'rechazado': 'status-rechazado'
     };
-    
     const texto = {
         'pendiente': 'Pendiente',
         'cotizado': 'Cotizado',
         'aprobado': 'Aprobado',
         'rechazado': 'Rechazado'
     };
-    
     return `<span class="status-badge ${map[estado] || 'status-pendiente'}">${texto[estado] || estado}</span>`;
 }
 
@@ -160,45 +151,28 @@ function debounce(func, wait) {
 // 🔥 FUNCIÓN PARA CARGAR IMAGEN VÍA PROXY
 // =====================================================
 
-async function cargarImagenProxy(url, imgElementOrId, loaderElementOrId = null) {
+async function cargarImagenProxy(url, imgElement, loaderElement) {
     if (!url) {
-        if (imgElementOrId) {
-            const img = typeof imgElementOrId === 'string' 
-                ? document.getElementById(imgElementOrId) 
-                : imgElementOrId;
-            if (img) img.style.display = 'none';
-        }
+        if (loaderElement) loaderElement.style.display = 'none';
+        if (imgElement) imgElement.style.display = 'none';
         return null;
     }
     
     // Verificar caché
-    const cacheKey = url;
-    if (imageCache[cacheKey]) {
-        const img = typeof imgElementOrId === 'string' 
-            ? document.getElementById(imgElementOrId) 
-            : imgElementOrId;
-        if (img) {
-            img.src = imageCache[cacheKey];
-            img.style.display = 'block';
-            img.style.opacity = '1';
+    if (imageCache[url]) {
+        if (imgElement) {
+            imgElement.src = imageCache[url];
+            imgElement.style.display = 'block';
+            imgElement.style.opacity = '1';
         }
-        return imageCache[cacheKey];
+        if (loaderElement) loaderElement.style.display = 'none';
+        return imageCache[url];
     }
     
-    // Obtener elementos
-    const img = typeof imgElementOrId === 'string' 
-        ? document.getElementById(imgElementOrId) 
-        : imgElementOrId;
-    
-    const loader = typeof loaderElementOrId === 'string' 
-        ? document.getElementById(loaderElementOrId) 
-        : loaderElementOrId;
-    
-    // Mostrar loader, ocultar imagen
-    if (loader) loader.style.display = 'flex';
-    if (img) {
-        img.style.display = 'none';
-        img.style.opacity = '0';
+    if (loaderElement) loaderElement.style.display = 'flex';
+    if (imgElement) {
+        imgElement.style.display = 'none';
+        imgElement.style.opacity = '0';
     }
     
     try {
@@ -209,176 +183,48 @@ async function cargarImagenProxy(url, imgElementOrId, loaderElementOrId = null) 
         const data = await response.json();
         
         if (data.success && data.base64) {
-            // Pre-cargar la imagen antes de mostrarla
-            const nuevaImg = new Image();
             return new Promise((resolve) => {
+                const nuevaImg = new Image();
                 nuevaImg.onload = function() {
-                    if (img) {
-                        img.src = data.base64;
-                        img.style.display = 'block';
-                        img.style.opacity = '1';
+                    if (imgElement) {
+                        imgElement.src = data.base64;
+                        imgElement.style.display = 'block';
+                        imgElement.style.opacity = '1';
+                        imgElement.setAttribute('data-loaded', 'true');
                     }
-                    if (loader) loader.style.display = 'none';
-                    
-                    // Guardar en caché
-                    imageCache[cacheKey] = data.base64;
+                    if (loaderElement) loaderElement.style.display = 'none';
+                    imageCache[url] = data.base64;
                     resolve(data.base64);
                 };
                 nuevaImg.onerror = function() {
-                    if (loader) {
-                        loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al cargar';
-                        loader.style.display = 'flex';
+                    console.error('Error cargando imagen:', url);
+                    if (loaderElement) {
+                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i>';
+                        loaderElement.style.display = 'flex';
                     }
                     resolve(null);
                 };
                 nuevaImg.src = data.base64;
             });
         } else {
-            if (loader) {
-                loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> No disponible';
-                loader.style.display = 'flex';
+            if (loaderElement) {
+                loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i>';
+                loaderElement.style.display = 'flex';
             }
             return null;
         }
     } catch (error) {
-        console.error('❌ Error cargando imagen:', error);
-        if (loader) {
-            loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error de conexión';
-            loader.style.display = 'flex';
+        console.error('Error cargando imagen:', error);
+        if (loaderElement) {
+            loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i>';
+            loaderElement.style.display = 'flex';
         }
         return null;
     }
 }
 
 // =====================================================
-// 🔥 FUNCIÓN PARA VER FOTO AMPLIADA CON PROXY
-// =====================================================
-
-async function verFotoAmpliada(url) {
-    if (!url) {
-        showToast('No hay foto para mostrar', 'warning');
-        return;
-    }
-    
-    // Crear modal de foto si no existe
-    let modalFoto = document.getElementById('modalFotoAmpliada');
-    if (!modalFoto) {
-        const modalHtml = `
-            <div class="modal" id="modalFotoAmpliada" onclick="cerrarFotoAmpliada()">
-                <div class="modal-content foto-ampliada-content" onclick="event.stopPropagation()">
-                    <div class="modal-header foto-ampliada-header">
-                        <h3><i class="fas fa-image"></i> Foto del Item</h3>
-                        <button class="close-modal" onclick="cerrarFotoAmpliada()">&times;</button>
-                    </div>
-                    <div class="modal-body foto-ampliada-body">
-                        <div id="fotoModalLoader" style="display:flex; justify-content:center; align-items:center; padding:2rem;">
-                            <i class="fas fa-spinner fa-spin" style="font-size:2rem; color:var(--rojo-primario);"></i>
-                            <span style="margin-left:1rem;">Cargando imagen...</span>
-                        </div>
-                        <img id="fotoAmpliadaImg" src="" alt="Foto ampliada" style="display:none; max-width:100%; max-height:70vh; object-fit:contain;">
-                    </div>
-                    <div class="modal-footer foto-ampliada-footer">
-                        <button class="btn-secondary" onclick="cerrarFotoAmpliada()">Cerrar</button>
-                        <button class="btn-cotizar" onclick="descargarFotoAmpliada()" id="btnDescargarFoto">
-                            <i class="fas fa-download"></i> Descargar
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-    }
-    
-    // Mostrar modal
-    const modal = document.getElementById('modalFotoAmpliada');
-    const img = document.getElementById('fotoAmpliadaImg');
-    const loader = document.getElementById('fotoModalLoader');
-    
-    if (!modal || !img) return;
-    
-    // Resetear estado
-    if (loader) loader.style.display = 'flex';
-    img.style.display = 'none';
-    img.style.opacity = '0';
-    img.src = '';
-    
-    // Abrir modal
-    modal.classList.add('active');
-    document.body.style.overflow = 'hidden';
-    
-    // Cargar imagen via proxy
-    try {
-        const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(url)}`;
-        const response = await fetch(proxyUrl, {
-            headers: getAuthHeaders()
-        });
-        const data = await response.json();
-        
-        if (data.success && data.base64) {
-            const nuevaImg = new Image();
-            nuevaImg.onload = function() {
-                img.src = data.base64;
-                img.style.display = 'block';
-                img.style.opacity = '1';
-                if (loader) loader.style.display = 'none';
-                
-                // Guardar para descarga
-                window._fotoAmpliadaUrl = data.base64;
-                window._fotoAmpliadaOriginalUrl = url;
-            };
-            nuevaImg.onerror = function() {
-                if (loader) {
-                    loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al cargar la imagen';
-                    loader.style.display = 'flex';
-                }
-                showToast('Error al cargar la imagen', 'error');
-            };
-            nuevaImg.src = data.base64;
-        } else {
-            if (loader) {
-                loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> No se pudo cargar la imagen';
-                loader.style.display = 'flex';
-            }
-            showToast('Error al cargar la imagen', 'error');
-        }
-    } catch (error) {
-        console.error('❌ Error:', error);
-        if (loader) {
-            loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error de conexión';
-            loader.style.display = 'flex';
-        }
-        showToast('Error al cargar la imagen', 'error');
-    }
-}
-
-function cerrarFotoAmpliada() {
-    const modal = document.getElementById('modalFotoAmpliada');
-    if (modal) {
-        modal.classList.remove('active');
-        document.body.style.overflow = '';
-    }
-}
-
-function descargarFotoAmpliada() {
-    const base64Url = window._fotoAmpliadaUrl;
-    if (!base64Url) {
-        showToast('No hay foto para descargar', 'warning');
-        return;
-    }
-    
-    // Crear link de descarga
-    const link = document.createElement('a');
-    link.href = base64Url;
-    link.download = `foto_item_${Date.now()}.jpg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    showToast('✅ Descargando foto...', 'success');
-}
-
-// =====================================================
-// 🔥 FUNCIÓN PARA RENDERIZAR ITEMS CON FOTOS (CORREGIDA)
+// 🔥 FUNCIÓN PARA RENDERIZAR ITEMS CON ARRAY DE FOTOS
 // =====================================================
 
 function renderItemsConFotos(items, maxItems = 3, prefix = '') {
@@ -389,12 +235,40 @@ function renderItemsConFotos(items, maxItems = 3, prefix = '') {
     const itemsToShow = items.slice(0, maxItems);
     
     return itemsToShow.map((item, index) => {
-        const fotoUrl = item.foto_url;
+        // 🔥 OBTENER EL ARRAY DE FOTOS
+        const fotos = item.fotos || [];
+        const fotosCount = fotos.length;
+        
+        // Usar la PRIMERA foto como miniatura
+        const fotoUrl = fotosCount > 0 ? fotos[0] : null;
         const uniqueId = `${prefix}_${index}_${Date.now()}`;
         const imgId = `img_${uniqueId}`;
         const loaderId = `loader_${uniqueId}`;
+        const galeriaId = `galeria_${uniqueId}`;
         
-        // Renderizar el contenedor con loader e imagen
+        // Si hay múltiples fotos, mostrar miniaturas
+        let miniaturasHtml = '';
+        if (fotosCount > 1) {
+            const mostrarMiniaturas = fotos.slice(0, 3);
+            miniaturasHtml = `
+                <div class="miniaturas-container" style="display:flex; gap:2px; margin-top:2px; flex-wrap:wrap;">
+                    ${mostrarMiniaturas.map((f, fi) => `
+                        <div class="miniatura-item" style="width:18px; height:18px; border-radius:2px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); cursor:pointer;"
+                             onclick="event.stopPropagation(); verFotoAmpliada('${escapeHtml(f)}')">
+                            <div id="mini_loader_${uniqueId}_${fi}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); font-size:6px;">
+                                <i class="fas fa-spinner fa-spin"></i>
+                            </div>
+                            <img id="mini_img_${uniqueId}_${fi}" src="" alt="Miniatura" 
+                                 style="display:none; width:100%; height:100%; object-fit:cover;"
+                                 data-url="${escapeHtml(f)}">
+                        </div>
+                    `).join('')}
+                    ${fotosCount > 3 ? `<span style="font-size:7px; color:var(--gris-texto);">+${fotosCount-3}</span>` : ''}
+                </div>
+            `;
+        }
+        
+        // Contenedor principal de la foto
         const fotoHtml = fotoUrl ? `
             <div class="item-foto-container" style="position:relative; width:60px; height:60px; border-radius:8px; overflow:hidden; background:var(--gris-oscuro); flex-shrink:0;">
                 <div id="${loaderId}" class="item-foto-loader" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); color:var(--gris-texto); font-size:0.7rem;">
@@ -402,7 +276,9 @@ function renderItemsConFotos(items, maxItems = 3, prefix = '') {
                 </div>
                 <img id="${imgId}" class="item-foto-miniatura" alt="Foto" 
                      style="display:none; width:100%; height:100%; object-fit:cover; cursor:pointer;"
-                     onclick="verFotoAmpliada('${escapeHtml(fotoUrl)}')">
+                     onclick="verFotoAmpliada('${escapeHtml(fotoUrl)}')"
+                     data-url="${escapeHtml(fotoUrl)}">
+                ${fotosCount > 1 ? `<span style="position:absolute;bottom:2px;right:4px;background:rgba(0,0,0,0.7);color:white;font-size:0.6rem;padding:0 4px;border-radius:3px;z-index:2;">+${fotosCount-1}</span>` : ''}
             </div>
         ` : `
             <div class="item-foto-placeholder" style="width:60px; height:60px; border-radius:8px; background:var(--gris-oscuro); display:flex; align-items:center; justify-content:center; color:var(--gris-texto); flex-shrink:0;">
@@ -412,12 +288,49 @@ function renderItemsConFotos(items, maxItems = 3, prefix = '') {
         
         return `
             <div class="item-row-solicitud" style="display:flex; align-items:center; gap:0.75rem; padding:0.4rem 0; border-bottom:1px solid rgba(255,255,255,0.05);">
-                ${fotoHtml}
+                <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                    ${fotoHtml}
+                    ${miniaturasHtml}
+                </div>
                 <div class="item-desc" style="flex:1; font-size:0.9rem;">${escapeHtml(item.descripcion)}</div>
                 <div class="item-cant" style="font-size:0.8rem; color:var(--gris-texto);">${item.cantidad} uds</div>
+                ${fotosCount > 0 ? `<span style="font-size:0.7rem; color:var(--rojo-primario);"><i class="fas fa-images"></i> ${fotosCount}</span>` : ''}
             </div>
         `;
     }).join('');
+}
+
+// =====================================================
+// 🔥 FUNCIÓN PARA CARGAR IMÁGENES DESPUÉS DE RENDERIZAR
+// =====================================================
+
+function cargarImagenesEnTarjetas() {
+    const container = document.getElementById('solicitudesContainer');
+    if (!container) return;
+    
+    // Cargar imágenes principales
+    const fotoContainers = container.querySelectorAll('.item-foto-container');
+    fotoContainers.forEach(container => {
+        const img = container.querySelector('.item-foto-miniatura');
+        const loader = container.querySelector('.item-foto-loader');
+        if (img && loader) {
+            const url = img.getAttribute('data-url');
+            if (url) {
+                cargarImagenProxy(url, img, loader);
+            }
+        }
+    });
+    
+    // Cargar miniaturas
+    const miniaturas = container.querySelectorAll('.miniatura-item img');
+    miniaturas.forEach(img => {
+        const url = img.getAttribute('data-url');
+        const loaderId = img.id.replace('mini_img', 'mini_loader');
+        const loader = document.getElementById(loaderId);
+        if (url) {
+            cargarImagenProxy(url, img, loader);
+        }
+    });
 }
 
 // =====================================================
@@ -469,27 +382,10 @@ async function cargarSolicitudes(resetPage = true) {
             renderizarSolicitudes(solicitudesCache.data);
             renderizarPaginacion();
             
-            const container = document.getElementById('solicitudesContainer');
-            if (container && solicitudesCache.totalItems > 0) {
-                const infoHtml = `
-                    <div class="pagination-info">
-                        <i class="fas fa-info-circle"></i> 
-                        Mostrando ${solicitudesCache.data.length} de ${solicitudesCache.totalItems} solicitudes
-                        ${solicitudesCache.totalItems > PAGE_SIZE ? ` (Página ${solicitudesCache.currentPage} de ${solicitudesCache.totalPages})` : ''}
-                    </div>
-                `;
-                const firstChild = container.firstChild;
-                if (firstChild && firstChild.classList?.contains('pagination-info')) {
-                    firstChild.innerHTML = infoHtml;
-                } else {
-                    container.insertAdjacentHTML('afterbegin', infoHtml);
-                }
-            }
-            
-            // 🔥 Cargar imágenes después de renderizar
+            // Cargar imágenes después de renderizar
             setTimeout(() => {
                 cargarImagenesEnTarjetas();
-            }, 100);
+            }, 150);
             
         } else {
             showToast(data.error || 'Error al cargar solicitudes', 'error');
@@ -500,36 +396,6 @@ async function cargarSolicitudes(resetPage = true) {
     } finally {
         mostrarLoading(false);
     }
-}
-
-// =====================================================
-// 🔥 FUNCIÓN PARA CARGAR IMÁGENES EN LAS TARJETAS
-// =====================================================
-
-function cargarImagenesEnTarjetas() {
-    const container = document.getElementById('solicitudesContainer');
-    if (!container) return;
-    
-    // Buscar todos los contenedores de imágenes
-    const fotoContainers = container.querySelectorAll('.item-foto-container');
-    
-    fotoContainers.forEach(container => {
-        const img = container.querySelector('img.item-foto-miniatura');
-        const loader = container.querySelector('.item-foto-loader');
-        
-        if (img && loader) {
-            // Obtener la URL del onclick
-            const onclickAttr = img.getAttribute('onclick');
-            if (onclickAttr) {
-                const match = onclickAttr.match(/verFotoAmpliada\('([^']+)'\)/);
-                if (match) {
-                    const url = match[1];
-                    // Cargar la imagen via proxy
-                    cargarImagenProxy(url, img, loader);
-                }
-            }
-        }
-    });
 }
 
 function renderizarSolicitudes(solicitudes) {
@@ -553,17 +419,17 @@ function renderizarSolicitudes(solicitudes) {
             try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
         }
         
-        // Renderizar items con fotos
         const itemsHtml = renderItemsConFotos(items, 3, `solicitud_${solicitud.id}`);
         const tieneMasItems = items.length > 3;
-        
         const puedeCotizar = solicitud.estado === 'pendiente';
+        const totalFotos = solicitud.total_fotos || 0;
         
         return `
             <div class="solicitud-card" data-id="${solicitud.id}" style="animation-delay: ${Math.min(index * 0.03, 0.3)}s">
                 <div class="solicitud-header">
                     <h3><i class="fas fa-file-invoice"></i> Solicitud #${solicitud.id}</h3>
                     ${statusBadge(solicitud.estado)}
+                    ${totalFotos > 0 ? `<span style="background:var(--rojo-primario);color:white;padding:0.1rem 0.5rem;border-radius:12px;font-size:0.6rem;margin-left:0.5rem;"><i class="fas fa-camera"></i> ${totalFotos}</span>` : ''}
                 </div>
                 <div class="solicitud-body">
                     <div class="orden-info">
@@ -610,10 +476,279 @@ function renderizarSolicitudes(solicitudes) {
     }).join('');
 }
 
+// =====================================================
+// VER DETALLE CON TODAS LAS FOTOS
+// =====================================================
+
+async function verDetalle(idSolicitud) {
+    let solicitud = solicitudesCache.data?.find(s => s.id === idSolicitud);
+    
+    if (!solicitud) {
+        mostrarLoading(true);
+        try {
+            const response = await fetch(`${API_URL}/solicitudes-cotizacion/${idSolicitud}`, {
+                headers: getAuthHeaders()
+            });
+            const data = await response.json();
+            if (data.success) {
+                solicitud = data.solicitud;
+            }
+        } catch (error) {
+            showToast('Error al cargar detalle', 'error');
+            return;
+        } finally {
+            mostrarLoading(false);
+        }
+    }
+    
+    if (!solicitud) {
+        showToast('No se encontró la solicitud', 'error');
+        return;
+    }
+    
+    let items = solicitud.items || [];
+    if (typeof items === 'string') {
+        try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
+    }
+    
+    // 🔥 RENDERIZAR TODAS LAS FOTOS DE CADA ITEM
+    const itemsHtml = items.map((item, idx) => {
+        const fotos = item.fotos || [];
+        const fotosCount = fotos.length;
+        
+        // Generar todas las miniaturas del item
+        const fotosHtml = fotosCount > 0 ? `
+            <div class="fotos-grid-detalle" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                ${fotos.map((f, fi) => {
+                    const fotoId = `detalle_foto_${idSolicitud}_${idx}_${fi}`;
+                    const loaderId = `detalle_loader_${idSolicitud}_${idx}_${fi}`;
+                    return `
+                        <div class="foto-item-detalle" style="position:relative; width:80px; height:80px; border-radius:8px; overflow:hidden; background:var(--gris-oscuro); border:2px solid var(--border-color); cursor:pointer;"
+                             onclick="verFotoAmpliada('${escapeHtml(f)}')">
+                            <div id="${loaderId}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%;">
+                                <i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);"></i>
+                            </div>
+                            <img id="${fotoId}" src="" alt="Foto ${fi+1}" 
+                                 style="display:none; width:100%; height:100%; object-fit:cover;"
+                                 data-url="${escapeHtml(f)}">
+                            <span style="position:absolute;top:2px;right:4px;background:rgba(0,0,0,0.7);color:white;font-size:0.6rem;padding:0 4px;border-radius:3px;">${fi+1}/${fotosCount}</span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        ` : `<div class="text-muted" style="font-size:0.8rem; margin-top:4px;">Sin fotos</div>`;
+        
+        return `
+            <div class="item-detalle-card" style="padding:0.75rem; background:var(--bg-card); border-radius:8px; margin-bottom:0.75rem; border-left:3px solid var(--rojo-primario);">
+                <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                    <strong>${escapeHtml(item.descripcion)}</strong>
+                    <span style="background:var(--gris-oscuro);padding:0.1rem 0.5rem;border-radius:4px;font-size:0.8rem;">×${item.cantidad}</span>
+                    ${item.detalle ? `<span style="color:var(--gris-texto);font-size:0.8rem;">${escapeHtml(item.detalle)}</span>` : ''}
+                    <span style="font-size:0.7rem; color:var(--rojo-primario);"><i class="fas fa-images"></i> ${fotosCount}</span>
+                </div>
+                ${fotosHtml}
+            </div>
+        `;
+    }).join('');
+    
+    const modalBody = document.getElementById('modalDetalleBody');
+    modalBody.innerHTML = `
+        <div class="orden-info">
+            <div class="orden-info-item">
+                <label>Solicitud #${solicitud.id}</label>
+                <span>${statusBadge(solicitud.estado)}</span>
+            </div>
+            <div class="orden-info-item">
+                <label>Orden de Trabajo</label>
+                <span><strong>${escapeHtml(solicitud.orden_codigo || 'N/A')}</strong></span>
+            </div>
+            <div class="orden-info-item">
+                <label>Vehículo</label>
+                <span>${escapeHtml(solicitud.vehiculo || 'N/A')}</span>
+            </div>
+            <div class="orden-info-item">
+                <label>Fecha Solicitud</label>
+                <span>${formatDateTime(solicitud.fecha_solicitud)}</span>
+            </div>
+        </div>
+        
+        <div class="items-list-detalle">
+            <h4>Items solicitados (${items.length}):</h4>
+            ${itemsHtml}
+        </div>
+        
+        ${solicitud.observacion_jefe_taller ? `
+            <div class="observacion-box">
+                <small><i class="fas fa-comment-dots"></i> Observación:</small>
+                <p>${escapeHtml(solicitud.observacion_jefe_taller)}</p>
+            </div>
+        ` : ''}
+        
+        ${solicitud.precio_cotizado ? `
+            <div class="precio-cotizado-box">
+                <strong>Precio cotizado:</strong>
+                <span class="precio-valor">Bs. ${solicitud.precio_cotizado.toFixed(2)}</span>
+                ${solicitud.proveedor_info ? `<br><strong>Proveedor:</strong> ${escapeHtml(solicitud.proveedor_info)}` : ''}
+                ${solicitud.respuesta_encargado ? `<br><strong>Notas:</strong> ${escapeHtml(solicitud.respuesta_encargado)}` : ''}
+            </div>
+        ` : ''}
+        
+        <div class="modal-actions">
+            <button class="btn-secondary" onclick="cerrarModal('modalDetalle')">Cerrar</button>
+            ${solicitud.estado === 'pendiente' ? `
+                <button class="btn-cotizar" onclick="cerrarModal('modalDetalle'); abrirModalCotizar(${solicitud.id})">
+                    Cotizar ahora
+                </button>
+            ` : ''}
+        </div>
+    `;
+    
+    abrirModal('modalDetalle');
+    
+    // Cargar las fotos del detalle
+    setTimeout(() => {
+        const fotos = modalBody.querySelectorAll('.foto-item-detalle img');
+        fotos.forEach(img => {
+            const url = img.getAttribute('data-url');
+            const loaderId = img.id.replace('detalle_foto', 'detalle_loader');
+            const loader = document.getElementById(loaderId);
+            if (url) {
+                cargarImagenProxy(url, img, loader);
+            }
+        });
+    }, 200);
+}
+
+// =====================================================
+// FUNCIÓN PARA VER FOTO AMPLIADA
+// =====================================================
+
+async function verFotoAmpliada(url) {
+    if (!url) {
+        showToast('No hay foto para mostrar', 'warning');
+        return;
+    }
+    
+    let modalFoto = document.getElementById('modalFotoAmpliada');
+    if (!modalFoto) {
+        const modalHtml = `
+            <div class="modal" id="modalFotoAmpliada" onclick="cerrarFotoAmpliada()">
+                <div class="modal-content foto-ampliada-content" onclick="event.stopPropagation()">
+                    <div class="modal-header foto-ampliada-header">
+                        <h3><i class="fas fa-image"></i> Foto del Item</h3>
+                        <button class="close-modal" onclick="cerrarFotoAmpliada()">&times;</button>
+                    </div>
+                    <div class="modal-body foto-ampliada-body">
+                        <div id="fotoModalLoader" style="display:flex; justify-content:center; align-items:center; padding:2rem;">
+                            <i class="fas fa-spinner fa-spin" style="font-size:2rem; color:var(--rojo-primario);"></i>
+                            <span style="margin-left:1rem;">Cargando imagen...</span>
+                        </div>
+                        <img id="fotoAmpliadaImg" src="" alt="Foto ampliada" style="display:none; max-width:100%; max-height:70vh; object-fit:contain;">
+                    </div>
+                    <div class="modal-footer foto-ampliada-footer">
+                        <button class="btn-secondary" onclick="cerrarFotoAmpliada()">Cerrar</button>
+                        <button class="btn-cotizar" onclick="descargarFotoAmpliada()" id="btnDescargarFoto">
+                            <i class="fas fa-download"></i> Descargar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    const modal = document.getElementById('modalFotoAmpliada');
+    const img = document.getElementById('fotoAmpliadaImg');
+    const loader = document.getElementById('fotoModalLoader');
+    
+    if (!modal || !img) return;
+    
+    if (loader) loader.style.display = 'flex';
+    img.style.display = 'none';
+    img.style.opacity = '0';
+    img.src = '';
+    
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    
+    // Si está en caché
+    if (imageCache[url]) {
+        img.src = imageCache[url];
+        img.style.display = 'block';
+        img.style.opacity = '1';
+        if (loader) loader.style.display = 'none';
+        window._fotoAmpliadaUrl = imageCache[url];
+        return;
+    }
+    
+    try {
+        const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            const nuevaImg = new Image();
+            nuevaImg.onload = function() {
+                img.src = data.base64;
+                img.style.display = 'block';
+                img.style.opacity = '1';
+                if (loader) loader.style.display = 'none';
+                window._fotoAmpliadaUrl = data.base64;
+                imageCache[url] = data.base64;
+            };
+            nuevaImg.onerror = function() {
+                if (loader) {
+                    loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al cargar';
+                    loader.style.display = 'flex';
+                }
+                showToast('Error al cargar la imagen', 'error');
+            };
+            nuevaImg.src = data.base64;
+        } else {
+            if (loader) {
+                loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> No se pudo cargar';
+                loader.style.display = 'flex';
+            }
+            showToast('Error al cargar la imagen', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        if (loader) {
+            loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error de conexión';
+            loader.style.display = 'flex';
+        }
+        showToast('Error al cargar la imagen', 'error');
+    }
+}
+
+function cerrarFotoAmpliada() {
+    const modal = document.getElementById('modalFotoAmpliada');
+    if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+}
+
+function descargarFotoAmpliada() {
+    const base64Url = window._fotoAmpliadaUrl;
+    if (!base64Url) {
+        showToast('No hay foto para descargar', 'warning');
+        return;
+    }
+    const link = document.createElement('a');
+    link.href = base64Url;
+    link.download = `foto_item_${Date.now()}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('✅ Descargando foto...', 'success');
+}
+
 function renderizarPaginacion() {
     const container = document.getElementById('solicitudesContainer');
     if (!container) return;
-    
     if (solicitudesCache.totalPages <= 1) return;
     
     const paginationHtml = `
@@ -631,20 +766,18 @@ function renderizarPaginacion() {
             </button>
         </div>
     `;
-    
     container.insertAdjacentHTML('beforeend', paginationHtml);
 }
 
 function cambiarPagina(page) {
     if (page < 1 || page > solicitudesCache.totalPages) return;
     if (page === solicitudesCache.currentPage) return;
-    
     currentFilters.page = page;
     cargarSolicitudes(false);
 }
 
 // =====================================================
-// COTIZAR SOLICITUD (CORREGIDO CON PROXY PARA IMÁGENES)
+// COTIZAR SOLICITUD (CORREGIDO)
 // =====================================================
 
 let currentSolicitudId = null;
@@ -685,24 +818,27 @@ async function abrirModalCotizar(idSolicitud) {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
     
-    // Mostrar items con fotos en el modal de cotización (usando proxy)
+    // 🔥 RENDERIZAR ITEMS CON FOTOS EN EL MODAL DE COTIZACIÓN
     const itemsHtml = items.map((item, idx) => {
-        const fotoUrl = item.foto_url;
+        const fotos = item.fotos || [];
+        const fotoUrl = fotos.length > 0 ? fotos[0] : null;
         const uniqueId = `cotizar_${idx}_${Date.now()}`;
         const imgId = `img_cotizar_${uniqueId}`;
         const loaderId = `loader_cotizar_${uniqueId}`;
         
         const fotoHtml = fotoUrl ? `
-            <div class="precio-item-foto" style="position:relative; width:80px; height:80px; border-radius:8px; overflow:hidden; background:var(--gris-oscuro); flex-shrink:0;">
-                <div id="${loaderId}" class="item-foto-loader" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); color:var(--gris-texto); font-size:0.7rem;">
+            <div class="precio-item-foto" style="position:relative; width:70px; height:70px; border-radius:8px; overflow:hidden; background:var(--gris-oscuro); flex-shrink:0;">
+                <div id="${loaderId}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); color:var(--gris-texto); font-size:0.7rem;">
                     <i class="fas fa-spinner fa-spin"></i>
                 </div>
-                <img id="${imgId}" class="item-foto-modal" alt="Foto" 
+                <img id="${imgId}" alt="Foto" 
                      style="display:none; width:100%; height:100%; object-fit:cover; cursor:pointer;"
-                     onclick="verFotoAmpliada('${escapeHtml(fotoUrl)}')">
+                     onclick="verFotoAmpliada('${escapeHtml(fotoUrl)}')"
+                     data-url="${escapeHtml(fotoUrl)}">
+                ${fotos.length > 1 ? `<span style="position:absolute;bottom:2px;right:4px;background:rgba(0,0,0,0.7);color:white;font-size:0.5rem;padding:0 3px;border-radius:2px;">+${fotos.length-1}</span>` : ''}
             </div>
         ` : `
-            <div class="item-foto-placeholder-modal" style="width:80px; height:80px; border-radius:8px; background:var(--gris-oscuro); display:flex; align-items:center; justify-content:center; color:var(--gris-texto); flex-shrink:0;">
+            <div class="item-foto-placeholder-modal" style="width:70px; height:70px; border-radius:8px; background:var(--gris-oscuro); display:flex; align-items:center; justify-content:center; color:var(--gris-texto); flex-shrink:0;">
                 <i class="fas fa-camera" style="font-size:1.5rem;"></i>
             </div>
         `;
@@ -715,6 +851,7 @@ async function abrirModalCotizar(idSolicitud) {
                         <strong>${escapeHtml(item.descripcion)}</strong>
                         <small>(x${item.cantidad} uds)</small>
                         ${item.detalle ? `<br><small class="text-muted">${escapeHtml(item.detalle)}</small>` : ''}
+                        ${fotos.length > 1 ? `<br><small class="text-muted"><i class="fas fa-images"></i> ${fotos.length} fotos</small>` : ''}
                     </div>
                 </div>
                 <div class="precio-item-input">
@@ -764,7 +901,6 @@ async function abrirModalCotizar(idSolicitud) {
         </div>
     `;
     
-    // Configurar eventos de precio
     setTimeout(() => {
         items.forEach((item, idx) => {
             const precioInput = document.getElementById(`precio_item_${idx}`);
@@ -784,20 +920,21 @@ async function abrirModalCotizar(idSolicitud) {
         const firstInput = document.getElementById('precio_item_0');
         if (firstInput) firstInput.focus();
         
-        // 🔥 Cargar imágenes en el modal
+        // Cargar imágenes en el modal
         items.forEach((item, idx) => {
-            const fotoUrl = item.foto_url;
-            if (fotoUrl) {
+            const fotos = item.fotos || [];
+            if (fotos.length > 0) {
                 const uniqueId = `cotizar_${idx}_${Date.now()}`;
                 const imgId = `img_cotizar_${uniqueId}`;
                 const loaderId = `loader_cotizar_${uniqueId}`;
-                // Usar un timeout para asegurar que los elementos existen
-                setTimeout(() => {
-                    cargarImagenProxy(fotoUrl, imgId, loaderId);
-                }, 50);
+                const img = document.getElementById(imgId);
+                const loader = document.getElementById(loaderId);
+                if (img && loader && fotos[0]) {
+                    cargarImagenProxy(fotos[0], img, loader);
+                }
             }
         });
-    }, 100);
+    }, 150);
     
     abrirModal('modalCotizar');
 }
@@ -874,143 +1011,6 @@ async function enviarCotizacion() {
     } finally {
         mostrarLoading(false);
     }
-}
-
-// =====================================================
-// VER DETALLE (CON PROXY PARA IMÁGENES)
-// =====================================================
-
-async function verDetalle(idSolicitud) {
-    let solicitud = solicitudesCache.data?.find(s => s.id === idSolicitud);
-    
-    if (!solicitud) {
-        mostrarLoading(true);
-        try {
-            const response = await fetch(`${API_URL}/solicitudes-cotizacion/${idSolicitud}`, {
-                headers: getAuthHeaders()
-            });
-            const data = await response.json();
-            if (data.success) {
-                solicitud = data.solicitud;
-            }
-        } catch (error) {
-            showToast('Error al cargar detalle', 'error');
-            return;
-        } finally {
-            mostrarLoading(false);
-        }
-    }
-    
-    if (!solicitud) {
-        showToast('No se encontró la solicitud', 'error');
-        return;
-    }
-    
-    let items = solicitud.items || [];
-    if (typeof items === 'string') {
-        try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
-    }
-    
-    // Renderizar items con fotos en el detalle (usando proxy)
-    const itemsHtml = items.map((item, idx) => {
-        const fotoUrl = item.foto_url;
-        const uniqueId = `detalle_${idx}_${Date.now()}`;
-        const imgId = `img_detalle_${uniqueId}`;
-        const loaderId = `loader_detalle_${uniqueId}`;
-        
-        const fotoHtml = fotoUrl ? `
-            <div class="item-foto-detalle-container" style="position:relative; width:100px; height:100px; border-radius:8px; overflow:hidden; background:var(--gris-oscuro); flex-shrink:0;">
-                <div id="${loaderId}" class="item-foto-loader" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); color:var(--gris-texto); font-size:0.7rem;">
-                    <i class="fas fa-spinner fa-spin"></i>
-                </div>
-                <img id="${imgId}" class="item-foto-detalle" alt="Foto" 
-                     style="display:none; width:100%; height:100%; object-fit:cover; cursor:pointer;"
-                     onclick="verFotoAmpliada('${escapeHtml(fotoUrl)}')">
-            </div>
-        ` : `
-            <div class="item-foto-placeholder-detalle" style="width:100px; height:100px; border-radius:8px; background:var(--gris-oscuro); display:flex; align-items:center; justify-content:center; color:var(--gris-texto); flex-shrink:0;">
-                <i class="fas fa-camera" style="font-size:2rem;"></i>
-            </div>
-        `;
-        
-        return `
-            <div class="item-row-detalle" style="display:flex; align-items:center; gap:1rem; padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.05);">
-                ${fotoHtml}
-                <div class="item-desc-detalle">
-                    <strong>${escapeHtml(item.descripcion)}</strong>
-                    <span class="item-cant-detalle" style="display:inline-block; margin-left:0.5rem; font-size:0.8rem; color:var(--gris-texto);">${item.cantidad} uds</span>
-                    ${item.detalle ? `<br><small class="text-muted">${escapeHtml(item.detalle)}</small>` : ''}
-                </div>
-            </div>
-        `;
-    }).join('');
-    
-    const modalBody = document.getElementById('modalDetalleBody');
-    modalBody.innerHTML = `
-        <div class="orden-info">
-            <div class="orden-info-item">
-                <label>Solicitud #${solicitud.id}</label>
-                <span>${statusBadge(solicitud.estado)}</span>
-            </div>
-            <div class="orden-info-item">
-                <label>Orden de Trabajo</label>
-                <span><strong>${escapeHtml(solicitud.orden_codigo || 'N/A')}</strong></span>
-            </div>
-            <div class="orden-info-item">
-                <label>Vehículo</label>
-                <span>${escapeHtml(solicitud.vehiculo || 'N/A')}</span>
-            </div>
-            <div class="orden-info-item">
-                <label>Fecha Solicitud</label>
-                <span>${formatDateTime(solicitud.fecha_solicitud)}</span>
-            </div>
-        </div>
-        
-        <div class="items-list-detalle">
-            <h4>Items solicitados (${items.length}):</h4>
-            ${itemsHtml}
-        </div>
-        
-        ${solicitud.observacion_jefe_taller ? `
-            <div class="observacion-box">
-                <small><i class="fas fa-comment-dots"></i> Observación:</small>
-                <p>${escapeHtml(solicitud.observacion_jefe_taller)}</p>
-            </div>
-        ` : ''}
-        
-        ${solicitud.precio_cotizado ? `
-            <div class="precio-cotizado-box">
-                <strong>Precio cotizado:</strong>
-                <span class="precio-valor">Bs. ${solicitud.precio_cotizado.toFixed(2)}</span>
-                ${solicitud.proveedor_info ? `<br><strong>Proveedor:</strong> ${escapeHtml(solicitud.proveedor_info)}` : ''}
-                ${solicitud.respuesta_encargado ? `<br><strong>Notas:</strong> ${escapeHtml(solicitud.respuesta_encargado)}` : ''}
-            </div>
-        ` : ''}
-        
-        <div class="modal-actions">
-            <button class="btn-secondary" onclick="cerrarModal('modalDetalle')">Cerrar</button>
-            ${solicitud.estado === 'pendiente' ? `
-                <button class="btn-cotizar" onclick="cerrarModal('modalDetalle'); abrirModalCotizar(${solicitud.id})">
-                    Cotizar ahora
-                </button>
-            ` : ''}
-        </div>
-    `;
-    
-    abrirModal('modalDetalle');
-    
-    // 🔥 Cargar imágenes en el detalle después de renderizar
-    setTimeout(() => {
-        items.forEach((item, idx) => {
-            const fotoUrl = item.foto_url;
-            if (fotoUrl) {
-                const uniqueId = `detalle_${idx}_${Date.now()}`;
-                const imgId = `img_detalle_${uniqueId}`;
-                const loaderId = `loader_detalle_${uniqueId}`;
-                cargarImagenProxy(fotoUrl, imgId, loaderId);
-            }
-        });
-    }, 200);
 }
 
 // =====================================================
@@ -1098,7 +1098,7 @@ function setupEventListeners() {
 }
 
 async function inicializar() {
-    console.log('🚀 Inicializando solicitudes_cotizacion.js (Con proxy para imágenes)');
+    console.log('🚀 Inicializando solicitudes_cotizacion.js (Con array de fotos)');
     console.log('📡 window.API_BASE_URL:', window.API_BASE_URL);
     
     const user = await cargarUsuarioActual();
@@ -1125,7 +1125,7 @@ async function inicializar() {
         }
     }, 60000);
     
-    console.log('✅ solicitudes_cotizacion.js con proxy cargado');
+    console.log('✅ solicitudes_cotizacion.js cargado');
 }
 
 // =====================================================

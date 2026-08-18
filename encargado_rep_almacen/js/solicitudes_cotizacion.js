@@ -506,7 +506,7 @@ function cambiarPagina(page) {
     cargarSolicitudes(false);
 }
 // =====================================================
-// COTIZAR SOLICITUD (CORREGIDO - CON VERIFICACIÓN DE ELEMENTOS)
+// COTIZAR SOLICITUD - CON 3 FOTOS MINIATURA
 // =====================================================
 
 let currentSolicitudId = null;
@@ -547,43 +547,54 @@ async function abrirModalCotizar(idSolicitud) {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
     
-    // 🔥 RENDERIZAR ITEMS CON IDs FIJOS
+    // 🔥 RENDERIZAR ITEMS CON 3 FOTOS MINIATURA
     const itemsHtml = items.map((item, idx) => {
         const fotos = item.fotos || [];
         const fotosCount = fotos.length;
-        const fotoUrl = fotosCount > 0 ? fotos[0] : null;
         
-        // IDs FIJOS basados en el índice - SIN Date.now()
-        const imgId = `img_cotizar_${idSolicitud}_${idx}`;
-        const loaderId = `loader_cotizar_${idSolicitud}_${idx}`;
-        
-        const fotoHtml = fotoUrl ? `
-            <div class="precio-item-foto" style="position:relative; width:80px; height:80px; border-radius:8px; overflow:hidden; background:var(--gris-oscuro); flex-shrink:0; border:2px solid var(--border-color);">
-                <div id="${loaderId}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); color:var(--gris-texto); font-size:0.7rem;">
-                    <i class="fas fa-spinner fa-spin"></i>
+        // 🔥 GENERAR MINIATURAS PARA CADA FOTO (hasta 3)
+        let miniaturasHtml = '';
+        if (fotosCount > 0) {
+            // Mostrar hasta 3 fotos como miniaturas
+            const fotosMostrar = fotos.slice(0, 3);
+            miniaturasHtml = `
+                <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:4px;">
+                    ${fotosMostrar.map((f, fi) => {
+                        const imgId = `img_cotizar_${idSolicitud}_${idx}_${fi}`;
+                        const loaderId = `loader_cotizar_${idSolicitud}_${idx}_${fi}`;
+                        return `
+                            <div style="position:relative; width:50px; height:50px; border-radius:6px; overflow:hidden; background:var(--gris-oscuro); border:2px solid var(--border-color); cursor:pointer;"
+                                 onclick="verFotoAmpliada('${escapeHtml(f)}')">
+                                <div id="${loaderId}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); color:var(--gris-texto); font-size:0.6rem;">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                </div>
+                                <img id="${imgId}" alt="Foto ${fi+1}" 
+                                     style="display:none; width:100%; height:100%; object-fit:cover;"
+                                     data-url="${escapeHtml(f)}">
+                                <span style="position:absolute;top:1px;right:3px;background:rgba(0,0,0,0.7);color:white;font-size:0.5rem;padding:0 3px;border-radius:2px;">${fi+1}</span>
+                            </div>
+                        `;
+                    }).join('')}
+                    ${fotosCount > 3 ? `<span style="font-size:0.6rem; color:var(--gris-texto); align-self:center;">+${fotosCount-3}</span>` : ''}
                 </div>
-                <img id="${imgId}" class="item-foto-modal" alt="Foto" 
-                     style="display:none; width:100%; height:100%; object-fit:cover; cursor:pointer;"
-                     onclick="verFotoAmpliada('${escapeHtml(fotoUrl)}')"
-                     data-url="${escapeHtml(fotoUrl)}">
-                ${fotosCount > 1 ? `<span style="position:absolute;bottom:2px;right:4px;background:rgba(0,0,0,0.8);color:white;font-size:0.55rem;padding:0 5px;border-radius:3px;z-index:2;">+${fotosCount-1}</span>` : ''}
-            </div>
-        ` : `
-            <div class="item-foto-placeholder-modal" style="width:80px; height:80px; border-radius:8px; background:var(--gris-oscuro); display:flex; align-items:center; justify-content:center; color:var(--gris-texto); flex-shrink:0; border:2px dashed var(--border-color);">
-                <i class="fas fa-camera" style="font-size:1.5rem;"></i>
-            </div>
-        `;
+            `;
+        }
         
         return `
             <div class="precio-item-row" style="display:flex; align-items:center; gap:1rem; padding:0.75rem; background:var(--bg-card); border-radius:8px; margin-bottom:0.5rem; border:1px solid var(--border-color);">
-                <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
-                    ${fotoHtml}
+                <div style="display:flex; flex-direction:column; align-items:center; gap:4px; min-width:70px;">
+                    ${miniaturasHtml}
+                    ${fotosCount === 0 ? `
+                        <div style="width:50px; height:50px; border-radius:6px; background:var(--gris-oscuro); display:flex; align-items:center; justify-content:center; color:var(--gris-texto); border:2px dashed var(--border-color);">
+                            <i class="fas fa-camera" style="font-size:1.2rem;"></i>
+                        </div>
+                    ` : ''}
+                    <span style="font-size:0.6rem; color:var(--gris-texto);">${fotosCount} foto(s)</span>
                 </div>
                 <div class="precio-item-desc" style="flex:1;">
                     <strong>${escapeHtml(item.descripcion)}</strong>
                     <small style="display:block; color:var(--gris-texto); font-size:0.75rem;">(x${item.cantidad} uds)</small>
                     ${item.detalle ? `<small class="text-muted" style="display:block; font-size:0.7rem;">${escapeHtml(item.detalle)}</small>` : ''}
-                    ${fotosCount > 0 ? `<small style="display:block; color:var(--rojo-primario); font-size:0.65rem;"><i class="fas fa-images"></i> ${fotosCount} foto(s)</small>` : ''}
                 </div>
                 <div class="precio-item-input" style="min-width:180px;">
                     <label style="font-size:0.7rem; color:var(--gris-texto);">Precio unitario (Bs.):</label>
@@ -618,7 +629,7 @@ async function abrirModalCotizar(idSolicitud) {
         
         <div style="margin-bottom: 1.5rem;">
             <h4 style="margin-bottom:0.75rem;"><i class="fas fa-cubes"></i> Items a cotizar (${items.length}):</h4>
-            <div style="max-height:400px; overflow-y:auto; padding-right:4px;">
+            <div style="max-height:450px; overflow-y:auto; padding-right:4px;">
                 ${itemsHtml}
             </div>
         </div>
@@ -646,7 +657,6 @@ async function abrirModalCotizar(idSolicitud) {
     `;
     
     // Configurar eventos de precio y cargar imágenes
-    // Usamos setTimeout con 300ms para asegurar que el DOM esté listo
     setTimeout(() => {
         items.forEach((item, idx) => {
             // Precio input
@@ -667,24 +677,23 @@ async function abrirModalCotizar(idSolicitud) {
         const firstInput = document.getElementById(`precio_item_${idSolicitud}_0`);
         if (firstInput) firstInput.focus();
         
-        // 🔥 CARGAR IMÁGENES - Con verificación de existencia
+        // 🔥 CARGAR TODAS LAS IMÁGENES (hasta 3 por item)
         items.forEach((item, idx) => {
             const fotos = item.fotos || [];
-            if (fotos.length > 0) {
-                const imgId = `img_cotizar_${idSolicitud}_${idx}`;
-                const loaderId = `loader_cotizar_${idSolicitud}_${idx}`;
+            // Cargar hasta 3 fotos por item
+            const fotosCargar = fotos.slice(0, 3);
+            fotosCargar.forEach((f, fi) => {
+                const imgId = `img_cotizar_${idSolicitud}_${idx}_${fi}`;
+                const loaderId = `loader_cotizar_${idSolicitud}_${idx}_${fi}`;
                 
-                // Buscar los elementos
                 const img = document.getElementById(imgId);
                 const loader = document.getElementById(loaderId);
                 
                 if (img && loader) {
-                    console.log(`📸 Cargando imagen para item ${idx}: ${fotos[0].substring(0, 50)}...`);
-                    cargarImagenProxy(fotos[0], img, loader);
-                } else {
-                    console.warn(`⚠️ No se encontraron elementos para item ${idx}: img=${!!img}, loader=${!!loader}`);
+                    console.log(`📸 Cargando foto ${fi+1} para item ${idx}`);
+                    cargarImagenProxy(f, img, loader);
                 }
-            }
+            });
         });
     }, 300);
     

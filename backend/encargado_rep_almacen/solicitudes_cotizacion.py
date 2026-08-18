@@ -1,10 +1,10 @@
 # =====================================================
 # SOLICITUDES_COTIZACION.PY - ENCARGADO DE REPUESTOS
-# CON ENDPOINT PROXY PARA IMÁGENES
+# VERSIÓN CORREGIDA - CON FOTOS EN ARRAY
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
-from flask import Blueprint, request, jsonify, Response
+from flask import Blueprint, request, jsonify
 from config import config
 from decorators import encargado_repuestos_required
 import datetime
@@ -13,7 +13,6 @@ import json
 import re
 import requests
 import base64
-from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +25,9 @@ solicitudes_cotizacion_bp = Blueprint('solicitudes_cotizacion', __name__, url_pr
 SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
 
+
 # =====================================================
-# 🔥 FUNCIÓN AUXILIAR PARA EXTRAER FILE_ID DE DRIVE
+# 🔥 FUNCIÓN PARA EXTRAER FILE_ID DE DRIVE
 # =====================================================
 
 def extraer_file_id_drive(url):
@@ -38,13 +38,13 @@ def extraer_file_id_drive(url):
     url = url.strip()
     
     patterns = [
-        r'[?&]id=([a-zA-Z0-9_-]+)',           # ?id=XXX o &id=XXX
-        r'/file/d/([a-zA-Z0-9_-]+)',          # /file/d/XXX
-        r'open\?id=([a-zA-Z0-9_-]+)',         # open?id=XXX
-        r'/d/([a-zA-Z0-9_-]+)',               # /d/XXX
-        r'thumbnail\?id=([a-zA-Z0-9_-]+)',    # thumbnail?id=XXX
-        r'uc\?export=view&id=([a-zA-Z0-9_-]+)', # uc?export=view&id=XXX
-        r'uc\?export=download&id=([a-zA-Z0-9_-]+)', # uc?export=download&id=XXX
+        r'[?&]id=([a-zA-Z0-9_-]+)',
+        r'/file/d/([a-zA-Z0-9_-]+)',
+        r'open\?id=([a-zA-Z0-9_-]+)',
+        r'/d/([a-zA-Z0-9_-]+)',
+        r'thumbnail\?id=([a-zA-Z0-9_-]+)',
+        r'uc\?export=view&id=([a-zA-Z0-9_-]+)',
+        r'uc\?export=download&id=([a-zA-Z0-9_-]+)',
     ]
     
     for pattern in patterns:
@@ -52,7 +52,6 @@ def extraer_file_id_drive(url):
         if match:
             return match.group(1)
     
-    # Si el string completo parece un ID de Drive
     if re.match(r'^[a-zA-Z0-9_-]{10,}$', url):
         return url
     
@@ -67,8 +66,8 @@ def extraer_file_id_drive(url):
 @encargado_repuestos_required
 def proxy_imagen(current_user):
     """
-    Descarga una imagen de Google Drive y la devuelve en Base64.
-    Esto evita problemas de CORS y autenticación.
+    Proxy para imágenes de Google Drive.
+    Descarga la imagen y la devuelve en Base64.
     """
     url = request.args.get('url')
     if not url:
@@ -83,9 +82,9 @@ def proxy_imagen(current_user):
     
     # Estrategias de descarga (en orden de prioridad)
     urls_descarga = [
-        f"https://drive.google.com/thumbnail?id={file_id}&sz=w800",  # Miniatura (más rápida)
-        f"https://drive.google.com/uc?export=view&id={file_id}",     # Vista
-        f"https://drive.google.com/uc?export=download&id={file_id}", # Descarga directa
+        f"https://drive.google.com/thumbnail?id={file_id}&sz=w800",
+        f"https://drive.google.com/uc?export=view&id={file_id}",
+        f"https://drive.google.com/uc?export=download&id={file_id}",
     ]
     
     image_data = None
@@ -111,13 +110,11 @@ def proxy_imagen(current_user):
                 content_type = response.headers.get('Content-Type', '')
                 content_length = len(response.content)
                 
-                # Verificar que sea una imagen (por content-type o tamaño)
                 if content_type.startswith('image/') or content_length > 500:
                     image_data = response.content
                     if content_type.startswith('image/'):
                         mime_type = content_type
                     else:
-                        # Intentar detectar por extensión o usar jpeg por defecto
                         mime_type = 'image/jpeg'
                     logger.debug(f"✅ Imagen descargada: {content_length} bytes, {mime_type}")
                     break
@@ -159,23 +156,52 @@ def proxy_imagen(current_user):
 
 
 # =====================================================
-# FUNCIONES AUXILIARES EXISTENTES
+# 🔥 FUNCIÓN PARA PARSEAR ITEMS CON FOTOS EN ARRAY
 # =====================================================
 
-def parse_items(items_data):
-    """Parsear items desde JSON"""
+def parse_items_con_fotos(items_data):
+    """
+    🔥 CLAVE: Parsear items y MANTENER el array de fotos
+    La estructura de items es:
+    [
+        {
+            "descripcion": "Item de ejemplo",
+            "cantidad": 2,
+            "detalle": "Detalles y esp",
+            "fotos": ["url1", "url2", "url3"],
+            "foto_public_ids": ["id1", "id2", "id3"]
+        }
+    ]
+    """
     if not items_data:
         return []
+    
     try:
         if isinstance(items_data, str):
-            return json.loads(items_data)
-        return items_data
-    except:
+            items = json.loads(items_data)
+        else:
+            items = items_data
+        
+        # Asegurar que cada item tenga todos los campos
+        parsed_items = []
+        for item in items:
+            parsed_item = {
+                'descripcion': item.get('descripcion', ''),
+                'cantidad': item.get('cantidad', 1),
+                'detalle': item.get('detalle', ''),
+                'fotos': item.get('fotos', []),        # 🔥 ARRAY DE FOTOS
+                'foto_public_ids': item.get('foto_public_ids', [])
+            }
+            parsed_items.append(parsed_item)
+        
+        return parsed_items
+    except Exception as e:
+        logger.warning(f"Error parseando items: {e}")
         return []
 
 
 # =====================================================
-# ENDPOINTS EXISTENTES (sin cambios)
+# ENDPOINT: OBTENER SOLICITUDES (CORREGIDO CON FOTOS)
 # =====================================================
 
 @solicitudes_cotizacion_bp.route('/solicitudes-cotizacion', methods=['GET'])
@@ -229,19 +255,30 @@ def obtener_solicitudes_cotizacion(current_user):
             for s in (servicios_result.data or []):
                 servicios_map[s['id']] = s.get('descripcion')
         
-        # Construir respuesta
+        # 🔥 CONSTRUIR RESPUESTA CON FOTOS EN ARRAY
         solicitudes = []
         for s in result.data:
             orden_info = ordenes_map.get(s.get('id_orden_trabajo'), {})
             
-            # Parsear items
-            items = parse_items(s.get('items'))
+            # 🔥 USAR LA FUNCIÓN QUE MANTIENE LAS FOTOS EN ARRAY
+            items = parse_items_con_fotos(s.get('items'))
+            
+            # Si no hay items, intentar con descripcion_pieza
             if not items and s.get('descripcion_pieza'):
                 items = [{
                     'descripcion': s.get('descripcion_pieza'),
                     'cantidad': s.get('cantidad', 1),
-                    'detalle': ''
+                    'detalle': '',
+                    'fotos': [],
+                    'foto_public_ids': []
                 }]
+            
+            # 🔥 CONTAR FOTOS EN EL ARRAY
+            total_fotos = 0
+            for item in items:
+                fotos = item.get('fotos', [])
+                if isinstance(fotos, list):
+                    total_fotos += len(fotos)
             
             solicitudes.append({
                 'id': s.get('id'),
@@ -250,7 +287,8 @@ def obtener_solicitudes_cotizacion(current_user):
                 'orden_codigo': orden_info.get('codigo_unico', 'N/A'),
                 'vehiculo': orden_info.get('vehiculo', 'N/A'),
                 'servicio_descripcion': servicios_map.get(s.get('id_servicio'), 'N/A'),
-                'items': items,
+                'items': items,  # 🔥 AHORA CON FOTOS EN ARRAY
+                'total_fotos': total_fotos,
                 'descripcion_pieza': items[0].get('descripcion') if items else s.get('descripcion_pieza'),
                 'cantidad': items[0].get('cantidad') if items else s.get('cantidad', 1),
                 'estado': s.get('estado', 'pendiente'),
@@ -262,6 +300,8 @@ def obtener_solicitudes_cotizacion(current_user):
                 'fecha_respuesta': s.get('fecha_respuesta')
             })
         
+        logger.info(f"📊 {len(solicitudes)} solicitudes, {sum(s.get('total_fotos', 0) for s in solicitudes)} fotos")
+        
         return jsonify({'success': True, 'solicitudes': solicitudes}), 200
         
     except Exception as e:
@@ -270,6 +310,91 @@ def obtener_solicitudes_cotizacion(current_user):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+
+# =====================================================
+# ENDPOINT: OBTENER DETALLE DE SOLICITUD (CORREGIDO CON FOTOS)
+# =====================================================
+
+@solicitudes_cotizacion_bp.route('/solicitudes-cotizacion/<int:id_solicitud>', methods=['GET'])
+@encargado_repuestos_required
+def obtener_detalle_solicitud(current_user, id_solicitud):
+    """Obtener detalle de una solicitud específica"""
+    try:
+        result = supabase.table('solicitud_cotizacion_repuesto') \
+            .select('*') \
+            .eq('id', id_solicitud) \
+            .eq('id_encargado_repuestos', current_user['id']) \
+            .execute()
+        
+        if not result.data:
+            return jsonify({'error': 'Solicitud no encontrada'}), 404
+        
+        solicitud = result.data[0]
+        
+        # Obtener información de la orden
+        orden_info = supabase.table('ordentrabajo') \
+            .select('codigo_unico, id_vehiculo, vehiculo!inner(marca, modelo, placa)') \
+            .eq('id', solicitud.get('id_orden_trabajo')) \
+            .execute()
+        
+        orden = orden_info.data[0] if orden_info.data else {}
+        vehiculo = orden.get('vehiculo', {}) if orden else {}
+        
+        # Obtener información del servicio
+        servicio_info = supabase.table('servicio_tecnico') \
+            .select('descripcion') \
+            .eq('id', solicitud.get('id_servicio')) \
+            .execute()
+        
+        servicio_desc = servicio_info.data[0].get('descripcion') if servicio_info.data else 'N/A'
+        
+        # 🔥 PARSEAR ITEMS CON FOTOS EN ARRAY
+        items = parse_items_con_fotos(solicitud.get('items'))
+        
+        if not items and solicitud.get('descripcion_pieza'):
+            items = [{
+                'descripcion': solicitud.get('descripcion_pieza'),
+                'cantidad': solicitud.get('cantidad', 1),
+                'detalle': '',
+                'fotos': [],
+                'foto_public_ids': []
+            }]
+        
+        # 🔥 CONTAR FOTOS
+        total_fotos = 0
+        for item in items:
+            fotos = item.get('fotos', [])
+            if isinstance(fotos, list):
+                total_fotos += len(fotos)
+        
+        return jsonify({
+            'success': True,
+            'solicitud': {
+                'id': solicitud.get('id'),
+                'id_orden_trabajo': solicitud.get('id_orden_trabajo'),
+                'orden_codigo': orden.get('codigo_unico', 'N/A'),
+                'vehiculo': f"{vehiculo.get('marca', '')} {vehiculo.get('modelo', '')} ({vehiculo.get('placa', '')})".strip(),
+                'servicio_descripcion': servicio_desc,
+                'items': items,
+                'total_fotos': total_fotos,
+                'estado': solicitud.get('estado'),
+                'precio_cotizado': float(solicitud.get('precio_cotizado')) if solicitud.get('precio_cotizado') else None,
+                'proveedor_info': solicitud.get('proveedor_info'),
+                'observacion_jefe_taller': solicitud.get('observacion_jefe_taller'),
+                'respuesta_encargado': solicitud.get('respuesta_encargado'),
+                'fecha_solicitud': solicitud.get('fecha_solicitud'),
+                'fecha_respuesta': solicitud.get('fecha_respuesta')
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo detalle: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT: COTIZAR SOLICITUD
+# =====================================================
 
 @solicitudes_cotizacion_bp.route('/solicitudes-cotizacion/<int:id_solicitud>/cotizar', methods=['PUT'])
 @encargado_repuestos_required
@@ -350,71 +475,9 @@ def cotizar_solicitud(current_user, id_solicitud):
         return jsonify({'error': str(e)}), 500
 
 
-@solicitudes_cotizacion_bp.route('/solicitudes-cotizacion/<int:id_solicitud>', methods=['GET'])
-@encargado_repuestos_required
-def obtener_detalle_solicitud(current_user, id_solicitud):
-    """Obtener detalle de una solicitud específica"""
-    try:
-        result = supabase.table('solicitud_cotizacion_repuesto') \
-            .select('*') \
-            .eq('id', id_solicitud) \
-            .eq('id_encargado_repuestos', current_user['id']) \
-            .execute()
-        
-        if not result.data:
-            return jsonify({'error': 'Solicitud no encontrada'}), 404
-        
-        solicitud = result.data[0]
-        
-        # Obtener información de la orden
-        orden_info = supabase.table('ordentrabajo') \
-            .select('codigo_unico, id_vehiculo, vehiculo!inner(marca, modelo, placa)') \
-            .eq('id', solicitud.get('id_orden_trabajo')) \
-            .execute()
-        
-        orden = orden_info.data[0] if orden_info.data else {}
-        vehiculo = orden.get('vehiculo', {}) if orden else {}
-        
-        # Obtener información del servicio
-        servicio_info = supabase.table('servicio_tecnico') \
-            .select('descripcion') \
-            .eq('id', solicitud.get('id_servicio')) \
-            .execute()
-        
-        servicio_desc = servicio_info.data[0].get('descripcion') if servicio_info.data else 'N/A'
-        
-        # Parsear items
-        items = parse_items(solicitud.get('items'))
-        if not items and solicitud.get('descripcion_pieza'):
-            items = [{
-                'descripcion': solicitud.get('descripcion_pieza'),
-                'cantidad': solicitud.get('cantidad', 1),
-                'detalle': ''
-            }]
-        
-        return jsonify({
-            'success': True,
-            'solicitud': {
-                'id': solicitud.get('id'),
-                'id_orden_trabajo': solicitud.get('id_orden_trabajo'),
-                'orden_codigo': orden.get('codigo_unico', 'N/A'),
-                'vehiculo': f"{vehiculo.get('marca', '')} {vehiculo.get('modelo', '')} ({vehiculo.get('placa', '')})".strip(),
-                'servicio_descripcion': servicio_desc,
-                'items': items,
-                'estado': solicitud.get('estado'),
-                'precio_cotizado': float(solicitud.get('precio_cotizado')) if solicitud.get('precio_cotizado') else None,
-                'proveedor_info': solicitud.get('proveedor_info'),
-                'observacion_jefe_taller': solicitud.get('observacion_jefe_taller'),
-                'respuesta_encargado': solicitud.get('respuesta_encargado'),
-                'fecha_solicitud': solicitud.get('fecha_solicitud'),
-                'fecha_respuesta': solicitud.get('fecha_respuesta')
-            }
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error obteniendo detalle: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
+# =====================================================
+# ENDPOINT: ESTADÍSTICAS
+# =====================================================
 
 @solicitudes_cotizacion_bp.route('/solicitudes-cotizacion/stats', methods=['GET'])
 @encargado_repuestos_required

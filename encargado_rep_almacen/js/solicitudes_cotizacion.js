@@ -505,9 +505,8 @@ function cambiarPagina(page) {
     currentFilters.page = page;
     cargarSolicitudes(false);
 }
-
 // =====================================================
-// COTIZAR SOLICITUD (CORREGIDO)
+// COTIZAR SOLICITUD (CORREGIDO - CON VERIFICACIÓN DE ELEMENTOS)
 // =====================================================
 
 let currentSolicitudId = null;
@@ -554,9 +553,9 @@ async function abrirModalCotizar(idSolicitud) {
         const fotosCount = fotos.length;
         const fotoUrl = fotosCount > 0 ? fotos[0] : null;
         
-        // IDs FIJOS basados en el índice
-        const imgId = `img_cotizar_${idx}`;
-        const loaderId = `loader_cotizar_${idx}`;
+        // IDs FIJOS basados en el índice - SIN Date.now()
+        const imgId = `img_cotizar_${idSolicitud}_${idx}`;
+        const loaderId = `loader_cotizar_${idSolicitud}_${idx}`;
         
         const fotoHtml = fotoUrl ? `
             <div class="precio-item-foto" style="position:relative; width:80px; height:80px; border-radius:8px; overflow:hidden; background:var(--gris-oscuro); flex-shrink:0; border:2px solid var(--border-color);">
@@ -588,9 +587,9 @@ async function abrirModalCotizar(idSolicitud) {
                 </div>
                 <div class="precio-item-input" style="min-width:180px;">
                     <label style="font-size:0.7rem; color:var(--gris-texto);">Precio unitario (Bs.):</label>
-                    <input type="number" id="precio_item_${idx}" class="precio-input" step="0.01" min="0" placeholder="0.00" 
+                    <input type="number" id="precio_item_${idSolicitud}_${idx}" class="precio-input" step="0.01" min="0" placeholder="0.00" 
                            style="width:100%; padding:0.4rem; border-radius:6px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white;">
-                    <span class="total-hint" style="font-size:0.7rem; color:var(--gris-texto);">Total: Bs. <span id="total_item_${idx}" class="total-item" style="color:var(--verde-exito); font-weight:600;">0.00</span></span>
+                    <span class="total-hint" style="font-size:0.7rem; color:var(--gris-texto);">Total: Bs. <span id="total_item_${idSolicitud}_${idx}" class="total-item" style="color:var(--verde-exito); font-weight:600;">0.00</span></span>
                 </div>
             </div>
         `;
@@ -647,12 +646,14 @@ async function abrirModalCotizar(idSolicitud) {
     `;
     
     // Configurar eventos de precio y cargar imágenes
+    // Usamos setTimeout con 300ms para asegurar que el DOM esté listo
     setTimeout(() => {
         items.forEach((item, idx) => {
-            const precioInput = document.getElementById(`precio_item_${idx}`);
+            // Precio input
+            const precioInput = document.getElementById(`precio_item_${idSolicitud}_${idx}`);
             if (precioInput) {
                 precioInput.addEventListener('input', function() {
-                    const totalSpan = document.getElementById(`total_item_${idx}`);
+                    const totalSpan = document.getElementById(`total_item_${idSolicitud}_${idx}`);
                     if (totalSpan) {
                         const precio = parseFloat(this.value) || 0;
                         const total = precio * item.cantidad;
@@ -663,21 +664,29 @@ async function abrirModalCotizar(idSolicitud) {
             }
         });
         
-        const firstInput = document.getElementById('precio_item_0');
+        const firstInput = document.getElementById(`precio_item_${idSolicitud}_0`);
         if (firstInput) firstInput.focus();
         
-        // 🔥 CARGAR IMÁGENES CON IDs FIJOS
+        // 🔥 CARGAR IMÁGENES - Con verificación de existencia
         items.forEach((item, idx) => {
             const fotos = item.fotos || [];
             if (fotos.length > 0) {
-                const img = document.getElementById(`img_cotizar_${idx}`);
-                const loader = document.getElementById(`loader_cotizar_${idx}`);
+                const imgId = `img_cotizar_${idSolicitud}_${idx}`;
+                const loaderId = `loader_cotizar_${idSolicitud}_${idx}`;
+                
+                // Buscar los elementos
+                const img = document.getElementById(imgId);
+                const loader = document.getElementById(loaderId);
+                
                 if (img && loader) {
+                    console.log(`📸 Cargando imagen para item ${idx}: ${fotos[0].substring(0, 50)}...`);
                     cargarImagenProxy(fotos[0], img, loader);
+                } else {
+                    console.warn(`⚠️ No se encontraron elementos para item ${idx}: img=${!!img}, loader=${!!loader}`);
                 }
             }
         });
-    }, 200);
+    }, 300);
     
     abrirModal('modalCotizar');
 }

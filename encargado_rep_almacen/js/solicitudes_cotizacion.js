@@ -148,7 +148,7 @@ function debounce(func, wait) {
 }
 
 // =====================================================
-// 🔥 FUNCIÓN PARA CARGAR IMAGEN VÍA PROXY
+// 🔥 FUNCIÓN PARA CARGAR IMAGEN VÍA PROXY (CORREGIDA)
 // =====================================================
 
 async function cargarImagenProxy(url, imgElement, loaderElement) {
@@ -164,6 +164,7 @@ async function cargarImagenProxy(url, imgElement, loaderElement) {
             imgElement.src = imageCache[url];
             imgElement.style.display = 'block';
             imgElement.style.opacity = '1';
+            imgElement.setAttribute('data-loaded', 'true');
         }
         if (loaderElement) loaderElement.style.display = 'none';
         return imageCache[url];
@@ -235,40 +236,40 @@ function renderItemsConFotos(items, maxItems = 3, prefix = '') {
     const itemsToShow = items.slice(0, maxItems);
     
     return itemsToShow.map((item, index) => {
-        // 🔥 OBTENER EL ARRAY DE FOTOS
         const fotos = item.fotos || [];
         const fotosCount = fotos.length;
-        
-        // Usar la PRIMERA foto como miniatura
         const fotoUrl = fotosCount > 0 ? fotos[0] : null;
-        const uniqueId = `${prefix}_${index}_${Date.now()}`;
+        
+        // IDs FIJOS basados en el prefix y el índice
+        const uniqueId = `${prefix}_${index}`;
         const imgId = `img_${uniqueId}`;
         const loaderId = `loader_${uniqueId}`;
-        const galeriaId = `galeria_${uniqueId}`;
         
-        // Si hay múltiples fotos, mostrar miniaturas
         let miniaturasHtml = '';
         if (fotosCount > 1) {
             const mostrarMiniaturas = fotos.slice(0, 3);
             miniaturasHtml = `
                 <div class="miniaturas-container" style="display:flex; gap:2px; margin-top:2px; flex-wrap:wrap;">
-                    ${mostrarMiniaturas.map((f, fi) => `
-                        <div class="miniatura-item" style="width:18px; height:18px; border-radius:2px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); cursor:pointer;"
-                             onclick="event.stopPropagation(); verFotoAmpliada('${escapeHtml(f)}')">
-                            <div id="mini_loader_${uniqueId}_${fi}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); font-size:6px;">
-                                <i class="fas fa-spinner fa-spin"></i>
+                    ${mostrarMiniaturas.map((f, fi) => {
+                        const miniId = `mini_img_${uniqueId}_${fi}`;
+                        const miniLoaderId = `mini_loader_${uniqueId}_${fi}`;
+                        return `
+                            <div class="miniatura-item" style="width:18px; height:18px; border-radius:2px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); cursor:pointer;"
+                                 onclick="event.stopPropagation(); verFotoAmpliada('${escapeHtml(f)}')">
+                                <div id="${miniLoaderId}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); font-size:6px;">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                </div>
+                                <img id="${miniId}" src="" alt="Miniatura" 
+                                     style="display:none; width:100%; height:100%; object-fit:cover;"
+                                     data-url="${escapeHtml(f)}">
                             </div>
-                            <img id="mini_img_${uniqueId}_${fi}" src="" alt="Miniatura" 
-                                 style="display:none; width:100%; height:100%; object-fit:cover;"
-                                 data-url="${escapeHtml(f)}">
-                        </div>
-                    `).join('')}
+                        `;
+                    }).join('')}
                     ${fotosCount > 3 ? `<span style="font-size:7px; color:var(--gris-texto);">+${fotosCount-3}</span>` : ''}
                 </div>
             `;
         }
         
-        // Contenedor principal de la foto
         const fotoHtml = fotoUrl ? `
             <div class="item-foto-container" style="position:relative; width:60px; height:60px; border-radius:8px; overflow:hidden; background:var(--gris-oscuro); flex-shrink:0;">
                 <div id="${loaderId}" class="item-foto-loader" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); color:var(--gris-texto); font-size:0.7rem;">
@@ -382,7 +383,6 @@ async function cargarSolicitudes(resetPage = true) {
             renderizarSolicitudes(solicitudesCache.data);
             renderizarPaginacion();
             
-            // Cargar imágenes después de renderizar
             setTimeout(() => {
                 cargarImagenesEnTarjetas();
             }, 150);
@@ -476,6 +476,286 @@ function renderizarSolicitudes(solicitudes) {
     }).join('');
 }
 
+function renderizarPaginacion() {
+    const container = document.getElementById('solicitudesContainer');
+    if (!container) return;
+    if (solicitudesCache.totalPages <= 1) return;
+    
+    const paginationHtml = `
+        <div class="pagination-controls">
+            <button class="pagination-btn" onclick="cambiarPagina(${solicitudesCache.currentPage - 1})" 
+                ${solicitudesCache.currentPage === 1 ? 'disabled' : ''}>
+                <i class="fas fa-chevron-left"></i> Anterior
+            </button>
+            <span class="pagination-current">
+                Página ${solicitudesCache.currentPage} de ${solicitudesCache.totalPages}
+            </span>
+            <button class="pagination-btn" onclick="cambiarPagina(${solicitudesCache.currentPage + 1})"
+                ${solicitudesCache.currentPage === solicitudesCache.totalPages ? 'disabled' : ''}>
+                Siguiente <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', paginationHtml);
+}
+
+function cambiarPagina(page) {
+    if (page < 1 || page > solicitudesCache.totalPages) return;
+    if (page === solicitudesCache.currentPage) return;
+    currentFilters.page = page;
+    cargarSolicitudes(false);
+}
+
+// =====================================================
+// COTIZAR SOLICITUD (CORREGIDO)
+// =====================================================
+
+let currentSolicitudId = null;
+
+async function abrirModalCotizar(idSolicitud) {
+    let solicitud = solicitudesCache.data?.find(s => s.id === idSolicitud);
+    
+    if (!solicitud) {
+        mostrarLoading(true);
+        try {
+            const response = await fetch(`${API_URL}/solicitudes-cotizacion/${idSolicitud}`, {
+                headers: getAuthHeaders()
+            });
+            const data = await response.json();
+            if (data.success) {
+                solicitud = data.solicitud;
+            } else {
+                showToast('No se encontró la solicitud', 'error');
+                return;
+            }
+        } catch (error) {
+            showToast('Error al cargar la solicitud', 'error');
+            return;
+        } finally {
+            mostrarLoading(false);
+        }
+    }
+    
+    if (!solicitud) {
+        showToast('No se encontró la solicitud', 'error');
+        return;
+    }
+    
+    currentSolicitudId = idSolicitud;
+    
+    let items = solicitud.items || [];
+    if (typeof items === 'string') {
+        try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
+    }
+    
+    // 🔥 RENDERIZAR ITEMS CON IDs FIJOS
+    const itemsHtml = items.map((item, idx) => {
+        const fotos = item.fotos || [];
+        const fotosCount = fotos.length;
+        const fotoUrl = fotosCount > 0 ? fotos[0] : null;
+        
+        // IDs FIJOS basados en el índice
+        const imgId = `img_cotizar_${idx}`;
+        const loaderId = `loader_cotizar_${idx}`;
+        
+        const fotoHtml = fotoUrl ? `
+            <div class="precio-item-foto" style="position:relative; width:80px; height:80px; border-radius:8px; overflow:hidden; background:var(--gris-oscuro); flex-shrink:0; border:2px solid var(--border-color);">
+                <div id="${loaderId}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); color:var(--gris-texto); font-size:0.7rem;">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </div>
+                <img id="${imgId}" class="item-foto-modal" alt="Foto" 
+                     style="display:none; width:100%; height:100%; object-fit:cover; cursor:pointer;"
+                     onclick="verFotoAmpliada('${escapeHtml(fotoUrl)}')"
+                     data-url="${escapeHtml(fotoUrl)}">
+                ${fotosCount > 1 ? `<span style="position:absolute;bottom:2px;right:4px;background:rgba(0,0,0,0.8);color:white;font-size:0.55rem;padding:0 5px;border-radius:3px;z-index:2;">+${fotosCount-1}</span>` : ''}
+            </div>
+        ` : `
+            <div class="item-foto-placeholder-modal" style="width:80px; height:80px; border-radius:8px; background:var(--gris-oscuro); display:flex; align-items:center; justify-content:center; color:var(--gris-texto); flex-shrink:0; border:2px dashed var(--border-color);">
+                <i class="fas fa-camera" style="font-size:1.5rem;"></i>
+            </div>
+        `;
+        
+        return `
+            <div class="precio-item-row" style="display:flex; align-items:center; gap:1rem; padding:0.75rem; background:var(--bg-card); border-radius:8px; margin-bottom:0.5rem; border:1px solid var(--border-color);">
+                <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                    ${fotoHtml}
+                </div>
+                <div class="precio-item-desc" style="flex:1;">
+                    <strong>${escapeHtml(item.descripcion)}</strong>
+                    <small style="display:block; color:var(--gris-texto); font-size:0.75rem;">(x${item.cantidad} uds)</small>
+                    ${item.detalle ? `<small class="text-muted" style="display:block; font-size:0.7rem;">${escapeHtml(item.detalle)}</small>` : ''}
+                    ${fotosCount > 0 ? `<small style="display:block; color:var(--rojo-primario); font-size:0.65rem;"><i class="fas fa-images"></i> ${fotosCount} foto(s)</small>` : ''}
+                </div>
+                <div class="precio-item-input" style="min-width:180px;">
+                    <label style="font-size:0.7rem; color:var(--gris-texto);">Precio unitario (Bs.):</label>
+                    <input type="number" id="precio_item_${idx}" class="precio-input" step="0.01" min="0" placeholder="0.00" 
+                           style="width:100%; padding:0.4rem; border-radius:6px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white;">
+                    <span class="total-hint" style="font-size:0.7rem; color:var(--gris-texto);">Total: Bs. <span id="total_item_${idx}" class="total-item" style="color:var(--verde-exito); font-weight:600;">0.00</span></span>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    const modalBody = document.getElementById('modalCotizarBody');
+    modalBody.innerHTML = `
+        <div class="orden-info" style="margin-bottom: 1.5rem; display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:0.5rem 1rem; padding:0.75rem; background:var(--gris-oscuro); border-radius:8px;">
+            <div class="orden-info-item">
+                <label style="font-size:0.65rem; color:var(--gris-texto);"><i class="fas fa-hashtag"></i> Solicitud</label>
+                <span style="font-weight:600;">#${solicitud.id}</span>
+            </div>
+            <div class="orden-info-item">
+                <label style="font-size:0.65rem; color:var(--gris-texto);"><i class="fas fa-tag"></i> OT</label>
+                <span><strong>${escapeHtml(solicitud.orden_codigo || 'N/A')}</strong></span>
+            </div>
+            <div class="orden-info-item">
+                <label style="font-size:0.65rem; color:var(--gris-texto);"><i class="fas fa-car"></i> Vehículo</label>
+                <span>${escapeHtml(solicitud.vehiculo || 'N/A')}</span>
+            </div>
+            <div class="orden-info-item">
+                <label style="font-size:0.65rem; color:var(--gris-texto);"><i class="fas fa-calendar"></i> Fecha</label>
+                <span>${formatDate(solicitud.fecha_solicitud)}</span>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 1.5rem;">
+            <h4 style="margin-bottom:0.75rem;"><i class="fas fa-cubes"></i> Items a cotizar (${items.length}):</h4>
+            <div style="max-height:400px; overflow-y:auto; padding-right:4px;">
+                ${itemsHtml}
+            </div>
+        </div>
+        
+        <div class="form-group" style="margin-bottom:1rem;">
+            <label style="font-weight:600;"><i class="fas fa-truck"></i> Proveedor *</label>
+            <input type="text" id="proveedorInfo" class="form-control" placeholder="Ej: Autoparts Bolivia" autocomplete="off" 
+                   style="width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white; margin-top:4px;">
+        </div>
+        
+        <div class="form-group" style="margin-bottom:1.5rem;">
+            <label style="font-weight:600;"><i class="fas fa-sticky-note"></i> Observaciones</label>
+            <textarea id="respuestaEncargado" class="form-control" rows="2" placeholder="Notas sobre la cotización..." 
+                      style="width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white; margin-top:4px; resize:vertical;"></textarea>
+        </div>
+        
+        <div class="modal-actions" style="display:flex; gap:0.75rem; justify-content:flex-end; padding-top:1rem; border-top:1px solid var(--border-color);">
+            <button class="btn-secondary" onclick="cerrarModal('modalCotizar')" style="padding:0.5rem 1.5rem; border-radius:8px; border:none; cursor:pointer;">
+                Cancelar
+            </button>
+            <button class="btn-cotizar" onclick="enviarCotizacion()" style="padding:0.5rem 1.5rem; border-radius:8px; border:none; cursor:pointer; background:var(--rojo-primario); color:white; font-weight:600;">
+                <i class="fas fa-paper-plane"></i> Enviar Cotización
+            </button>
+        </div>
+    `;
+    
+    // Configurar eventos de precio y cargar imágenes
+    setTimeout(() => {
+        items.forEach((item, idx) => {
+            const precioInput = document.getElementById(`precio_item_${idx}`);
+            if (precioInput) {
+                precioInput.addEventListener('input', function() {
+                    const totalSpan = document.getElementById(`total_item_${idx}`);
+                    if (totalSpan) {
+                        const precio = parseFloat(this.value) || 0;
+                        const total = precio * item.cantidad;
+                        totalSpan.textContent = total.toFixed(2);
+                        totalSpan.style.color = precio > 0 ? 'var(--verde-exito)' : 'var(--gris-texto)';
+                    }
+                });
+            }
+        });
+        
+        const firstInput = document.getElementById('precio_item_0');
+        if (firstInput) firstInput.focus();
+        
+        // 🔥 CARGAR IMÁGENES CON IDs FIJOS
+        items.forEach((item, idx) => {
+            const fotos = item.fotos || [];
+            if (fotos.length > 0) {
+                const img = document.getElementById(`img_cotizar_${idx}`);
+                const loader = document.getElementById(`loader_cotizar_${idx}`);
+                if (img && loader) {
+                    cargarImagenProxy(fotos[0], img, loader);
+                }
+            }
+        });
+    }, 200);
+    
+    abrirModal('modalCotizar');
+}
+
+async function enviarCotizacion() {
+    const solicitud = solicitudesCache.data?.find(s => s.id === currentSolicitudId);
+    if (!solicitud) {
+        showToast('Error: No se encontró la solicitud', 'error');
+        return;
+    }
+    
+    let items = solicitud.items || [];
+    if (typeof items === 'string') {
+        try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
+    }
+    
+    let precioTotal = 0;
+    let itemsConPrecio = 0;
+    
+    for (let i = 0; i < items.length; i++) {
+        const precioInput = document.getElementById(`precio_item_${i}`);
+        if (precioInput && precioInput.value) {
+            const precioUnitario = parseFloat(precioInput.value);
+            if (!isNaN(precioUnitario) && precioUnitario > 0) {
+                precioTotal += precioUnitario * items[i].cantidad;
+                itemsConPrecio++;
+            }
+        }
+    }
+    
+    if (precioTotal === 0 || itemsConPrecio === 0) {
+        showToast('Ingrese al menos un precio válido', 'warning');
+        return;
+    }
+    
+    const proveedorInfo = document.getElementById('proveedorInfo')?.value.trim() || '';
+    if (!proveedorInfo) {
+        showToast('Indique el nombre del proveedor', 'warning');
+        return;
+    }
+    
+    const respuesta = document.getElementById('respuestaEncargado')?.value.trim() || '';
+    
+    if (!confirm(`Confirmar cotización:\nProveedor: ${proveedorInfo}\nTotal: Bs. ${precioTotal.toFixed(2)}`)) {
+        return;
+    }
+    
+    mostrarLoading(true);
+    
+    try {
+        const response = await fetch(`${API_URL}/solicitudes-cotizacion/${currentSolicitudId}/cotizar`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                precio_cotizado: precioTotal,
+                proveedor_info: proveedorInfo,
+                respuesta_encargado: respuesta
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast(`Cotización enviada - Total: Bs. ${precioTotal.toFixed(2)}`, 'success');
+            cerrarModal('modalCotizar');
+            solicitudesCache.timestamp = 0;
+            await cargarSolicitudes(true);
+        } else {
+            showToast(data.error || 'Error al enviar cotización', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
 // =====================================================
 // VER DETALLE CON TODAS LAS FOTOS
 // =====================================================
@@ -511,12 +791,10 @@ async function verDetalle(idSolicitud) {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
     
-    // 🔥 RENDERIZAR TODAS LAS FOTOS DE CADA ITEM
     const itemsHtml = items.map((item, idx) => {
         const fotos = item.fotos || [];
         const fotosCount = fotos.length;
         
-        // Generar todas las miniaturas del item
         const fotosHtml = fotosCount > 0 ? `
             <div class="fotos-grid-detalle" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
                 ${fotos.map((f, fi) => {
@@ -605,7 +883,6 @@ async function verDetalle(idSolicitud) {
     
     abrirModal('modalDetalle');
     
-    // Cargar las fotos del detalle
     setTimeout(() => {
         const fotos = modalBody.querySelectorAll('.foto-item-detalle img');
         fotos.forEach(img => {
@@ -671,7 +948,6 @@ async function verFotoAmpliada(url) {
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
     
-    // Si está en caché
     if (imageCache[url]) {
         img.src = imageCache[url];
         img.style.display = 'block';
@@ -744,334 +1020,6 @@ function descargarFotoAmpliada() {
     link.click();
     document.body.removeChild(link);
     showToast('✅ Descargando foto...', 'success');
-}
-
-function renderizarPaginacion() {
-    const container = document.getElementById('solicitudesContainer');
-    if (!container) return;
-    if (solicitudesCache.totalPages <= 1) return;
-    
-    const paginationHtml = `
-        <div class="pagination-controls">
-            <button class="pagination-btn" onclick="cambiarPagina(${solicitudesCache.currentPage - 1})" 
-                ${solicitudesCache.currentPage === 1 ? 'disabled' : ''}>
-                <i class="fas fa-chevron-left"></i> Anterior
-            </button>
-            <span class="pagination-current">
-                Página ${solicitudesCache.currentPage} de ${solicitudesCache.totalPages}
-            </span>
-            <button class="pagination-btn" onclick="cambiarPagina(${solicitudesCache.currentPage + 1})"
-                ${solicitudesCache.currentPage === solicitudesCache.totalPages ? 'disabled' : ''}>
-                Siguiente <i class="fas fa-chevron-right"></i>
-            </button>
-        </div>
-    `;
-    container.insertAdjacentHTML('beforeend', paginationHtml);
-}
-
-function cambiarPagina(page) {
-    if (page < 1 || page > solicitudesCache.totalPages) return;
-    if (page === solicitudesCache.currentPage) return;
-    currentFilters.page = page;
-    cargarSolicitudes(false);
-}
-
-// =====================================================
-// COTIZAR SOLICITUD (CORREGIDO CON ARRAY DE FOTOS)
-// =====================================================
-
-let currentSolicitudId = null;
-
-async function abrirModalCotizar(idSolicitud) {
-    let solicitud = solicitudesCache.data?.find(s => s.id === idSolicitud);
-    
-    if (!solicitud) {
-        mostrarLoading(true);
-        try {
-            const response = await fetch(`${API_URL}/solicitudes-cotizacion/${idSolicitud}`, {
-                headers: getAuthHeaders()
-            });
-            const data = await response.json();
-            if (data.success) {
-                solicitud = data.solicitud;
-            } else {
-                showToast('No se encontró la solicitud', 'error');
-                return;
-            }
-        } catch (error) {
-            showToast('Error al cargar la solicitud', 'error');
-            return;
-        } finally {
-            mostrarLoading(false);
-        }
-    }
-    
-    if (!solicitud) {
-        showToast('No se encontró la solicitud', 'error');
-        return;
-    }
-    
-    currentSolicitudId = idSolicitud;
-    
-    let items = solicitud.items || [];
-    if (typeof items === 'string') {
-        try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
-    }
-    
-    // 🔥 RENDERIZAR ITEMS CON ARRAY DE FOTOS EN EL MODAL DE COTIZACIÓN
-    const itemsHtml = items.map((item, idx) => {
-        const fotos = item.fotos || [];
-        const fotosCount = fotos.length;
-        const fotoUrl = fotosCount > 0 ? fotos[0] : null;
-        const uniqueId = `cotizar_${idx}_${Date.now()}`;
-        const imgId = `img_cotizar_${uniqueId}`;
-        const loaderId = `loader_cotizar_${uniqueId}`;
-        
-        // 🔥 CONTENEDOR DE FOTO CON LOADER
-        const fotoHtml = fotoUrl ? `
-            <div class="precio-item-foto" style="position:relative; width:80px; height:80px; border-radius:8px; overflow:hidden; background:var(--gris-oscuro); flex-shrink:0; border:2px solid var(--border-color);">
-                <div id="${loaderId}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); color:var(--gris-texto); font-size:0.7rem;">
-                    <i class="fas fa-spinner fa-spin"></i>
-                </div>
-                <img id="${imgId}" class="item-foto-modal" alt="Foto" 
-                     style="display:none; width:100%; height:100%; object-fit:cover; cursor:pointer;"
-                     onclick="verFotoAmpliada('${escapeHtml(fotoUrl)}')"
-                     data-url="${escapeHtml(fotoUrl)}">
-                ${fotosCount > 1 ? `<span style="position:absolute;bottom:2px;right:4px;background:rgba(0,0,0,0.8);color:white;font-size:0.55rem;padding:0 5px;border-radius:3px;z-index:2;">+${fotosCount-1}</span>` : ''}
-            </div>
-        ` : `
-            <div class="item-foto-placeholder-modal" style="width:80px; height:80px; border-radius:8px; background:var(--gris-oscuro); display:flex; align-items:center; justify-content:center; color:var(--gris-texto); flex-shrink:0; border:2px dashed var(--border-color);">
-                <i class="fas fa-camera" style="font-size:1.5rem;"></i>
-            </div>
-        `;
-        
-        // 🔥 MINIATURAS DE FOTOS ADICIONALES (si hay más de 1)
-        let miniaturasHtml = '';
-        if (fotosCount > 1) {
-            const extraFotos = fotos.slice(1, Math.min(fotosCount, 4));
-            miniaturasHtml = `
-                <div style="display:flex; gap:2px; margin-top:4px; flex-wrap:wrap;">
-                    ${extraFotos.map((f, fi) => {
-                        const miniId = `mini_cotizar_${idx}_${fi}_${Date.now()}`;
-                        const miniLoaderId = `mini_loader_cotizar_${idx}_${fi}_${Date.now()}`;
-                        return `
-                            <div style="position:relative; width:22px; height:22px; border-radius:3px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); cursor:pointer;"
-                                 onclick="event.stopPropagation(); verFotoAmpliada('${escapeHtml(f)}')">
-                                <div id="${miniLoaderId}" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:var(--gris-oscuro); font-size:5px; color:var(--gris-texto);">
-                                    <i class="fas fa-spinner fa-spin"></i>
-                                </div>
-                                <img id="${miniId}" src="" alt="Mini" 
-                                     style="display:none; width:100%; height:100%; object-fit:cover;"
-                                     data-url="${escapeHtml(f)}">
-                            </div>
-                        `;
-                    }).join('')}
-                    ${fotosCount > 4 ? `<span style="font-size:0.5rem; color:var(--gris-texto); align-self:center;">+${fotosCount-4}</span>` : ''}
-                </div>
-            `;
-        }
-        
-        return `
-            <div class="precio-item-row" style="display:flex; align-items:center; gap:1rem; padding:0.75rem; background:var(--bg-card); border-radius:8px; margin-bottom:0.5rem; border:1px solid var(--border-color);">
-                <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
-                    ${fotoHtml}
-                    ${miniaturasHtml}
-                </div>
-                <div class="precio-item-desc" style="flex:1;">
-                    <strong>${escapeHtml(item.descripcion)}</strong>
-                    <small style="display:block; color:var(--gris-texto); font-size:0.75rem;">(x${item.cantidad} uds)</small>
-                    ${item.detalle ? `<small class="text-muted" style="display:block; font-size:0.7rem;">${escapeHtml(item.detalle)}</small>` : ''}
-                    ${fotosCount > 0 ? `<small style="display:block; color:var(--rojo-primario); font-size:0.65rem;"><i class="fas fa-images"></i> ${fotosCount} foto(s)</small>` : ''}
-                </div>
-                <div class="precio-item-input" style="min-width:180px;">
-                    <label style="font-size:0.7rem; color:var(--gris-texto);">Precio unitario (Bs.):</label>
-                    <input type="number" id="precio_item_${idx}" class="precio-input" step="0.01" min="0" placeholder="0.00" 
-                           style="width:100%; padding:0.4rem; border-radius:6px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white;">
-                    <span class="total-hint" style="font-size:0.7rem; color:var(--gris-texto);">Total: Bs. <span id="total_item_${idx}" class="total-item" style="color:var(--verde-exito); font-weight:600;">0.00</span></span>
-                </div>
-            </div>
-        `;
-    }).join('');
-    
-    const modalBody = document.getElementById('modalCotizarBody');
-    modalBody.innerHTML = `
-        <div class="orden-info" style="margin-bottom: 1.5rem; display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:0.5rem 1rem; padding:0.75rem; background:var(--gris-oscuro); border-radius:8px;">
-            <div class="orden-info-item">
-                <label style="font-size:0.65rem; color:var(--gris-texto);"><i class="fas fa-hashtag"></i> Solicitud</label>
-                <span style="font-weight:600;">#${solicitud.id}</span>
-            </div>
-            <div class="orden-info-item">
-                <label style="font-size:0.65rem; color:var(--gris-texto);"><i class="fas fa-tag"></i> OT</label>
-                <span><strong>${escapeHtml(solicitud.orden_codigo || 'N/A')}</strong></span>
-            </div>
-            <div class="orden-info-item">
-                <label style="font-size:0.65rem; color:var(--gris-texto);"><i class="fas fa-car"></i> Vehículo</label>
-                <span>${escapeHtml(solicitud.vehiculo || 'N/A')}</span>
-            </div>
-            <div class="orden-info-item">
-                <label style="font-size:0.65rem; color:var(--gris-texto);"><i class="fas fa-calendar"></i> Fecha</label>
-                <span>${formatDate(solicitud.fecha_solicitud)}</span>
-            </div>
-        </div>
-        
-        <div style="margin-bottom: 1.5rem;">
-            <h4 style="margin-bottom:0.75rem;"><i class="fas fa-cubes"></i> Items a cotizar (${items.length}):</h4>
-            <div style="max-height:400px; overflow-y:auto; padding-right:4px;">
-                ${itemsHtml}
-            </div>
-        </div>
-        
-        <div class="form-group" style="margin-bottom:1rem;">
-            <label style="font-weight:600;"><i class="fas fa-truck"></i> Proveedor *</label>
-            <input type="text" id="proveedorInfo" class="form-control" placeholder="Ej: Autoparts Bolivia" autocomplete="off" 
-                   style="width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white; margin-top:4px;">
-        </div>
-        
-        <div class="form-group" style="margin-bottom:1.5rem;">
-            <label style="font-weight:600;"><i class="fas fa-sticky-note"></i> Observaciones</label>
-            <textarea id="respuestaEncargado" class="form-control" rows="2" placeholder="Notas sobre la cotización..." 
-                      style="width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white; margin-top:4px; resize:vertical;"></textarea>
-        </div>
-        
-        <div class="modal-actions" style="display:flex; gap:0.75rem; justify-content:flex-end; padding-top:1rem; border-top:1px solid var(--border-color);">
-            <button class="btn-secondary" onclick="cerrarModal('modalCotizar')" style="padding:0.5rem 1.5rem; border-radius:8px; border:none; cursor:pointer;">
-                Cancelar
-            </button>
-            <button class="btn-cotizar" onclick="enviarCotizacion()" style="padding:0.5rem 1.5rem; border-radius:8px; border:none; cursor:pointer; background:var(--rojo-primario); color:white; font-weight:600;">
-                <i class="fas fa-paper-plane"></i> Enviar Cotización
-            </button>
-        </div>
-    `;
-    
-    // Configurar eventos de precio
-    setTimeout(() => {
-        items.forEach((item, idx) => {
-            const precioInput = document.getElementById(`precio_item_${idx}`);
-            if (precioInput) {
-                precioInput.addEventListener('input', function() {
-                    const totalSpan = document.getElementById(`total_item_${idx}`);
-                    if (totalSpan) {
-                        const precio = parseFloat(this.value) || 0;
-                        const total = precio * item.cantidad;
-                        totalSpan.textContent = total.toFixed(2);
-                        totalSpan.style.color = precio > 0 ? 'var(--verde-exito)' : 'var(--gris-texto)';
-                    }
-                });
-            }
-        });
-        
-        const firstInput = document.getElementById('precio_item_0');
-        if (firstInput) firstInput.focus();
-        
-        // 🔥 CARGAR TODAS LAS IMÁGENES EN EL MODAL
-        // 1. Imagen principal de cada item
-        items.forEach((item, idx) => {
-            const fotos = item.fotos || [];
-            if (fotos.length > 0) {
-                const uniqueId = `cotizar_${idx}_${Date.now()}`;
-                const imgId = `img_cotizar_${uniqueId}`;
-                const loaderId = `loader_cotizar_${uniqueId}`;
-                const img = document.getElementById(imgId);
-                const loader = document.getElementById(loaderId);
-                if (img && loader) {
-                    cargarImagenProxy(fotos[0], img, loader);
-                }
-            }
-        });
-        
-        // 2. Miniaturas adicionales
-        items.forEach((item, idx) => {
-            const fotos = item.fotos || [];
-            if (fotos.length > 1) {
-                fotos.slice(1, Math.min(fotos.length, 4)).forEach((f, fi) => {
-                    const miniId = `mini_cotizar_${idx}_${fi}_${Date.now()}`;
-                    const miniLoaderId = `mini_loader_cotizar_${idx}_${fi}_${Date.now()}`;
-                    const img = document.getElementById(miniId);
-                    const loader = document.getElementById(miniLoaderId);
-                    if (img && loader) {
-                        cargarImagenProxy(f, img, loader);
-                    }
-                });
-            }
-        });
-        
-    }, 200);
-    
-    abrirModal('modalCotizar');
-}
-
-async function enviarCotizacion() {
-    const solicitud = solicitudesCache.data?.find(s => s.id === currentSolicitudId);
-    if (!solicitud) {
-        showToast('Error: No se encontró la solicitud', 'error');
-        return;
-    }
-    
-    let items = solicitud.items || [];
-    if (typeof items === 'string') {
-        try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
-    }
-    
-    let precioTotal = 0;
-    let itemsConPrecio = 0;
-    
-    for (let i = 0; i < items.length; i++) {
-        const precioInput = document.getElementById(`precio_item_${i}`);
-        if (precioInput && precioInput.value) {
-            const precioUnitario = parseFloat(precioInput.value);
-            if (!isNaN(precioUnitario) && precioUnitario > 0) {
-                precioTotal += precioUnitario * items[i].cantidad;
-                itemsConPrecio++;
-            }
-        }
-    }
-    
-    if (precioTotal === 0 || itemsConPrecio === 0) {
-        showToast('Ingrese al menos un precio válido', 'warning');
-        return;
-    }
-    
-    const proveedorInfo = document.getElementById('proveedorInfo')?.value.trim() || '';
-    if (!proveedorInfo) {
-        showToast('Indique el nombre del proveedor', 'warning');
-        return;
-    }
-    
-    const respuesta = document.getElementById('respuestaEncargado')?.value.trim() || '';
-    
-    if (!confirm(`Confirmar cotización:\nProveedor: ${proveedorInfo}\nTotal: Bs. ${precioTotal.toFixed(2)}`)) {
-        return;
-    }
-    
-    mostrarLoading(true);
-    
-    try {
-        const response = await fetch(`${API_URL}/solicitudes-cotizacion/${currentSolicitudId}/cotizar`, {
-            method: 'PUT',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                precio_cotizado: precioTotal,
-                proveedor_info: proveedorInfo,
-                respuesta_encargado: respuesta
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast(`Cotización enviada - Total: Bs. ${precioTotal.toFixed(2)}`, 'success');
-            cerrarModal('modalCotizar');
-            solicitudesCache.timestamp = 0;
-            await cargarSolicitudes(true);
-        } else {
-            showToast(data.error || 'Error al enviar cotización', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
 }
 
 // =====================================================

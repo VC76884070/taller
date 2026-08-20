@@ -1,7 +1,7 @@
 /* =====================================================
    PROVEEDORES.CSS - ENCARGADO DE REPUESTOS
    TEMA OSCURO - FURIA MOTOR
-   VERSIÓN ALINEADA A LA IZQUIERDA
+   ALINEACIÓN FORZADA A LA IZQUIERDA
    ===================================================== */
 
 /* =====================================================
@@ -240,7 +240,7 @@ button {
 }
 
 /* =====================================================
-   TOP BAR
+   TOP BAR - ALINEADO A LA IZQUIERDA
    ===================================================== */
 .top-bar {
     display: flex;
@@ -255,6 +255,10 @@ button {
     gap: 16px;
 }
 
+.page-title {
+    text-align: left !important;
+}
+
 .page-title h1 {
     font-size: 22px;
     font-weight: 800;
@@ -262,6 +266,8 @@ button {
     display: flex;
     align-items: center;
     gap: 8px;
+    text-align: left !important;
+    justify-content: flex-start !important;
 }
 
 .page-title h1 i {
@@ -272,6 +278,7 @@ button {
     color: var(--gris-texto);
     font-size: 14px;
     margin-top: 2px;
+    text-align: left !important;
 }
 
 .top-actions {
@@ -460,7 +467,7 @@ button {
     color: var(--blanco);
     font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: 0.9rem;
-    text-align: left;
+    text-align: left !important;
 }
 
 .search-box input:focus {
@@ -483,7 +490,7 @@ button {
     transition: var(--transition);
     font-size: 0.85rem;
     min-height: 40px;
-    text-align: left;
+    text-align: left !important;
 }
 
 #filtroCategoria:hover {
@@ -502,7 +509,7 @@ button {
 }
 
 /* =====================================================
-   GRID DE PROVEEDORES
+   GRID DE PROVEEDORES - ALINEACIÓN IZQUIERDA
    ===================================================== */
 .proveedores-grid {
     display: grid;
@@ -511,7 +518,7 @@ button {
     animation: fadeIn 0.4s ease;
 }
 
-/* Tarjeta de proveedor */
+/* Tarjeta de proveedor - TODO A LA IZQUIERDA */
 .proveedor-card {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
@@ -534,7 +541,7 @@ button {
     background: linear-gradient(135deg, var(--gris-oscuro) 0%, var(--gris-medio) 100%);
     padding: 0.8rem 1rem;
     display: flex;
-    justify-content: flex-start;
+    justify-content: flex-start !important;
     align-items: center;
     border-bottom: 2px solid var(--rojo-primario);
     gap: 0.5rem;
@@ -550,7 +557,8 @@ button {
     word-break: break-word;
     flex: 1;
     min-width: 0;
-    text-align: left;
+    text-align: left !important;
+    justify-content: flex-start !important;
 }
 
 .proveedor-nombre i {
@@ -572,6 +580,7 @@ button {
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
+    align-items: flex-start !important;
 }
 
 .info-item {
@@ -582,8 +591,9 @@ button {
     color: var(--gris-texto);
     word-break: break-word;
     padding: 0.15rem 0;
-    justify-content: flex-start;
-    text-align: left;
+    justify-content: flex-start !important;
+    text-align: left !important;
+    width: 100%;
 }
 
 .info-item i {
@@ -591,7 +601,7 @@ button {
     color: var(--rojo-primario);
     flex-shrink: 0;
     font-size: 0.75rem;
-    text-align: left;
+    text-align: left !important;
 }
 
 .info-item span {
@@ -601,7 +611,7 @@ button {
     font-size: 0.8rem;
     min-width: 0;
     word-break: break-word;
-    text-align: left;
+    text-align: left !important;
 }
 
 .info-item .btn-maps {
@@ -632,10 +642,11 @@ button {
     border-color: var(--rojo-primario);
 }
 
+/* BOTONES DE ACCIÓN - ALINEADOS A LA IZQUIERDA */
 .proveedor-actions {
     display: flex;
     gap: 0.3rem;
-    justify-content: flex-start;
+    justify-content: flex-start !important;
     margin-top: 0.5rem;
     padding-top: 0.5rem;
     border-top: 1px solid var(--border-color);
@@ -655,7 +666,7 @@ button {
     gap: 0.3rem;
     color: var(--gris-texto);
     min-height: 30px;
-    justify-content: flex-start;
+    justify-content: center;
 }
 
 .action-btn i {
@@ -746,7 +757,7 @@ button {
     color: var(--blanco);
     font-size: 0.85rem;
     min-height: 40px;
-    text-align: left;
+    text-align: left !important;
 }
 
 .coords-input-group .form-group input:focus {
@@ -766,7 +777,7 @@ button {
     font-size: 0.8rem;
     color: var(--gris-texto);
     flex-wrap: wrap;
-    justify-content: flex-start;
+    justify-content: flex-start !important;
 }
 
 .ubicacion-info i {
@@ -886,7 +897,7 @@ button {
 }
 
 /* =====================================================
-   FORMULARIO
+   FORMULARIO - ALINEADO A LA IZQUIERDA
    ===================================================== */
 .form-row {
     display: grid;
@@ -906,7 +917,7 @@ button {
     color: var(--gris-texto);
     font-size: 0.75rem;
     letter-spacing: 0.3px;
-    text-align: left;
+    text-align: left !important;
 }
 
 .form-group label i {
@@ -928,7 +939,7 @@ button {
     font-size: 0.85rem;
     transition: var(--transition);
     min-height: 40px;
-    text-align: left;
+    text-align: left !important;
 }
 
 .form-group input:hover,
@@ -950,7 +961,7 @@ button {
     margin-top: 0.2rem;
     font-size: 0.6rem;
     color: var(--gris-texto);
-    text-align: left;
+    text-align: left !important;
 }
 
 .form-actions {
@@ -964,7 +975,7 @@ button {
 }
 
 /* =====================================================
-   DETALLE DE PROVEEDOR
+   DETALLE DE PROVEEDOR - ALINEADO A LA IZQUIERDA
    ===================================================== */
 .detalle-grid {
     display: grid;
@@ -987,7 +998,7 @@ button {
     color: var(--gris-texto);
     letter-spacing: 0.5px;
     margin-bottom: 0.15rem;
-    text-align: left;
+    text-align: left !important;
 }
 
 .detalle-item label i {
@@ -1002,7 +1013,7 @@ button {
     word-break: break-word;
     font-size: 0.85rem;
     line-height: 1.3;
-    text-align: left;
+    text-align: left !important;
 }
 
 .detalle-item p .btn-maps {
@@ -1226,15 +1237,12 @@ html {
 
 /* =====================================================
    =====================================================
-   📱 RESPONSIVE - OPTIMIZADO PARA MÓVIL
+   📱 RESPONSIVE - ALINEACIÓN IZQUIERDA
    =====================================================
    ===================================================== */
 
 @media (max-width: 1024px) {
     
-    /* =============================================
-       🔘 BOTÓN HAMBURGUESA
-       ============================================= */
     .hamburger-menu {
         display: flex !important;
         position: fixed;
@@ -1411,12 +1419,17 @@ html {
         border: 1px solid var(--border-color) !important;
     }
     
+    .page-title {
+        text-align: left !important;
+    }
+    
     .page-title h1 {
         font-size: 18px !important;
         font-weight: 800 !important;
         word-break: break-word !important;
         color: #FFFFFF !important;
         text-align: left !important;
+        justify-content: flex-start !important;
     }
     
     .page-title p {
@@ -1524,7 +1537,7 @@ html {
     }
     
     /* =============================================
-       🃏 GRID Y TARJETAS EN MÓVIL
+       🃏 GRID Y TARJETAS EN MÓVIL - IZQUIERDA
        ============================================= */
     .proveedores-grid {
         grid-template-columns: 1fr !important;
@@ -1545,6 +1558,7 @@ html {
         font-size: 0.85rem !important;
         font-weight: 600 !important;
         text-align: left !important;
+        justify-content: flex-start !important;
     }
     
     .proveedor-nombre i {
@@ -1555,16 +1569,22 @@ html {
         padding: 0.5rem 0.7rem !important;
     }
     
+    .proveedor-info {
+        align-items: flex-start !important;
+    }
+    
     .info-item {
         font-size: 0.75rem !important;
         padding: 0.1rem 0 !important;
         gap: 0.4rem !important;
         justify-content: flex-start !important;
+        text-align: left !important;
     }
     
     .info-item i {
         width: 16px !important;
         font-size: 0.7rem !important;
+        text-align: left !important;
     }
     
     .info-item span {
@@ -1715,9 +1735,6 @@ html {
         min-height: 40px !important;
     }
     
-    /* =============================================
-       🍞 TOAST
-       ============================================= */
     .toast-container {
         bottom: 12px !important;
         right: 12px !important;

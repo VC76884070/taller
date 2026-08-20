@@ -1,7 +1,7 @@
 /* =====================================================
    PROVEEDORES.CSS - ENCARGADO DE REPUESTOS
    TEMA OSCURO - FURIA MOTOR
-   VERSIÓN COMPLETA CON BOTÓN HAMBURGUESA RESPONSIVE
+   VERSIÓN CON MAPA Y DESCRIPCIÓN
    ===================================================== */
 
 /* =====================================================
@@ -351,6 +351,12 @@ button {
     transform: translateY(-2px);
 }
 
+.btn-secondary.btn-sm {
+    padding: 0.3rem 0.8rem;
+    font-size: 0.75rem;
+    min-height: 32px;
+}
+
 .btn-danger {
     background: var(--rojo-primario);
     color: var(--blanco);
@@ -371,6 +377,35 @@ button {
     background: var(--rojo-oscuro);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(193, 18, 31, 0.3);
+}
+
+/* =====================================================
+   BOTÓN GOOGLE MAPS EN TARJETA
+   ===================================================== */
+.btn-maps {
+    background: #34A853;
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 0.2rem 0.6rem;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-left: 0.5rem;
+    white-space: nowrap;
+    min-height: 28px;
+}
+
+.btn-maps:hover {
+    background: #2d8f47;
+    transform: scale(1.05);
+}
+
+.btn-maps i {
+    font-size: 0.7rem;
 }
 
 /* =====================================================
@@ -587,6 +622,13 @@ button {
     color: var(--rojo-primario);
 }
 
+/* Descripción en tarjeta */
+.descripcion-texto {
+    color: var(--blanco);
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
 .categorias-list {
     display: flex;
     flex-wrap: wrap;
@@ -660,19 +702,129 @@ button {
 }
 
 /* =====================================================
-   LOADING PLACEHOLDER
+   MAPA CON OPENSTREETMAP (LEAFLET)
    ===================================================== */
-.loading-placeholder {
-    text-align: center;
-    padding: 2rem;
-    color: var(--gris-texto);
-    grid-column: 1 / -1;
+
+/* Contenedor del mapa */
+#mapContainer {
+    width: 100%;
+    height: 300px;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-color);
+    margin-top: 0.5rem;
+    overflow: hidden;
+    position: relative;
+    background: var(--gris-oscuro);
 }
 
-.loading-placeholder i {
-    font-size: 2rem;
-    margin-bottom: 1rem;
+#mapContainer .leaflet-control-zoom {
+    border: none !important;
+}
+
+#mapContainer .leaflet-control-zoom a {
+    background: var(--gris-oscuro) !important;
+    color: var(--blanco) !important;
+    border-color: var(--border-color) !important;
+}
+
+#mapContainer .leaflet-tile-pane {
+    filter: brightness(0.9) contrast(1.1);
+}
+
+#mapContainer .leaflet-control-attribution {
+    background: rgba(0, 0, 0, 0.7) !important;
+    color: var(--gris-texto) !important;
+    font-size: 9px !important;
+}
+
+#mapContainer .leaflet-control-attribution a {
+    color: var(--rojo-primario) !important;
+}
+
+/* Marcador personalizado */
+.custom-marker {
+    background: none !important;
+    border: none !important;
+}
+
+/* Botón de geolocalización dentro del mapa */
+.btn-geolocate {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    background: var(--gris-oscuro);
+    color: var(--blanco);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 1.1rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.btn-geolocate:hover {
+    background: var(--rojo-primario);
+    transform: scale(1.05);
+}
+
+/* Input de coordenadas (oculto pero funcional) */
+.coords-input-group {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.coords-input-group .form-group {
+    flex: 1;
+    min-width: 120px;
+}
+
+.coords-input-group .form-group input {
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--gris-oscuro);
+    color: var(--blanco);
+    font-size: 0.85rem;
+    min-height: 40px;
+}
+
+.coords-input-group .form-group input:focus {
+    outline: none;
+    border-color: var(--rojo-primario);
+}
+
+/* Indicador de ubicación seleccionada */
+.ubicacion-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(193, 18, 31, 0.1);
+    border: 1px solid rgba(193, 18, 31, 0.2);
+    border-radius: var(--radius-sm);
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--gris-texto);
+    flex-wrap: wrap;
+}
+
+.ubicacion-info i {
     color: var(--rojo-primario);
+}
+
+.ubicacion-info .coords {
+    font-family: monospace;
+    color: var(--blanco);
+    font-weight: 500;
 }
 
 /* =====================================================
@@ -709,7 +861,7 @@ button {
 }
 
 .modal-lg {
-    max-width: 700px;
+    max-width: 750px;
     width: 90%;
 }
 
@@ -898,6 +1050,10 @@ button {
     word-break: break-word;
     font-size: 0.9rem;
     line-height: 1.4;
+}
+
+.detalle-item p .btn-maps {
+    margin-left: 0.5rem;
 }
 
 .detalle-categorias {
@@ -1114,8 +1270,7 @@ html {
 
 /* =====================================================
    =====================================================
-   📱 RESPONSIVE CON BOTÓN HAMBURGUESA
-   =====================================================
+   📱 RESPONSIVE CON BOTÓN HAMBURGUESA   =====================================================
    ===================================================== */
 
 @media (max-width: 1024px) {
@@ -1395,6 +1550,34 @@ html {
     }
     
     /* =============================================
+       🗺️ MAPA EN MÓVIL
+       ============================================= */
+    #mapContainer {
+        height: 220px !important;
+    }
+    
+    .coords-input-group {
+        flex-direction: column !important;
+    }
+    
+    .coords-input-group .form-group {
+        min-width: 100% !important;
+    }
+    
+    .ubicacion-info {
+        font-size: 0.75rem !important;
+        padding: 0.4rem 0.6rem !important;
+    }
+    
+    .btn-secondary.btn-sm {
+        font-size: 0.7rem !important;
+        padding: 0.25rem 0.6rem !important;
+        min-height: 36px !important;
+        flex: 1 !important;
+        justify-content: center !important;
+    }
+    
+    /* =============================================
        🃏 GRID DE PROVEEDORES
        ============================================= */
     .proveedores-grid {
@@ -1420,6 +1603,12 @@ html {
     
     .info-item {
         font-size: 0.8rem !important;
+    }
+    
+    .btn-maps {
+        font-size: 0.6rem !important;
+        padding: 0.15rem 0.5rem !important;
+        min-height: 24px !important;
     }
     
     .proveedor-actions {
@@ -1582,6 +1771,10 @@ html {
     .form-row {
         grid-template-columns: 1fr 1fr !important;
     }
+    
+    #mapContainer {
+        height: 250px !important;
+    }
 }
 
 /* =============================================
@@ -1649,6 +1842,16 @@ html {
     .modal-header h3 {
         font-size: 0.9rem !important;
     }
+    
+    #mapContainer {
+        height: 180px !important;
+    }
+    
+    .btn-maps {
+        font-size: 0.55rem !important;
+        padding: 0.1rem 0.4rem !important;
+        min-height: 20px !important;
+    }
 }
 
 /* =============================================
@@ -1671,6 +1874,10 @@ html {
     .action-btn {
         flex: 1 !important;
     }
+    
+    #mapContainer {
+        height: 160px !important;
+    }
 }
 
 /* =============================================
@@ -1680,6 +1887,10 @@ html {
     .proveedores-grid {
         grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)) !important;
         gap: 1.8rem !important;
+    }
+    
+    #mapContainer {
+        height: 350px !important;
     }
 }
 
@@ -1691,6 +1902,7 @@ html {
     .btn-primary:active,
     .btn-secondary:active,
     .btn-danger:active,
+    .btn-maps:active,
     .proveedor-card:active {
         transform: scale(0.98) !important;
         transition: transform 0.05s !important;

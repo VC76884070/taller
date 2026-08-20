@@ -1,6 +1,6 @@
 # =====================================================
 # PROVEEDORES.PY - ENCARGADO DE REPUESTOS
-# VERSIÓN CORREGIDA - SIN created_at/updated_at
+# VERSIÓN CON DESCRIPCIÓN Y MAPA
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
@@ -9,6 +9,7 @@ from config import config
 from decorators import encargado_repuestos_required
 import datetime
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,37 @@ def obtener_nombre_filtro(id_filtro):
     return None
 
 
+def validar_coordenadas(ubicacion_gps):
+    """
+    Validar que las coordenadas tengan formato correcto
+    Args:
+        ubicacion_gps (str): String con coordenadas "lat, lng"
+    Returns:
+        tuple: (es_valido, lat, lng)
+    """
+    if not ubicacion_gps:
+        return True, None, None
+    
+    # Intentar extraer coordenadas del string
+    # Formato esperado: "-17.7835, -63.1821" o "-17.7835,-63.1821"
+    patron = r'([-+]?\d+\.?\d*)\s*[,;]\s*([-+]?\d+\.?\d*)'
+    match = re.search(patron, ubicacion_gps)
+    
+    if match:
+        try:
+            lat = float(match.group(1))
+            lng = float(match.group(2))
+            # Validar rangos de coordenadas
+            if -90 <= lat <= 90 and -180 <= lng <= 180:
+                return True, lat, lng
+        except (ValueError, TypeError):
+            pass
+    
+    # Si no coincide con el patrón, pero no está vacío, lo dejamos pasar
+    # (podría ser una dirección o descripción)
+    return True, None, None
+
+
 def proveedor_to_dict(proveedor_data):
     """
     Convertir datos de proveedor a diccionario para respuesta JSON
@@ -65,9 +97,9 @@ def proveedor_to_dict(proveedor_data):
         'telefono': proveedor_data.get('telefono'),
         'ubicacion_gps': proveedor_data.get('ubicacion_gps'),
         'propietario': proveedor_data.get('propietario'),
+        'descripcion': proveedor_data.get('descripcion'),  # <-- NUEVO CAMPO
         'id_filtro': proveedor_data.get('id_filtro'),
         'categoria': nombre_categoria
-        # NOTA: No incluimos created_at/updated_at porque no existen en la tabla
     }
 
 
@@ -120,8 +152,21 @@ def validar_datos_proveedor(data):
     # Agregar campos opcionales solo si tienen valor
     if data.get('propietario'):
         datos_limpios['propietario'] = data.get('propietario').strip()
+    
     if data.get('ubicacion_gps'):
-        datos_limpios['ubicacion_gps'] = data.get('ubicacion_gps').strip()
+        ubicacion = data.get('ubicacion_gps').strip()
+        # Validar coordenadas
+        es_valido, lat, lng = validar_coordenadas(ubicacion)
+        if es_valido:
+            datos_limpios['ubicacion_gps'] = ubicacion
+        else:
+            # Si no son coordenadas válidas, guardar como texto
+            datos_limpios['ubicacion_gps'] = ubicacion
+    
+    # NUEVO: Campo descripcion
+    if data.get('descripcion'):
+        datos_limpios['descripcion'] = data.get('descripcion').strip()
+    
     if data.get('id_filtro'):
         datos_limpios['id_filtro'] = data.get('id_filtro')
     
@@ -174,7 +219,8 @@ def obtener_proveedores(current_user):
             proveedores = [p for p in proveedores if 
                 search_lower in (p.get('nombre') or '').lower() or
                 search_lower in (p.get('propietario') or '').lower() or
-                search_lower in (p.get('telefono') or '').lower()
+                search_lower in (p.get('telefono') or '').lower() or
+                search_lower in (p.get('descripcion') or '').lower()  # <-- NUEVO: buscar en descripción
             ]
         
         return jsonify({
@@ -220,7 +266,7 @@ def crear_proveedor(current_user):
         if not es_valido:
             return jsonify({'success': False, 'error': error}), 400
         
-        # Insertar en la base de datos (SIN created_at/updated_at)
+        # Insertar en la base de datos
         result = supabase.table('proveedor') \
             .insert(datos_limpios) \
             .execute()
@@ -293,7 +339,7 @@ def actualizar_proveedor(current_user, id_proveedor):
         if not data.get('telefono'):
             return jsonify({'success': False, 'error': 'El teléfono es requerido'}), 400
         
-        # Preparar datos para actualizar (SIN updated_at)
+        # Preparar datos para actualizar
         update_data = {
             'nombre': data.get('nombre').strip(),
             'telefono': data.get('telefono').strip()
@@ -302,8 +348,17 @@ def actualizar_proveedor(current_user, id_proveedor):
         # Agregar campos opcionales solo si vienen en la request
         if data.get('propietario') is not None:
             update_data['propietario'] = data.get('propietario').strip() if data.get('propietario') else None
+        
         if data.get('ubicacion_gps') is not None:
-            update_data['ubicacion_gps'] = data.get('ubicacion_gps').strip() if data.get('ubicacion_gps') else None
+            ubicacion = data.get('ubicacion_gps').strip() if data.get('ubicacion_gps') else None
+            if ubicacion:
+                es_valido, lat, lng = validar_coordenadas(ubicacion)
+            update_data['ubicacion_gps'] = ubicacion
+        
+        # NUEVO: Campo descripcion
+        if data.get('descripcion') is not None:
+            update_data['descripcion'] = data.get('descripcion').strip() if data.get('descripcion') else None
+        
         if data.get('id_filtro') is not None:
             update_data['id_filtro'] = data.get('id_filtro') if data.get('id_filtro') else None
         

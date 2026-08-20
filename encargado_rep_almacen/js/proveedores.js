@@ -1,15 +1,12 @@
 // =====================================================
 // PROVEEDORES.JS - ENCARGADO DE REPUESTOS
-// VERSIÓN FINAL CORREGIDA - USA window.API_BASE_URL
+// VERSIÓN CON MAPA Y DESCRIPCIÓN
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - USA LA VARIABLE GLOBAL
+// CONFIGURACIÓN DE API
 // =====================================================
-// NOTA: window.API_BASE_URL ya está declarada en include.js
-// No declarar const API_BASE_URL aquí
-
 const API_URL = `${window.API_BASE_URL}/api/encargado-repuestos`;
 
 // Variables globales
@@ -23,6 +20,188 @@ let proveedorAEliminar = null;
 // Bandera para evitar envíos duplicados
 let isSubmitting = false;
 let isInitialized = false;
+
+// =====================================================
+// MAPA CON OPENSTREETMAP (LEAFLET)
+// =====================================================
+
+let map = null;
+let mapMarker = null;
+let isMapInitialized = false;
+let currentLat = null;
+let currentLng = null;
+
+// Coordenadas por defecto (Santa Cruz, Bolivia)
+const DEFAULT_LAT = -17.7835;
+const DEFAULT_LNG = -63.1821;
+
+// Exponer para uso en HTML
+window.DEFAULT_LAT = DEFAULT_LAT;
+window.DEFAULT_LNG = DEFAULT_LNG;
+window.map = map;
+window.mapMarker = mapMarker;
+
+function initMap(lat = DEFAULT_LAT, lng = DEFAULT_LNG) {
+    const container = document.getElementById('mapContainer');
+    if (!container) {
+        console.warn('⚠️ Contenedor del mapa no encontrado');
+        return;
+    }
+    
+    // Si ya existe el mapa, lo destruimos
+    if (map) {
+        map.remove();
+        map = null;
+        mapMarker = null;
+    }
+    
+    try {
+        // Crear mapa
+        map = L.map('mapContainer', {
+            center: [lat, lng],
+            zoom: 15,
+            zoomControl: true,
+            fadeAnimation: true,
+            attributionControl: true
+        });
+        
+        // Capa de OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(map);
+        
+        // Icono personalizado
+        const customIcon = L.divIcon({
+            html: '<i class="fas fa-map-pin" style="color: #C1121F; font-size: 2rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5);"></i>',
+            className: 'custom-marker',
+            iconSize: [30, 42],
+            iconAnchor: [15, 42]
+        });
+        
+        // Agregar marcador
+        mapMarker = L.marker([lat, lng], {
+            draggable: true,
+            icon: customIcon
+        }).addTo(map);
+        
+        // Actualizar coordenadas al mover el marcador
+        mapMarker.on('dragend', function() {
+            const pos = mapMarker.getLatLng();
+            actualizarCoordenadas(pos.lat, pos.lng);
+        });
+        
+        // Click en el mapa para mover el marcador
+        map.on('click', function(e) {
+            const pos = e.latlng;
+            mapMarker.setLatLng(pos);
+            actualizarCoordenadas(pos.lat, pos.lng);
+        });
+        
+        // Actualizar coordenadas iniciales
+        actualizarCoordenadas(lat, lng);
+        
+        isMapInitialized = true;
+        
+        // Exponer para uso global
+        window.map = map;
+        window.mapMarker = mapMarker;
+        
+        // Forzar redimensionamiento del mapa después de un momento
+        setTimeout(() => {
+            if (map) {
+                map.invalidateSize();
+            }
+        }, 300);
+        
+        console.log('🗺️ Mapa inicializado correctamente');
+        
+    } catch (error) {
+        console.error('Error al inicializar el mapa:', error);
+        showToast('Error al cargar el mapa. Verifica tu conexión.', 'error');
+    }
+}
+
+function actualizarCoordenadas(lat, lng) {
+    currentLat = lat;
+    currentLng = lng;
+    
+    // Actualizar inputs ocultos
+    const latInput = document.getElementById('latitud');
+    const lngInput = document.getElementById('longitud');
+    const ubicacionGps = document.getElementById('ubicacion_gps');
+    const coordsDisplay = document.getElementById('coordsDisplay');
+    
+    if (latInput) latInput.value = lat.toFixed(7);
+    if (lngInput) lngInput.value = lng.toFixed(7);
+    
+    // Actualizar campo de ubicación GPS con formato "lat, lng"
+    if (ubicacionGps) {
+        const coordsStr = `${lat.toFixed(7)}, ${lng.toFixed(7)}`;
+        // Solo actualizar si el campo está vacío o si el usuario no ha escrito manualmente
+        if (!ubicacionGps.dataset.userEdited) {
+            ubicacionGps.value = coordsStr;
+        }
+    }
+    
+    // Actualizar info visual
+    if (coordsDisplay) {
+        coordsDisplay.textContent = `${lat.toFixed(7)}, ${lng.toFixed(7)}`;
+    }
+}
+
+function obtenerUbicacionActual() {
+    if (!navigator.geolocation) {
+        showToast('Tu navegador no soporta geolocalización', 'warning');
+        return;
+    }
+    
+    showToast('Obteniendo ubicación...', 'info');
+    
+    navigator.geolocation.getCurrentPosition(
+        function(pos) {
+            const { latitude, longitude } = pos.coords;
+            // Mover el mapa a la ubicación actual
+            if (map) {
+                map.setView([latitude, longitude], 16);
+                if (mapMarker) {
+                    mapMarker.setLatLng([latitude, longitude]);
+                }
+                actualizarCoordenadas(latitude, longitude);
+                showToast('📍 Ubicación actualizada', 'success');
+            }
+        },
+        function(error) {
+            console.error('Error de geolocalización:', error);
+            let msg = 'No se pudo obtener tu ubicación. ';
+            if (error.code === 1) {
+                msg += 'Permite el acceso a la ubicación en tu navegador.';
+            } else if (error.code === 2) {
+                msg += 'Señal GPS no disponible. Intenta más tarde.';
+            } else {
+                msg += 'Usa la ubicación por defecto o mueve el marcador en el mapa.';
+            }
+            showToast(msg, 'warning');
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        }
+    );
+}
+
+// Función para abrir en Google Maps
+function abrirGoogleMaps(lat, lng, nombre) {
+    if (!lat || !lng) {
+        showToast('No hay coordenadas disponibles para este proveedor', 'warning');
+        return;
+    }
+    
+    const query = encodeURIComponent(nombre || 'Proveedor');
+    const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    window.open(url, '_blank');
+}
 
 // =====================================================
 // FUNCIONES DE UTILIDAD
@@ -83,6 +262,19 @@ function cerrarModal(modalId) {
     if (modal) {
         modal.classList.remove('active');
         document.body.style.overflow = '';
+        // Si se cierra el modal de proveedor, destruir el mapa para liberar memoria
+        if (modalId === 'modalProveedor' && map) {
+            setTimeout(() => {
+                if (map) {
+                    map.remove();
+                    map = null;
+                    mapMarker = null;
+                    window.map = null;
+                    window.mapMarker = null;
+                    isMapInitialized = false;
+                }
+            }, 300);
+        }
     }
 }
 
@@ -91,6 +283,16 @@ function abrirModal(modalId) {
     if (modal) {
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
+        
+        // Si se abre el modal de proveedor, inicializar el mapa
+        if (modalId === 'modalProveedor') {
+            // Dar tiempo para que el modal se renderice
+            setTimeout(() => {
+                const lat = parseFloat(document.getElementById('latitud')?.value) || DEFAULT_LAT;
+                const lng = parseFloat(document.getElementById('longitud')?.value) || DEFAULT_LNG;
+                initMap(lat, lng);
+            }, 400);
+        }
     }
 }
 
@@ -213,7 +415,19 @@ function renderizarProveedores(proveedoresList) {
     }
     
     container.innerHTML = proveedoresList.map((proveedor, index) => {
-        const tieneInfo = proveedor.propietario || proveedor.ubicacion_gps || proveedor.categoria;
+        const tieneInfo = proveedor.propietario || proveedor.ubicacion_gps || proveedor.descripcion || proveedor.categoria;
+        
+        // Extraer coordenadas de ubicacion_gps si existen
+        let lat = null, lng = null;
+        if (proveedor.ubicacion_gps) {
+            const coords = proveedor.ubicacion_gps.split(',').map(s => s.trim());
+            if (coords.length === 2) {
+                lat = parseFloat(coords[0]);
+                lng = parseFloat(coords[1]);
+            }
+        }
+        
+        const tieneCoords = lat && lng && !isNaN(lat) && !isNaN(lng);
         
         return `
             <div class="proveedor-card" data-id="${proveedor.id}" style="animation-delay: ${Math.min(index * 0.05, 0.5)}s">
@@ -235,6 +449,12 @@ function renderizarProveedores(proveedoresList) {
                             <i class="fas fa-phone"></i>
                             <span>${escapeHtml(proveedor.telefono)}</span>
                         </div>
+                        ${proveedor.descripcion ? `
+                            <div class="info-item">
+                                <i class="fas fa-tags"></i>
+                                <span class="descripcion-texto">${escapeHtml(proveedor.descripcion)}</span>
+                            </div>
+                        ` : ''}
                         ${proveedor.categoria ? `
                             <div class="info-item">
                                 <i class="fas fa-tag"></i>
@@ -244,7 +464,14 @@ function renderizarProveedores(proveedoresList) {
                         ${proveedor.ubicacion_gps ? `
                             <div class="info-item">
                                 <i class="fas fa-map-marker-alt"></i>
-                                <span title="${escapeHtml(proveedor.ubicacion_gps)}">${escapeHtml(proveedor.ubicacion_gps.length > 30 ? proveedor.ubicacion_gps.substring(0, 30) + '...' : proveedor.ubicacion_gps)}</span>
+                                <span title="${escapeHtml(proveedor.ubicacion_gps)}">
+                                    ${escapeHtml(proveedor.ubicacion_gps.length > 30 ? proveedor.ubicacion_gps.substring(0, 30) + '...' : proveedor.ubicacion_gps)}
+                                </span>
+                                ${tieneCoords ? `
+                                    <button class="btn-maps" onclick="event.stopPropagation(); abrirGoogleMaps(${lat}, ${lng}, '${escapeHtml(proveedor.nombre)}')" title="Abrir en Google Maps">
+                                        <i class="fas fa-external-link-alt"></i> Maps
+                                    </button>
+                                ` : ''}
                             </div>
                         ` : ''}
                     </div>
@@ -282,9 +509,18 @@ function limpiarFormulario() {
     document.getElementById('nombre').value = '';
     document.getElementById('propietario').value = '';
     document.getElementById('telefono').value = '';
+    document.getElementById('descripcion').value = '';
     document.getElementById('ubicacion_gps').value = '';
+    document.getElementById('latitud').value = '';
+    document.getElementById('longitud').value = '';
     document.getElementById('id_filtro').value = '';
     document.getElementById('modalTitle').innerHTML = '<i class="fas fa-truck"></i> Nuevo Proveedor';
+    
+    // Resetear flag de edición manual
+    const ubicacionGps = document.getElementById('ubicacion_gps');
+    if (ubicacionGps) {
+        delete ubicacionGps.dataset.userEdited;
+    }
 }
 
 function abrirNuevoProveedor() {
@@ -307,11 +543,35 @@ async function editarProveedor(id) {
             document.getElementById('nombre').value = proveedor.nombre || '';
             document.getElementById('propietario').value = proveedor.propietario || '';
             document.getElementById('telefono').value = proveedor.telefono || '';
+            document.getElementById('descripcion').value = proveedor.descripcion || '';
             document.getElementById('ubicacion_gps').value = proveedor.ubicacion_gps || '';
             document.getElementById('id_filtro').value = proveedor.id_filtro || '';
             
+            // Extraer coordenadas para el mapa
+            let lat = DEFAULT_LAT, lng = DEFAULT_LNG;
+            if (proveedor.ubicacion_gps) {
+                const coords = proveedor.ubicacion_gps.split(',').map(s => s.trim());
+                if (coords.length === 2) {
+                    const parsedLat = parseFloat(coords[0]);
+                    const parsedLng = parseFloat(coords[1]);
+                    if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+                        lat = parsedLat;
+                        lng = parsedLng;
+                    }
+                }
+            }
+            
+            document.getElementById('latitud').value = lat;
+            document.getElementById('longitud').value = lng;
+            
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Proveedor';
             abrirModal('modalProveedor');
+            
+            // Inicializar mapa con las coordenadas del proveedor
+            setTimeout(() => {
+                initMap(lat, lng);
+            }, 500);
+            
         } else {
             showToast('No se encontró el proveedor', 'error');
         }
@@ -324,7 +584,7 @@ async function editarProveedor(id) {
 }
 
 // =====================================================
-// GUARDAR PROVEEDOR - CORREGIDO (SIN DOBLE ENVÍO)
+// GUARDAR PROVEEDOR
 // =====================================================
 
 async function guardarProveedor(event) {
@@ -356,6 +616,7 @@ async function guardarProveedor(event) {
         const nombre = document.getElementById('nombre').value.trim();
         const telefono = document.getElementById('telefono').value.trim();
         const propietario = document.getElementById('propietario').value.trim();
+        const descripcion = document.getElementById('descripcion').value.trim();
         const ubicacion_gps = document.getElementById('ubicacion_gps').value.trim();
         const id_filtro = document.getElementById('id_filtro').value;
         
@@ -372,11 +633,18 @@ async function guardarProveedor(event) {
             return;
         }
         
+        // Si el campo ubicacion_gps está vacío pero el mapa tiene coordenadas, usar las del mapa
+        let ubicacionFinal = ubicacion_gps;
+        if (!ubicacionFinal && currentLat && currentLng) {
+            ubicacionFinal = `${currentLat.toFixed(7)}, ${currentLng.toFixed(7)}`;
+        }
+        
         const proveedorData = {
             nombre: nombre,
             telefono: telefono,
             propietario: propietario || null,
-            ubicacion_gps: ubicacion_gps || null,
+            descripcion: descripcion || null,
+            ubicacion_gps: ubicacionFinal || null,
             id_filtro: id_filtro || null
         };
         
@@ -476,6 +744,17 @@ async function verDetalle(id) {
             const p = data.proveedor;
             currentDetalleId = p.id;
             
+            // Extraer coordenadas para el botón de Maps
+            let lat = null, lng = null;
+            if (p.ubicacion_gps) {
+                const coords = p.ubicacion_gps.split(',').map(s => s.trim());
+                if (coords.length === 2) {
+                    lat = parseFloat(coords[0]);
+                    lng = parseFloat(coords[1]);
+                }
+            }
+            const tieneCoords = lat && lng && !isNaN(lat) && !isNaN(lng);
+            
             const modalBody = document.getElementById('modalDetalleBody');
             modalBody.innerHTML = `
                 <div class="detalle-grid">
@@ -492,12 +771,23 @@ async function verDetalle(id) {
                         <p>${escapeHtml(p.telefono)}</p>
                     </div>
                     <div class="detalle-item">
+                        <label><i class="fas fa-tags"></i> Repuestos que ofrece</label>
+                        <p>${escapeHtml(p.descripcion) || '-'}</p>
+                    </div>
+                    <div class="detalle-item">
                         <label><i class="fas fa-tag"></i> Categoría</label>
                         <p>${p.categoria ? `<span class="categoria-tag">${escapeHtml(p.categoria)}</span>` : '-'}</p>
                     </div>
                     <div class="detalle-item">
                         <label><i class="fas fa-map-marker-alt"></i> Ubicación GPS</label>
-                        <p>${escapeHtml(p.ubicacion_gps) || '-'}</p>
+                        <p>
+                            ${escapeHtml(p.ubicacion_gps) || '-'}
+                            ${tieneCoords ? `
+                                <button class="btn-maps" onclick="abrirGoogleMaps(${lat}, ${lng}, '${escapeHtml(p.nombre)}')" title="Abrir en Google Maps" style="margin-left: 0.5rem;">
+                                    <i class="fas fa-external-link-alt"></i> Abrir en Maps
+                                </button>
+                            ` : ''}
+                        </p>
                     </div>
                     <div class="detalle-item">
                         <label><i class="fas fa-id-card"></i> ID</label>
@@ -629,6 +919,14 @@ function setupEventListeners() {
         searchInput.addEventListener('input', debouncedSearch);
     }
     
+    // Detectar edición manual del campo ubicacion_gps
+    const ubicacionGps = document.getElementById('ubicacion_gps');
+    if (ubicacionGps) {
+        ubicacionGps.addEventListener('input', function() {
+            this.dataset.userEdited = 'true';
+        });
+    }
+    
     // IMPORTANTE: Configurar el formulario sin duplicados
     const proveedorForm = document.getElementById('proveedorForm');
     if (proveedorForm) {
@@ -679,6 +977,10 @@ window.confirmarEliminar = confirmarEliminar;
 window.editarDesdeDetalle = editarDesdeDetalle;
 window.cerrarModal = cerrarModal;
 window.abrirNuevoProveedor = abrirNuevoProveedor;
+window.abrirGoogleMaps = abrirGoogleMaps;
+window.obtenerUbicacionActual = obtenerUbicacionActual;
+window.initMap = initMap;
+window.actualizarCoordenadas = actualizarCoordenadas;
 
 // Inicializar
 if (document.readyState === 'loading') {

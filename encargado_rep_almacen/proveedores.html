@@ -10,6 +10,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
 
+    <!-- Leaflet CSS para OpenStreetMap -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/proveedores.css">
@@ -97,9 +100,10 @@
                 <h3 id="modalTitle"><i class="fas fa-truck"></i> Nuevo Proveedor</h3>
                 <span class="close-modal" onclick="cerrarModal('modalProveedor')">&times;</span>
             </div>
-            <!-- IMPORTANTE: NO usar onsubmit aquí, se maneja desde JS -->
             <form id="proveedorForm">
                 <input type="hidden" id="proveedorId">
+                <input type="hidden" id="latitud" value="">
+                <input type="hidden" id="longitud" value="">
 
                 <!-- Fila 1: Nombre y Propietario -->
                 <div class="form-row">
@@ -113,26 +117,51 @@
                     </div>
                 </div>
 
-                <!-- Fila 2: Teléfono y Categoría -->
+                <!-- Fila 2: Teléfono y Descripción -->
                 <div class="form-row">
                     <div class="form-group">
                         <label><i class="fas fa-phone"></i> Teléfono *</label>
                         <input type="tel" id="telefono" required placeholder="Ej: 71234567" autocomplete="off">
                     </div>
                     <div class="form-group">
-                        <label><i class="fas fa-tag"></i> Categoría</label>
-                        <select id="id_filtro">
-                            <option value="">Seleccionar categoría</option>
-                        </select>
-                        <small>Selecciona el tipo de repuestos que ofrece</small>
+                        <label><i class="fas fa-tags"></i> Repuestos que ofrece</label>
+                        <input type="text" id="descripcion" placeholder="Ej: Motores, frenos, suspensión, eléctricos..." autocomplete="off">
+                        <small>Describe brevemente los repuestos que comercializa</small>
                     </div>
                 </div>
 
-                <!-- Fila 3: Ubicación GPS -->
+                <!-- Mapa y Ubicación GPS -->
                 <div class="form-group">
-                    <label><i class="fas fa-map-marker-alt"></i> Ubicación GPS</label>
-                    <input type="text" id="ubicacion_gps" placeholder="Ej: -17.123456, -66.123456 o dirección" autocomplete="off">
-                    <small>Coordenadas o dirección física del proveedor</small>
+                    <label><i class="fas fa-map-marked-alt"></i> Ubicación GPS</label>
+                    <div id="mapContainer"></div>
+                    
+                    <div class="ubicacion-info">
+                        <i class="fas fa-map-pin"></i>
+                        <span>Coordenadas seleccionadas: </span>
+                        <span id="coordsDisplay" class="coords">-17.7835, -63.1821</span>
+                    </div>
+                    
+                    <div class="coords-input-group">
+                        <div class="form-group" style="flex: 1;">
+                            <input type="text" id="ubicacion_gps" placeholder="O ingresa coordenadas manualmente (lat, lng)" autocomplete="off">
+                            <small>Formato: latitud, longitud (ej: -17.7835, -63.1821)</small>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button type="button" class="btn-secondary btn-sm" onclick="obtenerUbicacionActual()">
+                            <i class="fas fa-location-dot"></i> Mi Ubicación
+                        </button>
+                        <button type="button" class="btn-secondary btn-sm" onclick="if(window.map){window.map.setView([DEFAULT_LAT, DEFAULT_LNG], 14); if(window.mapMarker){window.mapMarker.setLatLng([DEFAULT_LAT, DEFAULT_LNG]); actualizarCoordenadas(DEFAULT_LAT, DEFAULT_LNG);}}">
+                            <i class="fas fa-home"></i> Predeterminada
+                        </button>
+                        <button type="button" class="btn-secondary btn-sm" onclick="if(window.map){window.map.invalidateSize();}">
+                            <i class="fas fa-expand"></i> Ajustar Mapa
+                        </button>
+                    </div>
+                    <small style="display: block; margin-top: 0.5rem; color: var(--gris-texto);">
+                        <i class="fas fa-info-circle"></i> Arrastra el marcador o haz clic en el mapa para seleccionar la ubicación exacta
+                    </small>
                 </div>
 
                 <!-- Botones de acción -->
@@ -206,6 +235,9 @@
     <!-- ===================================================== -->
     <!-- SCRIPTS -->
     <!-- ===================================================== -->
+    <!-- Leaflet JS para OpenStreetMap -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
     <script src="js/include.js"></script>
     <script src="js/proveedores.js"></script>
 

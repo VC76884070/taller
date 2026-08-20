@@ -800,7 +800,7 @@ async function confirmarEliminar() {
 }
 
 // =====================================================
-// VER DETALLE
+// VER DETALLE - SIN CATEGORÍA
 // =====================================================
 
 let currentDetalleId = null;
@@ -831,7 +831,7 @@ async function verDetalle(id) {
             if (modalBody) {
                 modalBody.innerHTML = `
                     <div class="detalle-grid">
-                        <div class="detalle-item">
+                        <div class="detalle-item full-width">
                             <label><i class="fas fa-building"></i> Nombre</label>
                             <p><strong>${escapeHtml(p.nombre)}</strong></p>
                         </div>
@@ -843,28 +843,20 @@ async function verDetalle(id) {
                             <label><i class="fas fa-phone"></i> Teléfono</label>
                             <p>${escapeHtml(p.telefono)}</p>
                         </div>
-                        <div class="detalle-item">
+                        <div class="detalle-item full-width">
                             <label><i class="fas fa-tags"></i> Repuestos que ofrece</label>
                             <p>${escapeHtml(p.descripcion) || '-'}</p>
                         </div>
-                        <div class="detalle-item">
-                            <label><i class="fas fa-tag"></i> Categoría</label>
-                            <p>${p.categoria ? `<span class="categoria-tag">${escapeHtml(p.categoria)}</span>` : '-'}</p>
-                        </div>
-                        <div class="detalle-item">
+                        <div class="detalle-item full-width">
                             <label><i class="fas fa-map-marker-alt"></i> Ubicación GPS</label>
                             <p>
                                 ${escapeHtml(p.ubicacion_gps) || '-'}
                                 ${tieneCoords ? `
                                     <button class="btn-maps" onclick="abrirGoogleMaps(${lat}, ${lng}, '${escapeHtml(p.nombre)}')" title="Abrir en Google Maps" style="margin-left: 0.5rem;">
-                                        <i class="fas fa-external-link-alt"></i> Abrir en Maps
+                                        <i class="fas fa-external-link-alt"></i> Maps
                                     </button>
                                 ` : ''}
                             </p>
-                        </div>
-                        <div class="detalle-item">
-                            <label><i class="fas fa-id-card"></i> ID</label>
-                            <p>#${p.id}</p>
                         </div>
                     </div>
                 `;

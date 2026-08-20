@@ -1,6 +1,6 @@
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA CLIENTE
-// VERSIÓN CORREGIDA - BASADA EN EL PATRÓN DE JEFE OPERATIVO
+// VERSIÓN CORREGIDA - SIGUIENDO EL PATRÓN DE LOS DEMÁS ROLES
 // =====================================================
 
 // =====================================================
@@ -14,7 +14,7 @@ window.API_BASE_URL = (() => {
         return 'http://localhost:5000';
     }
     console.log('📡 Include.js (Cliente) - Modo PRODUCCIÓN');
-    return 'https://taller-mecanico-dt10.onrender.com'; // <--- CAMBIA POR TU URL REAL
+    return '';
 })();
 
 const API_BASE_URL = window.API_BASE_URL;
@@ -29,8 +29,8 @@ sessionStorage.setItem('current_role_mode', 'cliente');
 // CONFIGURACIÓN DEL CLIENTE
 // =====================================================
 const CONFIG = {
-    sidebarPath: `${API_BASE_URL}/cliente/components/sidebar.html`,
-    logoPath: `${API_BASE_URL}/img/logoblanco.jpeg`,
+    sidebarPath: `/cliente/components/sidebar.html`,
+    logoPath: `/img/logoblanco.jpeg`,
     defaultUserName: 'Cliente',
     userRole: 'Cliente'
 };
@@ -71,12 +71,6 @@ async function includeSidebar() {
         if (!html || html.trim() === '') {
             throw new Error('El archivo sidebar.html está vacío');
         }
-        
-        // CORREGIR ENLACES RELATIVOS para que funcionen en producción
-        html = html.replace(/href="\.\.\//g, `href="${API_BASE_URL}/cliente/`);
-        html = html.replace(/href="\.\//g, `href="${API_BASE_URL}/cliente/`);
-        html = html.replace(/src="\.\.\//g, `src="${API_BASE_URL}/cliente/`);
-        html = html.replace(/src="\.\//g, `src="${API_BASE_URL}/cliente/`);
         
         sidebarContainer.innerHTML = html;
         console.log('✅ Sidebar cargado correctamente');

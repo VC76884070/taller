@@ -1,6 +1,6 @@
 // =====================================================
 // PROVEEDORES.JS - ENCARGADO DE REPUESTOS
-// VERSIÓN CON MAPA Y DESCRIPCIÓN
+// VERSIÓN CON MAPA Y DESCRIPCIÓN - CORREGIDA
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
@@ -344,6 +344,7 @@ function actualizarSelectCategorias() {
             categoriasDisponibles.map(c => `<option value="${c.id}">${escapeHtml(c.nombre_filtro)}</option>`).join('');
     }
     
+    // Solo si existe el select de categorías en el formulario
     const selectForm = document.getElementById('id_filtro');
     if (selectForm) {
         selectForm.innerHTML = '<option value="">Seleccionar categoría</option>' +
@@ -501,35 +502,70 @@ function renderizarProveedores(proveedoresList) {
 }
 
 // =====================================================
-// CRUD DE PROVEEDORES
+// CRUD DE PROVEEDORES - CORREGIDO
 // =====================================================
 
 function limpiarFormulario() {
-    document.getElementById('proveedorId').value = '';
-    document.getElementById('nombre').value = '';
-    document.getElementById('propietario').value = '';
-    document.getElementById('telefono').value = '';
-    document.getElementById('descripcion').value = '';
-    document.getElementById('ubicacion_gps').value = '';
-    document.getElementById('latitud').value = '';
-    document.getElementById('longitud').value = '';
-    document.getElementById('id_filtro').value = '';
-    document.getElementById('modalTitle').innerHTML = '<i class="fas fa-truck"></i> Nuevo Proveedor';
+    console.log('🧹 Limpiando formulario...');
+    
+    // Limpiar cada campo con verificación de existencia
+    const campos = [
+        'proveedorId',
+        'nombre',
+        'propietario',
+        'telefono',
+        'descripcion',
+        'ubicacion_gps',
+        'latitud',
+        'longitud'
+    ];
+    
+    campos.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.value = '';
+        } else {
+            console.warn(`⚠️ Elemento no encontrado: #${id}`);
+        }
+    });
+    
+    // Limpiar select de categoría (si existe)
+    const idFiltro = document.getElementById('id_filtro');
+    if (idFiltro) {
+        idFiltro.value = '';
+    }
     
     // Resetear flag de edición manual
     const ubicacionGps = document.getElementById('ubicacion_gps');
     if (ubicacionGps) {
         delete ubicacionGps.dataset.userEdited;
     }
+    
+    // Actualizar título del modal
+    const modalTitle = document.getElementById('modalTitle');
+    if (modalTitle) {
+        modalTitle.innerHTML = '<i class="fas fa-truck"></i> Nuevo Proveedor';
+    }
+    
+    // Resetear coordenadas actuales a las de default
+    currentLat = DEFAULT_LAT;
+    currentLng = DEFAULT_LNG;
+    
+    console.log('✅ Formulario limpiado correctamente');
 }
 
 function abrirNuevoProveedor() {
+    console.log('🔄 Abriendo modal de nuevo proveedor...');
     limpiarFormulario();
     abrirModal('modalProveedor');
-    setTimeout(() => { document.getElementById('nombre')?.focus(); }, 100);
+    setTimeout(() => { 
+        const nombreInput = document.getElementById('nombre');
+        if (nombreInput) nombreInput.focus();
+    }, 150);
 }
 
 async function editarProveedor(id) {
+    console.log(`✏️ Editando proveedor ID: ${id}`);
     mostrarLoading(true);
     
     try {
@@ -539,13 +575,33 @@ async function editarProveedor(id) {
         if (data.success && data.proveedor) {
             const proveedor = data.proveedor;
             
-            document.getElementById('proveedorId').value = proveedor.id;
-            document.getElementById('nombre').value = proveedor.nombre || '';
-            document.getElementById('propietario').value = proveedor.propietario || '';
-            document.getElementById('telefono').value = proveedor.telefono || '';
-            document.getElementById('descripcion').value = proveedor.descripcion || '';
-            document.getElementById('ubicacion_gps').value = proveedor.ubicacion_gps || '';
-            document.getElementById('id_filtro').value = proveedor.id_filtro || '';
+            // Asignar valores con verificación de existencia
+            const proveedorId = document.getElementById('proveedorId');
+            if (proveedorId) proveedorId.value = proveedor.id;
+            
+            const nombre = document.getElementById('nombre');
+            if (nombre) nombre.value = proveedor.nombre || '';
+            
+            const propietario = document.getElementById('propietario');
+            if (propietario) propietario.value = proveedor.propietario || '';
+            
+            const telefono = document.getElementById('telefono');
+            if (telefono) telefono.value = proveedor.telefono || '';
+            
+            const descripcion = document.getElementById('descripcion');
+            if (descripcion) descripcion.value = proveedor.descripcion || '';
+            
+            const ubicacionGps = document.getElementById('ubicacion_gps');
+            if (ubicacionGps) {
+                ubicacionGps.value = proveedor.ubicacion_gps || '';
+                delete ubicacionGps.dataset.userEdited;
+            }
+            
+            // Si existe el select de categoría
+            const idFiltro = document.getElementById('id_filtro');
+            if (idFiltro) {
+                idFiltro.value = proveedor.id_filtro || '';
+            }
             
             // Extraer coordenadas para el mapa
             let lat = DEFAULT_LAT, lng = DEFAULT_LNG;
@@ -561,10 +617,20 @@ async function editarProveedor(id) {
                 }
             }
             
-            document.getElementById('latitud').value = lat;
-            document.getElementById('longitud').value = lng;
+            const latitud = document.getElementById('latitud');
+            if (latitud) latitud.value = lat;
             
-            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Proveedor';
+            const longitud = document.getElementById('longitud');
+            if (longitud) longitud.value = lng;
+            
+            currentLat = lat;
+            currentLng = lng;
+            
+            const modalTitle = document.getElementById('modalTitle');
+            if (modalTitle) {
+                modalTitle.innerHTML = '<i class="fas fa-edit"></i> Editar Proveedor';
+            }
+            
             abrirModal('modalProveedor');
             
             // Inicializar mapa con las coordenadas del proveedor
@@ -618,7 +684,10 @@ async function guardarProveedor(event) {
         const propietario = document.getElementById('propietario').value.trim();
         const descripcion = document.getElementById('descripcion').value.trim();
         const ubicacion_gps = document.getElementById('ubicacion_gps').value.trim();
-        const id_filtro = document.getElementById('id_filtro').value;
+        
+        // Obtener id_filtro solo si existe
+        const idFiltroEl = document.getElementById('id_filtro');
+        const id_filtro = idFiltroEl ? idFiltroEl.value : null;
         
         // Validaciones
         if (!nombre) {
@@ -694,7 +763,10 @@ async function guardarProveedor(event) {
 
 function confirmarEliminarModal(id, nombre) {
     proveedorAEliminar = id;
-    document.getElementById('proveedorNombreEliminar').innerHTML = `<strong>${escapeHtml(nombre)}</strong>`;
+    const nombreEl = document.getElementById('proveedorNombreEliminar');
+    if (nombreEl) {
+        nombreEl.innerHTML = `<strong>${escapeHtml(nombre)}</strong>`;
+    }
     abrirModal('modalEliminar');
 }
 
@@ -756,45 +828,47 @@ async function verDetalle(id) {
             const tieneCoords = lat && lng && !isNaN(lat) && !isNaN(lng);
             
             const modalBody = document.getElementById('modalDetalleBody');
-            modalBody.innerHTML = `
-                <div class="detalle-grid">
-                    <div class="detalle-item">
-                        <label><i class="fas fa-building"></i> Nombre</label>
-                        <p><strong>${escapeHtml(p.nombre)}</strong></p>
+            if (modalBody) {
+                modalBody.innerHTML = `
+                    <div class="detalle-grid">
+                        <div class="detalle-item">
+                            <label><i class="fas fa-building"></i> Nombre</label>
+                            <p><strong>${escapeHtml(p.nombre)}</strong></p>
+                        </div>
+                        <div class="detalle-item">
+                            <label><i class="fas fa-user"></i> Propietario</label>
+                            <p>${escapeHtml(p.propietario) || '-'}</p>
+                        </div>
+                        <div class="detalle-item">
+                            <label><i class="fas fa-phone"></i> Teléfono</label>
+                            <p>${escapeHtml(p.telefono)}</p>
+                        </div>
+                        <div class="detalle-item">
+                            <label><i class="fas fa-tags"></i> Repuestos que ofrece</label>
+                            <p>${escapeHtml(p.descripcion) || '-'}</p>
+                        </div>
+                        <div class="detalle-item">
+                            <label><i class="fas fa-tag"></i> Categoría</label>
+                            <p>${p.categoria ? `<span class="categoria-tag">${escapeHtml(p.categoria)}</span>` : '-'}</p>
+                        </div>
+                        <div class="detalle-item">
+                            <label><i class="fas fa-map-marker-alt"></i> Ubicación GPS</label>
+                            <p>
+                                ${escapeHtml(p.ubicacion_gps) || '-'}
+                                ${tieneCoords ? `
+                                    <button class="btn-maps" onclick="abrirGoogleMaps(${lat}, ${lng}, '${escapeHtml(p.nombre)}')" title="Abrir en Google Maps" style="margin-left: 0.5rem;">
+                                        <i class="fas fa-external-link-alt"></i> Abrir en Maps
+                                    </button>
+                                ` : ''}
+                            </p>
+                        </div>
+                        <div class="detalle-item">
+                            <label><i class="fas fa-id-card"></i> ID</label>
+                            <p>#${p.id}</p>
+                        </div>
                     </div>
-                    <div class="detalle-item">
-                        <label><i class="fas fa-user"></i> Propietario</label>
-                        <p>${escapeHtml(p.propietario) || '-'}</p>
-                    </div>
-                    <div class="detalle-item">
-                        <label><i class="fas fa-phone"></i> Teléfono</label>
-                        <p>${escapeHtml(p.telefono)}</p>
-                    </div>
-                    <div class="detalle-item">
-                        <label><i class="fas fa-tags"></i> Repuestos que ofrece</label>
-                        <p>${escapeHtml(p.descripcion) || '-'}</p>
-                    </div>
-                    <div class="detalle-item">
-                        <label><i class="fas fa-tag"></i> Categoría</label>
-                        <p>${p.categoria ? `<span class="categoria-tag">${escapeHtml(p.categoria)}</span>` : '-'}</p>
-                    </div>
-                    <div class="detalle-item">
-                        <label><i class="fas fa-map-marker-alt"></i> Ubicación GPS</label>
-                        <p>
-                            ${escapeHtml(p.ubicacion_gps) || '-'}
-                            ${tieneCoords ? `
-                                <button class="btn-maps" onclick="abrirGoogleMaps(${lat}, ${lng}, '${escapeHtml(p.nombre)}')" title="Abrir en Google Maps" style="margin-left: 0.5rem;">
-                                    <i class="fas fa-external-link-alt"></i> Abrir en Maps
-                                </button>
-                            ` : ''}
-                        </p>
-                    </div>
-                    <div class="detalle-item">
-                        <label><i class="fas fa-id-card"></i> ID</label>
-                        <p>#${p.id}</p>
-                    </div>
-                </div>
-            `;
+                `;
+            }
             
             abrirModal('modalDetalle');
         } else {
@@ -930,7 +1004,6 @@ function setupEventListeners() {
     // IMPORTANTE: Configurar el formulario sin duplicados
     const proveedorForm = document.getElementById('proveedorForm');
     if (proveedorForm) {
-        // Eliminar cualquier listener anterior y agregar uno nuevo
         proveedorForm.removeEventListener('submit', guardarProveedor);
         proveedorForm.addEventListener('submit', guardarProveedor);
     }

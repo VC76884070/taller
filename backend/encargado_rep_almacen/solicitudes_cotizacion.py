@@ -1,6 +1,6 @@
 # =====================================================
 # SOLICITUDES_COTIZACION.PY - ENCARGADO DE REPUESTOS
-# VERSIÓN CORREGIDA - CON FOTOS EN ARRAY
+# VERSIÓN COMPLETA CON PROVEEDORES INTEGRADOS
 # FURIA MOTOR COMPANY SRL
 # =====================================================
 
@@ -27,7 +27,7 @@ supabase = config.supabase
 
 
 # =====================================================
-# 🔥 FUNCIÓN PARA EXTRAER FILE_ID DE DRIVE (VERSIÓN ÚNICA)
+# 🔥 FUNCIÓN PARA EXTRAER FILE_ID DE DRIVE
 # =====================================================
 
 def extraer_file_id_drive(url):
@@ -59,7 +59,7 @@ def extraer_file_id_drive(url):
 
 
 # =====================================================
-# 🔥 ENDPOINT PROXY PARA IMÁGENES (VERSIÓN ÚNICA CORREGIDA)
+# 🔥 ENDPOINT PROXY PARA IMÁGENES
 # =====================================================
 
 @solicitudes_cotizacion_bp.route('/proxy-imagen', methods=['GET'])
@@ -89,7 +89,7 @@ def proxy_imagen(current_user):
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
     
-    # 🔥 SI ES GOOGLE DRIVE - USAR LA FUNCIÓN LOCAL
+    # 🔥 SI ES GOOGLE DRIVE
     file_id = extraer_file_id_drive(url)
     if not file_id:
         logger.warning(f"⚠️ No se pudo extraer ID de: {url[:80]}...")
@@ -97,7 +97,7 @@ def proxy_imagen(current_user):
     
     logger.debug(f"📸 Proxy imagen - file_id: {file_id}")
     
-    # Estrategias de descarga (en orden de prioridad)
+    # Estrategias de descarga
     urls_descarga = [
         f"https://drive.google.com/thumbnail?id={file_id}&sz=w800",
         f"https://drive.google.com/uc?export=view&id={file_id}",
@@ -218,7 +218,264 @@ def parse_items_con_fotos(items_data):
 
 
 # =====================================================
-# ENDPOINT: OBTENER SOLICITUDES (CORREGIDO CON FOTOS)
+# 🔥 ENDPOINT: OBTENER PROVEEDORES (NUEVO)
+# =====================================================
+
+@solicitudes_cotizacion_bp.route('/proveedores', methods=['GET'])
+@encargado_repuestos_required
+def obtener_proveedores(current_user):
+    """
+    Obtener lista de proveedores para el selector en el modal de cotización.
+    Retorna id, nombre, telefono, propietario, ubicacion_gps.
+    """
+    try:
+        # Obtener todos los proveedores ordenados por nombre
+        result = supabase.table('proveedor') \
+            .select('id, nombre, telefono, propietario, ubicacion_gps') \
+            .order('nombre') \
+            .execute()
+        
+        proveedores = result.data if result.data else []
+        
+        return jsonify({
+            'success': True,
+            'proveedores': proveedores
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo proveedores: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# 🔥 ENDPOINT: CREAR PROVEEDOR (NUEVO)
+# =====================================================
+
+@solicitudes_cotizacion_bp.route('/proveedores', methods=['POST'])
+@encargado_repuestos_required
+def crear_proveedor(current_user):
+    """
+    Crear un nuevo proveedor desde el modal de cotización.
+    """
+    try:
+        data = request.get_json()
+        
+        nombre = data.get('nombre', '').strip()
+        telefono = data.get('telefono', '').strip()
+        propietario = data.get('propietario', '').strip()
+        ubicacion_gps = data.get('ubicacion_gps', '').strip()
+        descripcion = data.get('descripcion', '').strip()
+        
+        # Validaciones
+        if not nombre:
+            return jsonify({'error': 'El nombre del proveedor es requerido'}), 400
+        
+        if not telefono:
+            return jsonify({'error': 'El teléfono es requerido'}), 400
+        
+        # Verificar si ya existe un proveedor con el mismo nombre
+        check = supabase.table('proveedor') \
+            .select('id') \
+            .eq('nombre', nombre) \
+            .execute()
+        
+        if check.data and len(check.data) > 0:
+            return jsonify({'error': f'Ya existe un proveedor con el nombre "{nombre}"'}), 400
+        
+        # Insertar nuevo proveedor
+        ahora = datetime.datetime.now().isoformat()
+        nuevo_proveedor = {
+            'nombre': nombre,
+            'telefono': telefono,
+            'propietario': propietario if propietario else None,
+            'ubicacion_gps': ubicacion_gps if ubicacion_gps else None,
+            'descripcion': descripcion if descripcion else None,
+            'created_at': ahora,
+            'updated_at': ahora
+        }
+        
+        result = supabase.table('proveedor') \
+            .insert(nuevo_proveedor) \
+            .execute()
+        
+        if not result.data:
+            return jsonify({'error': 'Error al crear el proveedor'}), 500
+        
+        proveedor_creado = result.data[0]
+        
+        logger.info(f"✅ Proveedor creado: {nombre} por usuario {current_user['id']}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Proveedor creado exitosamente',
+            'proveedor': {
+                'id': proveedor_creado['id'],
+                'nombre': proveedor_creado['nombre'],
+                'telefono': proveedor_creado['telefono'],
+                'propietario': proveedor_creado.get('propietario'),
+                'ubicacion_gps': proveedor_creado.get('ubicacion_gps'),
+                'descripcion': proveedor_creado.get('descripcion')
+            }
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Error creando proveedor: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# 🔥 ENDPOINT: OBTENER PROVEEDOR POR ID (NUEVO)
+# =====================================================
+
+@solicitudes_cotizacion_bp.route('/proveedores/<int:id_proveedor>', methods=['GET'])
+@encargado_repuestos_required
+def obtener_proveedor(current_user, id_proveedor):
+    """
+    Obtener un proveedor específico por su ID.
+    """
+    try:
+        result = supabase.table('proveedor') \
+            .select('id, nombre, telefono, propietario, ubicacion_gps, descripcion') \
+            .eq('id', id_proveedor) \
+            .execute()
+        
+        if not result.data:
+            return jsonify({'success': False, 'error': 'Proveedor no encontrado'}), 404
+        
+        proveedor = result.data[0]
+        
+        return jsonify({
+            'success': True,
+            'proveedor': proveedor
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo proveedor: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# 🔥 ENDPOINT: ACTUALIZAR PROVEEDOR (NUEVO)
+# =====================================================
+
+@solicitudes_cotizacion_bp.route('/proveedores/<int:id_proveedor>', methods=['PUT'])
+@encargado_repuestos_required
+def actualizar_proveedor(current_user, id_proveedor):
+    """
+    Actualizar un proveedor existente.
+    """
+    try:
+        # Verificar que el proveedor existe
+        check = supabase.table('proveedor') \
+            .select('id') \
+            .eq('id', id_proveedor) \
+            .execute()
+        
+        if not check.data:
+            return jsonify({'success': False, 'error': 'Proveedor no encontrado'}), 404
+        
+        data = request.get_json()
+        
+        nombre = data.get('nombre', '').strip()
+        telefono = data.get('telefono', '').strip()
+        propietario = data.get('propietario', '').strip()
+        ubicacion_gps = data.get('ubicacion_gps', '').strip()
+        descripcion = data.get('descripcion', '').strip()
+        
+        # Validaciones
+        if not nombre:
+            return jsonify({'error': 'El nombre del proveedor es requerido'}), 400
+        
+        if not telefono:
+            return jsonify({'error': 'El teléfono es requerido'}), 400
+        
+        # Preparar datos para actualizar
+        update_data = {
+            'nombre': nombre,
+            'telefono': telefono,
+            'propietario': propietario if propietario else None,
+            'ubicacion_gps': ubicacion_gps if ubicacion_gps else None,
+            'descripcion': descripcion if descripcion else None,
+            'updated_at': datetime.datetime.now().isoformat()
+        }
+        
+        # Ejecutar actualización
+        result = supabase.table('proveedor') \
+            .update(update_data) \
+            .eq('id', id_proveedor) \
+            .execute()
+        
+        if not result.data:
+            return jsonify({'success': False, 'error': 'Error al actualizar proveedor'}), 500
+        
+        proveedor_actualizado = result.data[0]
+        
+        logger.info(f"✅ Proveedor actualizado: {nombre} por usuario {current_user['id']}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Proveedor actualizado exitosamente',
+            'proveedor': {
+                'id': proveedor_actualizado['id'],
+                'nombre': proveedor_actualizado['nombre'],
+                'telefono': proveedor_actualizado['telefono'],
+                'propietario': proveedor_actualizado.get('propietario'),
+                'ubicacion_gps': proveedor_actualizado.get('ubicacion_gps'),
+                'descripcion': proveedor_actualizado.get('descripcion')
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error actualizando proveedor: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# 🔥 ENDPOINT: ELIMINAR PROVEEDOR (NUEVO)
+# =====================================================
+
+@solicitudes_cotizacion_bp.route('/proveedores/<int:id_proveedor>', methods=['DELETE'])
+@encargado_repuestos_required
+def eliminar_proveedor(current_user, id_proveedor):
+    """
+    Eliminar un proveedor.
+    """
+    try:
+        # Verificar que el proveedor existe
+        check = supabase.table('proveedor') \
+            .select('id, nombre') \
+            .eq('id', id_proveedor) \
+            .execute()
+        
+        if not check.data:
+            return jsonify({'success': False, 'error': 'Proveedor no encontrado'}), 404
+        
+        nombre_proveedor = check.data[0].get('nombre', 'Unknown')
+        
+        # Eliminar proveedor
+        supabase.table('proveedor') \
+            .delete() \
+            .eq('id', id_proveedor) \
+            .execute()
+        
+        logger.info(f"🗑️ Proveedor eliminado: {nombre_proveedor} por usuario {current_user['id']}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Proveedor "{nombre_proveedor}" eliminado exitosamente'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error eliminando proveedor: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT: OBTENER SOLICITUDES (CON FOTOS)
 # =====================================================
 
 @solicitudes_cotizacion_bp.route('/solicitudes-cotizacion', methods=['GET'])
@@ -227,21 +484,39 @@ def obtener_solicitudes_cotizacion(current_user):
     """Obtener solicitudes de cotización asignadas al encargado de repuestos"""
     try:
         estado = request.args.get('estado')
+        search = request.args.get('search', '')
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 10))
         
         # Construir query base
         query = supabase.table('solicitud_cotizacion_repuesto') \
-            .select('*') \
-            .eq('id_encargado_repuestos', current_user['id']) \
-            .order('fecha_solicitud', desc=True)
+            .select('*', count='exact') \
+            .eq('id_encargado_repuestos', current_user['id'])
         
         # Aplicar filtro de estado si existe
         if estado and estado != 'all':
             query = query.eq('estado', estado)
         
+        # Ordenar
+        query = query.order('fecha_solicitud', desc=True)
+        
+        # Paginación
+        offset = (page - 1) * limit
+        query = query.range(offset, offset + limit - 1)
+        
         result = query.execute()
         
         if not result.data:
-            return jsonify({'success': True, 'solicitudes': []}), 200
+            return jsonify({
+                'success': True, 
+                'solicitudes': [],
+                'pagination': {
+                    'current_page': page,
+                    'total_pages': 1,
+                    'total': 0,
+                    'per_page': limit
+                }
+            }), 200
         
         # Obtener IDs únicos de órdenes y servicios
         ordenes_ids = list(set([s.get('id_orden_trabajo') for s in result.data if s.get('id_orden_trabajo')]))
@@ -317,9 +592,31 @@ def obtener_solicitudes_cotizacion(current_user):
                 'fecha_respuesta': s.get('fecha_respuesta')
             })
         
+        # 🔥 FILTRAR POR BÚSQUEDA (si existe)
+        if search and search.strip():
+            search_lower = search.lower().strip()
+            solicitudes = [s for s in solicitudes if 
+                search_lower in (s.get('orden_codigo') or '').lower() or
+                search_lower in (s.get('vehiculo') or '').lower() or
+                search_lower in (s.get('descripcion_pieza') or '').lower() or
+                any(search_lower in (item.get('descripcion') or '').lower() for item in s.get('items', []))
+            ]
+        
+        total = result.count if hasattr(result, 'count') else len(result.data)
+        total_pages = (total + limit - 1) // limit if total > 0 else 1
+        
         logger.info(f"📊 {len(solicitudes)} solicitudes, {sum(s.get('total_fotos', 0) for s in solicitudes)} fotos")
         
-        return jsonify({'success': True, 'solicitudes': solicitudes}), 200
+        return jsonify({
+            'success': True, 
+            'solicitudes': solicitudes,
+            'pagination': {
+                'current_page': page,
+                'total_pages': total_pages,
+                'total': total,
+                'per_page': limit
+            }
+        }), 200
         
     except Exception as e:
         logger.error(f"Error obteniendo solicitudes: {str(e)}")
@@ -329,7 +626,7 @@ def obtener_solicitudes_cotizacion(current_user):
 
 
 # =====================================================
-# ENDPOINT: OBTENER DETALLE DE SOLICITUD (CORREGIDO CON FOTOS)
+# ENDPOINT: OBTENER DETALLE DE SOLICITUD (CON FOTOS)
 # =====================================================
 
 @solicitudes_cotizacion_bp.route('/solicitudes-cotizacion/<int:id_solicitud>', methods=['GET'])

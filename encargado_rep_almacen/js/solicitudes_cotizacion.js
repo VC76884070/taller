@@ -1,6 +1,6 @@
 // =====================================================
 // SOLICITUDES_COTIZACION.JS - ENCARGADO DE REPUESTOS
-// VERSIÓN CORREGIDA - MANEJA ARRAY DE FOTOS
+// VERSIÓN COMPLETA CON PROVEEDORES REUTILIZADOS
 // FURIA MOTOR COMPANY SRL
 // =====================================================
 
@@ -25,6 +25,32 @@ let currentFilters = {
 };
 let isLoading = false;
 let imageCache = {};
+
+// =====================================================
+// 🔥 VARIABLES PARA PROVEEDORES
+// =====================================================
+let proveedoresCache = {
+    data: [],
+    timestamp: 0
+};
+let currentSolicitudId = null;
+let isSubmitting = false;
+
+// =====================================================
+// 🔥 VARIABLES PARA EL MAPA
+// =====================================================
+let map = null;
+let mapMarker = null;
+let currentLat = null;
+let currentLng = null;
+const DEFAULT_LAT = -17.7835;
+const DEFAULT_LNG = -63.1821;
+
+// Exponer para uso global en HTML
+window.DEFAULT_LAT = DEFAULT_LAT;
+window.DEFAULT_LNG = DEFAULT_LNG;
+window.map = map;
+window.mapMarker = mapMarker;
 
 // =====================================================
 // UTILIDADES
@@ -74,6 +100,7 @@ function formatDateTime(dateStr) {
 }
 
 function showToast(message, type = 'info') {
+    // Remover toast existente
     const existingToast = document.querySelector('.toast-notification');
     if (existingToast) existingToast.remove();
     
@@ -148,7 +175,7 @@ function debounce(func, wait) {
 }
 
 // =====================================================
-// 🔥 FUNCIÓN PARA CARGAR IMAGEN VÍA PROXY (CORREGIDA)
+// 🔥 FUNCIÓN PARA CARGAR IMAGEN VÍA PROXY
 // =====================================================
 
 async function cargarImagenProxy(url, imgElement, loaderElement) {
@@ -225,7 +252,7 @@ async function cargarImagenProxy(url, imgElement, loaderElement) {
 }
 
 // =====================================================
-// 🔥 FUNCIÓN PARA RENDERIZAR ITEMS CON ARRAY DE FOTOS
+// 🔥 FUNCIÓN PARA RENDERIZAR ITEMS CON FOTOS
 // =====================================================
 
 function renderItemsConFotos(items, maxItems = 3, prefix = '') {
@@ -335,7 +362,7 @@ function cargarImagenesEnTarjetas() {
 }
 
 // =====================================================
-// CARGA DE SOLICITUDES
+// 🔥 CARGA DE SOLICITUDES
 // =====================================================
 
 async function cargarSolicitudes(resetPage = true) {
@@ -505,11 +532,373 @@ function cambiarPagina(page) {
     currentFilters.page = page;
     cargarSolicitudes(false);
 }
+
 // =====================================================
-// COTIZAR SOLICITUD - CON 3 FOTOS MINIATURA
+// 🔥 PROVEEDORES - FUNCIONES REUTILIZADAS
 // =====================================================
 
-let currentSolicitudId = null;
+async function cargarProveedores(forceRefresh = false) {
+    try {
+        // Usar caché si no ha pasado mucho tiempo (5 minutos)
+        if (!forceRefresh && proveedoresCache.data.length > 0 && 
+            (Date.now() - proveedoresCache.timestamp) < 300000) {
+            return proveedoresCache.data;
+        }
+        
+        const response = await fetch(`${API_URL}/proveedores`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.status === 401) {
+            showToast('Sesión expirada', 'warning');
+            return [];
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            proveedoresCache.data = data.proveedores || [];
+            proveedoresCache.timestamp = Date.now();
+            return proveedoresCache.data;
+        } else {
+            console.error('Error cargando proveedores:', data.error);
+            return [];
+        }
+    } catch (error) {
+        console.error('Error cargando proveedores:', error);
+        return [];
+    }
+}
+
+function renderizarSelectProveedores(proveedores, selectedId = null) {
+    if (!proveedores || proveedores.length === 0) {
+        return `<option value="">-- No hay proveedores --</option>`;
+    }
+    
+    return proveedores.map(p => {
+        const selected = (selectedId && p.id === selectedId) ? 'selected' : '';
+        const label = `${p.nombre}${p.telefono ? ' - 📞 ' + p.telefono : ''}${p.propietario ? ' (' + p.propietario + ')' : ''}`;
+        return `<option value="${p.id}" ${selected}>${escapeHtml(label)}</option>`;
+    }).join('');
+}
+
+// =====================================================
+// 🔥 FUNCIONES DEL MAPA (REUTILIZADAS DE PROVEEDORES)
+// =====================================================
+
+function initMap(lat = DEFAULT_LAT, lng = DEFAULT_LNG) {
+    const container = document.getElementById('mapContainer');
+    if (!container) {
+        console.warn('⚠️ Contenedor del mapa no encontrado');
+        return;
+    }
+    
+    // Si ya existe el mapa, lo destruimos
+    if (map) {
+        map.remove();
+        map = null;
+        mapMarker = null;
+    }
+    
+    try {
+        // Crear mapa
+        map = L.map('mapContainer', {
+            center: [lat, lng],
+            zoom: 15,
+            zoomControl: true,
+            fadeAnimation: true,
+            attributionControl: true
+        });
+        
+        // Capa de OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(map);
+        
+        // Icono personalizado
+        const customIcon = L.divIcon({
+            html: '<i class="fas fa-map-pin" style="color: #C1121F; font-size: 2rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5);"></i>',
+            className: 'custom-marker',
+            iconSize: [30, 42],
+            iconAnchor: [15, 42]
+        });
+        
+        // Agregar marcador
+        mapMarker = L.marker([lat, lng], {
+            draggable: true,
+            icon: customIcon
+        }).addTo(map);
+        
+        // Actualizar coordenadas al mover el marcador
+        mapMarker.on('dragend', function() {
+            const pos = mapMarker.getLatLng();
+            actualizarCoordenadas(pos.lat, pos.lng);
+        });
+        
+        // Click en el mapa para mover el marcador
+        map.on('click', function(e) {
+            const pos = e.latlng;
+            mapMarker.setLatLng(pos);
+            actualizarCoordenadas(pos.lat, pos.lng);
+        });
+        
+        // Actualizar coordenadas iniciales
+        actualizarCoordenadas(lat, lng);
+        
+        // Exponer para uso global
+        window.map = map;
+        window.mapMarker = mapMarker;
+        
+        // Forzar redimensionamiento del mapa después de un momento
+        setTimeout(() => {
+            if (map) {
+                map.invalidateSize();
+            }
+        }, 300);
+        
+        console.log('🗺️ Mapa inicializado correctamente');
+        
+    } catch (error) {
+        console.error('Error al inicializar el mapa:', error);
+        showToast('Error al cargar el mapa', 'error');
+    }
+}
+
+function actualizarCoordenadas(lat, lng) {
+    currentLat = lat;
+    currentLng = lng;
+    
+    // Actualizar inputs ocultos
+    const latInput = document.getElementById('latitud');
+    const lngInput = document.getElementById('longitud');
+    const ubicacionGps = document.getElementById('ubicacion_gps');
+    const coordsDisplay = document.getElementById('coordsDisplay');
+    
+    if (latInput) latInput.value = lat.toFixed(7);
+    if (lngInput) lngInput.value = lng.toFixed(7);
+    
+    // Actualizar campo de ubicación GPS
+    if (ubicacionGps) {
+        const coordsStr = `${lat.toFixed(7)}, ${lng.toFixed(7)}`;
+        // Solo actualizar si el campo está vacío o si el usuario no ha escrito manualmente
+        if (!ubicacionGps.dataset.userEdited) {
+            ubicacionGps.value = coordsStr;
+        }
+    }
+    
+    // Actualizar info visual
+    if (coordsDisplay) {
+        coordsDisplay.textContent = `${lat.toFixed(7)}, ${lng.toFixed(7)}`;
+    }
+}
+
+function obtenerUbicacionActual() {
+    if (!navigator.geolocation) {
+        showToast('Tu navegador no soporta geolocalización', 'warning');
+        return;
+    }
+    
+    showToast('Obteniendo ubicación...', 'info');
+    
+    navigator.geolocation.getCurrentPosition(
+        function(pos) {
+            const { latitude, longitude } = pos.coords;
+            if (map) {
+                map.setView([latitude, longitude], 16);
+                if (mapMarker) {
+                    mapMarker.setLatLng([latitude, longitude]);
+                }
+                actualizarCoordenadas(latitude, longitude);
+                showToast('📍 Ubicación actualizada', 'success');
+            }
+        },
+        function(error) {
+            console.error('Error de geolocalización:', error);
+            let msg = 'No se pudo obtener tu ubicación. ';
+            if (error.code === 1) {
+                msg += 'Permite el acceso a la ubicación en tu navegador.';
+            } else if (error.code === 2) {
+                msg += 'Señal GPS no disponible. Intenta más tarde.';
+            } else {
+                msg += 'Usa la ubicación por defecto o mueve el marcador en el mapa.';
+            }
+            showToast(msg, 'warning');
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        }
+    );
+}
+
+// =====================================================
+// 🔥 MODALES DE PROVEEDORES (REUTILIZADOS)
+// =====================================================
+
+function cerrarModalProveedor() {
+    cerrarModal('modalProveedor');
+    if (map) {
+        map.remove();
+        map = null;
+        mapMarker = null;
+        window.map = null;
+        window.mapMarker = null;
+    }
+}
+
+function abrirModalProveedor() {
+    // Limpiar formulario
+    document.getElementById('proveedorId').value = '';
+    document.getElementById('nombre').value = '';
+    document.getElementById('propietario').value = '';
+    document.getElementById('telefono').value = '';
+    document.getElementById('descripcion').value = '';
+    document.getElementById('ubicacion_gps').value = '';
+    document.getElementById('latitud').value = DEFAULT_LAT;
+    document.getElementById('longitud').value = DEFAULT_LNG;
+    
+    // Resetear flag de edición manual
+    const ubicacionGps = document.getElementById('ubicacion_gps');
+    if (ubicacionGps) {
+        delete ubicacionGps.dataset.userEdited;
+    }
+    
+    // Actualizar título
+    const modalTitle = document.getElementById('modalTitleProveedor');
+    if (modalTitle) {
+        modalTitle.innerHTML = '<i class="fas fa-truck"></i> Nuevo Proveedor';
+    }
+    
+    // Abrir modal
+    abrirModal('modalProveedor');
+    
+    // Inicializar mapa después de que el modal se haya mostrado
+    setTimeout(() => {
+        initMap(DEFAULT_LAT, DEFAULT_LNG);
+    }, 400);
+}
+
+// =====================================================
+// 🔥 GUARDAR PROVEEDOR DESDE MODAL
+// =====================================================
+
+async function guardarProveedorDesdeModal(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
+    // Evitar envíos duplicados
+    if (isSubmitting) {
+        console.log('⏳ Ya hay un envío en proceso');
+        return;
+    }
+    
+    isSubmitting = true;
+    
+    const submitBtn = document.querySelector('#proveedorForm .btn-primary');
+    let originalBtnText = '';
+    if (submitBtn) {
+        originalBtnText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+    }
+    
+    try {
+        const id = document.getElementById('proveedorId').value;
+        const nombre = document.getElementById('nombre').value.trim();
+        const telefono = document.getElementById('telefono').value.trim();
+        const propietario = document.getElementById('propietario').value.trim();
+        const descripcion = document.getElementById('descripcion').value.trim();
+        const ubicacion_gps = document.getElementById('ubicacion_gps').value.trim();
+        
+        // Validaciones
+        if (!nombre) {
+            showToast('El nombre del proveedor es requerido', 'error');
+            document.getElementById('nombre').focus();
+            return;
+        }
+        
+        if (!telefono) {
+            showToast('El teléfono es requerido', 'error');
+            document.getElementById('telefono').focus();
+            return;
+        }
+        
+        // Si el campo ubicacion_gps está vacío pero el mapa tiene coordenadas, usar las del mapa
+        let ubicacionFinal = ubicacion_gps;
+        if (!ubicacionFinal && currentLat && currentLng) {
+            ubicacionFinal = `${currentLat.toFixed(7)}, ${currentLng.toFixed(7)}`;
+        }
+        
+        const proveedorData = {
+            nombre: nombre,
+            telefono: telefono,
+            propietario: propietario || null,
+            descripcion: descripcion || null,
+            ubicacion_gps: ubicacionFinal || null
+        };
+        
+        mostrarLoading(true);
+        
+        let url = `${API_URL}/proveedores`;
+        let method = 'POST';
+        
+        if (id) {
+            url = `${API_URL}/proveedores/${id}`;
+            method = 'PUT';
+        }
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: getAuthHeaders(),
+            body: JSON.stringify(proveedorData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast(id ? '✅ Proveedor actualizado' : '✅ Proveedor creado', 'success');
+            cerrarModalProveedor();
+            
+            // 🔥 RECARGAR PROVEEDORES Y ACTUALIZAR SELECT
+            proveedoresCache.timestamp = 0;
+            const proveedores = await cargarProveedores(true);
+            
+            const select = document.getElementById('proveedorSelect');
+            if (select) {
+                const opcionesHtml = renderizarSelectProveedores(proveedores, data.proveedor?.id);
+                select.innerHTML = `
+                    <option value="">-- Seleccione un proveedor --</option>
+                    ${opcionesHtml}
+                `;
+                if (data.proveedor?.id) {
+                    select.value = data.proveedor.id;
+                    select.dispatchEvent(new Event('change'));
+                }
+            }
+        } else {
+            showToast(data.error || 'Error al guardar proveedor', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión con el servidor', 'error');
+    } finally {
+        mostrarLoading(false);
+        isSubmitting = false;
+        
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnText;
+        }
+    }
+}
+
+// =====================================================
+// 🔥 ABRIR MODAL COTIZAR (CON SELECT DE PROVEEDORES)
+// =====================================================
 
 async function abrirModalCotizar(idSolicitud) {
     let solicitud = solicitudesCache.data?.find(s => s.id === idSolicitud);
@@ -542,20 +931,23 @@ async function abrirModalCotizar(idSolicitud) {
     
     currentSolicitudId = idSolicitud;
     
+    // 🔥 CARGAR PROVEEDORES
+    mostrarLoading(true);
+    const proveedores = await cargarProveedores();
+    mostrarLoading(false);
+    
     let items = solicitud.items || [];
     if (typeof items === 'string') {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
     
-    // 🔥 RENDERIZAR ITEMS CON 3 FOTOS MINIATURA
+    // Renderizar items con fotos
     const itemsHtml = items.map((item, idx) => {
         const fotos = item.fotos || [];
         const fotosCount = fotos.length;
         
-        // 🔥 GENERAR MINIATURAS PARA CADA FOTO (hasta 3)
         let miniaturasHtml = '';
         if (fotosCount > 0) {
-            // Mostrar hasta 3 fotos como miniaturas
             const fotosMostrar = fotos.slice(0, 3);
             miniaturasHtml = `
                 <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:4px;">
@@ -583,12 +975,11 @@ async function abrirModalCotizar(idSolicitud) {
         return `
             <div class="precio-item-row" style="display:flex; align-items:center; gap:1rem; padding:0.75rem; background:var(--bg-card); border-radius:8px; margin-bottom:0.5rem; border:1px solid var(--border-color);">
                 <div style="display:flex; flex-direction:column; align-items:center; gap:4px; min-width:70px;">
-                    ${miniaturasHtml}
-                    ${fotosCount === 0 ? `
+                    ${miniaturasHtml || `
                         <div style="width:50px; height:50px; border-radius:6px; background:var(--gris-oscuro); display:flex; align-items:center; justify-content:center; color:var(--gris-texto); border:2px dashed var(--border-color);">
                             <i class="fas fa-camera" style="font-size:1.2rem;"></i>
                         </div>
-                    ` : ''}
+                    `}
                     <span style="font-size:0.6rem; color:var(--gris-texto);">${fotosCount} foto(s)</span>
                 </div>
                 <div class="precio-item-desc" style="flex:1;">
@@ -598,13 +989,16 @@ async function abrirModalCotizar(idSolicitud) {
                 </div>
                 <div class="precio-item-input" style="min-width:180px;">
                     <label style="font-size:0.7rem; color:var(--gris-texto);">Precio unitario (Bs.):</label>
-                    <input type="number" id="precio_item_${idSolicitud}_${idx}" class="precio-input" step="0.01" min="0" placeholder="0.00" 
+                    <input type="number" id="precio_item_${idx}" class="precio-input" step="0.01" min="0" placeholder="0.00" 
                            style="width:100%; padding:0.4rem; border-radius:6px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white;">
-                    <span class="total-hint" style="font-size:0.7rem; color:var(--gris-texto);">Total: Bs. <span id="total_item_${idSolicitud}_${idx}" class="total-item" style="color:var(--verde-exito); font-weight:600;">0.00</span></span>
+                    <span class="total-hint" style="font-size:0.7rem; color:var(--gris-texto);">Total: Bs. <span id="total_item_${idx}" class="total-item" style="color:var(--verde-exito); font-weight:600;">0.00</span></span>
                 </div>
             </div>
         `;
     }).join('');
+    
+    // 🔥 RENDERIZAR SELECT DE PROVEEDORES
+    const selectProveedoresHtml = renderizarSelectProveedores(proveedores);
     
     const modalBody = document.getElementById('modalCotizarBody');
     modalBody.innerHTML = `
@@ -629,15 +1023,32 @@ async function abrirModalCotizar(idSolicitud) {
         
         <div style="margin-bottom: 1.5rem;">
             <h4 style="margin-bottom:0.75rem;"><i class="fas fa-cubes"></i> Items a cotizar (${items.length}):</h4>
-            <div style="max-height:450px; overflow-y:auto; padding-right:4px;">
+            <div style="max-height:300px; overflow-y:auto; padding-right:4px;">
                 ${itemsHtml}
             </div>
         </div>
         
-        <div class="form-group" style="margin-bottom:1rem;">
-            <label style="font-weight:600;"><i class="fas fa-truck"></i> Proveedor *</label>
-            <input type="text" id="proveedorInfo" class="form-control" placeholder="Ej: Autoparts Bolivia" autocomplete="off" 
-                   style="width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white; margin-top:4px;">
+        <!-- 🔥 SECCIÓN DE PROVEEDOR CON SELECT Y BOTÓN NUEVO -->
+        <div class="form-group proveedor-section" style="margin-bottom:1.5rem; padding:1rem; background:var(--bg-card); border-radius:10px; border:1px solid var(--border-color);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                <label style="font-weight:600; font-size:0.95rem;">
+                    <i class="fas fa-truck"></i> Proveedor *
+                </label>
+                <button type="button" class="btn-nuevo-proveedor" onclick="abrirModalProveedor()" 
+                        style="padding:0.3rem 0.8rem; border-radius:6px; border:1px solid var(--rojo-primario); background:transparent; color:var(--rojo-primario); font-size:0.75rem; cursor:pointer; transition:all 0.2s;">
+                    <i class="fas fa-plus"></i> Nuevo
+                </button>
+            </div>
+            
+            <select id="proveedorSelect" class="form-control" style="width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white; font-size:0.95rem;">
+                <option value="">-- Seleccione un proveedor --</option>
+                ${selectProveedoresHtml}
+            </select>
+            
+            <div id="proveedorInfoDisplay" style="margin-top:0.5rem; font-size:0.8rem; color:var(--gris-texto); display:none;">
+                <span id="proveedorTelefono"></span>
+                <span id="proveedorUbicacion"></span>
+            </div>
         </div>
         
         <div class="form-group" style="margin-bottom:1.5rem;">
@@ -650,7 +1061,7 @@ async function abrirModalCotizar(idSolicitud) {
             <button class="btn-secondary" onclick="cerrarModal('modalCotizar')" style="padding:0.5rem 1.5rem; border-radius:8px; border:none; cursor:pointer;">
                 Cancelar
             </button>
-            <button class="btn-cotizar" onclick="enviarCotizacion()" style="padding:0.5rem 1.5rem; border-radius:8px; border:none; cursor:pointer; background:var(--rojo-primario); color:white; font-weight:600;">
+            <button class="btn-cotizar" onclick="enviarCotizacionConProveedor()" style="padding:0.5rem 1.5rem; border-radius:8px; border:none; cursor:pointer; background:var(--rojo-primario); color:white; font-weight:600;">
                 <i class="fas fa-paper-plane"></i> Enviar Cotización
             </button>
         </div>
@@ -659,11 +1070,10 @@ async function abrirModalCotizar(idSolicitud) {
     // Configurar eventos de precio y cargar imágenes
     setTimeout(() => {
         items.forEach((item, idx) => {
-            // Precio input
-            const precioInput = document.getElementById(`precio_item_${idSolicitud}_${idx}`);
+            const precioInput = document.getElementById(`precio_item_${idx}`);
             if (precioInput) {
                 precioInput.addEventListener('input', function() {
-                    const totalSpan = document.getElementById(`total_item_${idSolicitud}_${idx}`);
+                    const totalSpan = document.getElementById(`total_item_${idx}`);
                     if (totalSpan) {
                         const precio = parseFloat(this.value) || 0;
                         const total = precio * item.cantidad;
@@ -674,23 +1084,48 @@ async function abrirModalCotizar(idSolicitud) {
             }
         });
         
-        const firstInput = document.getElementById(`precio_item_${idSolicitud}_0`);
+        // 🔥 EVENTO PARA MOSTRAR INFO DEL PROVEEDOR SELECCIONADO
+        const proveedorSelect = document.getElementById('proveedorSelect');
+        const infoDisplay = document.getElementById('proveedorInfoDisplay');
+        const telefonoSpan = document.getElementById('proveedorTelefono');
+        const ubicacionSpan = document.getElementById('proveedorUbicacion');
+        
+        if (proveedorSelect && infoDisplay) {
+            proveedorSelect.addEventListener('change', function() {
+                const selectedId = parseInt(this.value);
+                if (selectedId && proveedoresCache.data.length > 0) {
+                    const proveedor = proveedoresCache.data.find(p => p.id === selectedId);
+                    if (proveedor) {
+                        infoDisplay.style.display = 'block';
+                        telefonoSpan.textContent = proveedor.telefono ? `📞 ${proveedor.telefono}` : '';
+                        ubicacionSpan.textContent = proveedor.ubicacion_gps ? `📍 ${proveedor.ubicacion_gps}` : '';
+                        
+                        if (proveedor.ubicacion_gps) {
+                            ubicacionSpan.style.display = 'inline';
+                        } else {
+                            ubicacionSpan.style.display = 'none';
+                        }
+                    }
+                } else {
+                    infoDisplay.style.display = 'none';
+                }
+            });
+        }
+        
+        // Enfocar el primer input de precio
+        const firstInput = document.getElementById('precio_item_0');
         if (firstInput) firstInput.focus();
         
-        // 🔥 CARGAR TODAS LAS IMÁGENES (hasta 3 por item)
+        // 🔥 CARGAR TODAS LAS IMÁGENES
         items.forEach((item, idx) => {
             const fotos = item.fotos || [];
-            // Cargar hasta 3 fotos por item
             const fotosCargar = fotos.slice(0, 3);
             fotosCargar.forEach((f, fi) => {
                 const imgId = `img_cotizar_${idSolicitud}_${idx}_${fi}`;
                 const loaderId = `loader_cotizar_${idSolicitud}_${idx}_${fi}`;
-                
                 const img = document.getElementById(imgId);
                 const loader = document.getElementById(loaderId);
-                
                 if (img && loader) {
-                    console.log(`📸 Cargando foto ${fi+1} para item ${idx}`);
                     cargarImagenProxy(f, img, loader);
                 }
             });
@@ -700,7 +1135,11 @@ async function abrirModalCotizar(idSolicitud) {
     abrirModal('modalCotizar');
 }
 
-async function enviarCotizacion() {
+// =====================================================
+// 🔥 ENVIAR COTIZACIÓN CON PROVEEDOR
+// =====================================================
+
+async function enviarCotizacionConProveedor() {
     const solicitud = solicitudesCache.data?.find(s => s.id === currentSolicitudId);
     if (!solicitud) {
         showToast('Error: No se encontró la solicitud', 'error');
@@ -712,6 +1151,37 @@ async function enviarCotizacion() {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
     
+    // 🔥 OBTENER PROVEEDOR SELECCIONADO
+    const proveedorSelect = document.getElementById('proveedorSelect');
+    const selectedProveedorId = proveedorSelect ? parseInt(proveedorSelect.value) : null;
+    
+    let proveedorInfo = '';
+    let proveedorNombre = '';
+    
+    if (selectedProveedorId && proveedoresCache.data.length > 0) {
+        const proveedor = proveedoresCache.data.find(p => p.id === selectedProveedorId);
+        if (proveedor) {
+            proveedorNombre = proveedor.nombre;
+            proveedorInfo = proveedor.nombre;
+            if (proveedor.telefono) proveedorInfo += ` - 📞 ${proveedor.telefono}`;
+            if (proveedor.propietario) proveedorInfo += ` (${proveedor.propietario})`;
+            if (proveedor.ubicacion_gps) proveedorInfo += ` - 📍 ${proveedor.ubicacion_gps}`;
+        }
+    } else {
+        // Fallback: si no hay proveedor seleccionado, usar el campo de texto
+        const proveedorInput = document.getElementById('proveedorInfo');
+        if (proveedorInput && proveedorInput.value.trim()) {
+            proveedorInfo = proveedorInput.value.trim();
+            proveedorNombre = proveedorInfo;
+        }
+    }
+    
+    if (!proveedorInfo) {
+        showToast('Seleccione o ingrese un proveedor', 'warning');
+        return;
+    }
+    
+    // Calcular precios
     let precioTotal = 0;
     let itemsConPrecio = 0;
     
@@ -731,15 +1201,9 @@ async function enviarCotizacion() {
         return;
     }
     
-    const proveedorInfo = document.getElementById('proveedorInfo')?.value.trim() || '';
-    if (!proveedorInfo) {
-        showToast('Indique el nombre del proveedor', 'warning');
-        return;
-    }
-    
     const respuesta = document.getElementById('respuestaEncargado')?.value.trim() || '';
     
-    if (!confirm(`Confirmar cotización:\nProveedor: ${proveedorInfo}\nTotal: Bs. ${precioTotal.toFixed(2)}`)) {
+    if (!confirm(`Confirmar cotización:\nProveedor: ${proveedorNombre}\nTotal: Bs. ${precioTotal.toFixed(2)}`)) {
         return;
     }
     
@@ -759,7 +1223,7 @@ async function enviarCotizacion() {
         const data = await response.json();
         
         if (data.success) {
-            showToast(`Cotización enviada - Total: Bs. ${precioTotal.toFixed(2)}`, 'success');
+            showToast(`Cotización enviada - Proveedor: ${proveedorNombre} - Total: Bs. ${precioTotal.toFixed(2)}`, 'success');
             cerrarModal('modalCotizar');
             solicitudesCache.timestamp = 0;
             await cargarSolicitudes(true);
@@ -950,6 +1414,7 @@ async function verFotoAmpliada(url) {
             </div>
         `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
+        modalFoto = document.getElementById('modalFotoAmpliada');
     }
     
     const modal = document.getElementById('modalFotoAmpliada');
@@ -1108,24 +1573,54 @@ function setupEventListeners() {
         searchInput.addEventListener('input', debouncedSearch);
     }
     
+    // 🔥 EVENTO DEL FORMULARIO DE PROVEEDOR
+    const proveedorForm = document.getElementById('proveedorForm');
+    if (proveedorForm) {
+        proveedorForm.removeEventListener('submit', guardarProveedorDesdeModal);
+        proveedorForm.addEventListener('submit', guardarProveedorDesdeModal);
+    }
+    
+    // Cerrar modales al hacer click fuera
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) cerrarModal(modal.id);
+            if (e.target === modal) {
+                if (modal.id === 'modalProveedor') {
+                    cerrarModalProveedor();
+                } else if (modal.id === 'modalFotoAmpliada') {
+                    cerrarFotoAmpliada();
+                } else {
+                    cerrarModal(modal.id);
+                }
+            }
         });
     });
     
+    // Cerrar con tecla ESC
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             document.querySelectorAll('.modal.active').forEach(modal => {
-                cerrarModal(modal.id);
+                if (modal.id === 'modalProveedor') {
+                    cerrarModalProveedor();
+                } else if (modal.id === 'modalFotoAmpliada') {
+                    cerrarFotoAmpliada();
+                } else {
+                    cerrarModal(modal.id);
+                }
             });
-            cerrarFotoAmpliada();
         }
     });
+    
+    // Detectar edición manual del campo ubicacion_gps
+    const ubicacionGps = document.getElementById('ubicacion_gps');
+    if (ubicacionGps) {
+        ubicacionGps.addEventListener('input', function() {
+            this.dataset.userEdited = 'true';
+        });
+    }
 }
 
 async function inicializar() {
-    console.log('🚀 Inicializando solicitudes_cotizacion.js (Con array de fotos)');
+    console.log('🚀 Inicializando solicitudes_cotizacion.js (Con proveedores reutilizados)');
     console.log('📡 window.API_BASE_URL:', window.API_BASE_URL);
     
     const user = await cargarUsuarioActual();
@@ -1144,6 +1639,7 @@ async function inicializar() {
     await cargarSolicitudes(true);
     setupEventListeners();
     
+    // Actualización automática cada 60 segundos
     setInterval(() => {
         if (!document.querySelector('.modal.active') && !isLoading) {
             if (Date.now() - solicitudesCache.timestamp > 60000) {
@@ -1152,16 +1648,17 @@ async function inicializar() {
         }
     }, 60000);
     
-    console.log('✅ solicitudes_cotizacion.js cargado');
+    console.log('✅ solicitudes_cotizacion.js cargado correctamente');
 }
 
 // =====================================================
 // EXPORTAR FUNCIONES GLOBALES
 // =====================================================
 
+// Funciones principales
 window.verDetalle = verDetalle;
 window.abrirModalCotizar = abrirModalCotizar;
-window.enviarCotizacion = enviarCotizacion;
+window.enviarCotizacionConProveedor = enviarCotizacionConProveedor;
 window.cerrarModal = cerrarModal;
 window.cambiarPagina = cambiarPagina;
 window.verFotoAmpliada = verFotoAmpliada;
@@ -1169,4 +1666,20 @@ window.cerrarFotoAmpliada = cerrarFotoAmpliada;
 window.descargarFotoAmpliada = descargarFotoAmpliada;
 window.cargarImagenProxy = cargarImagenProxy;
 
-document.addEventListener('DOMContentLoaded', inicializar);
+// 🔥 Funciones de proveedores
+window.abrirModalProveedor = abrirModalProveedor;
+window.cerrarModalProveedor = cerrarModalProveedor;
+window.guardarProveedorDesdeModal = guardarProveedorDesdeModal;
+window.obtenerUbicacionActual = obtenerUbicacionActual;
+window.initMap = initMap;
+window.actualizarCoordenadas = actualizarCoordenadas;
+window.cargarProveedores = cargarProveedores;
+
+// Inicializar al cargar la página
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', inicializar);
+} else {
+    inicializar();
+}
+
+console.log('✅ solicitudes_cotizacion.js cargado');

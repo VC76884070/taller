@@ -1,214 +1,91 @@
 // =====================================================
-// INCLUDE.JS - SIDEBAR PARA CLIENTE
-// VERSIÓN CORREGIDA - BASADA EN EL PATRÓN DE JEFE OPERATIVO
+// CONFIGURACIÓN DE API - FUNCIONA EN LOCAL Y PRODUCCIÓN
 // =====================================================
-
-console.log('🔵 [INCLUDE CLIENTE] Archivo cargado');
-
-// =====================================================
-// CONFIGURACIÓN DE API - VARIABLE GLOBAL
-// =====================================================
-window.API_BASE_URL = (() => {
+const API_BASE_URL = (() => {
     if (window.location.hostname === 'localhost' || 
         window.location.hostname === '127.0.0.1' ||
         window.location.hostname.includes('192.168.')) {
-        console.log('📡 [INCLUDE CLIENTE] Modo DESARROLLO');
+        console.log('📡 Modo DESARROLLO - Usando localhost:5000');
         return 'http://localhost:5000';
     }
-    console.log('📡 [INCLUDE CLIENTE] Modo PRODUCCIÓN');
+    console.log('📡 Modo PRODUCCIÓN - Usando URL relativa');
     return '';
 })();
 
-const API_BASE_URL = window.API_BASE_URL;
+// ✅ EXPORTAR VARIABLE GLOBAL PARA OTROS SCRIPTS
+window.API_BASE_URL = API_BASE_URL;
 
-console.log('🔵 [INCLUDE CLIENTE] API_BASE_URL:', API_BASE_URL);
+// =====================================================
+// INCLUDE.JS - SIDEBAR PARA ENCARGADO DE REPUESTOS
+// VERSIÓN CORREGIDA CON RESPONSIVE
+// =====================================================
 
 // Configuración
 const CONFIG = {
-    sidebarPath: `${API_BASE_URL}/cliente/components/sidebar.html`,
+    sidebarPath: `${API_BASE_URL}/encargado_rep_almacen/components/sidebar.html`,
     logoPath: `${API_BASE_URL}/img/logoblanco.jpeg`,
-    defaultUserName: 'Cargando...',
-    userRole: 'Cliente'
+    defaultUserName: 'Encargado Repuestos',
+    userRole: 'Encargado de Repuestos'
 };
 
-console.log('🔵 [INCLUDE CLIENTE] CONFIG:', CONFIG);
-
-// Mapeo de páginas - CLIENTE
+// Mapeo de páginas
 const PAGE_FILES = {
-    'misvehiculos': 'misvehiculos.html',
-    'misreservas': 'misreservas.html',
-    'avances': 'avances.html',
-    'cotizaciones': 'cotizaciones.html',
+    'dashboard': 'dashboard.html',
+    'cotizaciones': 'solicitudes_cotizacion.html',
+    'compras': 'solicitudes_compra.html',
+    'proveedores': 'proveedores.html',
     'historial': 'historial.html',
     'perfil': 'perfil.html'
 };
 
-console.log('🔵 [INCLUDE CLIENTE] PAGE_FILES:', PAGE_FILES);
+const PAGE_NAMES = {
+    'dashboard': 'Dashboard',
+    'cotizaciones': 'Solicitudes de Cotización',
+    'compras': 'Solicitudes de Compra',
+    'proveedores': 'Proveedores',
+    'historial': 'Historial',
+    'perfil': 'Perfil'
+};
 
 // =====================================================
-// FUNCIÓN PARA OBTENER USUARIO ACTUAL
-// =====================================================
-function obtenerUsuarioActual() {
-    try {
-        const userStr = localStorage.getItem('furia_user');
-        console.log('🔵 [INCLUDE CLIENTE] userStr:', userStr);
-        if (userStr) {
-            const user = JSON.parse(userStr);
-            console.log('🔵 [INCLUDE CLIENTE] Usuario parseado:', user);
-            return {
-                nombre: user.nombre || CONFIG.defaultUserName,
-                roles: user.roles || [],
-                id: user.id || null,
-                type: user.type || null
-            };
-        }
-    } catch (error) {
-        console.error('Error obteniendo usuario:', error);
-    }
-    return { nombre: CONFIG.defaultUserName, roles: [], id: null, type: null };
-}
-
-// =====================================================
-// VERIFICACIÓN DE SESIÓN - SOLO CLIENTE
-// =====================================================
-function verificarSesionCliente() {
-    console.log('🔵 [INCLUDE CLIENTE] verificarSesionCliente() - INICIANDO');
-    
-    const token = localStorage.getItem('furia_token');
-    const userStr = localStorage.getItem('furia_user');
-    
-    console.log('🔍 [INCLUDE CLIENTE] Token:', token ? '✅ Presente' : '❌ Ausente');
-    console.log('🔍 [INCLUDE CLIENTE] User:', userStr ? '✅ Presente' : '❌ Ausente');
-    
-    if (!token || !userStr) {
-        console.warn('⚠️ [INCLUDE CLIENTE] No hay sesión - Redirigiendo al login');
-        window.location.href = `${API_BASE_URL}/`;
-        return false;
-    }
-    
-    try {
-        const userData = JSON.parse(userStr);
-        console.log('👤 [INCLUDE CLIENTE] Datos del usuario:', userData);
-        
-        // Verificar que sea un cliente
-        const esCliente = userData.type === 'client' || 
-                         (userData.roles && userData.roles.includes('cliente')) || 
-                         userData.rol === 'cliente';
-        
-        if (!esCliente) {
-            console.warn('⚠️ [INCLUDE CLIENTE] No es un cliente - Redirigiendo al login');
-            localStorage.clear();
-            window.location.href = `${API_BASE_URL}/`;
-            return false;
-        }
-        
-        console.log('✅ [INCLUDE CLIENTE] Sesión válida para:', userData.nombre);
-        return true;
-        
-    } catch (error) {
-        console.error('❌ [INCLUDE CLIENTE] Error al verificar sesión:', error);
-        localStorage.clear();
-        window.location.href = `${API_BASE_URL}/`;
-        return false;
-    }
-}
-
-// =====================================================
-// FUNCIÓN PARA ELIMINAR BOTONES DE CERRAR SESIÓN ADICIONALES
-// =====================================================
-function eliminarBotonesCerrarSesionAdicionales() {
-    const logoutSelectors = [
-        '.logout-btn', 
-        '.btn-logout', 
-        '.cerrar-sesion',
-        'a[onclick*="logout"]',
-        'button[onclick*="logout"]'
-    ];
-    
-    logoutSelectors.forEach(selector => {
-        try {
-            const elements = document.querySelectorAll(selector);
-            elements.forEach(el => {
-                const isInSidebar = el.closest('.sidebar');
-                const isInSidebarBottom = el.closest('.sidebar-bottom');
-                if (!isInSidebar && !isInSidebarBottom && el.parentNode) {
-                    console.log('🗑️ [INCLUDE CLIENTE] Eliminando botón adicional:', el);
-                    el.parentNode.removeChild(el);
-                }
-            });
-        } catch(e) {}
-    });
-}
-
-// =====================================================
-// FUNCIÓN PRINCIPAL PARA INCLUIR EL SIDEBAR
+// FUNCIÓN PRINCIPAL
 // =====================================================
 async function includeSidebar() {
-    console.log('🔵 [INCLUDE CLIENTE] includeSidebar() - INICIANDO');
-    
     const sidebarContainer = document.getElementById('sidebar-container');
-    console.log('🔵 [INCLUDE CLIENTE] sidebarContainer:', sidebarContainer);
     
     if (!sidebarContainer) {
-        console.warn('⚠️ [INCLUDE CLIENTE] No se encontró el contenedor del sidebar');
+        console.warn('⚠️ No se encontró el contenedor del sidebar');
         return;
-    }
-    
-    // VERIFICAR QUE ESTAMOS EN CLIENTE
-    const currentPath = window.location.pathname;
-    console.log('🔵 [INCLUDE CLIENTE] currentPath:', currentPath);
-    
-    if (!currentPath.includes('/cliente/')) {
-        console.log('ℹ️ [INCLUDE CLIENTE] No estamos en cliente, no se carga este sidebar');
-        return;
-    }
-    
-    console.log('🔵 [INCLUDE CLIENTE] Estamos en CLIENTE, cargando sidebar...');
-    
-    // VERIFICAR SESIÓN
-    if (!verificarSesionCliente()) {
-        return; // La función ya redirige
     }
     
     mostrarLoader(sidebarContainer);
     
     try {
-        console.log('🔄 [INCLUDE CLIENTE] Intentando cargar sidebar desde:', CONFIG.sidebarPath);
+        console.log('🔄 Cargando sidebar desde:', CONFIG.sidebarPath);
         const response = await fetch(CONFIG.sidebarPath);
-        console.log('🔵 [INCLUDE CLIENTE] Response status:', response.status);
         
         if (!response.ok) {
             throw new Error(`Error HTTP ${response.status}`);
         }
         
-        let html = await response.text();
-        console.log('🔵 [INCLUDE CLIENTE] HTML recibido, longitud:', html.length);
-        
-        if (!html || html.trim() === '') {
-            throw new Error('El archivo sidebar.html está vacío');
-        }
-        
+        const html = await response.text();
         sidebarContainer.innerHTML = html;
-        console.log('✅ [INCLUDE CLIENTE] Sidebar de Cliente cargado correctamente');
         
         inicializarSidebar();
-        
-        setTimeout(() => {
-            eliminarBotonesCerrarSesionAdicionales();
-        }, 200);
+        ajustarSidebarResponsive();
         
     } catch (error) {
-        console.error('❌ [INCLUDE CLIENTE] Error cargando sidebar:', error);
-        console.warn('⚠️ [INCLUDE CLIENTE] Usando sidebar de respaldo');
+        console.error('❌ Error cargando sidebar:', error);
         crearSidebarRespaldo(sidebarContainer);
         inicializarSidebar();
+        ajustarSidebarResponsive();
     }
 }
 
 function mostrarLoader(container) {
     container.innerHTML = `
         <aside class="sidebar sidebar-loader">
-            <div style="padding: 2rem; text-align: center; color: var(--gris-medio, #6B7280);">
+            <div style="padding: 2rem; text-align: center; color: #6B7280;">
                 <i class="fas fa-spinner fa-spin fa-2x"></i>
                 <p style="margin-top: 1rem;">Cargando menú...</p>
             </div>
@@ -217,20 +94,18 @@ function mostrarLoader(container) {
 }
 
 function crearSidebarRespaldo(container) {
-    console.log('🔵 [INCLUDE CLIENTE] Creando sidebar de respaldo');
     const user = obtenerUsuarioActual();
     const currentPage = obtenerPaginaActual();
     
     container.innerHTML = `
         <aside class="sidebar">
             <div class="sidebar-header">
-                <img src="${CONFIG.logoPath}" alt="FURIA MOTOR" class="sidebar-logo" 
-                     onerror="this.src='https://via.placeholder.com/40x40?text=FM'">
+                <img src="${CONFIG.logoPath}" alt="FURIA MOTOR" class="sidebar-logo" onerror="this.src='https://via.placeholder.com/40'">
                 <span class="sidebar-brand">FURIA MOTOR</span>
             </div>
             <div class="sidebar-user">
                 <div class="user-avatar">
-                    <i class="fas fa-user"></i>
+                    <i class="fas fa-boxes"></i>
                 </div>
                 <div class="user-info">
                     <span class="user-name" id="userName">${user.nombre}</span>
@@ -239,16 +114,16 @@ function crearSidebarRespaldo(container) {
             </div>
             <nav class="sidebar-nav">
                 <ul>
-                    ${crearMenuItem('misvehiculos', 'Mis Vehículos', 'car', currentPage)}
-                    ${crearMenuItem('misreservas', 'Mis Reservas', 'calendar-check', currentPage)}
-                    ${crearMenuItem('avances', 'Mis Avances', 'tasks', currentPage)}
-                    ${crearMenuItem('cotizaciones', 'Cotizaciones', 'file-invoice-dollar', currentPage)}
+                    ${crearMenuItem('dashboard', 'Dashboard', 'chart-line', currentPage)}
+                    ${crearMenuItem('cotizaciones', 'Solicitudes Cotización', 'file-invoice-dollar', currentPage)}
+                    ${crearMenuItem('compras', 'Solicitudes Compra', 'shopping-cart', currentPage)}
+                    ${crearMenuItem('proveedores', 'Proveedores', 'truck', currentPage)}
                     ${crearMenuItem('historial', 'Historial', 'history', currentPage)}
-                    ${crearMenuItem('perfil', 'Mi Perfil', 'user-circle', currentPage)}
+                    ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage)}
                 </ul>
                 <ul class="sidebar-bottom">
                     <li class="nav-item">
-                        <a href="#" onclick="window.cerrarSesionCliente()" class="nav-link">
+                        <a href="#" onclick="cerrarSesion()" class="nav-link">
                             <i class="fas fa-sign-out-alt"></i>
                             <span>Cerrar Sesión</span>
                         </a>
@@ -259,159 +134,237 @@ function crearSidebarRespaldo(container) {
     `;
 }
 
-function crearMenuItem(page, label, icon, currentPage, badge = null) {
+function crearMenuItem(page, label, icon, currentPage) {
     const isActive = currentPage === page ? 'active' : '';
     const href = PAGE_FILES[page] || `${page}.html`;
-    const badgeHtml = badge ? `<span class="badge">${badge}</span>` : '';
     
     return `
         <li class="nav-item ${isActive}" data-page="${page}">
-            <a href="${href}" class="nav-link" onclick="navegarPagina(event, '${page}')">
+            <a href="${href}" class="nav-link">
                 <i class="fas fa-${icon}"></i>
                 <span>${label}</span>
-                ${badgeHtml}
             </a>
         </li>
     `;
 }
 
-window.navegarPagina = function(event, page) {
-    event.preventDefault();
-    const href = PAGE_FILES[page] || `${page}.html`;
-    window.location.href = href;
-};
-
 function inicializarSidebar() {
-    console.log('🔵 [INCLUDE CLIENTE] inicializarSidebar() - INICIANDO');
     setTimeout(() => {
         const currentPage = obtenerPaginaActual();
-        console.log('🔵 [INCLUDE CLIENTE] currentPage:', currentPage);
+        console.log('📄 Página actual detectada:', currentPage);
+        
         marcarItemActivo(currentPage);
         actualizarNombreUsuario();
-        console.log('✅ [INCLUDE CLIENTE] Sidebar de Cliente inicializado');
-    }, 200);
+        actualizarEnlacesSidebar();
+        mejorarNavegacionMovil();
+        
+        const items = document.querySelectorAll('.nav-item');
+        console.log(`📋 Encontrados ${items.length} items en el sidebar`);
+    }, 100);
 }
 
 function obtenerPaginaActual() {
     const path = window.location.pathname;
-    const filename = path.split('/').pop() || 'misvehiculos.html';
-    let pageName = filename.replace('.html', '');
+    const filename = path.split('/').pop() || 'dashboard.html';
     
-    const pageMapping = {
-        'misvehiculos': 'misvehiculos',
-        'misreservas': 'misreservas',
-        'avances': 'avances',
-        'cotizaciones': 'cotizaciones',
-        'historial': 'historial',
-        'perfil': 'perfil'
+    console.log('🔍 Archivo actual:', filename);
+    
+    const fileToPage = {
+        'dashboard.html': 'dashboard',
+        'solicitudes_cotizacion.html': 'cotizaciones',
+        'solicitudes_compra.html': 'compras',
+        'proveedores.html': 'proveedores',
+        'historial.html': 'historial',
+        'perfil.html': 'perfil'
     };
     
-    return pageMapping[pageName] || pageName;
+    if (fileToPage[filename]) {
+        console.log('✅ Página encontrada:', fileToPage[filename]);
+        return fileToPage[filename];
+    }
+    
+    console.log('⚠️ Usando dashboard por defecto');
+    return 'dashboard';
 }
 
 function marcarItemActivo(currentPage) {
-    setTimeout(() => {
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+        const link = item.querySelector('.nav-link');
+        if (link) link.classList.remove('active');
+    });
+    
+    let activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
+    
+    if (!activeItem) {
+        const currentFile = window.location.pathname.split('/').pop();
         document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.remove('active');
+            const link = item.querySelector('.nav-link');
+            const href = link?.getAttribute('href');
+            if (href && href === currentFile) {
+                activeItem = item;
+            }
         });
-        
-        const activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
-        if (activeItem) {
-            activeItem.classList.add('active');
-            console.log(`✅ [INCLUDE CLIENTE] Item activo: ${currentPage}`);
-        } else {
-            const defaultItem = document.querySelector('.nav-item[data-page="misvehiculos"]');
-            if (defaultItem) defaultItem.classList.add('active');
+    }
+    
+    if (activeItem) {
+        activeItem.classList.add('active');
+        const activeLink = activeItem.querySelector('.nav-link');
+        if (activeLink) {
+            activeLink.classList.add('active');
         }
-    }, 100);
+        console.log('✅ Menú activo:', currentPage);
+    } else {
+        console.warn('⚠️ No se encontró el menú para:', currentPage);
+    }
+}
+
+function actualizarEnlacesSidebar() {
+    document.querySelectorAll('.nav-link[href]').forEach(link => {
+        const href = link.getAttribute('href');
+        if (href && !href.startsWith('javascript') && href !== '#' && !href.startsWith('http')) {
+            if (!href.includes('.html')) {
+                const page = link.closest('.nav-item')?.getAttribute('data-page');
+                if (page && PAGE_FILES[page]) {
+                    link.setAttribute('href', PAGE_FILES[page]);
+                }
+            }
+        }
+    });
+}
+
+function obtenerUsuarioActual() {
+    try {
+        const userStr = localStorage.getItem('furia_user');
+        
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            return {
+                nombre: user.nombre || CONFIG.defaultUserName,
+                email: user.email || '',
+                rol: user.rol || 'encargado_repuestos'
+            };
+        }
+    } catch (error) {
+        console.error('Error obteniendo usuario:', error);
+    }
+    
+    return { nombre: CONFIG.defaultUserName, email: '', rol: 'encargado_repuestos' };
 }
 
 function actualizarNombreUsuario() {
-    setTimeout(() => {
-        const userNameSpan = document.getElementById('userName');
-        if (!userNameSpan) return;
-        
-        const user = obtenerUsuarioActual();
-        console.log('🔵 [INCLUDE CLIENTE] Actualizando nombre a:', user.nombre);
-        userNameSpan.textContent = user.nombre;
-    }, 200);
+    const userNameSpan = document.getElementById('userName');
+    if (!userNameSpan) return;
+    
+    const user = obtenerUsuarioActual();
+    userNameSpan.textContent = user.nombre;
 }
 
 // =====================================================
-// CIERRE DE SESIÓN
+// FUNCIONES RESPONSIVE PARA EL SIDEBAR
 // =====================================================
 
-window.cerrarSesionCliente = function() {
-    console.log('🔵 [INCLUDE CLIENTE] cerrarSesionCliente() llamado');
-    if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
-        localStorage.removeItem('furia_token');
-        localStorage.removeItem('furia_user');
-        localStorage.removeItem('furia_remembered');
-        localStorage.removeItem('furia_remembered_type');
-        localStorage.removeItem('furia_selected_role');
-        localStorage.removeItem('furia_selected_role_user');
-        window.location.href = `${API_BASE_URL}/`;
-    }
-};
-
-// Alias para logout
-window.logout = window.cerrarSesionCliente;
-
-// =====================================================
-// FUNCIONES RESPONSIVE
-// =====================================================
-
+// Función para ajustar sidebar según el tamaño de pantalla
 function ajustarSidebarResponsive() {
     const sidebar = document.querySelector('.sidebar');
     const hamburgerMenu = document.getElementById('hamburgerMenu');
     
     if (!sidebar) return;
     
-    if (window.innerWidth > 1024) {
+    if (window.innerWidth > 768) {
+        // En desktop/tablet, asegurar que sidebar esté visible
+        sidebar.classList.remove('open');
+        if (hamburgerMenu) hamburgerMenu.classList.remove('active');
+        document.body.classList.remove('sidebar-open');
+        
+        // En tablet (769-992px) mantener estilo compacto
+        if (window.innerWidth <= 992) {
+            sidebar.style.transform = '';
+        }
+    } else {
+        // En móvil, asegurar que sidebar esté cerrado inicialmente
         sidebar.classList.remove('open');
         if (hamburgerMenu) hamburgerMenu.classList.remove('active');
         document.body.classList.remove('sidebar-open');
     }
 }
 
-function toggleSidebar() {
-    const sidebar = document.querySelector('.sidebar');
-    const hamburger = document.getElementById('hamburgerMenu');
+// Función para mejorar la navegación en móvil
+function mejorarNavegacionMovil() {
+    const navLinks = document.querySelectorAll('.nav-link');
     
-    if (!sidebar) return;
-    
-    sidebar.classList.toggle('open');
-    if (hamburger) hamburger.classList.toggle('active');
-    document.body.classList.toggle('sidebar-open');
+    navLinks.forEach(link => {
+        // Remover event listener previo para evitar duplicados
+        link.removeEventListener('click', handleNavLinkClick);
+        link.addEventListener('click', handleNavLinkClick);
+    });
 }
 
-function cerrarSidebar() {
-    const sidebar = document.querySelector('.sidebar');
-    const hamburger = document.getElementById('hamburgerMenu');
-    
-    if (sidebar) sidebar.classList.remove('open');
-    if (hamburger) hamburger.classList.remove('active');
-    document.body.classList.remove('sidebar-open');
+function handleNavLinkClick(e) {
+    // En móvil, cerrar sidebar después de hacer click
+    if (window.innerWidth <= 768) {
+        // Pequeño delay para que la navegación se complete
+        setTimeout(() => {
+            if (typeof window.closeSidebar === 'function') {
+                window.closeSidebar();
+            } else if (typeof closeSidebar === 'function') {
+                closeSidebar();
+            }
+        }, 150);
+    }
 }
 
-// Exponer funciones globales
-window.toggleSidebar = toggleSidebar;
-window.cerrarSidebar = cerrarSidebar;
-window.ajustarSidebarResponsive = ajustarSidebarResponsive;
+// Función para detectar si es dispositivo móvil
+function esDispositivoMovil() {
+    return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
 
 // =====================================================
-// INICIALIZAR
+// FUNCIONES GLOBALES
 // =====================================================
 
-console.log('🔵 [INCLUDE CLIENTE] Configurando inicialización...');
+window.cerrarSesion = function() {
+    if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
+        localStorage.removeItem('furia_token');
+        localStorage.removeItem('furia_user');
+        localStorage.removeItem('furia_remembered');
+        window.location.href = API_BASE_URL + '/';
+    }
+};
 
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🔵 [INCLUDE CLIENTE] DOMContentLoaded - CLIENTE');
-    console.log('🔵 [INCLUDE CLIENTE] Path actual:', window.location.pathname);
+window.recargarSidebar = function() {
     includeSidebar();
+};
+
+// Escuchar cambios de orientación
+window.addEventListener('orientationchange', function() {
+    setTimeout(ajustarSidebarResponsive, 100);
+});
+
+// Escuchar cambios de tamaño de pantalla
+window.addEventListener('resize', function() {
     ajustarSidebarResponsive();
 });
 
-window.addEventListener('resize', ajustarSidebarResponsive);
+// =====================================================
+// INICIALIZACIÓN
+// =====================================================
 
-console.log('🔵 [INCLUDE CLIENTE] Archivo cargado completamente');
+// Inicializar cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    includeSidebar();
+});
+
+// También inicializar si el script se carga después del DOM
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', includeSidebar);
+} else {
+    includeSidebar();
+}
+
+// Exportar funciones para uso global
+window.ajustarSidebarResponsive = ajustarSidebarResponsive;
+window.mejorarNavegacionMovil = mejorarNavegacionMovil;
+window.esDispositivoMovil = esDispositivoMovil;
+
+console.log('✅ include.js cargado correctamente - Versión responsive');

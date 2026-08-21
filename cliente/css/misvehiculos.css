@@ -1884,3 +1884,26 @@ body.sidebar-open {
         -webkit-overflow-scrolling: touch;
     }
 }
+/* =====================================================
+   RESALTADO DE MENÚ - CLIENTE
+   ===================================================== */
+
+.nav-item.active .nav-link {
+    background: #C1121F !important;
+    color: #fff !important;
+    box-shadow: 0 4px 15px rgba(193, 18, 31, 0.3) !important;
+}
+
+.nav-item.active .nav-link i {
+    color: #fff !important;
+}
+
+.nav-item.active .nav-link span {
+    color: #fff !important;
+}
+
+/* Efecto hover */
+.nav-link:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #fff !important;
+}

@@ -1,80 +1,33 @@
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA CLIENTE
-// VERSIÓN CORREGIDA - NAVEGACIÓN CON RUTAS ABSOLUTAS
+// VERSIÓN CORREGIDA - RESALTADO DE MENÚ
 // =====================================================
 
 console.log('🔵🔵🔵 [INCLUDE CLIENTE] ===== ARCHIVO CARGADO =====');
-
-// =====================================================
-// FUNCIÓN PARA GUARDAR LOGS EN LOCALSTORAGE
-// =====================================================
-function logPersistente(tag, mensaje, data = null) {
-    try {
-        const logs = JSON.parse(localStorage.getItem('furia_debug_logs') || '[]');
-        logs.push({
-            timestamp: new Date().toISOString(),
-            tag: tag,
-            mensaje: mensaje,
-            data: data,
-            url: window.location.href
-        });
-        if (logs.length > 50) logs.shift();
-        localStorage.setItem('furia_debug_logs', JSON.stringify(logs));
-        console.log(tag, mensaje, data);
-    } catch(e) {
-        console.error('Error guardando log:', e);
-    }
-}
-
-function verLogsPersistentes() {
-    try {
-        const logs = JSON.parse(localStorage.getItem('furia_debug_logs') || '[]');
-        console.log('📋 === LOGS PERSISTENTES ===');
-        logs.forEach(log => {
-            console.log(`[${log.timestamp}] ${log.tag}: ${log.mensaje}`, log.data || '');
-        });
-        console.log('📋 === FIN LOGS ===');
-        return logs;
-    } catch(e) {
-        console.error('Error leyendo logs:', e);
-        return [];
-    }
-}
-
-function limpiarLogsPersistentes() {
-    localStorage.removeItem('furia_debug_logs');
-    console.log('🧹 Logs persistentes limpiados');
-}
-
-window.verLogsPersistentes = verLogsPersistentes;
-window.limpiarLogsPersistentes = limpiarLogsPersistentes;
 
 // =====================================================
 // CONFIGURACIÓN DE API
 // =====================================================
 window.API_BASE_URL = (() => {
     const hostname = window.location.hostname;
-    if (hostname === 'localhost' || 
-        hostname === '127.0.0.1' ||
-        hostname.includes('192.168.')) {
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.includes('192.168.')) {
+        console.log('📡 Modo DESARROLLO - localhost');
         return 'http://localhost:5000';
     }
+    console.log('📡 Modo PRODUCCIÓN');
     return '';
 })();
 
 const API_BASE_URL = window.API_BASE_URL;
 
-// Configuración
 const CONFIG = {
     sidebarPath: `${API_BASE_URL}/cliente/components/sidebar.html`,
     logoPath: `${API_BASE_URL}/img/logoblanco.jpeg`,
     defaultUserName: 'Cargando...',
-    userRole: 'Cliente',
-    // ✅ NUEVO: BASE PATH para navegación
-    basePath: '/cliente/'
+    userRole: 'Cliente'
 };
 
-// Mapeo de páginas con rutas ABSOLUTAS
+// ✅ MAPEO DE PÁGINAS
 const PAGE_FILES = {
     'misvehiculos': '/cliente/misvehiculos.html',
     'misreservas': '/cliente/misreservas.html',
@@ -83,6 +36,82 @@ const PAGE_FILES = {
     'historial': '/cliente/historial.html',
     'perfil': '/cliente/perfil.html'
 };
+
+// =====================================================
+// FUNCIÓN PARA OBTENER LA PÁGINA ACTUAL
+// =====================================================
+function obtenerPaginaActual() {
+    const path = window.location.pathname;
+    console.log('🔍 [PAGINA] Path actual:', path);
+    
+    // Extraer el nombre del archivo
+    const filename = path.split('/').pop() || 'misvehiculos.html';
+    console.log('🔍 [PAGINA] Archivo:', filename);
+    
+    // Mapear archivo a página
+    const pageMapping = {
+        'misvehiculos.html': 'misvehiculos',
+        'misreservas.html': 'misreservas',
+        'avances.html': 'avances',
+        'cotizaciones.html': 'cotizaciones',
+        'historial.html': 'historial',
+        'perfil.html': 'perfil'
+    };
+    
+    const page = pageMapping[filename] || 'misvehiculos';
+    console.log('✅ [PAGINA] Página detectada:', page);
+    return page;
+}
+
+// =====================================================
+// FUNCIÓN PARA MARCAR EL ÍTEM ACTIVO
+// =====================================================
+function marcarItemActivo() {
+    const currentPage = obtenerPaginaActual();
+    console.log('🔵 [ACTIVO] Marcando página activa:', currentPage);
+    
+    // Quitar clase active de todos los items
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+        const link = item.querySelector('.nav-link');
+        if (link) link.classList.remove('active');
+    });
+    
+    // Buscar el item que coincide con la página actual
+    let activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
+    
+    // Si no se encuentra por data-page, buscar por href
+    if (!activeItem) {
+        const currentPath = window.location.pathname;
+        document.querySelectorAll('.nav-item').forEach(item => {
+            const link = item.querySelector('.nav-link');
+            if (link) {
+                const href = link.getAttribute('href');
+                if (href === currentPath || href === currentPath.replace('/cliente/', '')) {
+                    activeItem = item;
+                }
+            }
+        });
+    }
+    
+    // Si se encontró, marcarlo como activo
+    if (activeItem) {
+        activeItem.classList.add('active');
+        const link = activeItem.querySelector('.nav-link');
+        if (link) link.classList.add('active');
+        console.log(`✅ [ACTIVO] Item activo: ${currentPage}`);
+    } else {
+        console.warn(`⚠️ [ACTIVO] No se encontró item para: ${currentPage}`);
+        // Fallback: marcar misvehiculos como activo
+        const defaultItem = document.querySelector('.nav-item[data-page="misvehiculos"]');
+        if (defaultItem) {
+            defaultItem.classList.add('active');
+            const link = defaultItem.querySelector('.nav-link');
+            if (link) link.classList.add('active');
+            console.log('✅ [ACTIVO] Usando misvehiculos como fallback');
+        }
+    }
+}
 
 // =====================================================
 // FUNCIÓN PARA OBTENER USUARIO ACTUAL
@@ -96,8 +125,7 @@ function obtenerUsuarioActual() {
                 nombre: user.nombre || CONFIG.defaultUserName,
                 roles: user.roles || [],
                 id: user.id || null,
-                type: user.type || null,
-                raw: user
+                type: user.type || null
             };
         }
     } catch (error) {
@@ -114,8 +142,7 @@ function verificarSesionCliente() {
     const userStr = localStorage.getItem('furia_user');
     
     if (!token || !userStr) {
-        logPersistente('⚠️ SESION', 'NO HAY SESIÓN - Redirigiendo al login');
-        localStorage.setItem('furia_redirect_reason', 'no_session');
+        console.warn('⚠️ [SESION] NO HAY SESIÓN - Redirigiendo al login');
         window.location.href = `${API_BASE_URL}/`;
         return false;
     }
@@ -127,22 +154,71 @@ function verificarSesionCliente() {
                          userData.rol === 'cliente';
         
         if (!esCliente) {
-            logPersistente('⚠️ SESION', 'NO ES CLIENTE - Redirigiendo al login');
+            console.warn('⚠️ [SESION] NO ES CLIENTE - Redirigiendo al login');
             localStorage.clear();
             window.location.href = `${API_BASE_URL}/`;
             return false;
         }
         
-        logPersistente('✅ SESION', 'SESIÓN VÁLIDA para:', userData.nombre);
+        console.log('✅ [SESION] SESIÓN VÁLIDA para:', userData.nombre);
         return true;
         
     } catch (error) {
-        logPersistente('❌ SESION', 'Error al verificar sesión:', error.message);
+        console.error('❌ [SESION] Error al verificar sesión:', error);
         localStorage.clear();
         window.location.href = `${API_BASE_URL}/`;
         return false;
     }
 }
+
+// =====================================================
+// FUNCIÓN PARA ACTUALIZAR NOMBRE DEL USUARIO
+// =====================================================
+function actualizarNombreUsuario() {
+    setTimeout(() => {
+        const userNameSpan = document.getElementById('userName');
+        if (!userNameSpan) return;
+        
+        const user = obtenerUsuarioActual();
+        userNameSpan.textContent = user.nombre || CONFIG.defaultUserName;
+        console.log('👤 [NOMBRE] Usuario:', user.nombre);
+    }, 200);
+}
+
+// =====================================================
+// FUNCIÓN DE NAVEGACIÓN
+// =====================================================
+function navegarAPagina(page) {
+    console.log('🔵 [NAVEGAR] Navegando a:', page);
+    const url = PAGE_FILES[page];
+    if (url) {
+        console.log('🔵 [NAVEGAR] URL:', url);
+        window.location.href = url;
+    } else {
+        console.error('❌ [NAVEGAR] Página no encontrada:', page);
+    }
+}
+
+window.navegarAPagina = navegarAPagina;
+
+// =====================================================
+// CIERRE DE SESIÓN
+// =====================================================
+window.cerrarSesionCliente = function() {
+    if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
+        localStorage.removeItem('furia_token');
+        localStorage.removeItem('furia_user');
+        localStorage.removeItem('furia_remembered');
+        localStorage.removeItem('furia_remembered_type');
+        localStorage.removeItem('furia_selected_role');
+        localStorage.removeItem('furia_selected_role_user');
+        console.log('👋 [LOGOUT] Sesión cerrada');
+        window.location.href = `${API_BASE_URL}/`;
+    }
+};
+
+// Alias para logout
+window.logout = window.cerrarSesionCliente;
 
 // =====================================================
 // FUNCIÓN PRINCIPAL PARA INCLUIR EL SIDEBAR
@@ -179,22 +255,20 @@ async function includeSidebar() {
         let html = await response.text();
         
         // ✅ CORREGIR: Reemplazar rutas relativas por rutas absolutas
+        html = html.replace(/href="\.\.\/([^"]+\.html)"/g, '/cliente/$1');
         html = html.replace(/href="([^"]+\.html)"/g, (match, p1) => {
-            // Si ya es una ruta absoluta o externa, no la modificamos
-            if (p1.startsWith('/') || p1.startsWith('http')) {
-                return match;
-            }
-            // Convertir a ruta absoluta
+            if (p1.startsWith('/') || p1.startsWith('http')) return match;
             return `href="/cliente/${p1}"`;
         });
         
-        // ✅ También corregir onclick para cerrar sesión
-        html = html.replace(/onclick="cerrarSesion\(\)"/g, 'onclick="window.cerrarSesionCliente()"');
+        // ✅ CORREGIR: onclick de cerrar sesión
         html = html.replace(/onclick="logout\(\)"/g, 'onclick="window.cerrarSesionCliente()"');
+        html = html.replace(/onclick="cerrarSesion\(\)"/g, 'onclick="window.cerrarSesionCliente()"');
         
         sidebarContainer.innerHTML = html;
         console.log('✅ Sidebar de Cliente cargado correctamente');
         
+        // ✅ INICIALIZAR: Marcar item activo y actualizar nombre
         inicializarSidebar();
         
     } catch (error) {
@@ -259,7 +333,6 @@ function crearSidebarRespaldo(container) {
 
 function crearMenuItem(page, label, icon, currentPage) {
     const isActive = currentPage === page ? 'active' : '';
-    // ✅ Usar ruta ABSOLUTA
     const href = PAGE_FILES[page] || `/cliente/${page}.html`;
     
     return `
@@ -273,78 +346,28 @@ function crearMenuItem(page, label, icon, currentPage) {
 }
 
 function inicializarSidebar() {
-    setTimeout(() => {
-        const currentPage = obtenerPaginaActual();
-        marcarItemActivo(currentPage);
-        actualizarNombreUsuario();
-        console.log('✅ Sidebar de Cliente inicializado');
-    }, 200);
-}
-
-function obtenerPaginaActual() {
-    const path = window.location.pathname;
-    const filename = path.split('/').pop() || 'misvehiculos.html';
-    let pageName = filename.replace('.html', '');
+    console.log('🔵 [INICIALIZAR] Inicializando sidebar...');
     
-    const pageMapping = {
-        'misvehiculos': 'misvehiculos',
-        'misreservas': 'misreservas',
-        'avances': 'avances',
-        'cotizaciones': 'cotizaciones',
-        'historial': 'historial',
-        'perfil': 'perfil'
-    };
+    // Marcar el item activo
+    marcarItemActivo();
     
-    return pageMapping[pageName] || 'misvehiculos';
-}
-
-function marcarItemActivo(currentPage) {
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
+    // Actualizar nombre del usuario
+    actualizarNombreUsuario();
+    
+    // Agregar event listeners para asegurar el resaltado
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', function(e) {
+            // No prevenir el comportamiento por defecto
+            console.log('🔵 [CLICK] Navegando a:', this.getAttribute('href'));
+        });
     });
     
-    const activeItem = document.querySelector(`.nav-item[data-page="${currentPage}"]`);
-    if (activeItem) {
-        activeItem.classList.add('active');
-        console.log(`✅ Item activo: ${currentPage}`);
-    } else {
-        const defaultItem = document.querySelector('.nav-item[data-page="misvehiculos"]');
-        if (defaultItem) defaultItem.classList.add('active');
-    }
+    console.log('✅ Sidebar de Cliente inicializado');
 }
-
-function actualizarNombreUsuario() {
-    setTimeout(() => {
-        const userNameSpan = document.getElementById('userName');
-        if (!userNameSpan) return;
-        
-        const user = obtenerUsuarioActual();
-        userNameSpan.textContent = user.nombre || CONFIG.defaultUserName;
-    }, 200);
-}
-
-// =====================================================
-// CIERRE DE SESIÓN
-// =====================================================
-
-window.cerrarSesionCliente = function() {
-    if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
-        localStorage.removeItem('furia_token');
-        localStorage.removeItem('furia_user');
-        localStorage.removeItem('furia_remembered');
-        localStorage.removeItem('furia_remembered_type');
-        localStorage.removeItem('furia_selected_role');
-        localStorage.removeItem('furia_selected_role_user');
-        window.location.href = `${API_BASE_URL}/`;
-    }
-};
-
-window.logout = window.cerrarSesionCliente;
 
 // =====================================================
 // FUNCIONES RESPONSIVE
 // =====================================================
-
 function toggleSidebar() {
     const sidebar = document.querySelector('.sidebar');
     const hamburger = document.getElementById('hamburgerMenu');
@@ -371,14 +394,15 @@ window.cerrarSidebar = cerrarSidebar;
 // =====================================================
 // INICIALIZAR
 // =====================================================
-
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('🔵 [DOM] DOMContentLoaded - CLIENTE');
     includeSidebar();
 });
 
 // Si ya está cargado
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    console.log('🔵 [DOM] DOM ya cargado, ejecutando inmediatamente');
     includeSidebar();
 }
 
-console.log('✅ include.js cargado - CLIENTE (versión corregida)');
+console.log('✅ [INCLUDE] include.js cargado - CLIENTE');

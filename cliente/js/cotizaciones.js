@@ -2,6 +2,7 @@
 // COTIZACIONES.JS - CLIENTE (VERSIÓN OPTIMIZADA)
 // FURIA MOTOR COMPANY SRL
 // VERSIÓN CORREGIDA - UN SOLO BOTÓN "APROBAR"
+// CON CÁLCULO DE TOTAL EN TIEMPO REAL
 // =====================================================
 
 // =====================================================
@@ -299,7 +300,7 @@ function renderizarCotizaciones(cotizacionesList) {
 }
 
 // =====================================================
-// DETALLE DE COTIZACIÓN MEJORADO
+// DETALLE DE COTIZACIÓN MEJORADO CON CÁLCULO EN TIEMPO REAL
 // =====================================================
 
 async function verDetalleCotizacion(id) {
@@ -331,6 +332,62 @@ async function verDetalleCotizacion(id) {
         mostrarLoading(false);
     }
 }
+
+// ============================================================
+// FUNCIÓN PARA CALCULAR TOTAL SELECCIONADO EN TIEMPO REAL
+// ============================================================
+
+function calcularTotalSeleccionado() {
+    if (!currentCotizacion || !currentCotizacion.servicios) {
+        return 0;
+    }
+
+    const checkboxes = document.querySelectorAll('.servicio-checkbox:checked');
+    let total = 0;
+    let seleccionados = 0;
+    const totalServicios = currentCotizacion.servicios.length;
+
+    checkboxes.forEach(cb => {
+        const index = parseInt(cb.dataset.index);
+        const servicio = currentCotizacion.servicios[index];
+        if (servicio) {
+            total += servicio.precio || 0;
+            seleccionados++;
+        }
+    });
+
+    // Actualizar el contador y total en la UI
+    const totalSeleccionadoEl = document.getElementById('totalSeleccionado');
+    const contadorSeleccionadosEl = document.getElementById('contadorSeleccionados');
+    const btnAprobar = document.getElementById('btnAprobarCotizacion');
+
+    if (totalSeleccionadoEl) {
+        totalSeleccionadoEl.textContent = formatCurrency(total);
+        totalSeleccionadoEl.style.color = total > 0 ? '#16a34a' : '#6b7280';
+    }
+
+    if (contadorSeleccionadosEl) {
+        contadorSeleccionadosEl.textContent = `${seleccionados} de ${totalServicios}`;
+    }
+
+    // Habilitar/deshabilitar botón según selección
+    if (btnAprobar) {
+        btnAprobar.disabled = seleccionados === 0;
+        if (seleccionados === 0) {
+            btnAprobar.style.opacity = '0.5';
+            btnAprobar.style.cursor = 'not-allowed';
+        } else {
+            btnAprobar.style.opacity = '1';
+            btnAprobar.style.cursor = 'pointer';
+        }
+    }
+
+    return total;
+}
+
+// ============================================================
+// MOSTRAR DETALLE DE COTIZACIÓN CON CÁLCULO EN TIEMPO REAL
+// ============================================================
 
 function mostrarDetalleCotizacion(cotizacion) {
     const puedeAprobar = cotizacion.estado === 'enviada';
@@ -364,7 +421,7 @@ function mostrarDetalleCotizacion(cotizacion) {
             ${puedeAprobar && !servicio.aprobado_por_cliente ? `
                 <div class="servicio-acciones">
                     <label class="checkbox-label">
-                        <input type="checkbox" class="servicio-checkbox" data-index="${index}" data-id="${servicio.id_servicio}">
+                        <input type="checkbox" class="servicio-checkbox" data-index="${index}" data-id="${servicio.id_servicio}" onchange="calcularTotalSeleccionado()">
                         <span class="checkbox-custom"></span>
                         Aprobar este servicio
                     </label>
@@ -431,6 +488,21 @@ function mostrarDetalleCotizacion(cotizacion) {
                         <div class="servicios-lista-detalle">
                             ${serviciosHtml}
                         </div>
+                        <!-- ============================================ -->
+                        <!-- RESUMEN DE SELECCIÓN EN TIEMPO REAL        -->
+                        <!-- ============================================ -->
+                        ${puedeAprobar ? `
+                            <div class="resumen-seleccion">
+                                <div class="resumen-linea">
+                                    <span>Servicios seleccionados:</span>
+                                    <span id="contadorSeleccionados">0 de ${cotizacion.servicios.length}</span>
+                                </div>
+                                <div class="resumen-linea total">
+                                    <span>Total seleccionado:</span>
+                                    <span id="totalSeleccionado">${formatCurrency(0)}</span>
+                                </div>
+                            </div>
+                        ` : ''}
                         <div class="totales-detalle">
                             <div class="total-linea">
                                 <span>Total Servicios:</span>
@@ -476,7 +548,7 @@ function mostrarDetalleCotizacion(cotizacion) {
                 <button class="btn-danger" onclick="rechazarCotizacion()">
                     <i class="fas fa-times-circle"></i> Rechazar
                 </button>
-                <button class="btn-primary" onclick="aprobarCotizacion()">
+                <button class="btn-primary" id="btnAprobarCotizacion" onclick="aprobarCotizacion()" disabled style="opacity:0.5;">
                     <i class="fas fa-check-circle"></i> Aprobar
                 </button>
             `;
@@ -490,6 +562,15 @@ function mostrarDetalleCotizacion(cotizacion) {
     }
     
     abrirModal('modalDetalleCotizacion');
+    
+    // ============================================================
+    // CALCULAR TOTAL INICIAL DESPUÉS DE RENDERIZAR
+    // ============================================================
+    if (puedeAprobar && tieneServicios) {
+        setTimeout(() => {
+            calcularTotalSeleccionado();
+        }, 100);
+    }
 }
 
 function obtenerServiciosSeleccionados() {
@@ -541,6 +622,11 @@ async function aprobarCotizacion() {
         return;
     }
 
+    // Calcular total seleccionado
+    const totalSeleccionado = currentCotizacion.servicios
+        .filter(s => serviciosSeleccionados.includes(s.id_servicio))
+        .reduce((sum, s) => sum + (s.precio || 0), 0);
+
     // Determinar tipo de aprobación
     let tipoAprobacion = '';
     let mensajeConfirmacion = '';
@@ -552,16 +638,13 @@ async function aprobarCotizacion() {
         tituloConfirmacion = '✅ Aprobar Cotización Completa';
         mensajeConfirmacion = `
             ¿Aprobar TODOS los servicios?<br><br>
-            <strong>Total: ${formatCurrency(currentCotizacion.total || 0)}</strong><br><br>
+            <strong>Total: ${formatCurrency(totalSeleccionado)}</strong><br><br>
             <span style="color: #16a34a;">✅ Esto iniciará el trabajo completo en tu vehículo.</span>
         `;
     } else {
         // ALGUNOS seleccionados → Aprobación PARCIAL
         tipoAprobacion = 'parcial';
         tituloConfirmacion = '📝 Aprobar Servicios Seleccionados';
-        const totalSeleccionado = currentCotizacion.servicios
-            .filter(s => serviciosSeleccionados.includes(s.id_servicio))
-            .reduce((sum, s) => sum + (s.precio || 0), 0);
         
         mensajeConfirmacion = `
             Aprobar <strong>${seleccionados}</strong> de <strong>${totalServicios}</strong> servicio(s)<br><br>
@@ -602,8 +685,8 @@ async function aprobarCotizacion() {
 
         if (data.success) {
             const mensajeExito = tipoAprobacion === 'total' 
-                ? '✅ ¡Cotización aprobada completamente! El taller comenzará los trabajos.'
-                : `✅ ${seleccionados} servicio(s) aprobados correctamente.`;
+                ? `✅ ¡Cotización aprobada completamente! Total: ${formatCurrency(totalSeleccionado)}`
+                : `✅ ${seleccionados} servicio(s) aprobados. Total: ${formatCurrency(totalSeleccionado)}`;
             
             showToast(mensajeExito, 'success');
             cerrarModal('modalDetalleCotizacion');
@@ -930,13 +1013,14 @@ async function inicializar() {
 // EXPONER FUNCIONES GLOBALMENTE
 // ============================================================
 window.verDetalleCotizacion = verDetalleCotizacion;
-window.aprobarCotizacion = aprobarCotizacion;          // NUEVA función única
+window.aprobarCotizacion = aprobarCotizacion;
 window.rechazarCotizacion = rechazarCotizacion;
 window.imprimirCotizacionDirecta = imprimirCotizacionDirecta;
 window.imprimirCotizacion = imprimirCotizacion;
 window.cerrarModal = cerrarModal;
 window.cargarCotizaciones = cargarCotizaciones;
 window.mostrarConfirmacion = mostrarConfirmacion;
+window.calcularTotalSeleccionado = calcularTotalSeleccionado;
 
 // ============================================================
 // INICIALIZAR AL CARGAR LA PÁGINA

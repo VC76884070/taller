@@ -359,11 +359,21 @@ function calcularTotalSeleccionado() {
     // Actualizar el contador y total en la UI
     const totalSeleccionadoEl = document.getElementById('totalSeleccionado');
     const contadorSeleccionadosEl = document.getElementById('contadorSeleccionados');
+    const totalPagarEl = document.getElementById('totalPagar');
     const btnAprobar = document.getElementById('btnAprobarCotizacion');
 
     if (totalSeleccionadoEl) {
         totalSeleccionadoEl.textContent = formatCurrency(total);
         totalSeleccionadoEl.style.color = total > 0 ? '#16a34a' : '#6b7280';
+    }
+
+    // ============================================================
+    // ACTUALIZAR "TOTAL A PAGAR" CON EL TOTAL SELECCIONADO
+    // ============================================================
+    if (totalPagarEl) {
+        totalPagarEl.textContent = formatCurrency(total);
+        totalPagarEl.style.color = total > 0 ? '#16a34a' : '#6b7280';
+        totalPagarEl.style.fontWeight = '700';
     }
 
     if (contadorSeleccionadosEl) {
@@ -400,11 +410,12 @@ function mostrarDetalleCotizacion(cotizacion) {
         totalServiciosOriginal = cotizacion.servicios.reduce((sum, s) => sum + (s.precio || 0), 0);
     }
     
-    let totalPagar = totalServiciosOriginal;
+    // IMPORTANTE: totalPagarInicial = 0 (se actualizará con el cálculo de selección)
+    let totalPagarInicial = 0;
     let mostrarDiagnostico = false;
     
     if (esRechazada) {
-        totalPagar = COSTO_DIAGNOSTICO;
+        totalPagarInicial = COSTO_DIAGNOSTICO;
         mostrarDiagnostico = true;
     }
     
@@ -514,9 +525,12 @@ function mostrarDetalleCotizacion(cotizacion) {
                                     <span>${formatCurrency(COSTO_DIAGNOSTICO)}</span>
                                 </div>
                             ` : ''}
+                            <!-- ============================================ -->
+                            <!-- TOTAL A PAGAR = TOTAL SELECCIONADO          -->
+                            <!-- ============================================ -->
                             <div class="total-linea gran-total">
                                 <span>Total a Pagar:</span>
-                                <span class="total-monto">${formatCurrency(totalPagar)}</span>
+                                <span class="total-monto" id="totalPagar">${formatCurrency(totalPagarInicial)}</span>
                             </div>
                         </div>
                     ` : `

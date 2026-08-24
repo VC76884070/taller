@@ -1,7 +1,7 @@
 // =====================================================
 // COTIZACIONES.JS - CLIENTE (VERSIÓN OPTIMIZADA)
 // FURIA MOTOR COMPANY SRL
-// VERSIÓN CORREGIDA - USA DIRECTAMENTE window.API_BASE_URL
+// VERSIÓN CORREGIDA - UN SOLO BOTÓN "APROBAR"
 // =====================================================
 
 // =====================================================
@@ -458,7 +458,9 @@ function mostrarDetalleCotizacion(cotizacion) {
         `;
     }
     
-    // Configurar botones del footer
+    // ============================================================
+    // CONFIGURAR BOTONES DEL FOOTER - UN SOLO BOTÓN "APROBAR"
+    // ============================================================
     if (accionesFooter) {
         if (esRechazada) {
             accionesFooter.innerHTML = `
@@ -471,14 +473,11 @@ function mostrarDetalleCotizacion(cotizacion) {
                 <button class="btn-secondary" onclick="cerrarModal('modalDetalleCotizacion')">
                     <i class="fas fa-times"></i> Cerrar
                 </button>
-                <button class="btn-warning" onclick="rechazarCotizacion()">
-                    <i class="fas fa-times-circle"></i> Rechazar Cotización
+                <button class="btn-danger" onclick="rechazarCotizacion()">
+                    <i class="fas fa-times-circle"></i> Rechazar
                 </button>
-                <button class="btn-primary" onclick="aprobarServiciosSeleccionados()">
-                    <i class="fas fa-check-double"></i> Aprobar Seleccionados
-                </button>
-                <button class="btn-primary" onclick="aprobarCotizacionCompleta()">
-                    <i class="fas fa-check-circle"></i> Aprobar Todo
+                <button class="btn-primary" onclick="aprobarCotizacion()">
+                    <i class="fas fa-check-circle"></i> Aprobar
                 </button>
             `;
         } else {
@@ -503,32 +502,110 @@ function obtenerServiciosSeleccionados() {
     return [];
 }
 
-async function aprobarCotizacionCompleta() {
-    if (!currentCotizacion.servicios || currentCotizacion.servicios.length === 0) {
+// ============================================================
+// NUEVA FUNCIÓN ÚNICA DE APROBACIÓN - UN SOLO BOTÓN
+// ============================================================
+
+async function aprobarCotizacion() {
+    if (!currentCotizacion || !currentCotizacion.servicios || currentCotizacion.servicios.length === 0) {
         showToast('No hay servicios para aprobar', 'warning');
         return;
     }
-    
-    const confirmar = await mostrarConfirmacion(
-        '✅ Aprobar Cotización',
-        `¿Estás seguro de que deseas aprobar TODOS los servicios?<br><br>
-        <strong>Total: ${formatCurrency(currentCotizacion.total || 0)}</strong><br><br>
-        Esto iniciará el trabajo en tu vehículo.`
-    );
-    
+
+    const checkboxes = document.querySelectorAll('.servicio-checkbox');
+    if (checkboxes.length === 0) {
+        showToast('No hay servicios disponibles para aprobar', 'warning');
+        return;
+    }
+
+    // Obtener servicios seleccionados y no seleccionados
+    const serviciosSeleccionados = [];
+    const serviciosNoSeleccionados = [];
+    const totalServicios = checkboxes.length;
+
+    checkboxes.forEach(cb => {
+        const idServicio = parseInt(cb.dataset.id);
+        if (cb.checked) {
+            serviciosSeleccionados.push(idServicio);
+        } else {
+            serviciosNoSeleccionados.push(idServicio);
+        }
+    });
+
+    const seleccionados = serviciosSeleccionados.length;
+    const noSeleccionados = serviciosNoSeleccionados.length;
+
+    // Validar que al menos uno esté seleccionado
+    if (seleccionados === 0) {
+        showToast('⚠️ Selecciona al menos un servicio para aprobar', 'warning');
+        return;
+    }
+
+    // Determinar tipo de aprobación
+    let tipoAprobacion = '';
+    let mensajeConfirmacion = '';
+    let tituloConfirmacion = '';
+
+    if (seleccionados === totalServicios) {
+        // TODOS seleccionados → Aprobación TOTAL
+        tipoAprobacion = 'total';
+        tituloConfirmacion = '✅ Aprobar Cotización Completa';
+        mensajeConfirmacion = `
+            ¿Aprobar TODOS los servicios?<br><br>
+            <strong>Total: ${formatCurrency(currentCotizacion.total || 0)}</strong><br><br>
+            <span style="color: #16a34a;">✅ Esto iniciará el trabajo completo en tu vehículo.</span>
+        `;
+    } else {
+        // ALGUNOS seleccionados → Aprobación PARCIAL
+        tipoAprobacion = 'parcial';
+        tituloConfirmacion = '📝 Aprobar Servicios Seleccionados';
+        const totalSeleccionado = currentCotizacion.servicios
+            .filter(s => serviciosSeleccionados.includes(s.id_servicio))
+            .reduce((sum, s) => sum + (s.precio || 0), 0);
+        
+        mensajeConfirmacion = `
+            Aprobar <strong>${seleccionados}</strong> de <strong>${totalServicios}</strong> servicio(s)<br><br>
+            <strong>Total seleccionado: ${formatCurrency(totalSeleccionado)}</strong><br><br>
+            ${noSeleccionados > 0 ? `⚠️ <span style="color: #f59e0b;">${noSeleccionados} servicio(s) no seleccionados quedarán pendientes.</span>` : ''}
+            <br><span style="color: #16a34a;">✅ Solo se trabajará en los servicios aprobados.</span>
+        `;
+    }
+
+    // Mostrar confirmación
+    const confirmar = await mostrarConfirmacion(tituloConfirmacion, mensajeConfirmacion);
     if (!confirmar) return;
-    
+
+    // Enviar al backend
     mostrarLoading(true);
     try {
-        const response = await fetch(`${API_URL}/cotizacion/${currentCotizacionId}/aprobar-total`, {
+        let endpoint = '';
+        let body = {};
+
+        if (tipoAprobacion === 'total') {
+            endpoint = `${API_URL}/cotizacion/${currentCotizacionId}/aprobar-total`;
+            body = {};
+        } else {
+            endpoint = `${API_URL}/cotizacion/${currentCotizacionId}/aprobar-parcial`;
+            body = {
+                servicios_aprobados: serviciosSeleccionados,
+                comentarios: ''
+            };
+        }
+
+        const response = await fetch(endpoint, {
             method: 'POST',
-            headers: getAuthHeaders()
+            headers: getAuthHeaders(),
+            body: JSON.stringify(body)
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
-            showToast('✅ ¡Cotización aprobada! El taller comenzará los trabajos.', 'success');
+            const mensajeExito = tipoAprobacion === 'total' 
+                ? '✅ ¡Cotización aprobada completamente! El taller comenzará los trabajos.'
+                : `✅ ${seleccionados} servicio(s) aprobados correctamente.`;
+            
+            showToast(mensajeExito, 'success');
             cerrarModal('modalDetalleCotizacion');
             await cargarCotizaciones();
         } else {
@@ -542,59 +619,9 @@ async function aprobarCotizacionCompleta() {
     }
 }
 
-async function aprobarServiciosSeleccionados() {
-    if (!currentCotizacion.servicios || currentCotizacion.servicios.length === 0) {
-        showToast('No hay servicios disponibles para aprobar', 'warning');
-        return;
-    }
-    
-    const serviciosSeleccionados = obtenerServiciosSeleccionados();
-    
-    if (serviciosSeleccionados.length === 0) {
-        showToast('Selecciona al menos un servicio para aprobar', 'warning');
-        return;
-    }
-    
-    const totalSeleccionado = currentCotizacion.servicios
-        .filter((_, idx) => serviciosSeleccionados.includes(currentCotizacion.servicios[idx].id_servicio))
-        .reduce((sum, s) => sum + (s.precio || 0), 0);
-    
-    const confirmar = await mostrarConfirmacion(
-        '📝 Aprobar Servicios Seleccionados',
-        `¿Aprobar ${serviciosSeleccionados.length} servicio(s)?<br><br>
-        <strong>Total seleccionado: ${formatCurrency(totalSeleccionado)}</strong><br><br>
-        Los servicios no seleccionados quedarán pendientes.`
-    );
-    
-    if (!confirmar) return;
-    
-    mostrarLoading(true);
-    try {
-        const response = await fetch(`${API_URL}/cotizacion/${currentCotizacionId}/aprobar-parcial`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                servicios_aprobados: serviciosSeleccionados,
-                comentarios: ''
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast('✅ Cotización aprobada parcialmente', 'success');
-            cerrarModal('modalDetalleCotizacion');
-            await cargarCotizaciones();
-        } else {
-            showToast(data.error || 'Error al aprobar', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
+// ============================================================
+// RECHAZAR COTIZACIÓN
+// ============================================================
 
 async function rechazarCotizacion() {
     const confirmar = await mostrarConfirmacion(
@@ -633,6 +660,10 @@ async function rechazarCotizacion() {
         mostrarLoading(false);
     }
 }
+
+// ============================================================
+// MODAL DE CONFIRMACIÓN
+// ============================================================
 
 function mostrarConfirmacion(titulo, mensaje) {
     return new Promise((resolve) => {
@@ -895,14 +926,19 @@ async function inicializar() {
     }
 }
 
-// Exponer funciones globales
+// ============================================================
+// EXPONER FUNCIONES GLOBALMENTE
+// ============================================================
 window.verDetalleCotizacion = verDetalleCotizacion;
-window.aprobarCotizacionCompleta = aprobarCotizacionCompleta;
-window.aprobarServiciosSeleccionados = aprobarServiciosSeleccionados;
+window.aprobarCotizacion = aprobarCotizacion;          // NUEVA función única
 window.rechazarCotizacion = rechazarCotizacion;
 window.imprimirCotizacionDirecta = imprimirCotizacionDirecta;
 window.imprimirCotizacion = imprimirCotizacion;
 window.cerrarModal = cerrarModal;
 window.cargarCotizaciones = cargarCotizaciones;
+window.mostrarConfirmacion = mostrarConfirmacion;
 
+// ============================================================
+// INICIALIZAR AL CARGAR LA PÁGINA
+// ============================================================
 document.addEventListener('DOMContentLoaded', inicializar);

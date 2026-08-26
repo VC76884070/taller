@@ -131,7 +131,103 @@ def tecnico_required(f):
         return f(current_user, *args, **kwargs)
     return decorated
 
-
+# =====================================================
+# FUNCIÓN AUXILIAR: OBTENER DECISIÓN DEL CLIENTE (SIN PRECIOS)
+# =====================================================
+def obtener_decision_cliente_tecnico(id_orden):
+    """
+    Obtiene la decisión del cliente sobre los servicios de la cotización
+    SIN mostrar precios, solo la descripción y estado
+    """
+    try:
+        # 1. Obtener la cotización más reciente
+        cotizacion = supabase.table('cotizacion') \
+            .select('servicios_json, estado, fecha_ultima_modificacion, fecha_rechazo, motivo_rechazo, comentarios_rechazo') \
+            .eq('id_orden_trabajo', id_orden) \
+            .order('fecha_envio', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if not cotizacion.data:
+            return None
+        
+        cot = cotizacion.data[0]
+        
+        # 2. Si está en estado 'enviada', el cliente no ha respondido
+        if cot.get('estado') == 'enviada':
+            return {
+                'estado': 'pendiente',
+                'mensaje': '⏳ El cliente aún no ha respondido a la cotización',
+                'servicios': []
+            }
+        
+        # 3. Procesar servicios
+        servicios = []
+        servicios_aprobados = []
+        servicios_rechazados = []
+        
+        if cot.get('servicios_json'):
+            try:
+                servicios_data = cot['servicios_json']
+                if isinstance(servicios_data, str):
+                    servicios_data = json.loads(servicios_data)
+                
+                for s in servicios_data:
+                    aprobado = s.get('aprobado_por_cliente', False)
+                    descripcion = s.get('descripcion') or s.get('nombre', 'Servicio')
+                    
+                    servicio_info = {
+                        'descripcion': descripcion,
+                        'estado': 'aprobado' if aprobado else 'rechazado'
+                    }
+                    servicios.append(servicio_info)
+                    
+                    if aprobado:
+                        servicios_aprobados.append(servicio_info)
+                    else:
+                        servicios_rechazados.append(servicio_info)
+                        
+            except Exception as e:
+                logger.error(f"Error parseando servicios_json: {e}")
+        
+        # 4. Determinar estado de la decisión
+        estado_cotizacion = cot.get('estado', 'enviada')
+        es_rechazada_total = estado_cotizacion == 'rechazada'
+        
+        if es_rechazada_total:
+            estado_decision = 'rechazada_total'
+            mensaje = '❌ El cliente RECHAZÓ TODOS los servicios. Se procederá al armado del vehículo.'
+        elif len(servicios_aprobados) == len(servicios) and len(servicios) > 0:
+            estado_decision = 'aprobada_total'
+            mensaje = f'✅ El cliente APROBÓ TODOS los servicios ({len(servicios)} servicios)'
+        elif len(servicios_aprobados) > 0:
+            estado_decision = 'aprobada_parcial'
+            mensaje = f'📋 El cliente APROBÓ {len(servicios_aprobados)} de {len(servicios)} servicios'
+        else:
+            estado_decision = 'pendiente'
+            mensaje = '⏳ El cliente aún no ha respondido a la cotización'
+        
+        # 5. Retornar resultado (SIN PRECIOS)
+        return {
+            'estado': estado_decision,
+            'mensaje': mensaje,
+            'es_rechazada_total': es_rechazada_total,
+            'servicios': {
+                'todos': servicios,
+                'aprobados': servicios_aprobados,
+                'rechazados': servicios_rechazados,
+                'total_servicios': len(servicios),
+                'total_aprobados': len(servicios_aprobados),
+                'total_rechazados': len(servicios_rechazados)
+            },
+            'fecha_decision': cot.get('fecha_ultima_modificacion') or cot.get('fecha_rechazo'),
+            'motivo_rechazo': cot.get('motivo_rechazo'),
+            'comentarios_rechazo': cot.get('comentarios_rechazo')
+        }
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo decisión del cliente: {e}")
+        return None
 # =====================================================
 # FUNCIÓN AUXILIAR: OBTENER FILE_ID DE GOOGLE DRIVE
 # =====================================================
@@ -1232,7 +1328,7 @@ def notificar_jefe_taller_armado_completado(id_orden, tecnico_nombre, codigo_ord
 
 
 # =====================================================
-# API: DETALLE DE ORDEN (CORREGIDO CON TODOS LOS DATOS)
+# API: DETALLE DE ORDEN (COMPLETO CON DECISIÓN DEL CLIENTE)
 # =====================================================
 @mis_vehiculos_bp.route('/detalle-orden/<int:orden_id>', methods=['GET'])
 @tecnico_required
@@ -1423,6 +1519,11 @@ def obtener_detalle_orden(current_user, orden_id):
                 })
         
         # =====================================================
+        # 🔥 OBTENER DECISIÓN DEL CLIENTE (SIN PRECIOS)
+        # =====================================================
+        decision_cliente = obtener_decision_cliente_tecnico(orden_id)
+        
+        # =====================================================
         # CONSTRUIR RESPUESTA COMPLETA
         # =====================================================
         return jsonify({
@@ -1446,12 +1547,12 @@ def obtener_detalle_orden(current_user, orden_id):
                 'cliente': cliente_info,
                 'recepcion': {
                     'transcripcion_problema': recepcion_data.get('transcripcion_problema', 'No hay descripción'),
-                    'audio_url': recepcion_data.get('url_grabacion_problema', ''),  # Audio del problema
+                    'audio_url': recepcion_data.get('url_grabacion_problema', ''),
                     'fotos': fotos
                 },
                 'diagnostico_taller': {
                     'diagnostigo': diagnostico_taller_data.get('diagnostigo', ''),
-                    'audio_url': diagnostico_taller_data.get('url_grabacion', '')  # Audio del diagnóstico
+                    'audio_url': diagnostico_taller_data.get('url_grabacion', '')
                 },
                 'diagnostico_tecnico': {
                     'informe': diagnostico_data.get('informe') if diagnostico_data else None,
@@ -1472,7 +1573,8 @@ def obtener_detalle_orden(current_user, orden_id):
                 'instrucciones_armado_historial': instrucciones_data.get('instrucciones'),
                 'fecha_instrucciones': instrucciones_data.get('fecha_envio'),
                 'instrucciones_pendientes': instrucciones_pendientes,
-                'solicitudes_repuestos_pendientes': solicitudes_pendientes
+                'solicitudes_repuestos_pendientes': solicitudes_pendientes,
+                'decision_cliente': decision_cliente  # 🔥 NUEVO CAMPO
             }
         }), 200
         

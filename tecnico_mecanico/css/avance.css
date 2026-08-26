@@ -1,7 +1,8 @@
 /* =====================================================
    AVANCE.CSS - TÉCNICO MECÁNICO
    REGISTRO DE AVANCES DE TRABAJO
-   VERSIÓN COMPLETA CON RESPONSIVE Y SIDEBAR
+   VERSIÓN COMPLETA CON RESPONSIVE, SIDEBAR, 
+   CARGA EN COLA Y PREVIEW DE FOTOS
    ===================================================== */
 
 * {
@@ -112,7 +113,6 @@ body.sidebar-open {
    ESTILOS BASE PARA SIDEBAR
    ===================================================== */
 
-/* Ajustes para el main content cuando sidebar está presente */
 .main-content {
     flex: 1;
     margin-left: 280px;
@@ -435,9 +435,24 @@ body.sidebar-open {
     font-family: inherit;
 }
 
-/* Grid de fotos */
+/* =====================================================
+   GRID DE FOTOS - CON PREVIEW Y CARGA EN COLA
+   ===================================================== */
+
 .fotos-grid-container {
     margin-bottom: 1rem;
+}
+
+.fotos-grid-container > label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--gris-texto);
+    margin-bottom: 0.25rem;
+}
+
+.fotos-grid-container > label .required {
+    color: var(--rojo-primario);
 }
 
 .fotos-grid {
@@ -453,16 +468,21 @@ body.sidebar-open {
     border: 1px solid var(--border-color);
     padding: 0.75rem;
     transition: var(--transition);
+    position: relative;
 }
 
 .foto-upload-item:hover {
     border-color: var(--rojo-primario);
 }
 
+/* =====================================================
+   PREVIEW DE FOTO
+   ===================================================== */
+
 .foto-preview {
     width: 100%;
     aspect-ratio: 1;
-    background: rgba(193, 18, 31, 0.1);
+    background: rgba(193, 18, 31, 0.08);
     border-radius: var(--radius-sm);
     display: flex;
     flex-direction: column;
@@ -473,6 +493,13 @@ body.sidebar-open {
     margin-bottom: 0.5rem;
     position: relative;
     overflow: hidden;
+    border: 2px dashed var(--border-color);
+    min-height: 100px;
+}
+
+.foto-preview:hover {
+    border-color: var(--rojo-primario);
+    background: rgba(193, 18, 31, 0.12);
 }
 
 .foto-preview i {
@@ -487,6 +514,7 @@ body.sidebar-open {
 }
 
 .foto-preview.has-image {
+    border: 2px solid var(--verde-exito);
     background-size: cover;
     background-position: center;
 }
@@ -495,6 +523,100 @@ body.sidebar-open {
 .foto-preview.has-image span {
     display: none;
 }
+
+.foto-preview.has-error {
+    border-color: var(--rojo-primario) !important;
+}
+
+.foto-preview.has-error i {
+    color: var(--rojo-primario) !important;
+}
+
+.foto-preview .fa-exclamation-triangle {
+    color: var(--rojo-primario);
+}
+
+/* =====================================================
+   LOADING DE FOTOS (SPINNER SOBRE EL PREVIEW)
+   ===================================================== */
+
+.foto-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: var(--radius-sm);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.65rem;
+    gap: 0.3rem;
+    z-index: 10;
+    backdrop-filter: blur(2px);
+}
+
+.foto-loading i {
+    font-size: 1.8rem;
+    color: var(--ambar-alerta);
+}
+
+.foto-loading span {
+    font-size: 0.65rem;
+    color: var(--gris-texto);
+}
+
+/* =====================================================
+   BARRA DE PROGRESO DE SUBIDA
+   ===================================================== */
+
+#uploadProgressContainer {
+    background: var(--gris-oscuro);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    display: none;
+}
+
+#uploadProgressContainer .progress-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.25rem;
+}
+
+#uploadProgressContainer .progress-label span {
+    font-size: 0.8rem;
+    color: var(--gris-texto);
+}
+
+#uploadProgressContainer .progress-label #uploadProgressText {
+    color: var(--rojo-primario);
+    font-weight: 600;
+}
+
+#uploadProgressBar {
+    width: 0%;
+    height: 6px;
+    background: var(--rojo-primario);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+#uploadProgressBarContainer {
+    width: 100%;
+    height: 6px;
+    background: var(--gris-oscuro);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+/* =====================================================
+   COMENTARIO DE FOTO
+   ===================================================== */
 
 .foto-comentario {
     width: 100%;
@@ -506,6 +628,7 @@ body.sidebar-open {
     font-size: 0.7rem;
     resize: vertical;
     font-family: inherit;
+    min-height: 44px;
 }
 
 .foto-comentario:focus {
@@ -524,13 +647,17 @@ body.sidebar-open {
     padding: 0.25rem;
     border-radius: var(--radius-sm);
     transition: var(--transition);
+    min-height: 32px;
 }
 
 .btn-remove-foto:hover {
     background: rgba(193, 18, 31, 0.1);
 }
 
-/* Botones */
+/* =====================================================
+   BOTONES
+   ===================================================== */
+
 .btn-primary {
     background: var(--rojo-primario);
     color: var(--blanco);
@@ -544,12 +671,17 @@ body.sidebar-open {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
+    min-height: 44px;
 }
 
 .btn-primary:hover {
     background: var(--rojo-oscuro);
     transform: translateY(-1px);
     box-shadow: var(--shadow-red);
+}
+
+.btn-primary:active {
+    transform: scale(0.98);
 }
 
 .btn-outline {
@@ -564,6 +696,7 @@ body.sidebar-open {
     align-items: center;
     gap: 0.5rem;
     font-size: 0.8rem;
+    min-height: 44px;
 }
 
 .btn-outline:hover {
@@ -584,6 +717,7 @@ body.sidebar-open {
     align-items: center;
     gap: 0.5rem;
     font-size: 0.8rem;
+    min-height: 44px;
 }
 
 .btn-secondary:hover {
@@ -591,14 +725,44 @@ body.sidebar-open {
     transform: translateY(-1px);
 }
 
+.btn-actualizar {
+    background: var(--gris-medio);
+    color: var(--blanco);
+    border: 1px solid var(--border-color);
+    padding: 0.3rem 0.8rem;
+    border-radius: var(--radius-md);
+    font-size: 0.7rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 36px;
+}
+
+.btn-actualizar:hover {
+    background: var(--ambar-alerta);
+    border-color: var(--ambar-alerta);
+    color: var(--negro);
+}
+
+.btn-actualizar i {
+    font-size: 0.7rem;
+}
+
 .form-actions {
     display: flex;
     justify-content: flex-end;
     gap: 1rem;
     margin-top: 1rem;
+    flex-wrap: wrap;
 }
 
-/* Modal */
+/* =====================================================
+   MODAL
+   ===================================================== */
+
 .modal {
     display: none;
     position: fixed;
@@ -662,6 +826,8 @@ body.sidebar-open {
     transition: var(--transition);
     padding: 0.3rem 0.6rem;
     border-radius: var(--radius-sm);
+    min-height: 44px;
+    min-width: 44px;
 }
 
 .modal-close:hover {
@@ -681,7 +847,10 @@ body.sidebar-open {
     gap: 1rem;
 }
 
-/* Detalle de fotos */
+/* =====================================================
+   DETALLE DE FOTOS
+   ===================================================== */
+
 .detalle-fotos-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -701,6 +870,11 @@ body.sidebar-open {
     height: 120px;
     object-fit: cover;
     cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.detalle-foto-item img:hover {
+    transform: scale(1.02);
 }
 
 .detalle-foto-comentario {
@@ -709,6 +883,10 @@ body.sidebar-open {
     color: var(--gris-texto);
     background: var(--gris-oscuro);
 }
+
+/* =====================================================
+   ESTADOS Y BADGES
+   ===================================================== */
 
 .status-badge {
     display: inline-flex;
@@ -735,106 +913,6 @@ body.sidebar-open {
     color: var(--rojo-primario);
 }
 
-/* Loading */
-.loading-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 9999;
-    display: none;
-    justify-content: center;
-    align-items: center;
-}
-
-.loading-spinner {
-    width: 50px;
-    height: 50px;
-    border: 3px solid var(--gris-oscuro);
-    border-top-color: var(--rojo-primario);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-/* Empty state */
-.empty-state {
-    grid-column: 1 / -1;
-    text-align: center;
-    padding: 2rem;
-    background: var(--bg-card);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-color);
-}
-
-.empty-state i {
-    font-size: 2rem;
-    color: var(--gris-medio);
-    margin-bottom: 0.5rem;
-}
-
-.empty-state p {
-    color: var(--gris-texto);
-    font-size: 0.85rem;
-}
-
-/* Animaciones */
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-/* Scrollbar */
-::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-::-webkit-scrollbar-track {
-    background: var(--gris-oscuro);
-}
-::-webkit-scrollbar-thumb {
-    background: var(--gris-medio);
-    border-radius: var(--radius-full);
-}
-::-webkit-scrollbar-thumb:hover {
-    background: var(--rojo-primario);
-}
-
-/* =====================================================
-   ESTILOS ADICIONALES PARA ACTUALIZACIÓN Y REVISIÓN
-   ===================================================== */
-
-/* Botón Actualizar */
-.btn-actualizar {
-    background: var(--gris-medio);
-    color: var(--blanco);
-    border: 1px solid var(--border-color);
-    padding: 0.3rem 0.8rem;
-    border-radius: var(--radius-md);
-    font-size: 0.7rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: var(--transition);
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-}
-
-.btn-actualizar:hover {
-    background: var(--ambar-alerta);
-    border-color: var(--ambar-alerta);
-    color: var(--negro);
-}
-
-.btn-actualizar i {
-    font-size: 0.7rem;
-}
-
 .avance-info-left {
     display: flex;
     gap: 0.75rem;
@@ -854,7 +932,10 @@ body.sidebar-open {
     font-size: 0.65rem;
 }
 
-/* Comentario de revisión en tarjeta */
+/* =====================================================
+   COMENTARIO DE REVISIÓN
+   ===================================================== */
+
 .comentario-revision {
     margin-top: 0.75rem;
     padding: 0.5rem;
@@ -907,55 +988,59 @@ body.sidebar-open {
     font-size: 0.85rem;
 }
 
-.avance-card-header {
-    cursor: pointer;
-    transition: var(--transition);
+/* =====================================================
+   LOADING OVERLAY
+   ===================================================== */
+
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 9999;
+    display: none;
+    justify-content: center;
+    align-items: center;
 }
 
-.avance-card-header:hover {
-    background: rgba(193, 18, 31, 0.15);
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid var(--gris-oscuro);
+    border-top-color: var(--rojo-primario);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
 }
 
-.avance-card-body {
-    cursor: pointer;
-}
+/* =====================================================
+   EMPTY STATE
+   ===================================================== */
 
-.form-actions .btn-primary:active {
-    transform: scale(0.98);
-}
-
-.form-avance-section.editing-mode .section-header-left h3::after {
-    content: " (Editando)";
-    font-size: 0.7rem;
-    color: var(--ambar-alerta);
-    font-weight: normal;
-}
-
-.detalle-foto-item img {
-    transition: transform 0.2s ease;
-}
-
-.detalle-foto-item img:hover {
-    transform: scale(1.02);
-}
-
-.selector-body .btn-primary {
-    white-space: nowrap;
-}
-
-.alert-warning-avance {
-    background: rgba(245, 158, 11, 0.15);
-    border-left: 3px solid var(--ambar-alerta);
-    padding: 0.75rem;
+.empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 2rem;
+    background: var(--bg-card);
     border-radius: var(--radius-md);
-    margin-bottom: 1rem;
-    font-size: 0.8rem;
+    border: 1px solid var(--border-color);
 }
 
-.alert-warning-avance i {
-    color: var(--ambar-alerta);
-    margin-right: 0.5rem;
+.empty-state i {
+    font-size: 2rem;
+    color: var(--gris-medio);
+    margin-bottom: 0.5rem;
 }
+
+.empty-state p {
+    color: var(--gris-texto);
+    font-size: 0.85rem;
+}
+
+/* =====================================================
+   ORDEN INFO CARD
+   ===================================================== */
 
 .orden-info-card {
     background: var(--gris-oscuro);
@@ -991,23 +1076,77 @@ body.sidebar-open {
 }
 
 /* =====================================================
+   ALERTAS
+   ===================================================== */
+
+.alert-warning-avance {
+    background: rgba(245, 158, 11, 0.15);
+    border-left: 3px solid var(--ambar-alerta);
+    padding: 0.75rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    font-size: 0.8rem;
+}
+
+.alert-warning-avance i {
+    color: var(--ambar-alerta);
+    margin-right: 0.5rem;
+}
+
+/* =====================================================
+   ANIMACIONES
+   ===================================================== */
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* =====================================================
+   SCROLLBAR
+   ===================================================== */
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: var(--gris-oscuro);
+}
+::-webkit-scrollbar-thumb {
+    background: var(--gris-medio);
+    border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--rojo-primario);
+}
+
+/* =====================================================
    ========== RESPONSIVE ==========
    ===================================================== */
 
 /* Tablet y móvil (max 1024px) - Sidebar con hamburguesa */
 @media (max-width: 1024px) {
-    /* Mostrar botón hamburguesa */
     .hamburger-menu {
         display: flex !important;
     }
     
-    /* Sidebar oculto por defecto */
     .sidebar {
         transform: translateX(-100%);
         width: 280px;
         top: 0;
         height: 100vh;
         position: fixed;
+        z-index: 1000;
     }
     
     .sidebar.open {
@@ -1015,13 +1154,11 @@ body.sidebar-open {
         box-shadow: 5px 0 25px rgba(0, 0, 0, 0.5);
     }
     
-    /* Main content sin margen cuando sidebar está oculto */
     .main-content {
         margin-left: 0;
         padding-top: 70px;
     }
     
-    /* Área táctil mínima 44px para todos los elementos clickeables */
     .btn-primary,
     .btn-outline,
     .btn-secondary,
@@ -1034,27 +1171,23 @@ body.sidebar-open {
         min-width: 44px;
     }
     
-    /* Feedback táctil al tocar */
-    .avance-card:active,
-    .btn-primary:active,
-    .btn-outline:active,
-    .btn-secondary:active,
-    .selector-body .btn-primary:active {
-        transform: scale(0.98);
-        transition: transform 0.05s;
-    }
-    
-    /* Scroll suave en listas */
-    .avances-grid,
-    .fotos-grid {
-        -webkit-overflow-scrolling: touch;
-    }
-    
-    /* Mejorar área táctil de inputs */
     input,
     select,
     textarea {
         min-height: 44px;
+    }
+    
+    .avance-card:active,
+    .btn-primary:active,
+    .btn-outline:active,
+    .btn-secondary:active {
+        transform: scale(0.98);
+        transition: transform 0.05s;
+    }
+    
+    .avances-grid,
+    .fotos-grid {
+        -webkit-overflow-scrolling: touch;
     }
 }
 
@@ -1127,6 +1260,10 @@ body.sidebar-open {
         grid-template-columns: 1fr;
     }
     
+    .fotos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    }
+    
     .section-header {
         flex-direction: column;
         align-items: flex-start;
@@ -1145,6 +1282,14 @@ body.sidebar-open {
     .page-title p {
         font-size: 0.7rem;
     }
+    
+    .foto-upload-item {
+        padding: 0.5rem;
+    }
+    
+    .foto-preview {
+        min-height: 80px;
+    }
 }
 
 /* Desktop (min 1025px) - Sidebar siempre visible */
@@ -1153,18 +1298,19 @@ body.sidebar-open {
         margin-left: 300px;
     }
     
-    /* Ocultar botón hamburguesa en desktop */
     .hamburger-menu {
         display: none !important;
     }
     
-    /* Ocultar overlay en desktop */
     .sidebar-overlay {
         display: none !important;
     }
 }
 
-/* Selección de texto */
+/* =====================================================
+   SELECCIÓN DE TEXTO
+   ===================================================== */
+
 ::selection {
     background: var(--rojo-primario);
     color: var(--blanco);

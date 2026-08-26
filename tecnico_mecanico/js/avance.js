@@ -1,7 +1,7 @@
 // =====================================================
 // AVANCE.JS - TÉCNICO MECÁNICO
 // REGISTRO DE AVANCES DE TRABAJO
-// VERSIÓN CORREGIDA - CON SOPORTE PARA CÁMARA
+// VERSIÓN COMPLETA - CON CARGA EN COLA Y PREVIEW
 // =====================================================
 
 // =====================================================
@@ -10,7 +10,6 @@
 const API_URL = `${window.API_BASE_URL || ''}/tecnico`;
 
 console.log('📡 avance.js - API_URL:', API_URL);
-console.log('📡 avance.js - window.API_BASE_URL:', window.API_BASE_URL);
 
 let token = null;
 let currentUser = null;
@@ -18,6 +17,12 @@ let currentOrdenId = null;
 let fotosData = {};
 let avancesActuales = [];
 let avanceEditandoId = null;
+
+// Variables para la cola de subida
+let colaSubida = [];
+let subiendo = false;
+let totalFotosSubiendo = 0;
+let fotosSubidasExitosas = 0;
 
 // =====================================================
 // FUNCIONES DE UTILIDAD
@@ -326,28 +331,38 @@ function renderizarAvances() {
 // FORMULARIO - LIMPIAR Y RESETEAR
 // =====================================================
 
+function limpiarPreviewLocal(index) {
+    const preview = document.getElementById(`preview_${index}`);
+    if (preview) {
+        preview.style.backgroundImage = '';
+        preview.classList.remove('has-image');
+        preview.innerHTML = '<i class="fas fa-plus-circle"></i><span>Foto ' + (index + 1) + '</span>';
+    }
+    
+    const input = document.getElementById(`fotoInput_${index}`);
+    if (input) input.value = '';
+    
+    const loading = document.getElementById(`loading_${index}`);
+    if (loading) loading.style.display = 'none';
+    
+    const removeBtn = document.querySelector(`.foto-upload-item[data-index="${index}"] .btn-remove-foto`);
+    if (removeBtn) removeBtn.style.display = 'none';
+}
+
 function limpiarFormulario() {
     document.getElementById('tituloAvance').value = '';
     document.getElementById('descripcionAvance').value = '';
     fotosData = {};
 
     for (let i = 0; i < 10; i++) {
-        const input = document.getElementById(`fotoInput_${i}`);
-        if (input) input.value = '';
-        
-        const preview = document.querySelector(`.foto-upload-item[data-index="${i}"] .foto-preview`);
-        if (preview) {
-            preview.style.backgroundImage = '';
-            preview.classList.remove('has-image');
-            preview.innerHTML = '<i class="fas fa-plus-circle"></i><span>Foto ' + (i + 1) + '</span>';
-        }
-        
-        const comentario = document.getElementById(`comentario_${i}`);
-        if (comentario) comentario.value = '';
-        
-        const removeBtn = document.querySelector(`.foto-upload-item[data-index="${i}"] .btn-remove-foto`);
-        if (removeBtn) removeBtn.style.display = 'none';
+        limpiarPreviewLocal(i);
     }
+    
+    ocultarBarraProgreso();
+    colaSubida = [];
+    subiendo = false;
+    totalFotosSubiendo = 0;
+    fotosSubidasExitosas = 0;
 }
 
 function resetearBotonesFormulario() {
@@ -363,7 +378,7 @@ function resetearBotonesFormulario() {
 }
 
 // =====================================================
-// CONFIGURAR SUBIDA DE FOTOS CON SOPORTE PARA CÁMARA
+// CONFIGURAR SUBIDA DE FOTOS CON SOPORTE PARA CÁMARA Y PREVIEW
 // =====================================================
 
 function configurarSubidaFotos() {
@@ -385,7 +400,7 @@ function configurarSubidaFotos() {
 }
 
 // =====================================================
-// PROCESAR FOTO - USANDO GOOGLE DRIVE
+// PROCESAR FOTO - CON PREVIEW LOCAL Y CARGA EN COLA
 // =====================================================
 
 async function procesarFoto(index, event) {
@@ -402,13 +417,67 @@ async function procesarFoto(index, event) {
         return;
     }
 
-    mostrarLoading(true);
+    // ✅ PREVIEW LOCAL INMEDIATO
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const preview = document.getElementById(`preview_${index}`);
+        if (preview) {
+            preview.style.backgroundImage = `url('${e.target.result}')`;
+            preview.style.backgroundSize = 'cover';
+            preview.style.backgroundPosition = 'center';
+            preview.classList.add('has-image');
+            preview.innerHTML = '';
+        }
+        // Mostrar loading
+        const loading = document.getElementById(`loading_${index}`);
+        if (loading) {
+            loading.style.display = 'flex';
+        }
+    };
+    reader.readAsDataURL(file);
+
+    // ✅ Agregar a la cola de subida
+    colaSubida.push({
+        index: index,
+        file: file
+    });
+
+    // ✅ Mostrar barra de progreso
+    mostrarBarraProgreso();
+
+    // ✅ Iniciar procesamiento en cola si no está en curso
+    if (!subiendo) {
+        procesarCola();
+    }
+}
+
+// =====================================================
+// PROCESAR COLA DE SUBIDA (SECUENCIAL)
+// =====================================================
+
+async function procesarCola() {
+    if (colaSubida.length === 0) {
+        subiendo = false;
+        ocultarBarraProgreso();
+        return;
+    }
+
+    subiendo = true;
+    const item = colaSubida.shift();
+    const index = item.index;
+    const file = item.file;
+
+    totalFotosSubiendo = colaSubida.length + 1;
+    fotosSubidasExitosas = 0;
 
     try {
         const codigo_orden = await obtenerCodigoOrden(currentOrdenId);
         if (!codigo_orden) {
             showToast('No se pudo obtener el código de la orden', 'error');
-            mostrarLoading(false);
+            const loading = document.getElementById(`loading_${index}`);
+            if (loading) loading.style.display = 'none';
+            actualizarProgreso();
+            procesarCola();
             return;
         }
 
@@ -422,7 +491,8 @@ async function procesarFoto(index, event) {
                 comentario: comentarioInput ? comentarioInput.value : ''
             };
 
-            const preview = document.querySelector(`.foto-upload-item[data-index="${index}"] .foto-preview`);
+            // ✅ PREVIEW CON URL FINAL (DESPUÉS DE SUBIR)
+            const preview = document.getElementById(`preview_${index}`);
             if (preview) {
                 preview.style.backgroundImage = `url('${result.url}')`;
                 preview.style.backgroundSize = 'cover';
@@ -431,14 +501,132 @@ async function procesarFoto(index, event) {
                 preview.innerHTML = '';
             }
 
+            // Ocultar loading
+            const loading = document.getElementById(`loading_${index}`);
+            if (loading) loading.style.display = 'none';
+
             const removeBtn = document.querySelector(`.foto-upload-item[data-index="${index}"] .btn-remove-foto`);
             if (removeBtn) removeBtn.style.display = 'block';
 
+            fotosSubidasExitosas++;
             showToast(`Foto ${index + 1} subida correctamente a Drive`, 'success');
+        } else {
+            // Error en la subida - mostrar error en el preview
+            const preview = document.getElementById(`preview_${index}`);
+            if (preview) {
+                preview.style.backgroundImage = '';
+                preview.classList.remove('has-image');
+                preview.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--rojo-primario); font-size: 2rem;"></i><span style="color: var(--rojo-primario);">Error</span>';
+            }
+            const loading = document.getElementById(`loading_${index}`);
+            if (loading) loading.style.display = 'none';
+            showToast(`Error al subir foto ${index + 1}`, 'error');
         }
     } catch (error) {
         console.error('Error subiendo foto:', error);
-        showToast('Error al subir la foto: ' + error.message, 'error');
+        const preview = document.getElementById(`preview_${index}`);
+        if (preview) {
+            preview.style.backgroundImage = '';
+            preview.classList.remove('has-image');
+            preview.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--rojo-primario); font-size: 2rem;"></i><span style="color: var(--rojo-primario);">Error</span>';
+        }
+        const loading = document.getElementById(`loading_${index}`);
+        if (loading) loading.style.display = 'none';
+        showToast(`Error al subir foto ${index + 1}`, 'error');
+    }
+
+    // ✅ ACTUALIZAR PROGRESO
+    actualizarProgreso();
+
+    // ✅ CONTINUAR CON LA SIGUIENTE FOTO EN COLA
+    setTimeout(() => {
+        procesarCola();
+    }, 300);
+}
+
+// =====================================================
+// MOSTRAR BARRA DE PROGRESO
+// =====================================================
+
+function mostrarBarraProgreso() {
+    const container = document.getElementById('uploadProgressContainer');
+    const bar = document.getElementById('uploadProgressBar');
+    const text = document.getElementById('uploadProgressText');
+    
+    if (container) {
+        container.style.display = 'block';
+    }
+    if (bar) {
+        bar.style.width = '0%';
+    }
+    if (text) {
+        text.textContent = '0%';
+    }
+}
+
+function ocultarBarraProgreso() {
+    const container = document.getElementById('uploadProgressContainer');
+    if (container) {
+        setTimeout(() => {
+            container.style.display = 'none';
+        }, 1000);
+    }
+}
+
+function actualizarProgreso() {
+    const total = totalFotosSubiendo || 1;
+    const completadas = fotosSubidasExitosas;
+    const porcentaje = Math.min(Math.round((completadas / total) * 100), 100);
+    
+    const bar = document.getElementById('uploadProgressBar');
+    const text = document.getElementById('uploadProgressText');
+    
+    if (bar) {
+        bar.style.width = `${porcentaje}%`;
+    }
+    if (text) {
+        text.textContent = `${porcentaje}% (${completadas}/${total})`;
+    }
+}
+
+// =====================================================
+// ELIMINAR FOTO DE DRIVE (CON LIMPIEZA DE PREVIEW)
+// =====================================================
+
+async function eliminarFoto(index) {
+    const fotoData = fotosData[index];
+    if (!fotoData || !fotoData.public_id) {
+        limpiarPreviewLocal(index);
+        delete fotosData[index];
+        showToast(`Foto ${index + 1} eliminada (local)`, 'info');
+        return;
+    }
+
+    if (!confirm('¿Eliminar esta foto de Drive?')) return;
+
+    mostrarLoading(true);
+    
+    try {
+        const response = await fetch(`${API_URL}/eliminar-foto-avance-drive`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                public_id: fotoData.public_id
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            limpiarPreviewLocal(index);
+            delete fotosData[index];
+            showToast(`Foto ${index + 1} eliminada de Drive`, 'info');
+        } else {
+            showToast(data.error || 'Error al eliminar foto', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
     } finally {
         mostrarLoading(false);
     }
@@ -478,9 +666,6 @@ async function subirFotoADrive(file, codigo_orden) {
         
         const uploadUrl = `${API_URL}/subir-foto-avance-drive`;
         
-        console.log('📤 Subiendo foto de avance a Google Drive...');
-        console.log(`📁 Para orden: ${codigo_orden}`);
-        
         fetch(uploadUrl, {
             method: 'POST',
             headers: {
@@ -491,72 +676,15 @@ async function subirFotoADrive(file, codigo_orden) {
         .then(response => response.json())
         .then(data => {
             if (data.success && data.url) {
-                console.log('✅ Foto de avance subida a Drive:', data.url);
                 resolve(data);
             } else {
-                console.error('❌ Error Drive:', data.error);
                 reject(new Error(data.error || 'Error al subir a Google Drive'));
             }
         })
         .catch(err => {
-            console.error('❌ Error de red:', err);
             reject(new Error('Error de conexión con Google Drive'));
         });
     });
-}
-
-// =====================================================
-// ELIMINAR FOTO DE DRIVE
-// =====================================================
-
-async function eliminarFoto(index) {
-    const fotoData = fotosData[index];
-    if (!fotoData || !fotoData.public_id) {
-        showToast('No hay foto para eliminar', 'warning');
-        return;
-    }
-
-    if (!confirm('¿Eliminar esta foto de Drive?')) return;
-
-    mostrarLoading(true);
-    
-    try {
-        const response = await fetch(`${API_URL}/eliminar-foto-avance-drive`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                public_id: fotoData.public_id
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            delete fotosData[index];
-
-            const input = document.getElementById(`fotoInput_${index}`);
-            if (input) input.value = '';
-
-            const preview = document.querySelector(`.foto-upload-item[data-index="${index}"] .foto-preview`);
-            if (preview) {
-                preview.style.backgroundImage = '';
-                preview.classList.remove('has-image');
-                preview.innerHTML = '<i class="fas fa-plus-circle"></i><span>Foto ' + (index + 1) + '</span>';
-            }
-
-            const removeBtn = document.querySelector(`.foto-upload-item[data-index="${index}"] .btn-remove-foto`);
-            if (removeBtn) removeBtn.style.display = 'none';
-
-            showToast(`Foto ${index + 1} eliminada de Drive`, 'info');
-        } else {
-            showToast(data.error || 'Error al eliminar foto', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
 }
 
 // =====================================================
@@ -588,7 +716,7 @@ window.cargarAvanceParaActualizar = async function(avanceId) {
                 comentario: foto.comentario || ''
             };
             
-            const preview = document.querySelector(`.foto-upload-item[data-index="${i}"] .foto-preview`);
+            const preview = document.getElementById(`preview_${i}`);
             if (preview) {
                 preview.style.backgroundImage = `url('${foto.url}')`;
                 preview.style.backgroundSize = 'cover';
@@ -861,7 +989,7 @@ function setupEventListeners() {
 // =====================================================
 
 async function inicializar() {
-    console.log('🚀 Inicializando avance.js');
+    console.log('🚀 Inicializando avance.js - Versión con carga en cola');
     console.log('📡 API_URL:', API_URL);
 
     const user = await cargarUsuarioActual();

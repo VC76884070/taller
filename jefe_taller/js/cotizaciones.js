@@ -3635,8 +3635,59 @@ async function confirmarIniciarReparacion() {
     }
 }
 
-function verAvanceReparacion(id_orden) {
-    showToast('Función en desarrollo', 'info');
+async function verAvanceReparacion(id_orden) {
+    mostrarLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/orden/${id_orden}/avances-reparacion`, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            showToast(data.error || 'Error al cargar avances', 'error');
+            return;
+        }
+        
+        const container = document.getElementById('detalleCotizacionContainer');
+        if (!container) return;
+        
+        let avancesHtml = '';
+        if (data.avances && data.avances.length > 0) {
+            avancesHtml = data.avances.map(av => `
+                <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
+                        <span style="font-weight:600;">${escapeHtml(av.descripcion)}</span>
+                        <span style="font-size:0.7rem;color:var(--gris-texto);">${formatDate(av.fecha)}</span>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;margin-top:0.25rem;font-size:0.7rem;color:var(--gris-texto);">
+                        <span><i class="fas fa-user-cog"></i> ${escapeHtml(av.tecnico_nombre)}</span>
+                        <span><span class="status-badge status-pendiente">${escapeHtml(av.tipo)}</span></span>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            avancesHtml = `<p style="text-align:center;color:var(--gris-texto);padding:1rem;">No hay avances registrados</p>`;
+        }
+        
+        container.innerHTML = `
+            <div style="padding:0.5rem;">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:1rem;">
+                    <h3 style="margin:0;"><i class="fas fa-tasks"></i> Avances de Reparación</h3>
+                    <span style="font-size:0.8rem;color:var(--gris-texto);">Orden: ${escapeHtml(data.orden_codigo)}</span>
+                </div>
+                <div style="max-height:400px;overflow-y:auto;">
+                    ${avancesHtml}
+                </div>
+            </div>
+        `;
+        
+        abrirModal('modalDetalleCotizacion');
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
 }
 
 async function verInstruccionesArmado(id_orden) {

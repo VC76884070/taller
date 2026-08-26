@@ -2317,7 +2317,7 @@ function renderOrdenesCotizacionCliente() {
             </div>
         </div>`;
     }).join('');
-}
+}s
 
 function renderHistorialCotizaciones() {
     const container = document.getElementById('historialCotizacionesContainer');

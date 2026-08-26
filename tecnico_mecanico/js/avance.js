@@ -1,12 +1,12 @@
 // =====================================================
 // AVANCE.JS - TÉCNICO MECÁNICO
 // REGISTRO DE AVANCES DE TRABAJO
+// VERSIÓN CORREGIDA - CON SOPORTE PARA CÁMARA
 // =====================================================
 
 // =====================================================
 // CONFIGURACIÓN DE API - USA LA VARIABLE GLOBAL DE INCLUDE.JS
 // =====================================================
-// API_BASE_URL viene de include.js, la accedemos via window
 const API_URL = `${window.API_BASE_URL || ''}/tecnico`;
 
 console.log('📡 avance.js - API_URL:', API_URL);
@@ -18,10 +18,6 @@ let currentOrdenId = null;
 let fotosData = {};
 let avancesActuales = [];
 let avanceEditandoId = null;
-
-// Configuración de Cloudinary
-const CLOUDINARY_CLOUD_NAME = 'drpt6ztkd';
-const CLOUDINARY_UPLOAD_PRESET = 'furia_motor_preset';
 
 // =====================================================
 // FUNCIONES DE UTILIDAD
@@ -367,7 +363,7 @@ function resetearBotonesFormulario() {
 }
 
 // =====================================================
-// SUBIDA DE FOTOS A CLOUDINARY
+// CONFIGURAR SUBIDA DE FOTOS CON SOPORTE PARA CÁMARA
 // =====================================================
 
 function configurarSubidaFotos() {
@@ -375,8 +371,15 @@ function configurarSubidaFotos() {
         const input = document.getElementById(`fotoInput_${i}`);
         if (!input) continue;
 
+        // Clonar para eliminar eventos previos
         const newInput = input.cloneNode(true);
         input.parentNode.replaceChild(newInput, input);
+        
+        // ✅ Asegurar que capture esté presente (por si se perdió al clonar)
+        if (!newInput.hasAttribute('capture') && !newInput.getAttribute('capture')) {
+            newInput.setAttribute('capture', 'environment');
+        }
+        
         newInput.addEventListener('change', (e) => procesarFoto(i, e));
     }
 }
@@ -402,7 +405,6 @@ async function procesarFoto(index, event) {
     mostrarLoading(true);
 
     try {
-        // 🔥 OBTENER CÓDIGO DE ORDEN
         const codigo_orden = await obtenerCodigoOrden(currentOrdenId);
         if (!codigo_orden) {
             showToast('No se pudo obtener el código de la orden', 'error');
@@ -410,7 +412,6 @@ async function procesarFoto(index, event) {
             return;
         }
 
-        // ✅ SUBIR A DRIVE
         const result = await subirFotoADrive(file, codigo_orden);
 
         if (result.url) {
@@ -442,6 +443,7 @@ async function procesarFoto(index, event) {
         mostrarLoading(false);
     }
 }
+
 // =====================================================
 // OBTENER CÓDIGO DE ORDEN
 // =====================================================
@@ -462,6 +464,47 @@ async function obtenerCodigoOrden(ordenId) {
         return null;
     }
 }
+
+// =====================================================
+// SUBIR FOTO A GOOGLE DRIVE (AVANCES)
+// =====================================================
+
+async function subirFotoADrive(file, codigo_orden) {
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('foto', file);
+        formData.append('codigo_orden', codigo_orden);
+        formData.append('tipo', 'avance');
+        
+        const uploadUrl = `${API_URL}/subir-foto-avance-drive`;
+        
+        console.log('📤 Subiendo foto de avance a Google Drive...');
+        console.log(`📁 Para orden: ${codigo_orden}`);
+        
+        fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': getAuthHeaders()['Authorization']
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.url) {
+                console.log('✅ Foto de avance subida a Drive:', data.url);
+                resolve(data);
+            } else {
+                console.error('❌ Error Drive:', data.error);
+                reject(new Error(data.error || 'Error al subir a Google Drive'));
+            }
+        })
+        .catch(err => {
+            console.error('❌ Error de red:', err);
+            reject(new Error('Error de conexión con Google Drive'));
+        });
+    });
+}
+
 // =====================================================
 // ELIMINAR FOTO DE DRIVE
 // =====================================================
@@ -809,46 +852,6 @@ function setupEventListeners() {
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) modal.classList.remove('show');
-        });
-    });
-}
-// =====================================================
-// 🔥 NUEVO: SUBIR FOTO A GOOGLE DRIVE (AVANCES)
-// =====================================================
-
-async function subirFotoADrive(file, codigo_orden) {
-    return new Promise((resolve, reject) => {
-        const formData = new FormData();
-        formData.append('foto', file);
-        formData.append('codigo_orden', codigo_orden);
-        formData.append('tipo', 'avance');  // Para identificar que es un avance
-        
-        // ✅ ENDPOINT QUE SUBE A DRIVE
-        const uploadUrl = `${API_URL}/subir-foto-avance-drive`;
-        
-        console.log('📤 Subiendo foto de avance a Google Drive...');
-        console.log(`📁 Para orden: ${codigo_orden}`);
-        
-        fetch(uploadUrl, {
-            method: 'POST',
-            headers: {
-                'Authorization': getAuthHeaders()['Authorization']
-            },
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.url) {
-                console.log('✅ Foto de avance subida a Drive:', data.url);
-                resolve(data);
-            } else {
-                console.error('❌ Error Drive:', data.error);
-                reject(new Error(data.error || 'Error al subir a Google Drive'));
-            }
-        })
-        .catch(err => {
-            console.error('❌ Error de red:', err);
-            reject(new Error('Error de conexión con Google Drive'));
         });
     });
 }

@@ -1,11 +1,11 @@
 // =====================================================
 // AVANCE.JS - TÉCNICO MECÁNICO
 // REGISTRO DE AVANCES DE TRABAJO
-// VERSIÓN COMPLETA - CON PREVIEW INMEDIATO Y CÍRCULO DE PROGRESO
+// VERSIÓN CORREGIDA - PREVIEW FUNCIONANDO
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - USA LA VARIABLE GLOBAL DE INCLUDE.JS
+// CONFIGURACIÓN DE API
 // =====================================================
 const API_URL = `${window.API_BASE_URL || ''}/tecnico`;
 
@@ -96,6 +96,40 @@ function mostrarLoading(mostrar) {
     const overlay = document.getElementById('loadingOverlay');
     if (overlay) {
         overlay.style.display = mostrar ? 'flex' : 'none';
+    }
+}
+
+// =====================================================
+// ACTUALIZAR CÍRCULO DE PROGRESO
+// =====================================================
+
+function actualizarCirculoProgreso(index, porcentaje) {
+    const circle = document.getElementById(`circle-progress_${index}`);
+    const text = document.querySelector(`#progress_${index} text`);
+    
+    if (circle) {
+        const circumference = 100;
+        const offset = circumference - (porcentaje / 100) * circumference;
+        circle.style.strokeDasharray = `${offset}, ${circumference}`;
+    }
+    
+    if (text) {
+        text.textContent = `${Math.round(porcentaje)}%`;
+    }
+}
+
+function mostrarCirculoProgreso(index, porcentaje = 0) {
+    const container = document.getElementById(`progress_${index}`);
+    if (container) {
+        container.style.display = 'flex';
+        actualizarCirculoProgreso(index, porcentaje);
+    }
+}
+
+function ocultarCirculoProgreso(index) {
+    const container = document.getElementById(`progress_${index}`);
+    if (container) {
+        container.style.display = 'none';
     }
 }
 
@@ -351,7 +385,6 @@ function limpiarPreviewLocal(index) {
     const progressCircle = document.getElementById(`progress_${index}`);
     if (progressCircle) {
         progressCircle.style.display = 'none';
-        progressCircle.textContent = '';
     }
     
     const removeBtn = document.querySelector(`.foto-upload-item[data-index="${index}"] .btn-remove-foto`);
@@ -387,7 +420,7 @@ function resetearBotonesFormulario() {
 }
 
 // =====================================================
-// CONFIGURAR SUBIDA DE FOTOS CON SOPORTE PARA CÁMARA
+// CONFIGURAR SUBIDA DE FOTOS
 // =====================================================
 
 function configurarSubidaFotos() {
@@ -409,7 +442,7 @@ function configurarSubidaFotos() {
 }
 
 // =====================================================
-// PROCESAR FOTO - CON PREVIEW INMEDIATO Y CÍRCULO DE PROGRESO
+// ✅ PROCESAR FOTO - CON PREVIEW CORREGIDO
 // =====================================================
 
 async function procesarFoto(index, event) {
@@ -431,19 +464,22 @@ async function procesarFoto(index, event) {
     reader.onload = function(e) {
         const preview = document.getElementById(`preview_${index}`);
         if (preview) {
+            // Guardar la imagen local como fondo
             preview.style.backgroundImage = `url('${e.target.result}')`;
             preview.style.backgroundSize = 'cover';
             preview.style.backgroundPosition = 'center';
             preview.classList.add('has-image');
             preview.innerHTML = '';
+            
+            // ✅ GUARDAR LA IMAGEN LOCAL EN LOS DATOS PARA QUE NO SE PIERDA
+            if (!fotosData[index]) {
+                fotosData[index] = {};
+            }
+            fotosData[index].localPreview = e.target.result;
         }
         
         // ✅ 2. Mostrar círculo de progreso con 0%
-        const progressCircle = document.getElementById(`progress_${index}`);
-        if (progressCircle) {
-            progressCircle.style.display = 'flex';
-            progressCircle.textContent = '0%';
-        }
+        mostrarCirculoProgreso(index, 0);
         
         // ✅ 3. Mostrar loading sutil
         const loading = document.getElementById(`loading_${index}`);
@@ -470,7 +506,7 @@ async function procesarFoto(index, event) {
 }
 
 // =====================================================
-// PROCESAR COLA DE SUBIDA (SECUENCIAL) CON ACTUALIZACIÓN DE CÍRCULO
+// ✅ PROCESAR COLA DE SUBIDA - CON PREVIEW CORREGIDO
 // =====================================================
 
 async function procesarCola() {
@@ -487,19 +523,29 @@ async function procesarCola() {
 
     totalFotosSubiendo = colaSubida.length + 1;
     fotosSubidasExitosas = 0;
+    
+    actualizarProgreso();
 
     try {
         const codigo_orden = await obtenerCodigoOrden(currentOrdenId);
         if (!codigo_orden) {
             showToast('No se pudo obtener el código de la orden', 'error');
+            ocultarCirculoProgreso(index);
+            const loading = document.getElementById(`loading_${index}`);
+            if (loading) loading.style.display = 'none';
             actualizarProgreso();
             procesarCola();
             return;
         }
 
+        actualizarCirculoProgreso(index, 30);
+
         const result = await subirFotoADrive(file, codigo_orden);
 
         if (result.url) {
+            // ✅ SUBIDA EXITOSA - ACTUALIZAR PREVIEW CON URL DE DRIVE
+            actualizarCirculoProgreso(index, 100);
+            
             const comentarioInput = document.getElementById(`comentario_${index}`);
             fotosData[index] = {
                 url: result.url,
@@ -507,10 +553,15 @@ async function procesarCola() {
                 comentario: comentarioInput ? comentarioInput.value : ''
             };
 
-            // ✅ PREVIEW CON URL FINAL
+            // ✅ ACTUALIZAR PREVIEW CON URL DE DRIVE
             const preview = document.getElementById(`preview_${index}`);
             if (preview) {
-                preview.style.backgroundImage = `url('${result.url}')`;
+                // Si la imagen es de Google Drive, usar el proxy
+                let imageUrl = result.url;
+                if (imageUrl.includes('drive.google.com')) {
+                    imageUrl = `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(result.url)}`;
+                }
+                preview.style.backgroundImage = `url('${imageUrl}')`;
                 preview.style.backgroundSize = 'cover';
                 preview.style.backgroundPosition = 'center';
                 preview.classList.add('has-image');
@@ -520,12 +571,7 @@ async function procesarCola() {
             // ✅ OCULTAR LOADING Y CÍRCULO
             const loading = document.getElementById(`loading_${index}`);
             if (loading) loading.style.display = 'none';
-            
-            const progressCircle = document.getElementById(`progress_${index}`);
-            if (progressCircle) {
-                progressCircle.style.display = 'none';
-                progressCircle.textContent = '';
-            }
+            ocultarCirculoProgreso(index);
 
             const removeBtn = document.querySelector(`.foto-upload-item[data-index="${index}"] .btn-remove-foto`);
             if (removeBtn) removeBtn.style.display = 'block';
@@ -533,46 +579,57 @@ async function procesarCola() {
             fotosSubidasExitosas++;
             showToast(`Foto ${index + 1} subida correctamente a Drive`, 'success');
         } else {
-            // ❌ ERROR EN SUBIDA
+            // ❌ ERROR EN SUBIDA - MANTENER PREVIEW LOCAL
+            ocultarCirculoProgreso(index);
+            
+            // ✅ MANTENER EL PREVIEW LOCAL EN CASO DE ERROR
             const preview = document.getElementById(`preview_${index}`);
-            if (preview) {
+            if (preview && fotosData[index] && fotosData[index].localPreview) {
+                preview.style.backgroundImage = `url('${fotosData[index].localPreview}')`;
+                preview.style.backgroundSize = 'cover';
+                preview.style.backgroundPosition = 'center';
+                preview.classList.add('has-image');
+                preview.innerHTML = '';
+            } else {
                 preview.classList.add('has-error');
                 preview.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--rojo-primario); font-size: 2rem;"></i><span style="color: var(--rojo-primario);">Error</span>';
             }
+            
             const loading = document.getElementById(`loading_${index}`);
             if (loading) loading.style.display = 'none';
-            
-            const progressCircle = document.getElementById(`progress_${index}`);
-            if (progressCircle) {
-                progressCircle.style.display = 'none';
-                progressCircle.textContent = '';
-            }
-            
             showToast(`Error al subir foto ${index + 1}`, 'error');
         }
     } catch (error) {
         console.error('Error subiendo foto:', error);
+        ocultarCirculoProgreso(index);
+        
+        // ✅ MANTENER EL PREVIEW LOCAL EN CASO DE ERROR
         const preview = document.getElementById(`preview_${index}`);
-        if (preview) {
+        if (preview && fotosData[index] && fotosData[index].localPreview) {
+            preview.style.backgroundImage = `url('${fotosData[index].localPreview}')`;
+            preview.style.backgroundSize = 'cover';
+            preview.style.backgroundPosition = 'center';
+            preview.classList.add('has-image');
+            preview.innerHTML = '';
+        } else {
             preview.classList.add('has-error');
             preview.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--rojo-primario); font-size: 2rem;"></i><span style="color: var(--rojo-primario);">Error</span>';
         }
+        
         const loading = document.getElementById(`loading_${index}`);
         if (loading) loading.style.display = 'none';
-        
-        const progressCircle = document.getElementById(`progress_${index}`);
-        if (progressCircle) {
-            progressCircle.style.display = 'none';
-            progressCircle.textContent = '';
-        }
-        
         showToast(`Error al subir foto ${index + 1}`, 'error');
     }
 
-    // ✅ ACTUALIZAR PROGRESO GENERAL
     actualizarProgreso();
 
-    // ✅ CONTINUAR CON LA SIGUIENTE FOTO EN COLA
+    // ✅ ACTUALIZAR CÍRCULOS DE LAS FOTOS EN COLA
+    colaSubida.forEach((item, idx) => {
+        const progressIndex = item.index;
+        const progresoIndividual = Math.round(((fotosSubidasExitosas + idx) / totalFotosSubiendo) * 100);
+        actualizarCirculoProgreso(progressIndex, Math.min(progresoIndividual, 99));
+    });
+
     setTimeout(() => {
         procesarCola();
     }, 300);
@@ -621,20 +678,10 @@ function actualizarProgreso() {
     if (text) {
         text.textContent = `${porcentaje}% (${completadas}/${total})`;
     }
-    
-    // ✅ ACTUALIZAR CÍRCULOS DE CADA FOTO EN COLA
-    colaSubida.forEach((item, idx) => {
-        const progressIndex = item.index;
-        const progressCircle = document.getElementById(`progress_${progressIndex}`);
-        if (progressCircle) {
-            const progresoIndividual = Math.round(((fotosSubidasExitosas + idx) / total) * 100);
-            progressCircle.textContent = `${Math.min(progresoIndividual, 99)}%`;
-        }
-    });
 }
 
 // =====================================================
-// ELIMINAR FOTO DE DRIVE (CON LIMPIEZA DE PREVIEW)
+// ELIMINAR FOTO DE DRIVE
 // =====================================================
 
 async function eliminarFoto(index) {
@@ -698,7 +745,7 @@ async function obtenerCodigoOrden(ordenId) {
 }
 
 // =====================================================
-// SUBIR FOTO A GOOGLE DRIVE (AVANCES)
+// SUBIR FOTO A GOOGLE DRIVE
 // =====================================================
 
 async function subirFotoADrive(file, codigo_orden) {
@@ -755,14 +802,21 @@ window.cargarAvanceParaActualizar = async function(avanceId) {
     if (avance.fotos && avance.fotos.length > 0) {
         for (let i = 0; i < avance.fotos.length && i < 10; i++) {
             const foto = avance.fotos[i];
+            
+            // ✅ GUARDAR LA URL EN fotosData
             fotosData[i] = {
                 url: foto.url,
                 comentario: foto.comentario || ''
             };
             
+            // ✅ ACTUALIZAR PREVIEW CON LA URL DE DRIVE
             const preview = document.getElementById(`preview_${i}`);
             if (preview) {
-                preview.style.backgroundImage = `url('${foto.url}')`;
+                let imageUrl = foto.url;
+                if (imageUrl.includes('drive.google.com')) {
+                    imageUrl = `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(foto.url)}`;
+                }
+                preview.style.backgroundImage = `url('${imageUrl}')`;
                 preview.style.backgroundSize = 'cover';
                 preview.style.backgroundPosition = 'center';
                 preview.classList.add('has-image');
@@ -1033,7 +1087,7 @@ function setupEventListeners() {
 // =====================================================
 
 async function inicializar() {
-    console.log('🚀 Inicializando avance.js - Versión con círculo de progreso');
+    console.log('🚀 Inicializando avance.js - Versión con preview corregido');
     console.log('📡 API_URL:', API_URL);
 
     const user = await cargarUsuarioActual();

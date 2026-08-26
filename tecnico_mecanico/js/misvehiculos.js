@@ -1701,9 +1701,155 @@ function cerrarHistorialModal() {
     const modal = document.getElementById('historialSolicitudesModal');
     if (modal) modal.classList.remove('show');
 }
-
 // =====================================================
-// DETALLE DE ORDEN - COMPLETO Y CORREGIDO
+// RENDERIZAR DECISIÓN DEL CLIENTE (SIN PRECIOS)
+// =====================================================
+function renderDecisionCliente(decision) {
+    if (!decision) {
+        return `
+            <div class="modal-section">
+                <h3><i class="fas fa-file-invoice"></i> Decisión del Cliente</h3>
+                <div style="padding: 0.75rem; background: var(--gris-oscuro); border-radius: var(--radius-md); text-align: center; color: var(--gris-texto);">
+                    <i class="fas fa-info-circle"></i> No hay cotización para esta orden
+                </div>
+            </div>
+        `;
+    }
+    
+    if (decision.estado === 'pendiente') {
+        return `
+            <div class="modal-section">
+                <h3><i class="fas fa-file-invoice"></i> Decisión del Cliente</h3>
+                <div style="padding: 0.75rem; background: var(--gris-oscuro); border-radius: var(--radius-md); text-align: center; color: var(--ambar-alerta);">
+                    <i class="fas fa-clock"></i> ${decision.mensaje}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Colores según estado
+    let colorFondo = '';
+    let colorBorde = '';
+    let icono = '';
+    
+    if (decision.es_rechazada_total) {
+        colorFondo = 'rgba(193, 18, 31, 0.1)';
+        colorBorde = '#C1121F';
+        icono = 'fa-times-circle';
+    } else if (decision.estado === 'aprobada_total') {
+        colorFondo = 'rgba(16, 185, 129, 0.1)';
+        colorBorde = '#10B981';
+        icono = 'fa-check-circle';
+    } else if (decision.estado === 'aprobada_parcial') {
+        colorFondo = 'rgba(245, 158, 11, 0.1)';
+        colorBorde = '#F59E0B';
+        icono = 'fa-check-double';
+    } else {
+        colorFondo = 'rgba(142, 142, 147, 0.1)';
+        colorBorde = '#8E8E93';
+        icono = 'fa-clock';
+    }
+    
+    // Construir lista de servicios
+    let serviciosHtml = '';
+    if (decision.servicios && decision.servicios.todos && decision.servicios.todos.length > 0) {
+        serviciosHtml = decision.servicios.todos.map(serv => {
+            const esAprobado = serv.estado === 'aprobado';
+            const color = esAprobado ? 'var(--verde-exito)' : 'var(--rojo-primario)';
+            const iconoEstado = esAprobado ? 'fa-check-circle' : 'fa-times-circle';
+            const textoEstado = esAprobado ? '✅ Aprobado' : '❌ Rechazado';
+            
+            return `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.75rem; border-bottom: 1px solid var(--border-color);">
+                    <span style="font-size: 0.85rem;">${escapeHtml(serv.descripcion)}</span>
+                    <span style="font-size: 0.7rem; color: ${color}; font-weight: 500;">
+                        <i class="fas ${iconoEstado}"></i> ${textoEstado}
+                    </span>
+                </div>
+            `;
+        }).join('');
+    } else {
+        serviciosHtml = `
+            <div style="padding: 0.4rem 0.75rem; color: var(--gris-texto); font-size: 0.85rem;">
+                <i class="fas fa-info-circle"></i> No hay servicios en esta cotización
+            </div>
+        `;
+    }
+    
+    // Resumen rápido
+    const totalAprobados = decision.servicios?.total_aprobados || 0;
+    const totalRechazados = decision.servicios?.total_rechazados || 0;
+    const totalServicios = decision.servicios?.total_servicios || 0;
+    
+    let resumenHtml = '';
+    if (totalServicios > 0) {
+        resumenHtml = `
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem;">
+                <span style="color: var(--verde-exito);"><i class="fas fa-check-circle"></i> Aprobados: ${totalAprobados}</span>
+                <span style="color: var(--rojo-primario);"><i class="fas fa-times-circle"></i> Rechazados: ${totalRechazados}</span>
+                <span style="color: var(--gris-texto);">Total: ${totalServicios}</span>
+            </div>
+        `;
+    }
+    
+    // Motivo de rechazo (si aplica)
+    let motivoHtml = '';
+    if (decision.motivo_rechazo) {
+        motivoHtml = `
+            <div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(193, 18, 31, 0.08); border-radius: var(--radius-sm); border-left: 3px solid var(--rojo-primario);">
+                <strong style="color: var(--rojo-primario); font-size: 0.75rem;"><i class="fas fa-comment-dots"></i> Motivo del rechazo:</strong>
+                <p style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">${escapeHtml(decision.motivo_rechazo)}</p>
+                ${decision.comentarios_rechazo ? `<p style="margin: 0.25rem 0 0 0; font-size: 0.75rem; color: var(--gris-texto);">${escapeHtml(decision.comentarios_rechazo)}</p>` : ''}
+            </div>
+        `;
+    }
+    
+    // Badge de estado
+    let estadoBadge = '';
+    if (decision.es_rechazada_total) {
+        estadoBadge = 'RECHAZADA';
+    } else if (decision.estado === 'aprobada_total') {
+        estadoBadge = 'APROBADA';
+    } else if (decision.estado === 'aprobada_parcial') {
+        estadoBadge = 'PARCIAL';
+    } else {
+        estadoBadge = 'PENDIENTE';
+    }
+    
+    return `
+        <div class="modal-section" style="border: 2px solid ${colorBorde}; border-radius: var(--radius-md); padding: 1rem; background: ${colorFondo};">
+            <h3 style="display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fas ${icono}" style="color: ${colorBorde};"></i>
+                Decisión del Cliente
+                <span style="font-size: 0.6rem; background: ${colorBorde}; color: white; padding: 0.1rem 0.5rem; border-radius: 20px; margin-left: auto;">
+                    ${estadoBadge}
+                </span>
+            </h3>
+            
+            <div style="padding: 0.5rem 0;">
+                <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem;">
+                    <i class="fas fa-info-circle" style="color: ${colorBorde};"></i>
+                    ${decision.mensaje}
+                </p>
+                ${resumenHtml}
+            </div>
+            
+            <div style="background: var(--bg-card); border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-color);">
+                ${serviciosHtml}
+            </div>
+            
+            ${motivoHtml}
+            
+            ${decision.fecha_decision ? `
+                <div style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--gris-texto);">
+                    <i class="fas fa-calendar"></i> Decisión tomada: ${formatFecha(decision.fecha_decision)}
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+// =====================================================
+// DETALLE DE ORDEN - COMPLETO CON DECISIÓN DEL CLIENTE
 // =====================================================
 window.verDetalle = async function(ordenId) {
     // 🔥 VERIFICAR TOKEN
@@ -1776,7 +1922,6 @@ window.verDetalle = async function(ordenId) {
         // 🎵 FUNCIÓN PARA CREAR AUDIO CON IDS FIJOS
         // =============================================
         function crearAudioHtml(url, titulo, icono, color) {
-            // 🔥 USAR IDs FIJOS, NO GENERADOS DINÁMICAMENTE
             let audioId, loaderId;
             
             if (titulo.includes('problema')) {
@@ -1786,7 +1931,6 @@ window.verDetalle = async function(ordenId) {
                 audioId = 'audio_diagnostico_jefe_taller';
                 loaderId = 'audioLoader_diagnostico_jefe_taller';
             } else {
-                // Fallback
                 const baseId = titulo.toLowerCase().replace(/[^a-z0-9]/g, '_');
                 audioId = `audio_${baseId}`;
                 loaderId = `audioLoader_${baseId}`;
@@ -1877,6 +2021,151 @@ window.verDetalle = async function(ordenId) {
         `;
         
         // =============================================
+        // HTML - DECISIÓN DEL CLIENTE (SIN PRECIOS)
+        // =============================================
+        function renderDecisionCliente(decision) {
+            if (!decision) {
+                return `
+                    <div class="modal-section">
+                        <h3><i class="fas fa-file-invoice"></i> Decisión del Cliente</h3>
+                        <div style="padding: 0.75rem; background: var(--gris-oscuro); border-radius: var(--radius-md); text-align: center; color: var(--gris-texto);">
+                            <i class="fas fa-info-circle"></i> No hay cotización para esta orden
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (decision.estado === 'pendiente') {
+                return `
+                    <div class="modal-section">
+                        <h3><i class="fas fa-file-invoice"></i> Decisión del Cliente</h3>
+                        <div style="padding: 0.75rem; background: var(--gris-oscuro); border-radius: var(--radius-md); text-align: center; color: var(--ambar-alerta);">
+                            <i class="fas fa-clock"></i> ${decision.mensaje}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            let colorFondo = '';
+            let colorBorde = '';
+            let icono = '';
+            
+            if (decision.es_rechazada_total) {
+                colorFondo = 'rgba(193, 18, 31, 0.1)';
+                colorBorde = '#C1121F';
+                icono = 'fa-times-circle';
+            } else if (decision.estado === 'aprobada_total') {
+                colorFondo = 'rgba(16, 185, 129, 0.1)';
+                colorBorde = '#10B981';
+                icono = 'fa-check-circle';
+            } else if (decision.estado === 'aprobada_parcial') {
+                colorFondo = 'rgba(245, 158, 11, 0.1)';
+                colorBorde = '#F59E0B';
+                icono = 'fa-check-double';
+            } else {
+                colorFondo = 'rgba(142, 142, 147, 0.1)';
+                colorBorde = '#8E8E93';
+                icono = 'fa-clock';
+            }
+            
+            let serviciosHtml = '';
+            if (decision.servicios && decision.servicios.todos && decision.servicios.todos.length > 0) {
+                serviciosHtml = decision.servicios.todos.map(serv => {
+                    const esAprobado = serv.estado === 'aprobado';
+                    const color = esAprobado ? 'var(--verde-exito)' : 'var(--rojo-primario)';
+                    const iconoEstado = esAprobado ? 'fa-check-circle' : 'fa-times-circle';
+                    const textoEstado = esAprobado ? '✅ Aprobado' : '❌ Rechazado';
+                    
+                    return `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.75rem; border-bottom: 1px solid var(--border-color);">
+                            <span style="font-size: 0.85rem;">${escapeHtml(serv.descripcion)}</span>
+                            <span style="font-size: 0.7rem; color: ${color}; font-weight: 500;">
+                                <i class="fas ${iconoEstado}"></i> ${textoEstado}
+                            </span>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                serviciosHtml = `
+                    <div style="padding: 0.4rem 0.75rem; color: var(--gris-texto); font-size: 0.85rem;">
+                        <i class="fas fa-info-circle"></i> No hay servicios en esta cotización
+                    </div>
+                `;
+            }
+            
+            const totalAprobados = decision.servicios?.total_aprobados || 0;
+            const totalRechazados = decision.servicios?.total_rechazados || 0;
+            const totalServicios = decision.servicios?.total_servicios || 0;
+            
+            let resumenHtml = '';
+            if (totalServicios > 0) {
+                resumenHtml = `
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem;">
+                        <span style="color: var(--verde-exito);"><i class="fas fa-check-circle"></i> Aprobados: ${totalAprobados}</span>
+                        <span style="color: var(--rojo-primario);"><i class="fas fa-times-circle"></i> Rechazados: ${totalRechazados}</span>
+                        <span style="color: var(--gris-texto);">Total: ${totalServicios}</span>
+                    </div>
+                `;
+            }
+            
+            let motivoHtml = '';
+            if (decision.motivo_rechazo) {
+                motivoHtml = `
+                    <div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(193, 18, 31, 0.08); border-radius: var(--radius-sm); border-left: 3px solid var(--rojo-primario);">
+                        <strong style="color: var(--rojo-primario); font-size: 0.75rem;"><i class="fas fa-comment-dots"></i> Motivo del rechazo:</strong>
+                        <p style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">${escapeHtml(decision.motivo_rechazo)}</p>
+                        ${decision.comentarios_rechazo ? `<p style="margin: 0.25rem 0 0 0; font-size: 0.75rem; color: var(--gris-texto);">${escapeHtml(decision.comentarios_rechazo)}</p>` : ''}
+                    </div>
+                `;
+            }
+            
+            let estadoBadge = '';
+            if (decision.es_rechazada_total) {
+                estadoBadge = 'RECHAZADA';
+            } else if (decision.estado === 'aprobada_total') {
+                estadoBadge = 'APROBADA';
+            } else if (decision.estado === 'aprobada_parcial') {
+                estadoBadge = 'PARCIAL';
+            } else {
+                estadoBadge = 'PENDIENTE';
+            }
+            
+            return `
+                <div class="modal-section" style="border: 2px solid ${colorBorde}; border-radius: var(--radius-md); padding: 1rem; background: ${colorFondo};">
+                    <h3 style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas ${icono}" style="color: ${colorBorde};"></i>
+                        Decisión del Cliente
+                        <span style="font-size: 0.6rem; background: ${colorBorde}; color: white; padding: 0.1rem 0.5rem; border-radius: 20px; margin-left: auto;">
+                            ${estadoBadge}
+                        </span>
+                    </h3>
+                    
+                    <div style="padding: 0.5rem 0;">
+                        <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem;">
+                            <i class="fas fa-info-circle" style="color: ${colorBorde};"></i>
+                            ${decision.mensaje}
+                        </p>
+                        ${resumenHtml}
+                    </div>
+                    
+                    <div style="background: var(--bg-card); border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-color);">
+                        ${serviciosHtml}
+                    </div>
+                    
+                    ${motivoHtml}
+                    
+                    ${decision.fecha_decision ? `
+                        <div style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--gris-texto);">
+                            <i class="fas fa-calendar"></i> Decisión tomada: ${formatFecha(decision.fecha_decision)}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        const decisionHtml = detalle.decision_cliente ? renderDecisionCliente(detalle.decision_cliente) : '';
+        
+        // =============================================
         // HTML - SECCIÓN DE FOTOS
         // =============================================
         let fotosHtml = '';
@@ -1945,6 +2234,10 @@ window.verDetalle = async function(ordenId) {
                 
                 ${problemaHtml}
                 ${diagnosticoTallerHtml}
+                
+                <!-- 🔥 NUEVA SECCIÓN: DECISIÓN DEL CLIENTE -->
+                ${decisionHtml}
+                
                 ${fotosHtml}
             </div>
         `;
@@ -1956,7 +2249,7 @@ window.verDetalle = async function(ordenId) {
         document.getElementById('detalleModal').classList.add('show');
         
         // =============================================
-        // 🔥 CARGAR FOTOS Y AUDIOS CON FETCH - CORREGIDO
+        // 🔥 CARGAR FOTOS Y AUDIOS CON FETCH
         // =============================================
         setTimeout(() => {
             if (!token) {

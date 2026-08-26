@@ -2089,7 +2089,7 @@ function copiarUrlsFotosOrden(id_orden) {
     });
 }
 // =====================================================
-// RENDERIZADO SEGUNDO APARTADO (TAB 2) - CON BOTÓN VER DECISIÓN
+// RENDERIZADO SEGUNDO APARTADO (TAB 2) - CON BOTÓN VER DECISIÓN EN TODOS LOS ESTADOS
 // =====================================================
 
 function renderOrdenesCotizacionCliente() {
@@ -2134,7 +2134,7 @@ function renderOrdenesCotizacionCliente() {
         let botonesHtml = '';
         
         // =====================================================
-        // DIAGNOSTICO APROBADO - PENDIENTE DE COTIZACIÓN
+        // 1. DIAGNOSTICO APROBADO - PENDIENTE DE COTIZACIÓN
         // =====================================================
         if (estadoOrden === ESTADOS_ORDEN.DIAGNOSTICO_APROBADO) {
             estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> Pendiente de Cotización</span>`;
@@ -2145,7 +2145,7 @@ function renderOrdenesCotizacionCliente() {
             `;
         
         // =====================================================
-        // COTIZACION ENVIADA - ESPERANDO RESPUESTA DEL CLIENTE
+        // 2. COTIZACION ENVIADA - ESPERANDO RESPUESTA DEL CLIENTE
         // =====================================================
         } else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_ENVIADA) {
             estadoBadge = `<span class="status-badge status-enviado"><i class="fas fa-paper-plane"></i> Cotización Enviada</span>`;
@@ -2162,7 +2162,7 @@ function renderOrdenesCotizacionCliente() {
             `;
         
         // =====================================================
-        // COTIZACION ACEPTADA - CLIENTE APROBÓ
+        // 3. COTIZACION ACEPTADA - CLIENTE APROBÓ
         // =====================================================
         } else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_ACEPTADA || estadoOrden === ESTADOS_ORDEN.COTIZACION_PARCIAL) {
             estadoBadge = `<span class="status-badge status-aprobado"><i class="fas fa-check-circle"></i> Cotización Aceptada</span>`;
@@ -2179,7 +2179,7 @@ function renderOrdenesCotizacionCliente() {
             `;
         
         // =====================================================
-        // COTIZACION RECHAZADA - CLIENTE RECHAZÓ
+        // 4. COTIZACION RECHAZADA - CLIENTE RECHAZÓ
         // =====================================================
         } else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_RECHAZADA) {
             estadoBadge = `<span class="status-badge status-rechazado"><i class="fas fa-times-circle"></i> Cotización Rechazada</span>`;
@@ -2196,7 +2196,7 @@ function renderOrdenesCotizacionCliente() {
             `;
         
         // =====================================================
-        // EN ARMADO - VEHÍCULO SIENDO ARMADO
+        // 5. EN ARMADO - VEHÍCULO SIENDO ARMADO
         // =====================================================
         } else if (estadoOrden === ESTADOS_ORDEN.EN_ARMADO) {
             estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-tools"></i> Armando Vehículo</span>`;
@@ -2204,25 +2204,76 @@ function renderOrdenesCotizacionCliente() {
                 <button class="btn-outline" onclick="verInstruccionesArmado(${orden.id_orden})">
                     <i class="fas fa-clipboard-list"></i> Ver Instrucciones
                 </button>
+                <button class="btn-primary" onclick="verInformeDecisionCliente(${orden.id_orden})">
+                    <i class="fas fa-clipboard-check"></i> Ver Decisión
+                </button>
             `;
         
         // =====================================================
-        // EN REPARACION - VEHÍCULO EN TALLER
+        // 6. EN REPARACION - VEHÍCULO EN TALLER (CON BOTÓN VER DECISIÓN)
         // =====================================================
         } else if (estadoOrden === ESTADOS_ORDEN.EN_REPARACION) {
             estadoBadge = `<span class="status-badge status-proceso"><i class="fas fa-wrench"></i> En Reparación</span>`;
             botonesHtml = `
+                <button class="btn-primary" onclick="verInformeDecisionCliente(${orden.id_orden})">
+                    <i class="fas fa-clipboard-check"></i> Ver Decisión
+                </button>
                 <button class="btn-outline" onclick="verAvanceReparacion(${orden.id_orden})">
                     <i class="fas fa-eye"></i> Ver Detalle
                 </button>
             `;
         
         // =====================================================
-        // OTROS ESTADOS - FALLBACK
+        // 7. EN PAUSA - REPARACIÓN EN PAUSA
+        // =====================================================
+        } else if (estadoOrden === ESTADOS_ORDEN.EN_PAUSA) {
+            estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-pause"></i> En Pausa</span>`;
+            botonesHtml = `
+                <button class="btn-primary" onclick="verInformeDecisionCliente(${orden.id_orden})">
+                    <i class="fas fa-clipboard-check"></i> Ver Decisión
+                </button>
+                <button class="btn-outline" onclick="verAvanceReparacion(${orden.id_orden})">
+                    <i class="fas fa-eye"></i> Ver Detalle
+                </button>
+            `;
+        
+        // =====================================================
+        // 8. REPARACION COMPLETADA
+        // =====================================================
+        } else if (estadoOrden === ESTADOS_ORDEN.REPARACION_COMPLETADA) {
+            estadoBadge = `<span class="status-badge status-aprobado"><i class="fas fa-check-circle"></i> Reparación Completada</span>`;
+            botonesHtml = `
+                <button class="btn-primary" onclick="verInformeDecisionCliente(${orden.id_orden})">
+                    <i class="fas fa-clipboard-check"></i> Ver Decisión
+                </button>
+                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                    <i class="fas fa-eye"></i> Ver Detalle
+                </button>
+            `;
+        
+        // =====================================================
+        // 9. FINALIZADO / ENTREGADO
+        // =====================================================
+        } else if (estadoOrden === ESTADOS_ORDEN.FINALIZADO || estadoOrden === ESTADOS_ORDEN.ENTREGADO) {
+            estadoBadge = `<span class="status-badge status-aprobado"><i class="fas fa-check-circle"></i> ${estadoOrden === ESTADOS_ORDEN.FINALIZADO ? 'Finalizado' : 'Entregado'}</span>`;
+            botonesHtml = `
+                <button class="btn-primary" onclick="verInformeDecisionCliente(${orden.id_orden})">
+                    <i class="fas fa-clipboard-check"></i> Ver Decisión
+                </button>
+                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                    <i class="fas fa-eye"></i> Ver Detalle
+                </button>
+            `;
+        
+        // =====================================================
+        // 10. OTROS ESTADOS - FALLBACK
         // =====================================================
         } else {
             estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> ${escapeHtml(estadoOrden)}</span>`;
             botonesHtml = `
+                <button class="btn-primary" onclick="verInformeDecisionCliente(${orden.id_orden})">
+                    <i class="fas fa-clipboard-check"></i> Ver Decisión
+                </button>
                 <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
                     <i class="fas fa-eye"></i> Ver Detalle
                 </button>

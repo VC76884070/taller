@@ -2694,3 +2694,206 @@ def proxy_imagen_cotizacion(current_user):
         'success': True,
         'base64': f'data:{mime_type};base64,{base64_data}'
     })
+# =====================================================
+# APARTADO: OBTENER INFORME DE DECISIÓN DEL CLIENTE
+# =====================================================
+
+@cotizaciones_bp.route('/orden/<int:id_orden>/informe-decision-cliente', methods=['GET'])
+@jefe_taller_required
+def obtener_informe_decision_cliente(current_user, id_orden):
+    """
+    Obtiene un informe detallado de la decisión del cliente sobre la cotización
+    Muestra qué servicios fueron aprobados, rechazados y el total
+    """
+    try:
+        logger.info(f"📊 Generando informe de decisión para orden {id_orden}")
+        
+        # 1. Obtener la cotización más reciente de la orden
+        cotizacion = supabase.table('cotizacion') \
+            .select('*') \
+            .eq('id_orden_trabajo', id_orden) \
+            .order('fecha_envio', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if not cotizacion.data:
+            return jsonify({
+                'success': False,
+                'error': 'No hay cotización para esta orden'
+            }), 404
+        
+        cot = cotizacion.data[0]
+        
+        # 2. Obtener información de la orden
+        orden = supabase.table('ordentrabajo') \
+            .select('codigo_unico, estado_global, id_vehiculo') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        orden_data = orden.data[0] if orden.data else {}
+        
+        # 3. Obtener vehículo y cliente
+        vehiculo_data = {}
+        cliente_nombre = 'No registrado'
+        
+        if orden_data.get('id_vehiculo'):
+            vehiculo = supabase.table('vehiculo') \
+                .select('marca, modelo, placa, id_cliente') \
+                .eq('id', orden_data['id_vehiculo']) \
+                .execute()
+            
+            if vehiculo.data:
+                v = vehiculo.data[0]
+                vehiculo_data = v
+                
+                if v.get('id_cliente'):
+                    cliente = supabase.table('cliente') \
+                        .select('id_usuario') \
+                        .eq('id', v['id_cliente']) \
+                        .execute()
+                    
+                    if cliente.data and cliente.data[0].get('id_usuario'):
+                        usuario = supabase.table('usuario') \
+                            .select('nombre, contacto, email') \
+                            .eq('id', cliente.data[0]['id_usuario']) \
+                            .execute()
+                        
+                        if usuario.data:
+                            cliente_nombre = usuario.data[0].get('nombre', 'No registrado')
+        
+        # 4. Procesar servicios de la cotización
+        servicios = []
+        total_aprobado = 0
+        total_rechazado = 0
+        total_pendiente = 0
+        servicios_aprobados = []
+        servicios_rechazados = []
+        
+        if cot.get('servicios_json'):
+            try:
+                servicios_data = cot['servicios_json']
+                if isinstance(servicios_data, str):
+                    servicios_data = json.loads(servicios_data)
+                
+                for s in servicios_data:
+                    aprobado = s.get('aprobado_por_cliente', False)
+                    precio = float(s.get('precio', 0))
+                    descripcion = s.get('descripcion') or s.get('nombre', 'Servicio')
+                    
+                    estado = 'aprobado' if aprobado else 'rechazado'
+                    
+                    servicio_info = {
+                        'id_servicio': s.get('id_servicio'),
+                        'descripcion': descripcion,
+                        'precio': precio,
+                        'estado': estado,
+                        'fecha_aprobacion': s.get('fecha_aprobacion'),
+                        'aprobado_por_cliente': aprobado
+                    }
+                    servicios.append(servicio_info)
+                    
+                    if aprobado:
+                        total_aprobado += precio
+                        servicios_aprobados.append(servicio_info)
+                    else:
+                        total_rechazado += precio
+                        servicios_rechazados.append(servicio_info)
+                        
+            except Exception as e:
+                logger.error(f"Error parseando servicios_json: {e}")
+        
+        # 5. Si la cotización fue rechazada completamente
+        estado_cotizacion = cot.get('estado', 'enviada')
+        es_rechazada_total = estado_cotizacion == 'rechazada'
+        
+        # 6. Obtener historial de aprobaciones
+        historial = []
+        if cot.get('historial_aprobaciones'):
+            try:
+                historial_data = cot['historial_aprobaciones']
+                if isinstance(historial_data, str):
+                    historial_data = json.loads(historial_data)
+                historial = historial_data
+            except:
+                historial = []
+        
+        # 7. Costo de diagnóstico (constante)
+        COSTO_DIAGNOSTICO = 200
+        
+        # 8. Estado de la decisión
+        if es_rechazada_total:
+            estado_decision = 'RECHAZADA TOTAL'
+            mensaje_estado = f"⚠️ El cliente rechazó TODOS los servicios. Se cobrará Bs. {COSTO_DIAGNOSTICO} por diagnóstico."
+            total_final = COSTO_DIAGNOSTICO
+            color_estado = 'danger'
+            icono_estado = 'fa-times-circle'
+        elif len(servicios_aprobados) == len(servicios) and len(servicios) > 0:
+            estado_decision = 'APROBADA TOTAL'
+            mensaje_estado = f"✅ El cliente aprobó TODOS los servicios. Total: Bs. {total_aprobado:.2f}"
+            total_final = total_aprobado
+            color_estado = 'success'
+            icono_estado = 'fa-check-circle'
+        elif len(servicios_aprobados) > 0:
+            estado_decision = 'APROBADA PARCIAL'
+            mensaje_estado = f"📋 El cliente aprobó {len(servicios_aprobados)} de {len(servicios)} servicios. Total aprobado: Bs. {total_aprobado:.2f}"
+            total_final = total_aprobado
+            color_estado = 'warning'
+            icono_estado = 'fa-check-double'
+        else:
+            estado_decision = 'PENDIENTE'
+            mensaje_estado = "⏳ El cliente aún no ha respondido a la cotización"
+            total_final = 0
+            color_estado = 'secondary'
+            icono_estado = 'fa-clock'
+        
+        # 9. Construir respuesta
+        return jsonify({
+            'success': True,
+            'informe': {
+                'id_orden': id_orden,
+                'codigo_unico': orden_data.get('codigo_unico'),
+                'estado_orden': orden_data.get('estado_global'),
+                'cliente_nombre': cliente_nombre,
+                'vehiculo': {
+                    'marca': vehiculo_data.get('marca', ''),
+                    'modelo': vehiculo_data.get('modelo', ''),
+                    'placa': vehiculo_data.get('placa', '')
+                },
+                'cotizacion': {
+                    'id': cot.get('id'),
+                    'estado': estado_cotizacion,
+                    'fecha_envio': cot.get('fecha_envio'),
+                    'fecha_ultima_modificacion': cot.get('fecha_ultima_modificacion'),
+                    'fecha_rechazo': cot.get('fecha_rechazo'),
+                    'motivo_rechazo': cot.get('motivo_rechazo'),
+                    'comentarios_rechazo': cot.get('comentarios_rechazo')
+                },
+                'decision': {
+                    'estado': estado_decision,
+                    'mensaje': mensaje_estado,
+                    'color': color_estado,
+                    'icono': icono_estado,
+                    'total_aprobado': total_aprobado,
+                    'total_rechazado': total_rechazado,
+                    'total_final': total_final,
+                    'es_rechazada_total': es_rechazada_total,
+                    'costo_diagnostico': COSTO_DIAGNOSTICO if es_rechazada_total else None
+                },
+                'servicios': {
+                    'todos': servicios,
+                    'aprobados': servicios_aprobados,
+                    'rechazados': servicios_rechazados,
+                    'total_servicios': len(servicios),
+                    'total_aprobados': len(servicios_aprobados),
+                    'total_rechazados': len(servicios_rechazados)
+                },
+                'historial': historial,
+                'fecha_decision': cot.get('fecha_ultima_modificacion') or cot.get('fecha_rechazo')
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error generando informe de decisión: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500

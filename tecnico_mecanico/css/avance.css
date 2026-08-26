@@ -537,81 +537,51 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   LOADING DE FOTOS (SPINNER SOBRE EL PREVIEW)
+   CÍRCULO DE PROGRESO PARA CADA FOTO (ÚNICO INDICADOR)
    ===================================================== */
 
-.foto-loading {
+.foto-progress-circle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 50px;
+    height: 50px;
+    z-index: 15;
+    pointer-events: none;
+    display: none;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 50%;
+    padding: 2px;
+}
+
+.foto-progress-circle svg {
+    width: 46px;
+    height: 46px;
+    transform: rotate(-90deg);
+}
+
+.foto-progress-circle svg text {
+    transform: rotate(90deg);
+    fill: var(--blanco);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+/* El preview debe tener posición relativa para que el círculo se posicione sobre él */
+.foto-preview {
+    position: relative;
+}
+
+/* Cuando la foto está subiendo, el preview se oscurece un poco */
+.foto-preview.uploading::after {
+    content: '';
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.3);
     border-radius: var(--radius-sm);
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 0.65rem;
-    gap: 0.3rem;
-    z-index: 10;
-    backdrop-filter: blur(2px);
-}
-
-.foto-loading i {
-    font-size: 1.8rem;
-    color: var(--ambar-alerta);
-}
-
-.foto-loading span {
-    font-size: 0.65rem;
-    color: var(--gris-texto);
-}
-
-/* =====================================================
-   BARRA DE PROGRESO DE SUBIDA
-   ===================================================== */
-
-#uploadProgressContainer {
-    background: var(--gris-oscuro);
-    padding: 0.75rem 1rem;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-color);
-    display: none;
-}
-
-#uploadProgressContainer .progress-label {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.25rem;
-}
-
-#uploadProgressContainer .progress-label span {
-    font-size: 0.8rem;
-    color: var(--gris-texto);
-}
-
-#uploadProgressContainer .progress-label #uploadProgressText {
-    color: var(--rojo-primario);
-    font-weight: 600;
-}
-
-#uploadProgressBar {
-    width: 0%;
-    height: 6px;
-    background: var(--rojo-primario);
-    border-radius: 3px;
-    transition: width 0.3s ease;
-}
-
-#uploadProgressBarContainer {
-    width: 100%;
-    height: 6px;
-    background: var(--gris-oscuro);
-    border-radius: 3px;
-    overflow: hidden;
 }
 
 /* =====================================================
@@ -1131,6 +1101,15 @@ body.sidebar-open {
 }
 
 /* =====================================================
+   SELECCIÓN DE TEXTO
+   ===================================================== */
+
+::selection {
+    background: var(--rojo-primario);
+    color: var(--blanco);
+}
+
+/* =====================================================
    ========== RESPONSIVE ==========
    ===================================================== */
 
@@ -1305,71 +1284,4 @@ body.sidebar-open {
     .sidebar-overlay {
         display: none !important;
     }
-}
-
-/* =====================================================
-   SELECCIÓN DE TEXTO
-   ===================================================== */
-
-::selection {
-    background: var(--rojo-primario);
-    color: var(--blanco);
-}
-/* =====================================================
-   CÍRCULO DE PROGRESO PARA CADA FOTO
-   ===================================================== */
-
-.foto-progress-circle {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 50px;
-    height: 50px;
-    z-index: 15;
-    pointer-events: none;
-    display: none;
-    background: rgba(0, 0, 0, 0.5);
-    border-radius: 50%;
-    padding: 2px;
-}
-
-.foto-progress-circle svg {
-    width: 46px;
-    height: 46px;
-    transform: rotate(-90deg);
-}
-
-.foto-progress-circle svg text {
-    transform: rotate(90deg);
-    fill: var(--blanco);
-    font-family: 'Plus Jakarta Sans', sans-serif;
-}
-
-.foto-progress-circle .progress-text {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 8px;
-    font-weight: 700;
-    color: var(--blanco);
-    pointer-events: none;
-}
-
-/* El preview debe tener posición relativa para que el círculo se posicione sobre él */
-.foto-preview {
-    position: relative;
-}
-
-/* Cuando la foto está subiendo, el preview se oscurece un poco */
-.foto-preview.uploading::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: var(--radius-sm);
 }

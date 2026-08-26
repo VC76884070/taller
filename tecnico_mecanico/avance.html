@@ -118,12 +118,12 @@
                                 placeholder="Describe el trabajo realizado en este avance..."></textarea>
                         </div>
 
-                        <!-- Grid de fotos (10 espacios) CON PREVIEW EN VIVO Y CÍRCULO DE PROGRESO -->
+                        <!-- Grid de fotos (10 espacios) CON CÍRCULO DE PROGRESO -->
                         <div class="fotos-grid-container">
                             <label><i class="fas fa-images"></i> Fotos del Avance <span class="required">*</span>
                                 (Máximo 10)</label>
                             
-                            <!-- Barra de progreso de carga -->
+                            <!-- Barra de progreso de carga GENERAL -->
                             <div id="uploadProgressContainer" style="display: none; margin-bottom: 1rem;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
                                     <span style="font-size: 0.8rem; color: var(--gris-texto);">
@@ -137,23 +137,19 @@
                             </div>
 
                             <div class="fotos-grid" id="fotosGrid">
-                                <!-- Foto 1 con círculo de progreso -->
+                                <!-- Foto 1 - SOLO CÍRCULO DE PROGRESO -->
                                 <div class="foto-upload-item" data-index="0">
                                     <div class="foto-preview" id="preview_0" onclick="document.getElementById('fotoInput_0').click()">
                                         <i class="fas fa-plus-circle"></i>
                                         <span>Foto 1</span>
                                     </div>
-                                    <!-- CÍRCULO DE PROGRESO -->
+                                    <!-- CÍRCULO DE PROGRESO (ÚNICO INDICADOR) -->
                                     <div class="foto-progress-circle" id="progress_0" style="display: none;">
                                         <svg viewBox="0 0 36 36">
                                             <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#2C2C2E" stroke-width="3"/>
                                             <path id="circle-progress_0" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#C1121F" stroke-width="3" stroke-linecap="round" stroke-dasharray="0, 100"/>
                                             <text x="18" y="20" text-anchor="middle" font-size="8" fill="white" font-weight="600">0%</text>
                                         </svg>
-                                    </div>
-                                    <div class="foto-loading" id="loading_0" style="display: none;">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        <span>Subiendo...</span>
                                     </div>
                                     <input type="file" id="fotoInput_0" class="foto-input" accept="image/*" capture="environment" style="display: none;">
                                     <textarea id="comentario_0" class="foto-comentario" rows="2"
@@ -162,6 +158,7 @@
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </div>
+                                
                                 <!-- Foto 2 -->
                                 <div class="foto-upload-item" data-index="1">
                                     <div class="foto-preview" id="preview_1" onclick="document.getElementById('fotoInput_1').click()">
@@ -175,10 +172,6 @@
                                             <text x="18" y="20" text-anchor="middle" font-size="8" fill="white" font-weight="600">0%</text>
                                         </svg>
                                     </div>
-                                    <div class="foto-loading" id="loading_1" style="display: none;">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        <span>Subiendo...</span>
-                                    </div>
                                     <input type="file" id="fotoInput_1" class="foto-input" accept="image/*" capture="environment" style="display: none;">
                                     <textarea id="comentario_1" class="foto-comentario" rows="2"
                                         placeholder="Comentario de esta foto..."></textarea>
@@ -186,6 +179,7 @@
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </div>
+                                
                                 <!-- Foto 3 -->
                                 <div class="foto-upload-item" data-index="2">
                                     <div class="foto-preview" id="preview_2" onclick="document.getElementById('fotoInput_2').click()">
@@ -199,10 +193,6 @@
                                             <text x="18" y="20" text-anchor="middle" font-size="8" fill="white" font-weight="600">0%</text>
                                         </svg>
                                     </div>
-                                    <div class="foto-loading" id="loading_2" style="display: none;">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        <span>Subiendo...</span>
-                                    </div>
                                     <input type="file" id="fotoInput_2" class="foto-input" accept="image/*" capture="environment" style="display: none;">
                                     <textarea id="comentario_2" class="foto-comentario" rows="2"
                                         placeholder="Comentario de esta foto..."></textarea>
@@ -210,6 +200,7 @@
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </div>
+                                
                                 <!-- Foto 4 -->
                                 <div class="foto-upload-item" data-index="3">
                                     <div class="foto-preview" id="preview_3" onclick="document.getElementById('fotoInput_3').click()">
@@ -223,10 +214,6 @@
                                             <text x="18" y="20" text-anchor="middle" font-size="8" fill="white" font-weight="600">0%</text>
                                         </svg>
                                     </div>
-                                    <div class="foto-loading" id="loading_3" style="display: none;">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        <span>Subiendo...</span>
-                                    </div>
                                     <input type="file" id="fotoInput_3" class="foto-input" accept="image/*" capture="environment" style="display: none;">
                                     <textarea id="comentario_3" class="foto-comentario" rows="2"
                                         placeholder="Comentario de esta foto..."></textarea>
@@ -234,6 +221,7 @@
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </div>
+                                
                                 <!-- Foto 5 -->
                                 <div class="foto-upload-item" data-index="4">
                                     <div class="foto-preview" id="preview_4" onclick="document.getElementById('fotoInput_4').click()">
@@ -247,10 +235,6 @@
                                             <text x="18" y="20" text-anchor="middle" font-size="8" fill="white" font-weight="600">0%</text>
                                         </svg>
                                     </div>
-                                    <div class="foto-loading" id="loading_4" style="display: none;">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        <span>Subiendo...</span>
-                                    </div>
                                     <input type="file" id="fotoInput_4" class="foto-input" accept="image/*" capture="environment" style="display: none;">
                                     <textarea id="comentario_4" class="foto-comentario" rows="2"
                                         placeholder="Comentario de esta foto..."></textarea>
@@ -258,6 +242,7 @@
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </div>
+                                
                                 <!-- Foto 6 -->
                                 <div class="foto-upload-item" data-index="5">
                                     <div class="foto-preview" id="preview_5" onclick="document.getElementById('fotoInput_5').click()">
@@ -271,10 +256,6 @@
                                             <text x="18" y="20" text-anchor="middle" font-size="8" fill="white" font-weight="600">0%</text>
                                         </svg>
                                     </div>
-                                    <div class="foto-loading" id="loading_5" style="display: none;">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        <span>Subiendo...</span>
-                                    </div>
                                     <input type="file" id="fotoInput_5" class="foto-input" accept="image/*" capture="environment" style="display: none;">
                                     <textarea id="comentario_5" class="foto-comentario" rows="2"
                                         placeholder="Comentario de esta foto..."></textarea>
@@ -282,6 +263,7 @@
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </div>
+                                
                                 <!-- Foto 7 -->
                                 <div class="foto-upload-item" data-index="6">
                                     <div class="foto-preview" id="preview_6" onclick="document.getElementById('fotoInput_6').click()">
@@ -295,10 +277,6 @@
                                             <text x="18" y="20" text-anchor="middle" font-size="8" fill="white" font-weight="600">0%</text>
                                         </svg>
                                     </div>
-                                    <div class="foto-loading" id="loading_6" style="display: none;">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        <span>Subiendo...</span>
-                                    </div>
                                     <input type="file" id="fotoInput_6" class="foto-input" accept="image/*" capture="environment" style="display: none;">
                                     <textarea id="comentario_6" class="foto-comentario" rows="2"
                                         placeholder="Comentario de esta foto..."></textarea>
@@ -306,6 +284,7 @@
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </div>
+                                
                                 <!-- Foto 8 -->
                                 <div class="foto-upload-item" data-index="7">
                                     <div class="foto-preview" id="preview_7" onclick="document.getElementById('fotoInput_7').click()">
@@ -319,10 +298,6 @@
                                             <text x="18" y="20" text-anchor="middle" font-size="8" fill="white" font-weight="600">0%</text>
                                         </svg>
                                     </div>
-                                    <div class="foto-loading" id="loading_7" style="display: none;">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        <span>Subiendo...</span>
-                                    </div>
                                     <input type="file" id="fotoInput_7" class="foto-input" accept="image/*" capture="environment" style="display: none;">
                                     <textarea id="comentario_7" class="foto-comentario" rows="2"
                                         placeholder="Comentario de esta foto..."></textarea>
@@ -330,6 +305,7 @@
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </div>
+                                
                                 <!-- Foto 9 -->
                                 <div class="foto-upload-item" data-index="8">
                                     <div class="foto-preview" id="preview_8" onclick="document.getElementById('fotoInput_8').click()">
@@ -343,10 +319,6 @@
                                             <text x="18" y="20" text-anchor="middle" font-size="8" fill="white" font-weight="600">0%</text>
                                         </svg>
                                     </div>
-                                    <div class="foto-loading" id="loading_8" style="display: none;">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        <span>Subiendo...</span>
-                                    </div>
                                     <input type="file" id="fotoInput_8" class="foto-input" accept="image/*" capture="environment" style="display: none;">
                                     <textarea id="comentario_8" class="foto-comentario" rows="2"
                                         placeholder="Comentario de esta foto..."></textarea>
@@ -354,6 +326,7 @@
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </div>
+                                
                                 <!-- Foto 10 -->
                                 <div class="foto-upload-item" data-index="9">
                                     <div class="foto-preview" id="preview_9" onclick="document.getElementById('fotoInput_9').click()">
@@ -366,10 +339,6 @@
                                             <path id="circle-progress_9" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#C1121F" stroke-width="3" stroke-linecap="round" stroke-dasharray="0, 100"/>
                                             <text x="18" y="20" text-anchor="middle" font-size="8" fill="white" font-weight="600">0%</text>
                                         </svg>
-                                    </div>
-                                    <div class="foto-loading" id="loading_9" style="display: none;">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        <span>Subiendo...</span>
                                     </div>
                                     <input type="file" id="fotoInput_9" class="foto-input" accept="image/*" capture="environment" style="display: none;">
                                     <textarea id="comentario_9" class="foto-comentario" rows="2"

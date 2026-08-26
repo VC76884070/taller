@@ -14,7 +14,7 @@ if (typeof window.API_BASE_URL === 'undefined') {
 
 // =====================================================
 // COTIZACIONES.JS - JEFE DE TALLER
-// VERSIÓN 7.0 - CON INFORME DE DECISIÓN DEL CLIENTE
+// VERSIÓN 6.0 - CON FOTOS POR ITEM Y SERVICIOS
 // =====================================================
 
 const API_URL = window.API_BASE_URL + '/api/jefe-taller';
@@ -187,7 +187,7 @@ function statusBadge(estado) {
 }
 
 // =====================================================
-// FUNCIONES PARA SERVICIOS EN MODAL COTIZACIÓN
+// 🆕 FUNCIONES PARA SERVICIOS EN MODAL COTIZACIÓN
 // =====================================================
 
 async function cargarServiciosConItems(id_orden) {
@@ -200,6 +200,7 @@ async function cargarServiciosConItems(id_orden) {
         if (data.success) {
             serviciosParaSolicitud = data.servicios || [];
             
+            // Inicializar items por servicio
             serviciosParaSolicitud.forEach(serv => {
                 if (!itemsPorServicio[serv.id_servicio]) {
                     itemsPorServicio[serv.id_servicio] = serv.items || [];
@@ -236,6 +237,7 @@ function renderServiciosAcordeon(servicios, id_orden) {
     
     container.innerHTML = servicios.map((serv, idx) => {
         const items = itemsPorServicio[serv.id_servicio] || [];
+        const tieneItems = items.length > 0;
         const estado = serv.estado || 'pendiente';
         const badgeClass = estado === 'solicitado' ? 'activo' : 'pendiente';
         const badgeText = estado === 'solicitado' ? 'Solicitado' : 'Pendiente';
@@ -270,6 +272,10 @@ function renderServiciosAcordeon(servicios, id_orden) {
     }).join('');
 }
 
+// =====================================================
+// RENDERIZAR ITEMS DE SERVICIO CON SOPORTE PARA 3 FOTOS
+// =====================================================
+
 function renderItemsServicio(id_servicio, items) {
     if (!items || items.length === 0) {
         return `
@@ -283,7 +289,9 @@ function renderItemsServicio(id_servicio, items) {
     
     return items.map((item, index) => {
         const fotos = item.fotos || [];
+        const tieneFotos = fotos.length > 0;
         
+        // 🔥 GENERAR PREVIEWS PARA CADA FOTO (hasta 3)
         let fotosPreviewsHtml = '';
         for (let i = 0; i < 3; i++) {
             const fotoUrl = fotos[i] || '';
@@ -348,17 +356,24 @@ function toggleServicioAcordeon(id_servicio) {
     
     const isOpen = body.classList.contains('open');
     
+    // Cerrar todos los acordeones
     document.querySelectorAll('.servicio-acordeon-body').forEach(b => b.classList.remove('open'));
     document.querySelectorAll('.servicio-toggle').forEach(icon => {
         icon.classList.remove('rotated');
     });
     
+    // Si estaba cerrado, abrirlo
     if (!isOpen) {
         body.classList.add('open');
         if (toggleIcon) toggleIcon.classList.add('rotated');
     }
 }
 
+// =====================================================
+// MODIFICAR LA ESTRUCTURA DEL ITEM PARA SOPORTAR MÚLTIPLES FOTOS
+// =====================================================
+
+// Al agregar un item, ahora tiene un array de fotos
 function agregarItemServicio(id_servicio) {
     if (!itemsPorServicio[id_servicio]) {
         itemsPorServicio[id_servicio] = [];
@@ -367,8 +382,8 @@ function agregarItemServicio(id_servicio) {
         descripcion: '', 
         cantidad: 1, 
         detalle: '', 
-        fotos: [],
-        foto_public_ids: []
+        fotos: [],           // 🔥 ARRAY DE FOTOS (hasta 3)
+        foto_public_ids: []  // 🔥 ARRAY DE PUBLIC IDs
     });
     
     const container = document.getElementById(`itemsListServicio_${id_servicio}`);
@@ -395,6 +410,9 @@ function eliminarItemServicio(id_servicio, index) {
         container.innerHTML = renderItemsServicio(id_servicio, itemsPorServicio[id_servicio] || []);
     }
 }
+// =====================================================
+// ELIMINAR FOTO DE DRIVE (AUXILIAR)
+// =====================================================
 
 async function eliminarFotoDeDrive(publicId) {
     if (!publicId) return true;
@@ -415,6 +433,9 @@ async function eliminarFotoDeDrive(publicId) {
         return false;
     }
 }
+// =====================================================
+// SUBIR FOTO DE ITEM (SERVICIO) - SOPORTE PARA 3 FOTOS
+// =====================================================
 
 async function subirFotoItemServicio(id_servicio, index, slotIndex, input) {
     const file = input.files[0];
@@ -432,6 +453,7 @@ async function subirFotoItemServicio(id_servicio, index, slotIndex, input) {
         return;
     }
     
+    // Verificar que no exceda 3 fotos
     if (itemsPorServicio[id_servicio] && itemsPorServicio[id_servicio][index]) {
         const fotosActuales = itemsPorServicio[id_servicio][index].fotos || [];
         if (fotosActuales.length >= 3) {
@@ -447,6 +469,7 @@ async function subirFotoItemServicio(id_servicio, index, slotIndex, input) {
         const formData = new FormData();
         formData.append('foto', file);
         
+        // 🔥 ENVIAR CÓDIGO DE ORDEN AL BACKEND
         const ordenInfo = ordenesDiagnosticoAprobado.find(o => o.id_orden === ordenActualSolicitud);
         if (ordenInfo && ordenInfo.codigo_unico) {
             formData.append('codigo_orden', ordenInfo.codigo_unico);
@@ -467,6 +490,7 @@ async function subirFotoItemServicio(id_servicio, index, slotIndex, input) {
         const data = await response.json();
         
         if (data.success && data.url) {
+            // ✅ Guardar URL en el item (array de fotos)
             if (itemsPorServicio[id_servicio] && itemsPorServicio[id_servicio][index]) {
                 if (!itemsPorServicio[id_servicio][index].fotos) {
                     itemsPorServicio[id_servicio][index].fotos = [];
@@ -475,7 +499,9 @@ async function subirFotoItemServicio(id_servicio, index, slotIndex, input) {
                     itemsPorServicio[id_servicio][index].foto_public_ids = [];
                 }
                 
+                // Si el slot ya tiene foto, reemplazar
                 if (itemsPorServicio[id_servicio][index].fotos[slotIndex]) {
+                    // Eliminar la foto anterior de Drive
                     const oldPublicId = itemsPorServicio[id_servicio][index].foto_public_ids[slotIndex];
                     if (oldPublicId) {
                         await eliminarFotoDeDrive(oldPublicId);
@@ -483,13 +509,16 @@ async function subirFotoItemServicio(id_servicio, index, slotIndex, input) {
                     itemsPorServicio[id_servicio][index].fotos[slotIndex] = data.url;
                     itemsPorServicio[id_servicio][index].foto_public_ids[slotIndex] = data.public_id;
                 } else {
+                    // Agregar nueva foto
                     itemsPorServicio[id_servicio][index].fotos.push(data.url);
                     itemsPorServicio[id_servicio][index].foto_public_ids.push(data.public_id);
                 }
             }
             
+            // ✅ CARGAR PREVIEW CON PROXY
             await cargarPreviewFotoServicio(id_servicio, index, slotIndex, data.url);
             
+            // ✅ ACTUALIZAR CONTADOR
             const contador = document.querySelector(`[data-servicio="${id_servicio}"] [data-index="${index}"] .item-foto-upload span`);
             if (contador) {
                 const fotos = itemsPorServicio[id_servicio][index].fotos || [];
@@ -508,6 +537,10 @@ async function subirFotoItemServicio(id_servicio, index, slotIndex, input) {
         input.value = '';
     }
 }
+
+// =====================================================
+// ELIMINAR FOTO DE ITEM (SERVICIO) - MÚLTIPLES FOTOS
+// =====================================================
 
 async function eliminarFotoItemServicio(id_servicio, index, slotIndex) {
     if (!itemsPorServicio[id_servicio] || !itemsPorServicio[id_servicio][index]) {
@@ -534,6 +567,7 @@ async function eliminarFotoItemServicio(id_servicio, index, slotIndex) {
     mostrarLoading(true);
     
     try {
+        // Eliminar de Drive
         const response = await fetch(`${API_URL}/eliminar-foto-item`, {
             method: 'POST',
             headers: getAuthHeaders(),
@@ -545,13 +579,16 @@ async function eliminarFotoItemServicio(id_servicio, index, slotIndex) {
         const data = await response.json();
         
         if (data.success) {
+            // Eliminar del array
             fotos.splice(slotIndex, 1);
             publicIds.splice(slotIndex, 1);
             
+            // ✅ LIMPIAR PREVIEW
             const fotoId = `fotoPreviewServicio_${id_servicio}_${index}_${slotIndex}`;
             const loaderId = `fotoLoaderServicio_${id_servicio}_${index}_${slotIndex}`;
             const inputId = `fotoInputServicio_${id_servicio}_${index}_${slotIndex}`;
             
+            // Ocultar imagen y mostrar loader
             const previewDiv = document.getElementById(fotoId);
             const loaderDiv = document.getElementById(loaderId);
             
@@ -570,6 +607,7 @@ async function eliminarFotoItemServicio(id_servicio, index, slotIndex) {
                 };
             }
             
+            // ✅ ACTUALIZAR CONTADOR
             const contador = document.querySelector(`[data-servicio="${id_servicio}"] [data-index="${index}"] .item-foto-upload span`);
             if (contador) {
                 contador.textContent = `(${fotos.length}/3)`;
@@ -586,17 +624,46 @@ async function eliminarFotoItemServicio(id_servicio, index, slotIndex) {
         mostrarLoading(false);
     }
 }
+// =====================================================
+// HELPER PARA OBTENER EL INPUT DE FOTO CORRECTO
+// =====================================================
+
+function getInputFileServicio(id_servicio, index) {
+    const container = document.getElementById(`itemsListServicio_${id_servicio}`);
+    if (!container) return null;
+    
+    const rows = container.querySelectorAll('.item-row');
+    if (index >= rows.length) return null;
+    
+    return rows[index].querySelector('.item-foto-input-servicio');
+}
+// =====================================================
+// CARGAR TODOS LOS PREVIEWS DE FOTOS EN SERVICIOS
+// =====================================================
+
+function cargarPreviewsFotosServicios() {
+    for (const serv of serviciosParaSolicitud) {
+        const items = itemsPorServicio[serv.id_servicio] || [];
+        items.forEach((item, index) => {
+            if (item.foto_url) {
+                cargarPreviewFotoServicio(serv.id_servicio, index, item.foto_url);
+            }
+        });
+    }
+}
 
 async function abrirModalSolicitudCotizacion(id_orden) {
     limpiarItemsSolicitud();
     ordenActualSolicitud = id_orden;
     
+    // Resetear items por servicio
     itemsPorServicio = {};
     serviciosParaSolicitud = [];
     
     mostrarLoading(true);
     
     try {
+        // Obtener información de la orden
         const ordenInfo = ordenesDiagnosticoAprobado.find(o => o.id_orden === id_orden);
         if (ordenInfo) {
             document.getElementById('solicitudOrdenCodigo').textContent = ordenInfo.codigo_unico || '-';
@@ -606,6 +673,7 @@ async function abrirModalSolicitudCotizacion(id_orden) {
         
         document.getElementById('solicitud_id_orden_trabajo').value = id_orden;
         
+        // Cargar servicios con items
         const servicios = await cargarServiciosConItems(id_orden);
         
         if (servicios.length === 0) {
@@ -614,12 +682,15 @@ async function abrirModalSolicitudCotizacion(id_orden) {
             return;
         }
         
+        // Renderizar acordeón de servicios
         renderServiciosAcordeon(servicios, id_orden);
         
+        // ✅ CARGAR PREVIEWS DE FOTOS EXISTENTES
         setTimeout(() => {
             cargarPreviewsFotosServicios();
         }, 300);
         
+        // Cargar encargados de repuestos
         await cargarEncargadosRepuestos();
         
         abrirModal('modalSolicitudCotizacion');
@@ -630,7 +701,6 @@ async function abrirModalSolicitudCotizacion(id_orden) {
         mostrarLoading(false);
     }
 }
-
 async function guardarSolicitudCotizacion() {
     const id_orden = document.getElementById('solicitud_id_orden_trabajo')?.value;
     const id_encargado = document.getElementById('solicitud_id_encargado')?.value;
@@ -641,6 +711,7 @@ async function guardarSolicitudCotizacion() {
         return;
     }
     
+    // Recolectar items de todos los servicios
     let todosLosItems = [];
     let itemsPorServicioEnvio = {};
     
@@ -666,6 +737,7 @@ async function guardarSolicitudCotizacion() {
         const resultados = [];
         let errores = 0;
         
+        // Enviar una solicitud por cada servicio que tenga items
         for (const serv of serviciosParaSolicitud) {
             const items = itemsPorServicioEnvio[serv.id_servicio] || [];
             if (items.length === 0) continue;
@@ -691,6 +763,7 @@ async function guardarSolicitudCotizacion() {
                     id: data.id
                 });
                 
+                // Marcar servicio como solicitado
                 serv.estado = 'solicitado';
             } else {
                 errores++;
@@ -702,6 +775,7 @@ async function guardarSolicitudCotizacion() {
             showToast(`✅ ${resultados.length} solicitud(es) enviadas exitosamente`, 'success');
             cerrarModal('modalSolicitudCotizacion');
             
+            // Actualizar los servicios en el acordeón
             renderServiciosAcordeon(serviciosParaSolicitud, parseInt(id_orden));
             
             await cargarSolicitudesCotizacion();
@@ -717,96 +791,41 @@ async function guardarSolicitudCotizacion() {
     }
 }
 
+// =====================================================
+// FUNCIONES LEGACY PARA COMPATIBILIDAD
+// =====================================================
+
+function renderItemsSolicitud() {
+    const container = document.getElementById('itemsListSolicitud');
+    if (!container) return;
+    container.innerHTML = `<div class="item-empty"><i class="fas fa-box-open"></i><p>Usa los servicios para agregar items</p></div>`;
+}
+
+function agregarItemSolicitud() {
+    showToast('Usa los servicios para agregar items', 'info');
+}
+
+function actualizarItemSolicitud(index, campo, valor) {
+    // Función legacy
+}
+
+function eliminarItemSolicitud(index) {
+    // Función legacy
+}
+
 function limpiarItemsSolicitud() {
     itemsSolicitud = [];
 }
 
-function cargarPreviewsFotosServicios() {
-    for (const serv of serviciosParaSolicitud) {
-        const items = itemsPorServicio[serv.id_servicio] || [];
-        items.forEach((item, index) => {
-            if (item.fotos && item.fotos.length > 0) {
-                item.fotos.forEach((fotoUrl, slotIndex) => {
-                    cargarPreviewFotoServicio(serv.id_servicio, index, slotIndex, fotoUrl);
-                });
-            }
-        });
-    }
+async function subirFotoItemSolicitud(index, input) {
+    console.warn('⚠️ subirFotoItemSolicitud está obsoleta. Usa subirFotoItemServicio en su lugar.');
+    showToast('La funcionalidad de fotos ahora está integrada en los servicios', 'info');
+    if (input) input.value = '';
 }
 
-async function cargarPreviewFotoServicio(id_servicio, index, slotIndex, fotoUrl) {
-    if (!fotoUrl) {
-        return;
-    }
-    
-    const fotoId = `fotoPreviewServicio_${id_servicio}_${index}_${slotIndex}`;
-    const loaderId = `fotoLoaderServicio_${id_servicio}_${index}_${slotIndex}`;
-    
-    const previewContainer = document.getElementById(fotoId);
-    const loaderContainer = document.getElementById(loaderId);
-    
-    if (!previewContainer) return;
-    
-    if (loaderContainer) {
-        loaderContainer.style.display = 'flex';
-        loaderContainer.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);font-size:14px;"></i>';
-    }
-    
-    previewContainer.style.display = 'none';
-    
-    try {
-        const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(fotoUrl)}`;
-        const response = await fetch(proxyUrl, {
-            headers: getAuthHeaders()
-        });
-        const data = await response.json();
-        
-        if (data.success && data.base64) {
-            const img = new Image();
-            img.onload = function() {
-                previewContainer.innerHTML = `
-                    <div style="position:relative;display:inline-block;">
-                        <img src="${data.base64}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);" 
-                             data-loaded="true" data-url="${fotoUrl}">
-                        <button type="button" class="btn-remove-foto" 
-                                onclick="event.preventDefault(); eliminarFotoItemServicio(${id_servicio}, ${index}, ${slotIndex})" 
-                                style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                `;
-                previewContainer.style.display = 'block';
-                if (loaderContainer) loaderContainer.style.display = 'none';
-            };
-            img.onerror = function() {
-                previewContainer.innerHTML = `
-                    <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
-                        <i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:14px;"></i>
-                    </div>
-                `;
-                previewContainer.style.display = 'block';
-                if (loaderContainer) loaderContainer.style.display = 'none';
-            };
-            img.src = data.base64;
-        } else {
-            previewContainer.innerHTML = `
-                <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
-                    <i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:14px;"></i>
-                </div>
-            `;
-            previewContainer.style.display = 'block';
-            if (loaderContainer) loaderContainer.style.display = 'none';
-        }
-    } catch (error) {
-        console.error('Error cargando preview:', error);
-        previewContainer.innerHTML = `
-            <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
-                <i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:14px;"></i>
-            </div>
-        `;
-        previewContainer.style.display = 'block';
-        if (loaderContainer) loaderContainer.style.display = 'none';
-    }
+async function eliminarFotoItemSolicitud(index) {
+    console.warn('⚠️ eliminarFotoItemSolicitud está obsoleta.');
+    showToast('La funcionalidad de fotos ahora está integrada en los servicios', 'info');
 }
 
 // =====================================================
@@ -858,6 +877,7 @@ function renderItemsCompraDirecta() {
         `;
     }).join('');
     
+    // 🔥 CARGAR PREVIEWS DE FOTOS EXISTENTES
     setTimeout(() => {
         itemsCompraDirecta.forEach((item, index) => {
             if (item.foto_url) {
@@ -890,6 +910,10 @@ function limpiarItemsCompraDirecta() {
     renderItemsCompraDirecta();
 }
 
+// =====================================================
+// SUBIR FOTO DE ITEM (COMPRA DIRECTA) - CON PREVIEW
+// =====================================================
+
 async function subirFotoItemCompra(index, input) {
     const file = input.files[0];
     if (!file) return;
@@ -912,6 +936,7 @@ async function subirFotoItemCompra(index, input) {
         const formData = new FormData();
         formData.append('foto', file);
         
+        // 🔥 OBTENER CÓDIGO DE ORDEN DEL SELECT
         const selectOrden = document.getElementById('compraDirecta_id_orden');
         const selectedOption = selectOrden?.options[selectOrden.selectedIndex];
         
@@ -947,6 +972,7 @@ async function subirFotoItemCompra(index, input) {
                 itemsCompraDirecta[index].foto_public_id = data.public_id;
             }
             
+            // ✅ CARGAR PREVIEW CON PROXY
             await cargarPreviewFotoCompra(index, data.url);
             
             showToast('✅ Foto subida correctamente', 'success');
@@ -961,6 +987,10 @@ async function subirFotoItemCompra(index, input) {
         input.value = '';
     }
 }
+
+// =====================================================
+// ELIMINAR FOTO DE ITEM (COMPRA DIRECTA)
+// =====================================================
 
 async function eliminarFotoItemCompra(index) {
     if (!itemsCompraDirecta[index] || !itemsCompraDirecta[index].foto_public_id) {
@@ -987,6 +1017,7 @@ async function eliminarFotoItemCompra(index) {
             delete itemsCompraDirecta[index].foto_url;
             delete itemsCompraDirecta[index].foto_public_id;
             
+            // ✅ LIMPIAR PREVIEW
             const previewSpan = document.getElementById(`fotoPreviewCompra_${index}`);
             if (previewSpan) {
                 previewSpan.innerHTML = `
@@ -1005,67 +1036,6 @@ async function eliminarFotoItemCompra(index) {
         showToast('Error de conexión', 'error');
     } finally {
         mostrarLoading(false);
-    }
-}
-
-async function cargarPreviewFotoCompra(index, fotoUrl) {
-    if (!fotoUrl) {
-        const previewSpan = document.getElementById(`fotoPreviewCompra_${index}`);
-        if (previewSpan) previewSpan.innerHTML = '';
-        return;
-    }
-    
-    const previewSpan = document.getElementById(`fotoPreviewCompra_${index}`);
-    if (!previewSpan) return;
-    
-    previewSpan.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
-            <i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);font-size:14px;"></i>
-        </div>
-    `;
-    
-    try {
-        const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(fotoUrl)}`;
-        const response = await fetch(proxyUrl, {
-            headers: getAuthHeaders()
-        });
-        const data = await response.json();
-        
-        if (data.success && data.base64) {
-            const img = new Image();
-            img.onload = function() {
-                previewSpan.innerHTML = `
-                    <div class="foto-preview-container" style="position:relative;display:inline-block;">
-                        <img src="${data.base64}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);">
-                        <button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemCompra(${index})" 
-                                style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                `;
-            };
-            img.onerror = function() {
-                previewSpan.innerHTML = `
-                    <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
-                        <i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:14px;"></i>
-                    </div>
-                `;
-            };
-            img.src = data.base64;
-        } else {
-            previewSpan.innerHTML = `
-                <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
-                    <i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:14px;"></i>
-                </div>
-            `;
-        }
-    } catch (error) {
-        console.error('Error cargando preview:', error);
-        previewSpan.innerHTML = `
-            <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
-                <i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:14px;"></i>
-            </div>
-        `;
     }
 }
 
@@ -1182,6 +1152,23 @@ function cargarSelectEncargadosCompra() {
     if (selectEncargado && encargadosRepuestos.length > 0) {
         selectEncargado.innerHTML = '<option value="">Seleccionar encargado</option>' +
             encargadosRepuestos.map(e => `<option value="${e.id}">${escapeHtml(e.nombre)}</option>`).join('');
+    }
+}
+
+async function cargarOrdenesAprobadas() {
+    try {
+        const response = await fetch(`${API_URL}/ordenes-aprobadas`, { 
+            headers: getAuthHeaders() 
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            window.ordenesAprobadas = data.ordenes || [];
+            console.log(`✅ Órdenes aprobadas cargadas: ${window.ordenesAprobadas.length}`);
+        }
+    } catch (error) {
+        console.error('Error cargando órdenes aprobadas:', error);
+        window.ordenesAprobadas = [];
     }
 }
 
@@ -1610,7 +1597,7 @@ async function actualizarEstadoSolicitudTecnico(id_solicitud, nuevoEstado, respu
 }
 
 // =====================================================
-// RENDERIZADO PRIMER APARTADO (TAB 1)
+// RENDERIZADO PRIMER APARTADO (TAB 1) - CON BOTÓN VER FOTOS
 // =====================================================
 
 function renderOrdenesSolicitarCotizacion() {
@@ -1651,6 +1638,7 @@ function renderOrdenesSolicitarCotizacion() {
     }
     
     container.innerHTML = ordenesFiltradas.map(orden => {
+        // Contar TOTAL DE FOTOS EN LA ORDEN
         let totalFotos = 0;
         if (orden.servicios) {
             orden.servicios.forEach(serv => {
@@ -1697,6 +1685,7 @@ function renderOrdenesSolicitarCotizacion() {
             `;
         }
         
+        // ✅ HTML RESPONSIVE CON CLASES CORRECTAS
         return `
         <div class="orden-card">
             <div class="orden-header">
@@ -1747,24 +1736,26 @@ function renderOrdenesSolicitarCotizacion() {
         </div>`;
     }).join('');
 }
-
 // =====================================================
 // ABRIR MODAL DE FOTOS DE LA ORDEN (DESDE TAB 1)
 // =====================================================
 
 async function abrirModalFotosOrden(id_orden) {
+    // Buscar la orden en los datos
     const orden = ordenesDiagnosticoAprobado.find(o => o.id_orden === id_orden);
     if (!orden) {
         showToast('Orden no encontrada', 'error');
         return;
     }
     
+    // Recolectar todas las fotos de todos los servicios
     let todasLasFotos = [];
     
     if (orden.servicios) {
         orden.servicios.forEach(serv => {
             if (serv.items && serv.items.length > 0) {
                 serv.items.forEach(item => {
+                    // Soporte para versión anterior (foto_url)
                     if (item.foto_url) {
                         todasLasFotos.push({
                             url: item.foto_url,
@@ -1773,6 +1764,7 @@ async function abrirModalFotosOrden(id_orden) {
                             servicio: serv.descripcion
                         });
                     }
+                    // Soporte para nueva versión (fotos array)
                     if (item.fotos && Array.isArray(item.fotos)) {
                         item.fotos.forEach(fotoUrl => {
                             todasLasFotos.push({
@@ -1793,6 +1785,7 @@ async function abrirModalFotosOrden(id_orden) {
         return;
     }
     
+    // Crear el modal si no existe
     let modal = document.getElementById('modalFotosOrden');
     if (!modal) {
         const modalHtml = `
@@ -1810,6 +1803,7 @@ async function abrirModalFotosOrden(id_orden) {
                             <div><strong><i class="fas fa-camera"></i> Total:</strong> ${todasLasFotos.length} foto(s)</div>
                         </div>
                         <div id="fotosOrdenContainer" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;">
+                            <!-- Las fotos se cargarán aquí -->
                         </div>
                         <div id="fotosOrdenLoader" style="display:flex;justify-content:center;align-items:center;padding:2rem;">
                             <i class="fas fa-spinner fa-spin fa-2x"></i>
@@ -1838,6 +1832,7 @@ async function abrirModalFotosOrden(id_orden) {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
     
+    // Mostrar loader
     const container = document.getElementById('fotosOrdenContainer');
     const loader = document.getElementById('fotosOrdenLoader');
     const counter = document.getElementById('fotosOrdenCounter');
@@ -1846,16 +1841,19 @@ async function abrirModalFotosOrden(id_orden) {
     if (loader) loader.style.display = 'flex';
     if (counter) counter.textContent = `Cargando ${todasLasFotos.length} foto(s)...`;
     
+    // Abrir modal
     modal = document.getElementById('modalFotosOrden');
     if (modal) modal.classList.add('show');
     document.body.style.overflow = 'hidden';
     
+    // Cargar fotos con proxy
     let fotosCargadas = 0;
     
     for (let i = 0; i < todasLasFotos.length; i++) {
         const foto = todasLasFotos[i];
         const fotoId = `foto_orden_${id_orden}_${i}`;
         
+        // Crear contenedor para la foto
         const fotoDiv = document.createElement('div');
         fotoDiv.className = 'foto-item-modal';
         fotoDiv.style.cssText = `
@@ -1891,6 +1889,7 @@ async function abrirModalFotosOrden(id_orden) {
         
         if (container) container.appendChild(fotoDiv);
         
+        // Cargar la imagen con proxy
         const imgElement = document.getElementById(fotoId);
         const loaderElement = document.getElementById(`loader_foto_orden_${id_orden}_${i}`);
         
@@ -1940,6 +1939,7 @@ async function abrirModalFotosOrden(id_orden) {
         }
     }
     
+    // Ocultar loader principal cuando todas las fotos estén cargadas
     const checkFotosCargadas = setInterval(() => {
         if (fotosCargadas >= todasLasFotos.length) {
             if (loader) loader.style.display = 'none';
@@ -1947,6 +1947,7 @@ async function abrirModalFotosOrden(id_orden) {
         }
     }, 500);
     
+    // Timeout de seguridad
     setTimeout(() => {
         if (loader) loader.style.display = 'none';
         if (counter) {
@@ -1956,11 +1957,19 @@ async function abrirModalFotosOrden(id_orden) {
     }, 10000);
 }
 
+// =====================================================
+// CERRAR MODAL DE FOTOS DE LA ORDEN
+// =====================================================
+
 function cerrarModalFotosOrden() {
     const modal = document.getElementById('modalFotosOrden');
     if (modal) modal.classList.remove('show');
     document.body.style.overflow = '';
 }
+
+// =====================================================
+// DESCARGAR TODAS LAS FOTOS DE LA ORDEN
+// =====================================================
 
 async function descargarTodasFotosOrden(id_orden) {
     const orden = ordenesDiagnosticoAprobado.find(o => o.id_orden === id_orden);
@@ -1969,6 +1978,7 @@ async function descargarTodasFotosOrden(id_orden) {
         return;
     }
     
+    // Recolectar todas las fotos
     let todasLasFotos = [];
     if (orden.servicios) {
         orden.servicios.forEach(serv => {
@@ -2028,6 +2038,10 @@ async function descargarTodasFotosOrden(id_orden) {
     }
 }
 
+// =====================================================
+// COPIAR URLs DE LAS FOTOS DE LA ORDEN
+// =====================================================
+
 function copiarUrlsFotosOrden(id_orden) {
     const orden = ordenesDiagnosticoAprobado.find(o => o.id_orden === id_orden);
     if (!orden) {
@@ -2035,6 +2049,7 @@ function copiarUrlsFotosOrden(id_orden) {
         return;
     }
     
+    // Recolectar todas las URLs
     let urls = [];
     if (orden.servicios) {
         orden.servicios.forEach(serv => {
@@ -2063,6 +2078,7 @@ function copiarUrlsFotosOrden(id_orden) {
     navigator.clipboard.writeText(texto).then(() => {
         showToast(`✅ ${urls.length} URL(s) copiadas al portapapeles`, 'success');
     }).catch(() => {
+        // Fallback
         const input = document.createElement('textarea');
         input.value = texto;
         document.body.appendChild(input);
@@ -2072,9 +2088,8 @@ function copiarUrlsFotosOrden(id_orden) {
         showToast(`✅ ${urls.length} URL(s) copiadas al portapapeles`, 'success');
     });
 }
-
 // =====================================================
-// RENDERIZADO SEGUNDO APARTADO (TAB 2)
+// RENDERIZADO SEGUNDO APARTADO (TAB 2) - CON BOTÓN VER DECISIÓN
 // =====================================================
 
 function renderOrdenesCotizacionCliente() {
@@ -2118,40 +2133,107 @@ function renderOrdenesCotizacionCliente() {
         let estadoBadge = '';
         let botonesHtml = '';
         
+        // =====================================================
+        // DIAGNOSTICO APROBADO - PENDIENTE DE COTIZACIÓN
+        // =====================================================
         if (estadoOrden === ESTADOS_ORDEN.DIAGNOSTICO_APROBADO) {
             estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> Pendiente de Cotización</span>`;
-            botonesHtml = `<button class="btn-primary" onclick="abrirModalGenerarCotizacion(${orden.id_orden})"><i class="fas fa-file-invoice"></i> Generar Cotización</button>`;
+            botonesHtml = `
+                <button class="btn-primary" onclick="abrirModalGenerarCotizacion(${orden.id_orden})">
+                    <i class="fas fa-file-invoice"></i> Generar Cotización
+                </button>
+            `;
+        
+        // =====================================================
+        // COTIZACION ENVIADA - ESPERANDO RESPUESTA DEL CLIENTE
+        // =====================================================
         } else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_ENVIADA) {
             estadoBadge = `<span class="status-badge status-enviado"><i class="fas fa-paper-plane"></i> Cotización Enviada</span>`;
             botonesHtml = `
-                <button class="btn-outline" onclick="editarCotizacionExistente(${orden.id_orden})"><i class="fas fa-edit"></i> Editar Cotización</button>
-                <button class="btn-primary" onclick="verInformeDecisionCliente(${orden.id_orden})"><i class="fas fa-clipboard-check"></i> Ver Decisión</button>
-                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})"><i class="fas fa-eye"></i> Ver Detalle</button>
+                <button class="btn-outline" onclick="editarCotizacionExistente(${orden.id_orden})">
+                    <i class="fas fa-edit"></i> Editar Cotización
+                </button>
+                <button class="btn-primary" onclick="verInformeDecisionCliente(${orden.id_orden})">
+                    <i class="fas fa-clipboard-check"></i> Ver Decisión
+                </button>
+                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                    <i class="fas fa-eye"></i> Ver Detalle
+                </button>
             `;
+        
+        // =====================================================
+        // COTIZACION ACEPTADA - CLIENTE APROBÓ
+        // =====================================================
         } else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_ACEPTADA || estadoOrden === ESTADOS_ORDEN.COTIZACION_PARCIAL) {
             estadoBadge = `<span class="status-badge status-aprobado"><i class="fas fa-check-circle"></i> Cotización Aceptada</span>`;
             botonesHtml = `
-                <button class="btn-primary" onclick="verInformeDecisionCliente(${orden.id_orden})"><i class="fas fa-clipboard-check"></i> Ver Decisión</button>
-                <button class="btn-primary" onclick='abrirModalIniciarReparacion(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}", "${escapeHtml(orden.vehiculo)}", "${escapeHtml(orden.cliente_nombre)}")'><i class="fas fa-play-circle"></i> Iniciar Reparación</button>
-                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})"><i class="fas fa-eye"></i> Ver Cotización</button>
+                <button class="btn-primary" onclick="verInformeDecisionCliente(${orden.id_orden})">
+                    <i class="fas fa-clipboard-check"></i> Ver Decisión
+                </button>
+                <button class="btn-success" onclick='abrirModalIniciarReparacion(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}", "${escapeHtml(orden.vehiculo)}", "${escapeHtml(orden.cliente_nombre)}")'>
+                    <i class="fas fa-play-circle"></i> Iniciar Reparación
+                </button>
+                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                    <i class="fas fa-eye"></i> Ver Cotización
+                </button>
             `;
+        
+        // =====================================================
+        // COTIZACION RECHAZADA - CLIENTE RECHAZÓ
+        // =====================================================
         } else if (estadoOrden === ESTADOS_ORDEN.COTIZACION_RECHAZADA) {
             estadoBadge = `<span class="status-badge status-rechazado"><i class="fas fa-times-circle"></i> Cotización Rechazada</span>`;
             botonesHtml = `
-                <button class="btn-danger" onclick="verInformeDecisionCliente(${orden.id_orden})"><i class="fas fa-clipboard-check"></i> Ver Decisión</button>
-                <button class="btn-warning" onclick='abrirModalNotificarArmado(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}", "${escapeHtml(orden.vehiculo)}", "${escapeHtml(orden.cliente_nombre)}")'><i class="fas fa-tools"></i> Notificar Armado</button>
-                <button class="btn-primary" onclick="reutilizarCotizacionRechazada(${orden.id_orden})"><i class="fas fa-copy"></i> Nueva Cotización</button>
+                <button class="btn-danger" onclick="verInformeDecisionCliente(${orden.id_orden})">
+                    <i class="fas fa-clipboard-check"></i> Ver Decisión
+                </button>
+                <button class="btn-warning" onclick='abrirModalNotificarArmado(${orden.id_orden}, "${escapeHtml(orden.codigo_unico)}", "${escapeHtml(orden.vehiculo)}", "${escapeHtml(orden.cliente_nombre)}")'>
+                    <i class="fas fa-tools"></i> Notificar Armado
+                </button>
+                <button class="btn-primary" onclick="reutilizarCotizacionRechazada(${orden.id_orden})">
+                    <i class="fas fa-copy"></i> Nueva Cotización
+                </button>
             `;
+        
+        // =====================================================
+        // EN ARMADO - VEHÍCULO SIENDO ARMADO
+        // =====================================================
         } else if (estadoOrden === ESTADOS_ORDEN.EN_ARMADO) {
             estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-tools"></i> Armando Vehículo</span>`;
-            botonesHtml = `<button class="btn-outline" onclick="verInstruccionesArmado(${orden.id_orden})"><i class="fas fa-clipboard-list"></i> Ver Instrucciones</button>`;
+            botonesHtml = `
+                <button class="btn-outline" onclick="verInstruccionesArmado(${orden.id_orden})">
+                    <i class="fas fa-clipboard-list"></i> Ver Instrucciones
+                </button>
+            `;
+        
+        // =====================================================
+        // EN REPARACION - VEHÍCULO EN TALLER
+        // =====================================================
         } else if (estadoOrden === ESTADOS_ORDEN.EN_REPARACION) {
             estadoBadge = `<span class="status-badge status-proceso"><i class="fas fa-wrench"></i> En Reparación</span>`;
-            botonesHtml = `<button class="btn-outline" onclick="verAvanceReparacion(${orden.id_orden})"><i class="fas fa-eye"></i> Ver Detalle</button>`;
+            botonesHtml = `
+                <button class="btn-outline" onclick="verAvanceReparacion(${orden.id_orden})">
+                    <i class="fas fa-eye"></i> Ver Detalle
+                </button>
+            `;
+        
+        // =====================================================
+        // OTROS ESTADOS - FALLBACK
+        // =====================================================
+        } else {
+            estadoBadge = `<span class="status-badge status-pendiente"><i class="fas fa-clock"></i> ${escapeHtml(estadoOrden)}</span>`;
+            botonesHtml = `
+                <button class="btn-outline" onclick="verDetalleCotizacionByOrden(${orden.id_orden})">
+                    <i class="fas fa-eye"></i> Ver Detalle
+                </button>
+            `;
         }
         
         const totalCotizado = orden.cotizacion_total || orden.total_orden || 0;
         
+        // =====================================================
+        // RENDERIZAR CARD DE LA ORDEN
+        // =====================================================
         return `
         <div class="orden-card">
             <div class="orden-header">
@@ -2168,7 +2250,9 @@ function renderOrdenesCotizacionCliente() {
             <div class="servicios-container">
                 ${orden.servicios.map(serv => `
                     <div class="servicio-row">
-                        <div class="servicio-info"><div class="servicio-nombre">${escapeHtml(serv.descripcion)}</div></div>
+                        <div class="servicio-info">
+                            <div class="servicio-nombre">${escapeHtml(serv.descripcion)}</div>
+                        </div>
                         <div class="servicio-estado estado-${serv.estado_cotizacion}">
                             <i class="fas ${serv.estado_cotizacion === 'cotizado' ? 'fa-check-circle' : (serv.estado_cotizacion === 'solicitado' ? 'fa-paper-plane' : 'fa-clock')}"></i>
                             ${serv.estado_cotizacion === 'cotizado' ? 'Cotizado' : (serv.estado_cotizacion === 'solicitado' ? 'Solicitud enviada' : 'Pendiente')}
@@ -2177,7 +2261,9 @@ function renderOrdenesCotizacionCliente() {
                     </div>
                 `).join('')}
             </div>
-            <div class="orden-footer">${botonesHtml}</div>
+            <div class="orden-footer">
+                ${botonesHtml}
+            </div>
         </div>`;
     }).join('');
 }
@@ -2231,7 +2317,7 @@ function renderHistorialCotizaciones() {
 }
 
 // =====================================================
-// RENDERIZAR SOLICITUDES DE COTIZACIÓN CON BOTÓN VER FOTOS
+// RENDERIZAR SOLICITUDES DE COTIZACIÓN CON BOTÓN VER FOTOS (SIN COLUMNA ITEMS)
 // =====================================================
 
 function renderSolicitudesCotizacion() {
@@ -2267,6 +2353,7 @@ function renderSolicitudesCotizacion() {
             </span>
         ` : `<span style="font-size:0.65rem;color:var(--gris-texto);">-</span>`;
         
+        // ✅ AGREGAR data-label PARA RESPONSIVE
         return `
             <tr>
                 <td data-label="ID" style="font-weight:600;font-size:0.85rem;">${s.id}</td>
@@ -2282,22 +2369,24 @@ function renderSolicitudesCotizacion() {
         `;
     }).join('');
 }
-
 // =====================================================
-// ABRIR MODAL DE FOTOS DE LA SOLICITUD
+// ABRIR MODAL DE FOTOS DE LA SOLICITUD - CARGA PARALELA
 // =====================================================
 
 async function abrirModalFotosSolicitud(id_solicitud) {
+    // Buscar la solicitud en los datos
     const solicitud = solicitudesCotizacion.find(s => s.id === id_solicitud);
     if (!solicitud) {
         showToast('Solicitud no encontrada', 'error');
         return;
     }
     
+    // Recolectar todas las fotos de los items
     let todasLasFotos = [];
     
     if (solicitud.items && solicitud.items.length > 0) {
         solicitud.items.forEach(item => {
+            // Soporte para versión anterior (foto_url)
             if (item.foto_url) {
                 todasLasFotos.push({
                     url: item.foto_url,
@@ -2305,6 +2394,7 @@ async function abrirModalFotosSolicitud(id_solicitud) {
                     cantidad: item.cantidad || 1
                 });
             }
+            // Soporte para nueva versión (fotos array)
             if (item.fotos && Array.isArray(item.fotos)) {
                 item.fotos.forEach(fotoUrl => {
                     todasLasFotos.push({
@@ -2322,6 +2412,7 @@ async function abrirModalFotosSolicitud(id_solicitud) {
         return;
     }
     
+    // Crear el modal si no existe
     let modal = document.getElementById('modalFotosSolicitud');
     if (!modal) {
         const modalHtml = `
@@ -2339,6 +2430,7 @@ async function abrirModalFotosSolicitud(id_solicitud) {
                             <div><strong><i class="fas fa-clock"></i> Estado:</strong> ${statusBadge(solicitud.estado)}</div>
                         </div>
                         <div id="fotosSolicitudContainer" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;">
+                            <!-- Las fotos se cargarán aquí -->
                         </div>
                         <div id="fotosSolicitudLoader" style="display:flex;justify-content:center;align-items:center;padding:2rem;">
                             <i class="fas fa-spinner fa-spin fa-2x"></i>
@@ -2370,6 +2462,7 @@ async function abrirModalFotosSolicitud(id_solicitud) {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
     
+    // Mostrar loader
     const container = document.getElementById('fotosSolicitudContainer');
     const loader = document.getElementById('fotosSolicitudLoader');
     const counter = document.getElementById('fotosSolicitudCounter');
@@ -2384,10 +2477,12 @@ async function abrirModalFotosSolicitud(id_solicitud) {
     if (progressText) progressText.textContent = `0/${todasLasFotos.length} cargadas`;
     if (progressBar) progressBar.style.width = '0%';
     
+    // Abrir modal
     modal = document.getElementById('modalFotosSolicitud');
     if (modal) modal.classList.add('show');
     document.body.style.overflow = 'hidden';
     
+    // 🔥 CREAR TODOS LOS CONTENEDORES PRIMERO
     const fotosPorCargar = todasLasFotos.length;
     let fotosCargadas = 0;
     let fotosExitosas = 0;
@@ -2434,6 +2529,7 @@ async function abrirModalFotosSolicitud(id_solicitud) {
         if (container) container.appendChild(fotoDiv);
     }
     
+    // 🔥 FUNCIÓN PARA ACTUALIZAR PROGRESO
     function actualizarProgreso() {
         const porcentaje = Math.round((fotosCargadas / fotosPorCargar) * 100);
         if (progressText) progressText.textContent = `${fotosCargadas}/${fotosPorCargar} cargadas (${fotosExitosas} OK, ${fotosFallidas} ❌)`;
@@ -2450,6 +2546,7 @@ async function abrirModalFotosSolicitud(id_solicitud) {
         }
     }
     
+    // 🔥 CARGAR TODAS LAS FOTOS EN PARALELO CON PROMISE.ALLSETTLED
     const promesas = todasLasFotos.map((foto, i) => {
         return new Promise((resolve) => {
             const fotoId = `foto_solicitud_${id_solicitud}_${i}`;
@@ -2465,6 +2562,7 @@ async function abrirModalFotosSolicitud(id_solicitud) {
                 return;
             }
             
+            // Timeout para no esperar más de 10 segundos por foto
             const timeoutId = setTimeout(() => {
                 if (loaderElement) {
                     loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:1.5rem;"></i>';
@@ -2475,6 +2573,7 @@ async function abrirModalFotosSolicitud(id_solicitud) {
                 resolve({ success: false, index: i, error: 'timeout' });
             }, 10000);
             
+            // 🔥 CARGAR CON PROXY
             const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(foto.url)}`;
             fetch(proxyUrl, {
                 headers: getAuthHeaders()
@@ -2531,8 +2630,10 @@ async function abrirModalFotosSolicitud(id_solicitud) {
         });
     });
     
+    // Esperar a que todas las promesas terminen (éxito o error)
     const resultados = await Promise.allSettled(promesas);
     
+    // Resumen final
     const exitosas = resultados.filter(r => r.status === 'fulfilled' && r.value.success).length;
     const fallidas = resultados.length - exitosas;
     
@@ -2546,6 +2647,7 @@ async function abrirModalFotosSolicitud(id_solicitud) {
         }, 3000);
     }
     
+    // Mostrar toast con resumen
     if (fallidas > 0 && exitosas > 0) {
         showToast(`⚠️ ${exitosas} fotos cargadas, ${fallidas} fallaron. Reintenta más tarde.`, 'warning');
     } else if (fallidas === todasLasFotos.length) {
@@ -2554,12 +2656,19 @@ async function abrirModalFotosSolicitud(id_solicitud) {
         showToast(`✅ ${exitosas} fotos cargadas correctamente`, 'success');
     }
 }
+// =====================================================
+// CERRAR MODAL DE FOTOS DE LA SOLICITUD
+// =====================================================
 
 function cerrarModalFotosSolicitud() {
     const modal = document.getElementById('modalFotosSolicitud');
     if (modal) modal.classList.remove('show');
     document.body.style.overflow = '';
 }
+
+// =====================================================
+// DESCARGAR TODAS LAS FOTOS DE LA SOLICITUD
+// =====================================================
 
 async function descargarTodasFotosSolicitud(id_solicitud) {
     const solicitud = solicitudesCotizacion.find(s => s.id === id_solicitud);
@@ -2568,6 +2677,7 @@ async function descargarTodasFotosSolicitud(id_solicitud) {
         return;
     }
     
+    // Recolectar todas las fotos
     let todasLasFotos = [];
     if (solicitud.items && solicitud.items.length > 0) {
         solicitud.items.forEach(item => {
@@ -2622,7 +2732,6 @@ async function descargarTodasFotosSolicitud(id_solicitud) {
         mostrarLoading(false);
     }
 }
-
 // =====================================================
 // SUBIDA DE ARCHIVOS
 // =====================================================
@@ -2973,6 +3082,7 @@ async function editarCotizacionPorId(id_cotizacion) {
             document.getElementById('notasAdicionales').value = cotizacion.notas;
         }
         
+        // 🔥 SI HAY ARCHIVO EN DRIVE, MOSTRAR INFORMACIÓN
         if (cotizacion.archivo_url) {
             const fileInfo = document.getElementById('fileInfo');
             const fileName = document.getElementById('fileName');
@@ -2982,6 +3092,7 @@ async function editarCotizacionPorId(id_cotizacion) {
                 fileName.textContent = cotizacion.nombre_archivo || 'Documento en Drive';
                 fileInfo.style.display = 'block';
                 
+                // Mostrar icono según extensión
                 const fileIconPdf = document.getElementById('fileIconPdf');
                 const fileIconWord = document.getElementById('fileIconWord');
                 const nombreArchivo = (cotizacion.nombre_archivo || '').toLowerCase();
@@ -2996,6 +3107,7 @@ async function editarCotizacionPorId(id_cotizacion) {
                     }
                 }
                 
+                // 🔥 BOTÓN PARA VER/ABRIR EL ARCHIVO EN DRIVE
                 const fileActions = document.getElementById('fileActions');
                 if (!fileActions) {
                     const actionsDiv = document.createElement('div');
@@ -3174,6 +3286,7 @@ async function verDetalleCotizacion(id_cotizacion) {
             const d = data.detalle;
             const container = document.getElementById('detalleCotizacionContainer');
             
+            // 🔥 AGREGAR LINK AL DOCUMENTO EN DRIVE
             const documentoHtml = d.archivo_url ? `
                 <div style="margin-top: 1rem; padding: 0.75rem; background: var(--gris-oscuro); border-radius: 8px;">
                     <strong><i class="fas fa-file"></i> Documento:</strong>
@@ -3209,7 +3322,6 @@ async function verDetalleCotizacion(id_cotizacion) {
         mostrarLoading(false);
     }
 }
-
 async function verDetalleCotizacionByOrden(id_orden) {
     const cotizacion = cotizacionesMap[id_orden];
     if (cotizacion) {
@@ -3555,6 +3667,147 @@ async function verInstruccionesArmado(id_orden) {
 }
 
 // =====================================================
+// FUNCIONES DE TAB Y EVENTOS
+// =====================================================
+
+function setupTabs() {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tabId = this.getAttribute('data-tab');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            this.classList.add('active');
+            document.getElementById(tabId)?.classList.add('active');
+            
+            if (tabId === 'tab-solicitar-compra') {
+                cargarSolicitudesRepuestosTecnico();
+            }
+        });
+    });
+}
+
+function setupEventListeners() {
+    // Botones principales
+    document.getElementById('enviarCotizacionBtn')?.addEventListener('click', enviarCotizacionCliente);
+    document.getElementById('btnAgregarServicioCotizacion')?.addEventListener('click', agregarServicioCotizable);
+    document.getElementById('btnAgregarItemSolicitud')?.addEventListener('click', agregarItemSolicitud);
+    document.getElementById('saveSolicitudModal')?.addEventListener('click', guardarSolicitudCotizacion);
+    
+    // Botones de refresh
+    document.getElementById('refreshSolicitarBtn')?.addEventListener('click', () => cargarDatosIniciales());
+    document.getElementById('refreshCotizacionBtn')?.addEventListener('click', () => cargarDatosIniciales());
+    document.getElementById('refreshHistorialBtn')?.addEventListener('click', cargarHistorialCotizaciones);
+    document.getElementById('btnHistorialCotizaciones')?.addEventListener('click', () => {
+        cargarHistorialCotizaciones().then(() => abrirModal('modalHistorialCotizaciones'));
+    });
+    document.getElementById('btnNuevaSolicitudCotizacion')?.addEventListener('click', () => {
+        // Ya no se usa el select de orden
+        showToast('Selecciona una orden desde la lista', 'info');
+    });
+    
+    // Botones TAB 3
+    document.getElementById('refreshSolicitudesTecnico')?.addEventListener('click', () => {
+        cargarSolicitudesRepuestosTecnico();
+    });
+    document.getElementById('filtroEstadoRepuestoTecnico')?.addEventListener('change', () => cargarSolicitudesRepuestosTecnico());
+    document.getElementById('searchRepuestoTecnico')?.addEventListener('input', () => cargarSolicitudesRepuestosTecnico());
+    
+    // Filtros TAB 1 y 2
+    document.getElementById('filtroEstadoCotizacionSolicitar')?.addEventListener('change', () => renderOrdenesSolicitarCotizacion());
+    document.getElementById('searchOrdenSolicitar')?.addEventListener('input', () => renderOrdenesSolicitarCotizacion());
+    document.getElementById('filtroEstadoCotizacionCliente')?.addEventListener('change', () => renderOrdenesCotizacionCliente());
+    document.getElementById('searchCotizacionCliente')?.addEventListener('input', () => renderOrdenesCotizacionCliente());
+    document.getElementById('searchHistorial')?.addEventListener('input', () => renderHistorialCotizaciones());
+    document.getElementById('filtroEstadoHistorial')?.addEventListener('change', () => renderHistorialCotizaciones());
+    
+    // Botones compra directa
+    document.getElementById('btnNuevaSolicitudCompraDirecta')?.addEventListener('click', abrirModalNuevaSolicitudCompraDirecta);
+    document.getElementById('btnAgregarItemCompraDirecta')?.addEventListener('click', agregarItemCompraDirecta);
+    document.getElementById('btnConfirmarCompraDirecta')?.addEventListener('click', confirmarCompraDirecta);
+    
+    // Cerrar modales al hacer clic fuera
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
+    });
+}
+
+async function cargarUsuarioActual() {
+    try {
+        let token = localStorage.getItem('furia_token') || localStorage.getItem('token');
+        if (!token) { 
+            window.location.href = window.API_BASE_URL + '/'; 
+            return null; 
+        }
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const userData = JSON.parse(localStorage.getItem('furia_user') || '{}');
+        currentUser = { 
+            id: payload.user?.id || payload.id || userData?.id, 
+            nombre: payload.user?.nombre || payload.nombre || userData?.nombre || 'Usuario', 
+            roles: payload.user?.roles || payload.roles || userData?.roles || [] 
+        };
+        currentUserRoles = currentUser.roles || [];
+        
+        const tieneRolJefeTaller = currentUserRoles.some(rol => 
+            rol === 'jefe_taller' || rol === 'jefe_taller_principal' || rol === 'admin'
+        );
+        
+        if (!tieneRolJefeTaller) { 
+            showToast('No tienes permisos para acceder a esta sección', 'error'); 
+            setTimeout(() => { window.location.href = window.API_BASE_URL + '/'; }, 2000); 
+            return null; 
+        }
+        
+        const fechaElement = document.getElementById('currentDate');
+        if (fechaElement) {
+            fechaElement.innerHTML = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+        console.log('✅ Usuario autenticado:', currentUser.nombre);
+        return currentUser;
+    } catch (error) { 
+        console.error('Error al cargar usuario:', error);
+        window.location.href = window.API_BASE_URL + '/'; 
+        return null; 
+    }
+}
+
+async function cargarDatosIniciales() {
+    mostrarLoading(true);
+    try {
+        await Promise.all([
+            cargarOrdenesDiagnosticoAprobado(),
+            cargarOrdenesParaCotizar(),
+            cargarSolicitudesCotizacion(),
+            cargarCotizacionesMap(),
+            cargarSolicitudesCompra(),
+            cargarEncargadosRepuestos(),
+            cargarHistorialCotizaciones(),
+            cargarSolicitudesRepuestosTecnico()
+        ]);
+    } catch (error) {
+        console.error('Error cargando datos:', error);
+        showToast('Error al cargar los datos', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+function logout() { 
+    localStorage.clear(); 
+    sessionStorage.clear(); 
+    window.location.href = window.API_BASE_URL + '/'; 
+}
+
+async function inicializar() {
+    console.log('🚀 Inicializando cotizaciones.js versión 6.0');
+    const user = await cargarUsuarioActual();
+    if (!user) return;
+    await cargarDatosIniciales();
+    setupTabs();
+    setupEventListeners();
+    console.log('✅ cotizaciones.js inicializado correctamente');
+}
+
+// =====================================================
 // RENDERIZAR SOLICITUDES DE COMPRA CON PROXY
 // =====================================================
 
@@ -3577,6 +3830,7 @@ function renderSolicitudesCompra() {
             }
         }
         
+        // 🔥 MOSTRAR ITEMS CON FOTOS USANDO PROXY
         const itemsHtml = itemsList && itemsList.length > 0 
             ? itemsList.map((item, idx) => {
                 const fotoUrl = item.foto_url || '';
@@ -3604,6 +3858,7 @@ function renderSolicitudesCompra() {
                     </div>
                 `;
                 
+                // ✅ CARGAR LA IMAGEN CON PROXY
                 setTimeout(() => {
                     if (fotoUrl) {
                         const imgEl = document.getElementById(fotoId);
@@ -3668,6 +3923,9 @@ function renderSolicitudesCompra() {
         `;
     }).join('');
 }
+// =====================================================
+// VER DETALLE DE SOLICITUD DE COMPRA CON PROXY
+// =====================================================
 
 function verDetalleSolicitudCompra(id) {
     const solicitud = solicitudesCompra.find(s => s.id === id);
@@ -3678,6 +3936,7 @@ function verDetalleSolicitudCompra(id) {
     
     window.currentSolicitudCompraId = id;
     
+    // Parsear items
     let itemsList = solicitud.items;
     if (typeof itemsList === 'string') {
         try {
@@ -3687,6 +3946,7 @@ function verDetalleSolicitudCompra(id) {
         }
     }
     
+    // Construir HTML de items con fotos usando proxy
     let itemsHtml = '';
     if (itemsList && itemsList.length > 0) {
         itemsHtml = '<ul style="margin: 0.5rem 0 0 0; list-style: none; padding: 0;">' + 
@@ -3695,6 +3955,7 @@ function verDetalleSolicitudCompra(id) {
                 const fotoId = `detalle_foto_${solicitud.id}_${idx}`;
                 const loaderId = `detalle_loader_${solicitud.id}_${idx}`;
                 
+                // HTML para la foto con loader
                 let fotoHtml = '';
                 if (fotoUrl) {
                     fotoHtml = `
@@ -3715,6 +3976,7 @@ function verDetalleSolicitudCompra(id) {
                     `;
                 }
                 
+                // Elemento del item
                 const itemHtml = `
                     <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-color);">
                         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -3729,6 +3991,7 @@ function verDetalleSolicitudCompra(id) {
                     </li>
                 `;
                 
+                // Programar carga de imagen con proxy
                 setTimeout(() => {
                     if (fotoUrl) {
                         const imgEl = document.getElementById(fotoId);
@@ -3746,6 +4009,7 @@ function verDetalleSolicitudCompra(id) {
             }).join('') + 
             '</ul>';
     } else {
+        // Items legacy (sin array)
         const fotoUrl = solicitud.foto_url || solicitud.foto || '';
         const fotoId = `detalle_foto_${solicitud.id}_0`;
         const loaderId = `detalle_loader_${solicitud.id}_0`;
@@ -3792,9 +4056,11 @@ function verDetalleSolicitudCompra(id) {
         `;
     }
     
+    // Buscar la cotización relacionada (si existe)
     const cotizacion = cotizacionesMap ? cotizacionesMap[solicitud.id_orden_trabajo] : null;
     const tieneDocumento = cotizacion && cotizacion.id;
     
+    // Construir HTML del modal de detalle
     const container = document.getElementById('detalleCotizacionContainer');
     if (!container) {
         console.error('❌ Contenedor detalleCotizacionContainer no encontrado');
@@ -3867,6 +4133,7 @@ function verDetalleSolicitudCompra(id) {
                 </div>
             ` : ''}
             
+            <!-- Sección de compra (si está completada) -->
             ${solicitud.estado === 'comprado' || solicitud.estado === 'entregado' ? `
                 <div style="margin-top: 1rem; padding-top: 1rem; border-top: 2px solid var(--border-color);">
                     <h4 style="color: var(--verde-exito); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
@@ -3941,17 +4208,21 @@ function verDetalleSolicitudCompra(id) {
         </div>
     `;
     
+    // Configurar botón de descarga de documento
     const modalFooter = document.querySelector('#modalDetalleCotizacion .modal-footer');
     if (modalFooter) {
+        // Limpiar botones existentes (excepto cerrar)
         const closeBtn = modalFooter.querySelector('.btn-secondary');
         modalFooter.innerHTML = '';
         
+        // Botón cerrar
         const closeButton = document.createElement('button');
         closeButton.className = 'btn-secondary';
         closeButton.innerHTML = '<i class="fas fa-times"></i> Cerrar';
         closeButton.onclick = () => cerrarModal('modalDetalleCotizacion');
         modalFooter.appendChild(closeButton);
         
+        // Botón descargar documento (si existe cotización)
         if (tieneDocumento) {
             const downloadBtn = document.createElement('button');
             downloadBtn.className = 'btn-primary';
@@ -3960,6 +4231,7 @@ function verDetalleSolicitudCompra(id) {
             modalFooter.appendChild(downloadBtn);
         }
         
+        // Botón ver en Drive (si existe URL)
         if (solicitud.comprobante_url) {
             const driveBtn = document.createElement('button');
             driveBtn.className = 'btn-outline';
@@ -3969,9 +4241,9 @@ function verDetalleSolicitudCompra(id) {
         }
     }
     
+    // Abrir el modal
     abrirModal('modalDetalleCotizacion');
 }
-
 // =====================================================
 // FUNCIÓN: DESCARGAR DOCUMENTO DESDE DRIVE
 // =====================================================
@@ -3993,21 +4265,26 @@ async function descargarDocumentoCotizacion(idCotizacion) {
         
         const cotizacion = data.detalle;
         
+        // 🔥 AHORA USAMOS archivo_url EN VEZ DE archivo_base64
         if (!cotizacion.archivo_url) {
             showToast('No hay documento asociado a esta cotización', 'warning');
             return;
         }
         
+        // 🔥 ABRIR LA URL DE DRIVE PARA DESCARGAR
         const downloadUrl = cotizacion.archivo_url;
         
+        // Si es la URL de vista de Drive, convertir a descarga directa
         let directDownloadUrl = downloadUrl;
         if (downloadUrl.includes('drive.google.com')) {
+            // Extraer ID de la URL
             const fileIdMatch = downloadUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
             if (fileIdMatch) {
                 directDownloadUrl = `https://drive.google.com/uc?export=download&id=${fileIdMatch[1]}`;
             }
         }
         
+        // Abrir en nueva ventana para descargar
         window.open(directDownloadUrl, '_blank');
         
         showToast('✅ Descarga iniciada', 'success');
@@ -4212,7 +4489,6 @@ async function verificarDiasGuardados(id_orden) {
         return { success: false, error: error.message };
     }
 }
-
 // =====================================================
 // FUNCIÓN: COPIAR URL DE DRIVE
 // =====================================================
@@ -4226,6 +4502,7 @@ function copiarUrlDrive(url) {
     navigator.clipboard.writeText(url).then(() => {
         showToast('✅ URL copiada al portapapeles', 'success');
     }).catch(() => {
+        // Fallback: seleccionar manual
         const input = document.createElement('input');
         input.value = url;
         document.body.appendChild(input);
@@ -4235,7 +4512,6 @@ function copiarUrlDrive(url) {
         showToast('✅ URL copiada al portapapeles', 'success');
     });
 }
-
 async function cargarImagenProxy(url, imgElement, loaderElement = null) {
     if (!url) {
         if (imgElement) {
@@ -4245,6 +4521,7 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
         return null;
     }
     
+    // Mostrar loader
     if (loaderElement) {
         loaderElement.style.display = 'flex';
         loaderElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando imagen...';
@@ -4303,7 +4580,475 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
         return null;
     }
 }
+// =====================================================
+// CARGAR PREVIEW DE FOTO EN SERVICIO (CON PROXY)
+// =====================================================
 
+async function cargarPreviewFotoServicio(id_servicio, index, slotIndex, fotoUrl) {
+    if (!fotoUrl) {
+        return;
+    }
+    
+    const fotoId = `fotoPreviewServicio_${id_servicio}_${index}_${slotIndex}`;
+    const loaderId = `fotoLoaderServicio_${id_servicio}_${index}_${slotIndex}`;
+    const inputId = `fotoInputServicio_${id_servicio}_${index}_${slotIndex}`;
+    
+    const previewContainer = document.getElementById(fotoId);
+    const loaderContainer = document.getElementById(loaderId);
+    
+    if (!previewContainer) return;
+    
+    // Mostrar loader en el preview
+    if (loaderContainer) {
+        loaderContainer.style.display = 'flex';
+        loaderContainer.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);font-size:14px;"></i>';
+    }
+    
+    previewContainer.style.display = 'none';
+    
+    try {
+        const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(fotoUrl)}`;
+        const response = await fetch(proxyUrl, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            // Precargar la imagen
+            const img = new Image();
+            img.onload = function() {
+                previewContainer.innerHTML = `
+                    <div style="position:relative;display:inline-block;">
+                        <img src="${data.base64}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);" 
+                             data-loaded="true" data-url="${fotoUrl}">
+                        <button type="button" class="btn-remove-foto" 
+                                onclick="event.preventDefault(); eliminarFotoItemServicio(${id_servicio}, ${index}, ${slotIndex})" 
+                                style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                previewContainer.style.display = 'block';
+                if (loaderContainer) loaderContainer.style.display = 'none';
+            };
+            img.onerror = function() {
+                previewContainer.innerHTML = `
+                    <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+                        <i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:14px;"></i>
+                    </div>
+                `;
+                previewContainer.style.display = 'block';
+                if (loaderContainer) loaderContainer.style.display = 'none';
+            };
+            img.src = data.base64;
+        } else {
+            previewContainer.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+                    <i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:14px;"></i>
+                </div>
+            `;
+            previewContainer.style.display = 'block';
+            if (loaderContainer) loaderContainer.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error cargando preview:', error);
+        previewContainer.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+                <i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:14px;"></i>
+            </div>
+        `;
+        previewContainer.style.display = 'block';
+        if (loaderContainer) loaderContainer.style.display = 'none';
+    }
+}
+// =====================================================
+// MOSTRAR INFORME DE DECISIÓN DEL CLIENTE
+// =====================================================
+
+async function verInformeDecisionCliente(id_orden) {
+    mostrarLoading(true);
+    
+    try {
+        const response = await fetch(`${API_URL}/orden/${id_orden}/informe-decision-cliente`, {
+            headers: getAuthHeaders()
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            showToast(data.error || 'Error al obtener el informe', 'error');
+            return;
+        }
+        
+        const informe = data.informe;
+        const decision = informe.decision;
+        const servicios = informe.servicios;
+        const cotizacion = informe.cotizacion;
+        
+        // Construir HTML del informe
+        let serviciosHtml = '';
+        
+        if (servicios.todos && servicios.todos.length > 0) {
+            serviciosHtml = servicios.todos.map(serv => {
+                const esAprobado = serv.estado === 'aprobado';
+                const icono = esAprobado ? 'fa-check-circle' : 'fa-times-circle';
+                const color = esAprobado ? 'var(--verde-exito)' : 'var(--rojo-primario)';
+                const badgeText = esAprobado ? '✅ APROBADO' : '❌ RECHAZADO';
+                const badgeColor = esAprobado ? 'background: var(--verde-exito);' : 'background: var(--rojo-primario);';
+                
+                return `
+                    <tr>
+                        <td style="padding: 8px; border-bottom: 1px solid var(--border-color);">
+                            ${escapeHtml(serv.descripcion)}
+                        </td>
+                        <td style="padding: 8px; border-bottom: 1px solid var(--border-color); text-align: right;">
+                            ${formatCurrency(serv.precio)}
+                        </td>
+                        <td style="padding: 8px; border-bottom: 1px solid var(--border-color); text-align: center;">
+                            <span style="display: inline-block; padding: 0.1rem 0.5rem; border-radius: 12px; color: white; font-size: 0.6rem; ${badgeColor}">
+                                <i class="fas ${icono}"></i> ${badgeText}
+                            </span>
+                        </td>
+                        <td style="padding: 8px; border-bottom: 1px solid var(--border-color); text-align: center; font-size: 0.7rem; color: var(--gris-texto);">
+                            ${serv.fecha_aprobacion ? formatDate(serv.fecha_aprobacion) : '-'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            serviciosHtml = `
+                <tr>
+                    <td colspan="4" style="text-align: center; padding: 1rem; color: var(--gris-texto);">
+                        <i class="fas fa-info-circle"></i> No hay servicios en esta cotización
+                    </td>
+                </tr>
+            `;
+        }
+        
+        // Resumen de la decisión
+        let resumenHtml = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; margin-top: 0.5rem;">
+                <div style="padding: 0.5rem; background: var(--bg-card); border-radius: 8px; text-align: center;">
+                    <div style="font-size: 0.6rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Servicios Aprobados</div>
+                    <div style="font-size: 1.2rem; font-weight: 700; color: var(--verde-exito);">
+                        ${servicios.total_aprobados} de ${servicios.total_servicios}
+                    </div>
+                </div>
+                <div style="padding: 0.5rem; background: var(--bg-card); border-radius: 8px; text-align: center;">
+                    <div style="font-size: 0.6rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Total Aprobado</div>
+                    <div style="font-size: 1.2rem; font-weight: 700; color: var(--verde-exito);">
+                        ${formatCurrency(decision.total_aprobado)}
+                    </div>
+                </div>
+                <div style="padding: 0.5rem; background: var(--bg-card); border-radius: 8px; text-align: center;">
+                    <div style="font-size: 0.6rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Total Rechazado</div>
+                    <div style="font-size: 1.2rem; font-weight: 700; color: var(--rojo-primario);">
+                        ${formatCurrency(decision.total_rechazado)}
+                    </div>
+                </div>
+                <div style="padding: 0.5rem; background: var(--bg-card); border-radius: 8px; text-align: center; border: 2px solid ${decision.es_rechazada_total ? 'var(--rojo-primario)' : 'var(--verde-exito)'};">
+                    <div style="font-size: 0.6rem; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.5px;">Total a Pagar</div>
+                    <div style="font-size: 1.4rem; font-weight: 700; color: ${decision.es_rechazada_total ? 'var(--rojo-primario)' : 'var(--verde-exito)'};">
+                        ${formatCurrency(decision.total_final)}
+                        ${decision.es_rechazada_total ? `<span style="font-size: 0.6rem; color: var(--gris-texto); display: block;">(Diagnóstico)</span>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Estado de la decisión - badge grande
+        let estadoBadgeColor = '';
+        let estadoIcono = '';
+        let estadoTexto = '';
+        
+        if (decision.es_rechazada_total) {
+            estadoBadgeColor = 'background: var(--rojo-primario);';
+            estadoIcono = 'fa-times-circle';
+            estadoTexto = 'RECHAZADA TOTAL';
+        } else if (decision.estado === 'APROBADA TOTAL') {
+            estadoBadgeColor = 'background: var(--verde-exito);';
+            estadoIcono = 'fa-check-circle';
+            estadoTexto = 'APROBADA TOTALMENTE';
+        } else if (decision.estado === 'APROBADA PARCIAL') {
+            estadoBadgeColor = 'background: var(--amarillo); color: var(--negro);';
+            estadoIcono = 'fa-check-double';
+            estadoTexto = 'APROBADA PARCIALMENTE';
+        } else {
+            estadoBadgeColor = 'background: var(--gris-texto);';
+            estadoIcono = 'fa-clock';
+            estadoTexto = 'PENDIENTE';
+        }
+        
+        const container = document.getElementById('detalleCotizacionContainer');
+        if (!container) {
+            showToast('Error al mostrar el informe', 'error');
+            return;
+        }
+        
+        container.innerHTML = `
+            <div style="padding: 0.5rem;">
+                <!-- Encabezado -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                    <div>
+                        <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fas fa-file-invoice"></i> Informe de Decisión
+                        </h3>
+                        <p style="margin: 0.25rem 0 0 0; color: var(--gris-texto); font-size: 0.8rem;">
+                            Orden: <strong>${escapeHtml(informe.codigo_unico)}</strong>
+                            | Cliente: <strong>${escapeHtml(informe.cliente_nombre)}</strong>
+                            | Vehículo: <strong>${escapeHtml(informe.vehiculo.marca)} ${escapeHtml(informe.vehiculo.modelo)} - ${escapeHtml(informe.vehiculo.placa)}</strong>
+                        </p>
+                    </div>
+                    <span style="padding: 0.3rem 1rem; border-radius: 20px; color: white; font-weight: 700; font-size: 0.8rem; ${estadoBadgeColor}">
+                        <i class="fas ${estadoIcono}"></i> ${estadoTexto}
+                    </span>
+                </div>
+                
+                <!-- Mensaje de estado -->
+                <div style="padding: 0.75rem; background: var(--gris-oscuro); border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid ${decision.es_rechazada_total ? 'var(--rojo-primario)' : (decision.estado === 'APROBADA TOTAL' ? 'var(--verde-exito)' : 'var(--amarillo)')};">
+                    <p style="margin: 0; font-size: 0.9rem;">
+                        <i class="fas ${decision.icono}" style="color: ${decision.es_rechazada_total ? 'var(--rojo-primario)' : (decision.estado === 'APROBADA TOTAL' ? 'var(--verde-exito)' : 'var(--amarillo)')};"></i>
+                        ${decision.mensaje}
+                    </p>
+                    ${decision.fecha_decision ? `
+                        <p style="margin: 0.25rem 0 0 0; font-size: 0.7rem; color: var(--gris-texto);">
+                            <i class="fas fa-calendar"></i> Decisión tomada: ${formatDate(decision.fecha_decision)}
+                        </p>
+                    ` : ''}
+                </div>
+                
+                <!-- Resumen de la decisión -->
+                ${resumenHtml}
+                
+                <!-- Tabla de servicios -->
+                <div style="margin-top: 1rem; overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                        <thead>
+                            <tr style="background: var(--gris-oscuro);">
+                                <th style="padding: 8px; text-align: left;">Servicio</th>
+                                <th style="padding: 8px; text-align: right;">Precio</th>
+                                <th style="padding: 8px; text-align: center;">Estado</th>
+                                <th style="padding: 8px; text-align: center;">Fecha Aprobación</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${serviciosHtml}
+                        </tbody>
+                        <tfoot style="font-weight: 700; background: var(--gris-oscuro);">
+                            <tr>
+                                <td style="padding: 8px; text-align: right;" colspan="3">TOTAL FINAL:</td>
+                                <td style="padding: 8px; text-align: center; font-size: 1.1rem; color: ${decision.es_rechazada_total ? 'var(--rojo-primario)' : 'var(--verde-exito)'};">
+                                    ${formatCurrency(decision.total_final)}
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                
+                <!-- Motivo de rechazo (si aplica) -->
+                ${cotizacion.motivo_rechazo || cotizacion.comentarios_rechazo ? `
+                    <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(193,18,31,0.1); border-radius: 8px; border-left: 4px solid var(--rojo-primario);">
+                        <p style="margin: 0; font-weight: 600; color: var(--rojo-primario);">
+                            <i class="fas fa-comment-dots"></i> Motivo del Rechazo
+                        </p>
+                        ${cotizacion.motivo_rechazo ? `<p style="margin: 0.25rem 0 0 0; white-space: pre-wrap;">${escapeHtml(cotizacion.motivo_rechazo)}</p>` : ''}
+                        ${cotizacion.comentarios_rechazo ? `<p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: var(--gris-texto);">${escapeHtml(cotizacion.comentarios_rechazo)}</p>` : ''}
+                    </div>
+                ` : ''}
+                
+                <!-- Historial de modificaciones -->
+                ${informe.historial && informe.historial.length > 0 ? `
+                    <div style="margin-top: 1rem;">
+                        <details style="background: var(--gris-oscuro); border-radius: 8px; padding: 0.5rem;">
+                            <summary style="cursor: pointer; font-weight: 600; font-size: 0.85rem;">
+                                <i class="fas fa-history"></i> Historial de Modificaciones (${informe.historial.length})
+                            </summary>
+                            <div style="margin-top: 0.5rem; max-height: 150px; overflow-y: auto; font-size: 0.8rem;">
+                                ${informe.historial.map((h, idx) => `
+                                    <div style="padding: 0.25rem 0; border-bottom: 1px solid var(--border-color);">
+                                        <span style="color: var(--gris-texto);">${formatDate(h.fecha)}</span>
+                                        <span style="margin-left: 0.5rem;">${escapeHtml(h.comentario || 'Modificación de decisión')}</span>
+                                        <span style="margin-left: 0.5rem; font-size: 0.7rem; color: var(--gris-texto);">
+                                            (${h.servicios ? h.servicios.filter(s => s.aprobado).length : 0} aprobados)
+                                        </span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </details>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        
+        // Configurar footer del modal
+        const modalFooter = document.querySelector('#modalDetalleCotizacion .modal-footer');
+        if (modalFooter) {
+            // Limpiar footer
+            modalFooter.innerHTML = '';
+            
+            // Botón cerrar
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'btn-secondary';
+            closeBtn.innerHTML = '<i class="fas fa-times"></i> Cerrar';
+            closeBtn.onclick = () => cerrarModal('modalDetalleCotizacion');
+            modalFooter.appendChild(closeBtn);
+            
+            // Botón imprimir
+            const printBtn = document.createElement('button');
+            printBtn.className = 'btn-primary';
+            printBtn.innerHTML = '<i class="fas fa-print"></i> Imprimir Informe';
+            printBtn.onclick = () => imprimirInformeDecision(id_orden);
+            modalFooter.appendChild(printBtn);
+            
+            // Botón descargar PDF (si hay cotización)
+            if (cotizacion.id) {
+                const pdfBtn = document.createElement('button');
+                pdfBtn.className = 'btn-outline';
+                pdfBtn.innerHTML = '<i class="fas fa-file-pdf"></i> Ver Cotización';
+                pdfBtn.onclick = () => verDetalleCotizacion(cotizacion.id);
+                modalFooter.appendChild(pdfBtn);
+            }
+        }
+        
+        // Abrir el modal
+        abrirModal('modalDetalleCotizacion');
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error al obtener el informe', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// =====================================================
+// IMPRIMIR INFORME DE DECISIÓN
+// =====================================================
+
+function imprimirInformeDecision(id_orden) {
+    const content = document.getElementById('detalleCotizacionContainer');
+    if (!content) return;
+    
+    const ventana = window.open('', '_blank');
+    ventana.document.write(`
+        <html>
+            <head>
+                <title>Informe de Decisión - FURIA MOTOR</title>
+                <style>
+                    * { box-sizing: border-box; }
+                    body { font-family: 'Plus Jakarta Sans', Arial, sans-serif; margin: 0; padding: 20px; background: white; color: #1a1a1a; }
+                    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #C1121F; padding-bottom: 15px; }
+                    .header h1 { color: #C1121F; margin: 0; font-size: 1.5rem; }
+                    .header p { margin: 5px 0 0 0; color: #666; font-size: 0.9rem; }
+                    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+                    th, td { padding: 8px 10px; border: 1px solid #ddd; text-align: left; }
+                    th { background: #f5f5f5; font-weight: 600; }
+                    .total-row { background: #f5f5f5; font-weight: 700; }
+                    .badge-aprobado { display: inline-block; padding: 2px 10px; background: #10B981; color: white; border-radius: 12px; font-size: 0.7rem; }
+                    .badge-rechazado { display: inline-block; padding: 2px 10px; background: #EF4444; color: white; border-radius: 12px; font-size: 0.7rem; }
+                    .badge-pendiente { display: inline-block; padding: 2px 10px; background: #8E8E93; color: white; border-radius: 12px; font-size: 0.7rem; }
+                    .resumen { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 15px 0; }
+                    .resumen-item { text-align: center; padding: 10px; background: #f5f5f5; border-radius: 8px; }
+                    .resumen-item .label { font-size: 0.7rem; color: #666; text-transform: uppercase; }
+                    .resumen-item .value { font-size: 1.2rem; font-weight: 700; }
+                    .estado-badge { display: inline-block; padding: 4px 15px; border-radius: 20px; color: white; font-weight: 700; font-size: 0.8rem; }
+                    .estado-aprobada { background: #10B981; }
+                    .estado-parcial { background: #F59E0B; color: #1a1a1a; }
+                    .estado-rechazada { background: #EF4444; }
+                    .estado-pendiente { background: #8E8E93; }
+                    .footer { margin-top: 30px; text-align: center; font-size: 0.7rem; color: #999; border-top: 1px solid #ddd; padding-top: 15px; }
+                    .motivo { background: #fee2e2; padding: 10px; border-radius: 8px; margin: 10px 0; }
+                    @media print {
+                        .no-print { display: none; }
+                        body { margin: 0; padding: 10px; }
+                        .resumen-item { background: #f5f5f5; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>FURIA MOTOR COMPANY SRL</h1>
+                    <p>Informe de Decisión del Cliente</p>
+                    <p style="font-size: 0.8rem;">Fecha: ${new Date().toLocaleDateString('es-BO')}</p>
+                </div>
+                ${content.innerHTML}
+                <div class="footer">
+                    <p>Este informe es generado automáticamente por FURIA MOTOR COMPANY SRL</p>
+                    <p>Documento válido para fines de seguimiento de la orden de trabajo</p>
+                </div>
+                <script>
+                    window.onload = function() { window.print(); }
+                <\/script>
+            </body>
+        </html>
+    `);
+    ventana.document.close();
+}
+// =====================================================
+// CARGAR PREVIEW DE FOTO EN COMPRA DIRECTA (CON PROXY)
+// =====================================================
+
+async function cargarPreviewFotoCompra(index, fotoUrl) {
+    if (!fotoUrl) {
+        const previewSpan = document.getElementById(`fotoPreviewCompra_${index}`);
+        if (previewSpan) previewSpan.innerHTML = '';
+        return;
+    }
+    
+    const previewSpan = document.getElementById(`fotoPreviewCompra_${index}`);
+    if (!previewSpan) return;
+    
+    // Mostrar loader en el preview
+    previewSpan.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+            <i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);font-size:14px;"></i>
+        </div>
+    `;
+    
+    try {
+        const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(fotoUrl)}`;
+        const response = await fetch(proxyUrl, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            const img = new Image();
+            img.onload = function() {
+                previewSpan.innerHTML = `
+                    <div class="foto-preview-container" style="position:relative;display:inline-block;">
+                        <img src="${data.base64}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);">
+                        <button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemCompra(${index})" 
+                                style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+            };
+            img.onerror = function() {
+                previewSpan.innerHTML = `
+                    <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+                        <i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:14px;"></i>
+                    </div>
+                `;
+            };
+            img.src = data.base64;
+        } else {
+            previewSpan.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+                    <i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:14px;"></i>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error cargando preview:', error);
+        previewSpan.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
+                <i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:14px;"></i>
+            </div>
+        `;
+    }
+}
 // =====================================================
 // FUNCIÓN PARA VER FOTO AMPLIADA (JEFE DE TALLER)
 // =====================================================
@@ -4314,6 +5059,7 @@ function verFotoAmpliadaJefeTaller(url) {
         return;
     }
     
+    // Crear modal si no existe
     let modal = document.getElementById('modalFotoAmpliadaJefeTaller');
     if (!modal) {
         const modalHtml = `
@@ -4382,11 +5128,8 @@ function descargarFotoAmpliadaJefeTaller() {
     
     showToast('✅ Descargando foto...', 'success');
 }
-
 // =====================================================
-// =====================================================
-// 🆕 INFORME DE DECISIÓN DEL CLIENTE
-// =====================================================
+// INFORME DE DECISIÓN DEL CLIENTE
 // =====================================================
 
 async function verInformeDecisionCliente(id_orden) {
@@ -4416,7 +5159,6 @@ async function verInformeDecisionCliente(id_orden) {
             serviciosHtml = servicios.todos.map(serv => {
                 const esAprobado = serv.estado === 'aprobado';
                 const icono = esAprobado ? 'fa-check-circle' : 'fa-times-circle';
-                const color = esAprobado ? 'var(--verde-exito)' : 'var(--rojo-primario)';
                 const badgeText = esAprobado ? '✅ APROBADO' : '❌ RECHAZADO';
                 const badgeColor = esAprobado ? 'background: var(--verde-exito);' : 'background: var(--rojo-primario);';
                 
@@ -4703,147 +5445,10 @@ function imprimirInformeDecision(id_orden) {
     `);
     ventana.document.close();
 }
-
-// =====================================================
-// FUNCIONES DE TAB Y EVENTOS
-// =====================================================
-
-function setupTabs() {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const tabId = this.getAttribute('data-tab');
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            this.classList.add('active');
-            document.getElementById(tabId)?.classList.add('active');
-            
-            if (tabId === 'tab-solicitar-compra') {
-                cargarSolicitudesRepuestosTecnico();
-            }
-        });
-    });
-}
-
-function setupEventListeners() {
-    document.getElementById('enviarCotizacionBtn')?.addEventListener('click', enviarCotizacionCliente);
-    document.getElementById('btnAgregarServicioCotizacion')?.addEventListener('click', agregarServicioCotizable);
-    document.getElementById('btnAgregarItemSolicitud')?.addEventListener('click', agregarItemSolicitud);
-    document.getElementById('saveSolicitudModal')?.addEventListener('click', guardarSolicitudCotizacion);
-    
-    document.getElementById('refreshSolicitarBtn')?.addEventListener('click', () => cargarDatosIniciales());
-    document.getElementById('refreshCotizacionBtn')?.addEventListener('click', () => cargarDatosIniciales());
-    document.getElementById('refreshHistorialBtn')?.addEventListener('click', cargarHistorialCotizaciones);
-    document.getElementById('btnHistorialCotizaciones')?.addEventListener('click', () => {
-        cargarHistorialCotizaciones().then(() => abrirModal('modalHistorialCotizaciones'));
-    });
-    document.getElementById('btnNuevaSolicitudCotizacion')?.addEventListener('click', () => {
-        showToast('Selecciona una orden desde la lista', 'info');
-    });
-    
-    document.getElementById('refreshSolicitudesTecnico')?.addEventListener('click', () => {
-        cargarSolicitudesRepuestosTecnico();
-    });
-    document.getElementById('filtroEstadoRepuestoTecnico')?.addEventListener('change', () => cargarSolicitudesRepuestosTecnico());
-    document.getElementById('searchRepuestoTecnico')?.addEventListener('input', () => cargarSolicitudesRepuestosTecnico());
-    
-    document.getElementById('filtroEstadoCotizacionSolicitar')?.addEventListener('change', () => renderOrdenesSolicitarCotizacion());
-    document.getElementById('searchOrdenSolicitar')?.addEventListener('input', () => renderOrdenesSolicitarCotizacion());
-    document.getElementById('filtroEstadoCotizacionCliente')?.addEventListener('change', () => renderOrdenesCotizacionCliente());
-    document.getElementById('searchCotizacionCliente')?.addEventListener('input', () => renderOrdenesCotizacionCliente());
-    document.getElementById('searchHistorial')?.addEventListener('input', () => renderHistorialCotizaciones());
-    document.getElementById('filtroEstadoHistorial')?.addEventListener('change', () => renderHistorialCotizaciones());
-    
-    document.getElementById('btnNuevaSolicitudCompraDirecta')?.addEventListener('click', abrirModalNuevaSolicitudCompraDirecta);
-    document.getElementById('btnAgregarItemCompraDirecta')?.addEventListener('click', agregarItemCompraDirecta);
-    document.getElementById('btnConfirmarCompraDirecta')?.addEventListener('click', confirmarCompraDirecta);
-    
-    document.querySelectorAll('.modal').forEach(modal => {
-        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
-    });
-}
-
-async function cargarUsuarioActual() {
-    try {
-        let token = localStorage.getItem('furia_token') || localStorage.getItem('token');
-        if (!token) { 
-            window.location.href = window.API_BASE_URL + '/'; 
-            return null; 
-        }
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const userData = JSON.parse(localStorage.getItem('furia_user') || '{}');
-        currentUser = { 
-            id: payload.user?.id || payload.id || userData?.id, 
-            nombre: payload.user?.nombre || payload.nombre || userData?.nombre || 'Usuario', 
-            roles: payload.user?.roles || payload.roles || userData?.roles || [] 
-        };
-        currentUserRoles = currentUser.roles || [];
-        
-        const tieneRolJefeTaller = currentUserRoles.some(rol => 
-            rol === 'jefe_taller' || rol === 'jefe_taller_principal' || rol === 'admin'
-        );
-        
-        if (!tieneRolJefeTaller) { 
-            showToast('No tienes permisos para acceder a esta sección', 'error'); 
-            setTimeout(() => { window.location.href = window.API_BASE_URL + '/'; }, 2000); 
-            return null; 
-        }
-        
-        const fechaElement = document.getElementById('currentDate');
-        if (fechaElement) {
-            fechaElement.innerHTML = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
-        }
-        console.log('✅ Usuario autenticado:', currentUser.nombre);
-        return currentUser;
-    } catch (error) { 
-        console.error('Error al cargar usuario:', error);
-        window.location.href = window.API_BASE_URL + '/'; 
-        return null; 
-    }
-}
-
-async function cargarDatosIniciales() {
-    mostrarLoading(true);
-    try {
-        await Promise.all([
-            cargarOrdenesDiagnosticoAprobado(),
-            cargarOrdenesParaCotizar(),
-            cargarSolicitudesCotizacion(),
-            cargarCotizacionesMap(),
-            cargarSolicitudesCompra(),
-            cargarEncargadosRepuestos(),
-            cargarHistorialCotizaciones(),
-            cargarSolicitudesRepuestosTecnico()
-        ]);
-    } catch (error) {
-        console.error('Error cargando datos:', error);
-        showToast('Error al cargar los datos', 'error');
-    } finally {
-        mostrarLoading(false);
-    }
-}
-
-function logout() { 
-    localStorage.clear(); 
-    sessionStorage.clear(); 
-    window.location.href = window.API_BASE_URL + '/'; 
-}
-
-async function inicializar() {
-    console.log('🚀 Inicializando cotizaciones.js versión 7.0');
-    const user = await cargarUsuarioActual();
-    if (!user) return;
-    await cargarDatosIniciales();
-    setupTabs();
-    setupEventListeners();
-    console.log('✅ cotizaciones.js inicializado correctamente');
-}
-
 // =====================================================
 // EXPORTAR FUNCIONES GLOBALES
 // =====================================================
-
-window.verInformeDecisionCliente = verInformeDecisionCliente;
-window.imprimirInformeDecision = imprimirInformeDecision;
+// Agregar junto a las otras exportaciones
 window.cargarPreviewFotoCompra = cargarPreviewFotoCompra;
 window.abrirModalFotosSolicitud = abrirModalFotosSolicitud;
 window.cerrarModalFotosSolicitud = cerrarModalFotosSolicitud;
@@ -4887,7 +5492,11 @@ window.eliminarItemCompraDirecta = eliminarItemCompraDirecta;
 window.subirFotoItemCompra = subirFotoItemCompra;
 window.eliminarFotoItemCompra = eliminarFotoItemCompra;
 window.verificarDiasGuardados = verificarDiasGuardados;
+// Agregar junto a las otras exportaciones
+window.verInformeDecisionCliente = verInformeDecisionCliente;
+window.imprimirInformeDecision = imprimirInformeDecision;
 
+// 🆕 Exportar funciones de servicios
 window.abrirModalSolicitudCotizacion = abrirModalSolicitudCotizacion;
 window.toggleServicioAcordeon = toggleServicioAcordeon;
 window.agregarItemServicio = agregarItemServicio;

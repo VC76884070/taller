@@ -1,7 +1,7 @@
 // =====================================================
 // AVANCE.JS - TÉCNICO MECÁNICO
 // REGISTRO DE AVANCES DE TRABAJO
-// VERSIÓN CORREGIDA - PREVIEW FUNCIONANDO
+// VERSIÓN COMPLETA - CON PREVIEW FUNCIONANDO
 // =====================================================
 
 // =====================================================
@@ -96,6 +96,114 @@ function mostrarLoading(mostrar) {
     const overlay = document.getElementById('loadingOverlay');
     if (overlay) {
         overlay.style.display = mostrar ? 'flex' : 'none';
+    }
+}
+
+// =====================================================
+// 🔥 FUNCIÓN PARA CARGAR IMAGEN CON PROXY (REGLA DE ORO)
+// =====================================================
+
+async function cargarImagenProxy(url, imgElement, loaderElement = null) {
+    if (!url || url === 'null' || url === '' || url === 'undefined') {
+        if (imgElement) imgElement.style.display = 'none';
+        return null;
+    }
+
+    // Mostrar loader
+    if (loaderElement) {
+        loaderElement.style.display = 'flex';
+        loaderElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
+    }
+    if (imgElement) {
+        imgElement.style.display = 'none';
+        imgElement.style.opacity = '0';
+    }
+
+    try {
+        const tokenActual = getToken();
+        if (!tokenActual) {
+            throw new Error('No hay token de autenticación');
+        }
+
+        const proxyUrl = `${API_URL}/proxy-imagen-repuesto?url=${encodeURIComponent(url)}`;
+        
+        const response = await fetch(proxyUrl, {
+            headers: {
+                'Authorization': `Bearer ${tokenActual}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.success && data.base64) {
+            // Pre-cargar la imagen antes de mostrarla
+            const nuevaImg = new Image();
+            return new Promise((resolve) => {
+                nuevaImg.onload = function() {
+                    if (imgElement) {
+                        imgElement.src = data.base64;
+                        imgElement.style.display = 'block';
+                        imgElement.style.opacity = '1';
+                        imgElement.setAttribute('data-loaded', 'true');
+                    }
+                    if (loaderElement) loaderElement.style.display = 'none';
+                    resolve(data.base64);
+                };
+                nuevaImg.onerror = function() {
+                    if (loaderElement) {
+                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al cargar';
+                        loaderElement.style.display = 'flex';
+                    }
+                    resolve(null);
+                };
+                nuevaImg.src = data.base64;
+            });
+        } else {
+            if (loaderElement) {
+                loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> No se pudo cargar';
+                loaderElement.style.display = 'flex';
+            }
+            return null;
+        }
+    } catch (error) {
+        console.error('Error cargando imagen:', error);
+        if (loaderElement) {
+            loaderElement.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${error.message}`;
+            loaderElement.style.display = 'flex';
+        }
+        return null;
+    }
+}
+
+// =====================================================
+// FUNCIÓN PARA ACTUALIZAR PREVIEW DE FOTO CON PROXY
+// =====================================================
+
+async function actualizarPreviewConProxy(index, url) {
+    const preview = document.getElementById(`preview_${index}`);
+    if (!preview) return;
+
+    // Mostrar loader en el preview
+    preview.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;"><i class="fas fa-spinner fa-spin" style="font-size:1.5rem;color:var(--gris-texto);"></i></div>';
+    preview.classList.add('has-image');
+
+    try {
+        const base64 = await cargarImagenProxy(url);
+        if (base64) {
+            preview.style.backgroundImage = `url('${base64}')`;
+            preview.style.backgroundSize = 'cover';
+            preview.style.backgroundPosition = 'center';
+            preview.innerHTML = '';
+        } else {
+            preview.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:2rem;"></i>';
+        }
+    } catch (error) {
+        console.error('Error actualizando preview:', error);
+        preview.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:2rem;"></i>';
     }
 }
 
@@ -442,7 +550,7 @@ function configurarSubidaFotos() {
 }
 
 // =====================================================
-// ✅ PROCESAR FOTO - CON PREVIEW CORREGIDO
+// 🔥 PROCESAR FOTO - CON PREVIEW LOCAL INMEDIATO
 // =====================================================
 
 async function procesarFoto(index, event) {
@@ -464,18 +572,11 @@ async function procesarFoto(index, event) {
     reader.onload = function(e) {
         const preview = document.getElementById(`preview_${index}`);
         if (preview) {
-            // Guardar la imagen local como fondo
             preview.style.backgroundImage = `url('${e.target.result}')`;
             preview.style.backgroundSize = 'cover';
             preview.style.backgroundPosition = 'center';
             preview.classList.add('has-image');
             preview.innerHTML = '';
-            
-            // ✅ GUARDAR LA IMAGEN LOCAL EN LOS DATOS PARA QUE NO SE PIERDA
-            if (!fotosData[index]) {
-                fotosData[index] = {};
-            }
-            fotosData[index].localPreview = e.target.result;
         }
         
         // ✅ 2. Mostrar círculo de progreso con 0%
@@ -506,7 +607,7 @@ async function procesarFoto(index, event) {
 }
 
 // =====================================================
-// ✅ PROCESAR COLA DE SUBIDA - CON PREVIEW CORREGIDO
+// 🔥 PROCESAR COLA DE SUBIDA - CON PREVIEW CORREGIDO
 // =====================================================
 
 async function procesarCola() {
@@ -543,7 +644,7 @@ async function procesarCola() {
         const result = await subirFotoADrive(file, codigo_orden);
 
         if (result.url) {
-            // ✅ SUBIDA EXITOSA - ACTUALIZAR PREVIEW CON URL DE DRIVE
+            // ✅ SUBIDA EXITOSA
             actualizarCirculoProgreso(index, 100);
             
             const comentarioInput = document.getElementById(`comentario_${index}`);
@@ -553,20 +654,8 @@ async function procesarCola() {
                 comentario: comentarioInput ? comentarioInput.value : ''
             };
 
-            // ✅ ACTUALIZAR PREVIEW CON URL DE DRIVE
-            const preview = document.getElementById(`preview_${index}`);
-            if (preview) {
-                // Si la imagen es de Google Drive, usar el proxy
-                let imageUrl = result.url;
-                if (imageUrl.includes('drive.google.com')) {
-                    imageUrl = `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(result.url)}`;
-                }
-                preview.style.backgroundImage = `url('${imageUrl}')`;
-                preview.style.backgroundSize = 'cover';
-                preview.style.backgroundPosition = 'center';
-                preview.classList.add('has-image');
-                preview.innerHTML = '';
-            }
+            // ✅ ACTUALIZAR PREVIEW CON PROXY (REGLAS DE ORO)
+            await actualizarPreviewConProxy(index, result.url);
 
             // ✅ OCULTAR LOADING Y CÍRCULO
             const loading = document.getElementById(`loading_${index}`);
@@ -582,19 +671,6 @@ async function procesarCola() {
             // ❌ ERROR EN SUBIDA - MANTENER PREVIEW LOCAL
             ocultarCirculoProgreso(index);
             
-            // ✅ MANTENER EL PREVIEW LOCAL EN CASO DE ERROR
-            const preview = document.getElementById(`preview_${index}`);
-            if (preview && fotosData[index] && fotosData[index].localPreview) {
-                preview.style.backgroundImage = `url('${fotosData[index].localPreview}')`;
-                preview.style.backgroundSize = 'cover';
-                preview.style.backgroundPosition = 'center';
-                preview.classList.add('has-image');
-                preview.innerHTML = '';
-            } else {
-                preview.classList.add('has-error');
-                preview.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--rojo-primario); font-size: 2rem;"></i><span style="color: var(--rojo-primario);">Error</span>';
-            }
-            
             const loading = document.getElementById(`loading_${index}`);
             if (loading) loading.style.display = 'none';
             showToast(`Error al subir foto ${index + 1}`, 'error');
@@ -602,19 +678,6 @@ async function procesarCola() {
     } catch (error) {
         console.error('Error subiendo foto:', error);
         ocultarCirculoProgreso(index);
-        
-        // ✅ MANTENER EL PREVIEW LOCAL EN CASO DE ERROR
-        const preview = document.getElementById(`preview_${index}`);
-        if (preview && fotosData[index] && fotosData[index].localPreview) {
-            preview.style.backgroundImage = `url('${fotosData[index].localPreview}')`;
-            preview.style.backgroundSize = 'cover';
-            preview.style.backgroundPosition = 'center';
-            preview.classList.add('has-image');
-            preview.innerHTML = '';
-        } else {
-            preview.classList.add('has-error');
-            preview.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--rojo-primario); font-size: 2rem;"></i><span style="color: var(--rojo-primario);">Error</span>';
-        }
         
         const loading = document.getElementById(`loading_${index}`);
         if (loading) loading.style.display = 'none';
@@ -779,7 +842,7 @@ async function subirFotoADrive(file, codigo_orden) {
 }
 
 // =====================================================
-// CARGAR AVANCE PARA ACTUALIZAR
+// 🔥 CARGAR AVANCE PARA ACTUALIZAR - CON PREVIEW CORREGIDO
 // =====================================================
 
 window.cargarAvanceParaActualizar = async function(avanceId) {
@@ -809,19 +872,8 @@ window.cargarAvanceParaActualizar = async function(avanceId) {
                 comentario: foto.comentario || ''
             };
             
-            // ✅ ACTUALIZAR PREVIEW CON LA URL DE DRIVE
-            const preview = document.getElementById(`preview_${i}`);
-            if (preview) {
-                let imageUrl = foto.url;
-                if (imageUrl.includes('drive.google.com')) {
-                    imageUrl = `/tecnico/proxy-imagen-repuesto?url=${encodeURIComponent(foto.url)}`;
-                }
-                preview.style.backgroundImage = `url('${imageUrl}')`;
-                preview.style.backgroundSize = 'cover';
-                preview.style.backgroundPosition = 'center';
-                preview.classList.add('has-image');
-                preview.innerHTML = '';
-            }
+            // ✅ ACTUALIZAR PREVIEW CON PROXY (REGLAS DE ORO)
+            await actualizarPreviewConProxy(i, foto.url);
             
             const comentarioInput = document.getElementById(`comentario_${i}`);
             if (comentarioInput) {
@@ -988,15 +1040,111 @@ window.verDetalleAvance = async function(avanceId) {
     abrirModal('modalDetalleAvance');
 };
 
-window.verFotoAmpliada = function(url) {
-    document.getElementById('fotoAmpliada').src = url;
-    const modal = document.getElementById('modalFoto');
-    if (modal) modal.classList.add('show');
+// =====================================================
+// VER FOTO AMPLIADA - CON PROXY (REGLAS DE ORO)
+// =====================================================
+
+window.verFotoAmpliada = async function(url) {
+    if (!url) return;
+    
+    // Crear modal si no existe
+    let modal = document.getElementById('fotoAmpliadaModal');
+    if (!modal) {
+        const modalHtml = `
+            <div class="modal" id="fotoAmpliadaModal" onclick="cerrarFotoAmpliadaModal()">
+                <div class="modal-content" style="max-width: 800px; background: var(--bg-card);" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-image"></i> Foto Ampliada</h3>
+                        <button class="modal-close" onclick="cerrarFotoAmpliadaModal()">&times;</button>
+                    </div>
+                    <div class="modal-body" style="display:flex;justify-content:center;align-items:center;padding:1.5rem;background:var(--negro);min-height:300px;position:relative;">
+                        <div id="fotoAmpliadaLoader" style="position:absolute;color:white;font-size:1.2rem;z-index:5;">
+                            <i class="fas fa-spinner fa-spin"></i> Cargando...
+                        </div>
+                        <img id="fotoAmpliadaImg" src="" alt="Foto ampliada" loading="lazy" 
+                             style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:var(--radius-md);display:none;">
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="cerrarFotoAmpliadaModal()">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        modal = document.getElementById('fotoAmpliadaModal');
+    }
+    
+    const img = document.getElementById('fotoAmpliadaImg');
+    const loader = document.getElementById('fotoAmpliadaLoader');
+    
+    if (!img) return;
+    
+    // Resetear estados
+    img.style.display = 'none';
+    img.src = '';
+    if (loader) {
+        loader.style.display = 'flex';
+        loader.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
+    }
+    
+    abrirModal('fotoAmpliadaModal');
+    
+    try {
+        const tokenActual = getToken();
+        if (!tokenActual) {
+            throw new Error('No hay token de autenticación');
+        }
+        
+        const proxyUrl = `${API_URL}/proxy-imagen-repuesto?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl, {
+            headers: {
+                'Authorization': `Bearer ${tokenActual}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            // Pre-cargar la imagen
+            const nuevaImg = new Image();
+            nuevaImg.onload = function() {
+                img.src = data.base64;
+                img.style.display = 'block';
+                if (loader) loader.style.display = 'none';
+            };
+            nuevaImg.onerror = function() {
+                if (loader) {
+                    loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al cargar imagen';
+                    loader.style.display = 'flex';
+                }
+                showToast('Error al cargar la imagen', 'error');
+            };
+            nuevaImg.src = data.base64;
+        } else {
+            throw new Error(data.error || 'Error al obtener la imagen');
+        }
+    } catch (error) {
+        console.error('Error cargando foto ampliada:', error);
+        if (loader) {
+            loader.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${error.message}`;
+            loader.style.display = 'flex';
+        }
+        showToast('Error al cargar la imagen', 'error');
+    }
 };
 
-function cerrarModalFoto() {
-    const modal = document.getElementById('modalFoto');
+function cerrarFotoAmpliadaModal() {
+    const modal = document.getElementById('fotoAmpliadaModal');
     if (modal) modal.classList.remove('show');
+    const img = document.getElementById('fotoAmpliadaImg');
+    if (img) {
+        img.src = '';
+        img.style.display = 'none';
+    }
 }
 
 // =====================================================
@@ -1105,7 +1253,7 @@ window.cerrarSesion = cerrarSesion;
 window.cerrarModal = cerrarModal;
 window.verDetalleAvance = verDetalleAvance;
 window.verFotoAmpliada = verFotoAmpliada;
-window.cerrarModalFoto = cerrarModalFoto;
+window.cerrarFotoAmpliadaModal = cerrarFotoAmpliadaModal;
 window.eliminarFoto = eliminarFoto;
 window.cargarAvanceParaActualizar = cargarAvanceParaActualizar;
 

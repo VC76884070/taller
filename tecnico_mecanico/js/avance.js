@@ -1,7 +1,7 @@
 // =====================================================
 // AVANCE.JS - TÉCNICO MECÁNICO
 // REGISTRO DE AVANCES DE TRABAJO
-// VERSIÓN COMPLETA - CON CARGA EN COLA Y PREVIEW
+// VERSIÓN COMPLETA - CON PREVIEW INMEDIATO Y CÍRCULO DE PROGRESO
 // =====================================================
 
 // =====================================================
@@ -335,7 +335,7 @@ function limpiarPreviewLocal(index) {
     const preview = document.getElementById(`preview_${index}`);
     if (preview) {
         preview.style.backgroundImage = '';
-        preview.classList.remove('has-image');
+        preview.classList.remove('has-image', 'has-error');
         preview.innerHTML = '<i class="fas fa-plus-circle"></i><span>Foto ' + (index + 1) + '</span>';
     }
     
@@ -343,7 +343,16 @@ function limpiarPreviewLocal(index) {
     if (input) input.value = '';
     
     const loading = document.getElementById(`loading_${index}`);
-    if (loading) loading.style.display = 'none';
+    if (loading) {
+        loading.style.display = 'none';
+        loading.innerHTML = '';
+    }
+    
+    const progressCircle = document.getElementById(`progress_${index}`);
+    if (progressCircle) {
+        progressCircle.style.display = 'none';
+        progressCircle.textContent = '';
+    }
     
     const removeBtn = document.querySelector(`.foto-upload-item[data-index="${index}"] .btn-remove-foto`);
     if (removeBtn) removeBtn.style.display = 'none';
@@ -378,7 +387,7 @@ function resetearBotonesFormulario() {
 }
 
 // =====================================================
-// CONFIGURAR SUBIDA DE FOTOS CON SOPORTE PARA CÁMARA Y PREVIEW
+// CONFIGURAR SUBIDA DE FOTOS CON SOPORTE PARA CÁMARA
 // =====================================================
 
 function configurarSubidaFotos() {
@@ -390,7 +399,7 @@ function configurarSubidaFotos() {
         const newInput = input.cloneNode(true);
         input.parentNode.replaceChild(newInput, input);
         
-        // ✅ Asegurar que capture esté presente (por si se perdió al clonar)
+        // ✅ Asegurar que capture esté presente
         if (!newInput.hasAttribute('capture') && !newInput.getAttribute('capture')) {
             newInput.setAttribute('capture', 'environment');
         }
@@ -400,7 +409,7 @@ function configurarSubidaFotos() {
 }
 
 // =====================================================
-// PROCESAR FOTO - CON PREVIEW LOCAL Y CARGA EN COLA
+// PROCESAR FOTO - CON PREVIEW INMEDIATO Y CÍRCULO DE PROGRESO
 // =====================================================
 
 async function procesarFoto(index, event) {
@@ -417,7 +426,7 @@ async function procesarFoto(index, event) {
         return;
     }
 
-    // ✅ PREVIEW LOCAL INMEDIATO
+    // ✅ 1. PREVIEW LOCAL INMEDIATO (SIN ESPERAR SUBIDA)
     const reader = new FileReader();
     reader.onload = function(e) {
         const preview = document.getElementById(`preview_${index}`);
@@ -428,31 +437,40 @@ async function procesarFoto(index, event) {
             preview.classList.add('has-image');
             preview.innerHTML = '';
         }
-        // Mostrar loading
+        
+        // ✅ 2. Mostrar círculo de progreso con 0%
+        const progressCircle = document.getElementById(`progress_${index}`);
+        if (progressCircle) {
+            progressCircle.style.display = 'flex';
+            progressCircle.textContent = '0%';
+        }
+        
+        // ✅ 3. Mostrar loading sutil
         const loading = document.getElementById(`loading_${index}`);
         if (loading) {
             loading.style.display = 'flex';
+            loading.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Subiendo...</span>';
         }
     };
     reader.readAsDataURL(file);
 
-    // ✅ Agregar a la cola de subida
+    // ✅ 4. Agregar a la cola de subida
     colaSubida.push({
         index: index,
         file: file
     });
 
-    // ✅ Mostrar barra de progreso
+    // ✅ 5. Mostrar barra de progreso general
     mostrarBarraProgreso();
 
-    // ✅ Iniciar procesamiento en cola si no está en curso
+    // ✅ 6. Iniciar procesamiento en cola si no está en curso
     if (!subiendo) {
         procesarCola();
     }
 }
 
 // =====================================================
-// PROCESAR COLA DE SUBIDA (SECUENCIAL)
+// PROCESAR COLA DE SUBIDA (SECUENCIAL) CON ACTUALIZACIÓN DE CÍRCULO
 // =====================================================
 
 async function procesarCola() {
@@ -474,8 +492,6 @@ async function procesarCola() {
         const codigo_orden = await obtenerCodigoOrden(currentOrdenId);
         if (!codigo_orden) {
             showToast('No se pudo obtener el código de la orden', 'error');
-            const loading = document.getElementById(`loading_${index}`);
-            if (loading) loading.style.display = 'none';
             actualizarProgreso();
             procesarCola();
             return;
@@ -491,7 +507,7 @@ async function procesarCola() {
                 comentario: comentarioInput ? comentarioInput.value : ''
             };
 
-            // ✅ PREVIEW CON URL FINAL (DESPUÉS DE SUBIR)
+            // ✅ PREVIEW CON URL FINAL
             const preview = document.getElementById(`preview_${index}`);
             if (preview) {
                 preview.style.backgroundImage = `url('${result.url}')`;
@@ -501,9 +517,15 @@ async function procesarCola() {
                 preview.innerHTML = '';
             }
 
-            // Ocultar loading
+            // ✅ OCULTAR LOADING Y CÍRCULO
             const loading = document.getElementById(`loading_${index}`);
             if (loading) loading.style.display = 'none';
+            
+            const progressCircle = document.getElementById(`progress_${index}`);
+            if (progressCircle) {
+                progressCircle.style.display = 'none';
+                progressCircle.textContent = '';
+            }
 
             const removeBtn = document.querySelector(`.foto-upload-item[data-index="${index}"] .btn-remove-foto`);
             if (removeBtn) removeBtn.style.display = 'block';
@@ -511,31 +533,43 @@ async function procesarCola() {
             fotosSubidasExitosas++;
             showToast(`Foto ${index + 1} subida correctamente a Drive`, 'success');
         } else {
-            // Error en la subida - mostrar error en el preview
+            // ❌ ERROR EN SUBIDA
             const preview = document.getElementById(`preview_${index}`);
             if (preview) {
-                preview.style.backgroundImage = '';
-                preview.classList.remove('has-image');
+                preview.classList.add('has-error');
                 preview.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--rojo-primario); font-size: 2rem;"></i><span style="color: var(--rojo-primario);">Error</span>';
             }
             const loading = document.getElementById(`loading_${index}`);
             if (loading) loading.style.display = 'none';
+            
+            const progressCircle = document.getElementById(`progress_${index}`);
+            if (progressCircle) {
+                progressCircle.style.display = 'none';
+                progressCircle.textContent = '';
+            }
+            
             showToast(`Error al subir foto ${index + 1}`, 'error');
         }
     } catch (error) {
         console.error('Error subiendo foto:', error);
         const preview = document.getElementById(`preview_${index}`);
         if (preview) {
-            preview.style.backgroundImage = '';
-            preview.classList.remove('has-image');
+            preview.classList.add('has-error');
             preview.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--rojo-primario); font-size: 2rem;"></i><span style="color: var(--rojo-primario);">Error</span>';
         }
         const loading = document.getElementById(`loading_${index}`);
         if (loading) loading.style.display = 'none';
+        
+        const progressCircle = document.getElementById(`progress_${index}`);
+        if (progressCircle) {
+            progressCircle.style.display = 'none';
+            progressCircle.textContent = '';
+        }
+        
         showToast(`Error al subir foto ${index + 1}`, 'error');
     }
 
-    // ✅ ACTUALIZAR PROGRESO
+    // ✅ ACTUALIZAR PROGRESO GENERAL
     actualizarProgreso();
 
     // ✅ CONTINUAR CON LA SIGUIENTE FOTO EN COLA
@@ -545,7 +579,7 @@ async function procesarCola() {
 }
 
 // =====================================================
-// MOSTRAR BARRA DE PROGRESO
+// MOSTRAR BARRA DE PROGRESO GENERAL
 // =====================================================
 
 function mostrarBarraProgreso() {
@@ -587,6 +621,16 @@ function actualizarProgreso() {
     if (text) {
         text.textContent = `${porcentaje}% (${completadas}/${total})`;
     }
+    
+    // ✅ ACTUALIZAR CÍRCULOS DE CADA FOTO EN COLA
+    colaSubida.forEach((item, idx) => {
+        const progressIndex = item.index;
+        const progressCircle = document.getElementById(`progress_${progressIndex}`);
+        if (progressCircle) {
+            const progresoIndividual = Math.round(((fotosSubidasExitosas + idx) / total) * 100);
+            progressCircle.textContent = `${Math.min(progresoIndividual, 99)}%`;
+        }
+    });
 }
 
 // =====================================================
@@ -989,7 +1033,7 @@ function setupEventListeners() {
 // =====================================================
 
 async function inicializar() {
-    console.log('🚀 Inicializando avance.js - Versión con carga en cola');
+    console.log('🚀 Inicializando avance.js - Versión con círculo de progreso');
     console.log('📡 API_URL:', API_URL);
 
     const user = await cargarUsuarioActual();

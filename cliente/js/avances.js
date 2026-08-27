@@ -183,10 +183,6 @@ async function cargarVehiculos() {
     }
 }
 
-// =====================================================
-// RENDERIZADO DE CONTENIDO COMPLETO CON PROXY
-// =====================================================
-
 function renderizarContenido() {
     const container = document.getElementById('contenidoDinamico');
     if (!container) return;
@@ -275,13 +271,13 @@ function renderizarContenido() {
         </div>
     `;
 
-    // 🔥 CRUCIAL: Cargar fotos con proxy después de renderizar
-    // Esto permite que las imágenes se carguen con el token de autenticación
-    setTimeout(() => {
-        cargarFotosClienteProxy();
-    }, 300);
+    // 🔥 SOLUCIÓN: Usar requestAnimationFrame + setTimeout para asegurar que el DOM esté listo
+    requestAnimationFrame(() => {
+        setTimeout(() => {
+            cargarFotosClienteProxy();
+        }, 50);
+    });
 }
-
 function actualizarDashboard(totalAvances, totalFotos, ultimoAvance) {
     const totalAvancesEl = document.getElementById('totalAvances');
     const totalFotosEl = document.getElementById('totalFotos');
@@ -348,18 +344,27 @@ function renderizarAvance(avance, index, total) {
     `;
 }
 // =====================================================
-// 🔥 CARGAR FOTOS MINIATURA DEL CLIENTE CON PROXY (CORREGIDO)
+// 🔥 CARGAR FOTOS MINIATURA DEL CLIENTE CON PROXY (VERSIÓN ULTRA ROBUSTA)
 // =====================================================
 
 async function cargarFotosClienteProxy() {
     console.log('🖼️ Cargando miniaturas del cliente con proxy...');
+    
+    // 🔥 Esperar un momento adicional para que el DOM se actualice
+    await new Promise(resolve => setTimeout(resolve, 50));
     
     // 🔥 Buscar TODAS las imágenes con data-url dentro de .foto-mini-card
     const miniaturas = document.querySelectorAll('.foto-mini-card img[data-url]');
     console.log(`📸 Encontradas ${miniaturas.length} miniaturas para cargar`);
     
     if (miniaturas.length === 0) {
-        console.log('⚠️ No se encontraron miniaturas con data-url');
+        console.log('⚠️ No se encontraron miniaturas con data-url. Verificando estructura...');
+        // Debug: mostrar qué hay en el DOM
+        const allImages = document.querySelectorAll('.foto-mini-card img');
+        console.log(`📸 Total de imágenes en .foto-mini-card: ${allImages.length}`);
+        allImages.forEach(img => {
+            console.log(`   - ${img.id}: data-url=${img.getAttribute('data-url')}`);
+        });
         return;
     }
     
@@ -372,14 +377,15 @@ async function cargarFotosClienteProxy() {
         let loader = null;
         
         if (parentCard) {
-            // Buscar cualquier elemento con ID que empiece con "cliente_loader_"
-            loader = parentCard.querySelector('[id^="cliente_loader_"]');
+            // Buscar el loader por clase .loader-mini
+            loader = parentCard.querySelector('.loader-mini');
+            // Si no, buscar por ID
+            if (!loader) {
+                loader = parentCard.querySelector('[id^="cliente_loader_"]');
+            }
         }
         
-        // Si no encuentra por ID, buscar el div con el spinner
-        if (!loader && parentCard) {
-            loader = parentCard.querySelector('.loader-mini');
-        }
+        console.log(`🔍 Procesando ${img.id}: loader=${loader ? '✅ encontrado' : '❌ no encontrado'}, url=${url ? '✅' : '❌'}`);
         
         // 🔥 Función para ocultar loader SIEMPRE
         const ocultarLoader = () => {

@@ -344,27 +344,19 @@ function renderizarAvance(avance, index, total) {
     `;
 }
 // =====================================================
-// 🔥 CARGAR FOTOS MINIATURA DEL CLIENTE CON PROXY (VERSIÓN ULTRA ROBUSTA)
+// 🔥 CARGAR FOTOS MINIATURA - VERSIÓN CON THUMBNAIL DIRECTO
 // =====================================================
 
 async function cargarFotosClienteProxy() {
-    console.log('🖼️ Cargando miniaturas del cliente con proxy...');
+    console.log('🖼️ Cargando miniaturas del cliente...');
     
-    // 🔥 Esperar un momento adicional para que el DOM se actualice
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise(resolve => setTimeout(resolve, 100));
     
-    // 🔥 Buscar TODAS las imágenes con data-url dentro de .foto-mini-card
     const miniaturas = document.querySelectorAll('.foto-mini-card img[data-url]');
-    console.log(`📸 Encontradas ${miniaturas.length} miniaturas para cargar`);
+    console.log(`📸 Encontradas ${miniaturas.length} miniaturas`);
     
     if (miniaturas.length === 0) {
-        console.log('⚠️ No se encontraron miniaturas con data-url. Verificando estructura...');
-        // Debug: mostrar qué hay en el DOM
-        const allImages = document.querySelectorAll('.foto-mini-card img');
-        console.log(`📸 Total de imágenes en .foto-mini-card: ${allImages.length}`);
-        allImages.forEach(img => {
-            console.log(`   - ${img.id}: data-url=${img.getAttribute('data-url')}`);
-        });
+        console.log('⚠️ No hay miniaturas');
         return;
     }
     
@@ -372,30 +364,13 @@ async function cargarFotosClienteProxy() {
         const urlEncoded = img.getAttribute('data-url');
         const url = decodeURIComponent(urlEncoded);
         
-        // 🔥 Buscar el loader en el mismo contenedor .foto-mini-card
         const parentCard = img.closest('.foto-mini-card');
-        let loader = null;
+        let loader = parentCard ? parentCard.querySelector('.loader-mini') : null;
         
-        if (parentCard) {
-            // Buscar el loader por clase .loader-mini
-            loader = parentCard.querySelector('.loader-mini');
-            // Si no, buscar por ID
-            if (!loader) {
-                loader = parentCard.querySelector('[id^="cliente_loader_"]');
-            }
-        }
-        
-        console.log(`🔍 Procesando ${img.id}: loader=${loader ? '✅ encontrado' : '❌ no encontrado'}, url=${url ? '✅' : '❌'}`);
-        
-        // 🔥 Función para ocultar loader SIEMPRE
         const ocultarLoader = () => {
-            if (loader) {
-                loader.style.display = 'none';
-                console.log(`✅ Loader ocultado para: ${img.id}`);
-            }
+            if (loader) loader.style.display = 'none';
         };
         
-        // Si no hay URL válida, ocultar todo
         if (!url || url === 'null' || url === '' || url === 'undefined') {
             img.style.display = 'none';
             ocultarLoader();
@@ -403,53 +378,121 @@ async function cargarFotosClienteProxy() {
         }
         
         try {
-            const token = getToken();
-            if (!token) {
-                throw new Error('No hay token');
+            // 🔥 EXTRAER FILE_ID DE LA URL DE DRIVE
+            let fileId = null;
+            
+            // Patrón 1: ?id=XXX
+            const match1 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+            if (match1) fileId = match1[1];
+            
+            // Patrón 2: /file/d/XXX
+            if (!fileId) {
+                const match2 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+                if (match2) fileId = match2[1];
             }
             
-            const proxyUrl = `${window.API_BASE_URL || ''}/api/cliente/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
-            console.log(`📡 Cargando miniatura: ${img.id}`);
-            
-            const response = await fetch(proxyUrl, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+            // Patrón 3: /d/XXX
+            if (!fileId) {
+                const match3 = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                if (match3) fileId = match3[1];
             }
             
-            const data = await response.json();
+            // Patrón 4: thumbnail?id=XXX
+            if (!fileId) {
+                const match4 = url.match(/thumbnail\?id=([a-zA-Z0-9_-]+)/);
+                if (match4) fileId = match4[1];
+            }
             
-            if (data.success && data.base64) {
-                // Pre-cargar la imagen
-                const nuevaImg = new Image();
+            console.log(`🔍 ${img.id}: fileId=${fileId}`);
+            
+            if (!fileId) {
+                console.warn(`⚠️ No se pudo extraer fileId de: ${url.substring(0, 60)}...`);
+                img.style.display = 'none';
+                ocultarLoader();
+                continue;
+            }
+            
+            // 🔥 USAR THUMBNAIL DIRECTO DE GOOGLE DRIVE (SIN PROXY)
+            const thumbUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`;
+            console.log(`📡 Cargando miniatura: ${img.id} -> thumbnail`);
+            
+            // Cargar la imagen directamente
+            const nuevaImg = new Image();
+            nuevaImg.crossOrigin = 'anonymous';
+            
+            await new Promise((resolve) => {
                 nuevaImg.onload = function() {
-                    img.src = data.base64;
+                    img.src = thumbUrl;
                     img.style.display = 'block';
                     img.style.opacity = '1';
                     ocultarLoader();
                     console.log(`✅ Miniatura cargada: ${img.id}`);
+                    resolve();
                 };
                 nuevaImg.onerror = function() {
-                    console.error(`❌ Error pre-cargando: ${img.id}`);
-                    img.style.display = 'none';
-                    ocultarLoader();
+                    console.warn(`⚠️ Thumbnail falló para ${img.id}, intentando con proxy...`);
+                    // Si thumbnail falla, intentar con el proxy
+                    cargarConProxy(img, url, loader);
+                    resolve();
                 };
-                nuevaImg.src = data.base64;
-            } else {
-                throw new Error(data.error || 'Error al cargar');
-            }
+                // Timeout por si tarda demasiado
+                setTimeout(() => {
+                    if (!img.src) {
+                        console.warn(`⏰ Timeout para ${img.id}`);
+                        cargarConProxy(img, url, loader);
+                        resolve();
+                    }
+                }, 5000);
+                nuevaImg.src = thumbUrl;
+            });
+            
         } catch (error) {
-            console.error(`❌ Error cargando miniatura ${img.id}:`, error);
+            console.error(`❌ Error ${img.id}:`, error);
             img.style.display = 'none';
             ocultarLoader();
         }
     }
     
     console.log('✅ Procesamiento de miniaturas completado');
+}
+
+// =====================================================
+// 🔥 FALLBACK: Cargar con proxy si thumbnail falla
+// =====================================================
+
+async function cargarConProxy(img, url, loader) {
+    const ocultarLoader = () => {
+        if (loader) loader.style.display = 'none';
+    };
+    
+    try {
+        const token = getToken();
+        if (!token) throw new Error('No hay token');
+        
+        const proxyUrl = `${window.API_BASE_URL || ''}/api/cliente/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
+        console.log(`📡 Proxy fallback: ${img.id}`);
+        
+        const response = await fetch(proxyUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.base64) {
+                img.src = data.base64;
+                img.style.display = 'block';
+                img.style.opacity = '1';
+                ocultarLoader();
+                console.log(`✅ Proxy fallback: ${img.id}`);
+                return;
+            }
+        }
+        throw new Error('Proxy falló');
+    } catch (error) {
+        console.warn(`⚠️ Proxy fallback falló para ${img.id}:`, error.message);
+        img.style.display = 'none';
+        ocultarLoader();
+    }
 }
 // =====================================================
 // CARGAR DATOS OPTIMIZADO

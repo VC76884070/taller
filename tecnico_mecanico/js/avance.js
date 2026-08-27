@@ -959,20 +959,36 @@ async function subirFotoADrive(file, codigo_orden) {
 }
 
 // =====================================================
-// 🔥 CARGAR AVANCE PARA ACTUALIZAR - CON PREVIEW CORREGIDO
+// 🔥 CARGAR AVANCE PARA ACTUALIZAR - VERSIÓN MEJORADA
 // =====================================================
 
 window.cargarAvanceParaActualizar = async function(avanceId) {
     const avance = avancesActuales.find(a => a.id === avanceId);
-    if (!avance) return;
+    if (!avance) {
+        showToast('Avance no encontrado', 'error');
+        return;
+    }
     
     console.log('📝 Cargando avance para actualizar:', avance);
     
-    if (avance.estado === 'pendiente') {
-        showToast('⚠️ Este avance está pendiente de revisión. Al actualizarlo, se notificará nuevamente al jefe de taller.', 'warning');
-    } else if (avance.estado === 'rechazado') {
-        showToast('📝 Este avance fue rechazado. Corrige las observaciones y vuelve a enviar.', 'info');
+    // ✅ VERIFICAR ESTADO
+    if (avance.estado === 'aprobado') {
+        showToast('⚠️ Este avance ya fue aprobado. No se puede modificar.', 'warning');
+        return;
     }
+    
+    let mensaje = '';
+    if (avance.estado === 'pendiente') {
+        mensaje = '⚠️ Este avance está pendiente de revisión. Al actualizarlo, se notificará nuevamente al jefe de taller.';
+    } else if (avance.estado === 'rechazado') {
+        mensaje = '📝 Este avance fue rechazado. Corrige las observaciones y vuelve a enviar.';
+        if (avance.comentario_revision) {
+            mensaje += `\n\nComentario: ${avance.comentario_revision}`;
+        }
+    } else {
+        mensaje = '📝 Actualizando avance...';
+    }
+    showToast(mensaje, 'info');
     
     limpiarFormulario();
     
@@ -983,13 +999,11 @@ window.cargarAvanceParaActualizar = async function(avanceId) {
         for (let i = 0; i < avance.fotos.length && i < 10; i++) {
             const foto = avance.fotos[i];
             
-            // ✅ GUARDAR LA URL EN fotosData
             fotosData[i] = {
                 url: foto.url,
                 comentario: foto.comentario || ''
             };
             
-            // ✅ ACTUALIZAR PREVIEW CON PROXY (REGLAS DE ORO)
             await actualizarPreviewConProxy(i, foto.url);
             
             const comentarioInput = document.getElementById(`comentario_${i}`);
@@ -1002,6 +1016,7 @@ window.cargarAvanceParaActualizar = async function(avanceId) {
         }
     }
     
+    // ✅ ACTUALIZAR BOTONES
     const guardarBtn = document.getElementById('btnGuardarAvance');
     const enviarBtn = document.getElementById('btnEnviarRevision');
     
@@ -1019,7 +1034,7 @@ window.cargarAvanceParaActualizar = async function(avanceId) {
 };
 
 // =====================================================
-// GUARDAR AVANCE
+// GUARDAR AVANCE - MODIFICADO PARA PERMITIR ACTUALIZACIONES
 // =====================================================
 
 async function guardarAvance(estado) {
@@ -1030,6 +1045,11 @@ async function guardarAvance(estado) {
         showToast('Debes ingresar un título para el avance', 'warning');
         return;
     }
+
+    // 🔥 IMPORTANTE: Verificar si el avance ya existe (para actualizar)
+    // Si hay un avance existente para esta orden, debemos usar PUT
+    const avanceExistente = avancesActuales.find(a => a.id_orden_trabajo == currentOrdenId);
+    const esActualizacion = avanceExistente && avanceEditandoId;
 
     const fotosArray = Object.entries(fotosData)
         .filter(([_, data]) => data.url)
@@ -1047,9 +1067,8 @@ async function guardarAvance(estado) {
     mostrarLoading(true);
 
     try {
-        let method = avanceEditandoId ? 'PUT' : 'POST';
+        let method = 'POST';
         let url = `${API_URL}/avances`;
-        
         const body = {
             id_orden_trabajo: parseInt(currentOrdenId),
             titulo: titulo,
@@ -1057,11 +1076,14 @@ async function guardarAvance(estado) {
             fotos: fotosArray,
             estado: estado === 'pendiente' ? 'pendiente' : 'borrador'
         };
-        
-        if (avanceEditandoId) {
-            body.id = avanceEditandoId;
+
+        // ✅ SI ES ACTUALIZACIÓN, USAR PUT CON EL ID
+        if (esActualizacion || avanceEditandoId) {
+            method = 'PUT';
+            body.id = avanceEditandoId || avanceExistente.id;
+            console.log('🔄 Actualizando avance existente ID:', body.id);
         }
-        
+
         const response = await fetch(url, {
             method: method,
             headers: getAuthHeaders(),
@@ -1072,7 +1094,7 @@ async function guardarAvance(estado) {
 
         if (data.success) {
             let mensaje = '';
-            if (avanceEditandoId) {
+            if (method === 'PUT') {
                 mensaje = estado === 'pendiente' 
                     ? '✅ Avance actualizado y enviado a revisión' 
                     : '📝 Avance actualizado como borrador';
@@ -1386,6 +1408,10 @@ function setupEventListeners() {
         });
     }
 
+    // =====================================================
+    // BOTÓN NUEVO AVANCE - MODIFICADO
+    // =====================================================
+
     const btnNuevoAvance = document.getElementById('btnNuevoAvance');
     if (btnNuevoAvance) {
         btnNuevoAvance.addEventListener('click', () => {
@@ -1394,17 +1420,38 @@ function setupEventListeners() {
                 return;
             }
             
-            if (avancesActuales.length > 0 && !avanceEditandoId) {
-                showToast('⚠️ Ya existe un avance para esta orden. Usa el botón ACTUALIZAR en la tarjeta.', 'warning');
-                return;
-            }
+            // 🔥 VERIFICAR SI YA EXISTE UN AVANCE
+            const avanceExistente = avancesActuales.find(a => a.id_orden_trabajo == currentOrdenId);
             
-            avanceEditandoId = null;
-            resetearBotonesFormulario();
-            limpiarFormulario();
-            configurarSubidaFotos();
-            document.getElementById('formAvance').style.display = 'block';
-            document.getElementById('formAvance').scrollIntoView({ behavior: 'smooth' });
+            if (avanceExistente) {
+                // ✅ SI EL AVANCE ESTÁ APROBADO, NO PERMITIR ACTUALIZAR
+                if (avanceExistente.estado === 'aprobado') {
+                    showToast('⚠️ Este avance ya fue aprobado. No se puede modificar.', 'warning');
+                    return;
+                }
+                
+                // ✅ SI ESTÁ PENDIENTE O RECHAZADO, PREGUNTAR SI QUIERE ACTUALIZAR
+                const mensaje = avanceExistente.estado === 'pendiente'
+                    ? '⚠️ Ya existe un avance pendiente de revisión. ¿Quieres actualizarlo con más fotos?'
+                    : avanceExistente.estado === 'rechazado'
+                    ? '📝 Este avance fue rechazado. ¿Quieres corregirlo y actualizarlo?'
+                    : '⚠️ Ya existe un avance para esta orden. ¿Quieres actualizarlo?';
+                
+                if (!confirm(mensaje)) {
+                    return;
+                }
+                
+                // ✅ CARGAR EL AVANCE PARA ACTUALIZAR
+                cargarAvanceParaActualizar(avanceExistente.id);
+            } else {
+                // ✅ NUEVO AVANCE
+                avanceEditandoId = null;
+                resetearBotonesFormulario();
+                limpiarFormulario();
+                configurarSubidaFotos();
+                document.getElementById('formAvance').style.display = 'block';
+                document.getElementById('formAvance').scrollIntoView({ behavior: 'smooth' });
+            }
         });
     }
 

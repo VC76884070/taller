@@ -713,3 +713,78 @@ def obtener_codigo_orden_avance(current_user, orden_id):
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT: PROXY PARA IMÁGENES DE AVANCES
+# =====================================================
+
+@avance_bp.route('/proxy-imagen-avance', methods=['GET'])
+@tecnico_required
+def proxy_imagen_avance(current_user):
+    """
+    Proxy para imágenes de avances en Google Drive.
+    Recibe una URL de Drive, extrae el file_id, descarga y devuelve en Base64.
+    """
+    url = request.args.get('url')
+    if not url:
+        return jsonify({'success': False, 'error': 'URL no proporcionada'}), 400
+    
+    try:
+        from google_drive import google_drive
+        
+        # Extraer file_id
+        file_id = google_drive.extract_file_id_from_url(url)
+        if not file_id:
+            return jsonify({'success': False, 'error': 'No se pudo extraer el ID'}), 400
+        
+        # Estrategias de descarga
+        urls = [
+            f"https://drive.google.com/thumbnail?id={file_id}&sz=w800",
+            f"https://drive.google.com/uc?export=view&id={file_id}",
+            f"https://drive.google.com/uc?export=download&id={file_id}",
+        ]
+        
+        import requests
+        import base64
+        import re
+        
+        image_data = None
+        mime_type = 'image/jpeg'
+        
+        for download_url in urls:
+            try:
+                response = requests.get(download_url, timeout=30, allow_redirects=True)
+                
+                # Manejar redirecciones de confirmación de Google
+                if 'confirm' in response.url and 'download' in response.url:
+                    confirm_match = re.search(r'confirm=([^&]+)', response.text)
+                    if confirm_match:
+                        confirm_token = confirm_match.group(1)
+                        download_url_confirm = f"{response.url}&confirm={confirm_token}"
+                        response = requests.get(download_url_confirm, timeout=30, allow_redirects=True)
+                
+                if response.status_code == 200:
+                    content_type = response.headers.get('Content-Type', '')
+                    if content_type.startswith('image/') or len(response.content) > 1000:
+                        image_data = response.content
+                        mime_type = content_type if content_type.startswith('image/') else 'image/jpeg'
+                        break
+            except Exception as e:
+                logger.warning(f"Intento fallido con {download_url}: {str(e)}")
+                continue
+        
+        if not image_data:
+            return jsonify({'success': False, 'error': 'No se pudo descargar la imagen'}), 404
+        
+        # Convertir a Base64
+        base64_data = base64.b64encode(image_data).decode('utf-8')
+        
+        return jsonify({
+            'success': True,
+            'base64': f'data:{mime_type};base64,{base64_data}'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error en proxy de imagen de avance: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500

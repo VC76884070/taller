@@ -29,9 +29,7 @@ let fotosSubidasExitosas = 0;
 // =====================================================
 
 function getAuthHeaders() {
-    let token = localStorage.getItem('furia_token');
-    if (!token) token = localStorage.getItem('token');
-    if (!token) token = sessionStorage.getItem('token');
+    let token = getToken();
     return {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -99,17 +97,12 @@ function mostrarLoading(mostrar) {
     }
 }
 
-// =====================================================
-// 🔥 FUNCIÓN PARA CARGAR IMAGEN CON PROXY (REGLA DE ORO)
-// =====================================================
-
 async function cargarImagenProxy(url, imgElement, loaderElement = null) {
     if (!url || url === 'null' || url === '' || url === 'undefined') {
         if (imgElement) imgElement.style.display = 'none';
         return null;
     }
 
-    // Mostrar loader
     if (loaderElement) {
         loaderElement.style.display = 'flex';
         loaderElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
@@ -120,16 +113,17 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
     }
 
     try {
-        const tokenActual = getToken();
-        if (!tokenActual) {
+        const token = getToken();
+        if (!token) {
             throw new Error('No hay token de autenticación');
         }
 
-        const proxyUrl = `${API_URL}/proxy-imagen-repuesto?url=${encodeURIComponent(url)}`;
+        // 🔥 USAR EL NUEVO PROXY DE AVANCE
+        const proxyUrl = `${API_URL}/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
         
         const response = await fetch(proxyUrl, {
             headers: {
-                'Authorization': `Bearer ${tokenActual}`
+                'Authorization': `Bearer ${token}`
             }
         });
 
@@ -140,7 +134,6 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
         const data = await response.json();
 
         if (data.success && data.base64) {
-            // Pre-cargar la imagen antes de mostrarla
             const nuevaImg = new Image();
             return new Promise((resolve) => {
                 nuevaImg.onload = function() {
@@ -148,14 +141,13 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
                         imgElement.src = data.base64;
                         imgElement.style.display = 'block';
                         imgElement.style.opacity = '1';
-                        imgElement.setAttribute('data-loaded', 'true');
                     }
                     if (loaderElement) loaderElement.style.display = 'none';
                     resolve(data.base64);
                 };
                 nuevaImg.onerror = function() {
                     if (loaderElement) {
-                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al cargar';
+                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
                         loaderElement.style.display = 'flex';
                     }
                     resolve(null);
@@ -178,7 +170,6 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
         return null;
     }
 }
-
 // =====================================================
 // FUNCIÓN PARA ACTUALIZAR PREVIEW DE FOTO CON PROXY
 // =====================================================
@@ -379,7 +370,7 @@ async function cargarAvances() {
 }
 
 // =====================================================
-// RENDERIZAR AVANCES
+// RENDERIZAR AVANCES - VERSIÓN CORREGIDA
 // =====================================================
 
 function renderizarAvances() {
@@ -398,11 +389,26 @@ function renderizarAvances() {
     }
 
     container.innerHTML = avancesActuales.map(avance => {
+        // 🔥 GENERAR FOTOS CON IDS ÚNICOS PARA PROXY
         let fotosPreview = '';
         if (avance.fotos && avance.fotos.length > 0) {
-            fotosPreview = avance.fotos.slice(0, 3).map(f => `
-                <img src="${f.url}" class="avance-foto-mini" onclick="event.stopPropagation(); verFotoAmpliada('${f.url}')">
-            `).join('');
+            fotosPreview = avance.fotos.slice(0, 3).map((f, idx) => {
+                const fotoId = `foto_mini_${avance.id}_${idx}`;
+                const loaderId = `loader_mini_${avance.id}_${idx}`;
+                const urlEncoded = encodeURIComponent(f.url);
+                return `
+                    <div style="position:relative;display:inline-block;width:80px;height:80px;border-radius:8px;overflow:hidden;background:var(--gris-oscuro);flex-shrink:0;">
+                        <div id="${loaderId}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--gris-texto);z-index:2;font-size:0.7rem;">
+                            <i class="fas fa-spinner fa-spin"></i>
+                        </div>
+                        <img id="${fotoId}" src="" 
+                             style="width:100%;height:100%;object-fit:cover;display:none;opacity:0;cursor:pointer;"
+                             data-url="${urlEncoded}"
+                             onclick="event.stopPropagation(); verFotoAmpliada('${f.url}')">
+                    </div>
+                `;
+            }).join('');
+            
             if (avance.fotos.length > 3) {
                 fotosPreview += `<span class="avance-foto-mas">+${avance.fotos.length - 3}</span>`;
             }
@@ -467,6 +473,94 @@ function renderizarAvances() {
             </div>
         `;
     }).join('');
+
+    // 🔥 CARGAR FOTOS CON PROXY DESPUÉS DE RENDERIZAR
+    setTimeout(() => {
+        cargarFotosMiniaturasConProxy();
+    }, 100);
+}
+// =====================================================
+// 🔥 CARGAR FOTOS MINIATURA CON PROXY
+// =====================================================
+
+async function cargarFotosMiniaturasConProxy() {
+    const miniaturas = document.querySelectorAll('#listaAvances img[data-url]');
+    
+    for (const img of miniaturas) {
+        const urlEncoded = img.getAttribute('data-url');
+        const url = decodeURIComponent(urlEncoded);
+        
+        // Buscar el loader asociado
+        const loaderId = `loader_${img.id.replace('foto_mini_', 'loader_mini_')}`;
+        const loader = document.getElementById(loaderId);
+        
+        if (!url || url === 'null' || url === '' || url === 'undefined') {
+            if (loader) loader.style.display = 'none';
+            img.style.display = 'none';
+            continue;
+        }
+        
+        try {
+            const token = getToken();
+            if (!token) {
+                throw new Error('No hay token de autenticación');
+            }
+            
+            // 🔥 USAR EL PROXY
+            const proxyUrl = `${API_URL}/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
+            
+            const response = await fetch(proxyUrl, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.base64) {
+                // Pre-cargar antes de asignar
+                const nuevaImg = new Image();
+                nuevaImg.onload = function() {
+                    img.src = data.base64;
+                    img.style.display = 'block';
+                    img.style.opacity = '1';
+                    if (loader) loader.style.display = 'none';
+                };
+                nuevaImg.onerror = function() {
+                    if (loader) {
+                        loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);"></i>';
+                        loader.style.display = 'flex';
+                    }
+                    img.style.display = 'none';
+                };
+                nuevaImg.src = data.base64;
+            } else {
+                throw new Error(data.error || 'Error al cargar imagen');
+            }
+        } catch (error) {
+            console.error('Error cargando miniatura:', error);
+            if (loader) {
+                loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);"></i>';
+                loader.style.display = 'flex';
+            }
+            img.style.display = 'none';
+        }
+    }
+}
+
+// =====================================================
+// OBTENER TOKEN
+// =====================================================
+
+function getToken() {
+    let token = localStorage.getItem('furia_token');
+    if (!token) token = localStorage.getItem('token');
+    if (!token) token = sessionStorage.getItem('token');
+    return token;
 }
 
 // =====================================================
@@ -982,24 +1076,38 @@ async function guardarAvance(estado) {
     }
 }
 
-// =====================================================
-// VER DETALLE DE AVANCE
-// =====================================================
-
 window.verDetalleAvance = async function(avanceId) {
     const avance = avancesActuales.find(a => a.id === avanceId);
     if (!avance) return;
 
-    const fotosHtml = avance.fotos && avance.fotos.length > 0 ? `
-        <div class="detalle-fotos-grid">
-            ${avance.fotos.map(foto => `
+    // Generar HTML para fotos con proxy
+    let fotosHtml = '';
+    if (avance.fotos && avance.fotos.length > 0) {
+        fotosHtml = `<div class="detalle-fotos-grid">`;
+        for (let i = 0; i < avance.fotos.length; i++) {
+            const foto = avance.fotos[i];
+            const fotoId = `detalle_foto_${avanceId}_${i}`;
+            const loaderId = `detalle_loader_${avanceId}_${i}`;
+            const urlEncoded = encodeURIComponent(foto.url);
+            fotosHtml += `
                 <div class="detalle-foto-item">
-                    <img src="${foto.url}" onclick="verFotoAmpliada('${foto.url}')">
+                    <div style="position:relative;width:100%;padding-top:100%;background:var(--gris-oscuro);border-radius:var(--radius-sm);overflow:hidden;">
+                        <div id="${loaderId}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--gris-texto);z-index:2;">
+                            <i class="fas fa-spinner fa-spin"></i>
+                        </div>
+                        <img id="${fotoId}" src="" 
+                             style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;cursor:pointer;"
+                             data-url="${urlEncoded}"
+                             onclick="verFotoAmpliada('${foto.url}')">
+                    </div>
                     <div class="detalle-foto-comentario">${escapeHtml(foto.comentario || 'Sin comentario')}</div>
                 </div>
-            `).join('')}
-        </div>
-    ` : '<p>No hay fotos registradas</p>';
+            `;
+        }
+        fotosHtml += `</div>`;
+    } else {
+        fotosHtml = '<p>No hay fotos registradas</p>';
+    }
 
     let estadoBadge = '';
     switch (avance.estado) {
@@ -1038,7 +1146,81 @@ window.verDetalleAvance = async function(avanceId) {
     `;
 
     abrirModal('modalDetalleAvance');
+
+    // 🔥 CARGAR FOTOS DEL DETALLE CON PROXY
+    setTimeout(() => {
+        cargarFotosDetalleConProxy();
+    }, 100);
 };
+
+// =====================================================
+// 🔥 CARGAR FOTOS DEL DETALLE CON PROXY
+// =====================================================
+
+async function cargarFotosDetalleConProxy() {
+    const fotos = document.querySelectorAll('#detalleAvanceBody img[data-url]');
+    
+    for (const img of fotos) {
+        const urlEncoded = img.getAttribute('data-url');
+        const url = decodeURIComponent(urlEncoded);
+        
+        // Buscar loader
+        const loaderId = `detalle_loader_${img.id.replace('detalle_foto_', '')}`;
+        const loader = document.getElementById(loaderId);
+        
+        if (!url || url === 'null' || url === '' || url === 'undefined') {
+            if (loader) loader.style.display = 'none';
+            img.style.display = 'none';
+            continue;
+        }
+        
+        try {
+            const token = getToken();
+            if (!token) {
+                throw new Error('No hay token');
+            }
+            
+            const proxyUrl = `${API_URL}/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
+            
+            const response = await fetch(proxyUrl, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.base64) {
+                const nuevaImg = new Image();
+                nuevaImg.onload = function() {
+                    img.src = data.base64;
+                    img.style.display = 'block';
+                    if (loader) loader.style.display = 'none';
+                };
+                nuevaImg.onerror = function() {
+                    if (loader) {
+                        loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);"></i>';
+                        loader.style.display = 'flex';
+                    }
+                };
+                nuevaImg.src = data.base64;
+            } else {
+                throw new Error(data.error || 'Error al cargar');
+            }
+        } catch (error) {
+            console.error('Error cargando foto detalle:', error);
+            if (loader) {
+                loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);"></i>';
+                loader.style.display = 'flex';
+            }
+            img.style.display = 'none';
+        }
+    }
+}
 
 // =====================================================
 // VER FOTO AMPLIADA - CON PROXY (REGLAS DE ORO)

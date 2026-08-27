@@ -788,8 +788,9 @@ def proxy_imagen_avance(current_user):
     except Exception as e:
         logger.error(f"Error en proxy de imagen de avance: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
-        # =====================================================
-# ENDPOINT PRINCIPAL - GESTIONAR AVANCES (PUT - ACTUALIZAR)
+       # =====================================================
+# ENDPOINT PUT - ACTUALIZAR AVANCE (COMPLETO)
+# UBICADO EN: avance.py (TÉCNICO MECÁNICO)
 # =====================================================
 
 @avance_bp.route('/avances', methods=['PUT'])
@@ -799,42 +800,66 @@ def actualizar_avance(current_user):
     ACTUALIZAR AVANCE EXISTENTE
     Permite actualizar un avance incluso si está pendiente o rechazado.
     Solo no se puede actualizar si está aprobado.
+    Registra fecha_actualizacion y numero_actualizaciones.
     """
     print("=" * 60)
-    print("🔴 PUT RECIBIDO - ACTUALIZAR AVANCE")
+    print("🔴🔴🔴 PUT RECIBIDO - ACTUALIZAR AVANCE 🔴🔴🔴")
     print("=" * 60)
     
+    # =====================================================
+    # 1. OBTENER DATOS DEL REQUEST
+    # =====================================================
     try:
         data = request.get_json()
         if not data:
+            print("❌ No se recibieron datos JSON")
             return jsonify({'error': 'No se recibieron datos'}), 400
     except Exception as e:
+        print(f"❌ Error parsing JSON: {str(e)}")
         return jsonify({'error': f'Error en datos: {str(e)}'}), 400
     
     print(f"📦 Datos recibidos: {json.dumps(data, indent=2)}")
     
-    # Obtener datos
-    avance_id = data.get('id')  # ← ID del avance a actualizar
+    # =====================================================
+    # 2. EXTRAER DATOS
+    # =====================================================
+    avance_id = data.get('id')
     id_orden = data.get('id_orden_trabajo')
     titulo = data.get('titulo')
     descripcion = data.get('descripcion', '')
     fotos = data.get('fotos', [])
     estado = data.get('estado', 'pendiente')
     
-    # Validaciones
+    print(f"📝 avance_id: {avance_id}")
+    print(f"📝 id_orden: {id_orden}")
+    print(f"📝 titulo: {titulo}")
+    print(f"📝 fotos: {len(fotos)} fotos")
+    print(f"📝 estado: {estado}")
+    
+    # =====================================================
+    # 3. VALIDACIONES
+    # =====================================================
     if not avance_id:
+        print("❌ ID de avance faltante")
         return jsonify({'error': 'ID de avance requerido'}), 400
     
     if not id_orden:
+        print("❌ ID de orden faltante")
         return jsonify({'error': 'ID de orden requerido'}), 400
     
     if not titulo:
+        print("❌ Título faltante")
         return jsonify({'error': 'Título requerido'}), 400
     
     if not fotos:
+        print("❌ Fotos faltantes")
         return jsonify({'error': 'Debes subir al menos una foto'}), 400
     
-    # Verificar que el técnico tiene acceso a esta orden
+    logger.info(f"✏️ Usuario {current_user['id']} actualizando avance para orden {id_orden}")
+    
+    # =====================================================
+    # 4. VERIFICAR ACCESO DEL TÉCNICO A LA ORDEN
+    # =====================================================
     asignacion = supabase.table('asignaciontecnico') \
         .select('id') \
         .eq('id_orden_trabajo', id_orden) \
@@ -842,75 +867,119 @@ def actualizar_avance(current_user):
         .execute()
     
     if not asignacion.data:
+        print("❌ Técnico no tiene acceso a esta orden")
         return jsonify({'error': 'No tienes acceso a esta orden'}), 403
     
-    # Buscar el avance existente
+    # =====================================================
+    # 5. BUSCAR AVANCE EXISTENTE
+    # =====================================================
     avance_existente = supabase.table('avance_trabajo') \
-        .select('id, estado') \
+        .select('id, estado, numero_actualizaciones, fecha_creacion') \
         .eq('id', avance_id) \
         .eq('id_tecnico', current_user['id']) \
         .execute()
     
+    print(f"🔍 Avance existente: {avance_existente.data}")
+    
     if not avance_existente.data:
-        return jsonify({'error': 'Avance no encontrado'}), 404
+        print("❌ No se encontró avance existente")
+        return jsonify({
+            'error': 'No existe un avance para esta orden. Usa "Nuevo Avance" primero.'
+        }), 404
     
     estado_actual = avance_existente.data[0]['estado']
+    numero_actualizaciones = avance_existente.data[0].get('numero_actualizaciones', 0)
+    fecha_creacion = avance_existente.data[0].get('fecha_creacion')
     
-    # ❌ NO PERMITIR ACTUALIZAR SI ESTÁ APROBADO
+    print(f"📝 Avance ID: {avance_id}, Estado actual: {estado_actual}")
+    print(f"📝 Número de actualizaciones previas: {numero_actualizaciones}")
+    
+    # =====================================================
+    # 6. VERIFICAR SI SE PUEDE ACTUALIZAR SEGÚN EL ESTADO
+    # =====================================================
     if estado_actual == 'aprobado':
+        print("❌ Avance ya aprobado, no se puede modificar")
         return jsonify({
             'error': 'No puedes modificar un avance ya aprobado. Contacta al jefe de taller.'
         }), 403
     
+    # =====================================================
+    # 7. PREPARAR DATOS DE ACTUALIZACIÓN
+    # =====================================================
     ahora = datetime.datetime.now().isoformat()
     
-    # ✅ PREPARAR DATOS DE ACTUALIZACIÓN
+    # Incrementar contador de actualizaciones
+    nuevo_numero_actualizaciones = numero_actualizaciones + 1
+    
+    # Preparar datos base de actualización
     update_data = {
         'titulo': titulo,
         'descripcion': descripcion,
         'fotos': json.dumps(fotos),
-        'fecha_creacion': ahora,  # ← Actualizar timestamp para mostrar que hubo cambios
+        'fecha_actualizacion': ahora,
+        'numero_actualizaciones': nuevo_numero_actualizaciones
     }
     
-    # ✅ SI EL AVANCE ESTÁ RECHAZADO O PENDIENTE, CAMBIAR A PENDIENTE PARA REVISIÓN
-    if estado_actual in ['rechazado', 'pendiente', 'borrador']:
-        update_data['estado'] = 'pendiente'
-        update_data['comentario_revision'] = None  # Limpiar comentario anterior
-        print("🔄 Avance reactivado a pendiente para revisión")
-    
-    # Si el usuario explícitamente quiere guardar como borrador
-    if estado == 'borrador':
+    # =====================================================
+    # 8. MANEJAR CAMBIO DE ESTADO
+    # =====================================================
+    if estado == 'pendiente':
+        if estado_actual in ['rechazado', 'pendiente', 'borrador']:
+            update_data['estado'] = 'pendiente'
+            if estado_actual == 'rechazado':
+                update_data['comentario_revision'] = None
+            print("🔄 Reactivando avance a pendiente para revisión")
+        else:
+            print("📝 Actualizando avance pendiente")
+            
+    elif estado == 'borrador':
         update_data['estado'] = 'borrador'
         print("📝 Guardando como borrador")
+    else:
+        if estado_actual != 'aprobado':
+            update_data['estado'] = 'pendiente'
+            print("🔄 Estado no especificado, pasando a pendiente para revisión")
     
     print(f"📦 Datos a actualizar: {update_data}")
     
-    # Actualizar el avance
+    # =====================================================
+    # 9. ACTUALIZAR EN SUPABASE
+    # =====================================================
     result = supabase.table('avance_trabajo') \
         .update(update_data) \
         .eq('id', avance_id) \
         .execute()
     
+    print(f"✅ Resultado update: {result.data}")
+    
     if not result.data:
+        print("❌ Error al actualizar en Supabase")
         return jsonify({'error': 'Error al actualizar avance'}), 500
     
-    # ✅ NOTIFICAR AL JEFE DE TALLER (si se envió a revisión)
+    # =====================================================
+    # 10. NOTIFICAR AL JEFE DE TALLER
+    # =====================================================
     if update_data.get('estado') == 'pendiente':
+        tecnico_nombre = current_user.get('nombre', 'Técnico')
         notificar_jefe_taller_avance(
             id_orden,
             titulo,
-            current_user.get('nombre', 'Técnico'),
+            tecnico_nombre,
             avance_id,
-            es_actualizacion=True
+            es_actualizacion=True,
+            numero_actualizacion=nuevo_numero_actualizaciones
         )
-        mensaje = "✅ Avance actualizado y enviado a revisión"
+        mensaje = f"✅ Avance actualizado y enviado a revisión (Actualización #{nuevo_numero_actualizaciones})"
     else:
-        mensaje = "📝 Avance guardado como borrador"
+        mensaje = f"📝 Avance actualizado como borrador (Actualización #{nuevo_numero_actualizaciones})"
     
-    logger.info(f"✅ Avance {avance_id} actualizado correctamente")
+    logger.info(f"✅ Avance {avance_id} actualizado correctamente. Actualización #{nuevo_numero_actualizaciones}")
+    print(f"✅ Éxito: {mensaje}")
     
     return jsonify({
         'success': True,
         'message': mensaje,
-        'avance_id': avance_id
+        'avance_id': avance_id,
+        'numero_actualizaciones': nuevo_numero_actualizaciones,
+        'fecha_actualizacion': ahora
     }), 200

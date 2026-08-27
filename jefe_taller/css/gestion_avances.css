@@ -858,3 +858,67 @@ body {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
 }
+/* =====================================================
+   INDICADORES DE ACTUALIZACIÓN
+   ===================================================== */
+
+.update-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: #F59E0B;
+    color: #1A1A2E;
+    padding: 0.15rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.6rem;
+    font-weight: 600;
+    margin-left: 0.5rem;
+    animation: pulse-badge 2s ease-in-out infinite;
+}
+
+.update-badge i {
+    font-size: 0.5rem;
+}
+
+.card-updated {
+    border-left: 3px solid #F59E0B !important;
+}
+
+.update-info-banner {
+    background: #FEF3C7;
+    border: 1px solid #F59E0B;
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #92400E;
+}
+
+.update-info-banner i {
+    font-size: 1.2rem;
+    color: #F59E0B;
+}
+
+.update-date {
+    font-size: 0.6rem;
+    color: var(--gris-texto);
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+@keyframes pulse-badge {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Estilo para avances actualizados en la lista */
+.avance-card.card-updated .avance-card-header {
+    border-bottom-color: #F59E0B;
+}
+
+.avance-card.card-updated .avance-titulo {
+    color: #F59E0B;
+}

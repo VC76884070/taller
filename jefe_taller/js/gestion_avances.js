@@ -461,6 +461,18 @@ function renderizarAvancesPendientes() {
 
     container.innerHTML = hayMasHtml + avancesPendientes.map((avance, index) => {
         const fotos = avance.fotos || [];
+        
+        // 🔥 INDICADOR DE ACTUALIZACIÓN
+        let badgeActualizacion = '';
+        if (avance.es_actualizado) {
+            badgeActualizacion = `
+                <span class="update-badge">
+                    <i class="fas fa-sync-alt fa-pulse"></i> 
+                    Actualizado ${avance.numero_actualizaciones ? `(${avance.numero_actualizaciones}x)` : ''}
+                </span>
+            `;
+        }
+        
         const fotosHtml = fotos.length > 0 ? `
             <div class="avance-fotos" id="fotosPreview_${avance.id}">
                 ${fotos.slice(0, 3).map((f, i) => `
@@ -481,11 +493,19 @@ function renderizarAvancesPendientes() {
             </div>
         ` : '';
 
+        // 🔥 MOSTRAR FECHA DE ACTUALIZACIÓN SI EXISTE
+        const fechaDisplay = avance.fecha_actualizacion ? 
+            `<span class="update-date"><i class="far fa-clock"></i> Última actualización: ${formatDate(avance.fecha_actualizacion)}</span>` :
+            `<span class="avance-fecha">${formatDate(avance.fecha_creacion)}</span>`;
+
         return `
-            <div class="avance-card" data-avance-id="${avance.id}">
+            <div class="avance-card ${avance.es_actualizado ? 'card-updated' : ''}" data-avance-id="${avance.id}">
                 <div class="avance-card-header">
-                    <span class="avance-titulo">${escapeHtml(avance.titulo)}</span>
-                    <span class="avance-fecha">${formatDate(avance.fecha_creacion)}</span>
+                    <span class="avance-titulo">
+                        ${escapeHtml(avance.titulo)}
+                        ${badgeActualizacion}
+                    </span>
+                    ${fechaDisplay}
                 </div>
                 <div class="avance-card-body">
                     <div class="avance-descripcion">${escapeHtml(avance.descripcion || 'Sin descripción')}</div>
@@ -494,6 +514,13 @@ function renderizarAvancesPendientes() {
                         <span class="avance-tecnico"><i class="fas fa-user"></i> ${escapeHtml(avance.tecnico_nombre)}</span>
                         <span class="avance-orden"><i class="fas fa-tag"></i> ${escapeHtml(avance.orden_codigo)}</span>
                     </div>
+                    ${avance.comentario_revision ? `
+                        <div class="avance-info-row" style="margin-top: 0.5rem;">
+                            <span style="font-size: 0.7rem; color: var(--gris-texto);">
+                                <i class="fas fa-comment"></i> Comentario anterior: ${escapeHtml(avance.comentario_revision)}
+                            </span>
+                        </div>
+                    ` : ''}
                 </div>
                 <div class="avance-card-footer">
                     <button class="action-btn view" onclick="verDetalleAvance(${avance.id})">
@@ -510,7 +537,7 @@ function renderizarAvancesPendientes() {
         `;
     }).join('');
 
-    // 🔥 Cargar las miniaturas después de renderizar
+    // Cargar miniaturas después de renderizar
     setTimeout(() => {
         avancesPendientes.forEach(avance => {
             const fotos = avance.fotos || [];
@@ -652,14 +679,29 @@ window.verDetalleAvance = async function(avanceId) {
         const avance = data.avance;
         const fotos = avance.fotos || [];
 
+        // 🔥 INDICADOR DE ACTUALIZACIÓN EN EL DETALLE
+        let badgeActualizacion = '';
+        if (avance.es_actualizado) {
+            badgeActualizacion = `
+                <div class="update-info-banner">
+                    <i class="fas fa-sync-alt fa-pulse"></i>
+                    <strong>¡Este avance ha sido actualizado!</strong>
+                    ${avance.numero_actualizaciones ? ` (${avance.numero_actualizaciones} actualizaciones)` : ''}
+                    ${avance.fecha_actualizacion ? ` - Última actualización: ${formatDate(avance.fecha_actualizacion)}` : ''}
+                </div>
+            `;
+        }
+
         const modalBody = document.getElementById('detalleAvanceBody');
         modalBody.innerHTML = `
             <div class="orden-info-card">
+                ${badgeActualizacion}
                 <p><strong><i class="fas fa-tag"></i> Título:</strong> ${escapeHtml(avance.titulo)}</p>
                 <p><strong><i class="fas fa-align-left"></i> Descripción:</strong> ${escapeHtml(avance.descripcion || 'Sin descripción')}</p>
                 <p><strong><i class="fas fa-user"></i> Técnico:</strong> ${escapeHtml(avance.tecnico_nombre)}</p>
                 <p><strong><i class="fas fa-clipboard-list"></i> Orden:</strong> ${escapeHtml(avance.orden_codigo)}</p>
-                <p><strong><i class="fas fa-calendar"></i> Fecha:</strong> ${formatDate(avance.fecha_creacion)}</p>
+                <p><strong><i class="fas fa-calendar"></i> Fecha de creación:</strong> ${formatDate(avance.fecha_creacion)}</p>
+                ${avance.fecha_actualizacion ? `<p><strong><i class="fas fa-edit"></i> Última actualización:</strong> ${formatDate(avance.fecha_actualizacion)}</p>` : ''}
                 <p><strong><i class="fas fa-chart-line"></i> Estado:</strong> ${statusBadge(avance.estado)}</p>
                 ${avance.comentario_revision ? `<p><strong><i class="fas fa-comment"></i> Comentario de revisión:</strong> ${escapeHtml(avance.comentario_revision)}</p>` : ''}
                 ${avance.fecha_aprobacion ? `<p><strong><i class="fas fa-check-circle"></i> Fecha de aprobación:</strong> ${formatDate(avance.fecha_aprobacion)}</p>` : ''}
@@ -670,7 +712,7 @@ window.verDetalleAvance = async function(avanceId) {
             </div>
         `;
 
-        // 🔥 Cargar las fotos usando la función mejorada
+        // Cargar las fotos
         if (fotos.length > 0) {
             await cargarImagenesEnContenedor('detalleFotosContainer', fotos);
         } else {

@@ -79,6 +79,10 @@ def parse_fotos(fotos_data):
         return []
 
 
+# =====================================================
+# FUNCIÓN MEJORADA PARA OBTENER DATOS DE AVANCES
+# =====================================================
+
 def obtener_datos_avances_con_join(avances_data):
     """Optimizado: Obtener técnicos y órdenes en UNA SOLA consulta"""
     if not avances_data:
@@ -111,20 +115,39 @@ def obtener_datos_avances_con_join(avances_data):
     # Construir resultado
     resultado = []
     for avance in avances_data:
+        # Obtener fecha de actualización (si existe)
+        fecha_actualizacion = avance.get('fecha_actualizacion')
+        fecha_creacion = avance.get('fecha_creacion')
+        
+        # Determinar si fue actualizado (fecha_actualizacion > fecha_creacion + 1 minuto)
+        es_actualizado = False
+        if fecha_actualizacion and fecha_creacion:
+            try:
+                creacion = datetime.datetime.fromisoformat(fecha_creacion.replace('Z', '+00:00'))
+                actualizacion = datetime.datetime.fromisoformat(fecha_actualizacion.replace('Z', '+00:00'))
+                if (actualizacion - creacion).total_seconds() > 60:
+                    es_actualizado = True
+            except:
+                pass
+        
         resultado.append({
             'id': avance['id'],
             'titulo': avance['titulo'],
             'descripcion': avance.get('descripcion', ''),
             'fotos': parse_fotos(avance.get('fotos')),
             'estado': avance['estado'],
-            'fecha_creacion': avance['fecha_creacion'],
+            'fecha_creacion': fecha_creacion,
+            'fecha_actualizacion': fecha_actualizacion,
             'fecha_aprobacion': avance.get('fecha_aprobacion'),
             'comentario_revision': avance.get('comentario_revision'),
             'tecnico_nombre': tecnicos_map.get(avance['id_tecnico'], 'Desconocido'),
-            'orden_codigo': ordenes_map.get(avance['id_orden_trabajo'], 'N/A')
+            'orden_codigo': ordenes_map.get(avance['id_orden_trabajo'], 'N/A'),
+            'es_actualizado': es_actualizado,  # ← NUEVO CAMPO
+            'numero_actualizaciones': avance.get('numero_actualizaciones', 0)  # ← NUEVO CAMPO
         })
     
     return resultado
+
 
 
 # =====================================================
@@ -159,7 +182,7 @@ def obtener_avances_pendientes(current_user):
         
         # Consultar SOLO últimos 10 avances pendientes
         avances = supabase.table('avance_trabajo') \
-            .select('id, titulo, descripcion, fotos, estado, fecha_creacion, id_tecnico, id_orden_trabajo') \
+            .select('*') \  # ← Cambiar a '*' para obtener todos los campos
             .eq('estado', 'pendiente') \
             .order('fecha_creacion', desc=True) \
             .limit(10) \

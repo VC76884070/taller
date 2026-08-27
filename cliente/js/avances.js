@@ -344,13 +344,13 @@ function renderizarAvance(avance, index, total) {
     `;
 }
 // =====================================================
-// 🔥 CARGAR FOTOS MINIATURA - USANDO PROXY DE BACKEND
+// 🔥 CARGAR FOTOS MINIATURA - VERSIÓN CORREGIDA
 // =====================================================
 
 async function cargarFotosClienteProxy() {
-    console.log('🖼️ Cargando miniaturas del cliente con proxy...');
+    console.log('🖼️ Cargando miniaturas del cliente...');
     
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 150));
     
     const miniaturas = document.querySelectorAll('.foto-mini-card img[data-url]');
     console.log(`📸 Encontradas ${miniaturas.length} miniaturas`);
@@ -367,66 +367,133 @@ async function cargarFotosClienteProxy() {
         const parentCard = img.closest('.foto-mini-card');
         let loader = parentCard ? parentCard.querySelector('.loader-mini') : null;
         
-        const ocultarLoader = () => {
-            if (loader) loader.style.display = 'none';
-        };
+        // Si no encuentra .loader-mini, buscar por ID
+        if (!loader && parentCard) {
+            loader = parentCard.querySelector('[id^="cliente_loader_"]');
+        }
         
+        console.log(`🔍 ${img.id}: loader=${loader ? '✅' : '❌'}, url=${url ? '✅' : '❌'}`);
+        
+        // Si no hay URL, ocultar todo
         if (!url || url === 'null' || url === '' || url === 'undefined') {
             img.style.display = 'none';
-            ocultarLoader();
+            if (loader) loader.style.display = 'none';
             continue;
         }
         
         try {
-            const token = getToken();
-            if (!token) {
-                throw new Error('No hay token');
+            // Extraer fileId
+            let fileId = null;
+            const match1 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+            if (match1) fileId = match1[1];
+            
+            if (!fileId) {
+                const match2 = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                if (match2) fileId = match2[1];
             }
             
-            // 🔥 USAR EL PROXY DEL BACKEND (igual que en el modal)
-            const proxyUrl = `${window.API_BASE_URL || ''}/api/cliente/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
-            console.log(`📡 Cargando miniatura con proxy: ${img.id}`);
+            if (!fileId) {
+                console.warn(`⚠️ No se pudo extraer fileId de: ${url.substring(0, 50)}...`);
+                img.style.display = 'none';
+                if (loader) loader.style.display = 'none';
+                continue;
+            }
             
-            const response = await fetch(proxyUrl, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
+            // 🔥 USAR THUMBNAIL DIRECTO
+            const thumbUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`;
+            console.log(`📡 Cargando ${img.id} -> thumbnail`);
+            
+            // Crear nueva imagen para precargar
+            const nuevaImg = new Image();
+            nuevaImg.crossOrigin = 'anonymous';
+            
+            nuevaImg.onload = function() {
+                // 🔥 ASIGNAR Y FORZAR VISUALIZACIÓN
+                img.src = thumbUrl;
+                img.style.display = 'block';
+                img.style.opacity = '1';
+                img.style.visibility = 'visible';
+                img.style.width = '100%';
+                img.style.height = '100%';
+                img.style.objectFit = 'cover';
+                
+                // Ocultar loader
+                if (loader) {
+                    loader.style.display = 'none';
+                    loader.style.opacity = '0';
                 }
-            });
+                
+                console.log(`✅ Miniatura VISIBLE: ${img.id}`);
+            };
             
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
+            nuevaImg.onerror = function() {
+                console.warn(`⚠️ Thumbnail falló para ${img.id}, intentando con proxy...`);
+                // Fallback: usar el proxy
+                cargarMiniaturaConProxy(img, url, loader);
+            };
             
-            const data = await response.json();
+            // Timeout por si tarda demasiado
+            setTimeout(() => {
+                if (!img.src || img.style.display === 'none' || img.style.display === '') {
+                    console.warn(`⏰ Timeout para ${img.id}, usando proxy...`);
+                    cargarMiniaturaConProxy(img, url, loader);
+                }
+            }, 5000);
             
-            if (data.success && data.base64) {
-                const nuevaImg = new Image();
-                nuevaImg.onload = function() {
-                    img.src = data.base64;
-                    img.style.display = 'block';
-                    img.style.opacity = '1';
-                    ocultarLoader();
-                    console.log(`✅ Miniatura cargada: ${img.id}`);
-                };
-                nuevaImg.onerror = function() {
-                    console.error(`❌ Error en miniatura: ${img.id}`);
-                    img.style.display = 'none';
-                    ocultarLoader();
-                };
-                nuevaImg.src = data.base64;
-            } else {
-                throw new Error(data.error || 'Error al cargar');
-            }
+            nuevaImg.src = thumbUrl;
+            
         } catch (error) {
-            console.warn(`⚠️ Error en miniatura ${img.id}:`, error.message);
+            console.error(`❌ Error ${img.id}:`, error);
             img.style.display = 'none';
-            ocultarLoader();
+            if (loader) loader.style.display = 'none';
         }
     }
     
     console.log('✅ Procesamiento de miniaturas completado');
 }
 
+// =====================================================
+// 🔥 FALLBACK: Cargar con proxy
+// =====================================================
+
+async function cargarMiniaturaConProxy(img, url, loader) {
+    try {
+        const token = getToken();
+        if (!token) throw new Error('No hay token');
+        
+        const proxyUrl = `${window.API_BASE_URL || ''}/api/cliente/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
+        console.log(`📡 Proxy fallback: ${img.id}`);
+        
+        const response = await fetch(proxyUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.base64) {
+                img.src = data.base64;
+                img.style.display = 'block';
+                img.style.opacity = '1';
+                img.style.visibility = 'visible';
+                img.style.width = '100%';
+                img.style.height = '100%';
+                img.style.objectFit = 'cover';
+                
+                if (loader) {
+                    loader.style.display = 'none';
+                    loader.style.opacity = '0';
+                }
+                console.log(`✅ Proxy fallback: ${img.id}`);
+                return;
+            }
+        }
+        throw new Error('Proxy falló');
+    } catch (error) {
+        console.warn(`⚠️ Proxy fallback falló para ${img.id}`);
+        img.style.display = 'none';
+        if (loader) loader.style.display = 'none';
+    }
+}
 // =====================================================
 // 🔥 FALLBACK: Cargar con proxy si thumbnail falla
 // =====================================================

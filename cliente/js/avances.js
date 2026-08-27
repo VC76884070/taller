@@ -297,34 +297,32 @@ function renderizarAvance(avance, index, total) {
     const isFirst = index === 0;
     const isLast = index === total - 1;
     
-    // Generar HTML de fotos con PROXY
+    // 🔥 GENERAR FOTOS PEQUEÑAS (MINIATURAS)
     let fotosHtml = '';
     if (avance.fotos && avance.fotos.length > 0) {
-        const fotoCount = avance.fotos.length;
-        let gridClass = 'fotos-grid';
-        if (fotoCount === 1) gridClass = 'fotos-single';
-        else if (fotoCount === 2) gridClass = 'fotos-double';
-        else gridClass = 'fotos-grid';
+        // Mostrar máximo 3 fotos en miniatura
+        const fotosMostrar = avance.fotos.slice(0, 3);
+        const totalFotos = avance.fotos.length;
         
         fotosHtml = `
-            <div class="${gridClass}">
-                ${avance.fotos.map((foto, idx) => {
+            <div class="avance-fotos-mini-cliente">
+                ${fotosMostrar.map((foto, idx) => {
                     const fotoId = `cliente_foto_${avance.id}_${idx}`;
                     const loaderId = `cliente_loader_${avance.id}_${idx}`;
                     const urlEncoded = encodeURIComponent(foto.url);
                     return `
-                        <div class="foto-card" onclick="event.stopPropagation(); abrirFoto('${foto.url}', '${escapeHtml(foto.comentario || '')}')" style="position:relative;overflow:hidden;border-radius:8px;">
-                            <div id="${loaderId}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--gris-oscuro);z-index:2;">
-                                <i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);"></i>
+                        <div class="foto-mini-card" onclick="event.stopPropagation(); abrirFotoAmpliadaCliente('${foto.url}', '${escapeHtml(foto.comentario || '')}')" style="position:relative;width:80px;height:80px;flex-shrink:0;border-radius:8px;overflow:hidden;background:var(--gris-oscuro);cursor:pointer;">
+                            <div id="${loaderId}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;">
+                                <i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);font-size:1rem;"></i>
                             </div>
                             <img id="${fotoId}" src="" 
-                                 style="width:100%;height:200px;object-fit:cover;display:none;opacity:0;cursor:pointer;"
+                                 style="width:100%;height:100%;object-fit:cover;display:none;opacity:0;"
                                  data-url="${urlEncoded}"
-                                 onclick="event.stopPropagation(); abrirFoto('${foto.url}', '${escapeHtml(foto.comentario || '')}')">
-                            ${foto.comentario ? `<div class="foto-overlay"><span>${escapeHtml(foto.comentario)}</span></div>` : ''}
+                                 onclick="event.stopPropagation(); abrirFotoAmpliadaCliente('${foto.url}', '${escapeHtml(foto.comentario || '')}')">
                         </div>
                     `;
                 }).join('')}
+                ${totalFotos > 3 ? `<div class="foto-mini-mas" style="width:80px;height:80px;flex-shrink:0;border-radius:8px;background:var(--rojo-primario);display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:1.2rem;cursor:pointer;" onclick="event.stopPropagation(); verDetalleAvance(${avance.id})">+${totalFotos - 3}</div>` : ''}
             </div>
         `;
     }
@@ -353,16 +351,18 @@ function renderizarAvance(avance, index, total) {
     `;
 }
 // =====================================================
-// 🔥 CARGAR FOTOS DEL CLIENTE CON PROXY
+// 🔥 CARGAR FOTOS MINIATURA DEL CLIENTE CON PROXY
 // =====================================================
 
 async function cargarFotosClienteProxy() {
-    console.log('🖼️ Cargando fotos del cliente con proxy...');
+    console.log('🖼️ Cargando miniaturas del cliente con proxy...');
     
-    const fotos = document.querySelectorAll('#contenidoDinamico img[data-url]');
-    console.log(`📸 Encontradas ${fotos.length} fotos para cargar`);
+    // 🔥 Buscar SOLO las imágenes que son miniaturas (tamaño 80x80)
+    const fotos = document.querySelectorAll('.foto-mini-card img[data-url]');
+    console.log(`📸 Encontradas ${fotos.length} miniaturas para cargar`);
     
     if (fotos.length === 0) {
+        console.log('⚠️ No se encontraron miniaturas con data-url');
         return;
     }
     
@@ -372,15 +372,9 @@ async function cargarFotosClienteProxy() {
         
         // Buscar loader asociado
         let loader = null;
-        const loaderId = img.id.replace('cliente_foto_', 'cliente_loader_');
-        loader = document.getElementById(loaderId);
-        
-        // Si no encuentra, buscar en el contenedor padre
-        if (!loader) {
-            const parent = img.closest('.foto-card');
-            if (parent) {
-                loader = parent.querySelector('[id^="cliente_loader_"]');
-            }
+        const parent = img.closest('.foto-mini-card');
+        if (parent) {
+            loader = parent.querySelector('[id^="cliente_loader_"]');
         }
         
         // Función para ocultar loader siempre
@@ -425,7 +419,7 @@ async function cargarFotosClienteProxy() {
                     ocultarLoader();
                 };
                 nuevaImg.onerror = function() {
-                    console.error(`❌ Error en foto: ${img.id}`);
+                    console.error(`❌ Error en miniatura: ${img.id}`);
                     img.style.display = 'none';
                     ocultarLoader();
                 };
@@ -434,7 +428,7 @@ async function cargarFotosClienteProxy() {
                 throw new Error(data.error || 'Error al cargar');
             }
         } catch (error) {
-            console.error('Error cargando foto cliente:', error);
+            console.error('Error cargando miniatura:', error);
             img.style.display = 'none';
             ocultarLoader();
         }

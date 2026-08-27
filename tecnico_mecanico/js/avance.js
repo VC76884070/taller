@@ -480,22 +480,46 @@ function renderizarAvances() {
     }, 100);
 }
 // =====================================================
-// 🔥 CARGAR FOTOS MINIATURA CON PROXY
+// 🔥 CARGAR FOTOS MINIATURA CON PROXY (VERSIÓN ROBUSTA)
 // =====================================================
 
 async function cargarFotosMiniaturasConProxy() {
+    console.log('🖼️ Cargando miniaturas con proxy...');
+    
+    // Buscar TODAS las imágenes con data-url dentro de la lista de avances
     const miniaturas = document.querySelectorAll('#listaAvances img[data-url]');
+    console.log(`📸 Encontradas ${miniaturas.length} miniaturas para cargar`);
+    
+    if (miniaturas.length === 0) {
+        console.log('⚠️ No se encontraron miniaturas con data-url');
+        return;
+    }
     
     for (const img of miniaturas) {
         const urlEncoded = img.getAttribute('data-url');
         const url = decodeURIComponent(urlEncoded);
         
-        // Buscar el loader asociado
-        const loaderId = `loader_${img.id.replace('foto_mini_', 'loader_mini_')}`;
-        const loader = document.getElementById(loaderId);
+        // 🔥 Buscar el loader de forma más precisa
+        let loader = null;
+        // El loader tiene el mismo ID pero con 'loader_mini_' en lugar de 'foto_mini_'
+        const loaderId = img.id.replace('foto_mini_', 'loader_mini_');
+        loader = document.getElementById(loaderId);
+        
+        // Si no encuentra por ID, buscar el loader en el contenedor padre
+        if (!loader) {
+            const parent = img.closest('div[style*="position:relative"]');
+            if (parent) {
+                loader = parent.querySelector('[id^="loader_mini_"]');
+            }
+        }
+        
+        console.log(`🔍 Procesando imagen: ${img.id}, loader: ${loader ? '✅ encontrado' : '❌ no encontrado'}`);
         
         if (!url || url === 'null' || url === '' || url === 'undefined') {
-            if (loader) loader.style.display = 'none';
+            if (loader) {
+                loader.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--gris-texto);"></i>';
+                loader.style.display = 'flex';
+            }
             img.style.display = 'none';
             continue;
         }
@@ -508,6 +532,7 @@ async function cargarFotosMiniaturasConProxy() {
             
             // 🔥 USAR EL PROXY
             const proxyUrl = `${API_URL}/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
+            console.log(`📡 Llamando a proxy: ${proxyUrl.substring(0, 80)}...`);
             
             const response = await fetch(proxyUrl, {
                 headers: {
@@ -522,15 +547,19 @@ async function cargarFotosMiniaturasConProxy() {
             const data = await response.json();
             
             if (data.success && data.base64) {
+                console.log(`✅ Imagen cargada: ${img.id}`);
                 // Pre-cargar antes de asignar
                 const nuevaImg = new Image();
                 nuevaImg.onload = function() {
                     img.src = data.base64;
                     img.style.display = 'block';
                     img.style.opacity = '1';
-                    if (loader) loader.style.display = 'none';
+                    if (loader) {
+                        loader.style.display = 'none';
+                    }
                 };
                 nuevaImg.onerror = function() {
+                    console.error(`❌ Error pre-cargando imagen: ${img.id}`);
                     if (loader) {
                         loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);"></i>';
                         loader.style.display = 'flex';
@@ -542,14 +571,16 @@ async function cargarFotosMiniaturasConProxy() {
                 throw new Error(data.error || 'Error al cargar imagen');
             }
         } catch (error) {
-            console.error('Error cargando miniatura:', error);
+            console.error(`❌ Error cargando miniatura ${img.id}:`, error);
             if (loader) {
-                loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);"></i>';
+                loader.innerHTML = `<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);"></i>`;
                 loader.style.display = 'flex';
             }
             img.style.display = 'none';
         }
     }
+    
+    console.log('✅ Procesamiento de miniaturas completado');
 }
 
 // =====================================================

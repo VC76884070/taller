@@ -184,13 +184,14 @@ async function cargarVehiculos() {
 }
 
 // =====================================================
-// RENDERIZADO DE CONTENIDO MEJORADO
+// RENDERIZADO DE CONTENIDO COMPLETO CON PROXY
 // =====================================================
 
 function renderizarContenido() {
     const container = document.getElementById('contenidoDinamico');
     if (!container) return;
     
+    // Caso 1: No hay vehículo seleccionado
     if (!currentVehiculo) {
         container.innerHTML = `
             <div class="empty-state premium">
@@ -206,6 +207,7 @@ function renderizarContenido() {
         return;
     }
     
+    // Caso 2: No hay órdenes activas
     if (!ordenActual) {
         container.innerHTML = `
             <div class="empty-state premium">
@@ -224,6 +226,7 @@ function renderizarContenido() {
         return;
     }
     
+    // Caso 3: No hay avances aún
     if (!avancesActuales || avancesActuales.length === 0) {
         container.innerHTML = `
             <div class="empty-state premium">
@@ -245,6 +248,8 @@ function renderizarContenido() {
         actualizarDashboard(0, 0, null);
         return;
     }
+    
+    // Caso 4: Hay avances - RENDERIZAR CONTENIDO COMPLETO
     
     // Calcular estadísticas para dashboard
     const totalFotos = avancesActuales.reduce((sum, a) => sum + (a.fotos?.length || 0), 0);
@@ -269,6 +274,12 @@ function renderizarContenido() {
             </div>
         </div>
     `;
+
+    // 🔥 CRUCIAL: Cargar fotos con proxy después de renderizar
+    // Esto permite que las imágenes se carguen con el token de autenticación
+    setTimeout(() => {
+        cargarFotosClienteProxy();
+    }, 300);
 }
 
 function actualizarDashboard(totalAvances, totalFotos, ultimoAvance) {
@@ -286,7 +297,7 @@ function renderizarAvance(avance, index, total) {
     const isFirst = index === 0;
     const isLast = index === total - 1;
     
-    // Generar HTML de fotos
+    // Generar HTML de fotos con PROXY
     let fotosHtml = '';
     if (avance.fotos && avance.fotos.length > 0) {
         const fotoCount = avance.fotos.length;
@@ -297,12 +308,23 @@ function renderizarAvance(avance, index, total) {
         
         fotosHtml = `
             <div class="${gridClass}">
-                ${avance.fotos.map((foto, idx) => `
-                    <div class="foto-card" onclick="event.stopPropagation(); abrirFoto('${foto.url}', '${escapeHtml(foto.comentario || '')}')">
-                        <img src="${foto.url}" alt="Foto del avance" loading="lazy">
-                        ${foto.comentario ? `<div class="foto-overlay"><span>${escapeHtml(foto.comentario)}</span></div>` : ''}
-                    </div>
-                `).join('')}
+                ${avance.fotos.map((foto, idx) => {
+                    const fotoId = `cliente_foto_${avance.id}_${idx}`;
+                    const loaderId = `cliente_loader_${avance.id}_${idx}`;
+                    const urlEncoded = encodeURIComponent(foto.url);
+                    return `
+                        <div class="foto-card" onclick="event.stopPropagation(); abrirFoto('${foto.url}', '${escapeHtml(foto.comentario || '')}')" style="position:relative;overflow:hidden;border-radius:8px;">
+                            <div id="${loaderId}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--gris-oscuro);z-index:2;">
+                                <i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);"></i>
+                            </div>
+                            <img id="${fotoId}" src="" 
+                                 style="width:100%;height:200px;object-fit:cover;display:none;opacity:0;cursor:pointer;"
+                                 data-url="${urlEncoded}"
+                                 onclick="event.stopPropagation(); abrirFoto('${foto.url}', '${escapeHtml(foto.comentario || '')}')">
+                            ${foto.comentario ? `<div class="foto-overlay"><span>${escapeHtml(foto.comentario)}</span></div>` : ''}
+                        </div>
+                    `;
+                }).join('')}
             </div>
         `;
     }
@@ -330,7 +352,94 @@ function renderizarAvance(avance, index, total) {
         </div>
     `;
 }
+// =====================================================
+// 🔥 CARGAR FOTOS DEL CLIENTE CON PROXY
+// =====================================================
 
+async function cargarFotosClienteProxy() {
+    console.log('🖼️ Cargando fotos del cliente con proxy...');
+    
+    const fotos = document.querySelectorAll('#contenidoDinamico img[data-url]');
+    console.log(`📸 Encontradas ${fotos.length} fotos para cargar`);
+    
+    if (fotos.length === 0) {
+        return;
+    }
+    
+    for (const img of fotos) {
+        const urlEncoded = img.getAttribute('data-url');
+        const url = decodeURIComponent(urlEncoded);
+        
+        // Buscar loader asociado
+        let loader = null;
+        const loaderId = img.id.replace('cliente_foto_', 'cliente_loader_');
+        loader = document.getElementById(loaderId);
+        
+        // Si no encuentra, buscar en el contenedor padre
+        if (!loader) {
+            const parent = img.closest('.foto-card');
+            if (parent) {
+                loader = parent.querySelector('[id^="cliente_loader_"]');
+            }
+        }
+        
+        // Función para ocultar loader siempre
+        const ocultarLoader = () => {
+            if (loader) {
+                loader.style.display = 'none';
+            }
+        };
+        
+        if (!url || url === 'null' || url === '' || url === 'undefined') {
+            img.style.display = 'none';
+            ocultarLoader();
+            continue;
+        }
+        
+        try {
+            const token = getToken();
+            if (!token) {
+                throw new Error('No hay token');
+            }
+            
+            const proxyUrl = `${window.API_BASE_URL || ''}/api/cliente/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
+            
+            const response = await fetch(proxyUrl, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.base64) {
+                const nuevaImg = new Image();
+                nuevaImg.onload = function() {
+                    img.src = data.base64;
+                    img.style.display = 'block';
+                    img.style.opacity = '1';
+                    ocultarLoader();
+                };
+                nuevaImg.onerror = function() {
+                    console.error(`❌ Error en foto: ${img.id}`);
+                    img.style.display = 'none';
+                    ocultarLoader();
+                };
+                nuevaImg.src = data.base64;
+            } else {
+                throw new Error(data.error || 'Error al cargar');
+            }
+        } catch (error) {
+            console.error('Error cargando foto cliente:', error);
+            img.style.display = 'none';
+            ocultarLoader();
+        }
+    }
+}
 // =====================================================
 // CARGAR DATOS OPTIMIZADO
 // =====================================================
@@ -371,10 +480,6 @@ async function cargarDatosVehiculo() {
     }
 }
 
-// =====================================================
-// DETALLE DEL AVANCE MEJORADO
-// =====================================================
-
 window.verDetalleAvance = function(avanceId) {
     const avance = avancesActuales.find(a => a.id === avanceId);
     if (!avance) return;
@@ -390,12 +495,23 @@ window.verDetalleAvance = function(avanceId) {
     if (avance.fotos && avance.fotos.length > 0) {
         fotosHtml = `
             <div class="modal-fotos-grid">
-                ${avance.fotos.map((foto, idx) => `
-                    <div class="modal-foto-card" onclick="abrirFoto('${foto.url}', '${escapeHtml(foto.comentario || '')}')">
-                        <img src="${foto.url}" alt="Foto ${idx + 1}" loading="lazy">
-                        ${foto.comentario ? `<div class="modal-foto-caption">${escapeHtml(foto.comentario)}</div>` : ''}
-                    </div>
-                `).join('')}
+                ${avance.fotos.map((foto, idx) => {
+                    const fotoId = `modal_foto_${avance.id}_${idx}`;
+                    const loaderId = `modal_loader_${avance.id}_${idx}`;
+                    const urlEncoded = encodeURIComponent(foto.url);
+                    return `
+                        <div class="modal-foto-card" onclick="abrirFoto('${foto.url}', '${escapeHtml(foto.comentario || '')}')" style="position:relative;overflow:hidden;border-radius:8px;">
+                            <div id="${loaderId}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--gris-oscuro);z-index:2;">
+                                <i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);"></i>
+                            </div>
+                            <img id="${fotoId}" src="" 
+                                 style="width:100%;height:200px;object-fit:cover;display:none;opacity:0;cursor:pointer;"
+                                 data-url="${urlEncoded}"
+                                 onclick="event.stopPropagation(); abrirFoto('${foto.url}', '${escapeHtml(foto.comentario || '')}')">
+                            ${foto.comentario ? `<div class="modal-foto-caption">${escapeHtml(foto.comentario)}</div>` : ''}
+                        </div>
+                    `;
+                }).join('')}
             </div>
         `;
     }
@@ -431,8 +547,92 @@ window.verDetalleAvance = function(avanceId) {
     }
     
     abrirModal('modalDetalle');
+    
+    // 🔥 CARGAR FOTOS DEL MODAL CON PROXY
+    setTimeout(() => {
+        cargarFotosModalClienteProxy();
+    }, 200);
 };
+// =====================================================
+// 🔥 CARGAR FOTOS DEL MODAL CLIENTE CON PROXY
+// =====================================================
 
+async function cargarFotosModalClienteProxy() {
+    console.log('🖼️ Cargando fotos del modal cliente con proxy...');
+    
+    const fotos = document.querySelectorAll('#modalCuerpo img[data-url]');
+    console.log(`📸 Encontradas ${fotos.length} fotos en modal`);
+    
+    for (const img of fotos) {
+        const urlEncoded = img.getAttribute('data-url');
+        const url = decodeURIComponent(urlEncoded);
+        
+        let loader = null;
+        const loaderId = img.id.replace('modal_foto_', 'modal_loader_');
+        loader = document.getElementById(loaderId);
+        
+        if (!loader) {
+            const parent = img.closest('.modal-foto-card');
+            if (parent) {
+                loader = parent.querySelector('[id^="modal_loader_"]');
+            }
+        }
+        
+        const ocultarLoader = () => {
+            if (loader) {
+                loader.style.display = 'none';
+            }
+        };
+        
+        if (!url || url === 'null' || url === '' || url === 'undefined') {
+            img.style.display = 'none';
+            ocultarLoader();
+            continue;
+        }
+        
+        try {
+            const token = getToken();
+            if (!token) {
+                throw new Error('No hay token');
+            }
+            
+            const proxyUrl = `${window.API_BASE_URL || ''}/api/cliente/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
+            
+            const response = await fetch(proxyUrl, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.base64) {
+                const nuevaImg = new Image();
+                nuevaImg.onload = function() {
+                    img.src = data.base64;
+                    img.style.display = 'block';
+                    img.style.opacity = '1';
+                    ocultarLoader();
+                };
+                nuevaImg.onerror = function() {
+                    img.style.display = 'none';
+                    ocultarLoader();
+                };
+                nuevaImg.src = data.base64;
+            } else {
+                throw new Error(data.error || 'Error al cargar');
+            }
+        } catch (error) {
+            console.error('Error cargando foto modal:', error);
+            img.style.display = 'none';
+            ocultarLoader();
+        }
+    }
+}
 window.verInfoOrden = function() {
     if (!ordenActual && currentVehiculo) {
         // Mostrar información de que no hay orden activa
@@ -494,11 +694,22 @@ window.verInfoOrden = function() {
     }
 };
 
-window.abrirFoto = function(url, caption) {
+window.abrirFoto = async function(url, caption) {
+    if (!url) return;
+    
     const img = document.getElementById('fotoAmpliada');
     const captionDiv = document.getElementById('fotoCaption');
+    const loader = document.getElementById('fotoAmpliadaLoader');
     
-    if (img) img.src = url;
+    if (!img) return;
+    
+    // Resetear estados
+    img.style.display = 'none';
+    img.src = '';
+    if (loader) {
+        loader.style.display = 'flex';
+        loader.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
+    }
     if (captionDiv) {
         if (caption) {
             captionDiv.innerHTML = caption;
@@ -509,7 +720,64 @@ window.abrirFoto = function(url, caption) {
     }
     
     document.getElementById('modalFoto').classList.add('show');
+    
+    try {
+        const token = getToken();
+        if (!token) {
+            throw new Error('No hay token');
+        }
+        
+        const proxyUrl = `${window.API_BASE_URL || ''}/api/cliente/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
+        
+        const response = await fetch(proxyUrl, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            const nuevaImg = new Image();
+            nuevaImg.onload = function() {
+                img.src = data.base64;
+                img.style.display = 'block';
+                if (loader) loader.style.display = 'none';
+            };
+            nuevaImg.onerror = function() {
+                if (loader) {
+                    loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+                    loader.style.display = 'flex';
+                }
+                showToast('Error al cargar la imagen', 'error');
+            };
+            nuevaImg.src = data.base64;
+        } else {
+            throw new Error(data.error || 'Error al cargar');
+        }
+    } catch (error) {
+        console.error('Error abriendo foto:', error);
+        if (loader) {
+            loader.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${error.message}`;
+            loader.style.display = 'flex';
+        }
+        showToast('Error al cargar la imagen', 'error');
+    }
 };
+// =====================================================
+// 🔥 OBTENER TOKEN
+// =====================================================
+
+function getToken() {
+    let token = localStorage.getItem('furia_token');
+    if (!token) token = localStorage.getItem('token');
+    if (!token) token = sessionStorage.getItem('token');
+    return token;
+}
 
 function cerrarModalFoto() {
     document.getElementById('modalFoto').classList.remove('show');

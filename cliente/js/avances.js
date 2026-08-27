@@ -344,11 +344,11 @@ function renderizarAvance(avance, index, total) {
     `;
 }
 // =====================================================
-// 🔥 CARGAR FOTOS MINIATURA - VERSIÓN CON THUMBNAIL DIRECTO
+// 🔥 CARGAR FOTOS MINIATURA - USANDO PROXY DE BACKEND
 // =====================================================
 
 async function cargarFotosClienteProxy() {
-    console.log('🖼️ Cargando miniaturas del cliente...');
+    console.log('🖼️ Cargando miniaturas del cliente con proxy...');
     
     await new Promise(resolve => setTimeout(resolve, 100));
     
@@ -378,76 +378,47 @@ async function cargarFotosClienteProxy() {
         }
         
         try {
-            // 🔥 EXTRAER FILE_ID DE LA URL DE DRIVE
-            let fileId = null;
-            
-            // Patrón 1: ?id=XXX
-            const match1 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-            if (match1) fileId = match1[1];
-            
-            // Patrón 2: /file/d/XXX
-            if (!fileId) {
-                const match2 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-                if (match2) fileId = match2[1];
+            const token = getToken();
+            if (!token) {
+                throw new Error('No hay token');
             }
             
-            // Patrón 3: /d/XXX
-            if (!fileId) {
-                const match3 = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                if (match3) fileId = match3[1];
+            // 🔥 USAR EL PROXY DEL BACKEND (igual que en el modal)
+            const proxyUrl = `${window.API_BASE_URL || ''}/api/cliente/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
+            console.log(`📡 Cargando miniatura con proxy: ${img.id}`);
+            
+            const response = await fetch(proxyUrl, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
             }
             
-            // Patrón 4: thumbnail?id=XXX
-            if (!fileId) {
-                const match4 = url.match(/thumbnail\?id=([a-zA-Z0-9_-]+)/);
-                if (match4) fileId = match4[1];
-            }
+            const data = await response.json();
             
-            console.log(`🔍 ${img.id}: fileId=${fileId}`);
-            
-            if (!fileId) {
-                console.warn(`⚠️ No se pudo extraer fileId de: ${url.substring(0, 60)}...`);
-                img.style.display = 'none';
-                ocultarLoader();
-                continue;
-            }
-            
-            // 🔥 USAR THUMBNAIL DIRECTO DE GOOGLE DRIVE (SIN PROXY)
-            const thumbUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`;
-            console.log(`📡 Cargando miniatura: ${img.id} -> thumbnail`);
-            
-            // Cargar la imagen directamente
-            const nuevaImg = new Image();
-            nuevaImg.crossOrigin = 'anonymous';
-            
-            await new Promise((resolve) => {
+            if (data.success && data.base64) {
+                const nuevaImg = new Image();
                 nuevaImg.onload = function() {
-                    img.src = thumbUrl;
+                    img.src = data.base64;
                     img.style.display = 'block';
                     img.style.opacity = '1';
                     ocultarLoader();
                     console.log(`✅ Miniatura cargada: ${img.id}`);
-                    resolve();
                 };
                 nuevaImg.onerror = function() {
-                    console.warn(`⚠️ Thumbnail falló para ${img.id}, intentando con proxy...`);
-                    // Si thumbnail falla, intentar con el proxy
-                    cargarConProxy(img, url, loader);
-                    resolve();
+                    console.error(`❌ Error en miniatura: ${img.id}`);
+                    img.style.display = 'none';
+                    ocultarLoader();
                 };
-                // Timeout por si tarda demasiado
-                setTimeout(() => {
-                    if (!img.src) {
-                        console.warn(`⏰ Timeout para ${img.id}`);
-                        cargarConProxy(img, url, loader);
-                        resolve();
-                    }
-                }, 5000);
-                nuevaImg.src = thumbUrl;
-            });
-            
+                nuevaImg.src = data.base64;
+            } else {
+                throw new Error(data.error || 'Error al cargar');
+            }
         } catch (error) {
-            console.error(`❌ Error ${img.id}:`, error);
+            console.warn(`⚠️ Error en miniatura ${img.id}:`, error.message);
             img.style.display = 'none';
             ocultarLoader();
         }
@@ -753,7 +724,6 @@ function cerrarFotoAmpliadaCliente() {
 async function cargarFotosModalClienteProxy() {
     console.log('🖼️ Cargando fotos del modal cliente con proxy...');
     
-    // 🔥 Buscar en el nuevo contenedor
     const fotos = document.querySelectorAll('#modalCuerpo img[data-url]');
     console.log(`📸 Encontradas ${fotos.length} fotos en modal`);
     
@@ -762,20 +732,13 @@ async function cargarFotosModalClienteProxy() {
         const url = decodeURIComponent(urlEncoded);
         
         let loader = null;
-        const loaderId = img.id.replace('modal_foto_', 'modal_loader_');
-        loader = document.getElementById(loaderId);
-        
-        if (!loader) {
-            const parent = img.closest('.modal-foto-card-cliente');
-            if (parent) {
-                loader = parent.querySelector('[id^="modal_loader_"]');
-            }
+        const parent = img.closest('.modal-foto-card-cliente');
+        if (parent) {
+            loader = parent.querySelector('[id^="modal_loader_"]');
         }
         
         const ocultarLoader = () => {
-            if (loader) {
-                loader.style.display = 'none';
-            }
+            if (loader) loader.style.display = 'none';
         };
         
         if (!url || url === 'null' || url === '' || url === 'undefined') {

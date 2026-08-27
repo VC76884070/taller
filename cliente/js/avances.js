@@ -480,6 +480,10 @@ async function cargarDatosVehiculo() {
     }
 }
 
+// =====================================================
+// VER DETALLE DEL AVANCE - CON FOTOS EN CUADROS PEQUEÑOS
+// =====================================================
+
 window.verDetalleAvance = function(avanceId) {
     const avance = avancesActuales.find(a => a.id === avanceId);
     if (!avance) return;
@@ -491,57 +495,63 @@ window.verDetalleAvance = function(avanceId) {
     
     const fecha = formatDateTime(avance.fecha_aprobacion || avance.fecha_creacion);
     
+    // 🔥 GENERAR FOTOS EN CUADROS PEQUEÑOS (como en técnico)
     let fotosHtml = '';
     if (avance.fotos && avance.fotos.length > 0) {
         fotosHtml = `
-            <div class="modal-fotos-grid">
+            <div class="modal-fotos-grid-cliente">
                 ${avance.fotos.map((foto, idx) => {
                     const fotoId = `modal_foto_${avance.id}_${idx}`;
                     const loaderId = `modal_loader_${avance.id}_${idx}`;
                     const urlEncoded = encodeURIComponent(foto.url);
                     return `
-                        <div class="modal-foto-card" onclick="abrirFoto('${foto.url}', '${escapeHtml(foto.comentario || '')}')" style="position:relative;overflow:hidden;border-radius:8px;">
-                            <div id="${loaderId}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--gris-oscuro);z-index:2;">
-                                <i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);"></i>
+                        <div class="modal-foto-card-cliente" onclick="abrirFotoAmpliadaCliente('${foto.url}', '${escapeHtml(foto.comentario || '')}')" style="position:relative;overflow:hidden;border-radius:var(--radius-sm);cursor:pointer;aspect-ratio:1;background:var(--gris-oscuro);">
+                            <div id="${loaderId}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;">
+                                <i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);font-size:1.5rem;"></i>
                             </div>
                             <img id="${fotoId}" src="" 
-                                 style="width:100%;height:200px;object-fit:cover;display:none;opacity:0;cursor:pointer;"
+                                 style="width:100%;height:100%;object-fit:cover;display:none;opacity:0;"
                                  data-url="${urlEncoded}"
-                                 onclick="event.stopPropagation(); abrirFoto('${foto.url}', '${escapeHtml(foto.comentario || '')}')">
-                            ${foto.comentario ? `<div class="modal-foto-caption">${escapeHtml(foto.comentario)}</div>` : ''}
+                                 onclick="event.stopPropagation(); abrirFotoAmpliadaCliente('${foto.url}', '${escapeHtml(foto.comentario || '')}')">
+                            ${foto.comentario ? `<div class="modal-foto-caption-cliente">${escapeHtml(foto.comentario)}</div>` : ''}
                         </div>
                     `;
                 }).join('')}
             </div>
         `;
+    } else {
+        fotosHtml = '<div class="detalle-sin-fotos"><i class="fas fa-image"></i><p>No hay fotos disponibles</p></div>';
     }
     
     if (modalCuerpo) {
         modalCuerpo.innerHTML = `
-            <div class="detalle-avance">
-                <div class="detalle-meta">
-                    <div class="meta-item">
+            <div class="detalle-avance-cliente">
+                <div class="detalle-meta-cliente">
+                    <div class="meta-item-cliente">
                         <i class="far fa-calendar-alt"></i>
                         <span>${fecha}</span>
                     </div>
-                    <div class="meta-item">
+                    <div class="meta-item-cliente">
                         <i class="fas fa-receipt"></i>
                         <span>Orden: ${escapeHtml(ordenActual?.codigo_unico || 'N/A')}</span>
                     </div>
-                    <div class="meta-item">
+                    <div class="meta-item-cliente">
                         <i class="fas fa-car"></i>
                         <span>${escapeHtml(currentVehiculo?.marca)} ${escapeHtml(currentVehiculo?.modelo || '')}</span>
                     </div>
                 </div>
                 
                 ${avance.descripcion ? `
-                    <div class="detalle-descripcion">
+                    <div class="detalle-descripcion-cliente">
                         <h4><i class="fas fa-align-left"></i> Descripción</h4>
                         <p>${escapeHtml(avance.descripcion)}</p>
                     </div>
                 ` : ''}
                 
-                ${fotosHtml || '<div class="detalle-sin-fotos"><i class="fas fa-image"></i><p>No hay fotos disponibles</p></div>'}
+                <div class="detalle-fotos-section-cliente">
+                    <h4><i class="fas fa-images"></i> Fotos (${avance.fotos?.length || 0})</h4>
+                    ${fotosHtml}
+                </div>
             </div>
         `;
     }
@@ -554,12 +564,142 @@ window.verDetalleAvance = function(avanceId) {
     }, 200);
 };
 // =====================================================
+// 🔥 ABRIR FOTO AMPLIADA (MODAL GRANDE) - CLIENTE
+// =====================================================
+
+window.abrirFotoAmpliadaCliente = async function(url, caption) {
+    if (!url) return;
+    
+    // Crear modal si no existe
+    let modal = document.getElementById('fotoAmpliadaModalCliente');
+    if (!modal) {
+        const modalHtml = `
+            <div class="modal" id="fotoAmpliadaModalCliente" onclick="cerrarFotoAmpliadaCliente()">
+                <div class="modal-content" style="max-width: 90%; max-height: 95vh; background: var(--bg-card); padding: 1rem;" onclick="event.stopPropagation()">
+                    <div class="modal-header" style="border-bottom: 1px solid var(--gris-oscuro); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                        <h3 style="font-size: 1rem;"><i class="fas fa-image"></i> Foto Ampliada</h3>
+                        <button class="modal-close" onclick="cerrarFotoAmpliadaCliente()" style="background: none; border: none; font-size: 1.5rem; color: var(--gris-texto); cursor: pointer;">&times;</button>
+                    </div>
+                    <div class="modal-body" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0.5rem;background:var(--negro);border-radius:var(--radius-md);position:relative;min-height:300px;">
+                        <div id="fotoAmpliadaLoaderCliente" style="position:absolute;color:white;font-size:1.2rem;z-index:5;">
+                            <i class="fas fa-spinner fa-spin"></i> Cargando...
+                        </div>
+                        <img id="fotoAmpliadaImgCliente" src="" alt="Foto ampliada" 
+                             style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:var(--radius-md);display:none;">
+                        <div id="fotoAmpliadaCaptionCliente" style="color:var(--gris-texto);font-size:0.9rem;margin-top:0.5rem;text-align:center;display:none;width:100%;padding:0.5rem;background:var(--gris-oscuro);border-radius:var(--radius-sm);"></div>
+                    </div>
+                    <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:0.5rem;padding-top:0.5rem;">
+                        <button class="btn-secondary" onclick="cerrarFotoAmpliadaCliente()" style="padding:0.5rem 1rem;font-size:0.9rem;">
+                            <i class="fas fa-times"></i> Cerrar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        modal = document.getElementById('fotoAmpliadaModalCliente');
+    }
+    
+    const img = document.getElementById('fotoAmpliadaImgCliente');
+    const loader = document.getElementById('fotoAmpliadaLoaderCliente');
+    const captionDiv = document.getElementById('fotoAmpliadaCaptionCliente');
+    
+    if (!img) return;
+    
+    // Resetear estados
+    img.style.display = 'none';
+    img.src = '';
+    if (loader) {
+        loader.style.display = 'flex';
+        loader.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
+    }
+    if (captionDiv) {
+        if (caption) {
+            captionDiv.textContent = caption;
+            captionDiv.style.display = 'block';
+        } else {
+            captionDiv.style.display = 'none';
+        }
+    }
+    
+    // Abrir modal
+    modal.classList.add('show');
+    
+    try {
+        const token = getToken();
+        if (!token) {
+            throw new Error('No hay token de autenticación');
+        }
+        
+        const proxyUrl = `${window.API_BASE_URL || ''}/api/cliente/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
+        
+        const response = await fetch(proxyUrl, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            // Pre-cargar la imagen
+            const nuevaImg = new Image();
+            nuevaImg.onload = function() {
+                img.src = data.base64;
+                img.style.display = 'block';
+                if (loader) loader.style.display = 'none';
+            };
+            nuevaImg.onerror = function() {
+                if (loader) {
+                    loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al cargar imagen';
+                    loader.style.display = 'flex';
+                }
+                showToast('Error al cargar la imagen', 'error');
+            };
+            nuevaImg.src = data.base64;
+        } else {
+            throw new Error(data.error || 'Error al obtener la imagen');
+        }
+    } catch (error) {
+        console.error('Error cargando foto ampliada:', error);
+        if (loader) {
+            loader.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${error.message}`;
+            loader.style.display = 'flex';
+        }
+        showToast('Error al cargar la imagen', 'error');
+    }
+};
+
+// =====================================================
+// CERRAR FOTO AMPLIADA (CLIENTE)
+// =====================================================
+
+function cerrarFotoAmpliadaCliente() {
+    const modal = document.getElementById('fotoAmpliadaModalCliente');
+    if (modal) modal.classList.remove('show');
+    const img = document.getElementById('fotoAmpliadaImgCliente');
+    if (img) {
+        img.src = '';
+        img.style.display = 'none';
+    }
+    const loader = document.getElementById('fotoAmpliadaLoaderCliente');
+    if (loader) {
+        loader.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
+        loader.style.display = 'none';
+    }
+}
+// =====================================================
 // 🔥 CARGAR FOTOS DEL MODAL CLIENTE CON PROXY
 // =====================================================
 
 async function cargarFotosModalClienteProxy() {
     console.log('🖼️ Cargando fotos del modal cliente con proxy...');
     
+    // 🔥 Buscar en el nuevo contenedor
     const fotos = document.querySelectorAll('#modalCuerpo img[data-url]');
     console.log(`📸 Encontradas ${fotos.length} fotos en modal`);
     
@@ -572,7 +712,7 @@ async function cargarFotosModalClienteProxy() {
         loader = document.getElementById(loaderId);
         
         if (!loader) {
-            const parent = img.closest('.modal-foto-card');
+            const parent = img.closest('.modal-foto-card-cliente');
             if (parent) {
                 loader = parent.querySelector('[id^="modal_loader_"]');
             }
@@ -619,6 +759,7 @@ async function cargarFotosModalClienteProxy() {
                     ocultarLoader();
                 };
                 nuevaImg.onerror = function() {
+                    console.error(`❌ Error en foto modal: ${img.id}`);
                     img.style.display = 'none';
                     ocultarLoader();
                 };
@@ -857,5 +998,6 @@ window.verDetalleAvance = verDetalleAvance;
 window.verInfoOrden = verInfoOrden;
 window.abrirFoto = abrirFoto;
 window.cerrarModalFoto = cerrarModalFoto;
-
+window.abrirFotoAmpliadaCliente = abrirFotoAmpliadaCliente; 
+window.cerrarFotoAmpliadaCliente = cerrarFotoAmpliadaCliente;
 document.addEventListener('DOMContentLoaded', inicializar);

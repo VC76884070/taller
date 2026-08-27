@@ -297,10 +297,8 @@ function renderizarAvance(avance, index, total) {
     const isFirst = index === 0;
     const isLast = index === total - 1;
     
-    // 🔥 GENERAR FOTOS PEQUEÑAS (MINIATURAS)
     let fotosHtml = '';
     if (avance.fotos && avance.fotos.length > 0) {
-        // Mostrar máximo 3 fotos en miniatura
         const fotosMostrar = avance.fotos.slice(0, 3);
         const totalFotos = avance.fotos.length;
         
@@ -308,11 +306,10 @@ function renderizarAvance(avance, index, total) {
             <div class="avance-fotos-mini-cliente">
                 ${fotosMostrar.map((foto, idx) => {
                     const fotoId = `cliente_foto_${avance.id}_${idx}`;
-                    const loaderId = `cliente_loader_${avance.id}_${idx}`;
                     const urlEncoded = encodeURIComponent(foto.url);
                     return `
-                        <div class="foto-mini-card" onclick="event.stopPropagation(); abrirFotoAmpliadaCliente('${foto.url}', '${escapeHtml(foto.comentario || '')}')" style="position:relative;width:80px;height:80px;flex-shrink:0;border-radius:8px;overflow:hidden;background:var(--gris-oscuro);cursor:pointer;">
-                            <div id="${loaderId}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;">
+                        <div class="foto-mini-card" onclick="event.stopPropagation(); abrirFotoAmpliadaCliente('${foto.url}', '${escapeHtml(foto.comentario || '')}')">
+                            <div class="loader-mini" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;background:var(--gris-oscuro);">
                                 <i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);font-size:1rem;"></i>
                             </div>
                             <img id="${fotoId}" src="" 
@@ -322,7 +319,7 @@ function renderizarAvance(avance, index, total) {
                         </div>
                     `;
                 }).join('')}
-                ${totalFotos > 3 ? `<div class="foto-mini-mas" style="width:80px;height:80px;flex-shrink:0;border-radius:8px;background:var(--rojo-primario);display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:1.2rem;cursor:pointer;" onclick="event.stopPropagation(); verDetalleAvance(${avance.id})">+${totalFotos - 3}</div>` : ''}
+                ${totalFotos > 3 ? `<div class="foto-mini-mas" onclick="event.stopPropagation(); verDetalleAvance(${avance.id})">+${totalFotos - 3}</div>` : ''}
             </div>
         `;
     }
@@ -351,39 +348,48 @@ function renderizarAvance(avance, index, total) {
     `;
 }
 // =====================================================
-// 🔥 CARGAR FOTOS MINIATURA DEL CLIENTE CON PROXY
+// 🔥 CARGAR FOTOS MINIATURA DEL CLIENTE CON PROXY (CORREGIDO)
 // =====================================================
 
 async function cargarFotosClienteProxy() {
     console.log('🖼️ Cargando miniaturas del cliente con proxy...');
     
-    // 🔥 Buscar SOLO las imágenes que son miniaturas (tamaño 80x80)
-    const fotos = document.querySelectorAll('.foto-mini-card img[data-url]');
-    console.log(`📸 Encontradas ${fotos.length} miniaturas para cargar`);
+    // 🔥 Buscar TODAS las imágenes con data-url dentro de .foto-mini-card
+    const miniaturas = document.querySelectorAll('.foto-mini-card img[data-url]');
+    console.log(`📸 Encontradas ${miniaturas.length} miniaturas para cargar`);
     
-    if (fotos.length === 0) {
+    if (miniaturas.length === 0) {
         console.log('⚠️ No se encontraron miniaturas con data-url');
         return;
     }
     
-    for (const img of fotos) {
+    for (const img of miniaturas) {
         const urlEncoded = img.getAttribute('data-url');
         const url = decodeURIComponent(urlEncoded);
         
-        // Buscar loader asociado
+        // 🔥 Buscar el loader en el mismo contenedor .foto-mini-card
+        const parentCard = img.closest('.foto-mini-card');
         let loader = null;
-        const parent = img.closest('.foto-mini-card');
-        if (parent) {
-            loader = parent.querySelector('[id^="cliente_loader_"]');
+        
+        if (parentCard) {
+            // Buscar cualquier elemento con ID que empiece con "cliente_loader_"
+            loader = parentCard.querySelector('[id^="cliente_loader_"]');
         }
         
-        // Función para ocultar loader siempre
+        // Si no encuentra por ID, buscar el div con el spinner
+        if (!loader && parentCard) {
+            loader = parentCard.querySelector('.loader-mini');
+        }
+        
+        // 🔥 Función para ocultar loader SIEMPRE
         const ocultarLoader = () => {
             if (loader) {
                 loader.style.display = 'none';
+                console.log(`✅ Loader ocultado para: ${img.id}`);
             }
         };
         
+        // Si no hay URL válida, ocultar todo
         if (!url || url === 'null' || url === '' || url === 'undefined') {
             img.style.display = 'none';
             ocultarLoader();
@@ -397,6 +403,7 @@ async function cargarFotosClienteProxy() {
             }
             
             const proxyUrl = `${window.API_BASE_URL || ''}/api/cliente/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
+            console.log(`📡 Cargando miniatura: ${img.id}`);
             
             const response = await fetch(proxyUrl, {
                 headers: {
@@ -411,15 +418,17 @@ async function cargarFotosClienteProxy() {
             const data = await response.json();
             
             if (data.success && data.base64) {
+                // Pre-cargar la imagen
                 const nuevaImg = new Image();
                 nuevaImg.onload = function() {
                     img.src = data.base64;
                     img.style.display = 'block';
                     img.style.opacity = '1';
                     ocultarLoader();
+                    console.log(`✅ Miniatura cargada: ${img.id}`);
                 };
                 nuevaImg.onerror = function() {
-                    console.error(`❌ Error en miniatura: ${img.id}`);
+                    console.error(`❌ Error pre-cargando: ${img.id}`);
                     img.style.display = 'none';
                     ocultarLoader();
                 };
@@ -428,11 +437,13 @@ async function cargarFotosClienteProxy() {
                 throw new Error(data.error || 'Error al cargar');
             }
         } catch (error) {
-            console.error('Error cargando miniatura:', error);
+            console.error(`❌ Error cargando miniatura ${img.id}:`, error);
             img.style.display = 'none';
             ocultarLoader();
         }
     }
+    
+    console.log('✅ Procesamiento de miniaturas completado');
 }
 // =====================================================
 // CARGAR DATOS OPTIMIZADO

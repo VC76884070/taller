@@ -435,3 +435,65 @@ def verify_token(current_user):
         'success': True, 
         'user': current_user
     }), 200
+
+# =====================================================
+# ENDPOINT PARA SOLICITAR CAMBIOS (JEFE DE TALLER)
+# =====================================================
+
+@avance_jefe_bp.route('/solicitar-cambios/<int:id_avance>', methods=['PUT'])
+@jefe_taller_required
+def solicitar_cambios_avance(current_user, id_avance):
+    """Solicitar cambios en un avance (estado: cambios_solicitados)"""
+    try:
+        data = request.get_json() or {}
+        comentario = data.get('comentario', '').strip()
+        
+        if not comentario:
+            return jsonify({'success': False, 'error': 'Debes proporcionar un comentario sobre los cambios solicitados'}), 400
+        
+        logger.info(f"📝 Usuario {current_user.get('id')} solicitando cambios en avance {id_avance}")
+        
+        ahora = datetime.datetime.now().isoformat()
+        
+        # Obtener el avance
+        avance = supabase.table('avance_trabajo') \
+            .select('id_tecnico, id_orden_trabajo, titulo, numero_avance') \
+            .eq('id', id_avance) \
+            .execute()
+        
+        if not avance.data:
+            return jsonify({'success': False, 'error': 'Avance no encontrado'}), 404
+        
+        tecnico_id = avance.data[0]['id_tecnico']
+        titulo_avance = avance.data[0]['titulo']
+        numero_avance = avance.data[0].get('numero_avance', '?')
+        
+        # Actualizar avance a 'cambios_solicitados'
+        supabase.table('avance_trabajo') \
+            .update({
+                'estado': 'cambios_solicitados',
+                'comentario_revision': comentario,
+                'aprobado_por': current_user['id'],
+                'fecha_actualizacion': ahora
+            }) \
+            .eq('id', id_avance) \
+            .execute()
+        
+        # Notificar al técnico
+        mensaje = f"📝 Se solicitan cambios en tu avance #{numero_avance} '{titulo_avance}'.\n\nComentario: {comentario}\n\nPor favor, realiza los ajustes y reenvía el avance."
+        
+        notificar_tecnico(tecnico_id, 'avance_cambios', mensaje, id_avance)
+        
+        # Limpiar caché
+        cache.clear('avances_pendientes')
+        cache.clear('pendientes_count')
+        cache.clear('avances_procesados_all')
+        cache.clear('avances_procesados_aprobado')
+        cache.clear('avances_procesados_rechazado')
+        
+        logger.info(f"✅ Cambios solicitados en avance {id_avance}")
+        return jsonify({'success': True, 'message': 'Cambios solicitados al técnico'}), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error en solicitar_cambios_avance: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500

@@ -1,7 +1,7 @@
 // =====================================================
 // AVANCE.JS - TÉCNICO MECÁNICO
-// REGISTRO DE AVANCES DE TRABAJO
-// VERSIÓN COMPLETA - CON PREVIEW FUNCIONANDO
+// REGISTRO DE AVANCES DE TRABAJO - SOPORTE PARA MÚLTIPLES AVANCES
+// VERSIÓN COMPLETA CORREGIDA
 // =====================================================
 
 // =====================================================
@@ -118,7 +118,6 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
             throw new Error('No hay token de autenticación');
         }
 
-        // 🔥 USAR EL NUEVO PROXY DE AVANCE
         const proxyUrl = `${API_URL}/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
         
         const response = await fetch(proxyUrl, {
@@ -170,6 +169,7 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
         return null;
     }
 }
+
 // =====================================================
 // FUNCIÓN PARA ACTUALIZAR PREVIEW DE FOTO CON PROXY
 // =====================================================
@@ -178,7 +178,6 @@ async function actualizarPreviewConProxy(index, url) {
     const preview = document.getElementById(`preview_${index}`);
     if (!preview) return;
 
-    // Mostrar loader en el preview
     preview.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;"><i class="fas fa-spinner fa-spin" style="font-size:1.5rem;color:var(--gris-texto);"></i></div>';
     preview.classList.add('has-image');
 
@@ -356,6 +355,7 @@ async function cargarAvances() {
             const avancesSection = document.getElementById('avancesExistentes');
             if (avancesSection) avancesSection.style.display = 'block';
             
+            // Ocultar formulario al cargar avances
             document.getElementById('formAvance').style.display = 'none';
             avanceEditandoId = null;
         } else {
@@ -370,7 +370,7 @@ async function cargarAvances() {
 }
 
 // =====================================================
-// RENDERIZAR AVANCES - VERSIÓN CORREGIDA
+// RENDERIZAR AVANCES - CON SOPORTE PARA MÚLTIPLES AVANCES
 // =====================================================
 
 function renderizarAvances() {
@@ -388,8 +388,17 @@ function renderizarAvances() {
         return;
     }
 
-    container.innerHTML = avancesActuales.map(avance => {
-        // 🔥 GENERAR FOTOS CON IDS ÚNICOS PARA PROXY
+    // Ordenar: primero los pendientes, luego los aprobados
+    const avancesOrdenados = [...avancesActuales].sort((a, b) => {
+        const pesoA = a.estado === 'pendiente' ? 0 : a.estado === 'rechazado' ? 1 : a.estado === 'cambios_solicitados' ? 2 : 3;
+        const pesoB = b.estado === 'pendiente' ? 0 : b.estado === 'rechazado' ? 1 : b.estado === 'cambios_solicitados' ? 2 : 3;
+        return pesoA - pesoB || (a.numero_avance || 0) - (b.numero_avance || 0);
+    });
+
+    container.innerHTML = avancesOrdenados.map(avance => {
+        const numeroAvance = avance.numero_avance || '?';
+        
+        // Generar fotos
         let fotosPreview = '';
         if (avance.fotos && avance.fotos.length > 0) {
             fotosPreview = avance.fotos.slice(0, 3).map((f, idx) => {
@@ -434,6 +443,11 @@ function renderizarAvances() {
                 estadoText = '❌ Rechazado - Corregir';
                 puedeActualizar = true;
                 break;
+            case 'cambios_solicitados':
+                estadoClass = 'status-cambios';
+                estadoText = '📝 Cambios solicitados';
+                puedeActualizar = true;
+                break;
             default:
                 estadoClass = 'status-pendiente';
                 estadoText = 'Pendiente';
@@ -451,7 +465,10 @@ function renderizarAvances() {
         return `
             <div class="avance-card">
                 <div class="avance-card-header" onclick="verDetalleAvance(${avance.id})">
-                    <span class="avance-titulo">${escapeHtml(avance.titulo || 'Sin título')}</span>
+                    <span class="avance-titulo">
+                        <span class="avance-numero">#${numeroAvance}</span>
+                        ${escapeHtml(avance.titulo || 'Sin título')}
+                    </span>
                     <span class="avance-fecha">${formatDate(avance.fecha_creacion)}</span>
                 </div>
                 <div class="avance-card-body" onclick="verDetalleAvance(${avance.id})">
@@ -468,30 +485,31 @@ function renderizarAvances() {
                         <button class="btn-actualizar" onclick="event.stopPropagation(); cargarAvanceParaActualizar(${avance.id})">
                             <i class="fas fa-edit"></i> Actualizar
                         </button>
-                    ` : ''}
+                    ` : `
+                        <span class="badge-aprobado"><i class="fas fa-check-circle"></i> Aprobado</span>
+                    `}
                 </div>
             </div>
         `;
     }).join('');
 
-    // 🔥 CARGAR FOTOS CON PROXY DESPUÉS DE RENDERIZAR
+    // Cargar fotos miniaturas
     setTimeout(() => {
         cargarFotosMiniaturasConProxy();
     }, 100);
 }
+
 // =====================================================
-// 🔥 CARGAR FOTOS MINIATURA CON PROXY (VERSIÓN CORREGIDA)
+// CARGAR FOTOS MINIATURA CON PROXY
 // =====================================================
 
 async function cargarFotosMiniaturasConProxy() {
     console.log('🖼️ Cargando miniaturas con proxy...');
     
-    // Buscar TODAS las imágenes con data-url dentro de la lista de avances
     const miniaturas = document.querySelectorAll('#listaAvances img[data-url]');
     console.log(`📸 Encontradas ${miniaturas.length} miniaturas para cargar`);
     
     if (miniaturas.length === 0) {
-        console.log('⚠️ No se encontraron miniaturas con data-url');
         return;
     }
     
@@ -499,12 +517,10 @@ async function cargarFotosMiniaturasConProxy() {
         const urlEncoded = img.getAttribute('data-url');
         const url = decodeURIComponent(urlEncoded);
         
-        // 🔥 Buscar el loader asociado
         let loader = null;
         const loaderId = img.id.replace('foto_mini_', 'loader_mini_');
         loader = document.getElementById(loaderId);
         
-        // Si no encuentra por ID, buscar en el contenedor padre
         if (!loader) {
             const parent = img.closest('div[style*="position:relative"]');
             if (parent) {
@@ -512,17 +528,15 @@ async function cargarFotosMiniaturasConProxy() {
             }
         }
         
-        // 🔥 SIEMPRE OCULTAR EL LOADER AL FINALIZAR (éxito o error)
         const ocultarLoader = () => {
             if (loader) {
                 loader.style.display = 'none';
-                console.log(`✅ Loader ocultado para: ${img.id}`);
             }
         };
         
         if (!url || url === 'null' || url === '' || url === 'undefined') {
             img.style.display = 'none';
-            ocultarLoader(); // ← OCULTAR LOADER
+            ocultarLoader();
             continue;
         }
         
@@ -532,7 +546,6 @@ async function cargarFotosMiniaturasConProxy() {
                 throw new Error('No hay token de autenticación');
             }
             
-            // 🔥 USAR EL PROXY
             const proxyUrl = `${API_URL}/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
             
             const response = await fetch(proxyUrl, {
@@ -548,18 +561,17 @@ async function cargarFotosMiniaturasConProxy() {
             const data = await response.json();
             
             if (data.success && data.base64) {
-                // Pre-cargar antes de asignar
                 const nuevaImg = new Image();
                 nuevaImg.onload = function() {
                     img.src = data.base64;
                     img.style.display = 'block';
                     img.style.opacity = '1';
-                    ocultarLoader(); // ← OCULTAR LOADER AL CARGAR
+                    ocultarLoader();
                 };
                 nuevaImg.onerror = function() {
                     console.error(`❌ Error pre-cargando imagen: ${img.id}`);
                     img.style.display = 'none';
-                    ocultarLoader(); // ← OCULTAR LOADER EN ERROR
+                    ocultarLoader();
                 };
                 nuevaImg.src = data.base64;
             } else {
@@ -568,11 +580,9 @@ async function cargarFotosMiniaturasConProxy() {
         } catch (error) {
             console.error(`❌ Error cargando miniatura ${img.id}:`, error);
             img.style.display = 'none';
-            ocultarLoader(); // ← OCULTAR LOADER EN ERROR
+            ocultarLoader();
         }
     }
-    
-    console.log('✅ Procesamiento de miniaturas completado');
 }
 
 // =====================================================
@@ -630,6 +640,10 @@ function limpiarFormulario() {
     subiendo = false;
     totalFotosSubiendo = 0;
     fotosSubidasExitosas = 0;
+    
+    // Eliminar alert de revisión si existe
+    const alertReview = document.querySelector('.alert-review');
+    if (alertReview) alertReview.remove();
 }
 
 function resetearBotonesFormulario() {
@@ -653,11 +667,9 @@ function configurarSubidaFotos() {
         const input = document.getElementById(`fotoInput_${i}`);
         if (!input) continue;
 
-        // Clonar para eliminar eventos previos
         const newInput = input.cloneNode(true);
         input.parentNode.replaceChild(newInput, input);
         
-        // ✅ Asegurar que capture esté presente
         if (!newInput.hasAttribute('capture') && !newInput.getAttribute('capture')) {
             newInput.setAttribute('capture', 'environment');
         }
@@ -667,7 +679,7 @@ function configurarSubidaFotos() {
 }
 
 // =====================================================
-// 🔥 PROCESAR FOTO - CON PREVIEW LOCAL INMEDIATO
+// PROCESAR FOTO - CON PREVIEW LOCAL INMEDIATO
 // =====================================================
 
 async function procesarFoto(index, event) {
@@ -684,7 +696,7 @@ async function procesarFoto(index, event) {
         return;
     }
 
-    // ✅ 1. PREVIEW LOCAL INMEDIATO (SIN ESPERAR SUBIDA)
+    // Preview local inmediato
     const reader = new FileReader();
     reader.onload = function(e) {
         const preview = document.getElementById(`preview_${index}`);
@@ -696,10 +708,8 @@ async function procesarFoto(index, event) {
             preview.innerHTML = '';
         }
         
-        // ✅ 2. Mostrar círculo de progreso con 0%
         mostrarCirculoProgreso(index, 0);
         
-        // ✅ 3. Mostrar loading sutil
         const loading = document.getElementById(`loading_${index}`);
         if (loading) {
             loading.style.display = 'flex';
@@ -708,23 +718,21 @@ async function procesarFoto(index, event) {
     };
     reader.readAsDataURL(file);
 
-    // ✅ 4. Agregar a la cola de subida
+    // Agregar a la cola de subida
     colaSubida.push({
         index: index,
         file: file
     });
 
-    // ✅ 5. Mostrar barra de progreso general
     mostrarBarraProgreso();
 
-    // ✅ 6. Iniciar procesamiento en cola si no está en curso
     if (!subiendo) {
         procesarCola();
     }
 }
 
 // =====================================================
-// 🔥 PROCESAR COLA DE SUBIDA - CON PREVIEW CORREGIDO
+// PROCESAR COLA DE SUBIDA
 // =====================================================
 
 async function procesarCola() {
@@ -761,7 +769,6 @@ async function procesarCola() {
         const result = await subirFotoADrive(file, codigo_orden);
 
         if (result.url) {
-            // ✅ SUBIDA EXITOSA
             actualizarCirculoProgreso(index, 100);
             
             const comentarioInput = document.getElementById(`comentario_${index}`);
@@ -771,10 +778,8 @@ async function procesarCola() {
                 comentario: comentarioInput ? comentarioInput.value : ''
             };
 
-            // ✅ ACTUALIZAR PREVIEW CON PROXY (REGLAS DE ORO)
             await actualizarPreviewConProxy(index, result.url);
 
-            // ✅ OCULTAR LOADING Y CÍRCULO
             const loading = document.getElementById(`loading_${index}`);
             if (loading) loading.style.display = 'none';
             ocultarCirculoProgreso(index);
@@ -783,11 +788,9 @@ async function procesarCola() {
             if (removeBtn) removeBtn.style.display = 'block';
 
             fotosSubidasExitosas++;
-            showToast(`Foto ${index + 1} subida correctamente a Drive`, 'success');
+            showToast(`Foto ${index + 1} subida correctamente`, 'success');
         } else {
-            // ❌ ERROR EN SUBIDA - MANTENER PREVIEW LOCAL
             ocultarCirculoProgreso(index);
-            
             const loading = document.getElementById(`loading_${index}`);
             if (loading) loading.style.display = 'none';
             showToast(`Error al subir foto ${index + 1}`, 'error');
@@ -795,7 +798,6 @@ async function procesarCola() {
     } catch (error) {
         console.error('Error subiendo foto:', error);
         ocultarCirculoProgreso(index);
-        
         const loading = document.getElementById(`loading_${index}`);
         if (loading) loading.style.display = 'none';
         showToast(`Error al subir foto ${index + 1}`, 'error');
@@ -803,7 +805,6 @@ async function procesarCola() {
 
     actualizarProgreso();
 
-    // ✅ ACTUALIZAR CÍRCULOS DE LAS FOTOS EN COLA
     colaSubida.forEach((item, idx) => {
         const progressIndex = item.index;
         const progresoIndividual = Math.round(((fotosSubidasExitosas + idx) / totalFotosSubiendo) * 100);
@@ -959,7 +960,7 @@ async function subirFotoADrive(file, codigo_orden) {
 }
 
 // =====================================================
-// 🔥 CARGAR AVANCE PARA ACTUALIZAR - CON PREVIEW CORREGIDO
+// CARGAR AVANCE PARA ACTUALIZAR - CON COMENTARIO DE REVISIÓN
 // =====================================================
 
 window.cargarAvanceParaActualizar = async function(avanceId) {
@@ -968,28 +969,47 @@ window.cargarAvanceParaActualizar = async function(avanceId) {
     
     console.log('📝 Cargando avance para actualizar:', avance);
     
-    if (avance.estado === 'pendiente') {
-        showToast('⚠️ Este avance está pendiente de revisión. Al actualizarlo, se notificará nuevamente al jefe de taller.', 'warning');
+    // Mostrar mensaje según el estado
+    if (avance.estado === 'cambios_solicitados') {
+        showToast('📝 El jefe de taller solicitó cambios. Realiza las correcciones.', 'info');
     } else if (avance.estado === 'rechazado') {
-        showToast('📝 Este avance fue rechazado. Corrige las observaciones y vuelve a enviar.', 'info');
+        showToast('❌ Este avance fue rechazado. Corrige y reenvía.', 'info');
+    } else if (avance.estado === 'pendiente') {
+        showToast('⚠️ Este avance está pendiente de revisión. Al actualizarlo, se notificará nuevamente.', 'warning');
     }
     
     limpiarFormulario();
     
+    // Cargar datos del avance
     document.getElementById('tituloAvance').value = avance.titulo || '';
     document.getElementById('descripcionAvance').value = avance.descripcion || '';
     
+    // ✅ MOSTRAR COMENTARIO DE REVISIÓN
+    if (avance.comentario_revision && (avance.estado === 'rechazado' || avance.estado === 'cambios_solicitados')) {
+        const comentarioHTML = `
+            <div class="alert-review" style="padding: 1rem; margin-bottom: 1rem; background: rgba(245,158,11,0.1); border-left: 3px solid #F59E0B; border-radius: var(--radius-sm);">
+                <strong style="color: #F59E0B;"><i class="fas fa-comment-dots"></i> Comentario del Jefe de Taller:</strong>
+                <p style="margin-top: 0.5rem; color: var(--texto-primario); white-space: pre-wrap;">${escapeHtml(avance.comentario_revision)}</p>
+            </div>
+        `;
+        const formContainer = document.querySelector('.form-avance');
+        const existingAlert = formContainer.querySelector('.alert-review');
+        if (existingAlert) existingAlert.remove();
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert-review';
+        alertDiv.innerHTML = comentarioHTML;
+        formContainer.insertBefore(alertDiv, formContainer.firstChild);
+    }
+    
+    // Cargar fotos existentes
     if (avance.fotos && avance.fotos.length > 0) {
         for (let i = 0; i < avance.fotos.length && i < 10; i++) {
             const foto = avance.fotos[i];
-            
-            // ✅ GUARDAR LA URL EN fotosData
             fotosData[i] = {
                 url: foto.url,
                 comentario: foto.comentario || ''
             };
-            
-            // ✅ ACTUALIZAR PREVIEW CON PROXY (REGLAS DE ORO)
             await actualizarPreviewConProxy(i, foto.url);
             
             const comentarioInput = document.getElementById(`comentario_${i}`);
@@ -1002,15 +1022,19 @@ window.cargarAvanceParaActualizar = async function(avanceId) {
         }
     }
     
+    // Cambiar textos de botones
     const guardarBtn = document.getElementById('btnGuardarAvance');
     const enviarBtn = document.getElementById('btnEnviarRevision');
     
     if (guardarBtn) {
-        guardarBtn.innerHTML = '<i class="fas fa-save"></i> Guardar Cambios (Borrador)';
+        guardarBtn.innerHTML = '<i class="fas fa-save"></i> Guardar Cambios';
     }
     if (enviarBtn) {
-        enviarBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar a Revisión (Actualizar)';
+        enviarBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Reenviar a Revisión';
     }
+    
+    const numeroAvance = avance.numero_avance || '?';
+    document.getElementById('formTitle').textContent = `Editar Avance #${numeroAvance}`;
     
     avanceEditandoId = avanceId;
     configurarSubidaFotos();
@@ -1072,14 +1096,16 @@ async function guardarAvance(estado) {
 
         if (data.success) {
             let mensaje = '';
+            const numeroAvance = data.numero_avance || '?';
+            
             if (avanceEditandoId) {
                 mensaje = estado === 'pendiente' 
-                    ? '✅ Avance actualizado y enviado a revisión' 
-                    : '📝 Avance actualizado como borrador';
+                    ? `✅ Avance #${numeroAvance} actualizado y reenviado a revisión` 
+                    : `📝 Avance #${numeroAvance} actualizado como borrador`;
             } else {
                 mensaje = estado === 'pendiente' 
-                    ? '✅ Avance enviado a revisión' 
-                    : '📝 Avance guardado como borrador';
+                    ? `✅ Avance #${numeroAvance} enviado a revisión` 
+                    : `📝 Avance #${numeroAvance} guardado como borrador`;
             }
             
             showToast(mensaje, 'success');
@@ -1087,9 +1113,19 @@ async function guardarAvance(estado) {
             resetearBotonesFormulario();
             limpiarFormulario();
             document.getElementById('formAvance').style.display = 'none';
+            document.getElementById('formTitle').textContent = 'Registrar Nuevo Avance';
             await cargarAvances();
         } else {
-            showToast(data.error || 'Error al guardar avance', 'error');
+            if (data.avance_id && data.estado) {
+                // Hay un avance pendiente, mostrar mensaje específico
+                showToast(data.error, 'warning');
+                // Cargar el avance pendiente para actualizar
+                if (data.avance_id) {
+                    await cargarAvanceParaActualizar(data.avance_id);
+                }
+            } else {
+                showToast(data.error || 'Error al guardar avance', 'error');
+            }
         }
     } catch (error) {
         console.error('Error:', error);
@@ -1099,9 +1135,15 @@ async function guardarAvance(estado) {
     }
 }
 
+// =====================================================
+// VER DETALLE DE AVANCE
+// =====================================================
+
 window.verDetalleAvance = async function(avanceId) {
     const avance = avancesActuales.find(a => a.id === avanceId);
     if (!avance) return;
+
+    const numeroAvance = avance.numero_avance || '?';
 
     // Generar HTML para fotos con proxy
     let fotosHtml = '';
@@ -1143,6 +1185,9 @@ window.verDetalleAvance = async function(avanceId) {
         case 'rechazado':
             estadoBadge = '<span class="status-badge status-rechazado"><i class="fas fa-times-circle"></i> Rechazado</span>';
             break;
+        case 'cambios_solicitados':
+            estadoBadge = '<span class="status-badge status-cambios"><i class="fas fa-edit"></i> Cambios solicitados</span>';
+            break;
         default:
             estadoBadge = '<span class="status-badge status-pendiente">Pendiente</span>';
     }
@@ -1150,6 +1195,7 @@ window.verDetalleAvance = async function(avanceId) {
     const modalBody = document.getElementById('detalleAvanceBody');
     modalBody.innerHTML = `
         <div class="orden-info-card">
+            <p><strong><i class="fas fa-hashtag"></i> Número de Avance:</strong> #${numeroAvance}</p>
             <p><strong><i class="fas fa-tag"></i> Título:</strong> ${escapeHtml(avance.titulo)}</p>
             <p><strong><i class="fas fa-align-left"></i> Descripción:</strong> ${escapeHtml(avance.descripcion || 'Sin descripción')}</p>
             <p><strong><i class="fas fa-calendar"></i> Fecha de creación:</strong> ${formatDate(avance.fecha_creacion)}</p>
@@ -1170,14 +1216,14 @@ window.verDetalleAvance = async function(avanceId) {
 
     abrirModal('modalDetalleAvance');
 
-    // 🔥 CARGAR FOTOS DEL DETALLE CON PROXY
+    // Cargar fotos del detalle con proxy
     setTimeout(() => {
         cargarFotosDetalleConProxy();
     }, 100);
 };
 
 // =====================================================
-// 🔥 CARGAR FOTOS DEL DETALLE CON PROXY
+// CARGAR FOTOS DEL DETALLE CON PROXY
 // =====================================================
 
 async function cargarFotosDetalleConProxy() {
@@ -1187,7 +1233,6 @@ async function cargarFotosDetalleConProxy() {
         const urlEncoded = img.getAttribute('data-url');
         const url = decodeURIComponent(urlEncoded);
         
-        // Buscar loader
         const loaderId = `detalle_loader_${img.id.replace('detalle_foto_', '')}`;
         const loader = document.getElementById(loaderId);
         
@@ -1246,13 +1291,12 @@ async function cargarFotosDetalleConProxy() {
 }
 
 // =====================================================
-// VER FOTO AMPLIADA - CON PROXY (REGLAS DE ORO)
+// VER FOTO AMPLIADA
 // =====================================================
 
 window.verFotoAmpliada = async function(url) {
     if (!url) return;
     
-    // Crear modal si no existe
     let modal = document.getElementById('fotoAmpliadaModal');
     if (!modal) {
         const modalHtml = `
@@ -1284,7 +1328,6 @@ window.verFotoAmpliada = async function(url) {
     
     if (!img) return;
     
-    // Resetear estados
     img.style.display = 'none';
     img.src = '';
     if (loader) {
@@ -1300,7 +1343,7 @@ window.verFotoAmpliada = async function(url) {
             throw new Error('No hay token de autenticación');
         }
         
-        const proxyUrl = `${API_URL}/proxy-imagen-repuesto?url=${encodeURIComponent(url)}`;
+        const proxyUrl = `${API_URL}/proxy-imagen-avance?url=${encodeURIComponent(url)}`;
         const response = await fetch(proxyUrl, {
             headers: {
                 'Authorization': `Bearer ${tokenActual}`
@@ -1314,7 +1357,6 @@ window.verFotoAmpliada = async function(url) {
         const data = await response.json();
         
         if (data.success && data.base64) {
-            // Pre-cargar la imagen
             const nuevaImg = new Image();
             nuevaImg.onload = function() {
                 img.src = data.base64;
@@ -1394,15 +1436,39 @@ function setupEventListeners() {
                 return;
             }
             
-            if (avancesActuales.length > 0 && !avanceEditandoId) {
-                showToast('⚠️ Ya existe un avance para esta orden. Usa el botón ACTUALIZAR en la tarjeta.', 'warning');
+            // ✅ VERIFICAR si hay un avance PENDIENTE (no aprobado)
+            const avancePendiente = avancesActuales.find(a => 
+                a.estado === 'pendiente' || 
+                a.estado === 'rechazado' || 
+                a.estado === 'cambios_solicitados'
+            );
+            
+            if (avancePendiente) {
+                let mensaje = '⚠️ Tienes un avance pendiente de revisión o corrección.';
+                if (avancePendiente.estado === 'rechazado') {
+                    mensaje += ' El avance fue rechazado. Corrígelo y reenvía usando el botón ACTUALIZAR.';
+                } else if (avancePendiente.estado === 'cambios_solicitados') {
+                    mensaje += ' El jefe de taller solicitó cambios. Realiza las correcciones usando el botón ACTUALIZAR.';
+                } else {
+                    mensaje += ' Espera a que sea aprobado antes de crear uno nuevo.';
+                }
+                showToast(mensaje, 'warning');
+                
+                // Mostrar el avance pendiente para que el técnico pueda actualizarlo
+                cargarAvanceParaActualizar(avancePendiente.id);
                 return;
             }
+            
+            // ✅ PERMITIR NUEVO AVANCE SI EL ANTERIOR ESTÁ APROBADO
+            const avancesAprobados = avancesActuales.filter(a => a.estado === 'aprobado');
+            const numeroAvance = avancesAprobados.length + 1;
             
             avanceEditandoId = null;
             resetearBotonesFormulario();
             limpiarFormulario();
             configurarSubidaFotos();
+            
+            document.getElementById('formTitle').textContent = `Registrar Avance #${numeroAvance}`;
             document.getElementById('formAvance').style.display = 'block';
             document.getElementById('formAvance').scrollIntoView({ behavior: 'smooth' });
         });
@@ -1415,6 +1481,7 @@ function setupEventListeners() {
             limpiarFormulario();
             avanceEditandoId = null;
             resetearBotonesFormulario();
+            document.getElementById('formTitle').textContent = 'Registrar Nuevo Avance';
         });
     }
 
@@ -1440,7 +1507,7 @@ function setupEventListeners() {
 // =====================================================
 
 async function inicializar() {
-    console.log('🚀 Inicializando avance.js - Versión con preview corregido');
+    console.log('🚀 Inicializando avance.js - Versión con soporte para múltiples avances');
     console.log('📡 API_URL:', API_URL);
 
     const user = await cargarUsuarioActual();

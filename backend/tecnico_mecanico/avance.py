@@ -1,5 +1,6 @@
 # =====================================================
 # AVANCE.PY - TÉCNICO MECÁNICO (VERSIÓN COMPLETA CORREGIDA)
+# SOPORTE PARA MÚLTIPLES AVANCES POR ORDEN
 # =====================================================
 
 from flask import Blueprint, request, jsonify, send_from_directory
@@ -137,7 +138,7 @@ def tecnico_required(f):
 # FUNCIONES DE NOTIFICACIÓN
 # =====================================================
 
-def notificar_jefe_taller_avance(id_orden, titulo, tecnico_nombre, avance_id, es_actualizacion=False):
+def notificar_jefe_taller_avance(id_orden, titulo, tecnico_nombre, avance_id, es_actualizacion=False, numero_avance=1):
     """Notificar al jefe de taller sobre un nuevo avance o actualización"""
     try:
         jefes_result = supabase.table('usuario_rol') \
@@ -159,9 +160,9 @@ def notificar_jefe_taller_avance(id_orden, titulo, tecnico_nombre, avance_id, es
         codigo_orden = orden.data[0]['codigo_unico'] if orden.data else str(id_orden)
         
         if es_actualizacion:
-            mensaje = f"📸 AVANCE DE TRABAJO ACTUALIZADO\n\nTécnico: {tecnico_nombre}\nOrden: {codigo_orden}\nTítulo: {titulo}\n\nEl técnico ha actualizado el avance. Por favor, revisa las nuevas fotos."
+            mensaje = f"📸 AVANCE #{numero_avance} ACTUALIZADO\n\nTécnico: {tecnico_nombre}\nOrden: {codigo_orden}\nTítulo: {titulo}\n\nEl técnico ha actualizado el avance. Por favor, revisa las nuevas fotos."
         else:
-            mensaje = f"📸 NUEVO AVANCE DE TRABAJO\n\nTécnico: {tecnico_nombre}\nOrden: {codigo_orden}\nTítulo: {titulo}\n\nPor favor, revisa y aprueba el avance."
+            mensaje = f"📸 NUEVO AVANCE #{numero_avance}\n\nTécnico: {tecnico_nombre}\nOrden: {codigo_orden}\nTítulo: {titulo}\n\nPor favor, revisa y aprueba el avance."
         
         for jefe_id in jefes_ids:
             supabase.table('notificacion').insert({
@@ -208,7 +209,6 @@ def obtener_ordenes_en_reparacion(current_user):
         tecnico_id = current_user['id']
         print(f"\n🔍 Buscando órdenes para técnico {tecnico_id}")
         
-        # IMPORTANTE: NO filtrar por tipo_asignacion
         # Traer TODAS las asignaciones activas del técnico
         asignaciones = supabase.table('asignaciontecnico') \
             .select('id_orden_trabajo, tipo_asignacion') \
@@ -278,7 +278,7 @@ def gestionar_avances(current_user):
     """
     
     # =====================================================
-    # GET - OBTENER AVANCES
+    # GET - OBTENER TODOS LOS AVANCES DE UNA ORDEN
     # =====================================================
     if request.method == 'GET':
         id_orden = request.args.get('id_orden')
@@ -300,6 +300,7 @@ def gestionar_avances(current_user):
         if not asignacion.data:
             return jsonify({'error': 'No tienes acceso a esta orden'}), 403
         
+        # ✅ OBTENER TODOS LOS AVANCES (incluyendo aprobados)
         avances = supabase.table('avance_trabajo') \
             .select('*') \
             .eq('id_orden_trabajo', id_orden) \
@@ -324,7 +325,8 @@ def gestionar_avances(current_user):
                 'estado': a.get('estado', 'pendiente'),
                 'fecha_creacion': a.get('fecha_creacion'),
                 'fecha_aprobacion': a.get('fecha_aprobacion'),
-                'comentario_revision': a.get('comentario_revision')
+                'comentario_revision': a.get('comentario_revision'),
+                'numero_avance': a.get('numero_avance', 0)
             })
         
         return jsonify({'success': True, 'avances': resultado}), 200
@@ -348,14 +350,36 @@ def gestionar_avances(current_user):
         if not fotos:
             return jsonify({'error': 'Debes subir al menos una foto'}), 400
         
-        avance_existente = supabase.table('avance_trabajo') \
-            .select('id') \
+        # ✅ VERIFICAR si hay un avance PENDIENTE (no aprobado)
+        avance_pendiente = supabase.table('avance_trabajo') \
+            .select('id, estado') \
             .eq('id_orden_trabajo', id_orden) \
             .eq('id_tecnico', current_user['id']) \
+            .in_('estado', ['pendiente', 'rechazado', 'cambios_solicitados']) \
             .execute()
         
-        if avance_existente.data:
-            return jsonify({'error': 'Ya existe un avance para esta orden. Usa el botón ACTUALIZAR.'}), 400
+        if avance_pendiente.data:
+            estado_actual = avance_pendiente.data[0]['estado']
+            mensajes = {
+                'pendiente': 'Tienes un avance pendiente de revisión. Espera a que sea aprobado.',
+                'rechazado': 'Tu avance fue rechazado. Corrígelo y reenvía usando el botón ACTUALIZAR.',
+                'cambios_solicitados': 'El jefe de taller solicitó cambios. Realiza las correcciones usando el botón ACTUALIZAR.'
+            }
+            return jsonify({
+                'error': mensajes.get(estado_actual, 'Tienes un avance pendiente.'),
+                'avance_id': avance_pendiente.data[0]['id'],
+                'estado': estado_actual
+            }), 400
+        
+        # ✅ CONTAR AVANCES APROBADOS PARA ASIGNAR NÚMERO
+        avances_aprobados = supabase.table('avance_trabajo') \
+            .select('id', count='exact') \
+            .eq('id_orden_trabajo', id_orden) \
+            .eq('id_tecnico', current_user['id']) \
+            .eq('estado', 'aprobado') \
+            .execute()
+        
+        numero_avance = (avances_aprobados.count if hasattr(avances_aprobados, 'count') else len(avances_aprobados.data or [])) + 1
         
         ahora = datetime.datetime.now().isoformat()
         
@@ -366,7 +390,8 @@ def gestionar_avances(current_user):
             'descripcion': descripcion,
             'fotos': json.dumps(fotos),
             'estado': estado,
-            'fecha_creacion': ahora
+            'fecha_creacion': ahora,
+            'numero_avance': numero_avance
         }
         
         result = supabase.table('avance_trabajo').insert(nuevo_avance).execute()
@@ -382,17 +407,19 @@ def gestionar_avances(current_user):
                 titulo,
                 current_user.get('nombre', 'Técnico'),
                 avance_id,
-                es_actualizacion=False
+                es_actualizacion=False,
+                numero_avance=numero_avance
             )
         
         return jsonify({
             'success': True,
-            'message': 'Avance creado correctamente',
-            'avance_id': avance_id
+            'message': f'Avance #{numero_avance} creado correctamente',
+            'avance_id': avance_id,
+            'numero_avance': numero_avance
         }), 201
     
-        # =====================================================
-    # PUT - ACTUALIZAR AVANCE EXISTENTE (CORREGIDO - SIN fecha_actualizacion)
+    # =====================================================
+    # PUT - ACTUALIZAR AVANCE EXISTENTE
     # =====================================================
     elif request.method == 'PUT':
         print("=" * 60)
@@ -416,11 +443,13 @@ def gestionar_avances(current_user):
         descripcion = data.get('descripcion', '')
         fotos = data.get('fotos', [])
         estado = data.get('estado', 'pendiente')
+        avance_id = data.get('id')  # ID del avance a actualizar
         
         print(f"📝 id_orden: {id_orden}")
         print(f"📝 titulo: {titulo}")
         print(f"📝 fotos: {len(fotos)} fotos")
         print(f"📝 estado: {estado}")
+        print(f"📝 avance_id: {avance_id}")
         
         # Validaciones
         if not id_orden:
@@ -435,12 +464,16 @@ def gestionar_avances(current_user):
             print("❌ Fotos faltantes")
             return jsonify({'error': 'Debes subir al menos una foto'}), 400
         
-        logger.info(f"✏️ Usuario {current_user['id']} actualizando avance para orden {id_orden}")
+        if not avance_id:
+            print("❌ ID de avance faltante")
+            return jsonify({'error': 'ID de avance requerido para actualizar'}), 400
+        
+        logger.info(f"✏️ Usuario {current_user['id']} actualizando avance {avance_id} para orden {id_orden}")
         
         # Buscar el avance existente
         avance_existente = supabase.table('avance_trabajo') \
-            .select('id, estado') \
-            .eq('id_orden_trabajo', id_orden) \
+            .select('id, estado, numero_avance') \
+            .eq('id', avance_id) \
             .eq('id_tecnico', current_user['id']) \
             .execute()
         
@@ -448,41 +481,40 @@ def gestionar_avances(current_user):
         
         if not avance_existente.data:
             print("❌ No se encontró avance existente")
-            return jsonify({
-                'error': 'No existe un avance para esta orden. Usa "Nuevo Avance" primero.'
-            }), 404
+            return jsonify({'error': 'Avance no encontrado'}), 404
         
-        avance_id = avance_existente.data[0]['id']
         estado_actual = avance_existente.data[0]['estado']
+        numero_avance = avance_existente.data[0].get('numero_avance', 0)
         
-        print(f"📝 Avance ID: {avance_id}, Estado actual: {estado_actual}")
+        print(f"📝 Estado actual: {estado_actual}, Número: {numero_avance}")
         
         # Validar si se puede actualizar según el estado
         if estado_actual == 'aprobado':
             print("❌ Avance ya aprobado, no se puede modificar")
             return jsonify({
-                'error': 'No puedes modificar un avance ya aprobado. Contacta al jefe de taller.'
+                'error': 'No puedes modificar un avance ya aprobado.'
             }), 403
         
         ahora = datetime.datetime.now().isoformat()
         
-        # Preparar datos de actualización (SIN fecha_actualizacion)
+        # Preparar datos de actualización
         update_data = {
             'titulo': titulo,
             'descripcion': descripcion,
-            'fotos': json.dumps(fotos)
-            # 'fecha_actualizacion': ahora  # ← ELIMINAR ESTA LÍNEA
+            'fotos': json.dumps(fotos),
+            'fecha_actualizacion': ahora
         }
         
-        # Manejar cambio de estado
-        if estado == 'pendiente':
-            if estado_actual == 'rechazado':
-                update_data['estado'] = 'pendiente'
-                update_data['fecha_creacion'] = ahora
-                update_data['comentario_revision'] = None
-                print("🔄 Reactivando avance rechazado a pendiente")
-            else:
-                print("📝 Actualizando avance pendiente")
+        # ✅ Si el estado es rechazado o cambios_solicitados, cambiar a pendiente al reenviar
+        if estado_actual in ['rechazado', 'cambios_solicitados']:
+            update_data['estado'] = 'pendiente'
+            update_data['comentario_revision'] = None  # Limpiar comentario anterior
+            update_data['fecha_creacion'] = ahora  # Actualizar fecha
+            print(f"🔄 Reenviando avance desde estado {estado_actual}")
+        elif estado == 'pendiente' and estado_actual == 'pendiente':
+            # Si ya está pendiente y se actualiza, mantener pendiente
+            update_data['estado'] = 'pendiente'
+            print("📝 Actualizando avance pendiente")
         elif estado == 'borrador':
             update_data['estado'] = 'borrador'
             print("📝 Guardando como borrador")
@@ -502,17 +534,18 @@ def gestionar_avances(current_user):
             return jsonify({'error': 'Error al actualizar avance'}), 500
         
         # Notificar al jefe de taller solo si se envía a revisión
-        if estado == 'pendiente':
+        if update_data.get('estado') == 'pendiente' or estado_actual in ['rechazado', 'cambios_solicitados']:
             notificar_jefe_taller_avance(
                 id_orden,
                 titulo,
                 current_user.get('nombre', 'Técnico'),
                 avance_id,
-                es_actualizacion=True
+                es_actualizacion=True,
+                numero_avance=numero_avance
             )
-            mensaje = "Avance actualizado y enviado a revisión"
+            mensaje = f"Avance #{numero_avance} actualizado y reenviado a revisión"
         else:
-            mensaje = "Avance actualizado como borrador"
+            mensaje = f"Avance #{numero_avance} actualizado como borrador"
         
         logger.info(f"✅ Avance {avance_id} actualizado correctamente")
         print(f"✅ Éxito: {mensaje}")
@@ -520,8 +553,10 @@ def gestionar_avances(current_user):
         return jsonify({
             'success': True,
             'message': mensaje,
-            'avance_id': avance_id
+            'avance_id': avance_id,
+            'numero_avance': numero_avance
         }), 200
+
 
 # =====================================================
 # RUTAS PARA SERVIR ARCHIVOS ESTÁTICOS
@@ -564,6 +599,7 @@ def serve_js(filename):
     except Exception as e:
         logger.error(f"Error sirviendo JS {filename}: {e}")
         return jsonify({'error': 'Archivo no encontrado'}), 404
+
 
 # =====================================================
 # ENDPOINT: SUBIR FOTO DE AVANCE A GOOGLE DRIVE
@@ -627,7 +663,7 @@ def subir_foto_avance_drive(current_user):
             file_data=file,
             filename=filename,
             folder_path=folder_path,
-            public=True  # El jefe de taller debe poder verlo
+            public=True
         )
         
         return jsonify({

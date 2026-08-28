@@ -394,7 +394,8 @@ def gestionar_avances(current_user):
             'fotos': json.dumps(fotos),
             'estado': estado,
             'fecha_creacion': ahora,
-            'numero_avance': numero_avance
+            'numero_avance': numero_avance,
+            'numero_actualizaciones': 0
         }
         
         result = supabase.table('avance_trabajo').insert(nuevo_avance).execute()
@@ -423,7 +424,7 @@ def gestionar_avances(current_user):
         }), 201
     
     # =====================================================
-    # PUT - ACTUALIZAR AVANCE EXISTENTE
+    # PUT - ACTUALIZAR AVANCE EXISTENTE (CORREGIDO)
     # =====================================================
     elif request.method == 'PUT':
         print("=" * 60)
@@ -476,7 +477,7 @@ def gestionar_avances(current_user):
         
         # Buscar el avance existente
         avance_existente = supabase.table('avance_trabajo') \
-            .select('id, estado, numero_avance') \
+            .select('id, estado, numero_avance, numero_actualizaciones') \
             .eq('id', avance_id) \
             .eq('id_tecnico', current_user['id']) \
             .execute()
@@ -489,8 +490,9 @@ def gestionar_avances(current_user):
         
         estado_actual = avance_existente.data[0]['estado']
         numero_avance = avance_existente.data[0].get('numero_avance', 0)
+        numero_actualizaciones = avance_existente.data[0].get('numero_actualizaciones', 0)
         
-        print(f"📝 Estado actual: {estado_actual}, Número: {numero_avance}")
+        print(f"📝 Estado actual: {estado_actual}, Número: {numero_avance}, Actualizaciones: {numero_actualizaciones}")
         
         # ✅ Validar si se puede actualizar según el estado
         if estado_actual == 'aprobado':
@@ -506,7 +508,8 @@ def gestionar_avances(current_user):
             'titulo': titulo,
             'descripcion': descripcion,
             'fotos': json.dumps(fotos),
-            'fecha_actualizacion': ahora
+            'fecha_actualizacion': ahora,
+            'numero_actualizaciones': numero_actualizaciones + 1
         }
         
         # ✅ Si el estado es rechazado o cambios_solicitados, cambiar a pendiente al reenviar

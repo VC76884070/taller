@@ -291,6 +291,7 @@ def gestionar_avances(current_user):
         except ValueError:
             return jsonify({'error': 'ID de orden inválido'}), 400
         
+        # Verificar que el técnico tiene acceso a esta orden
         asignacion = supabase.table('asignaciontecnico') \
             .select('id') \
             .eq('id_orden_trabajo', id_orden) \
@@ -300,7 +301,7 @@ def gestionar_avances(current_user):
         if not asignacion.data:
             return jsonify({'error': 'No tienes acceso a esta orden'}), 403
         
-        # ✅ OBTENER TODOS LOS AVANCES (incluyendo aprobados)
+        # Obtener TODOS los avances (incluyendo aprobados)
         avances = supabase.table('avance_trabajo') \
             .select('*') \
             .eq('id_orden_trabajo', id_orden) \
@@ -332,7 +333,7 @@ def gestionar_avances(current_user):
         return jsonify({'success': True, 'avances': resultado}), 200
     
     # =====================================================
-    # POST - CREAR NUEVO AVANCE
+    # POST - CREAR NUEVO AVANCE (CORREGIDO)
     # =====================================================
     elif request.method == 'POST':
         data = request.get_json()
@@ -343,6 +344,7 @@ def gestionar_avances(current_user):
         fotos = data.get('fotos', [])
         estado = data.get('estado', 'pendiente')
         
+        # Validaciones básicas
         if not id_orden:
             return jsonify({'error': 'ID de orden requerido'}), 400
         if not titulo:
@@ -350,7 +352,7 @@ def gestionar_avances(current_user):
         if not fotos:
             return jsonify({'error': 'Debes subir al menos una foto'}), 400
         
-        # ✅ VERIFICAR si hay un avance PENDIENTE (no aprobado)
+        # ✅ CORREGIDO: SOLO BLOQUEA SI HAY UN AVANCE PENDIENTE (no aprobado)
         avance_pendiente = supabase.table('avance_trabajo') \
             .select('id, estado') \
             .eq('id_orden_trabajo', id_orden) \
@@ -383,6 +385,7 @@ def gestionar_avances(current_user):
         
         ahora = datetime.datetime.now().isoformat()
         
+        # Crear nuevo avance
         nuevo_avance = {
             'id_orden_trabajo': id_orden,
             'id_tecnico': current_user['id'],
@@ -401,6 +404,7 @@ def gestionar_avances(current_user):
         
         avance_id = result.data[0]['id']
         
+        # Notificar al jefe de taller si el avance se envía a revisión
         if estado == 'pendiente':
             notificar_jefe_taller_avance(
                 id_orden,
@@ -488,7 +492,7 @@ def gestionar_avances(current_user):
         
         print(f"📝 Estado actual: {estado_actual}, Número: {numero_avance}")
         
-        # Validar si se puede actualizar según el estado
+        # ✅ Validar si se puede actualizar según el estado
         if estado_actual == 'aprobado':
             print("❌ Avance ya aprobado, no se puede modificar")
             return jsonify({

@@ -1,14 +1,12 @@
 // =====================================================
 // SOLICITUDES_COMPRA.JS - ENCARGADO DE REPUESTOS
-// FURIA MOTOR COMPANY SRL - VERSIÓN COMPLETA CON FOTOS
+// FURIA MOTOR COMPANY SRL - VERSIÓN CORREGIDA CON 3 FOTOS
 // =====================================================
 
 // =====================================================
 // NOTA: API_BASE_URL ya está definida globalmente por include.js
-// como window.API_BASE_URL. NO redeclarar como const aquí.
 // =====================================================
 
-// Verificar si existe la variable global, si no, crearla (solo por si acaso)
 if (typeof window.API_BASE_URL === 'undefined') {
     window.API_BASE_URL = (() => {
         if (window.location.hostname === 'localhost' || 
@@ -24,7 +22,6 @@ if (typeof window.API_BASE_URL === 'undefined') {
 
 const API_URL = window.API_BASE_URL + '/api/encargado-repuestos';
 
-// Configuración de Cloudinary (hardcodeada temporalmente)
 const CLOUDINARY_CLOUD_NAME = 'drpt6ztkd';
 const CLOUDINARY_UPLOAD_PRESET = 'furia_motor_preset';
 
@@ -32,7 +29,6 @@ let currentUser = null;
 let currentUserRoles = [];
 let solicitudesPendientes = [];
 
-// Variables para subida de comprobante
 let currentSolicitudId = null;
 let currentComprobanteFile = null;
 
@@ -146,7 +142,7 @@ function statusBadge(estado) {
 }
 
 // =====================================================
-// VER FOTO AMPLIADA - VERSIÓN CORREGIDA
+// VER FOTO AMPLIADA
 // =====================================================
 
 function verFotoAmpliadaEncargado(url) {
@@ -155,7 +151,6 @@ function verFotoAmpliadaEncargado(url) {
         return;
     }
     
-    // Decodificar URL si está codificada
     let decodedUrl = url;
     try {
         decodedUrl = decodeURI(url);
@@ -163,7 +158,6 @@ function verFotoAmpliadaEncargado(url) {
     
     console.log('🔍 Ampliando foto:', decodedUrl.substring(0, 60) + '...');
     
-    // Crear modal de foto si no existe
     let modalFoto = document.getElementById('modalFotoAmpliadaEncargado');
     if (!modalFoto) {
         const modalHtml = `
@@ -192,7 +186,6 @@ function verFotoAmpliadaEncargado(url) {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
     
-    // Mostrar loader
     const loader = document.getElementById('fotoModalLoader');
     const img = document.getElementById('fotoAmpliadaEncargadoImg');
     
@@ -202,19 +195,14 @@ function verFotoAmpliadaEncargado(url) {
         img.src = '';
     }
     
-    // Guardar URL para descarga
     window._fotoAmpliadaEncargadoUrl = decodedUrl;
     
-    // Abrir modal
     const modal = document.getElementById('modalFotoAmpliadaEncargado');
     if (modal) {
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
     }
     
-    // =====================================================
-    // CARGAR LA IMAGEN CON PROXY
-    // =====================================================
     const proxyUrl = `${window.API_BASE_URL}/api/jefe-taller/proxy-imagen?url=${encodeURIComponent(decodedUrl)}`;
     
     fetch(proxyUrl, {
@@ -281,43 +269,7 @@ function descargarFotoAmpliadaEncargado() {
 }
 
 // =====================================================
-// SUBIR A CLOUDINARY
-// =====================================================
-
-async function subirACloudinary(file) {
-    return new Promise((resolve, reject) => {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-        formData.append('folder', 'comprobantes_compra');
-        
-        const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`;
-        
-        console.log('📤 Subiendo a Cloudinary...');
-        
-        fetch(cloudinaryUrl, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.secure_url) {
-                console.log('✅ Comprobante subido:', data.secure_url);
-                resolve(data.secure_url);
-            } else {
-                console.error('❌ Error Cloudinary:', data);
-                reject(new Error(data.error?.message || 'Error al subir a Cloudinary'));
-            }
-        })
-        .catch(err => {
-            console.error('❌ Error de red:', err);
-            reject(new Error('Error de conexión con Cloudinary'));
-        });
-    });
-}
-
-// =====================================================
-// CARGA DE DATOS Y ESTADÍSTICAS
+// CARGA DE DATOS
 // =====================================================
 
 async function cargarEstadisticas() {
@@ -392,7 +344,7 @@ async function cargarSolicitudes() {
 }
 
 // =====================================================
-// EXTRAER TODAS LAS URLs DE FOTOS - VERSIÓN FINAL
+// 🔥 EXTRAER TODAS LAS URLs DE FOTOS - VERSIÓN ROBUSTA
 // =====================================================
 
 function extraerUrlsFotos(item) {
@@ -400,88 +352,135 @@ function extraerUrlsFotos(item) {
     
     if (!item) return urls;
     
-    // =====================================================
-    // FUNCIÓN RECURSIVA PARA BUSCAR URLs EN CUALQUIER OBJETO
-    // =====================================================
-    function buscarUrlsEnObjeto(obj, resultado) {
-        if (!obj || typeof obj !== 'object') return;
-        
-        // Si es un array, recorrer cada elemento
-        if (Array.isArray(obj)) {
-            obj.forEach(elemento => {
-                if (typeof elemento === 'string' && elemento.startsWith('http')) {
-                    if (!resultado.includes(elemento)) {
-                        resultado.push(elemento);
-                    }
-                } else if (typeof elemento === 'object' && elemento !== null) {
-                    buscarUrlsEnObjeto(elemento, resultado);
-                }
-            });
-            return;
+    // 1. Verificar item.foto_url (string)
+    if (item.foto_url && typeof item.foto_url === 'string') {
+        if (item.foto_url.startsWith('http')) {
+            urls.push(item.foto_url);
         }
-        
-        // Si es un objeto, revisar cada propiedad
-        Object.keys(obj).forEach(key => {
-            const valor = obj[key];
-            
-            // Si la propiedad es string y parece URL
-            if (typeof valor === 'string' && valor.startsWith('http')) {
-                if (!resultado.includes(valor)) {
-                    resultado.push(valor);
-                }
-            }
-            // Si la propiedad es array, buscar en ella
-            else if (Array.isArray(valor)) {
-                valor.forEach(elemento => {
-                    if (typeof elemento === 'string' && elemento.startsWith('http')) {
-                        if (!resultado.includes(elemento)) {
-                            resultado.push(elemento);
-                        }
-                    } else if (typeof elemento === 'object' && elemento !== null) {
-                        buscarUrlsEnObjeto(elemento, resultado);
+    }
+    
+    // 2. Verificar item.fotos (array de strings o objetos)
+    if (item.fotos && Array.isArray(item.fotos)) {
+        item.fotos.forEach(foto => {
+            if (typeof foto === 'string' && foto.startsWith('http')) {
+                urls.push(foto);
+            } else if (typeof foto === 'object' && foto !== null) {
+                // Buscar en todas las propiedades del objeto
+                Object.values(foto).forEach(val => {
+                    if (typeof val === 'string' && val.startsWith('http')) {
+                        urls.push(val);
                     }
                 });
-            }
-            // Si la propiedad es objeto, buscar recursivamente
-            else if (typeof valor === 'object' && valor !== null) {
-                buscarUrlsEnObjeto(valor, resultado);
+                // Si el objeto tiene un array
+                if (Array.isArray(foto)) {
+                    foto.forEach(f => {
+                        if (typeof f === 'string' && f.startsWith('http')) {
+                            urls.push(f);
+                        }
+                    });
+                }
             }
         });
     }
     
-    // =====================================================
-    // BUSCAR EN TODO EL ITEM
-    // =====================================================
-    buscarUrlsEnObjeto(item, urls);
-    
-    // =====================================================
-    // 2. Verificar específicamente propiedades comunes
-    // =====================================================
-    const propiedadesComunes = ['foto_url', 'fotos', 'foto', 'imagen', 'image', 'photo', 'img', 'url', 'link', 'public_url', 'download_url'];
-    
-    propiedadesComunes.forEach(prop => {
-        if (item[prop]) {
-            if (typeof item[prop] === 'string' && item[prop].startsWith('http')) {
-                if (!urls.includes(item[prop])) {
-                    urls.push(item[prop]);
+    // 3. Verificar item.foto (alternativa)
+    if (urls.length === 0 && item.foto) {
+        if (typeof item.foto === 'string' && item.foto.startsWith('http')) {
+            urls.push(item.foto);
+        } else if (Array.isArray(item.foto)) {
+            item.foto.forEach(url => {
+                if (typeof url === 'string' && url.startsWith('http')) {
+                    urls.push(url);
                 }
-            } else if (Array.isArray(item[prop])) {
-                item[prop].forEach(val => {
-                    if (typeof val === 'string' && val.startsWith('http') && !urls.includes(val)) {
-                        urls.push(val);
-                    } else if (typeof val === 'object' && val !== null) {
-                        buscarUrlsEnObjeto(val, urls);
-                    }
+            });
+        }
+    }
+    
+    // 4. Verificar item.imagen (alternativa)
+    if (urls.length === 0 && item.imagen) {
+        if (typeof item.imagen === 'string' && item.imagen.startsWith('http')) {
+            urls.push(item.imagen);
+        } else if (Array.isArray(item.imagen)) {
+            item.imagen.forEach(url => {
+                if (typeof url === 'string' && url.startsWith('http')) {
+                    urls.push(url);
+                }
+            });
+        }
+    }
+    
+    // 5. Verificar item.fotos_urls (otro nombre)
+    if (urls.length === 0 && item.fotos_urls) {
+        if (typeof item.fotos_urls === 'string' && item.fotos_urls.startsWith('http')) {
+            urls.push(item.fotos_urls);
+        } else if (Array.isArray(item.fotos_urls)) {
+            item.fotos_urls.forEach(url => {
+                if (typeof url === 'string' && url.startsWith('http')) {
+                    urls.push(url);
+                }
+            });
+        }
+    }
+    
+    // 6. Verificar item.images (otro nombre)
+    if (urls.length === 0 && item.images) {
+        if (Array.isArray(item.images)) {
+            item.images.forEach(url => {
+                if (typeof url === 'string' && url.startsWith('http')) {
+                    urls.push(url);
+                }
+            });
+        }
+    }
+    
+    // 7. 🔥 VERIFICAR item.fotos_array (como en la base de datos)
+    if (urls.length === 0 && item.fotos_array) {
+        if (Array.isArray(item.fotos_array)) {
+            item.fotos_array.forEach(url => {
+                if (typeof url === 'string' && url.startsWith('http')) {
+                    urls.push(url);
+                }
+            });
+        }
+    }
+    
+    // 8. 🔥 BUSCAR EN ITEMS ANIDADOS (items dentro de items)
+    if (urls.length === 0) {
+        const subKeys = ['items', 'subitems', 'detalles', 'repuestos', 'lista_items'];
+        for (const key of subKeys) {
+            if (item[key] && Array.isArray(item[key])) {
+                item[key].forEach(subItem => {
+                    const subUrls = extraerUrlsFotos(subItem);
+                    subUrls.forEach(url => {
+                        if (!urls.includes(url)) {
+                            urls.push(url);
+                        }
+                    });
                 });
-            } else if (typeof item[prop] === 'object' && item[prop] !== null) {
-                buscarUrlsEnObjeto(item[prop], urls);
             }
         }
-    });
+    }
     
-    // =====================================================
-    // 3. FILTRAR DUPLICADOS Y URLS INVÁLIDAS
-    // =====================================================
+    // 9. 🔥 ÚLTIMO RECURSO: Buscar en todo el objeto
+    if (urls.length === 0) {
+        try {
+            const str = JSON.stringify(item);
+            const matches = str.match(/https?:\/\/[^\s"',]+/g);
+            if (matches) {
+                const validDomains = ['drive.google.com', 'cloudinary.com', 'res.cloudinary.com', 'googleusercontent.com'];
+                matches.forEach(url => {
+                    const isValid = validDomains.some(domain => url.includes(domain));
+                    if (isValid && !urls.includes(url)) {
+                        urls.push(url);
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('Error al buscar URLs en el item:', e);
+        }
+    }
+    
+    // 10. Filtrar duplicados
     urls = urls.filter((url, index, self) => 
         self.indexOf(url) === index && 
         typeof url === 'string' && 
@@ -489,9 +488,7 @@ function extraerUrlsFotos(item) {
         url.length > 10
     );
     
-    // =====================================================
-    // 4. DEPURACIÓN
-    // =====================================================
+    // Depuración
     if (urls.length > 0) {
         console.log(`📸 Item "${item.descripcion || item.nombre || 'sin nombre'}": ${urls.length} fotos encontradas`, urls);
     }
@@ -500,7 +497,83 @@ function extraerUrlsFotos(item) {
 }
 
 // =====================================================
-// RENDERIZAR SOLICITUDES - CON HASTA 3 FOTOS POR ITEM
+// CARGAR IMAGEN CON PROXY
+// =====================================================
+
+async function cargarImagenProxyEncargado(url, imgElement) {
+    if (!url || !imgElement) return null;
+    
+    if (imgElement.getAttribute('data-loaded') === 'true') return;
+    
+    try {
+        const proxyUrl = `${window.API_BASE_URL}/api/jefe-taller/proxy-imagen?url=${encodeURIComponent(url)}`;
+        
+        const response = await fetch(proxyUrl, {
+            headers: getAuthHeaders()
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = function() {
+                    imgElement.src = data.base64;
+                    imgElement.style.display = 'block';
+                    imgElement.setAttribute('data-loaded', 'true');
+                    
+                    const parent = imgElement.parentElement;
+                    if (parent) {
+                        const loader = parent.querySelector('.miniatura-loader');
+                        if (loader) {
+                            loader.style.display = 'none';
+                        }
+                    }
+                    
+                    resolve(data.base64);
+                };
+                img.onerror = function() {
+                    console.warn('⚠️ Error al cargar imagen:', url.substring(0, 60) + '...');
+                    const parent = imgElement.parentElement;
+                    if (parent) {
+                        const loader = parent.querySelector('.miniatura-loader');
+                        if (loader) {
+                            loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:14px;"></i>';
+                            loader.style.display = 'flex';
+                        }
+                    }
+                    resolve(null);
+                };
+                img.src = data.base64;
+            });
+        } else {
+            console.warn('⚠️ No se pudo cargar:', url.substring(0, 60) + '...');
+            const parent = imgElement.parentElement;
+            if (parent) {
+                const loader = parent.querySelector('.miniatura-loader');
+                if (loader) {
+                    loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:14px;"></i>';
+                    loader.style.display = 'flex';
+                }
+            }
+            return null;
+        }
+    } catch (error) {
+        console.error('❌ Error en proxy:', error);
+        const parent = imgElement.parentElement;
+        if (parent) {
+            const loader = parent.querySelector('.miniatura-loader');
+            if (loader) {
+                loader.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:14px;"></i>';
+                loader.style.display = 'flex';
+            }
+        }
+        return null;
+    }
+}
+
+// =====================================================
+// RENDERIZAR SOLICITUDES CON 3 FOTOS POR ITEM
 // =====================================================
 
 function renderizarSolicitudes(solicitudes) {
@@ -520,24 +593,30 @@ function renderizarSolicitudes(solicitudes) {
     
     let html = '';
     
-    solicitudes.forEach((solicitud, idx) => {
+    solicitudes.forEach((solicitud) => {
         let items = solicitud.items || [];
         if (typeof items === 'string') {
             try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
         }
         
         // =====================================================
-        // GENERAR HTML DE ITEMS CON FOTOS (HASTA 3)
+        // GENERAR HTML DE ITEMS CON 3 FOTOS
         // =====================================================
         let itemsHtml = '';
         let totalFotos = 0;
+        let fotosParaCargar = [];
         
         items.forEach((item, itemIdx) => {
+            // 🔥 EXTRAER TODAS LAS FOTOS
             const fotosUrls = extraerUrlsFotos(item);
             const tieneFotos = fotosUrls.length > 0;
             
             if (tieneFotos) {
                 totalFotos += fotosUrls.length;
+                fotosParaCargar.push({
+                    itemIdx: itemIdx,
+                    urls: fotosUrls
+                });
             }
             
             const uniqueId = `solicitud_${solicitud.id}_item_${itemIdx}`;
@@ -597,22 +676,9 @@ function renderizarSolicitudes(solicitudes) {
         const puedeEntregar = solicitud.estado === 'comprado';
         const tieneComprobante = solicitud.comprobante_url;
         
-        // Guardar todas las fotos de la solicitud para el modal de detalle
-        let todasLasFotos = [];
-        items.forEach((item) => {
-            const fotos = extraerUrlsFotos(item);
-            fotos.forEach(url => {
-                todasLasFotos.push({
-                    url: url,
-                    descripcion: item.descripcion || item.nombre || 'Item',
-                    cantidad: item.cantidad || 1
-                });
-            });
-        });
-        
         html += `
             <div class="solicitud-card" data-id="${solicitud.id}" 
-                 data-fotos='${JSON.stringify(todasLasFotos)}'
+                 data-fotos='${JSON.stringify(fotosParaCargar)}'
                  style="margin-bottom:1rem;border:1px solid var(--border-color);border-radius:8px;overflow:hidden;background:var(--bg-card);">
                 <div class="solicitud-header" style="padding:0.75rem 1rem;background:var(--gris-oscuro);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;border-bottom:1px solid var(--border-color);">
                     <h3 style="margin:0;font-size:1rem;"><i class="fas fa-shopping-cart"></i> Solicitud #${solicitud.id}</h3>
@@ -701,90 +767,9 @@ function renderizarSolicitudes(solicitudes) {
         });
     }, 500);
 }
-// =====================================================
-// CARGAR IMAGEN CON PROXY - CON MANEJO DE MÚLTIPLES FOTOS
-// =====================================================
 
-async function cargarImagenProxyEncargado(url, imgElement) {
-    if (!url || !imgElement) {
-        return null;
-    }
-    
-    // Si la imagen ya está cargada, no hacer nada
-    if (imgElement.getAttribute('data-loaded') === 'true') {
-        return;
-    }
-    
-    try {
-        // Usar el proxy del backend
-        const proxyUrl = `${window.API_BASE_URL}/api/jefe-taller/proxy-imagen?url=${encodeURIComponent(url)}`;
-        
-        const response = await fetch(proxyUrl, {
-            headers: getAuthHeaders()
-        });
-        
-        const data = await response.json();
-        
-        if (data.success && data.base64) {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = function() {
-                    imgElement.src = data.base64;
-                    imgElement.style.display = 'block';
-                    imgElement.setAttribute('data-loaded', 'true');
-                    
-                    // Ocultar el loader (el div padre que contiene el loader)
-                    const parent = imgElement.parentElement;
-                    if (parent) {
-                        const loader = parent.querySelector('.miniatura-loader');
-                        if (loader) {
-                            loader.style.display = 'none';
-                        }
-                    }
-                    
-                    resolve(data.base64);
-                };
-                img.onerror = function() {
-                    console.warn('⚠️ Error al cargar imagen individual:', url.substring(0, 60) + '...');
-                    const parent = imgElement.parentElement;
-                    if (parent) {
-                        const loader = parent.querySelector('.miniatura-loader');
-                        if (loader) {
-                            loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:14px;"></i>';
-                            loader.style.display = 'flex';
-                        }
-                    }
-                    resolve(null);
-                };
-                img.src = data.base64;
-            });
-        } else {
-            console.warn('⚠️ No se pudo cargar:', url.substring(0, 60) + '...');
-            const parent = imgElement.parentElement;
-            if (parent) {
-                const loader = parent.querySelector('.miniatura-loader');
-                if (loader) {
-                    loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:14px;"></i>';
-                    loader.style.display = 'flex';
-                }
-            }
-            return null;
-        }
-    } catch (error) {
-        console.error('❌ Error en proxy:', error);
-        const parent = imgElement.parentElement;
-        if (parent) {
-            const loader = parent.querySelector('.miniatura-loader');
-            if (loader) {
-                loader.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:14px;"></i>';
-                loader.style.display = 'flex';
-            }
-        }
-        return null;
-    }
-}
 // =====================================================
-// VER DETALLE - CON TODAS LAS FOTOS
+// VER DETALLE CON TODAS LAS FOTOS
 // =====================================================
 
 async function verDetalle(idSolicitud) {
@@ -796,15 +781,12 @@ async function verDetalle(idSolicitud) {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
     
-    // =====================================================
-    // RENDERIZAR ITEMS CON TODAS LAS FOTOS
-    // =====================================================
+    // Renderizar items con TODAS las fotos
     const itemsHtml = items.map((item, idx) => {
         const fotosUrls = extraerUrlsFotos(item);
         const tieneFotos = fotosUrls.length > 0;
         const uniqueId = `detalle_${solicitud.id}_item_${idx}`;
         
-        // Generar miniaturas de TODAS las fotos (no solo 3)
         let miniaturasHtml = '';
         if (tieneFotos) {
             miniaturasHtml = `
@@ -896,9 +878,7 @@ async function verDetalle(idSolicitud) {
         `;
     }
     
-    // =====================================================
-    // CARGAR LAS IMÁGENES DEL DETALLE
-    // =====================================================
+    // Cargar imágenes del detalle
     setTimeout(() => {
         const imagenes = document.querySelectorAll('.detalle-img');
         imagenes.forEach(img => {
@@ -908,67 +888,13 @@ async function verDetalle(idSolicitud) {
                 const parent = img.parentElement;
                 const loader = parent ? parent.querySelector('.detalle-loader') : null;
                 if (loader) {
-                    cargarImagenProxyDetalle(decodedUrl, img, loader);
+                    cargarImagenProxyEncargado(decodedUrl, img);
                 }
             }
         });
     }, 300);
     
     abrirModal('modalDetalle');
-}
-
-// =====================================================
-// CARGAR IMAGEN PARA DETALLE CON PROXY
-// =====================================================
-
-async function cargarImagenProxyDetalle(url, imgElement, loaderElement) {
-    if (!url || !imgElement) return null;
-    
-    if (imgElement.getAttribute('data-loaded') === 'true') return;
-    
-    try {
-        const proxyUrl = `${window.API_BASE_URL}/api/jefe-taller/proxy-imagen?url=${encodeURIComponent(url)}`;
-        
-        const response = await fetch(proxyUrl, {
-            headers: getAuthHeaders()
-        });
-        
-        const data = await response.json();
-        
-        if (data.success && data.base64) {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = function() {
-                    imgElement.src = data.base64;
-                    imgElement.style.display = 'block';
-                    imgElement.setAttribute('data-loaded', 'true');
-                    if (loaderElement) loaderElement.style.display = 'none';
-                    resolve(data.base64);
-                };
-                img.onerror = function() {
-                    if (loaderElement) {
-                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:18px;"></i>';
-                        loaderElement.style.display = 'flex';
-                    }
-                    resolve(null);
-                };
-                img.src = data.base64;
-            });
-        } else {
-            if (loaderElement) {
-                loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:18px;"></i>';
-                loaderElement.style.display = 'flex';
-            }
-            return null;
-        }
-    } catch (error) {
-        console.error('Error cargando imagen detalle:', error);
-        if (loaderElement) {
-            loaderElement.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:18px;"></i>';
-            loaderElement.style.display = 'flex';
-        }
-        return null;
-    }
 }
 
 // =====================================================
@@ -1009,70 +935,47 @@ async function verComprobante(idSolicitud) {
 }
 
 // =====================================================
-// CONFIGURAR SUBIDA DE COMPROBANTE
+// SUBIR COMPROBANTE A DRIVE
 // =====================================================
 
-function configurarSubidaComprobante() {
-    const uploadArea = document.getElementById('comprobanteUploadArea');
-    const fileInput = document.getElementById('comprobanteFile');
-    const removeBtn = document.getElementById('removeComprobanteBtn');
-    
-    if (!uploadArea || !fileInput) return;
-    
-    // Limpiar eventos anteriores
-    const newUploadArea = uploadArea.cloneNode(true);
-    uploadArea.parentNode.replaceChild(newUploadArea, uploadArea);
-    const newFileInput = fileInput.cloneNode(true);
-    fileInput.parentNode.replaceChild(newFileInput, fileInput);
-    
-    const finalUploadArea = document.getElementById('comprobanteUploadArea');
-    const finalFileInput = document.getElementById('comprobanteFile');
-    const finalRemoveBtn = document.getElementById('removeComprobanteBtn');
-    
-    if (!finalUploadArea || !finalFileInput) return;
-    
-    finalUploadArea.addEventListener('click', () => finalFileInput.click());
-    
-    finalFileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) procesarArchivoComprobante(file);
-    });
-    
-    if (finalRemoveBtn) {
-        finalRemoveBtn.addEventListener('click', () => {
-            currentComprobanteFile = null;
-            const preview = document.getElementById('comprobantePreview');
-            if (preview) preview.style.display = 'none';
-            finalFileInput.value = '';
+async function subirComprobanteADrive(file, id_orden, codigo_orden) {
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('comprobante', file);
+        formData.append('id_orden', id_orden);
+        formData.append('codigo_orden', codigo_orden);
+        
+        const uploadUrl = `${API_URL}/subir-comprobante-drive`;
+        
+        console.log('📤 Subiendo comprobante a Google Drive...');
+        console.log(`📁 Para orden: ${codigo_orden}`);
+        
+        fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': getAuthHeaders()['Authorization']
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.url) {
+                console.log('✅ Comprobante subido a Drive:', data.url);
+                resolve(data.url);
+            } else {
+                console.error('❌ Error Drive:', data.error);
+                reject(new Error(data.error || 'Error al subir a Google Drive'));
+            }
+        })
+        .catch(err => {
+            console.error('❌ Error de red:', err);
+            reject(new Error('Error de conexión con Google Drive'));
         });
-    }
-}
-
-function procesarArchivoComprobante(file) {
-    if (file.size > 5 * 1024 * 1024) {
-        showToast('El archivo no debe superar los 5MB', 'error');
-        return;
-    }
-    
-    const tiposPermitidos = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
-    if (!tiposPermitidos.includes(file.type)) {
-        showToast('Formato no permitido. Use JPG, PNG o PDF', 'error');
-        return;
-    }
-    
-    currentComprobanteFile = file;
-    
-    const preview = document.getElementById('comprobantePreview');
-    const nombreSpan = document.getElementById('comprobanteNombre');
-    if (preview && nombreSpan) {
-        nombreSpan.textContent = file.name;
-        preview.style.display = 'flex';
-    }
-    showToast('Comprobante cargado correctamente', 'success');
+    });
 }
 
 // =====================================================
-// MARCAR COMO COMPRADO (CON COMPROBANTE)
+// MARCAR COMO COMPRADO
 // =====================================================
 
 function abrirModalComprar(idSolicitud) {
@@ -1087,23 +990,31 @@ function abrirModalComprar(idSolicitud) {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
     
-    // =====================================================
-    // 🔧 MOSTRAR FOTOS EN MODAL DE COMPRA
-    // =====================================================
-    const itemsHtml = items.map(item => `
-        <div style="margin-bottom: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm); display: flex; align-items: center; gap: 0.5rem;">
-            ${item.foto_url ? `
-                <img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);cursor:pointer;" 
-                     onclick="verFotoAmpliadaEncargado('${item.foto_url}')" 
+    const itemsHtml = items.map(item => {
+        const fotosUrls = extraerUrlsFotos(item);
+        const tieneFotos = fotosUrls.length > 0;
+        
+        let fotosMiniaturas = '';
+        if (tieneFotos) {
+            const fotosMostrar = fotosUrls.slice(0, 3);
+            fotosMiniaturas = fotosMostrar.map((url, i) => `
+                <img src="${url}" style="width:35px;height:35px;object-fit:cover;border-radius:4px;border:2px solid var(--verde-exito);cursor:pointer;margin-right:4px;" 
+                     onclick="verFotoAmpliadaEncargado('${url}')" 
                      onerror="this.style.display='none'"
                      title="Haz clic para ver ampliada">
-            ` : ''}
-            <div>
-                <strong>${escapeHtml(item.descripcion)}</strong> - ${item.cantidad} uds
-                ${item.detalle ? `<br><small style="color: var(--gris-texto);">${escapeHtml(item.detalle)}</small>` : ''}
+            `).join('');
+        }
+        
+        return `
+            <div style="margin-bottom: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm); display: flex; align-items: center; gap: 0.5rem; flex-wrap:wrap;">
+                ${fotosMiniaturas}
+                <div>
+                    <strong>${escapeHtml(item.descripcion)}</strong> - ${item.cantidad} uds
+                    ${item.detalle ? `<br><small style="color: var(--gris-texto);">${escapeHtml(item.detalle)}</small>` : ''}
+                </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
     
     const modalBody = document.getElementById('modalComprarBody');
     if (modalBody) {
@@ -1181,9 +1092,63 @@ function abrirModalComprar(idSolicitud) {
     abrirModal('modalComprar');
 }
 
-// =====================================================
-// 🔥 MODIFICAR confirmarCompra() para usar Drive
-// =====================================================
+function configurarSubidaComprobante() {
+    const uploadArea = document.getElementById('comprobanteUploadArea');
+    const fileInput = document.getElementById('comprobanteFile');
+    const removeBtn = document.getElementById('removeComprobanteBtn');
+    
+    if (!uploadArea || !fileInput) return;
+    
+    const newUploadArea = uploadArea.cloneNode(true);
+    uploadArea.parentNode.replaceChild(newUploadArea, uploadArea);
+    const newFileInput = fileInput.cloneNode(true);
+    fileInput.parentNode.replaceChild(newFileInput, fileInput);
+    
+    const finalUploadArea = document.getElementById('comprobanteUploadArea');
+    const finalFileInput = document.getElementById('comprobanteFile');
+    const finalRemoveBtn = document.getElementById('removeComprobanteBtn');
+    
+    if (!finalUploadArea || !finalFileInput) return;
+    
+    finalUploadArea.addEventListener('click', () => finalFileInput.click());
+    
+    finalFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) procesarArchivoComprobante(file);
+    });
+    
+    if (finalRemoveBtn) {
+        finalRemoveBtn.addEventListener('click', () => {
+            currentComprobanteFile = null;
+            const preview = document.getElementById('comprobantePreview');
+            if (preview) preview.style.display = 'none';
+            finalFileInput.value = '';
+        });
+    }
+}
+
+function procesarArchivoComprobante(file) {
+    if (file.size > 5 * 1024 * 1024) {
+        showToast('El archivo no debe superar los 5MB', 'error');
+        return;
+    }
+    
+    const tiposPermitidos = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+    if (!tiposPermitidos.includes(file.type)) {
+        showToast('Formato no permitido. Use JPG, PNG o PDF', 'error');
+        return;
+    }
+    
+    currentComprobanteFile = file;
+    
+    const preview = document.getElementById('comprobantePreview');
+    const nombreSpan = document.getElementById('comprobanteNombre');
+    if (preview && nombreSpan) {
+        nombreSpan.textContent = file.name;
+        preview.style.display = 'flex';
+    }
+    showToast('Comprobante cargado correctamente', 'success');
+}
 
 async function confirmarCompra() {
     const fechaCompra = document.getElementById('fechaCompra')?.value || new Date().toISOString().split('T')[0];
@@ -1197,7 +1162,6 @@ async function confirmarCompra() {
         return;
     }
     
-    // 🔥 OBTENER CÓDIGO DE ORDEN Y ID DE ORDEN
     const solicitud = solicitudesPendientes.find(s => s.id === currentSolicitudId);
     if (!solicitud) {
         showToast('No se encontró la solicitud', 'error');
@@ -1214,7 +1178,6 @@ async function confirmarCompra() {
         
         if (currentComprobanteFile) {
             try {
-                // ✅ SUBIR A GOOGLE DRIVE (NO A CLOUDINARY)
                 comprobanteUrl = await subirComprobanteADrive(
                     currentComprobanteFile, 
                     id_orden, 
@@ -1275,20 +1238,30 @@ function abrirModalEntregar(idSolicitud) {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
     
-    const itemsHtml = items.map(item => `
-        <div style="margin-bottom: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm); display: flex; align-items: center; gap: 0.5rem;">
-            ${item.foto_url ? `
-                <img src="${item.foto_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);cursor:pointer;" 
-                     onclick="verFotoAmpliadaEncargado('${item.foto_url}')" 
+    const itemsHtml = items.map(item => {
+        const fotosUrls = extraerUrlsFotos(item);
+        const tieneFotos = fotosUrls.length > 0;
+        
+        let fotosMiniaturas = '';
+        if (tieneFotos) {
+            fotosMiniaturas = fotosUrls.slice(0, 3).map((url, i) => `
+                <img src="${url}" style="width:35px;height:35px;object-fit:cover;border-radius:4px;border:2px solid var(--verde-exito);cursor:pointer;margin-right:4px;" 
+                     onclick="verFotoAmpliadaEncargado('${url}')" 
                      onerror="this.style.display='none'"
                      title="Haz clic para ver ampliada">
-            ` : ''}
-            <div>
-                <strong>${escapeHtml(item.descripcion)}</strong> - ${item.cantidad} uds
-                ${item.detalle ? `<br><small style="color: var(--gris-texto);">${escapeHtml(item.detalle)}</small>` : ''}
+            `).join('');
+        }
+        
+        return `
+            <div style="margin-bottom: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm); display: flex; align-items: center; gap: 0.5rem; flex-wrap:wrap;">
+                ${fotosMiniaturas}
+                <div>
+                    <strong>${escapeHtml(item.descripcion)}</strong> - ${item.cantidad} uds
+                    ${item.detalle ? `<br><small style="color: var(--gris-texto);">${escapeHtml(item.detalle)}</small>` : ''}
+                </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
     
     const modalBody = document.getElementById('modalEntregarBody');
     if (modalBody) {
@@ -1465,7 +1438,7 @@ function setupEventListeners() {
 }
 
 async function inicializar() {
-    console.log('🚀 Inicializando solicitudes_compra.js - VERSIÓN CON FOTOS');
+    console.log('🚀 Inicializando solicitudes_compra.js - VERSIÓN CON 3 FOTOS');
     console.log('📡 API_URL:', API_URL);
     
     const user = await cargarUsuarioActual();
@@ -1475,46 +1448,6 @@ async function inicializar() {
     setupEventListeners();
     
     console.log('✅ solicitudes_compra.js inicializado correctamente');
-}
-// =====================================================
-// 🔥 NUEVO: SUBIR COMPROBANTE A GOOGLE DRIVE
-// =====================================================
-
-async function subirComprobanteADrive(file, id_orden, codigo_orden) {
-    return new Promise((resolve, reject) => {
-        const formData = new FormData();
-        formData.append('comprobante', file);
-        formData.append('id_orden', id_orden);
-        formData.append('codigo_orden', codigo_orden);
-        
-        // ✅ ENDPOINT QUE SUBE A DRIVE (lo crearemos en el backend)
-        const uploadUrl = `${API_URL}/subir-comprobante-drive`;
-        
-        console.log('📤 Subiendo comprobante a Google Drive...');
-        console.log(`📁 Para orden: ${codigo_orden}`);
-        
-        fetch(uploadUrl, {
-            method: 'POST',
-            headers: {
-                'Authorization': getAuthHeaders()['Authorization']
-            },
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.url) {
-                console.log('✅ Comprobante subido a Drive:', data.url);
-                resolve(data.url);
-            } else {
-                console.error('❌ Error Drive:', data.error);
-                reject(new Error(data.error || 'Error al subir a Google Drive'));
-            }
-        })
-        .catch(err => {
-            console.error('❌ Error de red:', err);
-            reject(new Error('Error de conexión con Google Drive'));
-        });
-    });
 }
 
 // Exponer funciones globales

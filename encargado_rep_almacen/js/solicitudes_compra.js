@@ -340,7 +340,93 @@ async function cargarSolicitudes() {
 }
 
 // =====================================================
-// 🆕 RENDERIZAR SOLICITUDES CON FOTOS (CORREGIDO)
+// 🆕 FUNCIÓN PARA EXTRAER URLs DE FOTOS (ROBUSTA)
+// =====================================================
+
+function extraerUrlsFotos(item) {
+    let urls = [];
+    
+    if (!item) return urls;
+    
+    // 1. Verificar item.foto_url
+    if (item.foto_url) {
+        if (typeof item.foto_url === 'string') {
+            if (item.foto_url.startsWith('http')) {
+                urls.push(item.foto_url);
+            }
+        } else if (typeof item.foto_url === 'object' && item.foto_url !== null) {
+            // Buscar propiedades que sean URLs
+            const posibles = ['url', 'link', 'public_url', 'download_url', 'secure_url'];
+            for (const prop of posibles) {
+                if (item.foto_url[prop] && typeof item.foto_url[prop] === 'string' && item.foto_url[prop].startsWith('http')) {
+                    urls.push(item.foto_url[prop]);
+                    break;
+                }
+            }
+        }
+    }
+    
+    // 2. Verificar item.fotos (array)
+    if (item.fotos && Array.isArray(item.fotos)) {
+        item.fotos.forEach(foto => {
+            if (!foto) return;
+            if (typeof foto === 'string' && foto.startsWith('http')) {
+                urls.push(foto);
+            } else if (typeof foto === 'object' && foto !== null) {
+                const posibles = ['url', 'link', 'public_url', 'download_url', 'secure_url'];
+                for (const prop of posibles) {
+                    if (foto[prop] && typeof foto[prop] === 'string' && foto[prop].startsWith('http')) {
+                        urls.push(foto[prop]);
+                        break;
+                    }
+                }
+            }
+        });
+    }
+    
+    // 3. Verificar item.foto (alternativa)
+    if (urls.length === 0 && item.foto) {
+        if (typeof item.foto === 'string' && item.foto.startsWith('http')) {
+            urls.push(item.foto);
+        } else if (typeof item.foto === 'object' && item.foto !== null) {
+            const posibles = ['url', 'link', 'public_url', 'download_url'];
+            for (const prop of posibles) {
+                if (item.foto[prop] && typeof item.foto[prop] === 'string' && item.foto[prop].startsWith('http')) {
+                    urls.push(item.foto[prop]);
+                    break;
+                }
+            }
+        }
+    }
+    
+    // 4. Último recurso: buscar URLs en el JSON del item
+    if (urls.length === 0) {
+        try {
+            const str = JSON.stringify(item);
+            const matches = str.match(/https?:\/\/[^\s"',]+/g);
+            if (matches) {
+                matches.forEach(url => {
+                    if (!urls.includes(url) && (url.includes('drive.google.com') || url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))) {
+                        urls.push(url);
+                    }
+                });
+            }
+        } catch (e) {}
+    }
+    
+    // Filtrar duplicados y URLs inválidas
+    urls = urls.filter((url, index, self) => 
+        self.indexOf(url) === index && 
+        typeof url === 'string' && 
+        url.startsWith('http') &&
+        url.length > 10
+    );
+    
+    return urls;
+}
+
+// =====================================================
+// RENDERIZAR SOLICITUDES CON FOTOS (CORREGIDO)
 // =====================================================
 
 function renderizarSolicitudes(solicitudes) {
@@ -365,37 +451,88 @@ function renderizarSolicitudes(solicitudes) {
         }
         
         // =====================================================
-        // 🔧 RENDERIZAR ITEMS CON FOTOS
+        // 🔧 RENDERIZAR ITEMS CON FOTOS (USANDO PROXY)
         // =====================================================
-        const itemsHtml = items.map(item => `
-            <div class="item-row-solicitud">
-                <div class="item-desc">
-                    ${item.foto_url ? `
-                        <img src="${item.foto_url}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;border:2px solid var(--verde-exito);margin-right:8px;vertical-align:middle;cursor:pointer;" 
-                             onclick="verFotoAmpliadaEncargado('${item.foto_url}')" 
-                             onerror="this.style.display='none'"
-                             title="Haz clic para ver ampliada">
-                        <span class="foto-badge"><i class="fas fa-camera"></i></span>
-                    ` : ''}
-                    ${escapeHtml(item.descripcion)}
+        const itemsHtml = items.map((item, idx) => {
+            // Extraer URLs de fotos
+            const fotosUrls = extraerUrlsFotos(item);
+            const tieneFotos = fotosUrls.length > 0;
+            
+            // Generar miniaturas (hasta 3)
+            let miniaturasHtml = '';
+            if (tieneFotos) {
+                const fotosMostrar = fotosUrls.slice(0, 3);
+                const itemId = `solicitud_${solicitud.id}_item_${idx}_${Date.now()}`;
+                
+                miniaturasHtml = `
+                    <div class="miniaturas-container" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px;">
+                        ${fotosMostrar.map((url, i) => `
+                            <div style="position:relative;width:40px;height:40px;border-radius:4px;overflow:hidden;border:2px solid var(--verde-exito);flex-shrink:0;cursor:pointer;" 
+                                 onclick="verFotoAmpliadaEncargado('${encodeURI(url)}')"
+                                 title="Haz clic para ver ampliada">
+                                <div id="loader_${itemId}_${i}" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:var(--gris-oscuro);">
+                                    <i class="fas fa-spinner fa-spin" style="font-size:12px;color:var(--gris-texto);"></i>
+                                </div>
+                                <img id="img_${itemId}_${i}" 
+                                     src="" 
+                                     alt="Foto" 
+                                     style="width:100%;height:100%;object-fit:cover;display:none;"
+                                     data-url="${encodeURI(url)}"
+                                     data-loaded="false">
+                            </div>
+                        `).join('')}
+                        ${fotosUrls.length > 3 ? `
+                            <span style="font-size:0.6rem;color:var(--gris-texto);background:var(--gris-oscuro);padding:0.1rem 0.4rem;border-radius:4px;">
+                                +${fotosUrls.length - 3}
+                            </span>
+                        ` : ''}
+                        <span style="font-size:0.6rem;color:var(--verde-exito);margin-left:2px;">
+                            <i class="fas fa-camera"></i> ${fotosUrls.length}
+                        </span>
+                    </div>
+                `;
+            }
+            
+            // Descripción del item
+            const descripcion = item.descripcion || item.nombre || 'Item';
+            const cantidad = item.cantidad || 1;
+            const detalle = item.detalle || '';
+            
+            return `
+                <div class="item-row-solicitud" style="border-bottom:1px solid var(--border-color);padding:0.5rem 0;">
+                    <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                        <div style="flex:1;min-width:100px;">
+                            <strong>${escapeHtml(descripcion)}</strong>
+                            ${detalle ? `<span style="color:var(--gris-texto);font-size:0.8rem;">(${escapeHtml(detalle)})</span>` : ''}
+                        </div>
+                        <div style="background:var(--gris-oscuro);padding:0.1rem 0.5rem;border-radius:4px;font-size:0.8rem;">
+                            ×${cantidad}
+                        </div>
+                        ${miniaturasHtml}
+                    </div>
                 </div>
-                <div class="item-cant">${item.cantidad} uds</div>
-                <div class="item-detalle">${escapeHtml(item.detalle || '')}</div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
+        
+        // Contar total de fotos en la solicitud
+        let totalFotos = 0;
+        items.forEach(item => {
+            const fotos = extraerUrlsFotos(item);
+            totalFotos += fotos.length;
+        });
+        
+        const tieneFotosGenerales = totalFotos > 0;
         
         const puedeComprar = solicitud.estado === 'pendiente';
         const puedeEntregar = solicitud.estado === 'comprado';
         const tieneComprobante = solicitud.comprobante_url;
         
-        const tieneFotos = items.some(item => item.foto_url);
-        
         return `
             <div class="solicitud-card" data-id="${solicitud.id}">
                 <div class="solicitud-header">
                     <h3><i class="fas fa-shopping-cart"></i> Solicitud #${solicitud.id}</h3>
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        ${tieneFotos ? `<span class="fotos-badge"><i class="fas fa-camera"></i> ${items.filter(i => i.foto_url).length} foto(s)</span>` : ''}
+                    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap:wrap;">
+                        ${tieneFotosGenerales ? `<span class="fotos-badge" style="background:var(--verde-exito);color:white;padding:0.1rem 0.5rem;border-radius:12px;font-size:0.65rem;"><i class="fas fa-camera"></i> ${totalFotos}</span>` : ''}
                         ${statusBadge(solicitud.estado)}
                     </div>
                 </div>
@@ -470,8 +607,105 @@ function renderizarSolicitudes(solicitudes) {
             </div>
         `;
     }).join('');
+    
+    // =====================================================
+    // CARGAR LAS IMÁGENES CON PROXY DESPUÉS DE RENDERIZAR
+    // =====================================================
+    requestAnimationFrame(() => {
+        setTimeout(() => {
+            const cards = container.querySelectorAll('.solicitud-card');
+            cards.forEach(card => {
+                const imagenes = card.querySelectorAll('.miniaturas-container img');
+                imagenes.forEach(img => {
+                    const url = img.getAttribute('data-url');
+                    if (url) {
+                        const decodedUrl = decodeURI(url);
+                        // Buscar el loader asociado
+                        const parent = img.parentElement;
+                        const loader = parent.querySelector('.miniatura-loader');
+                        if (loader) {
+                            cargarImagenProxyEncargado(decodedUrl, img, loader);
+                        }
+                    }
+                });
+            });
+        }, 300);
+    });
 }
+// =====================================================
+// CARGAR IMAGEN CON PROXY PARA ENCARGADO DE REPUESTOS
+// =====================================================
 
+async function cargarImagenProxyEncargado(url, imgElement, loaderElement = null) {
+    if (!url) {
+        if (imgElement) {
+            imgElement.style.display = 'none';
+            imgElement.src = '';
+        }
+        if (loaderElement) loaderElement.style.display = 'none';
+        return null;
+    }
+    
+    // Mostrar loader
+    if (loaderElement) {
+        loaderElement.style.display = 'flex';
+        loaderElement.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:12px;color:var(--gris-texto);"></i>';
+    }
+    if (imgElement) {
+        imgElement.style.display = 'none';
+        imgElement.style.opacity = '0';
+    }
+    
+    try {
+        // Usar el proxy del backend
+        const proxyUrl = `${API_URL}/proxy-imagen-encargado?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            return new Promise((resolve) => {
+                const nuevaImg = new Image();
+                nuevaImg.onload = function() {
+                    if (imgElement) {
+                        imgElement.src = data.base64;
+                        imgElement.style.display = 'block';
+                        imgElement.style.opacity = '1';
+                        imgElement.setAttribute('data-loaded', 'true');
+                    }
+                    if (loaderElement) loaderElement.style.display = 'none';
+                    resolve(data.base64);
+                };
+                nuevaImg.onerror = function() {
+                    console.error('Error al cargar imagen:', url);
+                    if (loaderElement) {
+                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);"></i>';
+                        loaderElement.style.display = 'flex';
+                    }
+                    if (imgElement) {
+                        imgElement.style.display = 'none';
+                    }
+                    resolve(null);
+                };
+                nuevaImg.src = data.base64;
+            });
+        } else {
+            if (loaderElement) {
+                loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);"></i>';
+                loaderElement.style.display = 'flex';
+            }
+            return null;
+        }
+    } catch (error) {
+        console.error('Error cargando imagen:', error);
+        if (loaderElement) {
+            loaderElement.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);"></i>';
+            loaderElement.style.display = 'flex';
+        }
+        return null;
+    }
+}
 // =====================================================
 // VER DETALLE (CON FOTOS)
 // =====================================================

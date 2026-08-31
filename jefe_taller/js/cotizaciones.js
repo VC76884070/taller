@@ -84,7 +84,6 @@ function getAuthHeaders() {
         'Content-Type': 'application/json'
     };
 }
-
 function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
@@ -829,7 +828,7 @@ async function eliminarFotoItemSolicitud(index) {
 }
 
 // =====================================================
-// RENDERIZAR ITEMS DE COMPRA DIRECTA CON PROXY
+// RENDERIZAR ITEMS DE COMPRA DIRECTA CON PROXY Y FOTOS
 // =====================================================
 
 function renderItemsCompraDirecta() {
@@ -841,32 +840,70 @@ function renderItemsCompraDirecta() {
         return;
     }
     
-    container.innerHTML = itemsCompraDirecta.map((item, index) => {
+    // Construir HTML con IDs únicos para las fotos
+    let html = '';
+    
+    itemsCompraDirecta.forEach((item, index) => {
         const tieneFoto = item.foto_url ? true : false;
+        const uniqueId = `compra_item_${index}_${Date.now()}`;
         
-        return `
-            <div class="item-row" data-index="${index}">
+        // Determinar si hay múltiples fotos
+        const fotos = item.fotos || (item.foto_url ? [item.foto_url] : []);
+        const totalFotos = fotos.length;
+        
+        // Generar miniaturas para hasta 3 fotos
+        let fotosHtml = '';
+        if (totalFotos > 0) {
+            const fotosMostrar = fotos.slice(0, 3);
+            fotosHtml = `
+                <div class="miniaturas-container" style="display:flex;gap:3px;align-items:center;flex-wrap:wrap;margin-top:4px;">
+                    ${fotosMostrar.map((url, i) => `
+                        <div class="miniatura-wrapper" style="position:relative;width:40px;height:40px;border-radius:4px;overflow:hidden;border:1px solid var(--border-color);flex-shrink:0;">
+                            <div class="miniatura-loader" id="loader_${uniqueId}_${i}" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:var(--gris-oscuro);">
+                                <i class="fas fa-spinner fa-spin" style="font-size:12px;color:var(--gris-texto);"></i>
+                            </div>
+                            <img class="miniatura-img" id="img_${uniqueId}_${i}" 
+                                 src="" 
+                                 alt="Foto item" 
+                                 style="width:100%;height:100%;object-fit:cover;display:none;cursor:pointer;"
+                                 onclick="verFotoAmpliadaJefeTaller('${url}')"
+                                 data-url="${url}"
+                                 data-loaded="false">
+                        </div>
+                    `).join('')}
+                    ${totalFotos > 3 ? `
+                        <span style="font-size:0.6rem;color:var(--gris-texto);background:var(--gris-oscuro);padding:0.1rem 0.4rem;border-radius:4px;">
+                            +${totalFotos - 3}
+                        </span>
+                    ` : ''}
+                </div>
+            `;
+        } else {
+            fotosHtml = `
+                <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;border:1px dashed var(--gris-texto);margin-top:4px;">
+                    <i class="fas fa-plus" style="color:var(--gris-texto);font-size:12px;"></i>
+                </div>
+            `;
+        }
+        
+        html += `
+            <div class="item-row" data-index="${index}" data-item-id="${uniqueId}">
                 <div class="item-fields">
                     <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Nombre del repuesto" onchange="actualizarItemCompraDirecta(${index}, 'descripcion', this.value)">
-                    <input type="number" class="item-cantidad" value="${item.cantidad}" min="1" onchange="actualizarItemCompraDirecta(${index}, 'cantidad', parseInt(this.value))">
+                    <input type="number" class="item-cantidad" value="${item.cantidad || 1}" min="1" onchange="actualizarItemCompraDirecta(${index}, 'cantidad', parseInt(this.value))">
                     <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle (marca, especificaciones...)" onchange="actualizarItemCompraDirecta(${index}, 'detalle', this.value)">
                 </div>
-                <div class="item-foto-upload">
-                    <input type="file" class="item-foto-input-compra" accept="image/*" onchange="subirFotoItemCompra(${index}, this)" style="display:none;">
-                    <button type="button" class="btn-foto-item" onclick="event.preventDefault(); document.querySelectorAll('.item-foto-input-compra')[${index}]?.click()">
-                        <i class="fas fa-camera"></i> Foto
-                    </button>
-                    <span class="item-foto-preview" id="fotoPreviewCompra_${index}">
-                        ${tieneFoto ? `
-                            <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
-                                <i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);font-size:14px;"></i>
-                            </div>
-                        ` : `
-                            <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;border:1px dashed var(--gris-texto);">
-                                <i class="fas fa-plus" style="color:var(--gris-texto);font-size:12px;"></i>
-                            </div>
-                        `}
-                    </span>
+                <div class="item-foto-upload" style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+                    ${fotosHtml}
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                        <input type="file" class="item-foto-input-compra" accept="image/*" onchange="subirFotoItemCompra(${index}, this)" style="display:none;">
+                        <button type="button" class="btn-foto-item" onclick="event.preventDefault(); document.querySelectorAll('.item-foto-input-compra')[${index}]?.click()" style="font-size:0.65rem;padding:0.2rem 0.5rem;">
+                            <i class="fas fa-camera"></i> Foto
+                        </button>
+                        ${tieneFoto ? `<button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemCompra(${index})" style="font-size:0.6rem;padding:0.2rem 0.5rem;background:var(--rojo-primario);color:white;border:none;border-radius:4px;cursor:pointer;">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>` : ''}
+                    </div>
                 </div>
                 <div class="item-actions">
                     <button type="button" class="btn-remove-item" onclick="event.preventDefault(); eliminarItemCompraDirecta(${index})">
@@ -875,18 +912,40 @@ function renderItemsCompraDirecta() {
                 </div>
             </div>
         `;
-    }).join('');
+    });
     
-    // 🔥 CARGAR PREVIEWS DE FOTOS EXISTENTES
-    setTimeout(() => {
-        itemsCompraDirecta.forEach((item, index) => {
-            if (item.foto_url) {
-                cargarPreviewFotoCompra(index, item.foto_url);
-            }
-        });
-    }, 100);
+    container.innerHTML = html;
+    
+    // =====================================================
+    // CARGAR LAS IMÁGENES CON PROXY
+    // =====================================================
+    requestAnimationFrame(() => {
+        setTimeout(() => {
+            const rows = container.querySelectorAll('.item-row');
+            
+            rows.forEach(row => {
+                const index = parseInt(row.getAttribute('data-index'));
+                const item = itemsCompraDirecta[index];
+                if (!item) return;
+                
+                const fotos = item.fotos || (item.foto_url ? [item.foto_url] : []);
+                
+                fotos.forEach((url, i) => {
+                    const uniqueId = row.getAttribute('data-item-id');
+                    const imgId = `img_${uniqueId}_${i}`;
+                    const loaderId = `loader_${uniqueId}_${i}`;
+                    
+                    const imgElement = document.getElementById(imgId);
+                    const loaderElement = document.getElementById(loaderId);
+                    
+                    if (imgElement && loaderElement && url) {
+                        cargarImagenProxy(url, imgElement, loaderElement);
+                    }
+                });
+            });
+        }, 200);
+    });
 }
-
 function agregarItemCompraDirecta() {
     itemsCompraDirecta.push({ descripcion: '', cantidad: 1, detalle: '', foto_url: null, foto_public_id: null });
     renderItemsCompraDirecta();
@@ -1404,28 +1463,58 @@ async function abrirModalCompraDesdeSolicitudTecnico(id_solicitud) {
     
     currentSolicitudTecnico = solicitud;
     
+    // =====================================================
+    // LIMPIAR Y PREPARAR ITEMS CON SUS FOTOS
+    // =====================================================
     limpiarItemsCompraDirecta();
     
     if (solicitud.items && solicitud.items.length > 0) {
-        itemsCompraDirecta = solicitud.items.map(item => ({
-            descripcion: item.descripcion,
-            cantidad: item.cantidad,
-            detalle: item.detalle || '',
-            foto_url: item.foto_url || null,
-            foto_public_id: item.foto_public_id || null
-        }));
+        // Mapear los items del técnico al formato de compra directa
+        itemsCompraDirecta = solicitud.items.map(item => {
+            // Determinar las fotos del item
+            let fotos = [];
+            
+            // Si el item tiene foto_url (versión anterior)
+            if (item.foto_url) {
+                fotos.push(item.foto_url);
+            }
+            
+            // Si el item tiene fotos array (nueva versión)
+            if (item.fotos && Array.isArray(item.fotos)) {
+                fotos = fotos.concat(item.fotos);
+            }
+            
+            return {
+                descripcion: item.descripcion || 'Item',
+                cantidad: item.cantidad || 1,
+                detalle: item.detalle || '',
+                foto_url: fotos.length > 0 ? fotos[0] : null,  // Para compatibilidad
+                fotos: fotos,  // Array de todas las fotos
+                foto_public_id: item.foto_public_id || null
+            };
+        });
+        
         renderItemsCompraDirecta();
-        console.log(`📦 Items pre-cargados: ${itemsCompraDirecta.length}`);
+        console.log(`📦 Items pre-cargados: ${itemsCompraDirecta.length}, con ${itemsCompraDirecta.reduce((sum, item) => sum + (item.fotos ? item.fotos.length : 0), 0)} fotos`);
     }
     
+    // =====================================================
+    // MOSTRAR INFORMACIÓN ADICIONAL DE LA SOLICITUD
+    // =====================================================
     const infoAdicional = document.getElementById('compraDirectaInfoAdicional');
     if (infoAdicional) {
         let itemsHtml = '';
         if (solicitud.items && solicitud.items.length > 0) {
             itemsHtml = '<ul style="margin: 0.5rem 0 0 1rem;">' + 
                 solicitud.items.map(item => {
-                    const fotoHtml = item.foto_url ? `<img src="${item.foto_url}" style="width:30px;height:30px;object-fit:cover;border-radius:4px;margin-left:4px;">` : '';
-                    return `<li><strong>${escapeHtml(item.descripcion)}</strong> x${item.cantidad}${item.detalle ? ` (${escapeHtml(item.detalle)})` : ''} ${fotoHtml}</li>`;
+                    // Contar fotos del item
+                    let fotosCount = 0;
+                    if (item.foto_url) fotosCount++;
+                    if (item.fotos && Array.isArray(item.fotos)) fotosCount += item.fotos.length;
+                    
+                    const fotosBadge = fotosCount > 0 ? `📸 ${fotosCount}` : '';
+                    
+                    return `<li><strong>${escapeHtml(item.descripcion)}</strong> x${item.cantidad}${item.detalle ? ` (${escapeHtml(item.detalle)})` : ''} ${fotosBadge}</li>`;
                 }).join('') + 
                 '</ul>';
         }
@@ -1468,7 +1557,38 @@ async function abrirModalCompraDesdeSolicitudTecnico(id_solicitud) {
             observacionesTextarea.value = `Solicitud del técnico: ${solicitud.observaciones.substring(0, 200)}`;
         }
         
+        // =====================================================
+        // ABRIR EL MODAL
+        // =====================================================
         abrirModal('modalNuevaSolicitudCompraDirecta');
+        
+        // =====================================================
+        // CARGAR LAS FOTOS NUEVAMENTE DESPUÉS DE ABRIR EL MODAL
+        // =====================================================
+        setTimeout(() => {
+            // Forzar recarga de fotos
+            const container = document.getElementById('itemsListCompraDirecta');
+            if (container) {
+                const rows = container.querySelectorAll('.item-row');
+                rows.forEach(row => {
+                    const index = parseInt(row.getAttribute('data-index'));
+                    const item = itemsCompraDirecta[index];
+                    if (item) {
+                        const fotos = item.fotos || (item.foto_url ? [item.foto_url] : []);
+                        fotos.forEach((url, i) => {
+                            const uniqueId = row.getAttribute('data-item-id');
+                            const imgId = `img_${uniqueId}_${i}`;
+                            const loaderId = `loader_${uniqueId}_${i}`;
+                            const imgElement = document.getElementById(imgId);
+                            const loaderElement = document.getElementById(loaderId);
+                            if (imgElement && loaderElement && url) {
+                                cargarImagenProxy(url, imgElement, loaderElement);
+                            }
+                        });
+                    }
+                });
+            }
+        }, 500);
         
     } catch (error) {
         console.error('❌ Error preparando modal:', error);

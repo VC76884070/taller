@@ -340,7 +340,7 @@ async function cargarSolicitudes() {
 }
 
 // =====================================================
-// 🆕 FUNCIÓN PARA EXTRAER URLs DE FOTOS (ROBUSTA)
+// EXTRAER URLs DE FOTOS - VERSIÓN SIMPLIFICADA
 // =====================================================
 
 function extraerUrlsFotos(item) {
@@ -348,82 +348,64 @@ function extraerUrlsFotos(item) {
     
     if (!item) return urls;
     
-    // 1. Verificar item.foto_url
-    if (item.foto_url) {
-        if (typeof item.foto_url === 'string') {
-            if (item.foto_url.startsWith('http')) {
-                urls.push(item.foto_url);
-            }
-        } else if (typeof item.foto_url === 'object' && item.foto_url !== null) {
-            // Buscar propiedades que sean URLs
-            const posibles = ['url', 'link', 'public_url', 'download_url', 'secure_url'];
-            for (const prop of posibles) {
-                if (item.foto_url[prop] && typeof item.foto_url[prop] === 'string' && item.foto_url[prop].startsWith('http')) {
-                    urls.push(item.foto_url[prop]);
-                    break;
-                }
-            }
+    // 1. Verificar item.foto_url (string directo)
+    if (item.foto_url && typeof item.foto_url === 'string') {
+        if (item.foto_url.startsWith('http')) {
+            urls.push(item.foto_url);
         }
     }
     
     // 2. Verificar item.fotos (array)
     if (item.fotos && Array.isArray(item.fotos)) {
         item.fotos.forEach(foto => {
-            if (!foto) return;
             if (typeof foto === 'string' && foto.startsWith('http')) {
                 urls.push(foto);
-            } else if (typeof foto === 'object' && foto !== null) {
-                const posibles = ['url', 'link', 'public_url', 'download_url', 'secure_url'];
-                for (const prop of posibles) {
-                    if (foto[prop] && typeof foto[prop] === 'string' && foto[prop].startsWith('http')) {
-                        urls.push(foto[prop]);
-                        break;
-                    }
-                }
             }
         });
     }
     
-    // 3. Verificar item.foto (alternativa)
-    if (urls.length === 0 && item.foto) {
-        if (typeof item.foto === 'string' && item.foto.startsWith('http')) {
+    // 3. Verificar item.foto (string)
+    if (urls.length === 0 && item.foto && typeof item.foto === 'string') {
+        if (item.foto.startsWith('http')) {
             urls.push(item.foto);
-        } else if (typeof item.foto === 'object' && item.foto !== null) {
-            const posibles = ['url', 'link', 'public_url', 'download_url'];
-            for (const prop of posibles) {
-                if (item.foto[prop] && typeof item.foto[prop] === 'string' && item.foto[prop].startsWith('http')) {
-                    urls.push(item.foto[prop]);
-                    break;
-                }
-            }
         }
     }
     
-    // 4. Último recurso: buscar URLs en el JSON del item
+    // 4. Verificar item.imagen (string)
+    if (urls.length === 0 && item.imagen && typeof item.imagen === 'string') {
+        if (item.imagen.startsWith('http')) {
+            urls.push(item.imagen);
+        }
+    }
+    
+    // 5. Buscar en items anidados (por si acaso)
     if (urls.length === 0) {
         try {
             const str = JSON.stringify(item);
             const matches = str.match(/https?:\/\/[^\s"',]+/g);
             if (matches) {
                 matches.forEach(url => {
-                    if (!urls.includes(url) && (url.includes('drive.google.com') || url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))) {
-                        urls.push(url);
+                    if (url.includes('drive.google.com') || 
+                        url.includes('cloudinary.com') || 
+                        url.includes('res.cloudinary.com')) {
+                        if (!urls.includes(url)) {
+                            urls.push(url);
+                        }
                     }
                 });
             }
         } catch (e) {}
     }
     
-    // Filtrar duplicados y URLs inválidas
-    urls = urls.filter((url, index, self) => 
-        self.indexOf(url) === index && 
-        typeof url === 'string' && 
-        url.startsWith('http') &&
-        url.length > 10
-    );
+    // Filtrar duplicados
+    urls = urls.filter((url, index, self) => self.indexOf(url) === index);
     
     return urls;
 }
+
+// =====================================================
+// RENDERIZAR SOLICITUDES - VERSIÓN SIMPLIFICADA CON FOTOS
+// =====================================================
 
 function renderizarSolicitudes(solicitudes) {
     const container = document.getElementById('solicitudesContainer');
@@ -453,32 +435,38 @@ function renderizarSolicitudes(solicitudes) {
         // =====================================================
         let itemsHtml = '';
         let totalFotos = 0;
+        let fotosParaCargar = [];
         
         items.forEach((item, itemIdx) => {
-            // Extraer URLs de fotos usando la función existente
             const fotosUrls = extraerUrlsFotos(item);
             const tieneFotos = fotosUrls.length > 0;
             
             if (tieneFotos) {
                 totalFotos += fotosUrls.length;
+                // Guardar URLs para cargar después
+                fotosParaCargar.push({
+                    itemIdx: itemIdx,
+                    urls: fotosUrls
+                });
             }
+            
+            const uniqueId = `solicitud_${solicitud.id}_item_${itemIdx}`;
             
             // Generar miniaturas (hasta 3)
             let miniaturasHtml = '';
             if (tieneFotos) {
                 const fotosMostrar = fotosUrls.slice(0, 3);
-                const uniqueId = `solicitud_${solicitud.id}_item_${itemIdx}_${Date.now()}`;
                 
                 miniaturasHtml = `
-                    <div class="miniaturas-container" style="display:flex;gap:3px;align-items:center;flex-wrap:wrap;margin-top:3px;">
+                    <div class="miniaturas-container" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px;">
                         ${fotosMostrar.map((url, i) => `
-                            <div style="position:relative;width:35px;height:35px;border-radius:4px;overflow:hidden;border:2px solid var(--verde-exito);flex-shrink:0;cursor:pointer;" 
+                            <div style="position:relative;width:40px;height:40px;border-radius:4px;overflow:hidden;border:2px solid var(--verde-exito);flex-shrink:0;cursor:pointer;" 
                                  onclick="verFotoAmpliadaEncargado('${encodeURI(url)}')"
                                  title="Haz clic para ver ampliada">
-                                <div id="loader_${uniqueId}_${i}" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:var(--gris-oscuro);">
-                                    <i class="fas fa-spinner fa-spin" style="font-size:10px;color:var(--gris-texto);"></i>
+                                <div class="miniatura-loader" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:var(--gris-oscuro);">
+                                    <i class="fas fa-spinner fa-spin" style="font-size:12px;color:var(--gris-texto);"></i>
                                 </div>
-                                <img id="img_${uniqueId}_${i}" 
+                                <img class="miniatura-img" 
                                      src="" 
                                      alt="Foto" 
                                      style="width:100%;height:100%;object-fit:cover;display:none;"
@@ -487,7 +475,7 @@ function renderizarSolicitudes(solicitudes) {
                             </div>
                         `).join('')}
                         ${fotosUrls.length > 3 ? `
-                            <span style="font-size:0.55rem;color:var(--gris-texto);background:var(--gris-oscuro);padding:0.1rem 0.3rem;border-radius:4px;">
+                            <span style="font-size:0.6rem;color:var(--gris-texto);background:var(--gris-oscuro);padding:0.1rem 0.4rem;border-radius:4px;">
                                 +${fotosUrls.length - 3}
                             </span>
                         ` : ''}
@@ -520,7 +508,9 @@ function renderizarSolicitudes(solicitudes) {
         const tieneComprobante = solicitud.comprobante_url;
         
         html += `
-            <div class="solicitud-card" data-id="${solicitud.id}" style="margin-bottom:1rem;border:1px solid var(--border-color);border-radius:8px;overflow:hidden;background:var(--bg-card);">
+            <div class="solicitud-card" data-id="${solicitud.id}" 
+                 data-fotos='${JSON.stringify(fotosParaCargar)}'
+                 style="margin-bottom:1rem;border:1px solid var(--border-color);border-radius:8px;overflow:hidden;background:var(--bg-card);">
                 <div class="solicitud-header" style="padding:0.75rem 1rem;background:var(--gris-oscuro);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;border-bottom:1px solid var(--border-color);">
                     <h3 style="margin:0;font-size:1rem;"><i class="fas fa-shopping-cart"></i> Solicitud #${solicitud.id}</h3>
                     <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
@@ -563,21 +553,21 @@ function renderizarSolicitudes(solicitudes) {
                     ` : ''}
                     
                     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
-                        <button class="action-btn view" onclick="verDetalle(${solicitud.id})" title="Ver Detalle" style="padding:0.3rem 0.8rem;border-radius:4px;border:none;cursor:pointer;background:var(--gris-oscuro);">
+                        <button class="action-btn view" onclick="verDetalle(${solicitud.id})" style="padding:0.3rem 0.8rem;border-radius:4px;border:none;cursor:pointer;background:var(--gris-oscuro);">
                             <i class="fas fa-eye"></i> Ver
                         </button>
                         ${tieneComprobante ? `
-                            <button class="action-btn view" onclick="verComprobante(${solicitud.id})" title="Ver Comprobante" style="padding:0.3rem 0.8rem;border-radius:4px;border:none;cursor:pointer;background:var(--gris-oscuro);">
+                            <button class="action-btn view" onclick="verComprobante(${solicitud.id})" style="padding:0.3rem 0.8rem;border-radius:4px;border:none;cursor:pointer;background:var(--gris-oscuro);">
                                 <i class="fas fa-receipt"></i> Ver Comprobante
                             </button>
                         ` : ''}
                         ${puedeComprar ? `
-                            <button class="action-btn buy" onclick="abrirModalComprar(${solicitud.id})" title="Marcar como Comprado" style="padding:0.3rem 0.8rem;border-radius:4px;border:none;cursor:pointer;background:var(--rojo-primario);color:white;">
+                            <button class="action-btn buy" onclick="abrirModalComprar(${solicitud.id})" style="padding:0.3rem 0.8rem;border-radius:4px;border:none;cursor:pointer;background:var(--rojo-primario);color:white;">
                                 <i class="fas fa-shopping-cart"></i> Marcar Comprado
                             </button>
                         ` : ''}
                         ${puedeEntregar ? `
-                            <button class="action-btn deliver" onclick="abrirModalEntregar(${solicitud.id})" title="Registrar Entrega" style="padding:0.3rem 0.8rem;border-radius:4px;border:none;cursor:pointer;background:var(--verde-exito);color:white;">
+                            <button class="action-btn deliver" onclick="abrirModalEntregar(${solicitud.id})" style="padding:0.3rem 0.8rem;border-radius:4px;border:none;cursor:pointer;background:var(--verde-exito);color:white;">
                                 <i class="fas fa-truck"></i> Registrar Entrega
                             </button>
                         ` : ''}
@@ -590,105 +580,105 @@ function renderizarSolicitudes(solicitudes) {
     container.innerHTML = html;
     
     // =====================================================
-    // CARGAR LAS IMÁGENES CON PROXY DESPUÉS DE RENDERIZAR
+    // CARGAR LAS IMÁGENES DESPUÉS DE RENDERIZAR
     // =====================================================
     setTimeout(() => {
         const cards = container.querySelectorAll('.solicitud-card');
+        
         cards.forEach(card => {
-            const imagenes = card.querySelectorAll('.miniaturas-container img');
+            // Buscar todas las imágenes dentro de la card
+            const imagenes = card.querySelectorAll('.miniatura-img');
+            
             imagenes.forEach(img => {
                 const url = img.getAttribute('data-url');
                 if (url) {
                     const decodedUrl = decodeURI(url);
-                    // Buscar el loader asociado (el div que está justo antes del img)
-                    const parent = img.parentElement;
-                    const loader = parent ? parent.querySelector('.miniatura-loader') : null;
-                    if (loader) {
-                        cargarImagenProxyEncargado(decodedUrl, img, loader);
-                    } else {
-                        // Si no hay loader, intentar cargar directamente
-                        cargarImagenProxyEncargado(decodedUrl, img, null);
-                    }
+                    cargarImagenProxyEncargado(decodedUrl, img);
                 }
             });
         });
     }, 500);
 }
 // =====================================================
-// CARGAR IMAGEN CON PROXY PARA ENCARGADO DE REPUESTOS
+// CARGAR IMAGEN CON PROXY - VERSIÓN SIMPLIFICADA
 // =====================================================
 
-async function cargarImagenProxyEncargado(url, imgElement, loaderElement = null) {
-    if (!url) {
-        if (imgElement) {
-            imgElement.style.display = 'none';
-            imgElement.src = '';
-        }
-        if (loaderElement) loaderElement.style.display = 'none';
+async function cargarImagenProxyEncargado(url, imgElement) {
+    if (!url || !imgElement) {
         return null;
     }
     
-    // Mostrar loader
-    if (loaderElement) {
-        loaderElement.style.display = 'flex';
-        loaderElement.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:12px;color:var(--gris-texto);"></i>';
-    }
-    if (imgElement) {
-        imgElement.style.display = 'none';
-        imgElement.style.opacity = '0';
+    // Si la imagen ya está cargada, no hacer nada
+    if (imgElement.getAttribute('data-loaded') === 'true') {
+        return;
     }
     
     try {
-        // 🔥 USAR EL PROXY DE JEFE DE TALLER (QUE YA FUNCIONA)
-        // O usar el proxy de encargado que creamos
+        // Usar el proxy del backend (el mismo que funciona en jefe de taller)
         const proxyUrl = `${window.API_BASE_URL}/api/jefe-taller/proxy-imagen?url=${encodeURIComponent(url)}`;
         
-        console.log(`📸 Cargando imagen: ${url.substring(0, 50)}...`);
+        console.log(`📸 Cargando: ${url.substring(0, 60)}...`);
         
         const response = await fetch(proxyUrl, {
             headers: getAuthHeaders()
         });
+        
         const data = await response.json();
         
         if (data.success && data.base64) {
             return new Promise((resolve) => {
-                const nuevaImg = new Image();
-                nuevaImg.onload = function() {
-                    if (imgElement) {
-                        imgElement.src = data.base64;
-                        imgElement.style.display = 'block';
-                        imgElement.style.opacity = '1';
-                        imgElement.setAttribute('data-loaded', 'true');
+                const img = new Image();
+                img.onload = function() {
+                    imgElement.src = data.base64;
+                    imgElement.style.display = 'block';
+                    imgElement.setAttribute('data-loaded', 'true');
+                    
+                    // Ocultar el loader (el div padre que contiene el loader)
+                    const parent = imgElement.parentElement;
+                    if (parent) {
+                        const loader = parent.querySelector('.miniatura-loader');
+                        if (loader) {
+                            loader.style.display = 'none';
+                        }
                     }
-                    if (loaderElement) loaderElement.style.display = 'none';
+                    
                     resolve(data.base64);
                 };
-                nuevaImg.onerror = function() {
-                    console.error('Error al cargar imagen:', url);
-                    if (loaderElement) {
-                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:12px;"></i>';
-                        loaderElement.style.display = 'flex';
-                    }
-                    if (imgElement) {
-                        imgElement.style.display = 'none';
+                img.onerror = function() {
+                    console.error('❌ Error cargando imagen:', url);
+                    const parent = imgElement.parentElement;
+                    if (parent) {
+                        const loader = parent.querySelector('.miniatura-loader');
+                        if (loader) {
+                            loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:14px;"></i>';
+                            loader.style.display = 'flex';
+                        }
                     }
                     resolve(null);
                 };
-                nuevaImg.src = data.base64;
+                img.src = data.base64;
             });
         } else {
-            console.warn('⚠️ No se pudo cargar la imagen:', data.error || 'Error desconocido');
-            if (loaderElement) {
-                loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:12px;"></i>';
-                loaderElement.style.display = 'flex';
+            console.warn('⚠️ No se pudo cargar:', url);
+            const parent = imgElement.parentElement;
+            if (parent) {
+                const loader = parent.querySelector('.miniatura-loader');
+                if (loader) {
+                    loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:14px;"></i>';
+                    loader.style.display = 'flex';
+                }
             }
             return null;
         }
     } catch (error) {
-        console.error('Error cargando imagen:', error);
-        if (loaderElement) {
-            loaderElement.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:12px;"></i>';
-            loaderElement.style.display = 'flex';
+        console.error('❌ Error en proxy:', error);
+        const parent = imgElement.parentElement;
+        if (parent) {
+            const loader = parent.querySelector('.miniatura-loader');
+            if (loader) {
+                loader.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:14px;"></i>';
+                loader.style.display = 'flex';
+            }
         }
         return null;
     }

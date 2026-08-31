@@ -3910,7 +3910,7 @@ async function inicializar() {
 }
 
 // =====================================================
-// RENDERIZAR SOLICITUDES DE COMPRA CON PROXY
+// RENDERIZAR SOLICITUDES DE COMPRA CON MINIATURAS DE FOTOS
 // =====================================================
 
 function renderSolicitudesCompra() {
@@ -3922,7 +3922,11 @@ function renderSolicitudesCompra() {
         return;
     }
     
-    tbody.innerHTML = solicitudesCompra.map(s => {
+    // Construir HTML de todas las filas
+    let html = '';
+    
+    solicitudesCompra.forEach((s, idx) => {
+        // Parsear items
         let itemsList = s.items;
         if (typeof itemsList === 'string') {
             try {
@@ -3932,52 +3936,75 @@ function renderSolicitudesCompra() {
             }
         }
         
-        // 🔥 MOSTRAR ITEMS CON FOTOS USANDO PROXY
-        const itemsHtml = itemsList && itemsList.length > 0 
-            ? itemsList.map((item, idx) => {
-                const fotoUrl = item.foto_url || '';
-                const fotoId = `foto_compra_${s.id}_${idx}`;
-                const loaderId = `loader_compra_${s.id}_${idx}`;
-                
-                const fotoHtml = fotoUrl ? `
-                    <div style="display:flex;align-items:center;gap:4px;margin:2px 0;">
-                        <div id="${loaderId}" style="display:flex;align-items:center;gap:4px;font-size:0.7rem;color:var(--gris-texto);">
-                            <i class="fas fa-spinner fa-spin"></i>
-                        </div>
-                        <img id="${fotoId}" 
-                             src="" 
-                             alt="Item ${idx+1}" 
-                             style="width:25px;height:25px;object-fit:cover;border-radius:4px;cursor:pointer;display:none;border:1px solid var(--border-color);"
-                             onclick="verFotoAmpliadaJefeTaller('${fotoUrl}')"
-                             data-url="${fotoUrl}"
-                             data-loaded="false">
-                        <span style="font-size:0.7rem;">${escapeHtml(item.descripcion)} x${item.cantidad}</span>
-                    </div>
-                ` : `
-                    <div style="display:flex;align-items:center;gap:4px;margin:2px 0;">
-                        <i class="fas fa-image" style="color:var(--gris-texto);font-size:0.7rem;"></i>
-                        <span style="font-size:0.7rem;">${escapeHtml(item.descripcion)} x${item.cantidad}</span>
-                    </div>
-                `;
-                
-                // ✅ CARGAR LA IMAGEN CON PROXY
-                setTimeout(() => {
-                    if (fotoUrl) {
-                        const imgEl = document.getElementById(fotoId);
-                        const loaderEl = document.getElementById(loaderId);
-                        if (imgEl && !imgEl.getAttribute('data-loaded') === 'true') {
-                            cargarImagenProxy(fotoUrl, imgEl, loaderEl);
-                        }
-                    } else {
-                        const loaderEl = document.getElementById(loaderId);
-                        if (loaderEl) loaderEl.style.display = 'none';
-                    }
-                }, 50);
-                
-                return `<div>${fotoHtml}</div>`;
-              }).join('')
-            : `<div class="text-muted">${escapeHtml(s.descripcion_pieza || 'Item')} x${s.cantidad || 1}</div>`;
+        // Recolectar todas las URLs de fotos de los items
+        let fotosUrls = [];
+        if (itemsList && itemsList.length > 0) {
+            itemsList.forEach(item => {
+                // Versión con foto_url
+                if (item.foto_url) {
+                    fotosUrls.push(item.foto_url);
+                }
+                // Versión con fotos array
+                if (item.fotos && Array.isArray(item.fotos)) {
+                    item.fotos.forEach(fotoUrl => {
+                        if (fotoUrl) fotosUrls.push(fotoUrl);
+                    });
+                }
+            });
+        }
         
+        const totalFotos = fotosUrls.length;
+        const totalItems = itemsList ? itemsList.length : 0;
+        
+        // =====================================================
+        // GENERAR MINIATURAS (hasta 3)
+        // =====================================================
+        let miniaturasHtml = '';
+        const fotosParaMostrar = fotosUrls.slice(0, 3);
+        
+        if (fotosParaMostrar.length > 0) {
+            // Usar un ID único por solicitud para los elementos
+            const uniqueId = `compra_${s.id}`;
+            
+            miniaturasHtml = `
+                <div class="miniaturas-container" style="display:flex;gap:2px;align-items:center;flex-wrap:wrap;">
+                    ${fotosParaMostrar.map((url, i) => `
+                        <div class="miniatura-wrapper" style="position:relative;width:30px;height:30px;border-radius:4px;overflow:hidden;border:1px solid var(--border-color);flex-shrink:0;">
+                            <div class="miniatura-loader" id="loader_${uniqueId}_${i}" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:var(--gris-oscuro);">
+                                <i class="fas fa-spinner fa-spin" style="font-size:10px;color:var(--gris-texto);"></i>
+                            </div>
+                            <img class="miniatura-img" id="img_${uniqueId}_${i}" 
+                                 src="" 
+                                 alt="Foto" 
+                                 style="width:100%;height:100%;object-fit:cover;display:none;cursor:pointer;"
+                                 onclick="verFotoAmpliadaJefeTaller('${url}')"
+                                 data-url="${url}"
+                                 data-loaded="false">
+                        </div>
+                    `).join('')}
+                    ${totalFotos > 3 ? `
+                        <span class="fotos-extra" style="font-size:0.6rem;color:var(--gris-texto);background:var(--gris-oscuro);padding:0.1rem 0.4rem;border-radius:4px;">
+                            +${totalFotos - 3}
+                        </span>
+                    ` : ''}
+                </div>
+            `;
+        } else {
+            miniaturasHtml = `
+                <span style="font-size:0.65rem;color:var(--gris-texto);">
+                    <i class="fas fa-camera" style="opacity:0.3;"></i> Sin fotos
+                </span>
+            `;
+        }
+        
+        // Items badge
+        const itemsBadge = totalItems > 0 ? `
+            <span style="background:var(--gris-oscuro);padding:0.1rem 0.5rem;border-radius:10px;font-size:0.65rem;color:var(--gris-texto);">
+                ${totalItems}
+            </span>
+        ` : `<span style="font-size:0.65rem;color:var(--gris-texto);">-</span>`;
+        
+        // Estado
         let estadoClass = '';
         let estadoIcon = '';
         let estadoTexto = '';
@@ -4004,15 +4031,29 @@ function renderSolicitudesCompra() {
                 estadoTexto = s.estado || 'Pendiente';
         }
         
-        return `
-            <tr>
-                <td>${s.id}</td>
-                <td><strong>${escapeHtml(s.orden_codigo || 'N/A')}</strong></td>
-                <td>${escapeHtml(s.vehiculo || 'N/A')}</td>
-                <td style="max-width: 250px;">${itemsHtml}</td>
-                <td><span class="status-badge ${estadoClass}"><i class="fas ${estadoIcon}"></i> ${estadoTexto}</span></td>
-                <td>${formatDate(s.fecha_solicitud)}</td>
-                <td class="action-buttons">
+        // Items en texto (para tooltip o vista rápida)
+        let itemsTexto = '';
+        if (itemsList && itemsList.length > 0) {
+            itemsTexto = itemsList.map(item => 
+                `${item.descripcion || 'Item'} x${item.cantidad || 1}`
+            ).join(', ');
+        }
+        
+        html += `
+            <tr data-solicitud-id="${s.id}" data-fotos-count="${totalFotos}">
+                <td data-label="ID" style="font-weight:600;font-size:0.85rem;">${s.id}</td>
+                <td data-label="Orden"><strong style="font-size:0.85rem;">${escapeHtml(s.orden_codigo || 'N/A')}</strong></td>
+                <td data-label="Vehículo" style="font-size:0.8rem;">${escapeHtml(s.vehiculo || 'N/A')}</td>
+                <td data-label="Items" style="max-width:200px;font-size:0.75rem;color:var(--gris-texto);" title="${escapeHtml(itemsTexto)}">
+                    ${itemsBadge}
+                    ${itemsList && itemsList.length > 0 ? `<div style="font-size:0.65rem;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(itemsTexto.substring(0, 50))}${itemsTexto.length > 50 ? '...' : ''}</div>` : ''}
+                </td>
+                <td data-label="Estado"><span class="status-badge ${estadoClass}"><i class="fas ${estadoIcon}"></i> ${estadoTexto}</span></td>
+                <td data-label="Fecha" style="font-size:0.75rem;">${formatDate(s.fecha_solicitud)}</td>
+                <td data-label="Fotos" style="text-align:center;min-width:80px;">
+                    ${miniaturasHtml}
+                </td>
+                <td data-label="Acciones" class="action-buttons">
                     <button class="action-btn view" onclick="verDetalleSolicitudCompra(${s.id})" title="Ver detalle">
                         <i class="fas fa-eye"></i>
                     </button>
@@ -4023,7 +4064,40 @@ function renderSolicitudesCompra() {
                 </td>
             </tr>
         `;
-    }).join('');
+    });
+    
+    // Insertar todo el HTML de una vez
+    tbody.innerHTML = html;
+    
+    // =====================================================
+    // CARGAR LAS MINIATURAS CON PROXY
+    // =====================================================
+    // Usar requestAnimationFrame para asegurar que el DOM esté listo
+    requestAnimationFrame(() => {
+        // Pequeño retraso adicional para garantizar que los elementos estén en el DOM
+        setTimeout(() => {
+            const rows = tbody.querySelectorAll('tr[data-solicitud-id]');
+            
+            rows.forEach(row => {
+                const solicitudId = row.getAttribute('data-solicitud-id');
+                const miniaturas = row.querySelectorAll('.miniatura-img');
+                
+                miniaturas.forEach((img, i) => {
+                    const url = img.getAttribute('data-url');
+                    const loaderId = `loader_compra_${solicitudId}_${i}`;
+                    // Buscar el loader con el ID correcto
+                    const loader = document.getElementById(loaderId);
+                    
+                    if (url && loader) {
+                        // Usar la función existente cargarImagenProxy
+                        cargarImagenProxy(url, img, loader);
+                    } else if (loader) {
+                        loader.style.display = 'none';
+                    }
+                });
+            });
+        }, 150);
+    });
 }
 // =====================================================
 // VER DETALLE DE SOLICITUD DE COMPRA CON PROXY
@@ -4620,13 +4694,14 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
             imgElement.style.display = 'none';
             imgElement.src = '';
         }
+        if (loaderElement) loaderElement.style.display = 'none';
         return null;
     }
     
     // Mostrar loader
     if (loaderElement) {
         loaderElement.style.display = 'flex';
-        loaderElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando imagen...';
+        loaderElement.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:10px;color:var(--gris-texto);"></i>';
     }
     if (imgElement) {
         imgElement.style.display = 'none';
@@ -4656,7 +4731,7 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
                 nuevaImg.onerror = function() {
                     console.error('Error al cargar imagen:', url);
                     if (loaderElement) {
-                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al cargar';
+                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);"></i>';
                         loaderElement.style.display = 'flex';
                     }
                     if (imgElement) {
@@ -4668,7 +4743,7 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
             });
         } else {
             if (loaderElement) {
-                loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> No se pudo cargar';
+                loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);"></i>';
                 loaderElement.style.display = 'flex';
             }
             return null;
@@ -4676,7 +4751,7 @@ async function cargarImagenProxy(url, imgElement, loaderElement = null) {
     } catch (error) {
         console.error('Error cargando imagen:', error);
         if (loaderElement) {
-            loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error de conexión';
+            loaderElement.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);"></i>';
             loaderElement.style.display = 'flex';
         }
         return null;

@@ -392,7 +392,7 @@ async function cargarSolicitudes() {
 }
 
 // =====================================================
-// EXTRAER URLs DE FOTOS - VERSIÓN SIMPLIFICADA
+// EXTRAER TODAS LAS URLs DE FOTOS - VERSIÓN COMPLETA
 // =====================================================
 
 function extraerUrlsFotos(item) {
@@ -400,57 +400,208 @@ function extraerUrlsFotos(item) {
     
     if (!item) return urls;
     
-    // 1. Verificar item.foto_url (string directo)
-    if (item.foto_url && typeof item.foto_url === 'string') {
-        if (item.foto_url.startsWith('http')) {
-            urls.push(item.foto_url);
+    // =====================================================
+    // 1. Verificar item.foto_url (puede ser string o array)
+    // =====================================================
+    if (item.foto_url) {
+        if (typeof item.foto_url === 'string') {
+            if (item.foto_url.startsWith('http')) {
+                urls.push(item.foto_url);
+            }
+        } else if (Array.isArray(item.foto_url)) {
+            item.foto_url.forEach(url => {
+                if (typeof url === 'string' && url.startsWith('http')) {
+                    urls.push(url);
+                }
+            });
+        } else if (typeof item.foto_url === 'object' && item.foto_url !== null) {
+            // Si es objeto, buscar propiedades que sean URLs
+            const posibles = ['url', 'link', 'public_url', 'download_url', 'secure_url', '0', '1', '2'];
+            for (const prop of posibles) {
+                const value = item.foto_url[prop];
+                if (typeof value === 'string' && value.startsWith('http')) {
+                    urls.push(value);
+                }
+                if (Array.isArray(value)) {
+                    value.forEach(v => {
+                        if (typeof v === 'string' && v.startsWith('http')) {
+                            urls.push(v);
+                        }
+                    });
+                }
+            }
         }
     }
     
-    // 2. Verificar item.fotos (array)
+    // =====================================================
+    // 2. Verificar item.fotos (array de strings)
+    // =====================================================
     if (item.fotos && Array.isArray(item.fotos)) {
         item.fotos.forEach(foto => {
             if (typeof foto === 'string' && foto.startsWith('http')) {
                 urls.push(foto);
+            } else if (typeof foto === 'object' && foto !== null) {
+                // Si cada foto es un objeto, buscar propiedades con URLs
+                const posibles = ['url', 'link', 'public_url', 'download_url', 'secure_url', 'src', 'href'];
+                for (const prop of posibles) {
+                    const value = foto[prop];
+                    if (typeof value === 'string' && value.startsWith('http')) {
+                        urls.push(value);
+                        break;
+                    }
+                }
+                // Si es un objeto con índices numéricos (0, 1, 2)
+                for (const key in foto) {
+                    const value = foto[key];
+                    if (typeof value === 'string' && value.startsWith('http') && !urls.includes(value)) {
+                        urls.push(value);
+                    }
+                }
             }
         });
     }
     
-    // 3. Verificar item.foto (string)
-    if (urls.length === 0 && item.foto && typeof item.foto === 'string') {
-        if (item.foto.startsWith('http')) {
+    // =====================================================
+    // 3. Verificar item.foto (alternativa)
+    // =====================================================
+    if (urls.length === 0 && item.foto) {
+        if (typeof item.foto === 'string' && item.foto.startsWith('http')) {
             urls.push(item.foto);
+        } else if (Array.isArray(item.foto)) {
+            item.foto.forEach(url => {
+                if (typeof url === 'string' && url.startsWith('http')) {
+                    urls.push(url);
+                }
+            });
+        } else if (typeof item.foto === 'object' && item.foto !== null) {
+            const posibles = ['url', 'link', 'public_url', 'download_url', '0', '1', '2'];
+            for (const prop of posibles) {
+                const value = item.foto[prop];
+                if (typeof value === 'string' && value.startsWith('http')) {
+                    urls.push(value);
+                }
+                if (Array.isArray(value)) {
+                    value.forEach(v => {
+                        if (typeof v === 'string' && v.startsWith('http')) {
+                            urls.push(v);
+                        }
+                    });
+                }
+            }
         }
     }
     
-    // 4. Verificar item.imagen (string)
-    if (urls.length === 0 && item.imagen && typeof item.imagen === 'string') {
-        if (item.imagen.startsWith('http')) {
+    // =====================================================
+    // 4. Verificar item.imagen (alternativa)
+    // =====================================================
+    if (urls.length === 0 && item.imagen) {
+        if (typeof item.imagen === 'string' && item.imagen.startsWith('http')) {
             urls.push(item.imagen);
+        } else if (Array.isArray(item.imagen)) {
+            item.imagen.forEach(url => {
+                if (typeof url === 'string' && url.startsWith('http')) {
+                    urls.push(url);
+                }
+            });
         }
     }
     
-    // 5. Buscar en items anidados (por si acaso)
+    // =====================================================
+    // 5. Verificar item.fotos_urls (otro nombre posible)
+    // =====================================================
+    if (urls.length === 0 && item.fotos_urls) {
+        if (typeof item.fotos_urls === 'string' && item.fotos_urls.startsWith('http')) {
+            urls.push(item.fotos_urls);
+        } else if (Array.isArray(item.fotos_urls)) {
+            item.fotos_urls.forEach(url => {
+                if (typeof url === 'string' && url.startsWith('http')) {
+                    urls.push(url);
+                }
+            });
+        }
+    }
+    
+    // =====================================================
+    // 6. Verificar item.images (otro nombre posible)
+    // =====================================================
+    if (urls.length === 0 && item.images) {
+        if (Array.isArray(item.images)) {
+            item.images.forEach(url => {
+                if (typeof url === 'string' && url.startsWith('http')) {
+                    urls.push(url);
+                }
+            });
+        }
+    }
+    
+    // =====================================================
+    // 7. Verificar item.fotos_array (otro nombre posible)
+    // =====================================================
+    if (urls.length === 0 && item.fotos_array) {
+        if (Array.isArray(item.fotos_array)) {
+            item.fotos_array.forEach(url => {
+                if (typeof url === 'string' && url.startsWith('http')) {
+                    urls.push(url);
+                }
+            });
+        }
+    }
+    
+    // =====================================================
+    // 8. ÚLTIMO RECURSO: Buscar en todo el item
+    // =====================================================
     if (urls.length === 0) {
         try {
             const str = JSON.stringify(item);
+            // Buscar todas las URLs que contengan domain de Drive o Cloudinary
             const matches = str.match(/https?:\/\/[^\s"',]+/g);
             if (matches) {
+                const validDomains = ['drive.google.com', 'cloudinary.com', 'res.cloudinary.com', 'googleusercontent.com'];
                 matches.forEach(url => {
-                    if (url.includes('drive.google.com') || 
-                        url.includes('cloudinary.com') || 
-                        url.includes('res.cloudinary.com')) {
-                        if (!urls.includes(url)) {
-                            urls.push(url);
-                        }
+                    const isValid = validDomains.some(domain => url.includes(domain));
+                    if (isValid && !urls.includes(url)) {
+                        urls.push(url);
                     }
                 });
             }
-        } catch (e) {}
+        } catch (e) {
+            console.warn('Error al buscar URLs en el item:', e);
+        }
     }
     
-    // Filtrar duplicados
-    urls = urls.filter((url, index, self) => self.indexOf(url) === index);
+    // =====================================================
+    // 9. Si el item tiene sub-items, buscar en ellos
+    // =====================================================
+    if (urls.length === 0) {
+        const subKeys = ['items', 'subitems', 'detalles', 'repuestos'];
+        for (const key of subKeys) {
+            if (item[key] && Array.isArray(item[key])) {
+                item[key].forEach(subItem => {
+                    const subUrls = extraerUrlsFotos(subItem);
+                    subUrls.forEach(url => {
+                        if (!urls.includes(url)) {
+                            urls.push(url);
+                        }
+                    });
+                });
+            }
+        }
+    }
+    
+    // =====================================================
+    // 10. FILTRAR DUPLICADOS Y URLS INVÁLIDAS
+    // =====================================================
+    urls = urls.filter((url, index, self) => 
+        self.indexOf(url) === index && 
+        typeof url === 'string' && 
+        url.startsWith('http') &&
+        url.length > 10
+    );
+    
+    // Mostrar en consola para depuración
+    if (urls.length > 0) {
+        console.log(`📸 Item "${item.descripcion || 'sin nombre'}": ${urls.length} fotos encontradas`, urls);
+    }
     
     return urls;
 }
@@ -658,7 +809,7 @@ function renderizarSolicitudes(solicitudes) {
     }, 500);
 }
 // =====================================================
-// CARGAR IMAGEN CON PROXY - VERSIÓN SIMPLIFICADA
+// CARGAR IMAGEN CON PROXY - CON MANEJO DE MÚLTIPLES FOTOS
 // =====================================================
 
 async function cargarImagenProxyEncargado(url, imgElement) {
@@ -672,10 +823,8 @@ async function cargarImagenProxyEncargado(url, imgElement) {
     }
     
     try {
-        // Usar el proxy del backend (el mismo que funciona en jefe de taller)
+        // Usar el proxy del backend
         const proxyUrl = `${window.API_BASE_URL}/api/jefe-taller/proxy-imagen?url=${encodeURIComponent(url)}`;
-        
-        console.log(`📸 Cargando: ${url.substring(0, 60)}...`);
         
         const response = await fetch(proxyUrl, {
             headers: getAuthHeaders()
@@ -703,7 +852,7 @@ async function cargarImagenProxyEncargado(url, imgElement) {
                     resolve(data.base64);
                 };
                 img.onerror = function() {
-                    console.error('❌ Error cargando imagen:', url);
+                    console.warn('⚠️ Error al cargar imagen individual:', url.substring(0, 60) + '...');
                     const parent = imgElement.parentElement;
                     if (parent) {
                         const loader = parent.querySelector('.miniatura-loader');
@@ -717,7 +866,7 @@ async function cargarImagenProxyEncargado(url, imgElement) {
                 img.src = data.base64;
             });
         } else {
-            console.warn('⚠️ No se pudo cargar:', url);
+            console.warn('⚠️ No se pudo cargar:', url.substring(0, 60) + '...');
             const parent = imgElement.parentElement;
             if (parent) {
                 const loader = parent.querySelector('.miniatura-loader');

@@ -425,10 +425,6 @@ function extraerUrlsFotos(item) {
     return urls;
 }
 
-// =====================================================
-// RENDERIZAR SOLICITUDES CON FOTOS (CORREGIDO)
-// =====================================================
-
 function renderizarSolicitudes(solicitudes) {
     const container = document.getElementById('solicitudesContainer');
     if (!container) return;
@@ -444,36 +440,45 @@ function renderizarSolicitudes(solicitudes) {
         return;
     }
     
-    container.innerHTML = solicitudes.map(solicitud => {
+    let html = '';
+    
+    solicitudes.forEach((solicitud, idx) => {
         let items = solicitud.items || [];
         if (typeof items === 'string') {
             try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
         }
         
         // =====================================================
-        // 🔧 RENDERIZAR ITEMS CON FOTOS (USANDO PROXY)
+        // GENERAR HTML DE ITEMS CON FOTOS
         // =====================================================
-        const itemsHtml = items.map((item, idx) => {
-            // Extraer URLs de fotos
+        let itemsHtml = '';
+        let totalFotos = 0;
+        
+        items.forEach((item, itemIdx) => {
+            // Extraer URLs de fotos usando la función existente
             const fotosUrls = extraerUrlsFotos(item);
             const tieneFotos = fotosUrls.length > 0;
+            
+            if (tieneFotos) {
+                totalFotos += fotosUrls.length;
+            }
             
             // Generar miniaturas (hasta 3)
             let miniaturasHtml = '';
             if (tieneFotos) {
                 const fotosMostrar = fotosUrls.slice(0, 3);
-                const itemId = `solicitud_${solicitud.id}_item_${idx}_${Date.now()}`;
+                const uniqueId = `solicitud_${solicitud.id}_item_${itemIdx}_${Date.now()}`;
                 
                 miniaturasHtml = `
-                    <div class="miniaturas-container" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px;">
+                    <div class="miniaturas-container" style="display:flex;gap:3px;align-items:center;flex-wrap:wrap;margin-top:3px;">
                         ${fotosMostrar.map((url, i) => `
-                            <div style="position:relative;width:40px;height:40px;border-radius:4px;overflow:hidden;border:2px solid var(--verde-exito);flex-shrink:0;cursor:pointer;" 
+                            <div style="position:relative;width:35px;height:35px;border-radius:4px;overflow:hidden;border:2px solid var(--verde-exito);flex-shrink:0;cursor:pointer;" 
                                  onclick="verFotoAmpliadaEncargado('${encodeURI(url)}')"
                                  title="Haz clic para ver ampliada">
-                                <div id="loader_${itemId}_${i}" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:var(--gris-oscuro);">
-                                    <i class="fas fa-spinner fa-spin" style="font-size:12px;color:var(--gris-texto);"></i>
+                                <div id="loader_${uniqueId}_${i}" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:var(--gris-oscuro);">
+                                    <i class="fas fa-spinner fa-spin" style="font-size:10px;color:var(--gris-texto);"></i>
                                 </div>
-                                <img id="img_${itemId}_${i}" 
+                                <img id="img_${uniqueId}_${i}" 
                                      src="" 
                                      alt="Foto" 
                                      style="width:100%;height:100%;object-fit:cover;display:none;"
@@ -482,123 +487,97 @@ function renderizarSolicitudes(solicitudes) {
                             </div>
                         `).join('')}
                         ${fotosUrls.length > 3 ? `
-                            <span style="font-size:0.6rem;color:var(--gris-texto);background:var(--gris-oscuro);padding:0.1rem 0.4rem;border-radius:4px;">
+                            <span style="font-size:0.55rem;color:var(--gris-texto);background:var(--gris-oscuro);padding:0.1rem 0.3rem;border-radius:4px;">
                                 +${fotosUrls.length - 3}
                             </span>
                         ` : ''}
-                        <span style="font-size:0.6rem;color:var(--verde-exito);margin-left:2px;">
-                            <i class="fas fa-camera"></i> ${fotosUrls.length}
-                        </span>
                     </div>
                 `;
             }
             
-            // Descripción del item
             const descripcion = item.descripcion || item.nombre || 'Item';
             const cantidad = item.cantidad || 1;
             const detalle = item.detalle || '';
             
-            return `
-                <div class="item-row-solicitud" style="border-bottom:1px solid var(--border-color);padding:0.5rem 0;">
+            itemsHtml += `
+                <div class="item-row-solicitud" style="border-bottom:1px solid var(--border-color);padding:0.4rem 0;">
                     <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
-                        <div style="flex:1;min-width:100px;">
+                        <div style="flex:1;min-width:80px;font-size:0.85rem;">
                             <strong>${escapeHtml(descripcion)}</strong>
-                            ${detalle ? `<span style="color:var(--gris-texto);font-size:0.8rem;">(${escapeHtml(detalle)})</span>` : ''}
+                            ${detalle ? `<span style="color:var(--gris-texto);font-size:0.75rem;">(${escapeHtml(detalle)})</span>` : ''}
                         </div>
-                        <div style="background:var(--gris-oscuro);padding:0.1rem 0.5rem;border-radius:4px;font-size:0.8rem;">
+                        <div style="background:var(--gris-oscuro);padding:0.1rem 0.4rem;border-radius:4px;font-size:0.75rem;">
                             ×${cantidad}
                         </div>
                         ${miniaturasHtml}
                     </div>
                 </div>
             `;
-        }).join('');
-        
-        // Contar total de fotos en la solicitud
-        let totalFotos = 0;
-        items.forEach(item => {
-            const fotos = extraerUrlsFotos(item);
-            totalFotos += fotos.length;
         });
-        
-        const tieneFotosGenerales = totalFotos > 0;
         
         const puedeComprar = solicitud.estado === 'pendiente';
         const puedeEntregar = solicitud.estado === 'comprado';
         const tieneComprobante = solicitud.comprobante_url;
         
-        return `
-            <div class="solicitud-card" data-id="${solicitud.id}">
-                <div class="solicitud-header">
-                    <h3><i class="fas fa-shopping-cart"></i> Solicitud #${solicitud.id}</h3>
-                    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap:wrap;">
-                        ${tieneFotosGenerales ? `<span class="fotos-badge" style="background:var(--verde-exito);color:white;padding:0.1rem 0.5rem;border-radius:12px;font-size:0.65rem;"><i class="fas fa-camera"></i> ${totalFotos}</span>` : ''}
+        html += `
+            <div class="solicitud-card" data-id="${solicitud.id}" style="margin-bottom:1rem;border:1px solid var(--border-color);border-radius:8px;overflow:hidden;background:var(--bg-card);">
+                <div class="solicitud-header" style="padding:0.75rem 1rem;background:var(--gris-oscuro);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;border-bottom:1px solid var(--border-color);">
+                    <h3 style="margin:0;font-size:1rem;"><i class="fas fa-shopping-cart"></i> Solicitud #${solicitud.id}</h3>
+                    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+                        ${totalFotos > 0 ? `<span style="background:var(--verde-exito);color:white;padding:0.1rem 0.5rem;border-radius:12px;font-size:0.6rem;"><i class="fas fa-camera"></i> ${totalFotos}</span>` : ''}
                         ${statusBadge(solicitud.estado)}
                     </div>
                 </div>
-                <div class="solicitud-body">
-                    <div class="orden-info">
-                        <div class="orden-info-item">
-                            <label>Orden de Trabajo</label>
-                            <span><strong>${escapeHtml(solicitud.orden_codigo || 'N/A')}</strong></span>
-                        </div>
-                        <div class="orden-info-item">
-                            <label>Vehículo</label>
-                            <span>${escapeHtml(solicitud.vehiculo || 'N/A')}</span>
-                        </div>
-                        <div class="orden-info-item">
-                            <label>Servicio</label>
-                            <span>${escapeHtml(solicitud.servicio_descripcion || 'N/A')}</span>
-                        </div>
-                        <div class="orden-info-item">
-                            <label>Fecha Solicitud</label>
-                            <span>${formatDate(solicitud.fecha_solicitud)}</span>
-                        </div>
+                <div class="solicitud-body" style="padding:0.75rem 1rem;">
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.25rem 1rem;margin-bottom:0.75rem;font-size:0.8rem;">
+                        <div><strong>Orden:</strong> ${escapeHtml(solicitud.orden_codigo || 'N/A')}</div>
+                        <div><strong>Vehículo:</strong> ${escapeHtml(solicitud.vehiculo || 'N/A')}</div>
+                        <div><strong>Servicio:</strong> ${escapeHtml(solicitud.servicio_descripcion || 'N/A')}</div>
+                        <div><strong>Fecha:</strong> ${formatDate(solicitud.fecha_solicitud)}</div>
                     </div>
                     
-                    <div class="items-list">
-                        <h4><i class="fas fa-cubes"></i> Items solicitados:</h4>
+                    <div style="margin-bottom:0.75rem;">
+                        <h4 style="margin:0 0 0.25rem 0;font-size:0.85rem;"><i class="fas fa-cubes"></i> Items solicitados:</h4>
                         ${itemsHtml}
                     </div>
                     
                     ${solicitud.precio_cotizado ? `
-                        <div class="precio-cotizado-box">
-                            <strong><i class="fas fa-tag"></i> Precio cotizado:</strong>
-                            <span class="precio-valor">Bs. ${solicitud.precio_cotizado.toFixed(2)}</span>
+                        <div style="padding:0.5rem;background:var(--gris-oscuro);border-radius:4px;margin-bottom:0.5rem;font-size:0.85rem;">
+                            <strong><i class="fas fa-tag"></i> Precio cotizado:</strong> Bs. ${solicitud.precio_cotizado.toFixed(2)}
                             ${solicitud.proveedor_info ? `<br><small>Proveedor: ${escapeHtml(solicitud.proveedor_info)}</small>` : ''}
                         </div>
                     ` : ''}
                     
                     ${solicitud.mensaje_jefe_taller ? `
-                        <div class="observacion-box">
+                        <div style="padding:0.5rem;background:rgba(193,18,31,0.05);border-radius:4px;margin-bottom:0.5rem;font-size:0.8rem;border-left:3px solid var(--rojo-primario);">
                             <small><i class="fas fa-comment"></i> Mensaje del Jefe de Taller:</small>
-                            <p>${escapeHtml(solicitud.mensaje_jefe_taller)}</p>
+                            <p style="margin:0.25rem 0 0 0;">${escapeHtml(solicitud.mensaje_jefe_taller)}</p>
                         </div>
                     ` : ''}
                     
                     ${solicitud.respuesta_encargado ? `
-                        <div class="observacion-box">
+                        <div style="padding:0.5rem;background:rgba(16,185,129,0.05);border-radius:4px;margin-bottom:0.5rem;font-size:0.8rem;border-left:3px solid var(--verde-exito);">
                             <small><i class="fas fa-reply"></i> Tu respuesta:</small>
-                            <p>${escapeHtml(solicitud.respuesta_encargado)}</p>
+                            <p style="margin:0.25rem 0 0 0;">${escapeHtml(solicitud.respuesta_encargado)}</p>
                         </div>
                     ` : ''}
                     
-                    <div class="action-buttons">
-                        <button class="action-btn view" onclick="verDetalle(${solicitud.id})" title="Ver Detalle">
+                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
+                        <button class="action-btn view" onclick="verDetalle(${solicitud.id})" title="Ver Detalle" style="padding:0.3rem 0.8rem;border-radius:4px;border:none;cursor:pointer;background:var(--gris-oscuro);">
                             <i class="fas fa-eye"></i> Ver
                         </button>
                         ${tieneComprobante ? `
-                            <button class="action-btn view" onclick="verComprobante(${solicitud.id})" title="Ver Comprobante">
+                            <button class="action-btn view" onclick="verComprobante(${solicitud.id})" title="Ver Comprobante" style="padding:0.3rem 0.8rem;border-radius:4px;border:none;cursor:pointer;background:var(--gris-oscuro);">
                                 <i class="fas fa-receipt"></i> Ver Comprobante
                             </button>
                         ` : ''}
                         ${puedeComprar ? `
-                            <button class="action-btn buy" onclick="abrirModalComprar(${solicitud.id})" title="Marcar como Comprado">
+                            <button class="action-btn buy" onclick="abrirModalComprar(${solicitud.id})" title="Marcar como Comprado" style="padding:0.3rem 0.8rem;border-radius:4px;border:none;cursor:pointer;background:var(--rojo-primario);color:white;">
                                 <i class="fas fa-shopping-cart"></i> Marcar Comprado
                             </button>
                         ` : ''}
                         ${puedeEntregar ? `
-                            <button class="action-btn deliver" onclick="abrirModalEntregar(${solicitud.id})" title="Registrar Entrega">
+                            <button class="action-btn deliver" onclick="abrirModalEntregar(${solicitud.id})" title="Registrar Entrega" style="padding:0.3rem 0.8rem;border-radius:4px;border:none;cursor:pointer;background:var(--verde-exito);color:white;">
                                 <i class="fas fa-truck"></i> Registrar Entrega
                             </button>
                         ` : ''}
@@ -606,31 +585,34 @@ function renderizarSolicitudes(solicitudes) {
                 </div>
             </div>
         `;
-    }).join('');
+    });
+    
+    container.innerHTML = html;
     
     // =====================================================
     // CARGAR LAS IMÁGENES CON PROXY DESPUÉS DE RENDERIZAR
     // =====================================================
-    requestAnimationFrame(() => {
-        setTimeout(() => {
-            const cards = container.querySelectorAll('.solicitud-card');
-            cards.forEach(card => {
-                const imagenes = card.querySelectorAll('.miniaturas-container img');
-                imagenes.forEach(img => {
-                    const url = img.getAttribute('data-url');
-                    if (url) {
-                        const decodedUrl = decodeURI(url);
-                        // Buscar el loader asociado
-                        const parent = img.parentElement;
-                        const loader = parent.querySelector('.miniatura-loader');
-                        if (loader) {
-                            cargarImagenProxyEncargado(decodedUrl, img, loader);
-                        }
+    setTimeout(() => {
+        const cards = container.querySelectorAll('.solicitud-card');
+        cards.forEach(card => {
+            const imagenes = card.querySelectorAll('.miniaturas-container img');
+            imagenes.forEach(img => {
+                const url = img.getAttribute('data-url');
+                if (url) {
+                    const decodedUrl = decodeURI(url);
+                    // Buscar el loader asociado (el div que está justo antes del img)
+                    const parent = img.parentElement;
+                    const loader = parent ? parent.querySelector('.miniatura-loader') : null;
+                    if (loader) {
+                        cargarImagenProxyEncargado(decodedUrl, img, loader);
+                    } else {
+                        // Si no hay loader, intentar cargar directamente
+                        cargarImagenProxyEncargado(decodedUrl, img, null);
                     }
-                });
+                }
             });
-        }, 300);
-    });
+        });
+    }, 500);
 }
 // =====================================================
 // CARGAR IMAGEN CON PROXY PARA ENCARGADO DE REPUESTOS
@@ -657,8 +639,12 @@ async function cargarImagenProxyEncargado(url, imgElement, loaderElement = null)
     }
     
     try {
-        // Usar el proxy del backend
-        const proxyUrl = `${API_URL}/proxy-imagen-encargado?url=${encodeURIComponent(url)}`;
+        // 🔥 USAR EL PROXY DE JEFE DE TALLER (QUE YA FUNCIONA)
+        // O usar el proxy de encargado que creamos
+        const proxyUrl = `${window.API_BASE_URL}/api/jefe-taller/proxy-imagen?url=${encodeURIComponent(url)}`;
+        
+        console.log(`📸 Cargando imagen: ${url.substring(0, 50)}...`);
+        
         const response = await fetch(proxyUrl, {
             headers: getAuthHeaders()
         });
@@ -680,7 +666,7 @@ async function cargarImagenProxyEncargado(url, imgElement, loaderElement = null)
                 nuevaImg.onerror = function() {
                     console.error('Error al cargar imagen:', url);
                     if (loaderElement) {
-                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);"></i>';
+                        loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:12px;"></i>';
                         loaderElement.style.display = 'flex';
                     }
                     if (imgElement) {
@@ -691,8 +677,9 @@ async function cargarImagenProxyEncargado(url, imgElement, loaderElement = null)
                 nuevaImg.src = data.base64;
             });
         } else {
+            console.warn('⚠️ No se pudo cargar la imagen:', data.error || 'Error desconocido');
             if (loaderElement) {
-                loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);"></i>';
+                loaderElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:12px;"></i>';
                 loaderElement.style.display = 'flex';
             }
             return null;
@@ -700,7 +687,7 @@ async function cargarImagenProxyEncargado(url, imgElement, loaderElement = null)
     } catch (error) {
         console.error('Error cargando imagen:', error);
         if (loaderElement) {
-            loaderElement.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);"></i>';
+            loaderElement.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:12px;"></i>';
             loaderElement.style.display = 'flex';
         }
         return null;

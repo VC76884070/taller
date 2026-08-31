@@ -128,17 +128,6 @@
         </div>
     </div>
 
-    <!-- Modal de foto ampliada -->
-    <div class="modal modal-fullscreen" id="modalFoto" onclick="cerrarModalFoto()">
-        <div class="modal-foto-container" onclick="event.stopPropagation()">
-            <button class="modal-foto-close" onclick="cerrarModalFoto()">
-                <i class="fas fa-times"></i>
-            </button>
-            <img id="fotoAmpliada" src="" alt="Foto ampliada">
-            <div class="modal-foto-caption" id="fotoCaption"></div>
-        </div>
-    </div>
-
     <!-- Modal de orden activa -->
     <div class="modal" id="modalOrden">
         <div class="modal-content modal-sm">
@@ -160,6 +149,7 @@
         </div>
     </div>
 
+    <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
         <p>Cargando avances...</p>

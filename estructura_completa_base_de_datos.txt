@@ -84,18 +84,6 @@
                 {
                     "nombre": "idx_asignaciontecnico_orden",
                     "definicion": "CREATE INDEX idx_asignaciontecnico_orden ON public.asignaciontecnico USING btree (id_orden_trabajo, tipo_asignacion)"
-                },
-                {
-                    "nombre": "idx_asignaciontecnico_orden_activa",
-                    "definicion": "CREATE INDEX idx_asignaciontecnico_orden_activa ON public.asignaciontecnico USING btree (id_orden_trabajo, tipo_asignacion) WHERE (fecha_hora_final IS NULL)"
-                },
-                {
-                    "nombre": "idx_asignaciontecnico_tecnico",
-                    "definicion": "CREATE INDEX idx_asignaciontecnico_tecnico ON public.asignaciontecnico USING btree (id_tecnico, fecha_hora_final)"
-                },
-                {
-                    "nombre": "idx_asignaciontecnico_tecnico_activo",
-                    "definicion": "CREATE INDEX idx_asignaciontecnico_tecnico_activo ON public.asignaciontecnico USING btree (id_tecnico, tipo_asignacion) WHERE (fecha_hora_final IS NULL)"
                 }
             ],
             "columnas": [
@@ -180,6 +168,10 @@
                 {
                     "nombre": "avance_trabajo_pkey",
                     "definicion": "CREATE UNIQUE INDEX avance_trabajo_pkey ON public.avance_trabajo USING btree (id)"
+                },
+                {
+                    "nombre": "idx_avance_actualizacion",
+                    "definicion": "CREATE INDEX idx_avance_actualizacion ON public.avance_trabajo USING btree (fecha_actualizacion DESC) WHERE ((estado)::text = 'pendiente'::text)"
                 },
                 {
                     "nombre": "idx_avance_estado",
@@ -276,6 +268,22 @@
                     "nombre": "aprobado_por",
                     "default": null,
                     "posicion": 11,
+                    "obligatorio": false,
+                    "tipo_completo": "integer"
+                },
+                {
+                    "tipo": "timestamp without time zone",
+                    "nombre": "fecha_actualizacion",
+                    "default": null,
+                    "posicion": 12,
+                    "obligatorio": false,
+                    "tipo_completo": "timestamp without time zone"
+                },
+                {
+                    "tipo": "integer",
+                    "nombre": "numero_actualizaciones",
+                    "default": "0",
+                    "posicion": 13,
                     "obligatorio": false,
                     "tipo_completo": "integer"
                 }
@@ -475,11 +483,11 @@
                 },
                 {
                     "nombre": "idx_cliente_documento",
-                    "definicion": "CREATE INDEX idx_cliente_documento ON public.cliente USING btree (numero_documento)"
+                    "definicion": "CREATE UNIQUE INDEX idx_cliente_documento ON public.cliente USING btree (numero_documento)"
                 },
                 {
                     "nombre": "idx_cliente_email",
-                    "definicion": "CREATE INDEX idx_cliente_email ON public.cliente USING btree (email)"
+                    "definicion": "CREATE UNIQUE INDEX idx_cliente_email ON public.cliente USING btree (email)"
                 }
             ],
             "columnas": [
@@ -554,7 +562,7 @@
             "claves_foraneas": [
                 {
                     "columna": "id_usuario",
-                    "constraint": "fk_cliente_usuario",
+                    "constraint": "cliente_id_usuario_fkey",
                     "tabla_referenciada": "usuario",
                     "columna_referenciada": "id"
                 }
@@ -566,14 +574,6 @@
                 {
                     "nombre": "codigoverificacion_pkey",
                     "definicion": "CREATE UNIQUE INDEX codigoverificacion_pkey ON public.codigoverificacion USING btree (id)"
-                },
-                {
-                    "nombre": "idx_codigo_verificacion_codigo",
-                    "definicion": "CREATE INDEX idx_codigo_verificacion_codigo ON public.codigoverificacion USING btree (codigo)"
-                },
-                {
-                    "nombre": "idx_codigo_verificacion_email",
-                    "definicion": "CREATE INDEX idx_codigo_verificacion_email ON public.codigoverificacion USING btree (email)"
                 }
             ],
             "columnas": [
@@ -812,10 +812,6 @@
                     "definicion": "CREATE UNIQUE INDEX comunicado_pkey ON public.comunicado USING btree (id)"
                 },
                 {
-                    "nombre": "idx_comunicado_destinatarios",
-                    "definicion": "CREATE INDEX idx_comunicado_destinatarios ON public.comunicado USING gin (destinatarios)"
-                },
-                {
                     "nombre": "idx_comunicado_estado",
                     "definicion": "CREATE INDEX idx_comunicado_estado ON public.comunicado USING btree (estado)"
                 },
@@ -1048,20 +1044,8 @@
                     "definicion": "CREATE INDEX idx_cotizacion_estado ON public.cotizacion USING btree (estado)"
                 },
                 {
-                    "nombre": "idx_cotizacion_fecha_creacion",
-                    "definicion": "CREATE INDEX idx_cotizacion_fecha_creacion ON public.cotizacion USING btree (fecha_creacion)"
-                },
-                {
-                    "nombre": "idx_cotizacion_fecha_envio",
-                    "definicion": "CREATE INDEX idx_cotizacion_fecha_envio ON public.cotizacion USING btree (fecha_envio)"
-                },
-                {
-                    "nombre": "idx_cotizacion_id_orden",
-                    "definicion": "CREATE INDEX idx_cotizacion_id_orden ON public.cotizacion USING btree (id_orden_trabajo)"
-                },
-                {
-                    "nombre": "idx_cotizacion_jefe_taller",
-                    "definicion": "CREATE INDEX idx_cotizacion_jefe_taller ON public.cotizacion USING btree (id_jefe_taller)"
+                    "nombre": "idx_cotizacion_orden",
+                    "definicion": "CREATE INDEX idx_cotizacion_orden ON public.cotizacion USING btree (id_orden_trabajo)"
                 }
             ],
             "columnas": [
@@ -1320,10 +1304,6 @@
             "tabla": "cotizacion_servicio",
             "indices": [
                 {
-                    "nombre": "cotizacion_servicio_id_cotizacion_id_servicio_key",
-                    "definicion": "CREATE UNIQUE INDEX cotizacion_servicio_id_cotizacion_id_servicio_key ON public.cotizacion_servicio USING btree (id_cotizacion, id_servicio)"
-                },
-                {
                     "nombre": "cotizacion_servicio_pkey",
                     "definicion": "CREATE UNIQUE INDEX cotizacion_servicio_pkey ON public.cotizacion_servicio USING btree (id)"
                 }
@@ -1402,14 +1382,6 @@
                 {
                     "nombre": "cotizacion_temporal_pkey",
                     "definicion": "CREATE UNIQUE INDEX cotizacion_temporal_pkey ON public.cotizacion_temporal USING btree (id)"
-                },
-                {
-                    "nombre": "idx_cotizacion_temporal_jefe",
-                    "definicion": "CREATE INDEX idx_cotizacion_temporal_jefe ON public.cotizacion_temporal USING btree (id_jefe_taller)"
-                },
-                {
-                    "nombre": "idx_cotizacion_temporal_orden",
-                    "definicion": "CREATE INDEX idx_cotizacion_temporal_orden ON public.cotizacion_temporal USING btree (id_orden_trabajo)"
                 }
             ],
             "columnas": [
@@ -1546,12 +1518,6 @@
                     "columna": "id_cotizacion",
                     "constraint": "cotizaciondetalle_id_cotizacion_fkey",
                     "tabla_referenciada": "cotizacion",
-                    "columna_referenciada": "id"
-                },
-                {
-                    "columna": "id_servicio",
-                    "constraint": "cotizaciondetalle_id_servicio_fkey",
-                    "tabla_referenciada": "servicio",
                     "columna_referenciada": "id"
                 }
             ]
@@ -1998,14 +1964,6 @@
             "tabla": "instrucciones_tecnico_historial",
             "indices": [
                 {
-                    "nombre": "idx_instrucciones_leida",
-                    "definicion": "CREATE INDEX idx_instrucciones_leida ON public.instrucciones_tecnico_historial USING btree (leida)"
-                },
-                {
-                    "nombre": "idx_instrucciones_orden",
-                    "definicion": "CREATE INDEX idx_instrucciones_orden ON public.instrucciones_tecnico_historial USING btree (id_orden_trabajo)"
-                },
-                {
                     "nombre": "instrucciones_tecnico_historial_pkey",
                     "definicion": "CREATE UNIQUE INDEX instrucciones_tecnico_historial_pkey ON public.instrucciones_tecnico_historial USING btree (id)"
                 }
@@ -2089,10 +2047,6 @@
         {
             "tabla": "notificacion",
             "indices": [
-                {
-                    "nombre": "idx_notificacion_id_referencia",
-                    "definicion": "CREATE INDEX idx_notificacion_id_referencia ON public.notificacion USING btree (id_referencia)"
-                },
                 {
                     "nombre": "idx_notificacion_leida",
                     "definicion": "CREATE INDEX idx_notificacion_leida ON public.notificacion USING btree (leida)"
@@ -2179,14 +2133,6 @@
         {
             "tabla": "notificacionadmin",
             "indices": [
-                {
-                    "nombre": "idx_notificacion_admin",
-                    "definicion": "CREATE INDEX idx_notificacion_admin ON public.notificacionadmin USING btree (id_admin_general)"
-                },
-                {
-                    "nombre": "idx_notificacion_admin_leida",
-                    "definicion": "CREATE INDEX idx_notificacion_admin_leida ON public.notificacionadmin USING btree (leida)"
-                },
                 {
                     "nombre": "notificacionadmin_pkey",
                     "definicion": "CREATE UNIQUE INDEX notificacionadmin_pkey ON public.notificacionadmin USING btree (id)"
@@ -2364,26 +2310,6 @@
                 {
                     "nombre": "idx_ordentrabajo_estado",
                     "definicion": "CREATE INDEX idx_ordentrabajo_estado ON public.ordentrabajo USING btree (estado_global)"
-                },
-                {
-                    "nombre": "idx_ordentrabajo_estado_fecha",
-                    "definicion": "CREATE INDEX idx_ordentrabajo_estado_fecha ON public.ordentrabajo USING btree (estado_global, fecha_ingreso DESC)"
-                },
-                {
-                    "nombre": "idx_ordentrabajo_estado_global",
-                    "definicion": "CREATE INDEX idx_ordentrabajo_estado_global ON public.ordentrabajo USING btree (estado_global)"
-                },
-                {
-                    "nombre": "idx_ordentrabajo_fecha_estimada",
-                    "definicion": "CREATE INDEX idx_ordentrabajo_fecha_estimada ON public.ordentrabajo USING btree (fecha_estimada_finalizacion) WHERE ((estado_global)::text <> ALL ((ARRAY['Finalizado'::character varying, 'Entregado'::character varying])::text[]))"
-                },
-                {
-                    "nombre": "idx_ordentrabajo_fecha_ingreso",
-                    "definicion": "CREATE INDEX idx_ordentrabajo_fecha_ingreso ON public.ordentrabajo USING btree (fecha_ingreso DESC)"
-                },
-                {
-                    "nombre": "idx_ordentrabajo_jefe_operativo_2",
-                    "definicion": "CREATE INDEX idx_ordentrabajo_jefe_operativo_2 ON public.ordentrabajo USING btree (id_jefe_operativo_2)"
                 },
                 {
                     "nombre": "idx_ordentrabajo_vehiculo",
@@ -2564,7 +2490,7 @@
                 },
                 {
                     "columna": "id_jefe_operativo_2",
-                    "constraint": "fk_ordentrabajo_jefe_operativo_2",
+                    "constraint": "ordentrabajo_id_jefe_operativo_2_fkey",
                     "tabla_referenciada": "usuario",
                     "columna_referenciada": "id"
                 },
@@ -2585,18 +2511,6 @@
         {
             "tabla": "planificacion",
             "indices": [
-                {
-                    "nombre": "idx_planificacion_bahia",
-                    "definicion": "CREATE INDEX idx_planificacion_bahia ON public.planificacion USING btree (bahia_asignada, fecha_hora_inicio_estimado)"
-                },
-                {
-                    "nombre": "idx_planificacion_bahia_fechas",
-                    "definicion": "CREATE INDEX idx_planificacion_bahia_fechas ON public.planificacion USING btree (bahia_asignada, fecha_hora_inicio_estimado, fecha_hora_fin_estimado)"
-                },
-                {
-                    "nombre": "idx_planificacion_orden",
-                    "definicion": "CREATE INDEX idx_planificacion_orden ON public.planificacion USING btree (id_orden_trabajo)"
-                },
                 {
                     "nombre": "planificacion_id_orden_trabajo_key",
                     "definicion": "CREATE UNIQUE INDEX planificacion_id_orden_trabajo_key ON public.planificacion USING btree (id_orden_trabajo)"
@@ -2688,10 +2602,6 @@
             "tabla": "proveedor",
             "indices": [
                 {
-                    "nombre": "idx_proveedor_filtro",
-                    "definicion": "CREATE INDEX idx_proveedor_filtro ON public.proveedor USING btree (id_filtro)"
-                },
-                {
                     "nombre": "proveedor_pkey",
                     "definicion": "CREATE UNIQUE INDEX proveedor_pkey ON public.proveedor USING btree (id)"
                 }
@@ -2760,6 +2670,14 @@
                     "posicion": 8,
                     "obligatorio": false,
                     "tipo_completo": "timestamp without time zone"
+                },
+                {
+                    "tipo": "text",
+                    "nombre": "descripcion",
+                    "default": null,
+                    "posicion": 9,
+                    "obligatorio": false,
+                    "tipo_completo": "text"
                 }
             ],
             "clave_primaria": [
@@ -2768,7 +2686,7 @@
             "claves_foraneas": [
                 {
                     "columna": "id_filtro",
-                    "constraint": "fk_proveedor_filtro",
+                    "constraint": "proveedor_id_filtro_fkey",
                     "tabla_referenciada": "filtro_herramienta",
                     "columna_referenciada": "id"
                 }
@@ -3294,7 +3212,7 @@
             "claves_foraneas": [
                 {
                     "columna": "id_diagnostico_tecnico",
-                    "constraint": "fk_servicio_diagnostico",
+                    "constraint": "servicio_id_diagnostico_tecnico_fkey",
                     "tabla_referenciada": "diagnostico_tecnico",
                     "columna_referenciada": "id"
                 }
@@ -3376,7 +3294,7 @@
             "claves_foraneas": [
                 {
                     "columna": "id_jefe_taller",
-                    "constraint": "servicio_precio_id_jefe_operativo_fkey",
+                    "constraint": "servicio_precio_id_jefe_taller_fkey",
                     "tabla_referenciada": "usuario",
                     "columna_referenciada": "id"
                 },
@@ -3391,10 +3309,6 @@
         {
             "tabla": "servicio_tecnico",
             "indices": [
-                {
-                    "nombre": "idx_servicio_tecnico_diagnostico",
-                    "definicion": "CREATE INDEX idx_servicio_tecnico_diagnostico ON public.servicio_tecnico USING btree (id_diagnostico_tecnico)"
-                },
                 {
                     "nombre": "servicio_tecnico_pkey",
                     "definicion": "CREATE UNIQUE INDEX servicio_tecnico_pkey ON public.servicio_tecnico USING btree (id)"
@@ -3458,18 +3372,6 @@
             "tabla": "sesion_colaborativa",
             "indices": [
                 {
-                    "nombre": "idx_sesion_colaboradores",
-                    "definicion": "CREATE INDEX idx_sesion_colaboradores ON public.sesion_colaborativa USING gin (colaboradores_ids)"
-                },
-                {
-                    "nombre": "idx_sesion_estado",
-                    "definicion": "CREATE INDEX idx_sesion_estado ON public.sesion_colaborativa USING btree (estado)"
-                },
-                {
-                    "nombre": "idx_sesion_ultima_actividad",
-                    "definicion": "CREATE INDEX idx_sesion_ultima_actividad ON public.sesion_colaborativa USING btree (ultima_actividad)"
-                },
-                {
                     "nombre": "sesion_colaborativa_pkey",
                     "definicion": "CREATE UNIQUE INDEX sesion_colaborativa_pkey ON public.sesion_colaborativa USING btree (codigo)"
                 }
@@ -3505,7 +3407,7 @@
                     "default": "'{}'::integer[]",
                     "posicion": 4,
                     "obligatorio": false,
-                    "tipo_completo": "_int4"
+                    "tipo_completo": "ARRAY"
                 },
                 {
                     "tipo": "ARRAY",
@@ -3513,7 +3415,7 @@
                     "default": "'{}'::text[]",
                     "posicion": 5,
                     "obligatorio": false,
-                    "tipo_completo": "_text"
+                    "tipo_completo": "ARRAY"
                 },
                 {
                     "tipo": "jsonb",
@@ -3573,18 +3475,6 @@
         {
             "tabla": "solicitud_compra",
             "indices": [
-                {
-                    "nombre": "idx_solicitud_compra_estado",
-                    "definicion": "CREATE INDEX idx_solicitud_compra_estado ON public.solicitud_compra USING btree (estado)"
-                },
-                {
-                    "nombre": "idx_solicitud_compra_jefe",
-                    "definicion": "CREATE INDEX idx_solicitud_compra_jefe ON public.solicitud_compra USING btree (id_jefe_taller)"
-                },
-                {
-                    "nombre": "idx_solicitud_compra_orden",
-                    "definicion": "CREATE INDEX idx_solicitud_compra_orden ON public.solicitud_compra USING btree (id_orden_trabajo)"
-                },
                 {
                     "nombre": "solicitud_compra_pkey",
                     "definicion": "CREATE UNIQUE INDEX solicitud_compra_pkey ON public.solicitud_compra USING btree (id)"
@@ -3789,26 +3679,12 @@
                     "constraint": "solicitud_compra_id_orden_trabajo_fkey",
                     "tabla_referenciada": "ordentrabajo",
                     "columna_referenciada": "id"
-                },
-                {
-                    "columna": "id_solicitud_cotizacion",
-                    "constraint": "solicitud_compra_id_solicitud_cotizacion_fkey",
-                    "tabla_referenciada": "solicitud_cotizacion_repuesto",
-                    "columna_referenciada": "id"
                 }
             ]
         },
         {
             "tabla": "solicitud_cotizacion_repuesto",
             "indices": [
-                {
-                    "nombre": "idx_solicitud_repuesto_estado",
-                    "definicion": "CREATE INDEX idx_solicitud_repuesto_estado ON public.solicitud_cotizacion_repuesto USING btree (estado)"
-                },
-                {
-                    "nombre": "idx_solicitud_repuesto_orden",
-                    "definicion": "CREATE INDEX idx_solicitud_repuesto_orden ON public.solicitud_cotizacion_repuesto USING btree (id_orden_trabajo)"
-                },
                 {
                     "nombre": "solicitud_cotizacion_repuesto_pkey",
                     "definicion": "CREATE UNIQUE INDEX solicitud_cotizacion_repuesto_pkey ON public.solicitud_cotizacion_repuesto USING btree (id)"
@@ -4064,18 +3940,6 @@
             "tabla": "solicitud_repuestos_tecnico",
             "indices": [
                 {
-                    "nombre": "idx_solicitud_repuestos_estado",
-                    "definicion": "CREATE INDEX idx_solicitud_repuestos_estado ON public.solicitud_repuestos_tecnico USING btree (estado)"
-                },
-                {
-                    "nombre": "idx_solicitud_repuestos_orden",
-                    "definicion": "CREATE INDEX idx_solicitud_repuestos_orden ON public.solicitud_repuestos_tecnico USING btree (id_orden_trabajo)"
-                },
-                {
-                    "nombre": "idx_solicitud_repuestos_tecnico",
-                    "definicion": "CREATE INDEX idx_solicitud_repuestos_tecnico ON public.solicitud_repuestos_tecnico USING btree (id_tecnico)"
-                },
-                {
                     "nombre": "solicitud_repuestos_tecnico_pkey",
                     "definicion": "CREATE UNIQUE INDEX solicitud_repuestos_tecnico_pkey ON public.solicitud_repuestos_tecnico USING btree (id)"
                 }
@@ -4197,22 +4061,6 @@
         {
             "tabla": "solicitud_reserva_cliente",
             "indices": [
-                {
-                    "nombre": "idx_solicitud_reserva_cliente",
-                    "definicion": "CREATE INDEX idx_solicitud_reserva_cliente ON public.solicitud_reserva_cliente USING btree (id_cliente)"
-                },
-                {
-                    "nombre": "idx_solicitud_reserva_estado",
-                    "definicion": "CREATE INDEX idx_solicitud_reserva_estado ON public.solicitud_reserva_cliente USING btree (estado)"
-                },
-                {
-                    "nombre": "idx_solicitud_reserva_fecha",
-                    "definicion": "CREATE INDEX idx_solicitud_reserva_fecha ON public.solicitud_reserva_cliente USING btree (fecha_deseada)"
-                },
-                {
-                    "nombre": "idx_solicitud_reserva_fecha_agendada",
-                    "definicion": "CREATE INDEX idx_solicitud_reserva_fecha_agendada ON public.solicitud_reserva_cliente USING btree (fecha_agendada)"
-                },
                 {
                     "nombre": "solicitud_reserva_cliente_pkey",
                     "definicion": "CREATE UNIQUE INDEX solicitud_reserva_cliente_pkey ON public.solicitud_reserva_cliente USING btree (id)"
@@ -4377,14 +4225,6 @@
         {
             "tabla": "solicitudregistropersonal",
             "indices": [
-                {
-                    "nombre": "idx_solicitud_documento",
-                    "definicion": "CREATE INDEX idx_solicitud_documento ON public.solicitudregistropersonal USING btree (numero_documento)"
-                },
-                {
-                    "nombre": "idx_solicitud_email",
-                    "definicion": "CREATE INDEX idx_solicitud_email ON public.solicitudregistropersonal USING btree (email)"
-                },
                 {
                     "nombre": "solicitudregistropersonal_email_key",
                     "definicion": "CREATE UNIQUE INDEX solicitudregistropersonal_email_key ON public.solicitudregistropersonal USING btree (email)"
@@ -4737,7 +4577,7 @@
                     "tipo": "character varying",
                     "nombre": "nombre",
                     "default": null,
-                    "posicion": 3,
+                    "posicion": 2,
                     "obligatorio": true,
                     "tipo_completo": "varchar(200)"
                 },
@@ -4745,7 +4585,7 @@
                     "tipo": "character varying",
                     "nombre": "contacto",
                     "default": null,
-                    "posicion": 4,
+                    "posicion": 3,
                     "obligatorio": false,
                     "tipo_completo": "varchar(100)"
                 },
@@ -4753,7 +4593,7 @@
                     "tipo": "character varying",
                     "nombre": "ubicacion",
                     "default": null,
-                    "posicion": 5,
+                    "posicion": 4,
                     "obligatorio": false,
                     "tipo_completo": "varchar(255)"
                 },
@@ -4761,7 +4601,7 @@
                     "tipo": "character varying",
                     "nombre": "contrasenia",
                     "default": null,
-                    "posicion": 6,
+                    "posicion": 5,
                     "obligatorio": true,
                     "tipo_completo": "varchar(255)"
                 },
@@ -4769,7 +4609,7 @@
                     "tipo": "timestamp without time zone",
                     "nombre": "fecha_registro",
                     "default": "CURRENT_TIMESTAMP",
-                    "posicion": 7,
+                    "posicion": 6,
                     "obligatorio": false,
                     "tipo_completo": "timestamp without time zone"
                 },
@@ -4777,7 +4617,7 @@
                     "tipo": "character varying",
                     "nombre": "numero_documento",
                     "default": null,
-                    "posicion": 8,
+                    "posicion": 7,
                     "obligatorio": false,
                     "tipo_completo": "varchar(50)"
                 },
@@ -4785,7 +4625,7 @@
                     "tipo": "character varying",
                     "nombre": "email",
                     "default": null,
-                    "posicion": 9,
+                    "posicion": 8,
                     "obligatorio": false,
                     "tipo_completo": "varchar(255)"
                 },
@@ -4793,7 +4633,7 @@
                     "tipo": "text",
                     "nombre": "avatar_url",
                     "default": null,
-                    "posicion": 10,
+                    "posicion": 9,
                     "obligatorio": false,
                     "tipo_completo": "text"
                 },
@@ -4801,7 +4641,7 @@
                     "tipo": "integer",
                     "nombre": "rol_principal",
                     "default": null,
-                    "posicion": 11,
+                    "posicion": 10,
                     "obligatorio": false,
                     "tipo_completo": "integer"
                 }
@@ -4821,14 +4661,6 @@
         {
             "tabla": "usuario_rol",
             "indices": [
-                {
-                    "nombre": "idx_usuario_rol_rol",
-                    "definicion": "CREATE INDEX idx_usuario_rol_rol ON public.usuario_rol USING btree (id_rol)"
-                },
-                {
-                    "nombre": "idx_usuario_rol_usuario",
-                    "definicion": "CREATE INDEX idx_usuario_rol_usuario ON public.usuario_rol USING btree (id_usuario)"
-                },
                 {
                     "nombre": "usuario_rol_id_usuario_id_rol_key",
                     "definicion": "CREATE UNIQUE INDEX usuario_rol_id_usuario_id_rol_key ON public.usuario_rol USING btree (id_usuario, id_rol)"
@@ -4994,11 +4826,5 @@
                 }
             ]
         }
-    ],
-    "informacion_base_datos": {
-        "motor": "PostgreSQL",
-        "plataforma": "Supabase",
-        "descripcion": "Estructura actual de la base de datos generada automáticamente para utilizar como contexto de desarrollo con inteligencia artificial.",
-        "generado_en": "2026-07-28T14:24:33.976285+00:00"
-    }
+    ]
 }

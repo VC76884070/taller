@@ -1,5 +1,6 @@
 # =====================================================
-# AVANCES.PY - CLIENTE
+# AVANCES.PY - CLIENTE (VERSIÓN COMPLETA CORREGIDA)
+# MUESTRA TODOS LOS AVANCES APROBADOS DE UNA ORDEN
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -64,49 +65,60 @@ def cliente_required(f):
 @avances_cliente_bp.route('/mis-vehiculos', methods=['GET'])
 @cliente_required
 def obtener_mis_vehiculos(current_user):
+    """Obtener todos los vehículos del cliente"""
     try:
         cliente = supabase.table('cliente').select('id').eq('id_usuario', current_user['id']).execute()
         if not cliente.data:
             return jsonify({'success': True, 'vehiculos': []}), 200
         
         vehiculos = supabase.table('vehiculo') \
-            .select('id, placa, marca, modelo, anio') \
+            .select('id, placa, marca, modelo, anio, kilometraje') \
             .eq('id_cliente', cliente.data[0]['id']) \
+            .order('id', desc=True) \
             .execute()
         
         return jsonify({'success': True, 'vehiculos': vehiculos.data or []}), 200
     except Exception as e:
+        logger.error(f"Error obteniendo vehículos: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
 @avances_cliente_bp.route('/ordenes-vehiculo/<int:id_vehiculo>', methods=['GET'])
 @cliente_required
 def obtener_ordenes_vehiculo(current_user, id_vehiculo):
+    """Obtener todas las órdenes de un vehículo (ordenadas por fecha)"""
     try:
         ordenes = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, estado_global, fecha_ingreso') \
+            .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_salida') \
             .eq('id_vehiculo', id_vehiculo) \
             .order('fecha_ingreso', desc=True) \
             .execute()
         
         return jsonify({'success': True, 'ordenes': ordenes.data or []}), 200
     except Exception as e:
+        logger.error(f"Error obteniendo órdenes: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
 @avances_cliente_bp.route('/avances-orden/<int:id_orden>', methods=['GET'])
 @cliente_required
 def obtener_avances_orden(current_user, id_orden):
+    """
+    Obtener TODOS los avances APROBADOS de una orden
+    Ordenados por fecha de creación (más reciente primero)
+    """
     try:
+        # Obtener todos los avances aprobados de la orden
         avances = supabase.table('avance_trabajo') \
             .select('*') \
             .eq('id_orden_trabajo', id_orden) \
-            .in_('estado', ['aprobado']) \
+            .eq('estado', 'aprobado') \
             .order('fecha_creacion', desc=True) \
             .execute()
         
         resultado = []
         for a in (avances.data or []):
+            # Parsear fotos
             fotos = []
             if a.get('fotos'):
                 try:
@@ -121,12 +133,17 @@ def obtener_avances_orden(current_user, id_orden):
                 'fotos': fotos,
                 'estado': a.get('estado'),
                 'fecha_creacion': a.get('fecha_creacion'),
-                'fecha_aprobacion': a.get('fecha_aprobacion')
+                'fecha_aprobacion': a.get('fecha_aprobacion'),
+                'numero_avance': a.get('numero_avance', 0),
+                'comentario_revision': a.get('comentario_revision')
             })
         
+        logger.info(f"✅ Avances aprobados encontrados para orden {id_orden}: {len(resultado)}")
         return jsonify({'success': True, 'avances': resultado}), 200
     except Exception as e:
+        logger.error(f"Error obteniendo avances: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 # =====================================================
 # ENDPOINT: PROXY PARA IMÁGENES DE AVANCES (CLIENTE)

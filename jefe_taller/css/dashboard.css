@@ -1,6 +1,6 @@
 /* =====================================================
    DASHBOARD JEFE DE TALLER - ESTILOS OSCUROS MODERNOS
-   VERSIÓN COMPLETA CON BOTÓN FLOTANTE DE CIERRE DE SESIÓN
+   VERSIÓN COMPLETA CON UN SOLO BOTÓN DE CIERRE DE SESIÓN
    ===================================================== */
 
 /* =====================================================
@@ -140,12 +140,12 @@ body {
 }
 
 .sidebar-nav {
-    padding: 1rem 0;
     display: flex;
     flex-direction: column;
     flex: 1;
     overflow-y: auto;
     min-height: 0;
+    padding: 0.5rem 0;
 }
 
 .sidebar-nav ul {
@@ -201,19 +201,15 @@ body {
     margin-left: auto;
 }
 
-.sidebar-bottom {
-    border-top: 1px solid var(--border-color);
-    padding-top: 1rem;
-    flex-shrink: 0;
-}
-
 /* =====================================================
-   CIERRE DE SESIÓN - MEJORADO
+   CIERRE DE SESIÓN - UN SOLO BOTÓN A LA VEZ
    ===================================================== */
+
+/* Botón de cerrar sesión en desktop (dentro del menú) */
 .cerrar-sesion-item {
-    margin-top: 0.5rem;
+    margin-top: 0.75rem;
     border-top: 1px solid var(--border-color);
-    padding-top: 0.5rem;
+    padding-top: 0.75rem;
 }
 
 .cerrar-sesion-link {
@@ -235,16 +231,13 @@ body {
 }
 
 /* =====================================================
-   BOTÓN FLOTANTE DE CIERRE DE SESIÓN PARA MÓVILES
+   BOTÓN FLOTANTE - SOLO PARA MÓVILES
    ===================================================== */
 .cerrar-sesion-mobile {
     display: none;
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: calc(100% - 40px);
-    z-index: 10;
+    padding: 0.75rem 1.5rem 1.5rem 1.5rem;
+    margin-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
     flex-shrink: 0;
 }
 
@@ -1339,9 +1332,30 @@ body {
 }
 
 /* =====================================================
-   RESPONSIVE - BOTÓN FLOTANTE Y SIDEBAR
+   RESPONSIVE - UN SOLO BOTÓN A LA VEZ
    ===================================================== */
 
+/* En desktop (>1024px): mostrar el botón del menú, ocultar el flotante */
+@media (min-width: 1025px) {
+    .cerrar-sesion-mobile {
+        display: none !important;
+    }
+    
+    .cerrar-desktop {
+        display: block !important;
+    }
+    
+    .main-content {
+        margin-left: 280px !important;
+    }
+    
+    .hamburger-menu,
+    .sidebar-overlay {
+        display: none !important;
+    }
+}
+
+/* En móviles (≤1024px): ocultar el botón del menú, mostrar el flotante */
 @media (max-width: 1024px) {
     .hamburger-menu {
         display: flex !important;
@@ -1352,7 +1366,9 @@ body {
         width: 280px !important;
         position: fixed;
         height: 100vh;
-        padding-bottom: 80px !important;
+        padding-bottom: 0 !important;
+        display: flex;
+        flex-direction: column;
     }
     
     .sidebar.open {
@@ -1394,44 +1410,33 @@ body {
         width: 95%;
     }
     
-    /* ===== BOTÓN FLOTANTE EN MÓVILES ===== */
-    .cerrar-sesion-mobile {
-        display: block !important;
-        position: absolute;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: calc(100% - 40px);
-        z-index: 10;
+    /* Ocultar el botón de cerrar sesión del menú en móviles */
+    .cerrar-desktop {
+        display: none !important;
     }
     
-    .sidebar-bottom .cerrar-sesion-item {
-        display: none;
+    /* Mostrar el botón flotante en móviles */
+    .cerrar-sesion-mobile {
+        display: block !important;
+        position: sticky;
+        bottom: 0;
+        background: var(--negro);
+        z-index: 5;
+        border-top: 1px solid var(--border-color);
+        padding: 0.75rem 1.5rem 1.5rem 1.5rem;
+        margin-top: auto;
     }
     
     .sidebar-nav {
-        height: calc(100vh - 220px) !important;
+        flex: 1;
         overflow-y: auto;
-        flex: 0 1 auto;
-    }
-}
-
-@media (min-width: 1025px) {
-    .cerrar-sesion-mobile {
-        display: none !important;
+        display: flex;
+        flex-direction: column;
+        padding: 0.5rem 0;
     }
     
-    .sidebar-bottom .cerrar-sesion-item {
-        display: block !important;
-    }
-    
-    .main-content {
-        margin-left: 280px !important;
-    }
-    
-    .hamburger-menu,
-    .sidebar-overlay {
-        display: none !important;
+    .sidebar-nav ul:first-child {
+        flex: 1;
     }
 }
 
@@ -1489,10 +1494,6 @@ body {
     .btn-cerrar-sesion-flotante i {
         font-size: 1.3rem;
     }
-    
-    .sidebar {
-        padding-bottom: 90px !important;
-    }
 }
 
 @media (max-width: 480px) {
@@ -1531,14 +1532,45 @@ body {
         font-size: 1.4rem;
     }
     
+    .cerrar-sesion-mobile {
+        padding: 0.5rem 1rem 1rem 1rem;
+    }
+}
+
+@media (max-width: 360px) {
     .sidebar {
-        padding-bottom: 95px !important;
+        width: 260px !important;
     }
     
-    /* Ajuste para que el botón flotante no se superponga */
+    .sidebar-header {
+        padding: 1rem;
+    }
+    
+    .sidebar-user {
+        padding: 1rem;
+    }
+    
+    .nav-link {
+        padding: 0.6rem 1rem;
+        font-size: 0.85rem;
+    }
+    
+    .main-content {
+        padding: 0.75rem;
+        padding-top: 65px;
+    }
+    
+    .card {
+        padding: 1rem;
+    }
+    
+    .btn-cerrar-sesion-flotante {
+        padding: 0.8rem;
+        font-size: 0.95rem;
+    }
+    
     .cerrar-sesion-mobile {
-        bottom: 15px;
-        width: calc(100% - 30px);
+        padding: 0.4rem 0.8rem 0.8rem 0.8rem;
     }
 }
 
@@ -1574,41 +1606,5 @@ body {
     
     .btn-cerrar-sesion-flotante:active {
         transform: scale(0.95);
-    }
-}
-
-/* =====================================================
-   SOPORTE PARA PANTALLAS MUY PEQUEÑAS
-   ===================================================== */
-@media (max-width: 360px) {
-    .sidebar {
-        width: 260px !important;
-    }
-    
-    .sidebar-header {
-        padding: 1rem;
-    }
-    
-    .sidebar-user {
-        padding: 1rem;
-    }
-    
-    .nav-link {
-        padding: 0.6rem 1rem;
-        font-size: 0.85rem;
-    }
-    
-    .main-content {
-        padding: 0.75rem;
-        padding-top: 65px;
-    }
-    
-    .card {
-        padding: 1rem;
-    }
-    
-    .btn-cerrar-sesion-flotante {
-        padding: 0.8rem;
-        font-size: 0.95rem;
     }
 }

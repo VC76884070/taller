@@ -1,6 +1,6 @@
 <!-- ===================================================== -->
 <!-- SIDEBAR - JEFE DE TALLER CON CIERRE DE SESIÓN VISIBLE -->
-<!-- VERSIÓN CORREGIDA - CERRAR SESIÓN MÁS ARRIBA        -->
+<!-- VERSIÓN CORREGIDA - UN SOLO BOTÓN DE CERRAR SESIÓN   -->
 <!-- ===================================================== -->
 
 <aside class="sidebar">
@@ -113,25 +113,25 @@
             </li>
 
             <!-- ============================================= -->
-            <!-- 🚨 CIERRE DE SESIÓN - AHORA DENTRO DEL MISMO UL -->
+            <!-- 🚨 CIERRE DE SESIÓN - VISIBLE EN DESKTOP     -->
             <!-- ============================================= -->
-            <li class="nav-item cerrar-sesion-item" data-page="cerrar">
+            <li class="nav-item cerrar-sesion-item cerrar-desktop">
                 <a href="#" onclick="cerrarSesion()" class="nav-link cerrar-sesion-link">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Cerrar Sesión</span>
                 </a>
             </li>
         </ul>
-    </nav>
 
-    <!-- ============================================= -->
-    <!-- BOTÓN FLOTANTE PARA CIERRE DE SESIÓN EN MÓVILES -->
-    <!-- (Solo visible en pantallas pequeñas)          -->
-    <!-- ============================================= -->
-    <div class="cerrar-sesion-mobile">
-        <button class="btn-cerrar-sesion-flotante">
-            <i class="fas fa-sign-out-alt"></i>
-            <span>Cerrar Sesión</span>
-        </button>
-    </div>
+        <!-- ============================================= -->
+        <!-- 🚨 CIERRE DE SESIÓN - VISIBLE EN MÓVIL        -->
+        <!-- (BOTÓN FLOTANTE - UN SOLO BOTÓN)             -->
+        <!-- ============================================= -->
+        <div class="cerrar-sesion-mobile">
+            <button class="btn-cerrar-sesion-flotante" onclick="cerrarSesion()">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Cerrar Sesión</span>
+            </button>
+        </div>
+    </nav>
 </aside>

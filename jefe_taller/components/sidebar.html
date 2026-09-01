@@ -1,6 +1,6 @@
 <!-- ===================================================== -->
 <!-- SIDEBAR - JEFE DE TALLER CON CIERRE DE SESIÓN VISIBLE -->
-<!-- VERSIÓN CORREGIDA - UN SOLO BOTÓN DE CERRAR SESIÓN   -->
+<!-- VERSIÓN CORREGIDA - BOTÓN DESPUÉS DE PERFIL CON ESPACIO -->
 <!-- ===================================================== -->
 
 <aside class="sidebar">
@@ -113,25 +113,22 @@
             </li>
 
             <!-- ============================================= -->
-            <!-- 🚨 CIERRE DE SESIÓN - VISIBLE EN DESKTOP     -->
+            <!-- 🚨 CIERRE DE SESIÓN - JUSTO DESPUÉS DE PERFIL -->
+            <!-- CON ESPACIO EXTRA ABAJO PARA SCROLL          -->
             <!-- ============================================= -->
-            <li class="nav-item cerrar-sesion-item cerrar-desktop">
+            <li class="nav-item cerrar-sesion-item">
                 <a href="#" onclick="cerrarSesion()" class="nav-link cerrar-sesion-link">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Cerrar Sesión</span>
                 </a>
             </li>
-        </ul>
 
-        <!-- ============================================= -->
-        <!-- 🚨 CIERRE DE SESIÓN - VISIBLE EN MÓVIL        -->
-        <!-- (BOTÓN FLOTANTE - UN SOLO BOTÓN)             -->
-        <!-- ============================================= -->
-        <div class="cerrar-sesion-mobile">
-            <button class="btn-cerrar-sesion-flotante" onclick="cerrarSesion()">
-                <i class="fas fa-sign-out-alt"></i>
-                <span>Cerrar Sesión</span>
-            </button>
-        </div>
+            <!-- ============================================= -->
+            <!-- ESPACIO EXTRA PARA HACER SCROLL Y VER EL BOTÓN -->
+            <!-- ============================================= -->
+            <li class="nav-item spacer-item" style="height: 80px; pointer-events: none; opacity: 0;">
+                <span style="display: block; height: 80px;"></span>
+            </li>
+        </ul>
     </nav>
 </aside>

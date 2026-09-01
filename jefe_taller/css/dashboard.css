@@ -1,6 +1,6 @@
 /* =====================================================
    DASHBOARD JEFE DE TALLER - ESTILOS OSCUROS MODERNOS
-   VERSIÓN COMPLETA CON UN SOLO BOTÓN DE CIERRE DE SESIÓN
+   VERSIÓN COMPLETA - BOTÓN DESPUÉS DE PERFIL CON ESPACIO
    ===================================================== */
 
 /* =====================================================
@@ -202,19 +202,23 @@ body {
 }
 
 /* =====================================================
-   CIERRE DE SESIÓN - UN SOLO BOTÓN A LA VEZ
+   CIERRE DE SESIÓN - JUSTO DESPUÉS DE PERFIL
+   CON ESPACIO EXTRA PARA SCROLL
    ===================================================== */
 
-/* Botón de cerrar sesión en desktop (dentro del menú) */
+/* Botón de cerrar sesión */
 .cerrar-sesion-item {
     margin-top: 0.75rem;
-    border-top: 1px solid var(--border-color);
+    border-top: 2px solid var(--rojo-primario);
     padding-top: 0.75rem;
 }
 
 .cerrar-sesion-link {
     color: var(--rojo-primario) !important;
-    font-weight: 600;
+    font-weight: 700;
+    background: rgba(193, 18, 31, 0.05);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1.5rem !important;
 }
 
 .cerrar-sesion-link:hover {
@@ -224,53 +228,19 @@ body {
 
 .cerrar-sesion-link i {
     color: var(--rojo-primario);
+    font-size: 1.2rem;
 }
 
 .cerrar-sesion-link:hover i {
     color: var(--blanco);
 }
 
-/* =====================================================
-   BOTÓN FLOTANTE - SOLO PARA MÓVILES
-   ===================================================== */
-.cerrar-sesion-mobile {
-    display: none;
-    padding: 0.75rem 1.5rem 1.5rem 1.5rem;
-    margin-top: 0.5rem;
-    border-top: 1px solid var(--border-color);
-    flex-shrink: 0;
-}
-
-.btn-cerrar-sesion-flotante {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    width: 100%;
-    padding: 0.75rem;
-    background: var(--rojo-primario);
-    color: var(--blanco);
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: var(--transition);
-    box-shadow: 0 4px 15px rgba(193, 18, 31, 0.3);
-    font-family: inherit;
-}
-
-.btn-cerrar-sesion-flotante:hover {
-    background: var(--rojo-oscuro);
-    transform: scale(1.02);
-}
-
-.btn-cerrar-sesion-flotante:active {
-    transform: scale(0.95);
-}
-
-.btn-cerrar-sesion-flotante i {
-    font-size: 1.1rem;
+/* Espaciador al final del sidebar para poder hacer scroll */
+.spacer-item {
+    height: 120px !important;
+    min-height: 120px !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
 }
 
 /* =====================================================
@@ -1332,30 +1302,9 @@ body {
 }
 
 /* =====================================================
-   RESPONSIVE - UN SOLO BOTÓN A LA VEZ
+   RESPONSIVE
    ===================================================== */
 
-/* En desktop (>1024px): mostrar el botón del menú, ocultar el flotante */
-@media (min-width: 1025px) {
-    .cerrar-sesion-mobile {
-        display: none !important;
-    }
-    
-    .cerrar-desktop {
-        display: block !important;
-    }
-    
-    .main-content {
-        margin-left: 280px !important;
-    }
-    
-    .hamburger-menu,
-    .sidebar-overlay {
-        display: none !important;
-    }
-}
-
-/* En móviles (≤1024px): ocultar el botón del menú, mostrar el flotante */
 @media (max-width: 1024px) {
     .hamburger-menu {
         display: flex !important;
@@ -1365,10 +1314,9 @@ body {
         transform: translateX(-100%);
         width: 280px !important;
         position: fixed;
-        height: 100vh;
-        padding-bottom: 0 !important;
-        display: flex;
-        flex-direction: column;
+        height: 100vh !important;
+        overflow-y: auto !important;
+        padding-bottom: 20px !important;
     }
     
     .sidebar.open {
@@ -1410,33 +1358,10 @@ body {
         width: 95%;
     }
     
-    /* Ocultar el botón de cerrar sesión del menú en móviles */
-    .cerrar-desktop {
-        display: none !important;
-    }
-    
-    /* Mostrar el botón flotante en móviles */
-    .cerrar-sesion-mobile {
-        display: block !important;
-        position: sticky;
-        bottom: 0;
-        background: var(--negro);
-        z-index: 5;
-        border-top: 1px solid var(--border-color);
-        padding: 0.75rem 1.5rem 1.5rem 1.5rem;
-        margin-top: auto;
-    }
-    
-    .sidebar-nav {
-        flex: 1;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        padding: 0.5rem 0;
-    }
-    
-    .sidebar-nav ul:first-child {
-        flex: 1;
+    /* Espaciador más pequeño en móviles pero aún visible */
+    .spacer-item {
+        height: 80px !important;
+        min-height: 80px !important;
     }
 }
 
@@ -1484,15 +1409,9 @@ body {
         max-height: 180px;
     }
     
-    /* Botón flotante más grande en tablets */
-    .btn-cerrar-sesion-flotante {
-        padding: 0.9rem;
-        font-size: 1rem;
-        border-radius: var(--radius-lg);
-    }
-    
-    .btn-cerrar-sesion-flotante i {
-        font-size: 1.3rem;
+    .spacer-item {
+        height: 60px !important;
+        min-height: 60px !important;
     }
 }
 
@@ -1521,19 +1440,9 @@ body {
         max-height: 150px;
     }
     
-    /* Botón flotante aún más grande en celulares */
-    .btn-cerrar-sesion-flotante {
-        padding: 1rem;
-        font-size: 1.1rem;
-        border-radius: var(--radius-lg);
-    }
-    
-    .btn-cerrar-sesion-flotante i {
-        font-size: 1.4rem;
-    }
-    
-    .cerrar-sesion-mobile {
-        padding: 0.5rem 1rem 1rem 1rem;
+    .spacer-item {
+        height: 40px !important;
+        min-height: 40px !important;
     }
 }
 
@@ -1563,14 +1472,16 @@ body {
     .card {
         padding: 1rem;
     }
-    
-    .btn-cerrar-sesion-flotante {
-        padding: 0.8rem;
-        font-size: 0.95rem;
+}
+
+@media (min-width: 1025px) {
+    .main-content {
+        margin-left: 280px !important;
     }
     
-    .cerrar-sesion-mobile {
-        padding: 0.4rem 0.8rem 0.8rem 0.8rem;
+    .hamburger-menu,
+    .sidebar-overlay {
+        display: none !important;
     }
 }
 
@@ -1590,21 +1501,4 @@ body {
     align-items: center;
     justify-content: center;
     min-height: 100vh;
-}
-
-/* =====================================================
-   MEJORAS DE ACCESIBILIDAD EN MÓVILES
-   ===================================================== */
-@media (hover: none) and (pointer: coarse) {
-    .nav-link:hover {
-        background: transparent !important;
-    }
-    
-    .btn-cerrar-sesion-flotante:hover {
-        transform: none;
-    }
-    
-    .btn-cerrar-sesion-flotante:active {
-        transform: scale(0.95);
-    }
 }

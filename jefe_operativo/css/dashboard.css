@@ -1,6 +1,6 @@
 /* =====================================================
    DASHBOARD JEFE OPERATIVO - ESTILOS OSCUROS MODERNOS
-   VERSIÓN CORREGIDA - TÍTULO AJUSTADO + SOLO VISTA MENSUAL
+   VERSIÓN CON CERRAR SESIÓN VISIBLE EN MÓVIL
    ===================================================== */
 
 :root {
@@ -139,6 +139,8 @@ body.sidebar-open {
     z-index: 1000;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     transform: translateX(0);
+    /* ✅ IMPORTANTE: padding inferior para que el scroll muestre el último item */
+    padding-bottom: 20px;
 }
 
 .sidebar::-webkit-scrollbar {
@@ -210,12 +212,15 @@ body.sidebar-open {
     padding: 1.5rem 0;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
     height: calc(100% - 140px);
+    overflow-y: auto;
 }
+
 .sidebar-nav ul {
     list-style: none;
+    flex: 1;
 }
+
 .nav-link {
     display: flex;
     align-items: center;
@@ -237,10 +242,34 @@ body.sidebar-open {
     color: var(--blanco);
     border-left: 3px solid var(--rojo-primario);
 }
-.sidebar-bottom {
+
+/* =====================================================
+   ESTILOS PARA CERRAR SESIÓN - VISIBLE SIEMPRE
+   ===================================================== */
+.nav-item-logout {
+    margin-top: 1.5rem;
     border-top: 1px solid var(--border-color);
-    padding-top: 0.5rem;
-    margin-top: auto;
+    padding-top: 0.75rem;
+    /* ✅ Espacio extra inferior para que no se tape en móvil */
+    margin-bottom: 1.5rem;
+}
+
+.nav-item-logout .nav-link {
+    color: var(--rojo-acento) !important;
+    font-weight: 600;
+}
+
+.nav-item-logout .nav-link i {
+    color: var(--rojo-acento) !important;
+}
+
+.nav-item-logout .nav-link:hover {
+    background: rgba(193, 18, 31, 0.15) !important;
+    color: var(--blanco) !important;
+}
+
+.nav-item-logout .nav-link:hover i {
+    color: var(--blanco) !important;
 }
 
 /* =====================================================
@@ -1091,6 +1120,8 @@ body.sidebar-open {
         width: 280px;
         height: 100vh;
         z-index: 1000;
+        /* ✅ Padding inferior extra en móvil para que se vea el botón */
+        padding-bottom: 40px;
     }
     .sidebar.open {
         transform: translateX(0);
@@ -1102,7 +1133,6 @@ body.sidebar-open {
         width: 100% !important;
     }
     
-    /* Ajuste para móvil: margen superior para que el título no se superponga con el botón hamburguesa */
     .top-bar {
         padding: 1rem 1rem 1rem 4.5rem;
         min-height: 70px;
@@ -1121,14 +1151,20 @@ body.sidebar-open {
         grid-template-columns: 1fr;
         gap: 1rem;
     }
+
+    .nav-item-logout {
+        margin-top: 1rem;
+        padding-top: 0.5rem;
+        margin-bottom: 2rem;
+    }
 }
 
-/* =====================================================
-   MÓVILES (max 768px) - REDISEÑO COMPACTO
-   CON ICONOS A LA DERECHA
-   ===================================================== */
+/* MÓVILES (max 768px) - REDISEÑO COMPACTO */
 @media (max-width: 768px) {
-    /* 🔴 TOP BAR - MEJORADO PARA MÓVIL */
+    .sidebar {
+        padding-bottom: 60px;
+    }
+
     .top-bar {
         flex-direction: row;
         align-items: center;
@@ -1181,7 +1217,6 @@ body.sidebar-open {
         font-size: 0.8rem;
     }
     
-    /* Ocultar texto "Actualizar" en móvil y hacer botón circular */
     .refresh-btn span {
         display: none;
     }
@@ -1200,7 +1235,6 @@ body.sidebar-open {
         margin: 0;
     }
     
-    /* 🔴 KPI CARDS - ICONOS A LA DERECHA */
     .kpi-grid {
         grid-template-columns: repeat(2, 1fr);
         gap: 0.7rem;
@@ -1304,7 +1338,6 @@ body.sidebar-open {
         display: block;
     }
     
-    /* LISTAS EN MÓVIL */
     .entrega-item,
     .vehiculo-taller-item {
         flex-direction: row;
@@ -1363,10 +1396,24 @@ body.sidebar-open {
     .toast-notification {
         min-width: auto;
     }
+
+    .nav-item-logout {
+        margin-top: 0.75rem;
+        padding-top: 0.4rem;
+        margin-bottom: 3rem;
+    }
+    .nav-item-logout .nav-link {
+        padding: 0.5rem 0.8rem;
+        font-size: 0.85rem;
+    }
 }
 
 /* MÓVILES PEQUEÑOS (max 480px) */
 @media (max-width: 480px) {
+    .sidebar {
+        padding-bottom: 80px;
+    }
+
     .content {
         padding: 0.6rem;
     }
@@ -1467,6 +1514,10 @@ body.sidebar-open {
     .fc .fc-toolbar-title {
         font-size: 12px !important;
     }
+
+    .nav-item-logout {
+        margin-bottom: 4rem;
+    }
 }
 
 /* LANDSCAPE EN MÓVIL */
@@ -1499,6 +1550,7 @@ body.sidebar-open {
     .sidebar {
         transform: translateX(0) !important;
         position: fixed;
+        padding-bottom: 20px;
     }
     .hamburger-menu {
         display: none !important;

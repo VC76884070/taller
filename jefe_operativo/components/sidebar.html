@@ -1,4 +1,4 @@
-<!-- SIDEBAR - Componente reutilizable -->
+<!-- SIDEBAR - Componente reutilizable para JEFE OPERATIVO -->
 <aside class="sidebar">
     <div class="sidebar-header">
         <img src="../img/logoblanco.jpeg" alt="FURIA MOTOR" class="sidebar-logo">
@@ -17,6 +17,7 @@
 
     <nav class="sidebar-nav">
         <ul>
+            <!-- Items de navegación -->
             <li class="nav-item" data-page="dashboard">
                 <a href="dashboard.html" class="nav-link">
                     <i class="fas fa-chart-pie"></i>
@@ -29,7 +30,7 @@
                     <span>Recepción de Vehículos</span>
                 </a>
             </li>
-            <li class="nav-item" data-page="control_calidad"> 
+            <li class="nav-item" data-page="control_calidad">
                 <a href="control_calidad.html" class="nav-link">
                     <i class="fas fa-check-circle"></i>
                     <span>Control de Calidad</span>
@@ -53,10 +54,9 @@
                     <span>Perfil</span>
                 </a>
             </li>
-        </ul>
 
-        <ul class="sidebar-bottom">
-            <li class="nav-item">
+            <!-- ✅ CERRAR SESIÓN - Debajo de Perfil con ESPACIO EXTRA -->
+            <li class="nav-item nav-item-logout" data-page="logout">
                 <a href="#" onclick="logout()" class="nav-link">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Cerrar Sesión</span>

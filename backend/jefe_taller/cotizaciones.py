@@ -992,10 +992,6 @@ def actualizar_estado_solicitud_tecnico(current_user, id_solicitud):
         logger.error(f"Error actualizando solicitud: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# =====================================================
-# APARTADO 8: SOLICITUDES DE COMPRA DIRECTA (CORREGIDO - CON 3 FOTOS POR ITEM)
-# =====================================================
-
 @cotizaciones_bp.route('/solicitudes-compra-directa', methods=['POST'])
 @jefe_taller_required
 def crear_solicitud_compra_directa(current_user):
@@ -1035,22 +1031,28 @@ def crear_solicitud_compra_directa(current_user):
             }
             
             # ✅ GUARDAR EL ARRAY COMPLETO DE FOTOS (hasta 3)
-            if item.get('fotos') and isinstance(item.get('fotos'), list):
-                item_data['fotos'] = item.get('fotos')  # Array completo
-                total_fotos += len(item.get('fotos'))
-                logger.info(f"📸 Item con {len(item.get('fotos'))} fotos: {item_data['fotos']}")
-            
-            # ✅ TAMBIÉN GUARDAR foto_url PARA COMPATIBILIDAD (primera foto)
-            if item.get('foto_url'):
+            fotos_array = item.get('fotos', [])
+            if fotos_array and isinstance(fotos_array, list) and len(fotos_array) > 0:
+                # ✅ Guardar el array completo de URLs
+                item_data['fotos'] = fotos_array
+                total_fotos += len(fotos_array)
+                logger.info(f"📸 Item con {len(fotos_array)} fotos: {fotos_array}")
+                
+                # ✅ También guardar la primera foto como foto_url para compatibilidad
+                if len(fotos_array) > 0 and fotos_array[0]:
+                    item_data['foto_url'] = fotos_array[0]
+                if item.get('foto_public_id'):
+                    item_data['foto_public_id'] = item.get('foto_public_id')
+            elif item.get('foto_url') and isinstance(item.get('foto_url'), str):
+                # Fallback: Si solo hay foto_url (string), convertirlo a array
                 item_data['foto_url'] = item.get('foto_url')
-            
-            # ✅ Guardar foto_public_id para eliminación
-            if item.get('foto_public_id'):
-                item_data['foto_public_id'] = item.get('foto_public_id')
-            
-            # ✅ Guardar array de public_ids para eliminación múltiple
-            if item.get('foto_public_ids') and isinstance(item.get('foto_public_ids'), list):
-                item_data['foto_public_ids'] = item.get('foto_public_ids')
+                item_data['fotos'] = [item.get('foto_url')]
+                if item.get('foto_public_id'):
+                    item_data['foto_public_id'] = item.get('foto_public_id')
+                total_fotos += 1
+            else:
+                # Sin fotos
+                item_data['fotos'] = []
             
             items_con_fotos.append(item_data)
         

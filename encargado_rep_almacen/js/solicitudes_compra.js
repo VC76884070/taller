@@ -138,7 +138,6 @@ function extraerUrlsFotos(item) {
         
         if (!obj || typeof obj !== 'object') return;
         
-        // Si es un array, recorrer cada elemento
         if (Array.isArray(obj)) {
             obj.forEach(subItem => {
                 buscarRecursivamente(subItem, profundidad + 1);
@@ -146,24 +145,19 @@ function extraerUrlsFotos(item) {
             return;
         }
         
-        // Recorrer todas las propiedades del objeto
         for (const [key, value] of Object.entries(obj)) {
-            // 🔥 DETECTAR URLs DE IMÁGENES
             if (typeof value === 'string' && value.startsWith('http')) {
-                // Verificar si es una URL de imagen válida
                 const esImagen = /(drive\.google\.com|cloudinary\.com|res\.cloudinary\.com|googleusercontent\.com|\.(jpg|jpeg|png|gif|webp|svg))/i.test(value);
                 if (esImagen && !urls.includes(value)) {
                     urls.push(value);
                     console.log(`📸 Encontrada en ${key}: ${value.substring(0, 50)}...`);
                 }
             } else if (typeof value === 'object' && value !== null) {
-                // Buscar recursivamente en objetos anidados
                 buscarRecursivamente(value, profundidad + 1);
             }
         }
     }
     
-    // Iniciar búsqueda
     buscarRecursivamente(item);
     
     // 🔥 FILTRO FINAL: solo URLs válidas
@@ -173,7 +167,6 @@ function extraerUrlsFotos(item) {
         /(drive\.google\.com|cloudinary\.com|res\.cloudinary\.com|googleusercontent\.com)/i.test(url)
     );
     
-    // Eliminar duplicados
     urls = [...new Set(urls)];
     
     console.log(`📸 Total fotos encontradas: ${urls.length}`, urls);

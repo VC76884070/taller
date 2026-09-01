@@ -993,13 +993,13 @@ def actualizar_estado_solicitud_tecnico(current_user, id_solicitud):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# APARTADO 8: SOLICITUDES DE COMPRA DIRECTA (CORREGIDO CON 3 FOTOS)
+# APARTADO 8: SOLICITUDES DE COMPRA DIRECTA (CORREGIDO - CON 3 FOTOS POR ITEM)
 # =====================================================
 
 @cotizaciones_bp.route('/solicitudes-compra-directa', methods=['POST'])
 @jefe_taller_required
 def crear_solicitud_compra_directa(current_user):
-    """Crear una solicitud de compra directa (sin pasar por cotización) - CON 3 FOTOS POR ITEM"""
+    """Crear una solicitud de compra directa - CON 3 FOTOS POR ITEM"""
     try:
         data = request.get_json()
         
@@ -1034,21 +1034,21 @@ def crear_solicitud_compra_directa(current_user):
                 'detalle': item.get('detalle', '')
             }
             
-            # ✅ TRANSFERIR EL ARRAY COMPLETO DE FOTOS
+            # ✅ GUARDAR EL ARRAY COMPLETO DE FOTOS (hasta 3)
             if item.get('fotos') and isinstance(item.get('fotos'), list):
-                # Guardar el array completo de fotos (hasta 3)
-                item_data['fotos'] = item.get('fotos')
+                item_data['fotos'] = item.get('fotos')  # Array completo
                 total_fotos += len(item.get('fotos'))
                 logger.info(f"📸 Item con {len(item.get('fotos'))} fotos: {item_data['fotos']}")
             
-            # ✅ TAMBIÉN GUARDAR foto_url para compatibilidad
+            # ✅ TAMBIÉN GUARDAR foto_url PARA COMPATIBILIDAD (primera foto)
             if item.get('foto_url'):
                 item_data['foto_url'] = item.get('foto_url')
             
+            # ✅ Guardar foto_public_id para eliminación
             if item.get('foto_public_id'):
                 item_data['foto_public_id'] = item.get('foto_public_id')
             
-            # ✅ Si tiene fotos_public_ids (para eliminación)
+            # ✅ Guardar array de public_ids para eliminación múltiple
             if item.get('foto_public_ids') and isinstance(item.get('foto_public_ids'), list):
                 item_data['foto_public_ids'] = item.get('foto_public_ids')
             
@@ -1061,7 +1061,7 @@ def crear_solicitud_compra_directa(current_user):
             'id_orden_trabajo': id_orden_trabajo,
             'id_jefe_taller': current_user['id'],
             'id_encargado_repuestos': id_encargado_repuestos,
-            'items': json.dumps(items_con_fotos),  # ✅ Guardar items con TODAS las fotos
+            'items': json.dumps(items_con_fotos),  # ✅ Guarda items con TODAS las fotos
             'descripcion_pieza': items_con_fotos[0].get('descripcion', '') if items_con_fotos else '',
             'cantidad': sum(item.get('cantidad', 1) for item in items_con_fotos),
             'mensaje_jefe_taller': observaciones,

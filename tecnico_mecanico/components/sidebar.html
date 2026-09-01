@@ -1,4 +1,8 @@
-<!-- SIDEBAR - TÉCNICO MECÁNICO -->
+<!-- ===================================================== -->
+<!-- SIDEBAR - TÉCNICO MECÁNICO CON CIERRE DE SESIÓN VISIBLE -->
+<!-- VERSIÓN CORREGIDA - BOTÓN DESPUÉS DE PERFIL CON ESPACIO -->
+<!-- ===================================================== -->
+
 <aside class="sidebar">
     <div class="sidebar-header">
         <img src="../../img/logoblanco.jpeg" alt="FURIA MOTOR" class="sidebar-logo">
@@ -17,6 +21,7 @@
 
     <nav class="sidebar-nav">
         <ul>
+            <!-- Mis Vehículos -->
             <li class="nav-item" data-page="misvehiculos">
                 <a href="misvehiculos.html" class="nav-link">
                     <i class="fas fa-car"></i>
@@ -24,38 +29,55 @@
                     <span class="badge" id="vehiculosBadge">0</span>
                 </a>
             </li>
+
+            <!-- Diagnóstico -->
             <li class="nav-item" data-page="diagnostico">
                 <a href="diagnostico.html" class="nav-link">
                     <i class="fas fa-stethoscope"></i>
                     <span>Diagnóstico</span>
                 </a>
             </li>
+
+            <!-- Avance de Trabajo -->
             <li class="nav-item" data-page="avance">
                 <a href="avance.html" class="nav-link">
                     <i class="fas fa-tasks"></i>
                     <span>Avance de Trabajo</span>
                 </a>
             </li>
+
+            <!-- Historial -->
             <li class="nav-item" data-page="historial">
                 <a href="historial.html" class="nav-link">
                     <i class="fas fa-history"></i>
                     <span>Historial</span>
                 </a>
             </li>
+
+            <!-- Perfil -->
             <li class="nav-item" data-page="perfil">
                 <a href="perfil.html" class="nav-link">
                     <i class="fas fa-user-circle"></i>
                     <span>Perfil</span>
                 </a>
             </li>
-        </ul>
 
-        <ul class="sidebar-bottom">
-            <li class="nav-item">
-                <a href="#" onclick="cerrarSesion()" class="nav-link">
+            <!-- ============================================= -->
+            <!-- 🚨 CIERRE DE SESIÓN - JUSTO DESPUÉS DE PERFIL -->
+            <!-- CON ESPACIO EXTRA PARA SCROLL                -->
+            <!-- ============================================= -->
+            <li class="nav-item cerrar-sesion-item">
+                <a href="#" onclick="cerrarSesion()" class="nav-link cerrar-sesion-link">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Cerrar Sesión</span>
                 </a>
+            </li>
+
+            <!-- ============================================= -->
+            <!-- ESPACIO EXTRA PARA HACER SCROLL Y VER EL BOTÓN -->
+            <!-- ============================================= -->
+            <li class="nav-item spacer-item">
+                <span style="display: block; height: 80px;"></span>
             </li>
         </ul>
     </nav>

@@ -46,8 +46,7 @@ def obtener_servicio_desde_orden(id_orden_trabajo):
             servicio = diagnostico.data[0].get('servicios', {})
             return servicio.get('descripcion', 'Servicio técnico')
         
-        # Buscar en servicio_tecnico directamente (si hay relación)
-        # Obtener servicio de la orden desde la planificación
+        # Buscar en servicio_tecnico directamente
         planificacion = supabase.table('planificacion') \
             .select('id_servicio, servicio_tecnico!inner(descripcion)') \
             .eq('id_orden_trabajo', id_orden_trabajo) \
@@ -62,7 +61,6 @@ def obtener_servicio_desde_orden(id_orden_trabajo):
     except Exception as e:
         logger.warning(f"Error obteniendo servicio desde orden {id_orden_trabajo}: {e}")
         return None
-
 
 # =====================================================
 # ENDPOINTS
@@ -93,10 +91,9 @@ def obtener_solicitudes_compra(current_user):
         
         # Mapa de órdenes con vehículo
         ordenes_map = {}
-        ordenes_servicio_map = {}  # Mapa para guardar el servicio de cada orden
+        ordenes_servicio_map = {}
         
         if ordenes_ids:
-            # Obtener información de las órdenes
             ordenes_result = supabase.table('ordentrabajo') \
                 .select('id, codigo_unico, id_vehiculo, vehiculo!inner(marca, modelo, placa)') \
                 .in_('id', ordenes_ids) \
@@ -109,7 +106,6 @@ def obtener_solicitudes_compra(current_user):
                     'vehiculo': f"{v.get('marca', '')} {v.get('modelo', '')} ({v.get('placa', '')})".strip()
                 }
                 
-                # Obtener servicio para esta orden
                 servicio = obtener_servicio_desde_orden(o['id'])
                 if servicio:
                     ordenes_servicio_map[o['id']] = servicio
@@ -119,7 +115,6 @@ def obtener_solicitudes_compra(current_user):
             orden_id = s.get('id_orden_trabajo')
             orden_info = ordenes_map.get(orden_id, {})
             
-            # Obtener servicio - primero de nuestro mapa, si no, intentar obtener ahora
             servicio_desc = ordenes_servicio_map.get(orden_id)
             if not servicio_desc:
                 servicio_desc = obtener_servicio_desde_orden(orden_id)
@@ -180,7 +175,7 @@ def marcar_como_comprado(current_user, id_solicitud):
         notas_compra = data.get('notas_compra', '')
         numero_factura = data.get('numero_factura', '')
         proveedor_nombre = data.get('proveedor_nombre', '')
-        monto_compra = data.get('monto_compra')  # Este viene del frontend
+        monto_compra = data.get('monto_compra')
         comprobante_url = data.get('comprobante_url')
         
         # Verificar que la solicitud existe
@@ -198,9 +193,6 @@ def marcar_como_comprado(current_user, id_solicitud):
         
         ahora = datetime.datetime.now().isoformat()
         
-        # =====================================================
-        # 🔧 CORREGIDO: Usar precio_cotizado en lugar de monto_compra
-        # =====================================================
         update_data = {
             'estado': 'comprado',
             'fecha_compra': fecha_compra or ahora,
@@ -208,7 +200,7 @@ def marcar_como_comprado(current_user, id_solicitud):
             'respuesta_encargado': f"Compra realizada el {fecha_compra or ahora.split('T')[0]}"
         }
         
-        # ✅ Usar precio_cotizado (que sí existe) en lugar de monto_compra
+        # Usar precio_cotizado en lugar de monto_compra
         if monto_compra:
             update_data['precio_cotizado'] = float(monto_compra)
         
@@ -414,8 +406,9 @@ def obtener_estadisticas(current_user):
         logger.error(f"Error obteniendo estadísticas: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # =====================================================
-# 🆕 ENDPOINT: SUBIR COMPROBANTE A GOOGLE DRIVE
+# ENDPOINT: SUBIR COMPROBANTE A GOOGLE DRIVE
 # =====================================================
 
 @solicitudes_compra_bp.route('/subir-comprobante-drive', methods=['POST'])
@@ -425,7 +418,6 @@ def subir_comprobante_drive(current_user):
     try:
         from google_drive import google_drive
         
-        # Verificar archivo
         if 'comprobante' not in request.files:
             return jsonify({'success': False, 'error': 'No se envió comprobante'}), 400
         
@@ -433,41 +425,33 @@ def subir_comprobante_drive(current_user):
         if not file.filename:
             return jsonify({'success': False, 'error': 'Archivo vacío'}), 400
         
-        # Obtener datos
         id_orden = request.form.get('id_orden')
         codigo_orden = request.form.get('codigo_orden')
         
-        if not codigo_orden:
-            # Si no viene, buscarlo
-            if id_orden:
-                orden = supabase.table('ordentrabajo') \
-                    .select('codigo_unico') \
-                    .eq('id', id_orden) \
-                    .execute()
-                if orden.data:
-                    codigo_orden = orden.data[0].get('codigo_unico')
+        if not codigo_orden and id_orden:
+            orden = supabase.table('ordentrabajo') \
+                .select('codigo_unico') \
+                .eq('id', id_orden) \
+                .execute()
+            if orden.data:
+                codigo_orden = orden.data[0].get('codigo_unico')
         
         if not codigo_orden:
             return jsonify({'success': False, 'error': 'No se pudo obtener el código de la orden'}), 400
         
-        # Validar tipo de archivo
         allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'}
         file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
         
         if file_ext not in allowed_extensions:
             return jsonify({'error': f'Formato no permitido. Use: {", ".join(allowed_extensions)}'}), 400
         
-        # Validar tamaño (5MB)
         if len(file.read()) > 5 * 1024 * 1024:
             return jsonify({'error': 'El archivo no debe superar los 5MB'}), 400
         file.seek(0)
         
-        # Generar nombre único
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"comprobante_{timestamp}_{file.filename}"
         
-        # 🔥 SUBIR A GOOGLE DRIVE
-        # Ruta: {codigo_orden}/COTIZACION/SOLICITUD_COMPRA/comprobantes/
         folder_path = google_drive.get_ruta_solicitud_compra(codigo_orden, 'comprobantes')
         
         logger.info(f"📁 Subiendo comprobante a: {folder_path}")
@@ -476,7 +460,7 @@ def subir_comprobante_drive(current_user):
             file_data=file,
             filename=filename,
             folder_path=folder_path,
-            public=False  # Solo para el taller
+            public=False
         )
         
         return jsonify({
@@ -494,18 +478,14 @@ def subir_comprobante_drive(current_user):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-
 # =====================================================
-# 🆕 ENDPOINT: PROXY IMAGEN PARA ENCARGADO DE REPUESTOS
+# ENDPOINT: PROXY IMAGEN PARA ENCARGADO DE REPUESTOS
 # =====================================================
 
 @solicitudes_compra_bp.route('/proxy-imagen-encargado', methods=['GET'])
 @encargado_repuestos_required
 def proxy_imagen_encargado(current_user):
-    """
-    Proxy para imágenes de Google Drive y Cloudinary.
-    Devuelve la imagen en Base64 para uso en <img>
-    """
+    """Proxy para imágenes de Google Drive y Cloudinary"""
     import requests
     import base64
     import re
@@ -514,11 +494,10 @@ def proxy_imagen_encargado(current_user):
     if not url:
         return jsonify({'success': False, 'error': 'URL no proporcionada'}), 400
     
-    # 🔥 DETECTAR SI ES CLOUDINARY
+    # Cloudinary
     if 'cloudinary.com' in url or 'res.cloudinary.com' in url:
         try:
             logger.info(f"📸 Proxy Encargado: Cargando desde Cloudinary: {url[:80]}...")
-            
             response = requests.get(url, timeout=30, allow_redirects=True)
             
             if response.status_code == 200:
@@ -549,7 +528,7 @@ def proxy_imagen_encargado(current_user):
             logger.error(f"❌ Error descargando de Cloudinary: {str(e)}")
             return jsonify({'success': False, 'error': str(e)}), 500
     
-    # 🔥 SI ES GOOGLE DRIVE
+    # Google Drive
     from google_drive import google_drive
     
     file_id = google_drive.extract_file_id_from_url(url)
@@ -594,6 +573,8 @@ def proxy_imagen_encargado(current_user):
         'success': True,
         'base64': f'data:{mime_type};base64,{base64_data}'
     })
+
+
 # =====================================================
 # ENDPOINT DE PRUEBA
 # =====================================================

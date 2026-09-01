@@ -125,122 +125,59 @@ function statusBadge(estado) {
 }
 
 // =====================================================
-// 🔥 FUNCIÓN CORREGIDA - EXTRAE TODAS LAS FOTOS DEL ITEM
+// 🔥 FUNCIÓN ULTRA CORREGIDA - EXTRAE TODAS LAS FOTOS
 // =====================================================
 
 function extraerUrlsFotos(item) {
     let urls = [];
     if (!item) return urls;
 
-    // 🔥 CASO 1: item.fotos (array de strings u objetos)
-    if (item.fotos && Array.isArray(item.fotos)) {
-        item.fotos.forEach(foto => {
-            if (typeof foto === 'string' && foto.startsWith('http')) {
-                urls.push(foto);
-            } else if (typeof foto === 'object' && foto !== null) {
-                Object.values(foto).forEach(val => {
-                    if (typeof val === 'string' && val.startsWith('http')) {
-                        urls.push(val);
-                    }
-                });
-            }
-        });
-    }
-
-    // 🔥 CASO 2: item.items (items anidados - recursivo)
-    if (item.items && Array.isArray(item.items)) {
-        item.items.forEach(subItem => {
-            const subUrls = extraerUrlsFotos(subItem);
-            subUrls.forEach(url => {
-                if (!urls.includes(url)) urls.push(url);
+    // 🔥 BUSCAR RECURSIVAMENTE EN TODO EL OBJETO
+    function buscarRecursivamente(obj, profundidad = 0) {
+        if (profundidad > 5) return; // Evitar bucles infinitos
+        
+        if (!obj || typeof obj !== 'object') return;
+        
+        // Si es un array, recorrer cada elemento
+        if (Array.isArray(obj)) {
+            obj.forEach(subItem => {
+                buscarRecursivamente(subItem, profundidad + 1);
             });
-        });
-    }
-
-    // 🔥 CASO 3: item.foto_url (string)
-    if (item.foto_url && typeof item.foto_url === 'string' && item.foto_url.startsWith('http')) {
-        urls.push(item.foto_url);
-    }
-
-    // 🔥 CASO 4: item.foto (string o array)
-    if (item.foto) {
-        if (typeof item.foto === 'string' && item.foto.startsWith('http')) {
-            urls.push(item.foto);
-        } else if (Array.isArray(item.foto)) {
-            item.foto.forEach(url => {
-                if (typeof url === 'string' && url.startsWith('http')) {
-                    urls.push(url);
+            return;
+        }
+        
+        // Recorrer todas las propiedades del objeto
+        for (const [key, value] of Object.entries(obj)) {
+            // 🔥 DETECTAR URLs DE IMÁGENES
+            if (typeof value === 'string' && value.startsWith('http')) {
+                // Verificar si es una URL de imagen válida
+                const esImagen = /(drive\.google\.com|cloudinary\.com|res\.cloudinary\.com|googleusercontent\.com|\.(jpg|jpeg|png|gif|webp|svg))/i.test(value);
+                if (esImagen && !urls.includes(value)) {
+                    urls.push(value);
+                    console.log(`📸 Encontrada en ${key}: ${value.substring(0, 50)}...`);
                 }
-            });
-        }
-    }
-
-    // 🔥 CASO 5: item.imagen (string o array)
-    if (item.imagen) {
-        if (typeof item.imagen === 'string' && item.imagen.startsWith('http')) {
-            urls.push(item.imagen);
-        } else if (Array.isArray(item.imagen)) {
-            item.imagen.forEach(url => {
-                if (typeof url === 'string' && url.startsWith('http')) {
-                    urls.push(url);
-                }
-            });
-        }
-    }
-
-    // 🔥 CASO 6: item.fotos_array (array)
-    if (item.fotos_array && Array.isArray(item.fotos_array)) {
-        item.fotos_array.forEach(url => {
-            if (typeof url === 'string' && url.startsWith('http')) {
-                urls.push(url);
+            } else if (typeof value === 'object' && value !== null) {
+                // Buscar recursivamente en objetos anidados
+                buscarRecursivamente(value, profundidad + 1);
             }
-        });
-    }
-
-    // 🔥 CASO 7: item.image_url (string)
-    if (item.image_url && typeof item.image_url === 'string' && item.image_url.startsWith('http')) {
-        urls.push(item.image_url);
-    }
-
-    // 🔥 CASO 8: item.url_foto (string)
-    if (item.url_foto && typeof item.url_foto === 'string' && item.url_foto.startsWith('http')) {
-        urls.push(item.url_foto);
-    }
-
-    // 🔥 CASO 9: Buscar en todo el objeto por regex
-    if (urls.length === 0) {
-        try {
-            const str = JSON.stringify(item);
-            const matches = str.match(/https?:\/\/[^\s"',\]]+/g);
-            if (matches) {
-                const validDomains = ['drive.google.com', 'cloudinary.com', 'res.cloudinary.com', 'googleusercontent.com'];
-                matches.forEach(url => {
-                    // Limpiar URL de caracteres no deseados
-                    url = url.replace(/[",\]]+$/, '');
-                    const isValid = validDomains.some(domain => url.includes(domain));
-                    if (isValid && !urls.includes(url) && url.length > 10) {
-                        urls.push(url);
-                    }
-                });
-            }
-        } catch (e) {
-            console.warn('Error al buscar URLs en el item:', e);
         }
     }
-
-    // 🔥 Filtrar duplicados y URLs inválidas
-    urls = urls.filter((url, index, self) => 
-        self.indexOf(url) === index && 
-        typeof url === 'string' && 
-        url.startsWith('http') &&
-        url.length > 10
+    
+    // Iniciar búsqueda
+    buscarRecursivamente(item);
+    
+    // 🔥 FILTRO FINAL: solo URLs válidas
+    urls = urls.filter(url => 
+        url.startsWith('http') && 
+        url.length > 10 &&
+        /(drive\.google\.com|cloudinary\.com|res\.cloudinary\.com|googleusercontent\.com)/i.test(url)
     );
-
-    // Mostrar en consola cuántas fotos se encontraron
-    if (urls.length > 0) {
-        console.log(`📸 Item "${item.descripcion || item.nombre || 'sin nombre'}": ${urls.length} fotos encontradas`);
-    }
-
+    
+    // Eliminar duplicados
+    urls = [...new Set(urls)];
+    
+    console.log(`📸 Total fotos encontradas: ${urls.length}`, urls);
+    
     return urls;
 }
 

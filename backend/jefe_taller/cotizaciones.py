@@ -993,13 +993,13 @@ def actualizar_estado_solicitud_tecnico(current_user, id_solicitud):
         return jsonify({'error': str(e)}), 500
 
 # =====================================================
-# APARTADO 8: SOLICITUDES DE COMPRA DIRECTA (CORREGIDO CON FOTOS)
+# APARTADO 8: SOLICITUDES DE COMPRA DIRECTA (CORREGIDO CON 3 FOTOS)
 # =====================================================
 
 @cotizaciones_bp.route('/solicitudes-compra-directa', methods=['POST'])
 @jefe_taller_required
 def crear_solicitud_compra_directa(current_user):
-    """Crear una solicitud de compra directa (sin pasar por cotización) - CON FOTOS"""
+    """Crear una solicitud de compra directa (sin pasar por cotización) - CON 3 FOTOS POR ITEM"""
     try:
         data = request.get_json()
         
@@ -1022,9 +1022,11 @@ def crear_solicitud_compra_directa(current_user):
         ahora = datetime.datetime.now().isoformat()
         
         # =====================================================
-        # 🔧 PROCESAR ITEMS CON FOTOS
+        # 🔧 PROCESAR ITEMS CON TODAS LAS FOTOS
         # =====================================================
         items_con_fotos = []
+        total_fotos = 0
+        
         for item in items:
             item_data = {
                 'descripcion': item.get('descripcion', ''),
@@ -1032,24 +1034,34 @@ def crear_solicitud_compra_directa(current_user):
                 'detalle': item.get('detalle', '')
             }
             
-            # ✅ TRANSFERIR FOTO SI EXISTE
+            # ✅ TRANSFERIR EL ARRAY COMPLETO DE FOTOS
+            if item.get('fotos') and isinstance(item.get('fotos'), list):
+                # Guardar el array completo de fotos (hasta 3)
+                item_data['fotos'] = item.get('fotos')
+                total_fotos += len(item.get('fotos'))
+                logger.info(f"📸 Item con {len(item.get('fotos'))} fotos: {item_data['fotos']}")
+            
+            # ✅ TAMBIÉN GUARDAR foto_url para compatibilidad
             if item.get('foto_url'):
                 item_data['foto_url'] = item.get('foto_url')
-                logger.info(f"📸 Foto transferida a solicitud de compra: {item_data['foto_url']}")
             
             if item.get('foto_public_id'):
                 item_data['foto_public_id'] = item.get('foto_public_id')
             
+            # ✅ Si tiene fotos_public_ids (para eliminación)
+            if item.get('foto_public_ids') and isinstance(item.get('foto_public_ids'), list):
+                item_data['foto_public_ids'] = item.get('foto_public_ids')
+            
             items_con_fotos.append(item_data)
         
-        logger.info(f"📦 Items con fotos: {len(items_con_fotos)} items, {sum(1 for i in items_con_fotos if i.get('foto_url'))} con foto")
+        logger.info(f"📦 Items procesados: {len(items_con_fotos)}, Total fotos: {total_fotos}")
         
-        # Crear la solicitud de compra con los items que incluyen fotos
+        # Crear la solicitud de compra con los items que incluyen TODAS las fotos
         nueva_solicitud = {
             'id_orden_trabajo': id_orden_trabajo,
             'id_jefe_taller': current_user['id'],
             'id_encargado_repuestos': id_encargado_repuestos,
-            'items': json.dumps(items_con_fotos),  # ✅ Guardar items con fotos
+            'items': json.dumps(items_con_fotos),  # ✅ Guardar items con TODAS las fotos
             'descripcion_pieza': items_con_fotos[0].get('descripcion', '') if items_con_fotos else '',
             'cantidad': sum(item.get('cantidad', 1) for item in items_con_fotos),
             'mensaje_jefe_taller': observaciones,
@@ -1068,23 +1080,24 @@ def crear_solicitud_compra_directa(current_user):
         enviar_notificacion(
             id_encargado_repuestos,
             'nueva_solicitud_compra',
-            f"🛒 Nueva solicitud de compra para la orden #{id_orden_trabajo}. {len(items_con_fotos)} item(s) solicitados. {sum(1 for i in items_con_fotos if i.get('foto_url'))} con foto.",
+            f"🛒 Nueva solicitud de compra para la orden #{id_orden_trabajo}. {len(items_con_fotos)} item(s) solicitados. {total_fotos} foto(s) totales.",
             result.data[0]['id']
         )
         
         supabase.table('avancetrabajo').insert({
             'id_orden_trabajo': id_orden_trabajo,
             'id_tecnico': current_user['id'],
-            'descripcion': f"Solicitud de compra directa creada por jefe de taller. Items: {len(items_con_fotos)}, con fotos: {sum(1 for i in items_con_fotos if i.get('foto_url'))}",
+            'descripcion': f"Solicitud de compra directa creada por jefe de taller. Items: {len(items_con_fotos)}, Fotos: {total_fotos}",
             'tipo_avance': 'solicitud_compra_directa',
             'fecha_hora': ahora
         }).execute()
         
         return jsonify({
             'success': True,
-            'message': f'Solicitud de compra creada exitosamente para {len(items_con_fotos)} item(s)',
+            'message': f'Solicitud de compra creada exitosamente para {len(items_con_fotos)} item(s) con {total_fotos} foto(s)',
             'id': result.data[0]['id'],
-            'items_con_fotos': len([i for i in items_con_fotos if i.get('foto_url')])
+            'total_items': len(items_con_fotos),
+            'total_fotos': total_fotos
         }), 201
         
     except Exception as e:

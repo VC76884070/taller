@@ -1,6 +1,6 @@
 <!-- ===================================================== -->
-<!-- SIDEBAR - JEFE DE TALLER CON CIERRE DE SESIÓN MÓVIL -->
-<!-- VERSIÓN COMPLETA Y CORREGIDA                         -->
+<!-- SIDEBAR - JEFE DE TALLER CON CIERRE DE SESIÓN VISIBLE -->
+<!-- VERSIÓN CORREGIDA - CERRAR SESIÓN MÁS ARRIBA        -->
 <!-- ===================================================== -->
 
 <aside class="sidebar">
@@ -111,14 +111,11 @@
                     <span>Perfil</span>
                 </a>
             </li>
-        </ul>
 
-        <!-- ============================================= -->
-        <!-- SECCIÓN DE CIERRE DE SESIÓN                   -->
-        <!-- ============================================= -->
-        <ul class="sidebar-bottom">
-            <!-- Botón normal (visible en desktop) -->
-            <li class="nav-item cerrar-sesion-item">
+            <!-- ============================================= -->
+            <!-- 🚨 CIERRE DE SESIÓN - AHORA DENTRO DEL MISMO UL -->
+            <!-- ============================================= -->
+            <li class="nav-item cerrar-sesion-item" data-page="cerrar">
                 <a href="#" onclick="cerrarSesion()" class="nav-link cerrar-sesion-link">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Cerrar Sesión</span>

@@ -1507,7 +1507,7 @@ async function subirAudio(audioBlob) {
 }
 
 // =====================================================
-// MANEJO DE FOTOS
+// SETUP FOTOS UPLOAD CON CÍRCULO DE PROGRESO
 // =====================================================
 
 function setupFotosUpload() {
@@ -1520,7 +1520,9 @@ function setupFotosUpload() {
         const fotoPreview = uploadCard.querySelector('.foto-preview');
         const previewImg = fotoPreview.querySelector('img');
         const btnEliminar = fotoPreview.querySelector('.btn-eliminar-foto');
-        const loaderEl = uploadCard.querySelector('.foto-loader') || createLoaderElement(uploadCard);
+        const progressOverlay = fotoPreview.querySelector('.foto-progress-overlay');
+        const progressCircle = progressOverlay?.querySelector('.progress-fg');
+        const progressText = progressOverlay?.querySelector('.progress-text');
         
         if (uploadArea) {
             uploadArea.addEventListener('click', () => fotoInput.click());
@@ -1541,7 +1543,19 @@ function setupFotosUpload() {
                         return;
                     }
                     
+                    // Resetear progreso
+                    if (progressOverlay) {
+                        progressOverlay.style.display = 'flex';
+                        const circumference = 264;
+                        if (progressCircle) {
+                            progressCircle.style.strokeDasharray = circumference;
+                            progressCircle.style.strokeDashoffset = circumference;
+                        }
+                        if (progressText) progressText.textContent = '0%';
+                    }
+                    
                     const uploaded = await subirFoto(file, i);
+                    
                     if (uploaded) {
                         const reader = new FileReader();
                         reader.onload = (e) => {
@@ -1551,11 +1565,16 @@ function setupFotosUpload() {
                             }
                             if (uploadArea) uploadArea.style.display = 'none';
                             if (fotoPreview) fotoPreview.style.display = 'block';
-                            if (loaderEl) loaderEl.style.display = 'none';
+                            if (progressOverlay) {
+                                setTimeout(() => {
+                                    progressOverlay.style.display = 'none';
+                                }, 300);
+                            }
                         };
                         reader.readAsDataURL(file);
                     } else {
                         fotoInput.value = '';
+                        if (progressOverlay) progressOverlay.style.display = 'none';
                     }
                 }
             });
@@ -1569,16 +1588,21 @@ function setupFotosUpload() {
                 fotosSubidas[i] = {};
                 if (uploadArea) uploadArea.style.display = 'block';
                 if (fotoPreview) fotoPreview.style.display = 'none';
+                if (previewImg) {
+                    previewImg.src = '';
+                    previewImg.style.display = 'none';
+                }
                 if (fotoInput) fotoInput.value = '';
-                if (loaderEl) loaderEl.style.display = 'none';
+                if (progressOverlay) progressOverlay.style.display = 'none';
                 actualizarInfoFotos();
             });
         }
     }
 }
 
+
 // =====================================================
-// SUBIR FOTO CON PROXY
+// SUBIR FOTO CON CÍRCULO DE PROGRESO
 // =====================================================
 
 async function subirFoto(file, index) {
@@ -1587,22 +1611,86 @@ async function subirFoto(file, index) {
         return false;
     }
     
+    const uploadCard = document.getElementById(`fotoUpload${index + 1}`);
+    if (!uploadCard) {
+        showToast('Error: No se encontró el contenedor de la foto', 'error');
+        return false;
+    }
+    
+    // Obtener elementos del progreso
+    const previewDiv = uploadCard.querySelector('.foto-preview');
+    const progressOverlay = previewDiv?.querySelector('.foto-progress-overlay');
+    const progressCircle = progressOverlay?.querySelector('.progress-fg');
+    const progressText = progressOverlay?.querySelector('.progress-text');
+    
+    if (!progressOverlay || !progressCircle || !progressText) {
+        showToast('Error: No se encontró el elemento de progreso', 'error');
+        return false;
+    }
+    
+    // Mostrar overlay de progreso
+    progressOverlay.style.display = 'flex';
+    uploadCard.classList.add('subiendo');
+    
+    // Inicializar progreso
+    const circumference = 264; // 2 * PI * 42
+    progressCircle.style.strokeDasharray = circumference;
+    progressCircle.style.strokeDashoffset = circumference;
+    progressText.textContent = '0%';
+    
     const formData = new FormData();
     formData.append('foto', file);
     formData.append('id_orden', ordenSeleccionada.orden_id);
     
     try {
         showToast('Subiendo foto...', 'info');
+        
         const baseUrl = window.API_BASE_URL || '';
-        // 🔥 RUTA CORRECTA: /tecnico/api/diagnostico/subir-foto
-        const response = await fetch(`${baseUrl}/tecnico/api/diagnostico/subir-foto`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
-            body: formData
+        
+        // Usar XMLHttpRequest para monitorear el progreso
+        const xhr = new XMLHttpRequest();
+        
+        const uploadPromise = new Promise((resolve, reject) => {
+            xhr.open('POST', `${baseUrl}/tecnico/api/diagnostico/subir-foto`, true);
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            
+            // Actualizar círculo de progreso
+            xhr.upload.addEventListener('progress', (event) => {
+                if (event.lengthComputable) {
+                    const percent = Math.round((event.loaded / event.total) * 100);
+                    const offset = circumference - (percent / 100) * circumference;
+                    progressCircle.style.strokeDashoffset = offset;
+                    progressText.textContent = `${percent}%`;
+                    console.log(`📤 Subiendo foto: ${percent}%`);
+                }
+            });
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        resolve(data);
+                    } catch (e) {
+                        reject(new Error('Error al parsear respuesta'));
+                    }
+                } else {
+                    reject(new Error(`HTTP ${xhr.status}: ${xhr.statusText}`));
+                }
+            };
+            
+            xhr.onerror = function() {
+                reject(new Error('Error de conexión'));
+            };
+            
+            xhr.send(formData);
         });
         
-        const data = await response.json();
+        const data = await uploadPromise;
         console.log('📤 Respuesta subir foto:', data);
+        
+        // Ocultar overlay de progreso
+        progressOverlay.style.display = 'none';
+        uploadCard.classList.remove('subiendo');
         
         if (data.success) {
             const urlFoto = data.url || data.foto_url;
@@ -1619,21 +1707,16 @@ async function subirFoto(file, index) {
                 url: urlFoto 
             };
             
-            const uploadCard = document.getElementById(`fotoUpload${index + 1}`);
-            if (uploadCard) {
-                const uploadArea = uploadCard.querySelector('.upload-area');
-                const fotoPreview = uploadCard.querySelector('.foto-preview');
-                const previewImg = fotoPreview ? fotoPreview.querySelector('img') : null;
-                const loaderEl = uploadCard.querySelector('.foto-loader') || createLoaderElement(uploadCard);
-                
-                if (uploadArea) uploadArea.style.display = 'none';
-                if (fotoPreview) {
-                    fotoPreview.style.display = 'block';
-                    if (previewImg) {
-                        await cargarImagenProxy(urlFoto, previewImg, loaderEl);
-                    }
-                }
+            const uploadArea = uploadCard.querySelector('.upload-area');
+            const previewImg = previewDiv?.querySelector('img');
+            const btnEliminar = previewDiv?.querySelector('.btn-eliminar-foto');
+            
+            if (uploadArea) uploadArea.style.display = 'none';
+            if (previewDiv) previewDiv.style.display = 'block';
+            if (previewImg) {
+                await cargarImagenProxy(urlFoto, previewImg);
             }
+            if (btnEliminar) btnEliminar.style.display = 'flex';
             
             actualizarInfoFotos();
             showToast('✅ Foto subida correctamente', 'success');
@@ -1644,6 +1727,8 @@ async function subirFoto(file, index) {
         }
     } catch (error) {
         console.error('❌ Error subiendo foto:', error);
+        progressOverlay.style.display = 'none';
+        uploadCard.classList.remove('subiendo');
         showToast('Error al subir foto', 'error');
         return false;
     }

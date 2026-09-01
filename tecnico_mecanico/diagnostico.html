@@ -8,29 +8,25 @@
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/diagnostico.css">
-    
-    <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
+
+    <!-- ========== CONFIGURACIÓN PWA ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TORQUE">
-    
-    <!-- ICONO PARA LA PESTAÑA DEL NAVEGADOR -->
+
     <link rel="icon" type="image/png" href="/icono.png">
     <link rel="shortcut icon" type="image/png" href="/icono.png">
-    
-    <!-- ICONO PARA IPHONE / IPAD (pantalla de inicio) -->
     <link rel="apple-touch-icon" href="/icono.png">
-    
-    <!-- ICONO PARA ANDROID (chrome) -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
-    <!-- ===================================================== -->
 </head>
 
 <body>
@@ -43,18 +39,14 @@
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <div class="app">
-        <!-- SIDEBAR -->
         <div id="sidebar-container"></div>
 
-        <!-- MAIN CONTENT -->
         <main class="main-content">
-            <!-- Top Bar -->
             <header class="top-bar">
                 <div class="page-title">
                     <h1><i class="fas fa-stethoscope"></i> Diagnóstico Técnico</h1>
-                    <p>Registra el diagnóstico detallado de los vehículos asignados o realiza el armado requerido</p>
+                    <p>Registra el diagnóstico detallado de los vehículos asignados</p>
                 </div>
-
                 <div class="top-actions">
                     <div class="date-display">
                         <i class="far fa-calendar-alt"></i>
@@ -63,17 +55,16 @@
                 </div>
             </header>
 
-            <!-- CONTENT -->
             <div class="content">
                 <!-- ===================================================== -->
-                <!-- SECCIÓN: MIS ÓRDENES ASIGNADAS (TARJETAS) -->
+                <!-- SECCIÓN: MIS ÓRDENES ASIGNADAS -->
                 <!-- ===================================================== -->
                 <div class="ordenes-section">
                     <div class="section-header">
                         <h2><i class="fas fa-tasks"></i> Mis Órdenes Asignadas</h2>
-                        <p>Órdenes de trabajo asignadas para diagnóstico o armado de vehículos</p>
+                        <p>Órdenes de trabajo asignadas para diagnóstico de vehículos</p>
                     </div>
-                    
+
                     <div id="ordenesContainer" class="ordenes-container">
                         <div class="loading-spinner">
                             <i class="fas fa-spinner fa-pulse"></i> Cargando órdenes...
@@ -82,14 +73,15 @@
                 </div>
 
                 <!-- ===================================================== -->
-                <!-- SECCIÓN: FORMULARIO DE DIAGNÓSTICO (solo para órdenes normales) -->
+                <!-- SECCIÓN: FORMULARIO DE DIAGNÓSTICO -->
                 <!-- ===================================================== -->
                 <div id="diagnosticoFormContainer" style="display: none;">
                     <div class="separator">
-                        <span><i class="fas fa-stethoscope"></i> DIAGNÓSTICO TÉCNICO <i class="fas fa-stethoscope"></i></span>
+                        <span><i class="fas fa-stethoscope"></i> DIAGNÓSTICO TÉCNICO <i
+                                class="fas fa-stethoscope"></i></span>
                     </div>
 
-                    <!-- Selector de Orden para Diagnóstico -->
+                    <!-- Selector de Orden -->
                     <div class="selector-container">
                         <label class="selector-label">
                             <i class="fas fa-clipboard-list"></i>
@@ -124,7 +116,7 @@
 
                                 <div class="servicios-input-group">
                                     <input type="text" id="nuevoServicioInput" class="servicio-input"
-                                        placeholder="Ej: Cambio de bujías, Cambio de aceite, Alineación de dirección...">
+                                        placeholder="Ej: Cambio de bujías, Cambio de aceite...">
                                     <button type="button" id="btnAgregarServicio" class="btn-agregar">
                                         <i class="fas fa-plus"></i> Agregar
                                     </button>
@@ -133,10 +125,11 @@
                                 <div id="serviciosList" class="servicios-list">
                                     <div class="servicios-empty">
                                         <i class="fas fa-clipboard-list"></i>
-                                        <p>No hay servicios agregados aún.<br>Escribe un servicio y presiona "Agregar"</p>
+                                        <p>No hay servicios agregados aún.</p>
                                     </div>
                                 </div>
-                                <small class="form-hint"><i class="fas fa-info-circle"></i> Lista de servicios que recomiendas realizar (mínimo 1)</small>
+                                <small class="form-hint"><i class="fas fa-info-circle"></i> Lista de servicios que
+                                    recomiendas realizar (mínimo 1)</small>
                             </div>
 
                             <!-- Diagnóstico - Audio y Transcripción -->
@@ -149,53 +142,82 @@
                                         <button type="button" id="btnGrabarAudio" class="btn-audio">
                                             <i class="fas fa-microphone"></i> Grabar Audio
                                         </button>
-                                        <button type="button" id="btnEliminarAudio" class="btn-audio-eliminar" style="display: none;">
+                                        <button type="button" id="btnEliminarAudio" class="btn-audio-eliminar"
+                                            style="display: none;">
                                             <i class="fas fa-trash-alt"></i> Eliminar Audio
                                         </button>
                                         <div id="grabacionStatus" class="grabacion-status"></div>
                                         <input type="hidden" id="audioUrl" name="audio_url">
-                                        <audio id="audioPreview" controls style="display: none; margin-top: 0.5rem; width: 100%;"></audio>
+                                        <audio id="audioPreview" controls
+                                            style="display: none; margin-top: 0.5rem; width: 100%;"></audio>
                                     </div>
-                                    <small class="form-hint"><i class="fas fa-info-circle"></i> Graba tu diagnóstico en audio (máximo 5 minutos)</small>
+                                    <small class="form-hint"><i class="fas fa-info-circle"></i> Graba tu diagnóstico en
+                                        audio (máximo 5 minutos)</small>
                                 </div>
 
                                 <div class="form-group">
                                     <label><i class="fas fa-robot"></i> Transcripción Automática</label>
                                     <textarea id="transcripcionDiagnostico" class="form-textarea" rows="4"
-                                        placeholder="La grabación se transcribirá automáticamente al detener la grabación..."
+                                        placeholder="La grabación se transcribirá automáticamente..."
                                         readonly></textarea>
-                                    <small class="form-hint"><i class="fas fa-magic"></i> La transcripción se genera automáticamente al finalizar la grabación</small>
+                                    <small class="form-hint"><i class="fas fa-magic"></i> La transcripción se genera
+                                        automáticamente</small>
                                 </div>
                             </div>
 
-                            <!-- Fotos del Diagnóstico (Máximo 2 - Mínimo 1) -->
+                            <!-- Fotos del Diagnóstico -->
                             <div class="form-section">
-                                <h3><i class="fas fa-images"></i> Evidencia Fotográfica <span class="foto-limit">(Máximo 2 fotos - Mínimo 1 obligatoria)</span></h3>
+                                <h3><i class="fas fa-images"></i> Evidencia Fotográfica <span class="foto-limit">(Máximo
+                                        2 fotos - Mínimo 1 obligatoria)</span></h3>
 
                                 <div class="fotos-container">
+                                    <!-- Foto 1 -->
                                     <div class="foto-upload-card" id="fotoUpload1">
                                         <div class="upload-area" data-foto-idx="0">
                                             <i class="fas fa-cloud-upload-alt"></i>
                                             <p>Foto 1/2</p>
                                             <small>Haz clic para subir</small>
-                                            <input type="file" class="foto-input" accept="image/*" style="display: none;">
+                                            <input type="file" class="foto-input" accept="image/*"
+                                                style="display: none;">
                                         </div>
                                         <div class="foto-preview" style="display: none;">
                                             <img src="" alt="Preview">
-                                            <button class="btn-eliminar-foto" type="button"><i class="fas fa-trash-alt"></i></button>
+                                            <!-- 🔥 CÍRCULO DE PROGRESO -->
+                                            <div class="foto-progress-overlay" style="display: none;">
+                                                <svg class="foto-progress-circle" viewBox="0 0 100 100">
+                                                    <circle class="progress-bg" cx="50" cy="50" r="42" />
+                                                    <circle class="progress-fg" cx="50" cy="50" r="42" />
+                                                    <text class="progress-text" x="50" y="55"
+                                                        text-anchor="middle">0%</text>
+                                                </svg>
+                                            </div>
+                                            <button class="btn-eliminar-foto" type="button"><i
+                                                    class="fas fa-trash-alt"></i></button>
                                         </div>
                                     </div>
 
+                                    <!-- Foto 2 -->
                                     <div class="foto-upload-card" id="fotoUpload2">
                                         <div class="upload-area" data-foto-idx="1">
                                             <i class="fas fa-cloud-upload-alt"></i>
                                             <p>Foto 2/2</p>
                                             <small>Haz clic para subir</small>
-                                            <input type="file" class="foto-input" accept="image/*" style="display: none;">
+                                            <input type="file" class="foto-input" accept="image/*"
+                                                style="display: none;">
                                         </div>
                                         <div class="foto-preview" style="display: none;">
                                             <img src="" alt="Preview">
-                                            <button class="btn-eliminar-foto" type="button"><i class="fas fa-trash-alt"></i></button>
+                                            <!-- 🔥 CÍRCULO DE PROGRESO -->
+                                            <div class="foto-progress-overlay" style="display: none;">
+                                                <svg class="foto-progress-circle" viewBox="0 0 100 100">
+                                                    <circle class="progress-bg" cx="50" cy="50" r="42" />
+                                                    <circle class="progress-fg" cx="50" cy="50" r="42" />
+                                                    <text class="progress-text" x="50" y="55"
+                                                        text-anchor="middle">0%</text>
+                                                </svg>
+                                            </div>
+                                            <button class="btn-eliminar-foto" type="button"><i
+                                                    class="fas fa-trash-alt"></i></button>
                                         </div>
                                     </div>
                                 </div>
@@ -267,22 +289,39 @@
         </div>
     </div>
 
+    <!-- Modal: Foto Ampliada -->
+    <div class="modal" id="fotoAmpliadaModal" style="display: none;">
+        <div class="modal-content foto-ampliada-content" style="max-width: 600px; width: 95%;">
+            <div class="modal-header">
+                <h2><i class="fas fa-image"></i> Ver Foto</h2>
+                <button class="modal-close"
+                    onclick="document.getElementById('fotoAmpliadaModal').style.display='none'">&times;</button>
+            </div>
+            <div class="modal-body foto-ampliada-body" style="text-align:center; padding: 1rem;">
+                <div id="fotoModalLoader"
+                    style="display:flex;align-items:center;justify-content:center;gap:0.5rem;padding:1rem;color:var(--gris-texto);">
+                    <i class="fas fa-spinner fa-pulse"></i> Cargando imagen...
+                </div>
+                <img id="fotoAmpliada" src="" alt="Foto ampliada"
+                    style="max-width:100%;max-height:70vh;display:none;border-radius:8px;">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary"
+                    onclick="document.getElementById('fotoAmpliadaModal').style.display='none'">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div id="toast-container"></div>
 
     <!-- ===================================================== -->
-    <!-- SCRIPTS - INCLUDE.JS PRIMERO (DEFINE EL SIDEBAR) -->
+    <!-- SCRIPTS -->
     <!-- ===================================================== -->
     <script src="js/include.js"></script>
     <script src="js/diagnostico.js"></script>
 
-    <!-- ===================================================== -->
-    <!-- FUNCIONES RESPONSIVE Y AUXILIARES -->
-    <!-- ===================================================== -->
     <script>
-        /**
-         * Actualiza la fecha actual en el top-bar
-         */
         function updateCurrentDate() {
             const dateElement = document.getElementById('currentDate');
             if (dateElement) {
@@ -292,54 +331,40 @@
             }
         }
 
-        /**
-         * INICIALIZACIÓN - Se ejecuta cuando el DOM está listo
-         */
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             console.log('🚀 diagnostico.html - Inicializando...');
-            
-            // Actualizar fecha
             updateCurrentDate();
-
-            // =============================================
-            // CONFIGURAR HAMBURGUESA Y OVERLAY
-            // Usamos las funciones GLOBALES definidas en include.js
-            // =============================================
 
             const hamburgerBtn = document.getElementById('hamburgerMenu');
             if (hamburgerBtn) {
-                hamburgerBtn.addEventListener('click', function(e) {
+                hamburgerBtn.addEventListener('click', function (e) {
                     e.stopPropagation();
-                    // Usar la función global de include.js
                     if (typeof window.toggleSidebar === 'function') {
                         window.toggleSidebar();
-                    } else {
-                        console.warn('⚠️ toggleSidebar no está definida globalmente');
                     }
                 });
             }
 
             const overlay = document.getElementById('sidebarOverlay');
             if (overlay) {
-                overlay.addEventListener('click', function() {
+                overlay.addEventListener('click', function () {
                     if (typeof window.cerrarSidebar === 'function') {
                         window.cerrarSidebar();
                     }
                 });
             }
 
-            // Cerrar sidebar al hacer click fuera en móvil
-            document.addEventListener('click', function(e) {
+            document.addEventListener('click', function (e) {
                 if (window.innerWidth <= 1024) {
                     const sidebar = document.querySelector('.sidebar');
                     const hamburger = document.getElementById('hamburgerMenu');
                     const overlayEl = document.getElementById('sidebarOverlay');
-                    
+
                     if (sidebar && sidebar.classList.contains('open')) {
                         const isClickInsideSidebar = sidebar.contains(e.target);
                         const isClickOnHamburger = hamburger && hamburger.contains(e.target);
                         const isClickOnOverlay = overlayEl && overlayEl.contains(e.target);
-                        
+
                         if (!isClickInsideSidebar && !isClickOnHamburger && !isClickOnOverlay) {
                             if (typeof window.cerrarSidebar === 'function') {
                                 window.cerrarSidebar();
@@ -349,8 +374,7 @@
                 }
             });
 
-            // Cerrar sidebar al redimensionar a escritorio
-            window.addEventListener('resize', function() {
+            window.addEventListener('resize', function () {
                 if (window.innerWidth > 1024) {
                     if (typeof window.cerrarSidebar === 'function') {
                         window.cerrarSidebar();
@@ -361,22 +385,17 @@
             console.log('✅ diagnostico.html - Inicialización completa');
         });
 
-        // =====================================================
-        // FUNCIONES PARA CERRAR MODALES (EXPUESTAS GLOBALMENTE)
-        // =====================================================
-
-        window.cerrarConfirmModal = function() {
+        window.cerrarConfirmModal = function () {
             const modal = document.getElementById('confirmModal');
             if (modal) modal.classList.remove('show');
         };
 
-        window.cerrarModal = function(modalId) {
+        window.cerrarModal = function (modalId) {
             const modal = document.getElementById(modalId);
             if (modal) modal.classList.remove('show');
         };
 
-        // Función global de logout (por si acaso)
-        window.cerrarSesion = function() {
+        window.cerrarSesion = function () {
             if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
                 localStorage.removeItem('furia_token');
                 localStorage.removeItem('furia_user');

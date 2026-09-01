@@ -2259,3 +2259,208 @@ body.sidebar-open {
         min-height: 100px !important;
     }
 }
+/* =====================================================
+   BARRA DE PROGRESO PARA SUBIDA DE FOTOS
+   ===================================================== */
+
+.foto-progress-container {
+    display: none;
+    margin-top: 0.5rem;
+    padding: 0.25rem;
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.foto-progress-bar {
+    height: 24px;
+    background: linear-gradient(90deg, var(--rojo-primario), var(--rojo-oscuro));
+    border-radius: var(--radius-sm);
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+}
+
+.foto-progress-text {
+    color: var(--blanco);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Estado de carga en el card de foto */
+.foto-upload-card.cargando {
+    border: 2px solid var(--rojo-primario);
+    animation: pulse-border 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-border {
+    0%, 100% { border-color: var(--rojo-primario); }
+    50% { border-color: var(--rojo-oscuro); }
+}
+
+/* Mejora para el loader dentro de la foto */
+.foto-loader {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--gris-oscuro);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    color: var(--gris-texto);
+    margin-top: 0.25rem;
+}
+
+.foto-loader i {
+    font-size: 1rem;
+    color: var(--rojo-primario);
+}
+
+/* Responsive para móviles */
+@media (max-width: 768px) {
+    .foto-progress-bar {
+        height: 20px;
+    }
+    
+    .foto-progress-text {
+        font-size: 0.6rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .foto-progress-bar {
+        height: 18px;
+    }
+    
+    .foto-progress-text {
+        font-size: 0.55rem;
+    }
+}
+/* =====================================================
+   CÍRCULO DE PROGRESO PARA SUBIDA DE FOTOS
+   ===================================================== */
+
+/* Contenedor overlay sobre la imagen */
+.foto-progress-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+    backdrop-filter: blur(2px);
+}
+
+/* SVG del círculo de progreso */
+.foto-progress-circle {
+    width: 70px;
+    height: 70px;
+    transform: rotate(-90deg);
+}
+
+/* Círculo de fondo (gris) */
+.foto-progress-circle .progress-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.2);
+    stroke-width: 6;
+    stroke-linecap: round;
+}
+
+/* Círculo de progreso (rojo) */
+.foto-progress-circle .progress-fg {
+    fill: none;
+    stroke: var(--rojo-primario);
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-dasharray: 264;
+    stroke-dashoffset: 264;
+    transition: stroke-dashoffset 0.3s ease;
+}
+
+/* Texto del porcentaje */
+.foto-progress-circle .progress-text {
+    fill: var(--blanco);
+    font-size: 18px;
+    font-weight: 700;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    transform: rotate(90deg);
+    text-anchor: middle;
+    dominant-baseline: central;
+}
+
+/* Efecto de pulso en el círculo */
+.foto-upload-card.subiendo .foto-progress-overlay {
+    animation: pulse-overlay 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-overlay {
+    0%, 100% { background: rgba(0, 0, 0, 0.6); }
+    50% { background: rgba(0, 0, 0, 0.75); }
+}
+
+/* El card de foto debe ser relative para el overlay */
+.foto-upload-card {
+    position: relative;
+}
+
+.foto-preview {
+    position: relative;
+}
+
+/* La imagen preview debe ocupar todo el espacio */
+.foto-preview img {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    border-radius: var(--radius-md);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .foto-progress-circle {
+        width: 55px;
+        height: 55px;
+    }
+    
+    .foto-progress-circle .progress-text {
+        font-size: 14px;
+    }
+    
+    .foto-progress-circle .progress-bg,
+    .foto-progress-circle .progress-fg {
+        stroke-width: 5;
+    }
+    
+    .foto-preview img {
+        height: 100px;
+    }
+}
+
+@media (max-width: 480px) {
+    .foto-progress-circle {
+        width: 45px;
+        height: 45px;
+    }
+    
+    .foto-progress-circle .progress-text {
+        font-size: 11px;
+    }
+    
+    .foto-progress-circle .progress-bg,
+    .foto-progress-circle .progress-fg {
+        stroke-width: 4;
+    }
+    
+    .foto-preview img {
+        height: 80px;
+    }
+}

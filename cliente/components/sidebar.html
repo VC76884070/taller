@@ -1,7 +1,8 @@
-<!-- SIDEBAR - CLIENTE -->
+<!-- SIDEBAR - CLIENTE CON CIERRE DE SESIÓN VISIBLE -->
 <aside class="sidebar">
     <div class="sidebar-header">
-        <img src="../../img/logoblanco.jpeg" alt="FURIA MOTOR" class="sidebar-logo" onerror="this.src='https://via.placeholder.com/40x40?text=FM'">
+        <img src="../../img/logoblanco.jpeg" alt="FURIA MOTOR" class="sidebar-logo"
+            onerror="this.src='https://via.placeholder.com/40x40?text=FM'">
         <span class="sidebar-brand">FURIA MOTOR</span>
     </div>
 
@@ -64,14 +65,22 @@
                     <span>Perfil</span>
                 </a>
             </li>
-        </ul>
 
-        <ul class="sidebar-bottom">
-            <li class="nav-item">
-                <a href="#" onclick="window.cerrarSesionCliente()" class="nav-link">
+            <!-- ============================================= -->
+            <!-- 🚨 CIERRE DE SESIÓN - JUSTO DESPUÉS DE PERFIL -->
+            <!-- ============================================= -->
+            <li class="nav-item cerrar-sesion-item">
+                <a href="#" onclick="window.cerrarSesionCliente()" class="nav-link cerrar-sesion-link">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Cerrar Sesión</span>
                 </a>
+            </li>
+
+            <!-- ============================================= -->
+            <!-- ESPACIO EXTRA PARA HACER SCROLL Y VER EL BOTÓN -->
+            <!-- ============================================= -->
+            <li class="nav-item spacer-item">
+                <span style="display: block; height: 80px;"></span>
             </li>
         </ul>
     </nav>

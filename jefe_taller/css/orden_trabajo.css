@@ -1437,3 +1437,81 @@ body {
         opacity: 0.6;
     }
 }
+/* =====================================================
+   CIERRE DE SESIÓN - BOTÓN DESTACADO
+   ===================================================== */
+
+/* Botón de cerrar sesión - estilo destacado */
+.cerrar-sesion-item {
+    margin-top: 0.75rem;
+    border-top: 2px solid var(--rojo-primario, #C1121F);
+    padding-top: 0.75rem;
+}
+
+.cerrar-sesion-link {
+    color: var(--rojo-primario, #C1121F) !important;
+    font-weight: 700 !important;
+    background: rgba(193, 18, 31, 0.08);
+    border-radius: var(--radius-md, 10px);
+    padding: 0.75rem 1.5rem !important;
+    transition: all 0.3s ease;
+}
+
+.cerrar-sesion-link:hover {
+    background: rgba(193, 18, 31, 0.2) !important;
+    color: var(--blanco, #FFFFFF) !important;
+    transform: translateX(4px);
+}
+
+.cerrar-sesion-link i {
+    color: var(--rojo-primario, #C1121F);
+    font-size: 1.2rem;
+}
+
+.cerrar-sesion-link:hover i {
+    color: var(--blanco, #FFFFFF);
+}
+
+/* Espaciador al final del sidebar para poder hacer scroll */
+.spacer-item {
+    height: 80px !important;
+    min-height: 80px !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+}
+
+/* =====================================================
+   RESPONSIVE - SCROLL SUAVE EN MÓVILES
+   ===================================================== */
+
+@media (max-width: 1024px) {
+    .sidebar {
+        overflow-y: auto !important;
+        height: 100vh !important;
+        padding-bottom: 20px !important;
+    }
+    
+    .sidebar-nav {
+        overflow-y: visible !important;
+        flex: 1 !important;
+    }
+    
+    .spacer-item {
+        height: 80px !important;
+        min-height: 80px !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .spacer-item {
+        height: 60px !important;
+        min-height: 60px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .spacer-item {
+        height: 40px !important;
+        min-height: 40px !important;
+    }
+}

@@ -1,6 +1,6 @@
 // =====================================================
 // INCLUDE.JS - SIDEBAR PARA JEFE DE TALLER
-// VERSIÓN CORREGIDA - CARGA CORRECTAMENTE EL SIDEBAR
+// VERSIÓN COMPLETA CON BOTÓN DE CIERRE DE SESIÓN MÓVIL
 // =====================================================
 
 // =====================================================
@@ -59,6 +59,7 @@ async function includeSidebar() {
         setTimeout(() => {
             inicializarSidebar();
             configurarSidebarResponsive();
+            configurarBotonCerrarSesionMovil();
         }, 50);
         
     } catch (error) {
@@ -67,6 +68,7 @@ async function includeSidebar() {
         setTimeout(() => {
             inicializarSidebar();
             configurarSidebarResponsive();
+            configurarBotonCerrarSesionMovil();
         }, 50);
     }
 }
@@ -106,24 +108,30 @@ function crearSidebarRespaldo(container) {
                     ${crearMenuItem('dashboard', 'Dashboard Técnico', 'chart-line', currentPage)}
                     ${crearMenuItem('orden_trabajo', 'Órdenes de Trabajo', 'clipboard-list', currentPage)}
                     ${crearMenuItem('calendario_bahias', 'Calendario y Bahías', 'calendar-alt', currentPage)}
-                    ${crearMenuItem('diagnostico', 'Diagnósticos', 'stethoscope', currentPage)}
+                    ${crearMenuItem('reservas_solicitudes', 'Reservas y Solicitudes', 'calendar-check', currentPage)}
+                    ${crearMenuItem('diagnosticos', 'Diagnósticos', 'stethoscope', currentPage)}
                     ${crearMenuItem('cotizaciones', 'Cotizaciones', 'file-invoice-dollar', currentPage)}
                     ${crearMenuItem('control_calidad', 'Control de Calidad', 'check-double', currentPage)}
                     ${crearMenuItem('gestion_avances', 'Gestión de Avances', 'tasks', currentPage)}
-                    ${crearMenuItem('reservas_solicitudes', 'Reservas y Solicitudes', 'calendar-check', currentPage)}
                     ${crearMenuItem('admin_roles', 'Administrar Roles', 'user-shield', currentPage)}
                     ${crearMenuItem('historial_vehiculos', 'Historial', 'history', currentPage)}
                     ${crearMenuItem('perfil', 'Perfil', 'user-circle', currentPage)}
                 </ul>
                 <ul class="sidebar-bottom">
-                    <li class="nav-item">
-                        <a href="#" onclick="cerrarSesion()" class="nav-link">
+                    <li class="nav-item cerrar-sesion-item">
+                        <a href="#" onclick="cerrarSesion()" class="nav-link cerrar-sesion-link">
                             <i class="fas fa-sign-out-alt"></i>
                             <span>Cerrar Sesión</span>
                         </a>
                     </li>
                 </ul>
             </nav>
+            <div class="cerrar-sesion-mobile">
+                <button class="btn-cerrar-sesion-flotante">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Cerrar Sesión</span>
+                </button>
+            </div>
         </aside>
     `;
 }
@@ -140,6 +148,9 @@ function crearMenuItem(page, label, icon, currentPage) {
     `;
 }
 
+// =====================================================
+// INICIALIZACIÓN DEL SIDEBAR
+// =====================================================
 function inicializarSidebar() {
     // Marcar el elemento activo basado en la página actual
     const currentPage = obtenerPaginaActual();
@@ -169,6 +180,28 @@ function inicializarSidebar() {
     }
 }
 
+// =====================================================
+// CONFIGURAR BOTÓN DE CIERRE DE SESIÓN MÓVIL
+// =====================================================
+function configurarBotonCerrarSesionMovil() {
+    const btnCerrarMovil = document.querySelector('.btn-cerrar-sesion-flotante');
+    if (btnCerrarMovil) {
+        // Remover event listeners previos si existen
+        const nuevoBtn = btnCerrarMovil.cloneNode(true);
+        btnCerrarMovil.parentNode.replaceChild(nuevoBtn, btnCerrarMovil);
+        
+        // Agregar el evento de click
+        nuevoBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            cerrarSesion();
+        });
+    }
+}
+
+// =====================================================
+// CONFIGURAR SIDEBAR RESPONSIVE
+// =====================================================
 function configurarSidebarResponsive() {
     // Configurar botón hamburguesa y overlay si existen en la página
     const hamburgerBtn = document.getElementById('hamburgerMenu');
@@ -376,10 +409,10 @@ window.cerrarSesion = function() {
 };
 
 // =====================================================
-// INICIALIZACIÓN
+// INICIALIZACIÓN GLOBAL
 // =====================================================
 
-// Función global para toggle sidebar (para usar desde HTML)
+// Funciones globales para usar desde HTML
 window.toggleSidebarGlobal = toggleSidebar;
 window.closeSidebarGlobal = closeSidebar;
 
@@ -401,7 +434,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (sidebar?.classList.contains('open') && 
                 !sidebar.contains(e.target) && 
-                hamburger && !hamburger.contains(e.target)) {
+                hamburger && !hamburger.contains(e.target) &&
+                overlay && !overlay.contains(e.target)) {
                 closeSidebar();
             }
         }
@@ -435,4 +469,4 @@ if (document.readyState === 'loading') {
     includeSidebar();
 }
 
-console.log('✅ include.js cargado correctamente - Versión corregida');
+console.log('✅ include.js cargado correctamente - Versión con botón flotante de cierre de sesión');

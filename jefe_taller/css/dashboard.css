@@ -1,6 +1,6 @@
 /* =====================================================
    DASHBOARD JEFE DE TALLER - ESTILOS OSCUROS MODERNOS
-   VERSIÓN COMPLETA CON FULLCALENDAR Y MODAL
+   VERSIÓN COMPLETA CON BOTÓN FLOTANTE DE CIERRE DE SESIÓN
    ===================================================== */
 
 /* =====================================================
@@ -46,6 +46,8 @@ body {
     background: var(--bg-primary);
     color: var(--blanco);
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .app {
@@ -65,10 +67,12 @@ body {
     left: 0;
     top: 0;
     overflow-y: auto;
-    transition: transform 0.3s ease;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 1000;
     border-right: 1px solid var(--border-color);
     transform: translateX(0);
+    display: flex;
+    flex-direction: column;
 }
 
 .sidebar-header {
@@ -77,6 +81,7 @@ body {
     align-items: center;
     gap: 1rem;
     border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
 }
 
 .sidebar-logo {
@@ -97,6 +102,7 @@ body {
     align-items: center;
     gap: 1rem;
     border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
 }
 
 .user-avatar {
@@ -108,10 +114,12 @@ body {
     align-items: center;
     justify-content: center;
     font-size: 1.5rem;
+    flex-shrink: 0;
 }
 
 .user-info {
     flex: 1;
+    min-width: 0;
 }
 
 .user-name {
@@ -120,6 +128,9 @@ body {
     font-size: 1rem;
     margin-bottom: 0.25rem;
     color: var(--blanco);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .user-role {
@@ -132,7 +143,9 @@ body {
     padding: 1rem 0;
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 180px);
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
 }
 
 .sidebar-nav ul {
@@ -158,11 +171,14 @@ body {
     text-decoration: none;
     transition: var(--transition);
     border-left: 4px solid transparent;
+    cursor: pointer;
+    font-size: 0.95rem;
 }
 
 .nav-link i {
     width: 20px;
     font-size: 1.1rem;
+    flex-shrink: 0;
 }
 
 .nav-link:hover {
@@ -188,6 +204,80 @@ body {
 .sidebar-bottom {
     border-top: 1px solid var(--border-color);
     padding-top: 1rem;
+    flex-shrink: 0;
+}
+
+/* =====================================================
+   CIERRE DE SESIÓN - MEJORADO
+   ===================================================== */
+.cerrar-sesion-item {
+    margin-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.5rem;
+}
+
+.cerrar-sesion-link {
+    color: var(--rojo-primario) !important;
+    font-weight: 600;
+}
+
+.cerrar-sesion-link:hover {
+    background: rgba(193, 18, 31, 0.15) !important;
+    color: var(--blanco) !important;
+}
+
+.cerrar-sesion-link i {
+    color: var(--rojo-primario);
+}
+
+.cerrar-sesion-link:hover i {
+    color: var(--blanco);
+}
+
+/* =====================================================
+   BOTÓN FLOTANTE DE CIERRE DE SESIÓN PARA MÓVILES
+   ===================================================== */
+.cerrar-sesion-mobile {
+    display: none;
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 40px);
+    z-index: 10;
+    flex-shrink: 0;
+}
+
+.btn-cerrar-sesion-flotante {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--rojo-primario);
+    color: var(--blanco);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    box-shadow: 0 4px 15px rgba(193, 18, 31, 0.3);
+    font-family: inherit;
+}
+
+.btn-cerrar-sesion-flotante:hover {
+    background: var(--rojo-oscuro);
+    transform: scale(1.02);
+}
+
+.btn-cerrar-sesion-flotante:active {
+    transform: scale(0.95);
+}
+
+.btn-cerrar-sesion-flotante i {
+    font-size: 1.1rem;
 }
 
 /* =====================================================
@@ -211,6 +301,7 @@ body {
     justify-content: center;
     box-shadow: var(--shadow-lg);
     transition: var(--transition);
+    padding: 0;
 }
 
 .hamburger-menu:hover {
@@ -230,6 +321,7 @@ body {
     height: 100%;
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     z-index: 998;
     display: none;
 }
@@ -303,6 +395,7 @@ body {
     border-radius: var(--radius-full);
     min-width: 18px;
     text-align: center;
+    font-weight: 600;
 }
 
 .date-display {
@@ -314,6 +407,7 @@ body {
     padding: 0.5rem 1rem;
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
+    font-size: 0.9rem;
 }
 
 .date-display i {
@@ -392,6 +486,15 @@ body {
     font-weight: 600;
 }
 
+.badge-success {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--verde-exito);
+    padding: 0.3rem 0.8rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
 /* =====================================================
    BAHÍAS GRID
    ===================================================== */
@@ -402,7 +505,7 @@ body {
 }
 
 .bahia-item {
-    background: var(--gris-libre);
+    background: var(--gris-oscuro);
     border-radius: var(--radius-md);
     padding: 1rem;
     text-align: center;
@@ -464,11 +567,10 @@ body {
 /* =====================================================
    FULLCALENDAR
    ===================================================== */
-
 #fullcalendar-container {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
-    padding: 1rem;
+    padding: 0.5rem;
     width: 100%;
     overflow-x: auto;
 }
@@ -583,6 +685,7 @@ body {
     height: 14px;
     background-color: #F59E0B;
     border-radius: 3px;
+    flex-shrink: 0;
 }
 
 .color-entrega {
@@ -590,6 +693,7 @@ body {
     height: 14px;
     background-color: #8B5CF6;
     border-radius: 3px;
+    flex-shrink: 0;
 }
 
 .color-atrasado {
@@ -597,6 +701,7 @@ body {
     height: 14px;
     background-color: #EF4444;
     border-radius: 3px;
+    flex-shrink: 0;
 }
 
 /* =====================================================
@@ -724,6 +829,7 @@ body {
     align-items: center;
     justify-content: center;
     font-size: 1.1rem;
+    flex-shrink: 0;
 }
 
 .diagnostico-icon {
@@ -739,6 +845,7 @@ body {
 .diagnostico-content,
 .entrega-content {
     flex: 1;
+    min-width: 0;
 }
 
 .diagnostico-content h4,
@@ -765,6 +872,7 @@ body {
     font-weight: 600;
     cursor: pointer;
     transition: var(--transition);
+    flex-shrink: 0;
 }
 
 .btn-revisar:hover {
@@ -785,7 +893,6 @@ body {
     scroll-behavior: smooth;
 }
 
-/* Scroll personalizado para la lista de vehículos */
 .vehiculos-taller-list::-webkit-scrollbar {
     width: 5px;
 }
@@ -804,7 +911,6 @@ body {
     background: var(--rojo-oscuro);
 }
 
-/* Firefox */
 .vehiculos-taller-list {
     scrollbar-width: thin;
     scrollbar-color: var(--rojo-primario) var(--gris-oscuro);
@@ -839,6 +945,7 @@ body {
     font-size: 1.2rem;
     background: rgba(245, 158, 11, 0.15);
     color: var(--ambar-alerta);
+    flex-shrink: 0;
 }
 
 .vehiculo-taller-info {
@@ -887,6 +994,7 @@ body {
     height: 100%;
     background: rgba(0, 0, 0, 0.85);
     backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     z-index: 1100;
     justify-content: center;
     align-items: center;
@@ -964,6 +1072,9 @@ body {
     max-height: calc(85vh - 70px);
 }
 
+/* =====================================================
+   COMUNICADOS
+   ===================================================== */
 .lista-comunicados {
     display: flex;
     flex-direction: column;
@@ -1143,6 +1254,7 @@ body {
     height: 100%;
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     z-index: 9999;
     justify-content: center;
     align-items: center;
@@ -1227,8 +1339,9 @@ body {
 }
 
 /* =====================================================
-   RESPONSIVE
+   RESPONSIVE - BOTÓN FLOTANTE Y SIDEBAR
    ===================================================== */
+
 @media (max-width: 1024px) {
     .hamburger-menu {
         display: flex !important;
@@ -1237,6 +1350,9 @@ body {
     .sidebar {
         transform: translateX(-100%);
         width: 280px !important;
+        position: fixed;
+        height: 100vh;
+        padding-bottom: 80px !important;
     }
     
     .sidebar.open {
@@ -1276,6 +1392,46 @@ body {
     
     .modal-contenido {
         width: 95%;
+    }
+    
+    /* ===== BOTÓN FLOTANTE EN MÓVILES ===== */
+    .cerrar-sesion-mobile {
+        display: block !important;
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc(100% - 40px);
+        z-index: 10;
+    }
+    
+    .sidebar-bottom .cerrar-sesion-item {
+        display: none;
+    }
+    
+    .sidebar-nav {
+        height: calc(100vh - 220px) !important;
+        overflow-y: auto;
+        flex: 0 1 auto;
+    }
+}
+
+@media (min-width: 1025px) {
+    .cerrar-sesion-mobile {
+        display: none !important;
+    }
+    
+    .sidebar-bottom .cerrar-sesion-item {
+        display: block !important;
+    }
+    
+    .main-content {
+        margin-left: 280px !important;
+    }
+    
+    .hamburger-menu,
+    .sidebar-overlay {
+        display: none !important;
     }
 }
 
@@ -1318,10 +1474,24 @@ body {
     .modal-body {
         padding: 1rem;
     }
-
-    /* Ajuste del scroll en móvil */
+    
     .vehiculos-taller-list {
         max-height: 180px;
+    }
+    
+    /* Botón flotante más grande en tablets */
+    .btn-cerrar-sesion-flotante {
+        padding: 0.9rem;
+        font-size: 1rem;
+        border-radius: var(--radius-lg);
+    }
+    
+    .btn-cerrar-sesion-flotante i {
+        font-size: 1.3rem;
+    }
+    
+    .sidebar {
+        padding-bottom: 90px !important;
     }
 }
 
@@ -1345,24 +1515,100 @@ body {
     .modal-header h3 {
         font-size: 1rem;
     }
-
+    
     .vehiculos-taller-list {
         max-height: 150px;
     }
-}
-
-@media (min-width: 1025px) {
-    .main-content {
-        margin-left: 280px !important;
+    
+    /* Botón flotante aún más grande en celulares */
+    .btn-cerrar-sesion-flotante {
+        padding: 1rem;
+        font-size: 1.1rem;
+        border-radius: var(--radius-lg);
     }
     
-    .hamburger-menu,
-    .sidebar-overlay {
-        display: none !important;
+    .btn-cerrar-sesion-flotante i {
+        font-size: 1.4rem;
+    }
+    
+    .sidebar {
+        padding-bottom: 95px !important;
+    }
+    
+    /* Ajuste para que el botón flotante no se superponga */
+    .cerrar-sesion-mobile {
+        bottom: 15px;
+        width: calc(100% - 30px);
     }
 }
 
+/* =====================================================
+   SELECTION
+   ===================================================== */
 ::selection {
     background: var(--rojo-primario);
     color: var(--blanco);
+}
+
+/* =====================================================
+   ANIMACIONES ADICIONALES
+   ===================================================== */
+.sidebar-loader {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+/* =====================================================
+   MEJORAS DE ACCESIBILIDAD EN MÓVILES
+   ===================================================== */
+@media (hover: none) and (pointer: coarse) {
+    .nav-link:hover {
+        background: transparent !important;
+    }
+    
+    .btn-cerrar-sesion-flotante:hover {
+        transform: none;
+    }
+    
+    .btn-cerrar-sesion-flotante:active {
+        transform: scale(0.95);
+    }
+}
+
+/* =====================================================
+   SOPORTE PARA PANTALLAS MUY PEQUEÑAS
+   ===================================================== */
+@media (max-width: 360px) {
+    .sidebar {
+        width: 260px !important;
+    }
+    
+    .sidebar-header {
+        padding: 1rem;
+    }
+    
+    .sidebar-user {
+        padding: 1rem;
+    }
+    
+    .nav-link {
+        padding: 0.6rem 1rem;
+        font-size: 0.85rem;
+    }
+    
+    .main-content {
+        padding: 0.75rem;
+        padding-top: 65px;
+    }
+    
+    .card {
+        padding: 1rem;
+    }
+    
+    .btn-cerrar-sesion-flotante {
+        padding: 0.8rem;
+        font-size: 0.95rem;
+    }
 }

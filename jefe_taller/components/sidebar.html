@@ -1,10 +1,16 @@
-<!-- SIDEBAR - JEFE DE TALLER (CORREGIDO) -->
+<!-- ===================================================== -->
+<!-- SIDEBAR - JEFE DE TALLER CON CIERRE DE SESIÓN MÓVIL -->
+<!-- VERSIÓN COMPLETA Y CORREGIDA                         -->
+<!-- ===================================================== -->
+
 <aside class="sidebar">
+    <!-- HEADER -->
     <div class="sidebar-header">
         <img src="../img/logoblanco.jpeg" alt="FURIA MOTOR" class="sidebar-logo">
         <span class="sidebar-brand">FURIA MOTOR</span>
     </div>
 
+    <!-- USUARIO -->
     <div class="sidebar-user">
         <div class="user-avatar">
             <i class="fas fa-user-cog"></i>
@@ -15,21 +21,26 @@
         </div>
     </div>
 
+    <!-- NAVEGACIÓN -->
     <nav class="sidebar-nav">
         <ul>
-            <!-- PESTAÑAS EXISTENTES -->
+            <!-- Dashboard -->
             <li class="nav-item" data-page="dashboard">
                 <a href="dashboard.html" class="nav-link">
                     <i class="fas fa-chart-line"></i>
                     <span>Dashboard Técnico</span>
                 </a>
             </li>
+
+            <!-- Órdenes de Trabajo -->
             <li class="nav-item" data-page="orden_trabajo">
                 <a href="orden_trabajo.html" class="nav-link">
                     <i class="fas fa-clipboard-list"></i>
                     <span>Órdenes de Trabajo</span>
                 </a>
             </li>
+
+            <!-- Calendario y Bahías -->
             <li class="nav-item" data-page="calendario_bahias">
                 <a href="calendario_bahias.html" class="nav-link">
                     <i class="fas fa-calendar-alt"></i>
@@ -37,7 +48,7 @@
                 </a>
             </li>
 
-            <!-- NUEVA OPCIÓN: RESERVAS Y SOLICITUDES -->
+            <!-- Reservas y Solicitudes -->
             <li class="nav-item" data-page="reservas_solicitudes">
                 <a href="reservas_solicitudes.html" class="nav-link">
                     <i class="fas fa-calendar-check"></i>
@@ -45,44 +56,55 @@
                 </a>
             </li>
 
+            <!-- Diagnósticos -->
             <li class="nav-item" data-page="diagnosticos">
                 <a href="diagnostico.html" class="nav-link">
                     <i class="fas fa-stethoscope"></i>
                     <span>Diagnósticos</span>
                 </a>
             </li>
+
+            <!-- Cotizaciones -->
             <li class="nav-item" data-page="cotizaciones">
                 <a href="cotizaciones.html" class="nav-link">
                     <i class="fas fa-file-invoice-dollar"></i>
                     <span>Cotizaciones</span>
                 </a>
             </li>
+
+            <!-- Control de Calidad -->
             <li class="nav-item" data-page="control_calidad">
                 <a href="control_calidad.html" class="nav-link">
                     <i class="fas fa-check-double"></i>
                     <span>Control de Calidad</span>
                 </a>
             </li>
-            <!-- CORREGIDO: Gestión de Avances con su propio data-page -->
+
+            <!-- Gestión de Avances -->
             <li class="nav-item" data-page="gestion_avances">
                 <a href="gestion_avances.html" class="nav-link">
                     <i class="fas fa-tasks"></i>
                     <span>Gestión de Avances</span>
                 </a>
             </li>
-            <!-- CORREGIDO: Administración de roles con su propio data-page y diferente ícono -->
+
+            <!-- Administración de roles -->
             <li class="nav-item" data-page="admin_roles">
                 <a href="admin_roles.html" class="nav-link">
                     <i class="fas fa-user-shield"></i>
                     <span>Administración de roles</span>
                 </a>
             </li>
+
+            <!-- Historial -->
             <li class="nav-item" data-page="historial_vehiculos">
                 <a href="historial_vehiculos.html" class="nav-link">
                     <i class="fas fa-history"></i>
                     <span>Historial</span>
                 </a>
             </li>
+
+            <!-- Perfil -->
             <li class="nav-item" data-page="perfil">
                 <a href="perfil.html" class="nav-link">
                     <i class="fas fa-user-circle"></i>
@@ -91,13 +113,28 @@
             </li>
         </ul>
 
+        <!-- ============================================= -->
+        <!-- SECCIÓN DE CIERRE DE SESIÓN                   -->
+        <!-- ============================================= -->
         <ul class="sidebar-bottom">
-            <li class="nav-item">
-                <a href="#" onclick="cerrarSesion()" class="nav-link">
+            <!-- Botón normal (visible en desktop) -->
+            <li class="nav-item cerrar-sesion-item">
+                <a href="#" onclick="cerrarSesion()" class="nav-link cerrar-sesion-link">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Cerrar Sesión</span>
                 </a>
             </li>
         </ul>
     </nav>
+
+    <!-- ============================================= -->
+    <!-- BOTÓN FLOTANTE PARA CIERRE DE SESIÓN EN MÓVILES -->
+    <!-- (Solo visible en pantallas pequeñas)          -->
+    <!-- ============================================= -->
+    <div class="cerrar-sesion-mobile">
+        <button class="btn-cerrar-sesion-flotante">
+            <i class="fas fa-sign-out-alt"></i>
+            <span>Cerrar Sesión</span>
+        </button>
+    </div>
 </aside>

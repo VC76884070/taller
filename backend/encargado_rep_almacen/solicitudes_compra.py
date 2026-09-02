@@ -1648,10 +1648,119 @@ async function inicializar() {
 
     console.log('✅ solicitudes_compra.js inicializado correctamente');
 }
+# =====================================================
+# ENDPOINT: OBTENER SOLICITUDES DE COMPRA (PRINCIPAL)
+# =====================================================
 
-// =====================================================
-// EXPORTAR FUNCIONES GLOBALES
-// =====================================================
+@solicitudes_compra_bp.route('/solicitudes-compra', methods=['GET'])
+@encargado_repuestos_required
+def obtener_solicitudes_compra_principal(current_user):
+    """
+    Obtener solicitudes de compra asignadas al encargado de repuestos
+    Esta es la ruta principal que usa el frontend
+    """
+    try:
+        estado = request.args.get('estado')
+        
+        query = supabase.table('solicitud_compra') \
+            .select('*') \
+            .eq('id_encargado_repuestos', current_user['id']) \
+            .order('fecha_solicitud', desc=True)
+        
+        if estado and estado != 'all':
+            query = query.eq('estado', estado)
+        
+        result = query.execute()
+        
+        if not result.data:
+            return jsonify({'success': True, 'solicitudes': []}), 200
+        
+        # Obtener IDs únicos de órdenes
+        ordenes_ids = list(set([s.get('id_orden_trabajo') for s in result.data if s.get('id_orden_trabajo')]))
+        
+        # Mapa de órdenes con vehículo
+        ordenes_map = {}
+        ordenes_servicio_map = {}
+        
+        if ordenes_ids:
+            ordenes_result = supabase.table('ordentrabajo') \
+                .select('id, codigo_unico, id_vehiculo, vehiculo!inner(marca, modelo, placa)') \
+                .in_('id', ordenes_ids) \
+                .execute()
+            
+            for o in (ordenes_result.data or []):
+                v = o.get('vehiculo', {})
+                ordenes_map[o['id']] = {
+                    'codigo_unico': o.get('codigo_unico'),
+                    'vehiculo': f"{v.get('marca', '')} {v.get('modelo', '')} ({v.get('placa', '')})".strip()
+                }
+                
+                # Obtener servicio
+                servicio = obtener_servicio_desde_orden(o['id'])
+                if servicio:
+                    ordenes_servicio_map[o['id']] = servicio
+        
+        solicitudes = []
+        for s in result.data:
+            orden_id = s.get('id_orden_trabajo')
+            orden_info = ordenes_map.get(orden_id, {})
+            
+            servicio_desc = ordenes_servicio_map.get(orden_id)
+            if not servicio_desc:
+                servicio_desc = obtener_servicio_desde_orden(orden_id)
+            
+            if not servicio_desc:
+                servicio_desc = 'Servicio técnico'
+            
+            # 🔥 PARSEAR ITEMS CON FOTOS
+            items = []
+            if s.get('items'):
+                try:
+                    items = json.loads(s['items']) if isinstance(s['items'], str) else s['items']
+                except:
+                    items = []
+            
+            # Si no hay items, usar descripcion_pieza
+            if not items and s.get('descripcion_pieza'):
+                items = [{
+                    'descripcion': s.get('descripcion_pieza'),
+                    'cantidad': s.get('cantidad', 1),
+                    'detalle': ''
+                }]
+            
+            solicitudes.append({
+                'id': s.get('id'),
+                'id_orden_trabajo': orden_id,
+                'id_solicitud_cotizacion': s.get('id_solicitud_cotizacion'),
+                'orden_codigo': orden_info.get('codigo_unico', 'N/A'),
+                'vehiculo': orden_info.get('vehiculo', 'N/A'),
+                'servicio_descripcion': servicio_desc,
+                'items': items,
+                'descripcion_pieza': items[0].get('descripcion') if items else s.get('descripcion_pieza'),
+                'cantidad': items[0].get('cantidad') if items else s.get('cantidad', 1),
+                'precio_cotizado': float(s.get('precio_cotizado')) if s.get('precio_cotizado') else None,
+                'proveedor_info': s.get('proveedor_info'),
+                'estado': s.get('estado', 'pendiente'),
+                'fecha_solicitud': s.get('fecha_solicitud'),
+                'fecha_compra': s.get('fecha_compra'),
+                'fecha_entrega': s.get('fecha_entrega'),
+                'mensaje_jefe_taller': s.get('mensaje_jefe_taller'),
+                'respuesta_encargado': s.get('respuesta_encargado'),
+                'notas_compra': s.get('notas_compra'),
+                'notas_entrega': s.get('notas_entrega'),
+                'comprobante_url': s.get('comprobante_url'),
+                'numero_factura': s.get('numero_factura'),
+                'proveedor_nombre': s.get('proveedor_nombre'),
+                'monto_compra': float(s.get('monto_compra')) if s.get('monto_compra') else None
+            })
+        
+        return jsonify({'success': True, 'solicitudes': solicitudes}), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo solicitudes: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 window.verDetalle = verDetalle;
 window.verComprobante = verComprobante;

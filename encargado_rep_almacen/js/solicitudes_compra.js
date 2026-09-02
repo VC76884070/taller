@@ -125,33 +125,59 @@ function statusBadge(estado) {
 }
 
 function extraerUrlsFotos(item) {
+    console.log('🔍 [extraerUrlsFotos] INICIO - item:', item);
+    
     let urls = [];
-    if (!item) return urls;
+    if (!item) {
+        console.log('⚠️ [extraerUrlsFotos] item es null/undefined');
+        return urls;
+    }
+
+    console.log('🔍 [extraerUrlsFotos] Tipo de item:', typeof item);
+    console.log('🔍 [extraerUrlsFotos] Keys del item:', Object.keys(item));
 
     function buscarRecursivamente(obj, profundidad = 0) {
-        if (profundidad > 5) return;
-        if (!obj || typeof obj !== 'object') return;
+        if (profundidad > 5) {
+            console.log(`⚠️ [buscarRecursivamente] Profundidad máxima alcanzada en nivel ${profundidad}`);
+            return;
+        }
+        if (!obj || typeof obj !== 'object') {
+            console.log(`⚠️ [buscarRecursivamente] obj no es objeto en nivel ${profundidad}:`, obj);
+            return;
+        }
         
         if (Array.isArray(obj)) {
+            console.log(`📦 [buscarRecursivamente] Es array en nivel ${profundidad}, longitud: ${obj.length}`);
             obj.forEach(subItem => {
                 buscarRecursivamente(subItem, profundidad + 1);
             });
             return;
         }
         
+        console.log(`🔍 [buscarRecursivamente] Nivel ${profundidad}, keys:`, Object.keys(obj));
+        
         for (const [key, value] of Object.entries(obj)) {
+            console.log(`🔍 [buscarRecursivamente] key: "${key}", type: ${typeof value}, value:`, value);
+            
             if (typeof value === 'string' && value.startsWith('http')) {
                 const esImagen = /(drive\.google\.com|cloudinary\.com|res\.cloudinary\.com|googleusercontent\.com|\.(jpg|jpeg|png|gif|webp|svg))/i.test(value);
+                console.log(`📸 [buscarRecursivamente] URL encontrada en "${key}": ${value.substring(0, 50)}..., esImagen: ${esImagen}`);
+                
                 if (esImagen && !urls.includes(value)) {
                     urls.push(value);
+                    console.log(`✅ [buscarRecursivamente] URL agregada: ${value.substring(0, 60)}...`);
                 }
             } else if (typeof value === 'object' && value !== null) {
+                console.log(`🔍 [buscarRecursivamente] Descendiendo a "${key}" que es objeto`);
                 buscarRecursivamente(value, profundidad + 1);
             }
         }
     }
     
+    console.log('🚀 [extraerUrlsFotos] Iniciando búsqueda recursiva...');
     buscarRecursivamente(item);
+    
+    console.log('📊 [extraerUrlsFotos] URLs encontradas (sin filtrar):', urls);
     
     urls = urls.filter(url => 
         url.startsWith('http') && 
@@ -160,6 +186,9 @@ function extraerUrlsFotos(item) {
     );
     
     urls = [...new Set(urls)];
+    
+    console.log(`📸 [extraerUrlsFotos] RESULTADO FINAL: ${urls.length} fotos encontradas`, urls);
+    
     return urls;
 }
 
@@ -366,6 +395,7 @@ async function cargarEstadisticas() {
 }
 
 async function cargarSolicitudes() {
+    console.log('🔄 [cargarSolicitudes] INICIO');
     mostrarLoading(true);
     try {
         const estado = document.getElementById('filtroEstado')?.value || 'all';
@@ -375,6 +405,8 @@ async function cargarSolicitudes() {
         if (estado !== 'all') params.append('estado', estado);
         if (params.toString()) url += `?${params.toString()}`;
 
+        console.log(`📡 [cargarSolicitudes] URL: ${url}`);
+
         const response = await fetch(url, { headers: getAuthHeaders() });
         if (response.status === 401) {
             window.location.href = window.API_BASE_URL + '/';
@@ -382,14 +414,30 @@ async function cargarSolicitudes() {
         }
         const data = await response.json();
 
+        console.log('📦 [cargarSolicitudes] Respuesta del servidor:', data);
+
         if (data.success) {
             let solicitudes = data.solicitudes || [];
+            console.log(`📊 [cargarSolicitudes] ${solicitudes.length} solicitudes recibidas`);
+            
+            // Log de los items para verificar que tienen fotos
+            solicitudes.forEach((s, idx) => {
+                console.log(`📋 [cargarSolicitudes] Solicitud ${idx + 1} (ID: ${s.id}) - items:`, s.items);
+                if (s.items && s.items.length > 0) {
+                    s.items.forEach((item, itemIdx) => {
+                        console.log(`📸 [cargarSolicitudes] Item ${itemIdx} - fotos:`, item.fotos);
+                        console.log(`📸 [cargarSolicitudes] Item ${itemIdx} - foto_url:`, item.foto_url);
+                    });
+                }
+            });
+            
             if (search) {
                 solicitudes = solicitudes.filter(s => 
                     (s.orden_codigo || '').toLowerCase().includes(search) ||
                     (s.descripcion_pieza || '').toLowerCase().includes(search) ||
                     (s.vehiculo || '').toLowerCase().includes(search)
                 );
+                console.log(`🔍 [cargarSolicitudes] Filtradas por búsqueda: ${solicitudes.length} solicitudes`);
             }
             solicitudesPendientes = solicitudes;
             renderizarSolicitudes(solicitudes);
@@ -398,7 +446,7 @@ async function cargarSolicitudes() {
             showToast(data.error || 'Error al cargar solicitudes', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
+        console.error('❌ [cargarSolicitudes] Error:', error);
         showToast('Error de conexión', 'error');
     } finally {
         mostrarLoading(false);
@@ -406,8 +454,13 @@ async function cargarSolicitudes() {
 }
 
 function renderizarSolicitudes(solicitudes) {
+    console.log('🚀 [renderizarSolicitudes] INICIO, solicitudes:', solicitudes.length);
+    
     const container = document.getElementById('solicitudesContainer');
-    if (!container) return;
+    if (!container) {
+        console.error('❌ [renderizarSolicitudes] Container no encontrado');
+        return;
+    }
 
     if (solicitudes.length === 0) {
         container.innerHTML = `
@@ -422,18 +475,35 @@ function renderizarSolicitudes(solicitudes) {
 
     let html = '';
 
-    solicitudes.forEach((solicitud) => {
+    solicitudes.forEach((solicitud, idx) => {
+        console.log(`📋 [renderizarSolicitudes] Procesando solicitud #${idx + 1}, ID: ${solicitud.id}`);
+        
         let items = solicitud.items || [];
         if (typeof items === 'string') {
-            try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
+            console.log(`📋 [renderizarSolicitudes] items es string, parseando...`);
+            try { items = JSON.parse(items); } catch(e) { 
+                console.error('❌ Error parseando items:', e);
+                items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; 
+            }
         }
+        
+        console.log(`📋 [renderizarSolicitudes] Items parseados: ${items.length} items`);
+        console.log('📋 [renderizarSolicitudes] Items:', items);
 
         // 🔥 CONTADOR TOTAL DE FOTOS
         let totalFotos = 0;
-        items.forEach(item => {
+        items.forEach((item, itemIdx) => {
+            console.log(`📸 [renderizarSolicitudes] Item ${itemIdx} - descripcion: "${item.descripcion}"`);
+            console.log(`📸 [renderizarSolicitudes] Item ${itemIdx} - keys:`, Object.keys(item));
+            console.log(`📸 [renderizarSolicitudes] Item ${itemIdx} - "fotos" existe?`, item.fotos);
+            console.log(`📸 [renderizarSolicitudes] Item ${itemIdx} - "fotos" valor:`, item.fotos);
+            
             const fotos = extraerUrlsFotos(item);
+            console.log(`📸 [renderizarSolicitudes] Item ${itemIdx} - fotos encontradas: ${fotos.length}`, fotos);
             totalFotos += fotos.length;
         });
+        
+        console.log(`📸 [renderizarSolicitudes] TOTAL FOTOS para solicitud #${solicitud.id}: ${totalFotos}`);
 
         // =====================================================
         // GENERAR HTML DE ITEMS CON TODAS LAS FOTOS
@@ -443,6 +513,8 @@ function renderizarSolicitudes(solicitudes) {
             // 🔥 OBTENER TODAS LAS FOTOS
             const fotosUrls = extraerUrlsFotos(item);
             const tieneFotos = fotosUrls.length > 0;
+            
+            console.log(`📸 [renderizarSolicitudes] Item ${itemIdx} - tieneFotos: ${tieneFotos}, fotosUrls:`, fotosUrls);
 
             let miniaturasHtml = '';
             if (tieneFotos) {
@@ -471,6 +543,9 @@ function renderizarSolicitudes(solicitudes) {
                         ` : ''}
                     </div>
                 `;
+                console.log(`📸 [renderizarSolicitudes] Miniaturas generadas para item ${itemIdx}: ${fotosMostrar.length} fotos`);
+            } else {
+                console.log(`⚠️ [renderizarSolicitudes] Item ${itemIdx} NO tiene fotos`);
             }
 
             const descripcion = item.descripcion || item.nombre || 'Item';
@@ -583,24 +658,37 @@ function renderizarSolicitudes(solicitudes) {
     }, 500);
 }
 
-// =====================================================
-// VER DETALLE CON TODAS LAS FOTOS
-// =====================================================
-
 async function verDetalle(idSolicitud) {
+    console.log(`🔍 [verDetalle] Buscando solicitud ID: ${idSolicitud}`);
+    
     const solicitud = solicitudesPendientes.find(s => s.id === idSolicitud);
-    if (!solicitud) return;
+    if (!solicitud) {
+        console.error(`❌ [verDetalle] Solicitud ${idSolicitud} no encontrada`);
+        return;
+    }
+
+    console.log(`📋 [verDetalle] Solicitud encontrada:`, solicitud);
 
     let items = solicitud.items || [];
     if (typeof items === 'string') {
-        try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
+        console.log(`📋 [verDetalle] items es string, parseando...`);
+        try { items = JSON.parse(items); } catch(e) { 
+            console.error('❌ Error parseando items:', e);
+            items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; 
+        }
     }
+    
+    console.log(`📋 [verDetalle] Items a renderizar: ${items.length} items`);
+    console.log(`📋 [verDetalle] Items:`, items);
 
     // Renderizar items con TODAS las fotos
     const itemsHtml = items.map((item, idx) => {
+        console.log(`📸 [verDetalle] Procesando item ${idx}:`, item);
         const fotosUrls = extraerUrlsFotos(item);
         const tieneFotos = fotosUrls.length > 0;
         const uniqueId = `detalle_${solicitud.id}_item_${idx}`;
+
+        console.log(`📸 [verDetalle] Item ${idx} - fotos encontradas: ${fotosUrls.length}`, fotosUrls);
 
         let miniaturasHtml = '';
         if (tieneFotos) {
@@ -624,6 +712,8 @@ async function verDetalle(idSolicitud) {
                     `).join('')}
                 </div>
             `;
+        } else {
+            console.log(`⚠️ [verDetalle] Item ${idx} NO tiene fotos`);
         }
 
         return `

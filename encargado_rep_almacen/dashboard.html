@@ -3,7 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <!-- ✅ META VIEWPORT MEJORADO -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Dashboard - Encargado Repuestos | FURIA MOTOR</title>
 
     <!-- Favicon -->
@@ -18,7 +19,7 @@
 
     <!-- ========== ESTILOS ========== -->
     <link rel="stylesheet" href="css/dashboard.css">
-    <link rel="stylesheet" href="css/dashboard-mobile.css" media="(max-width: 1024px)">
+    <link rel="stylesheet" href="css/dashboard-mobile.css">
     
     <!-- ========== CONFIGURACIÓN PWA ========== -->
     <link rel="manifest" href="/manifest.json">
@@ -35,7 +36,7 @@
 </head>
 
 <body>
-    <!-- Botón hamburguesa para móvil -->
+    <!-- ✅ Botón hamburguesa MEJORADO - visible en móvil -->
     <button class="hamburger-menu" id="hamburgerMenu" aria-label="Menú">
         <i class="fas fa-bars"></i>
     </button>
@@ -55,7 +56,7 @@
                 </div>
                 <div class="top-actions">
                     <button class="btn-secondary" id="refreshBtn">
-                        <i class="fas fa-sync-alt"></i> Actualizar
+                        <i class="fas fa-sync-alt"></i> <span>Actualizar</span>
                     </button>
                     <div class="notification-icon" id="notificationIcon">
                         <i class="fas fa-bell"></i>
@@ -100,7 +101,7 @@
                 <div class="kpi-card" id="kpiTotal" onclick="if(window.irASolicitudesCompra) irASolicitudesCompra()">
                     <div class="kpi-icon"><i class="fas fa-chart-line"></i></div>
                     <div class="kpi-content">
-                        <span class="kpi-label">Total Solicitudes</span>
+                        <span class="kpi-label">Total</span>
                         <span class="kpi-value">
                             <span class="kpi-number" id="totalSolicitudes">--</span>
                         </span>
@@ -109,7 +110,7 @@
                 <div class="kpi-card" id="kpiComprasMes">
                     <div class="kpi-icon"><i class="fas fa-dollar-sign"></i></div>
                     <div class="kpi-content">
-                        <span class="kpi-label">Compras del Mes</span>
+                        <span class="kpi-label">Compras Mes</span>
                         <span class="kpi-value">
                             <span class="kpi-number" id="comprasMes">--</span>
                         </span>
@@ -163,7 +164,7 @@
                     <!-- Proveedores Destacados -->
                     <div class="card">
                         <div class="card-header">
-                            <h3><i class="fas fa-truck"></i> Proveedores Destacados</h3>
+                            <h3><i class="fas fa-truck"></i> Proveedores</h3>
                             <a href="proveedores.html" class="card-link">Ver todos →</a>
                         </div>
                         <div class="proveedores-list" id="proveedoresList">
@@ -237,7 +238,7 @@
     
     <script>
         // =====================================================
-        // FUNCIONES RESPONSIVE PARA MÓVIL
+        // FUNCIONES RESPONSIVE PARA MÓVIL - MEJORADAS
         // =====================================================
         
         let sidebarOpen = false;
@@ -285,7 +286,7 @@
         }
         
         // =====================================================
-        // FORZAR VISIBILIDAD DEL HAMBURGUESA EN MÓVIL
+        // FORZAR VISIBILIDAD DEL HAMBURGUESA EN MÓVIL - MEJORADO
         // =====================================================
         function forzarHamburguesaMovil() {
             const hamburger = document.getElementById('hamburgerMenu');
@@ -299,6 +300,17 @@
                 hamburger.style.top = '12px';
                 hamburger.style.left = '12px';
                 hamburger.style.zIndex = '1002';
+                hamburger.style.width = '44px';
+                hamburger.style.height = '44px';
+                hamburger.style.background = '#C1121F';
+                hamburger.style.border = 'none';
+                hamburger.style.borderRadius = '10px';
+                hamburger.style.color = 'white';
+                hamburger.style.fontSize = '1.2rem';
+                hamburger.style.cursor = 'pointer';
+                hamburger.style.alignItems = 'center';
+                hamburger.style.justifyContent = 'center';
+                hamburger.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
             } else {
                 hamburger.style.display = 'none';
             }

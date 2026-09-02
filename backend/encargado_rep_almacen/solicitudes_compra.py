@@ -17,10 +17,6 @@ solicitudes_compra_bp = Blueprint('solicitudes_compra', __name__, url_prefix='/a
 SECRET_KEY = config.SECRET_KEY
 supabase = config.supabase
 
-# =====================================================
-# FUNCIONES AUXILIARES
-# =====================================================
-
 def parse_items(items_data):
     if not items_data:
         return []
@@ -28,7 +24,8 @@ def parse_items(items_data):
         if isinstance(items_data, str):
             return json.loads(items_data)
         return items_data
-    except:
+    except Exception as e:
+        print(f"⚠️ Error parseando items: {e}")
         return []
 
 def obtener_servicio_desde_orden(id_orden_trabajo):
@@ -122,13 +119,42 @@ def obtener_solicitudes_compra(current_user):
             if not servicio_desc:
                 servicio_desc = 'Servicio técnico'
             
+            # =====================================================
+            # 🔥 CORRECCIÓN: PARSEAR ITEMS Y PRESERVAR EL ARRAY 'fotos'
+            # =====================================================
             items = parse_items(s.get('items'))
+            
+            # ✅ Si no hay items pero hay descripcion_pieza, crear item básico
             if not items and s.get('descripcion_pieza'):
                 items = [{
                     'descripcion': s.get('descripcion_pieza'),
                     'cantidad': s.get('cantidad', 1),
                     'detalle': ''
                 }]
+            
+            # ✅ Asegurar que cada item tenga el array 'fotos' preservado
+            items_procesados = []
+            for item in items:
+                item_procesado = {
+                    'descripcion': item.get('descripcion', 'Item'),
+                    'cantidad': item.get('cantidad', 1),
+                    'detalle': item.get('detalle', '')
+                }
+                
+                # 🔥 PRESERVAR EL ARRAY 'fotos' COMPLETO
+                if 'fotos' in item and item['fotos'] and isinstance(item['fotos'], list):
+                    item_procesado['fotos'] = item['fotos']
+                    print(f"📸 Preservando {len(item['fotos'])} fotos para item: {item.get('descripcion')}")
+                
+                # 🔥 PRESERVAR 'foto_url' (primer foto) para compatibilidad
+                if 'foto_url' in item and item['foto_url']:
+                    item_procesado['foto_url'] = item['foto_url']
+                
+                # 🔥 PRESERVAR 'foto_public_ids' si existe
+                if 'foto_public_ids' in item and item['foto_public_ids']:
+                    item_procesado['foto_public_ids'] = item['foto_public_ids']
+                
+                items_procesados.append(item_procesado)
             
             solicitudes.append({
                 'id': s.get('id'),
@@ -137,9 +163,9 @@ def obtener_solicitudes_compra(current_user):
                 'orden_codigo': orden_info.get('codigo_unico', 'N/A'),
                 'vehiculo': orden_info.get('vehiculo', 'N/A'),
                 'servicio_descripcion': servicio_desc,
-                'items': items,
-                'descripcion_pieza': items[0].get('descripcion') if items else s.get('descripcion_pieza'),
-                'cantidad': items[0].get('cantidad') if items else s.get('cantidad', 1),
+                'items': items_procesados,  # ✅ AHORA CON TODAS LAS FOTOS
+                'descripcion_pieza': items_procesados[0].get('descripcion') if items_procesados else s.get('descripcion_pieza'),
+                'cantidad': items_procesados[0].get('cantidad') if items_procesados else s.get('cantidad', 1),
                 'precio_cotizado': float(s.get('precio_cotizado')) if s.get('precio_cotizado') else None,
                 'proveedor_info': s.get('proveedor_info'),
                 'estado': s.get('estado', 'pendiente'),
@@ -153,8 +179,16 @@ def obtener_solicitudes_compra(current_user):
                 'comprobante_url': s.get('comprobante_url'),
                 'numero_factura': s.get('numero_factura'),
                 'proveedor_nombre': s.get('proveedor_nombre'),
-                'monto_compra': float(s.get('monto_compra')) if s.get('monto_compra') else None
+                'monto_compra': float(s.get('monto_compra')) if s.get('monto_compra') else None,
+                'foto_url': items_procesados[0].get('foto_url') if items_procesados and items_procesados[0].get('foto_url') else None
             })
+        
+        # Log para verificar que las fotos se están enviando
+        for sol in solicitudes:
+            if sol.get('items'):
+                for item in sol['items']:
+                    if 'fotos' in item and item['fotos']:
+                        print(f"📸 Enviando item con {len(item['fotos'])} fotos: {item.get('descripcion')}")
         
         return jsonify({'success': True, 'solicitudes': solicitudes}), 200
         
@@ -163,7 +197,6 @@ def obtener_solicitudes_compra(current_user):
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
 
 @solicitudes_compra_bp.route('/solicitudes-compra/<int:id_solicitud>/comprar', methods=['PUT'])
 @encargado_repuestos_required

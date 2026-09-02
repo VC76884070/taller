@@ -217,17 +217,8 @@ function extraerUrlsFotos(item) {
 // =====================================================
 
 async function cargarImagenProxyEncargado(url, imgElement) {
-    if (!url || !imgElement) {
-        console.log('⚠️ [cargarImagenProxyEncargado] url o imgElement null');
-        return null;
-    }
-    
-    if (imgElement.getAttribute('data-loaded') === 'true') {
-        console.log('✅ [cargarImagenProxyEncargado] Imagen ya cargada');
-        return;
-    }
-
-    console.log(`📸 [cargarImagenProxyEncargado] Cargando: ${url.substring(0, 60)}...`);
+    if (!url || !imgElement) return null;
+    if (imgElement.getAttribute('data-loaded') === 'true') return;
 
     try {
         const proxyUrl = `${window.API_BASE_URL}/api/jefe-taller/proxy-imagen?url=${encodeURIComponent(url)}`;
@@ -238,29 +229,23 @@ async function cargarImagenProxyEncargado(url, imgElement) {
             return new Promise((resolve) => {
                 const img = new Image();
                 img.onload = function() {
-                    console.log('✅ [cargarImagenProxyEncargado] Imagen cargada exitosamente');
                     imgElement.src = data.base64;
                     imgElement.style.display = 'block';
                     imgElement.setAttribute('data-loaded', 'true');
-                    
-                    // Ocultar el loader
                     const parent = imgElement.parentElement;
                     if (parent) {
-                        const loader = parent.querySelector('.detalle-loader, .miniatura-loader');
-                        if (loader) {
-                            loader.style.display = 'none';
-                            console.log('✅ [cargarImagenProxyEncargado] Loader ocultado');
-                        }
+                        const loader = parent.querySelector('.miniatura-loader');
+                        if (loader) loader.style.display = 'none';
                     }
                     resolve(data.base64);
                 };
                 img.onerror = function() {
-                    console.warn('⚠️ [cargarImagenProxyEncargado] Error al cargar imagen:', url.substring(0, 60) + '...');
+                    console.warn('⚠️ Error al cargar imagen:', url.substring(0, 60) + '...');
                     const parent = imgElement.parentElement;
                     if (parent) {
-                        const loader = parent.querySelector('.detalle-loader, .miniatura-loader');
+                        const loader = parent.querySelector('.miniatura-loader');
                         if (loader) {
-                            loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:14px;"></i>';
+                            loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:12px;"></i>';
                             loader.style.display = 'flex';
                         }
                     }
@@ -269,24 +254,24 @@ async function cargarImagenProxyEncargado(url, imgElement) {
                 img.src = data.base64;
             });
         } else {
-            console.warn('⚠️ [cargarImagenProxyEncargado] No se pudo cargar:', url.substring(0, 60) + '...');
+            console.warn('⚠️ No se pudo cargar:', url.substring(0, 60) + '...');
             const parent = imgElement.parentElement;
             if (parent) {
-                const loader = parent.querySelector('.detalle-loader, .miniatura-loader');
+                const loader = parent.querySelector('.miniatura-loader');
                 if (loader) {
-                    loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:14px;"></i>';
+                    loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:12px;"></i>';
                     loader.style.display = 'flex';
                 }
             }
             return null;
         }
     } catch (error) {
-        console.error('❌ [cargarImagenProxyEncargado] Error:', error);
+        console.error('❌ Error en proxy:', error);
         const parent = imgElement.parentElement;
         if (parent) {
-            const loader = parent.querySelector('.detalle-loader, .miniatura-loader');
+            const loader = parent.querySelector('.miniatura-loader');
             if (loader) {
-                loader.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:14px;"></i>';
+                loader.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:12px;"></i>';
                 loader.style.display = 'flex';
             }
         }
@@ -546,6 +531,7 @@ function renderizarSolicitudes(solicitudes) {
         let itemsHtml = '';
         items.forEach((item, itemIdx) => {
             // En renderizarSolicitudes(), dentro del forEach de items:
+
             const fotosUrls = extraerUrlsFotos(item);
             const tieneFotos = fotosUrls.length > 0;
 
@@ -818,38 +804,19 @@ async function verDetalle(idSolicitud) {
         `;
     }
 
-    // ✅ ABRIR EL MODAL PRIMERO
-    abrirModal('modalDetalle');
-
-    // ✅ CARGAR LAS IMÁGENES DEL DETALLE DESPUÉS DE ABRIR EL MODAL
+    // Cargar imágenes del detalle
     setTimeout(() => {
-        console.log('🔄 [verDetalle] Cargando imágenes del detalle...');
-        
-        // Buscar todas las imágenes del detalle
         const imagenes = document.querySelectorAll('.detalle-img');
-        console.log(`📸 [verDetalle] Encontradas ${imagenes.length} imágenes en el detalle`);
-        
-        imagenes.forEach((img, index) => {
+        imagenes.forEach(img => {
             const url = img.getAttribute('data-url');
             if (url) {
                 const decodedUrl = decodeURI(url);
-                console.log(`📸 [verDetalle] Cargando imagen ${index + 1}: ${decodedUrl.substring(0, 60)}...`);
-                
-                // Encontrar el loader asociado
-                const loaderId = img.id.replace('detalle_img', 'detalle_loader');
-                const loader = document.getElementById(loaderId);
-                
-                if (loader) {
-                    console.log(`✅ [verDetalle] Loader encontrado para imagen ${index + 1}`);
-                } else {
-                    console.log(`⚠️ [verDetalle] Loader NO encontrado para imagen ${index + 1}`);
-                }
-                
-                // Cargar la imagen
                 cargarImagenProxyEncargado(decodedUrl, img);
             }
         });
-    }, 500);
+    }, 300);
+
+    abrirModal('modalDetalle');
 }
 
 // =====================================================

@@ -124,18 +124,12 @@ function statusBadge(estado) {
     </span>`;
 }
 
-// =====================================================
-// 🔥 FUNCIÓN ULTRA CORREGIDA - EXTRAE TODAS LAS FOTOS
-// =====================================================
-
 function extraerUrlsFotos(item) {
     let urls = [];
     if (!item) return urls;
 
-    // 🔥 BUSCAR RECURSIVAMENTE EN TODO EL OBJETO
     function buscarRecursivamente(obj, profundidad = 0) {
-        if (profundidad > 5) return; // Evitar bucles infinitos
-        
+        if (profundidad > 5) return;
         if (!obj || typeof obj !== 'object') return;
         
         if (Array.isArray(obj)) {
@@ -150,7 +144,6 @@ function extraerUrlsFotos(item) {
                 const esImagen = /(drive\.google\.com|cloudinary\.com|res\.cloudinary\.com|googleusercontent\.com|\.(jpg|jpeg|png|gif|webp|svg))/i.test(value);
                 if (esImagen && !urls.includes(value)) {
                     urls.push(value);
-                    console.log(`📸 Encontrada en ${key}: ${value.substring(0, 50)}...`);
                 }
             } else if (typeof value === 'object' && value !== null) {
                 buscarRecursivamente(value, profundidad + 1);
@@ -160,7 +153,6 @@ function extraerUrlsFotos(item) {
     
     buscarRecursivamente(item);
     
-    // 🔥 FILTRO FINAL: solo URLs válidas
     urls = urls.filter(url => 
         url.startsWith('http') && 
         url.length > 10 &&
@@ -168,9 +160,6 @@ function extraerUrlsFotos(item) {
     );
     
     urls = [...new Set(urls)];
-    
-    console.log(`📸 Total fotos encontradas: ${urls.length}`, urls);
-    
     return urls;
 }
 
@@ -416,10 +405,6 @@ async function cargarSolicitudes() {
     }
 }
 
-// =====================================================
-// 🔥 RENDERIZAR SOLICITUDES - CON SOPORTE PARA MÚLTIPLES FOTOS
-// =====================================================
-
 function renderizarSolicitudes(solicitudes) {
     const container = document.getElementById('solicitudesContainer');
     if (!container) return;
@@ -443,7 +428,7 @@ function renderizarSolicitudes(solicitudes) {
             try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
         }
 
-        // Contador total de fotos
+        // 🔥 CONTADOR TOTAL DE FOTOS
         let totalFotos = 0;
         items.forEach(item => {
             const fotos = extraerUrlsFotos(item);
@@ -455,11 +440,10 @@ function renderizarSolicitudes(solicitudes) {
         // =====================================================
         let itemsHtml = '';
         items.forEach((item, itemIdx) => {
-            // 🔥 OBTENER TODAS LAS FOTOS DEL ITEM
+            // 🔥 OBTENER TODAS LAS FOTOS
             const fotosUrls = extraerUrlsFotos(item);
             const tieneFotos = fotosUrls.length > 0;
 
-            // Generar miniaturas (hasta 3 en vista previa)
             let miniaturasHtml = '';
             if (tieneFotos) {
                 const fotosMostrar = fotosUrls.slice(0, 3);
@@ -583,9 +567,7 @@ function renderizarSolicitudes(solicitudes) {
 
     container.innerHTML = html;
 
-    // =====================================================
-    // CARGAR LAS IMÁGENES DESPUÉS DE RENDERIZAR
-    // =====================================================
+    // Cargar imágenes después de renderizar
     setTimeout(() => {
         const cards = container.querySelectorAll('.solicitud-card');
         cards.forEach(card => {
@@ -803,10 +785,6 @@ async function subirComprobanteADrive(file, id_orden, codigo_orden) {
     });
 }
 
-// =====================================================
-// MARCAR COMO COMPRADO
-// =====================================================
-
 function abrirModalComprar(idSolicitud) {
     const solicitud = solicitudesPendientes.find(s => s.id === idSolicitud);
     if (!solicitud) return;
@@ -831,6 +809,11 @@ function abrirModalComprar(idSolicitud) {
                      onerror="this.style.display='none'"
                      title="Haz clic para ver ampliada">
             `).join('');
+            if (fotosUrls.length > 3) {
+                fotosMiniaturas += `<span style="font-size:0.6rem;color:var(--gris-texto);margin-left:4px;">+${fotosUrls.length - 3}</span>`;
+            }
+        } else {
+            fotosMiniaturas = `<span style="color:var(--gris-texto);font-size:0.7rem;"><i class="fas fa-camera" style="opacity:0.3;"></i> Sin fotos</span>`;
         }
 
         return `
@@ -1043,10 +1026,6 @@ async function confirmarCompra() {
     }
 }
 
-// =====================================================
-// REGISTRAR ENTREGA
-// =====================================================
-
 function abrirModalEntregar(idSolicitud) {
     const solicitud = solicitudesPendientes.find(s => s.id === idSolicitud);
     if (!solicitud) return;
@@ -1070,6 +1049,11 @@ function abrirModalEntregar(idSolicitud) {
                      onerror="this.style.display='none'"
                      title="Haz clic para ver ampliada">
             `).join('');
+            if (fotosUrls.length > 3) {
+                fotosMiniaturas += `<span style="font-size:0.6rem;color:var(--gris-texto);margin-left:4px;">+${fotosUrls.length - 3}</span>`;
+            }
+        } else {
+            fotosMiniaturas = `<span style="color:var(--gris-texto);font-size:0.7rem;"><i class="fas fa-camera" style="opacity:0.3;"></i> Sin fotos</span>`;
         }
 
         return `

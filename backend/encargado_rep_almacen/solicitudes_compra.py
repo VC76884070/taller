@@ -211,6 +211,7 @@ def marcar_como_comprado(current_user, id_solicitud):
         notas_compra = data.get('notas_compra', '')
         numero_factura = data.get('numero_factura', '')
         proveedor_nombre = data.get('proveedor_nombre', '')
+        proveedor_id = data.get('proveedor_id')  # 🔥 NUEVO: ID del proveedor
         monto_compra = data.get('monto_compra')
         comprobante_url = data.get('comprobante_url')
         
@@ -242,8 +243,21 @@ def marcar_como_comprado(current_user, id_solicitud):
         
         if numero_factura:
             update_data['numero_factura'] = numero_factura
-        if proveedor_nombre:
+        
+        # 🔥 SI SE PROPORCIONA proveedor_id, buscar el nombre desde la tabla proveedor
+        if proveedor_id:
+            proveedor_result = supabase.table('proveedor') \
+                .select('nombre') \
+                .eq('id', proveedor_id) \
+                .execute()
+            
+            if proveedor_result.data:
+                update_data['proveedor_nombre'] = proveedor_result.data[0].get('nombre')
+                update_data['proveedor_id'] = proveedor_id  # Guardar el ID para referencia
+                logger.info(f"✅ Proveedor ID {proveedor_id} asignado: {update_data['proveedor_nombre']}")
+        elif proveedor_nombre:
             update_data['proveedor_nombre'] = proveedor_nombre
+        
         if comprobante_url:
             update_data['comprobante_url'] = comprobante_url
         
@@ -283,7 +297,7 @@ def marcar_como_comprado(current_user, id_solicitud):
             supabase.table('notificacion').insert({
                 'id_usuario_destino': check.data[0]['id_jefe_taller'],
                 'tipo': 'compra_realizada',
-                'mensaje': f"🛒 Compra realizada para solicitud #{id_solicitud} - Factura: {numero_factura or 'N/A'}",
+                'mensaje': f"🛒 Compra realizada para solicitud #{id_solicitud} - Factura: {numero_factura or 'N/A'} - Proveedor: {update_data.get('proveedor_nombre', 'N/A')}",
                 'fecha_envio': ahora,
                 'leida': False
             }).execute()
@@ -294,6 +308,8 @@ def marcar_como_comprado(current_user, id_solicitud):
         
     except Exception as e:
         logger.error(f"Error marcando como comprado: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 

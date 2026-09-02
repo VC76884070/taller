@@ -1,6 +1,6 @@
 // =====================================================
 // SOLICITUDES_COMPRA.JS - ENCARGADO DE REPUESTOS
-// VERSIÓN CORREGIDA - SOPORTE PARA MÚLTIPLES FOTOS POR ITEM
+// VERSIÓN COMPLETA CON PROVEEDORES INTEGRADOS
 // =====================================================
 
 if (typeof window.API_BASE_URL === 'undefined') {
@@ -23,6 +23,16 @@ let currentUserRoles = [];
 let solicitudesPendientes = [];
 let currentSolicitudId = null;
 let currentComprobanteFile = null;
+
+// =====================================================
+// 🔥 VARIABLES PARA PROVEEDORES (COMPRA DIRECTA)
+// =====================================================
+let proveedoresCompraCache = {
+    data: [],
+    timestamp: 0
+};
+let currentSolicitudCompraId = null;
+let isSubmittingCompra = false;
 
 // =====================================================
 // FUNCIONES DE UTILIDAD
@@ -124,80 +134,47 @@ function statusBadge(estado) {
     </span>`;
 }
 
-function extraerUrlsFotos(item) {
-    console.log('🔍 [extraerUrlsFotos] INICIO - item:', item);
-    
-    let urls = [];
-    if (!item) {
-        console.log('⚠️ [extraerUrlsFotos] item es null/undefined');
-        return urls;
-    }
+// =====================================================
+// 🔥 FUNCIÓN PARA EXTRAER URLs DE FOTOS
+// =====================================================
 
-    console.log('🔍 [extraerUrlsFotos] Tipo de item:', typeof item);
-    console.log('🔍 [extraerUrlsFotos] Keys del item:', Object.keys(item));
+function extraerUrlsFotos(item) {
+    let urls = [];
+    if (!item) return urls;
 
     function buscarRecursivamente(obj, profundidad = 0) {
-        if (profundidad > 5) {
-            console.log(`⚠️ [buscarRecursivamente] Profundidad máxima alcanzada en nivel ${profundidad}`);
-            return;
-        }
-        if (!obj || typeof obj !== 'object') {
-            console.log(`⚠️ [buscarRecursivamente] obj no es objeto en nivel ${profundidad}:`, obj);
-            return;
-        }
+        if (profundidad > 5) return;
+        if (!obj || typeof obj !== 'object') return;
         
-        // ✅ SI ES UN ARRAY, PROCESAR CADA ELEMENTO
         if (Array.isArray(obj)) {
-            console.log(`📦 [buscarRecursivamente] Es array en nivel ${profundidad}, longitud: ${obj.length}`);
             obj.forEach(subItem => {
-                // 🔥 SI EL ELEMENTO DEL ARRAY ES UN STRING Y ES URL, AGREGARLO DIRECTAMENTE
                 if (typeof subItem === 'string' && subItem.startsWith('http')) {
-                    console.log(`📸 [buscarRecursivamente] URL directa en array: ${subItem.substring(0, 50)}...`);
                     const esImagen = /(drive\.google\.com|cloudinary\.com|res\.cloudinary\.com|googleusercontent\.com|\.(jpg|jpeg|png|gif|webp|svg))/i.test(subItem);
                     if (esImagen && !urls.includes(subItem)) {
                         urls.push(subItem);
-                        console.log(`✅ [buscarRecursivamente] URL agregada desde array: ${subItem.substring(0, 60)}...`);
                     }
                 } else {
-                    // Si es objeto, seguir buscando
                     buscarRecursivamente(subItem, profundidad + 1);
                 }
             });
             return;
         }
         
-        console.log(`🔍 [buscarRecursivamente] Nivel ${profundidad}, keys:`, Object.keys(obj));
-        
         for (const [key, value] of Object.entries(obj)) {
-            console.log(`🔍 [buscarRecursivamente] key: "${key}", type: ${typeof value}, value:`, value);
-            
-            // ✅ SI ES UN STRING Y ES URL
             if (typeof value === 'string' && value.startsWith('http')) {
                 const esImagen = /(drive\.google\.com|cloudinary\.com|res\.cloudinary\.com|googleusercontent\.com|\.(jpg|jpeg|png|gif|webp|svg))/i.test(value);
-                console.log(`📸 [buscarRecursivamente] URL encontrada en "${key}": ${value.substring(0, 50)}..., esImagen: ${esImagen}`);
-                
                 if (esImagen && !urls.includes(value)) {
                     urls.push(value);
-                    console.log(`✅ [buscarRecursivamente] URL agregada: ${value.substring(0, 60)}...`);
                 }
-            } 
-            // ✅ SI ES UN ARRAY, LLAMAR RECURSIVAMENTE
-            else if (Array.isArray(value)) {
-                console.log(`📦 [buscarRecursivamente] key "${key}" es un array, procesando...`);
+            } else if (Array.isArray(value)) {
                 buscarRecursivamente(value, profundidad + 1);
-            }
-            // ✅ SI ES UN OBJETO, LLAMAR RECURSIVAMENTE
-            else if (typeof value === 'object' && value !== null) {
-                console.log(`🔍 [buscarRecursivamente] Descendiendo a "${key}" que es objeto`);
+            } else if (typeof value === 'object' && value !== null) {
                 buscarRecursivamente(value, profundidad + 1);
             }
         }
     }
     
-    console.log('🚀 [extraerUrlsFotos] Iniciando búsqueda recursiva...');
     buscarRecursivamente(item);
-    
-    console.log('📊 [extraerUrlsFotos] URLs encontradas (sin filtrar):', urls);
     
     urls = urls.filter(url => 
         url.startsWith('http') && 
@@ -206,10 +183,285 @@ function extraerUrlsFotos(item) {
     );
     
     urls = [...new Set(urls)];
-    
-    console.log(`📸 [extraerUrlsFotos] RESULTADO FINAL: ${urls.length} fotos encontradas`, urls);
-    
     return urls;
+}
+
+// =====================================================
+// 🔥 FUNCIONES DE PROVEEDORES (REUTILIZADAS DE COTIZACIONES)
+// =====================================================
+
+async function cargarProveedoresCompra(forceRefresh = false) {
+    try {
+        if (!forceRefresh && proveedoresCompraCache.data.length > 0 && 
+            (Date.now() - proveedoresCompraCache.timestamp) < 300000) {
+            return proveedoresCompraCache.data;
+        }
+        
+        const response = await fetch(`${API_URL}/proveedores`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.status === 401) {
+            showToast('Sesión expirada', 'warning');
+            return [];
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            proveedoresCompraCache.data = data.proveedores || [];
+            proveedoresCompraCache.timestamp = Date.now();
+            return proveedoresCompraCache.data;
+        } else {
+            console.error('Error cargando proveedores:', data.error);
+            return [];
+        }
+    } catch (error) {
+        console.error('Error cargando proveedores:', error);
+        return [];
+    }
+}
+
+function renderizarSelectProveedoresCompra(proveedores, selectedId = null) {
+    if (!proveedores || proveedores.length === 0) {
+        return `<option value="">-- No hay proveedores --</option>`;
+    }
+    
+    return proveedores.map(p => {
+        const selected = (selectedId && p.id === selectedId) ? 'selected' : '';
+        const label = `${p.nombre}${p.telefono ? ' - 📞 ' + p.telefono : ''}${p.propietario ? ' (' + p.propietario + ')' : ''}`;
+        return `<option value="${p.id}" ${selected}>${escapeHtml(label)}</option>`;
+    }).join('');
+}
+
+function mostrarInfoProveedorCompra(proveedorId, proveedores) {
+    const infoDisplay = document.getElementById('proveedorInfoDisplayCompra');
+    const telefonoSpan = document.getElementById('proveedorTelefonoCompra');
+    const ubicacionSpan = document.getElementById('proveedorUbicacionCompra');
+    
+    if (!infoDisplay || !telefonoSpan || !ubicacionSpan) return;
+    
+    if (proveedorId && proveedores && proveedores.length > 0) {
+        const proveedor = proveedores.find(p => p.id === proveedorId);
+        if (proveedor) {
+            infoDisplay.style.display = 'block';
+            telefonoSpan.textContent = proveedor.telefono ? `📞 ${proveedor.telefono}` : '';
+            ubicacionSpan.textContent = proveedor.ubicacion_gps ? `📍 ${proveedor.ubicacion_gps}` : '';
+            ubicacionSpan.style.display = proveedor.ubicacion_gps ? 'inline' : 'none';
+            return;
+        }
+    }
+    infoDisplay.style.display = 'none';
+}
+
+// =====================================================
+// 🔥 MODAL DE PROVEEDOR PARA COMPRA DIRECTA
+// =====================================================
+
+function abrirModalProveedorCompra() {
+    let modal = document.getElementById('modalProveedorCompra');
+    
+    if (!modal) {
+        const modalHtml = `
+            <div class="modal" id="modalProveedorCompra" onclick="cerrarModalProveedorCompra()">
+                <div class="modal-content modal-md" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-truck"></i> Nuevo Proveedor</h3>
+                        <button class="modal-close" onclick="cerrarModalProveedorCompra()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="proveedorFormCompra">
+                            <input type="hidden" id="proveedorIdCompra" value="">
+                            
+                            <div class="form-group">
+                                <label>Nombre del Proveedor <span class="required">*</span></label>
+                                <input type="text" id="nombreCompra" class="form-input" placeholder="Ej: Repuestos ABC" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Teléfono <span class="required">*</span></label>
+                                <input type="text" id="telefonoCompra" class="form-input" placeholder="Ej: 70000000">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Propietario/Contacto</label>
+                                <input type="text" id="propietarioCompra" class="form-input" placeholder="Nombre del propietario o contacto">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Ubicación GPS</label>
+                                <div style="display:flex; gap:0.5rem; align-items:center;">
+                                    <input type="text" id="ubicacion_gps_compra" class="form-input" placeholder="-17.7835, -63.1821">
+                                    <button type="button" class="btn-outline" onclick="obtenerUbicacionActualCompra()" style="padding:0.3rem 0.6rem; font-size:0.75rem;">
+                                        <i class="fas fa-location-dot"></i>
+                                    </button>
+                                </div>
+                                <small style="color:var(--gris-texto);">Coordenadas en formato: latitud, longitud</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Descripción</label>
+                                <textarea id="descripcionCompra" class="form-textarea" rows="2" placeholder="Información adicional del proveedor..."></textarea>
+                            </div>
+                            
+                            <div class="modal-actions" style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1rem;">
+                                <button type="button" class="btn-secondary" onclick="cerrarModalProveedorCompra()">Cancelar</button>
+                                <button type="submit" class="btn-primary">
+                                    <i class="fas fa-save"></i> Guardar Proveedor
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        modal = document.getElementById('modalProveedorCompra');
+    }
+    
+    // Limpiar formulario
+    document.getElementById('proveedorIdCompra').value = '';
+    document.getElementById('nombreCompra').value = '';
+    document.getElementById('telefonoCompra').value = '';
+    document.getElementById('propietarioCompra').value = '';
+    document.getElementById('ubicacion_gps_compra').value = '';
+    document.getElementById('descripcionCompra').value = '';
+    
+    // Actualizar título
+    const modalTitle = modal.querySelector('.modal-header h3');
+    if (modalTitle) {
+        modalTitle.innerHTML = '<i class="fas fa-truck"></i> Nuevo Proveedor';
+    }
+    
+    abrirModal('modalProveedorCompra');
+    
+    const form = document.getElementById('proveedorFormCompra');
+    if (form) {
+        form.removeEventListener('submit', guardarProveedorCompra);
+        form.addEventListener('submit', guardarProveedorCompra);
+    }
+}
+
+function cerrarModalProveedorCompra() {
+    cerrarModal('modalProveedorCompra');
+}
+
+async function guardarProveedorCompra(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
+    if (isSubmittingCompra) return;
+    isSubmittingCompra = true;
+    
+    const submitBtn = document.querySelector('#proveedorFormCompra .btn-primary');
+    let originalBtnText = '';
+    if (submitBtn) {
+        originalBtnText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+    }
+    
+    try {
+        const nombre = document.getElementById('nombreCompra').value.trim();
+        const telefono = document.getElementById('telefonoCompra').value.trim();
+        const propietario = document.getElementById('propietarioCompra').value.trim();
+        const ubicacion_gps = document.getElementById('ubicacion_gps_compra').value.trim();
+        const descripcion = document.getElementById('descripcionCompra').value.trim();
+        
+        if (!nombre) {
+            showToast('El nombre del proveedor es requerido', 'error');
+            document.getElementById('nombreCompra').focus();
+            return;
+        }
+        
+        if (!telefono) {
+            showToast('El teléfono es requerido', 'error');
+            document.getElementById('telefonoCompra').focus();
+            return;
+        }
+        
+        const proveedorData = {
+            nombre: nombre,
+            telefono: telefono,
+            propietario: propietario || null,
+            descripcion: descripcion || null,
+            ubicacion_gps: ubicacion_gps || null
+        };
+        
+        mostrarLoading(true);
+        
+        const response = await fetch(`${API_URL}/proveedores`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(proveedorData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('✅ Proveedor creado exitosamente', 'success');
+            cerrarModalProveedorCompra();
+            
+            proveedoresCompraCache.timestamp = 0;
+            const proveedores = await cargarProveedoresCompra(true);
+            
+            const select = document.getElementById('proveedorSelectCompra');
+            if (select) {
+                const opcionesHtml = renderizarSelectProveedoresCompra(proveedores, data.proveedor?.id);
+                select.innerHTML = `
+                    <option value="">-- Seleccione un proveedor --</option>
+                    ${opcionesHtml}
+                `;
+                if (data.proveedor?.id) {
+                    select.value = data.proveedor.id;
+                    mostrarInfoProveedorCompra(data.proveedor.id, proveedores);
+                }
+            }
+        } else {
+            showToast(data.error || 'Error al guardar proveedor', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión con el servidor', 'error');
+    } finally {
+        mostrarLoading(false);
+        isSubmittingCompra = false;
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnText;
+        }
+    }
+}
+
+function obtenerUbicacionActualCompra() {
+    if (!navigator.geolocation) {
+        showToast('Tu navegador no soporta geolocalización', 'warning');
+        return;
+    }
+    
+    showToast('Obteniendo ubicación...', 'info');
+    
+    navigator.geolocation.getCurrentPosition(
+        function(pos) {
+            const { latitude, longitude } = pos.coords;
+            const ubicacionInput = document.getElementById('ubicacion_gps_compra');
+            if (ubicacionInput) {
+                ubicacionInput.value = `${latitude.toFixed(7)}, ${longitude.toFixed(7)}`;
+                showToast('📍 Ubicación actualizada', 'success');
+            }
+        },
+        function(error) {
+            console.error('Error de geolocalización:', error);
+            showToast('No se pudo obtener la ubicación. Ingresa manualmente.', 'warning');
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        }
+    );
 }
 
 // =====================================================
@@ -234,16 +486,15 @@ async function cargarImagenProxyEncargado(url, imgElement) {
                     imgElement.setAttribute('data-loaded', 'true');
                     const parent = imgElement.parentElement;
                     if (parent) {
-                        const loader = parent.querySelector('.miniatura-loader');
+                        const loader = parent.querySelector('.miniatura-loader, .detalle-loader');
                         if (loader) loader.style.display = 'none';
                     }
                     resolve(data.base64);
                 };
                 img.onerror = function() {
-                    console.warn('⚠️ Error al cargar imagen:', url.substring(0, 60) + '...');
                     const parent = imgElement.parentElement;
                     if (parent) {
-                        const loader = parent.querySelector('.miniatura-loader');
+                        const loader = parent.querySelector('.miniatura-loader, .detalle-loader');
                         if (loader) {
                             loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:12px;"></i>';
                             loader.style.display = 'flex';
@@ -254,10 +505,9 @@ async function cargarImagenProxyEncargado(url, imgElement) {
                 img.src = data.base64;
             });
         } else {
-            console.warn('⚠️ No se pudo cargar:', url.substring(0, 60) + '...');
             const parent = imgElement.parentElement;
             if (parent) {
-                const loader = parent.querySelector('.miniatura-loader');
+                const loader = parent.querySelector('.miniatura-loader, .detalle-loader');
                 if (loader) {
                     loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:12px;"></i>';
                     loader.style.display = 'flex';
@@ -269,7 +519,7 @@ async function cargarImagenProxyEncargado(url, imgElement) {
         console.error('❌ Error en proxy:', error);
         const parent = imgElement.parentElement;
         if (parent) {
-            const loader = parent.querySelector('.miniatura-loader');
+            const loader = parent.querySelector('.miniatura-loader, .detalle-loader');
             if (loader) {
                 loader.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:12px;"></i>';
                 loader.style.display = 'flex';
@@ -415,7 +665,6 @@ async function cargarEstadisticas() {
 }
 
 async function cargarSolicitudes() {
-    console.log('🔄 [cargarSolicitudes] INICIO');
     mostrarLoading(true);
     try {
         const estado = document.getElementById('filtroEstado')?.value || 'all';
@@ -425,8 +674,6 @@ async function cargarSolicitudes() {
         if (estado !== 'all') params.append('estado', estado);
         if (params.toString()) url += `?${params.toString()}`;
 
-        console.log(`📡 [cargarSolicitudes] URL: ${url}`);
-
         const response = await fetch(url, { headers: getAuthHeaders() });
         if (response.status === 401) {
             window.location.href = window.API_BASE_URL + '/';
@@ -434,30 +681,14 @@ async function cargarSolicitudes() {
         }
         const data = await response.json();
 
-        console.log('📦 [cargarSolicitudes] Respuesta del servidor:', data);
-
         if (data.success) {
             let solicitudes = data.solicitudes || [];
-            console.log(`📊 [cargarSolicitudes] ${solicitudes.length} solicitudes recibidas`);
-            
-            // Log de los items para verificar que tienen fotos
-            solicitudes.forEach((s, idx) => {
-                console.log(`📋 [cargarSolicitudes] Solicitud ${idx + 1} (ID: ${s.id}) - items:`, s.items);
-                if (s.items && s.items.length > 0) {
-                    s.items.forEach((item, itemIdx) => {
-                        console.log(`📸 [cargarSolicitudes] Item ${itemIdx} - fotos:`, item.fotos);
-                        console.log(`📸 [cargarSolicitudes] Item ${itemIdx} - foto_url:`, item.foto_url);
-                    });
-                }
-            });
-            
             if (search) {
                 solicitudes = solicitudes.filter(s => 
                     (s.orden_codigo || '').toLowerCase().includes(search) ||
                     (s.descripcion_pieza || '').toLowerCase().includes(search) ||
                     (s.vehiculo || '').toLowerCase().includes(search)
                 );
-                console.log(`🔍 [cargarSolicitudes] Filtradas por búsqueda: ${solicitudes.length} solicitudes`);
             }
             solicitudesPendientes = solicitudes;
             renderizarSolicitudes(solicitudes);
@@ -466,21 +697,20 @@ async function cargarSolicitudes() {
             showToast(data.error || 'Error al cargar solicitudes', 'error');
         }
     } catch (error) {
-        console.error('❌ [cargarSolicitudes] Error:', error);
+        console.error('Error:', error);
         showToast('Error de conexión', 'error');
     } finally {
         mostrarLoading(false);
     }
 }
 
+// =====================================================
+// RENDERIZAR SOLICITUDES
+// =====================================================
+
 function renderizarSolicitudes(solicitudes) {
-    console.log('🚀 [renderizarSolicitudes] INICIO, solicitudes:', solicitudes.length);
-    
     const container = document.getElementById('solicitudesContainer');
-    if (!container) {
-        console.error('❌ [renderizarSolicitudes] Container no encontrado');
-        return;
-    }
+    if (!container) return;
 
     if (solicitudes.length === 0) {
         container.innerHTML = `
@@ -495,67 +725,41 @@ function renderizarSolicitudes(solicitudes) {
 
     let html = '';
 
-    solicitudes.forEach((solicitud, idx) => {
-        console.log(`📋 [renderizarSolicitudes] Procesando solicitud #${idx + 1}, ID: ${solicitud.id}`);
-        
+    solicitudes.forEach((solicitud) => {
         let items = solicitud.items || [];
         if (typeof items === 'string') {
-            console.log(`📋 [renderizarSolicitudes] items es string, parseando...`);
-            try { items = JSON.parse(items); } catch(e) { 
-                console.error('❌ Error parseando items:', e);
-                items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; 
-            }
+            try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
         }
-        
-        console.log(`📋 [renderizarSolicitudes] Items parseados: ${items.length} items`);
-        console.log('📋 [renderizarSolicitudes] Items:', items);
 
-        // 🔥 CONTADOR TOTAL DE FOTOS
         let totalFotos = 0;
-        items.forEach((item, itemIdx) => {
-            console.log(`📸 [renderizarSolicitudes] Item ${itemIdx} - descripcion: "${item.descripcion}"`);
-            console.log(`📸 [renderizarSolicitudes] Item ${itemIdx} - keys:`, Object.keys(item));
-            console.log(`📸 [renderizarSolicitudes] Item ${itemIdx} - "fotos" existe?`, item.fotos);
-            console.log(`📸 [renderizarSolicitudes] Item ${itemIdx} - "fotos" valor:`, item.fotos);
-            
+        items.forEach(item => {
             const fotos = extraerUrlsFotos(item);
-            console.log(`📸 [renderizarSolicitudes] Item ${itemIdx} - fotos encontradas: ${fotos.length}`, fotos);
             totalFotos += fotos.length;
         });
-        
-        console.log(`📸 [renderizarSolicitudes] TOTAL FOTOS para solicitud #${solicitud.id}: ${totalFotos}`);
 
-        // =====================================================
-        // GENERAR HTML DE ITEMS CON TODAS LAS FOTOS
-        // =====================================================
         let itemsHtml = '';
         items.forEach((item, itemIdx) => {
-            // En renderizarSolicitudes(), dentro del forEach de items:
-
             const fotosUrls = extraerUrlsFotos(item);
             const tieneFotos = fotosUrls.length > 0;
 
-            console.log(`📸 [renderizarSolicitudes] Item ${itemIdx} - tieneFotos: ${tieneFotos}, fotosUrls:`, fotosUrls);
-
             let miniaturasHtml = '';
             if (tieneFotos) {
-                // ✅ MOSTRAR TODAS LAS FOTOS (hasta 3)
                 const fotosMostrar = fotosUrls.slice(0, 3);
                 miniaturasHtml = `
                     <div class="miniaturas-container" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px;">
                         ${fotosMostrar.map((url, i) => `
                             <div style="position:relative;width:40px;height:40px;border-radius:4px;overflow:hidden;border:2px solid var(--verde-exito);flex-shrink:0;cursor:pointer;" 
-                                onclick="verFotoAmpliadaEncargado('${encodeURI(url)}')"
-                                title="Haz clic para ver ampliada">
+                                 onclick="verFotoAmpliadaEncargado('${encodeURI(url)}')"
+                                 title="Haz clic para ver ampliada">
                                 <div class="miniatura-loader" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:var(--gris-oscuro);">
                                     <i class="fas fa-spinner fa-spin" style="font-size:12px;color:var(--gris-texto);"></i>
                                 </div>
                                 <img class="miniatura-img" 
-                                    src="" 
-                                    alt="Foto" 
-                                    style="width:100%;height:100%;object-fit:cover;display:none;"
-                                    data-url="${encodeURI(url)}"
-                                    data-loaded="false">
+                                     src="" 
+                                     alt="Foto" 
+                                     style="width:100%;height:100%;object-fit:cover;display:none;"
+                                     data-url="${encodeURI(url)}"
+                                     data-loaded="false">
                             </div>
                         `).join('')}
                         ${fotosUrls.length > 3 ? `
@@ -565,10 +769,8 @@ function renderizarSolicitudes(solicitudes) {
                         ` : ''}
                     </div>
                 `;
-                console.log(`📸 [renderizarSolicitudes] Miniaturas generadas para item ${itemIdx}: ${fotosMostrar.length} fotos`);
-            } else {
-                console.log(`⚠️ [renderizarSolicitudes] Item ${itemIdx} NO tiene fotos`);
             }
+
             const descripcion = item.descripcion || item.nombre || 'Item';
             const cantidad = item.cantidad || 1;
             const detalle = item.detalle || '';
@@ -663,7 +865,6 @@ function renderizarSolicitudes(solicitudes) {
 
     container.innerHTML = html;
 
-    // Cargar imágenes después de renderizar
     setTimeout(() => {
         const cards = container.querySelectorAll('.solicitud-card');
         cards.forEach(card => {
@@ -679,37 +880,23 @@ function renderizarSolicitudes(solicitudes) {
     }, 500);
 }
 
-async function verDetalle(idSolicitud) {
-    console.log(`🔍 [verDetalle] Buscando solicitud ID: ${idSolicitud}`);
-    
-    const solicitud = solicitudesPendientes.find(s => s.id === idSolicitud);
-    if (!solicitud) {
-        console.error(`❌ [verDetalle] Solicitud ${idSolicitud} no encontrada`);
-        return;
-    }
+// =====================================================
+// VER DETALLE CON TODAS LAS FOTOS
+// =====================================================
 
-    console.log(`📋 [verDetalle] Solicitud encontrada:`, solicitud);
+async function verDetalle(idSolicitud) {
+    const solicitud = solicitudesPendientes.find(s => s.id === idSolicitud);
+    if (!solicitud) return;
 
     let items = solicitud.items || [];
     if (typeof items === 'string') {
-        console.log(`📋 [verDetalle] items es string, parseando...`);
-        try { items = JSON.parse(items); } catch(e) { 
-            console.error('❌ Error parseando items:', e);
-            items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; 
-        }
+        try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
-    
-    console.log(`📋 [verDetalle] Items a renderizar: ${items.length} items`);
-    console.log(`📋 [verDetalle] Items:`, items);
 
-    // Renderizar items con TODAS las fotos
     const itemsHtml = items.map((item, idx) => {
-        console.log(`📸 [verDetalle] Procesando item ${idx}:`, item);
         const fotosUrls = extraerUrlsFotos(item);
         const tieneFotos = fotosUrls.length > 0;
         const uniqueId = `detalle_${solicitud.id}_item_${idx}`;
-
-        console.log(`📸 [verDetalle] Item ${idx} - fotos encontradas: ${fotosUrls.length}`, fotosUrls);
 
         let miniaturasHtml = '';
         if (tieneFotos) {
@@ -733,8 +920,6 @@ async function verDetalle(idSolicitud) {
                     `).join('')}
                 </div>
             `;
-        } else {
-            console.log(`⚠️ [verDetalle] Item ${idx} NO tiene fotos`);
         }
 
         return `
@@ -804,7 +989,6 @@ async function verDetalle(idSolicitud) {
         `;
     }
 
-    // Cargar imágenes del detalle
     setTimeout(() => {
         const imagenes = document.querySelectorAll('.detalle-img');
         imagenes.forEach(img => {
@@ -896,122 +1080,172 @@ async function subirComprobanteADrive(file, id_orden, codigo_orden) {
     });
 }
 
+// =====================================================
+// 🔥 ABRIR MODAL COMPRAR (CON PROVEEDORES) - MODIFICADO
+// =====================================================
+
 function abrirModalComprar(idSolicitud) {
     const solicitud = solicitudesPendientes.find(s => s.id === idSolicitud);
     if (!solicitud) return;
 
     currentSolicitudId = idSolicitud;
     currentComprobanteFile = null;
+    currentSolicitudCompraId = idSolicitud;
 
     let items = solicitud.items || [];
     if (typeof items === 'string') {
         try { items = JSON.parse(items); } catch(e) { items = [{ descripcion: solicitud.descripcion_pieza, cantidad: solicitud.cantidad }]; }
     }
 
-    const itemsHtml = items.map(item => {
-        const fotosUrls = extraerUrlsFotos(item);
-        const tieneFotos = fotosUrls.length > 0;
+    mostrarLoading(true);
+    cargarProveedoresCompra().then(proveedores => {
+        mostrarLoading(false);
+        const selectProveedoresHtml = renderizarSelectProveedoresCompra(proveedores);
+        
+        const itemsHtml = items.map(item => {
+            const fotosUrls = extraerUrlsFotos(item);
+            const tieneFotos = fotosUrls.length > 0;
 
-        let fotosMiniaturas = '';
-        if (tieneFotos) {
-            fotosMiniaturas = fotosUrls.slice(0, 3).map((url, i) => `
-                <img src="${url}" style="width:35px;height:35px;object-fit:cover;border-radius:4px;border:2px solid var(--verde-exito);cursor:pointer;margin-right:4px;" 
-                     onclick="verFotoAmpliadaEncargado('${url}')" 
-                     onerror="this.style.display='none'"
-                     title="Haz clic para ver ampliada">
-            `).join('');
-            if (fotosUrls.length > 3) {
-                fotosMiniaturas += `<span style="font-size:0.6rem;color:var(--gris-texto);margin-left:4px;">+${fotosUrls.length - 3}</span>`;
+            let fotosMiniaturas = '';
+            if (tieneFotos) {
+                fotosMiniaturas = fotosUrls.slice(0, 3).map((url, i) => `
+                    <img src="${url}" style="width:35px;height:35px;object-fit:cover;border-radius:4px;border:2px solid var(--verde-exito);cursor:pointer;margin-right:4px;" 
+                         onclick="verFotoAmpliadaEncargado('${url}')" 
+                         onerror="this.style.display='none'"
+                         title="Haz clic para ver ampliada">
+                `).join('');
+                if (fotosUrls.length > 3) {
+                    fotosMiniaturas += `<span style="font-size:0.6rem;color:var(--gris-texto);margin-left:4px;">+${fotosUrls.length - 3}</span>`;
+                }
+            } else {
+                fotosMiniaturas = `<span style="color:var(--gris-texto);font-size:0.7rem;"><i class="fas fa-camera" style="opacity:0.3;"></i> Sin fotos</span>`;
             }
-        } else {
-            fotosMiniaturas = `<span style="color:var(--gris-texto);font-size:0.7rem;"><i class="fas fa-camera" style="opacity:0.3;"></i> Sin fotos</span>`;
+
+            return `
+                <div style="margin-bottom: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm); display: flex; align-items: center; gap: 0.5rem; flex-wrap:wrap;">
+                    ${fotosMiniaturas}
+                    <div>
+                        <strong>${escapeHtml(item.descripcion)}</strong> - ${item.cantidad} uds
+                        ${item.detalle ? `<br><small style="color: var(--gris-texto);">${escapeHtml(item.detalle)}</small>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        const modalBody = document.getElementById('modalComprarBody');
+        if (modalBody) {
+            modalBody.innerHTML = `
+                <div class="orden-info" style="margin-bottom: 1rem;">
+                    <div class="orden-info-item">
+                        <label>Orden</label>
+                        <span><strong>${escapeHtml(solicitud.orden_codigo)}</strong></span>
+                    </div>
+                    <div class="orden-info-item">
+                        <label>Vehículo</label>
+                        <span>${escapeHtml(solicitud.vehiculo)}</span>
+                    </div>
+                </div>
+                
+                <div class="items-list">
+                    <h4>Items a comprar:</h4>
+                    ${itemsHtml}
+                </div>
+                
+                ${solicitud.precio_cotizado ? `
+                    <div class="precio-cotizado-box">
+                        <strong>Precio cotizado:</strong> Bs. ${solicitud.precio_cotizado.toFixed(2)}
+                        ${solicitud.proveedor_info ? `<br><strong>Proveedor:</strong> ${escapeHtml(solicitud.proveedor_info)}` : ''}
+                    </div>
+                ` : ''}
+                
+                <div class="compra-form">
+                    <div class="form-group">
+                        <label>Fecha de compra</label>
+                        <input type="date" id="fechaCompra" class="form-input" value="${new Date().toISOString().split('T')[0]}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>N° de Factura/Comprobante</label>
+                        <input type="text" id="numeroFactura" class="form-input" placeholder="Ej: 001-123456">
+                    </div>
+                    
+                    <!-- 🔥 SECCIÓN DE PROVEEDOR CON SELECT Y BOTÓN NUEVO -->
+                    <div class="form-group proveedor-section" style="padding:0.75rem; background:var(--bg-card); border-radius:8px; border:1px solid var(--border-color);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                            <label style="font-weight:600; font-size:0.9rem;">
+                                <i class="fas fa-truck"></i> Proveedor *
+                            </label>
+                            <button type="button" class="btn-nuevo-proveedor" onclick="abrirModalProveedorCompra()" 
+                                    style="padding:0.2rem 0.6rem; border-radius:4px; border:1px solid var(--rojo-primario); background:transparent; color:var(--rojo-primario); font-size:0.7rem; cursor:pointer; transition:all 0.2s;">
+                                <i class="fas fa-plus"></i> Nuevo
+                            </button>
+                        </div>
+                        
+                        <select id="proveedorSelectCompra" class="form-control" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white; font-size:0.9rem;">
+                            <option value="">-- Seleccione un proveedor --</option>
+                            ${selectProveedoresHtml}
+                        </select>
+                        
+                        <div id="proveedorInfoDisplayCompra" style="margin-top:0.5rem; font-size:0.75rem; color:var(--gris-texto); display:none;">
+                            <span id="proveedorTelefonoCompra"></span>
+                            <span id="proveedorUbicacionCompra" style="margin-left:0.5rem;"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Monto total de la compra (Bs.)</label>
+                        <input type="number" id="montoCompra" step="0.01" class="form-input" placeholder="0.00">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-image"></i> Subir foto del recibo/comprobante <span class="required">*</span></label>
+                        <div class="file-upload-area" id="comprobanteUploadArea">
+                            <i class="fas fa-cloud-upload-alt" style="font-size: 32px; color: var(--rojo-primario); margin-bottom: 0.5rem;"></i>
+                            <p style="margin: 0; font-size: 0.85rem;">Haz clic para seleccionar el comprobante</p>
+                            <small style="color: var(--gris-texto);">Formatos: JPG, PNG, PDF (Máx. 5MB)</small>
+                            <input type="file" id="comprobanteFile" accept="image/*,application/pdf" style="display: none;">
+                        </div>
+                        <div id="comprobantePreview" style="display: none; margin-top: 0.5rem;" class="comprobante-preview">
+                            <i class="fas fa-file-image"></i>
+                            <span id="comprobanteNombre"></span>
+                            <button type="button" id="removeComprobanteBtn" class="btn-remove-comprobante">
+                                <i class="fas fa-times-circle"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Notas de compra (opcional)</label>
+                        <textarea id="notasCompra" rows="2" class="form-textarea" placeholder="Detalles adicionales de la compra..."></textarea>
+                    </div>
+                </div>
+            `;
         }
 
-        return `
-            <div style="margin-bottom: 0.5rem; padding: 0.5rem; background: var(--gris-oscuro); border-radius: var(--radius-sm); display: flex; align-items: center; gap: 0.5rem; flex-wrap:wrap;">
-                ${fotosMiniaturas}
-                <div>
-                    <strong>${escapeHtml(item.descripcion)}</strong> - ${item.cantidad} uds
-                    ${item.detalle ? `<br><small style="color: var(--gris-texto);">${escapeHtml(item.detalle)}</small>` : ''}
-                </div>
-            </div>
-        `;
-    }).join('');
-
-    const modalBody = document.getElementById('modalComprarBody');
-    if (modalBody) {
-        modalBody.innerHTML = `
-            <div class="orden-info" style="margin-bottom: 1rem;">
-                <div class="orden-info-item">
-                    <label>Orden</label>
-                    <span><strong>${escapeHtml(solicitud.orden_codigo)}</strong></span>
-                </div>
-                <div class="orden-info-item">
-                    <label>Vehículo</label>
-                    <span>${escapeHtml(solicitud.vehiculo)}</span>
-                </div>
-            </div>
+        setTimeout(() => {
+            configurarSubidaComprobante();
             
-            <div class="items-list">
-                <h4>Items a comprar:</h4>
-                ${itemsHtml}
-            </div>
-            
-            ${solicitud.precio_cotizado ? `
-                <div class="precio-cotizado-box">
-                    <strong>Precio cotizado:</strong> Bs. ${solicitud.precio_cotizado.toFixed(2)}
-                    ${solicitud.proveedor_info ? `<br><strong>Proveedor:</strong> ${escapeHtml(solicitud.proveedor_info)}` : ''}
-                </div>
-            ` : ''}
-            
-            <div class="compra-form">
-                <div class="form-group">
-                    <label>Fecha de compra</label>
-                    <input type="date" id="fechaCompra" class="form-input" value="${new Date().toISOString().split('T')[0]}">
-                </div>
-                
-                <div class="form-group">
-                    <label>N° de Factura/Comprobante</label>
-                    <input type="text" id="numeroFactura" class="form-input" placeholder="Ej: 001-123456">
-                </div>
-                
-                <div class="form-group">
-                    <label>Proveedor</label>
-                    <input type="text" id="proveedorNombre" class="form-input" placeholder="Nombre del proveedor">
-                </div>
-                
-                <div class="form-group">
-                    <label>Monto total de la compra (Bs.)</label>
-                    <input type="number" id="montoCompra" step="0.01" class="form-input" placeholder="0.00">
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-image"></i> Subir foto del recibo/comprobante <span class="required">*</span></label>
-                    <div class="file-upload-area" id="comprobanteUploadArea">
-                        <i class="fas fa-cloud-upload-alt" style="font-size: 32px; color: var(--rojo-primario); margin-bottom: 0.5rem;"></i>
-                        <p style="margin: 0; font-size: 0.85rem;">Haz clic para seleccionar el comprobante</p>
-                        <small style="color: var(--gris-texto);">Formatos: JPG, PNG, PDF (Máx. 5MB)</small>
-                        <input type="file" id="comprobanteFile" accept="image/*,application/pdf" style="display: none;">
-                    </div>
-                    <div id="comprobantePreview" style="display: none; margin-top: 0.5rem;" class="comprobante-preview">
-                        <i class="fas fa-file-image"></i>
-                        <span id="comprobanteNombre"></span>
-                        <button type="button" id="removeComprobanteBtn" class="btn-remove-comprobante">
-                            <i class="fas fa-times-circle"></i>
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label>Notas de compra (opcional)</label>
-                    <textarea id="notasCompra" rows="2" class="form-textarea" placeholder="Detalles adicionales de la compra..."></textarea>
-                </div>
-            </div>
-        `;
-    }
-
-    setTimeout(() => configurarSubidaComprobante(), 100);
-    abrirModal('modalComprar');
+            const proveedorSelect = document.getElementById('proveedorSelectCompra');
+            if (proveedorSelect) {
+                proveedorSelect.addEventListener('change', function() {
+                    const selectedId = parseInt(this.value);
+                    if (selectedId && proveedoresCompraCache.data.length > 0) {
+                        mostrarInfoProveedorCompra(selectedId, proveedoresCompraCache.data);
+                    } else {
+                        const infoDisplay = document.getElementById('proveedorInfoDisplayCompra');
+                        if (infoDisplay) infoDisplay.style.display = 'none';
+                    }
+                });
+            }
+        }, 100);
+        
+        abrirModal('modalComprar');
+        
+    }).catch(error => {
+        mostrarLoading(false);
+        console.error('Error cargando proveedores:', error);
+        showToast('Error al cargar proveedores', 'error');
+    });
 }
 
 function configurarSubidaComprobante() {
@@ -1069,12 +1303,43 @@ function procesarArchivoComprobante(file) {
     showToast('Comprobante cargado correctamente', 'success');
 }
 
+// =====================================================
+// 🔥 CONFIRMAR COMPRA (CON PROVEEDOR) - MODIFICADO
+// =====================================================
+
 async function confirmarCompra() {
     const fechaCompra = document.getElementById('fechaCompra')?.value || new Date().toISOString().split('T')[0];
     const numeroFactura = document.getElementById('numeroFactura')?.value || '';
-    const proveedorNombre = document.getElementById('proveedorNombre')?.value || '';
     const montoCompra = document.getElementById('montoCompra')?.value;
     const notas = document.getElementById('notasCompra')?.value || '';
+    
+    // 🔥 OBTENER PROVEEDOR SELECCIONADO
+    const proveedorSelect = document.getElementById('proveedorSelectCompra');
+    let proveedorNombre = '';
+    let proveedorId = null;
+    
+    if (proveedorSelect && proveedorSelect.value) {
+        const selectedId = parseInt(proveedorSelect.value);
+        proveedorId = selectedId;
+        if (proveedoresCompraCache.data.length > 0) {
+            const proveedor = proveedoresCompraCache.data.find(p => p.id === selectedId);
+            if (proveedor) {
+                proveedorNombre = proveedor.nombre;
+            }
+        }
+    }
+    
+    if (!proveedorNombre) {
+        showToast('⚠️ Debes seleccionar un proveedor', 'warning');
+        if (proveedorSelect) {
+            proveedorSelect.style.borderColor = 'var(--rojo-primario)';
+            proveedorSelect.focus();
+            setTimeout(() => {
+                proveedorSelect.style.borderColor = '';
+            }, 2000);
+        }
+        return;
+    }
 
     if (!currentComprobanteFile) {
         showToast('⚠️ Debes subir la foto del recibo/comprobante de compra', 'warning');
@@ -1113,6 +1378,7 @@ async function confirmarCompra() {
                 fecha_compra: fechaCompra,
                 numero_factura: numeroFactura,
                 proveedor_nombre: proveedorNombre,
+                proveedor_id: proveedorId,  // 🔥 ENVIAR ID DEL PROVEEDOR
                 monto_compra: montoCompra ? parseFloat(montoCompra) : null,
                 notas_compra: notas,
                 comprobante_url: comprobanteUrl
@@ -1136,6 +1402,10 @@ async function confirmarCompra() {
         mostrarLoading(false);
     }
 }
+
+// =====================================================
+// REGISTRAR ENTREGA
+// =====================================================
 
 function abrirModalEntregar(idSolicitud) {
     const solicitud = solicitudesPendientes.find(s => s.id === idSolicitud);
@@ -1350,10 +1620,25 @@ function setupEventListeners() {
             if (e.target === modal) modal.classList.remove('active');
         });
     });
+
+    // Cerrar con tecla ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal.active').forEach(modal => {
+                if (modal.id === 'modalProveedorCompra') {
+                    cerrarModalProveedorCompra();
+                } else if (modal.id === 'modalFotoAmpliadaEncargado') {
+                    cerrarFotoAmpliadaEncargado();
+                } else {
+                    cerrarModal(modal.id);
+                }
+            });
+        }
+    });
 }
 
 async function inicializar() {
-    console.log('🚀 Inicializando solicitudes_compra.js - VERSIÓN CON MÚLTIPLES FOTOS');
+    console.log('🚀 Inicializando solicitudes_compra.js - VERSIÓN CON PROVEEDORES');
     console.log('📡 API_URL:', API_URL);
 
     const user = await cargarUsuarioActual();
@@ -1365,7 +1650,10 @@ async function inicializar() {
     console.log('✅ solicitudes_compra.js inicializado correctamente');
 }
 
-// Exponer funciones globales
+// =====================================================
+// EXPORTAR FUNCIONES GLOBALES
+// =====================================================
+
 window.verDetalle = verDetalle;
 window.verComprobante = verComprobante;
 window.abrirModalComprar = abrirModalComprar;
@@ -1378,4 +1666,13 @@ window.verFotoAmpliadaEncargado = verFotoAmpliadaEncargado;
 window.cerrarFotoAmpliadaEncargado = cerrarFotoAmpliadaEncargado;
 window.descargarFotoAmpliadaEncargado = descargarFotoAmpliadaEncargado;
 
+// 🔥 Funciones de proveedores
+window.abrirModalProveedorCompra = abrirModalProveedorCompra;
+window.cerrarModalProveedorCompra = cerrarModalProveedorCompra;
+window.guardarProveedorCompra = guardarProveedorCompra;
+window.obtenerUbicacionActualCompra = obtenerUbicacionActualCompra;
+window.cargarProveedoresCompra = cargarProveedoresCompra;
+
 document.addEventListener('DOMContentLoaded', inicializar);
+
+console.log('✅ solicitudes_compra.js cargado');

@@ -1858,7 +1858,9 @@ def obtener_solicitudes_compra_principal(current_user):
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
+@solicitudes_compra_bp.route('/test', methods=['GET'])
+def test_route():
+    return jsonify({'success': True, 'message': 'Ruta de prueba funcionando'}), 200
 
 
 window.verDetalle = verDetalle;

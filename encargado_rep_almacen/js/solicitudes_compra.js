@@ -217,8 +217,17 @@ function extraerUrlsFotos(item) {
 // =====================================================
 
 async function cargarImagenProxyEncargado(url, imgElement) {
-    if (!url || !imgElement) return null;
-    if (imgElement.getAttribute('data-loaded') === 'true') return;
+    if (!url || !imgElement) {
+        console.log('⚠️ [cargarImagenProxyEncargado] url o imgElement null');
+        return null;
+    }
+    
+    if (imgElement.getAttribute('data-loaded') === 'true') {
+        console.log('✅ [cargarImagenProxyEncargado] Imagen ya cargada');
+        return;
+    }
+
+    console.log(`📸 [cargarImagenProxyEncargado] Cargando: ${url.substring(0, 60)}...`);
 
     try {
         const proxyUrl = `${window.API_BASE_URL}/api/jefe-taller/proxy-imagen?url=${encodeURIComponent(url)}`;
@@ -229,23 +238,29 @@ async function cargarImagenProxyEncargado(url, imgElement) {
             return new Promise((resolve) => {
                 const img = new Image();
                 img.onload = function() {
+                    console.log('✅ [cargarImagenProxyEncargado] Imagen cargada exitosamente');
                     imgElement.src = data.base64;
                     imgElement.style.display = 'block';
                     imgElement.setAttribute('data-loaded', 'true');
+                    
+                    // Ocultar el loader
                     const parent = imgElement.parentElement;
                     if (parent) {
-                        const loader = parent.querySelector('.miniatura-loader');
-                        if (loader) loader.style.display = 'none';
+                        const loader = parent.querySelector('.detalle-loader, .miniatura-loader');
+                        if (loader) {
+                            loader.style.display = 'none';
+                            console.log('✅ [cargarImagenProxyEncargado] Loader ocultado');
+                        }
                     }
                     resolve(data.base64);
                 };
                 img.onerror = function() {
-                    console.warn('⚠️ Error al cargar imagen:', url.substring(0, 60) + '...');
+                    console.warn('⚠️ [cargarImagenProxyEncargado] Error al cargar imagen:', url.substring(0, 60) + '...');
                     const parent = imgElement.parentElement;
                     if (parent) {
-                        const loader = parent.querySelector('.miniatura-loader');
+                        const loader = parent.querySelector('.detalle-loader, .miniatura-loader');
                         if (loader) {
-                            loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:12px;"></i>';
+                            loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:14px;"></i>';
                             loader.style.display = 'flex';
                         }
                     }
@@ -254,24 +269,24 @@ async function cargarImagenProxyEncargado(url, imgElement) {
                 img.src = data.base64;
             });
         } else {
-            console.warn('⚠️ No se pudo cargar:', url.substring(0, 60) + '...');
+            console.warn('⚠️ [cargarImagenProxyEncargado] No se pudo cargar:', url.substring(0, 60) + '...');
             const parent = imgElement.parentElement;
             if (parent) {
-                const loader = parent.querySelector('.miniatura-loader');
+                const loader = parent.querySelector('.detalle-loader, .miniatura-loader');
                 if (loader) {
-                    loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:12px;"></i>';
+                    loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:14px;"></i>';
                     loader.style.display = 'flex';
                 }
             }
             return null;
         }
     } catch (error) {
-        console.error('❌ Error en proxy:', error);
+        console.error('❌ [cargarImagenProxyEncargado] Error:', error);
         const parent = imgElement.parentElement;
         if (parent) {
-            const loader = parent.querySelector('.miniatura-loader');
+            const loader = parent.querySelector('.detalle-loader, .miniatura-loader');
             if (loader) {
-                loader.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:12px;"></i>';
+                loader.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:14px;"></i>';
                 loader.style.display = 'flex';
             }
         }

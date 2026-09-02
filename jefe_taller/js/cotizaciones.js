@@ -832,122 +832,66 @@ function renderItemsCompraDirecta() {
     if (!container) return;
     
     if (itemsCompraDirecta.length === 0) {
-        container.innerHTML = `<div class="item-empty"><i class="fas fa-box-open"></i><p>No hay items agregados</p><small>Haz clic en "Agregar item" para comenzar</small></div>`;
+        container.innerHTML = `
+            <div class="item-empty">
+                <i class="fas fa-box-open"></i>
+                <p>No hay items agregados</p>
+                <small>Haz clic en "Agregar item" para comenzar</small>
+            </div>
+        `;
         return;
     }
     
-    let html = '';
-    
-    itemsCompraDirecta.forEach((item, index) => {
-        const uniqueId = `compra_item_${index}_${Date.now()}`;
+    container.innerHTML = itemsCompraDirecta.map((item, index) => {
+        const fotos = item.fotos || [];
+        const tieneFotos = fotos.length > 0;
         
-        // =====================================================
-        // 🔥 EXTRAER URLs DE FOTOS CORRECTAMENTE
-        // =====================================================
-        let fotosUrls = [];
-        
-        // Si el item tiene foto_url (string)
-        if (item.foto_url && typeof item.foto_url === 'string') {
-            fotosUrls.push(item.foto_url);
-        }
-        
-        // Si el item tiene fotos (array)
-        if (item.fotos && Array.isArray(item.fotos)) {
-            item.fotos.forEach(foto => {
-                // Si es string, agregarla directamente
-                if (typeof foto === 'string') {
-                    fotosUrls.push(foto);
-                }
-                // Si es objeto, intentar extraer la URL
-                else if (typeof foto === 'object' && foto !== null) {
-                    // Buscar propiedades que parezcan URLs
-                    const possibleUrls = [
-                        foto.url,
-                        foto.foto_url,
-                        foto.image_url,
-                        foto.link,
-                        foto.public_url,
-                        foto.download_url
-                    ];
-                    for (const possibleUrl of possibleUrls) {
-                        if (typeof possibleUrl === 'string' && possibleUrl.startsWith('http')) {
-                            fotosUrls.push(possibleUrl);
-                            break;
-                        }
-                    }
-                    // Si no se encontró, intentar con el objeto completo
-                    if (fotosUrls.length === 0 && typeof foto === 'string') {
-                        fotosUrls.push(foto);
-                    }
-                }
-            });
-        }
-        
-        // Si no hay fotos pero hay foto_url en el objeto
-        if (fotosUrls.length === 0 && item.foto) {
-            if (typeof item.foto === 'string') {
-                fotosUrls.push(item.foto);
-            }
-        }
-        
-        // 🔥 DEPURACIÓN: Mostrar en consola las URLs extraídas
-        console.log(`📸 Item ${index} - URLs extraídas:`, fotosUrls);
-        
-        const totalFotos = fotosUrls.length;
-        
-        // Generar miniaturas para hasta 3 fotos
-        let fotosHtml = '';
-        if (totalFotos > 0) {
-            const fotosMostrar = fotosUrls.slice(0, 3);
-            fotosHtml = `
-                <div class="miniaturas-container" style="display:flex;gap:3px;align-items:center;flex-wrap:wrap;margin-top:4px;">
-                    ${fotosMostrar.map((url, i) => `
-                        <div class="miniatura-wrapper" style="position:relative;width:40px;height:40px;border-radius:4px;overflow:hidden;border:1px solid var(--border-color);flex-shrink:0;">
-                            <div class="miniatura-loader" id="loader_${uniqueId}_${i}" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:var(--gris-oscuro);">
-                                <i class="fas fa-spinner fa-spin" style="font-size:12px;color:var(--gris-texto);"></i>
+        // 🔥 GENERAR 3 SLOTS DE FOTOS
+        let fotosPreviewsHtml = '';
+        for (let i = 0; i < 3; i++) {
+            const fotoUrl = fotos[i] || '';
+            const tieneFoto = !!fotoUrl;
+            const fotoId = `fotoPreviewCompra_${index}_${i}`;
+            const loaderId = `fotoLoaderCompra_${index}_${i}`;
+            const inputId = `fotoInputCompra_${index}_${i}`;
+            
+            fotosPreviewsHtml += `
+                <div class="foto-slot" data-slot="${i}" style="position:relative;display:inline-block;width:40px;height:40px;margin:2px;">
+                    <input type="file" class="item-foto-input-compra" id="${inputId}" accept="image/*" 
+                           onchange="subirFotoItemCompra(${index}, ${i}, this)" style="display:none;">
+                    <div id="${loaderId}" style="display:${tieneFoto ? 'none' : 'flex'};align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;border:1px dashed var(--gris-texto);cursor:pointer;" 
+                         onclick="document.getElementById('${inputId}').click()">
+                        <i class="fas fa-plus" style="color:var(--gris-texto);font-size:12px;"></i>
+                    </div>
+                    <div id="${fotoId}" style="display:${tieneFoto ? 'block' : 'none'};position:relative;">
+                        ${tieneFoto ? `
+                            <div style="position:relative;display:inline-block;">
+                                <img src="" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);" 
+                                     data-loaded="false" data-url="${fotoUrl}"
+                                     onerror="this.style.display='none'">
+                                <button type="button" class="btn-remove-foto" 
+                                        onclick="event.preventDefault(); eliminarFotoItemCompra(${index}, ${i})" 
+                                        style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
-                            <img class="miniatura-img" id="img_${uniqueId}_${i}" 
-                                 src="" 
-                                 alt="Foto item" 
-                                 style="width:100%;height:100%;object-fit:cover;display:none;cursor:pointer;"
-                                 onclick="verFotoAmpliadaJefeTaller('${encodeURI(url)}')"
-                                 data-url="${encodeURI(url)}"
-                                 data-loaded="false">
-                        </div>
-                    `).join('')}
-                    ${totalFotos > 3 ? `
-                        <span style="font-size:0.6rem;color:var(--gris-texto);background:var(--gris-oscuro);padding:0.1rem 0.4rem;border-radius:4px;">
-                            +${totalFotos - 3}
-                        </span>
-                    ` : ''}
-                </div>
-            `;
-        } else {
-            fotosHtml = `
-                <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;border:1px dashed var(--gris-texto);margin-top:4px;">
-                    <i class="fas fa-plus" style="color:var(--gris-texto);font-size:12px;"></i>
+                        ` : ''}
+                    </div>
+                    ${!tieneFoto ? `<span style="position:absolute;bottom:-12px;left:50%;transform:translateX(-50%);font-size:7px;color:var(--gris-texto);">${i+1}</span>` : ''}
                 </div>
             `;
         }
         
-        html += `
-            <div class="item-row" data-index="${index}" data-item-id="${uniqueId}">
+        return `
+            <div class="item-row" data-index="${index}" data-item-id="compra_${index}_${Date.now()}">
                 <div class="item-fields">
-                    <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Nombre del repuesto" onchange="actualizarItemCompraDirecta(${index}, 'descripcion', this.value)">
+                    <input type="text" class="item-descripcion" value="${escapeHtml(item.descripcion)}" placeholder="Descripción del repuesto" onchange="actualizarItemCompraDirecta(${index}, 'descripcion', this.value)">
                     <input type="number" class="item-cantidad" value="${item.cantidad || 1}" min="1" onchange="actualizarItemCompraDirecta(${index}, 'cantidad', parseInt(this.value))">
                     <input type="text" class="item-detalle" value="${escapeHtml(item.detalle || '')}" placeholder="Detalle (marca, especificaciones...)" onchange="actualizarItemCompraDirecta(${index}, 'detalle', this.value)">
                 </div>
-                <div class="item-foto-upload" style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-                    ${fotosHtml}
-                    <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                        <input type="file" class="item-foto-input-compra" accept="image/*" onchange="subirFotoItemCompra(${index}, this)" style="display:none;">
-                        <button type="button" class="btn-foto-item" onclick="event.preventDefault(); document.querySelectorAll('.item-foto-input-compra')[${index}]?.click()" style="font-size:0.65rem;padding:0.2rem 0.5rem;">
-                            <i class="fas fa-camera"></i> Foto
-                        </button>
-                        ${totalFotos > 0 ? `<button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemCompra(${index})" style="font-size:0.6rem;padding:0.2rem 0.5rem;background:var(--rojo-primario);color:white;border:none;border-radius:4px;cursor:pointer;">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>` : ''}
-                    </div>
+                <div class="item-foto-upload" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+                    ${fotosPreviewsHtml}
+                    <span style="font-size:0.6rem;color:var(--gris-texto);margin-left:2px;">(${fotos.length}/3)</span>
                 </div>
                 <div class="item-actions">
                     <button type="button" class="btn-remove-item" onclick="event.preventDefault(); eliminarItemCompraDirecta(${index})">
@@ -956,79 +900,56 @@ function renderItemsCompraDirecta() {
                 </div>
             </div>
         `;
-    });
-    
-    container.innerHTML = html;
+    }).join('');
     
     // =====================================================
-    // CARGAR LAS IMÁGENES CON PROXY
+    // CARGAR PREVIEWS DE FOTOS EXISTENTES
     // =====================================================
-    requestAnimationFrame(() => {
-        setTimeout(() => {
-            const rows = container.querySelectorAll('.item-row');
-            
-            rows.forEach(row => {
-                const index = parseInt(row.getAttribute('data-index'));
-                const item = itemsCompraDirecta[index];
-                if (!item) return;
-                
-                // Re-extraer URLs para la carga
-                let fotosUrls = [];
-                
-                if (item.foto_url && typeof item.foto_url === 'string') {
-                    fotosUrls.push(item.foto_url);
+    setTimeout(() => {
+        cargarPreviewsFotosCompraDirecta();
+    }, 300);
+}
+// =====================================================
+// CARGAR PREVIEWS DE FOTOS EN COMPRA DIRECTA
+// =====================================================
+
+function cargarPreviewsFotosCompraDirecta() {
+    const container = document.getElementById('itemsListCompraDirecta');
+    if (!container) return;
+    
+    const rows = container.querySelectorAll('.item-row');
+    
+    rows.forEach(row => {
+        const index = parseInt(row.getAttribute('data-index'));
+        const item = itemsCompraDirecta[index];
+        if (!item) return;
+        
+        const fotos = item.fotos || [];
+        fotos.forEach((url, i) => {
+            if (url && typeof url === 'string') {
+                const imgElement = row.querySelector(`#fotoPreviewCompra_${index}_${i} img`);
+                const loaderElement = document.getElementById(`fotoLoaderCompra_${index}_${i}`);
+                if (imgElement && imgElement.getAttribute('data-loaded') !== 'true') {
+                    cargarImagenProxy(url, imgElement, loaderElement);
                 }
-                
-                if (item.fotos && Array.isArray(item.fotos)) {
-                    item.fotos.forEach(foto => {
-                        if (typeof foto === 'string') {
-                            fotosUrls.push(foto);
-                        } else if (typeof foto === 'object' && foto !== null) {
-                            const possibleUrls = [
-                                foto.url,
-                                foto.foto_url,
-                                foto.image_url,
-                                foto.link,
-                                foto.public_url,
-                                foto.download_url
-                            ];
-                            for (const possibleUrl of possibleUrls) {
-                                if (typeof possibleUrl === 'string' && possibleUrl.startsWith('http')) {
-                                    fotosUrls.push(possibleUrl);
-                                    break;
-                                }
-                            }
-                        }
-                    });
-                }
-                
-                fotosUrls.forEach((url, i) => {
-                    const uniqueId = row.getAttribute('data-item-id');
-                    const imgId = `img_${uniqueId}_${i}`;
-                    const loaderId = `loader_${uniqueId}_${i}`;
-                    
-                    const imgElement = document.getElementById(imgId);
-                    const loaderElement = document.getElementById(loaderId);
-                    
-                    if (imgElement && loaderElement && url && typeof url === 'string') {
-                        // Decodificar la URL si fue codificada
-                        const decodedUrl = decodeURI(url);
-                        cargarImagenProxy(decodedUrl, imgElement, loaderElement);
-                    }
-                });
-            });
-        }, 300);
+            }
+        });
     });
 }
 function agregarItemCompraDirecta() {
-    itemsCompraDirecta.push({ descripcion: '', cantidad: 1, detalle: '', foto_url: null, foto_public_id: null });
+    itemsCompraDirecta.push({ 
+        descripcion: '', 
+        cantidad: 1, 
+        detalle: '', 
+        fotos: [],           // 🔥 ARRAY DE FOTOS (hasta 3)
+        foto_public_ids: []  // 🔥 ARRAY DE PUBLIC IDs
+    });
     renderItemsCompraDirecta();
     setTimeout(() => {
         const lastInput = document.querySelector('#itemsListCompraDirecta .item-row:last-child .item-descripcion');
         if (lastInput) lastInput.focus();
     }, 100);
 }
-
 function actualizarItemCompraDirecta(index, campo, valor) {
     if (itemsCompraDirecta[index]) itemsCompraDirecta[index][campo] = valor;
 }
@@ -1042,12 +963,7 @@ function limpiarItemsCompraDirecta() {
     itemsCompraDirecta = [];
     renderItemsCompraDirecta();
 }
-
-// =====================================================
-// SUBIR FOTO DE ITEM (COMPRA DIRECTA) - CON PREVIEW
-// =====================================================
-
-async function subirFotoItemCompra(index, input) {
+async function subirFotoItemCompra(index, slotIndex, input) {
     const file = input.files[0];
     if (!file) return;
     
@@ -1063,13 +979,23 @@ async function subirFotoItemCompra(index, input) {
         return;
     }
     
+    // Verificar que no exceda 3 fotos
+    if (itemsCompraDirecta[index]) {
+        const fotosActuales = itemsCompraDirecta[index].fotos || [];
+        if (fotosActuales.length >= 3) {
+            showToast('Ya tienes 3 fotos para este item. Elimina una para agregar otra.', 'warning');
+            input.value = '';
+            return;
+        }
+    }
+    
     mostrarLoading(true);
     
     try {
         const formData = new FormData();
         formData.append('foto', file);
         
-        // 🔥 OBTENER CÓDIGO DE ORDEN DEL SELECT
+        // OBTENER CÓDIGO DE ORDEN DEL SELECT
         const selectOrden = document.getElementById('compraDirecta_id_orden');
         const selectedOption = selectOrden?.options[selectOrden.selectedIndex];
         
@@ -1100,13 +1026,38 @@ async function subirFotoItemCompra(index, input) {
         const data = await response.json();
         
         if (data.success && data.url) {
+            // Guardar en el item
             if (itemsCompraDirecta[index]) {
-                itemsCompraDirecta[index].foto_url = data.url;
-                itemsCompraDirecta[index].foto_public_id = data.public_id;
+                if (!itemsCompraDirecta[index].fotos) {
+                    itemsCompraDirecta[index].fotos = [];
+                }
+                if (!itemsCompraDirecta[index].foto_public_ids) {
+                    itemsCompraDirecta[index].foto_public_ids = [];
+                }
+                
+                // Si el slot ya tiene foto, reemplazar
+                if (itemsCompraDirecta[index].fotos[slotIndex]) {
+                    const oldPublicId = itemsCompraDirecta[index].foto_public_ids[slotIndex];
+                    if (oldPublicId) {
+                        await eliminarFotoDeDrive(oldPublicId);
+                    }
+                    itemsCompraDirecta[index].fotos[slotIndex] = data.url;
+                    itemsCompraDirecta[index].foto_public_ids[slotIndex] = data.public_id;
+                } else {
+                    itemsCompraDirecta[index].fotos.push(data.url);
+                    itemsCompraDirecta[index].foto_public_ids.push(data.public_id);
+                }
             }
             
-            // ✅ CARGAR PREVIEW CON PROXY
-            await cargarPreviewFotoCompra(index, data.url);
+            // Cargar preview con proxy
+            await cargarPreviewFotoCompra(index, slotIndex, data.url);
+            
+            // Actualizar contador
+            const contador = document.querySelector(`[data-index="${index}"] .item-foto-upload span`);
+            if (contador) {
+                const fotos = itemsCompraDirecta[index].fotos || [];
+                contador.textContent = `(${fotos.length}/3)`;
+            }
             
             showToast('✅ Foto subida correctamente', 'success');
         } else {
@@ -1121,13 +1072,23 @@ async function subirFotoItemCompra(index, input) {
     }
 }
 
-// =====================================================
-// ELIMINAR FOTO DE ITEM (COMPRA DIRECTA)
-// =====================================================
-
-async function eliminarFotoItemCompra(index) {
-    if (!itemsCompraDirecta[index] || !itemsCompraDirecta[index].foto_public_id) {
-        showToast('No hay foto para eliminar', 'warning');
+async function eliminarFotoItemCompra(index, slotIndex) {
+    if (!itemsCompraDirecta[index] || !itemsCompraDirecta[index].fotos) {
+        showToast('Item no encontrado', 'warning');
+        return;
+    }
+    
+    const item = itemsCompraDirecta[index];
+    const fotos = item.fotos || [];
+    const publicIds = item.foto_public_ids || [];
+    
+    if (slotIndex >= fotos.length || !fotos[slotIndex]) {
+        showToast('No hay foto en esta posición', 'warning');
+        return;
+    }
+    
+    if (!publicIds[slotIndex]) {
+        showToast('No se puede eliminar esta foto', 'warning');
         return;
     }
     
@@ -1140,24 +1101,43 @@ async function eliminarFotoItemCompra(index) {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({
-                public_id: itemsCompraDirecta[index].foto_public_id
+                public_id: publicIds[slotIndex]
             })
         });
         
         const data = await response.json();
         
         if (data.success) {
-            delete itemsCompraDirecta[index].foto_url;
-            delete itemsCompraDirecta[index].foto_public_id;
+            fotos.splice(slotIndex, 1);
+            publicIds.splice(slotIndex, 1);
             
-            // ✅ LIMPIAR PREVIEW
-            const previewSpan = document.getElementById(`fotoPreviewCompra_${index}`);
-            if (previewSpan) {
-                previewSpan.innerHTML = `
-                    <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;border:1px dashed var(--gris-texto);">
-                        <i class="fas fa-plus" style="color:var(--gris-texto);font-size:12px;"></i>
-                    </div>
+            // Limpiar preview
+            const fotoId = `fotoPreviewCompra_${index}_${slotIndex}`;
+            const loaderId = `fotoLoaderCompra_${index}_${slotIndex}`;
+            const inputId = `fotoInputCompra_${index}_${slotIndex}`;
+            
+            const previewDiv = document.getElementById(fotoId);
+            const loaderDiv = document.getElementById(loaderId);
+            
+            if (previewDiv) {
+                previewDiv.style.display = 'none';
+                previewDiv.innerHTML = '';
+            }
+            
+            if (loaderDiv) {
+                loaderDiv.style.display = 'flex';
+                loaderDiv.innerHTML = `
+                    <i class="fas fa-plus" style="color:var(--gris-texto);font-size:12px;"></i>
                 `;
+                loaderDiv.onclick = function() {
+                    document.getElementById(inputId).click();
+                };
+            }
+            
+            // Actualizar contador
+            const contador = document.querySelector(`[data-index="${index}"] .item-foto-upload span`);
+            if (contador) {
+                contador.textContent = `(${fotos.length}/3)`;
             }
             
             showToast('✅ Foto eliminada', 'success');
@@ -1882,14 +1862,31 @@ async function confirmarCompraDirecta() {
             return;
         }
         
+        // 🔥 PROCESAR ITEMS CON TODAS LAS FOTOS
+        const itemsParaEnviar = itemsValidos.map(item => {
+            const itemData = {
+                descripcion: item.descripcion,
+                cantidad: item.cantidad || 1,
+                detalle: item.detalle || ''
+            };
+            
+            // Enviar el array completo de fotos (hasta 3)
+            if (item.fotos && Array.isArray(item.fotos) && item.fotos.length > 0) {
+                itemData.fotos = item.fotos;
+                itemData.foto_public_ids = item.foto_public_ids || [];
+            }
+            
+            return itemData;
+        });
+        
         const requestBody = {
             id_orden_trabajo: id_orden_numero,
             id_encargado_repuestos: parseInt(id_encargado),
-            items: itemsValidos,
+            items: itemsParaEnviar,
             observaciones: observaciones
         };
         
-        console.log('📤 Enviando solicitud:', requestBody);
+        console.log('📤 Enviando solicitud con fotos:', JSON.stringify(requestBody, null, 2));
         
         const response = await fetch(`${API_URL}/solicitudes-compra-directa`, {
             method: 'POST',
@@ -1905,7 +1902,7 @@ async function confirmarCompraDirecta() {
                     `Solicitud de compra enviada. Items: ${itemsValidos.length}`);
             }
             
-            showToast('✅ Solicitud de compra enviada al encargado de repuestos', 'success');
+            showToast(`✅ Solicitud de compra enviada con ${data.total_fotos || 0} foto(s)`, 'success');
             cerrarModal('modalNuevaSolicitudCompraDirecta');
             limpiarItemsCompraDirecta();
             currentSolicitudTecnico = null;
@@ -5508,26 +5505,25 @@ function imprimirInformeDecision(id_orden) {
     `);
     ventana.document.close();
 }
-// =====================================================
-// CARGAR PREVIEW DE FOTO EN COMPRA DIRECTA (CON PROXY)
-// =====================================================
-
-async function cargarPreviewFotoCompra(index, fotoUrl) {
-    if (!fotoUrl) {
-        const previewSpan = document.getElementById(`fotoPreviewCompra_${index}`);
-        if (previewSpan) previewSpan.innerHTML = '';
-        return;
+async function cargarPreviewFotoCompra(index, slotIndex, fotoUrl) {
+    if (!fotoUrl) return;
+    
+    const fotoId = `fotoPreviewCompra_${index}_${slotIndex}`;
+    const loaderId = `fotoLoaderCompra_${index}_${slotIndex}`;
+    const inputId = `fotoInputCompra_${index}_${slotIndex}`;
+    
+    const previewContainer = document.getElementById(fotoId);
+    const loaderContainer = document.getElementById(loaderId);
+    
+    if (!previewContainer) return;
+    
+    // Mostrar loader
+    if (loaderContainer) {
+        loaderContainer.style.display = 'flex';
+        loaderContainer.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);font-size:14px;"></i>';
     }
     
-    const previewSpan = document.getElementById(`fotoPreviewCompra_${index}`);
-    if (!previewSpan) return;
-    
-    // Mostrar loader en el preview
-    previewSpan.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
-            <i class="fas fa-spinner fa-spin" style="color:var(--gris-texto);font-size:14px;"></i>
-        </div>
-    `;
+    previewContainer.style.display = 'none';
     
     try {
         const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(fotoUrl)}`;
@@ -5539,38 +5535,48 @@ async function cargarPreviewFotoCompra(index, fotoUrl) {
         if (data.success && data.base64) {
             const img = new Image();
             img.onload = function() {
-                previewSpan.innerHTML = `
-                    <div class="foto-preview-container" style="position:relative;display:inline-block;">
-                        <img src="${data.base64}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);">
-                        <button type="button" class="btn-remove-foto" onclick="event.preventDefault(); eliminarFotoItemCompra(${index})" 
+                previewContainer.innerHTML = `
+                    <div style="position:relative;display:inline-block;">
+                        <img src="${data.base64}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:2px solid var(--verde-exito);" 
+                             data-loaded="true" data-url="${fotoUrl}">
+                        <button type="button" class="btn-remove-foto" 
+                                onclick="event.preventDefault(); eliminarFotoItemCompra(${index}, ${slotIndex})" 
                                 style="position:absolute;top:-4px;right:-4px;background:var(--rojo-primario);color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
                 `;
+                previewContainer.style.display = 'block';
+                if (loaderContainer) loaderContainer.style.display = 'none';
             };
             img.onerror = function() {
-                previewSpan.innerHTML = `
+                previewContainer.innerHTML = `
                     <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
                         <i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:14px;"></i>
                     </div>
                 `;
+                previewContainer.style.display = 'block';
+                if (loaderContainer) loaderContainer.style.display = 'none';
             };
             img.src = data.base64;
         } else {
-            previewSpan.innerHTML = `
+            previewContainer.innerHTML = `
                 <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
                     <i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:14px;"></i>
                 </div>
             `;
+            previewContainer.style.display = 'block';
+            if (loaderContainer) loaderContainer.style.display = 'none';
         }
     } catch (error) {
         console.error('Error cargando preview:', error);
-        previewSpan.innerHTML = `
+        previewContainer.innerHTML = `
             <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--gris-oscuro);border-radius:6px;">
                 <i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:14px;"></i>
             </div>
         `;
+        previewContainer.style.display = 'block';
+        if (loaderContainer) loaderContainer.style.display = 'none';
     }
 }
 // =====================================================

@@ -3,7 +3,6 @@
 
 <head>
     <meta charset="UTF-8">
-    <!-- ✅ META VIEWPORT MEJORADO -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Dashboard - Encargado Repuestos | FURIA MOTOR</title>
 
@@ -21,9 +20,146 @@
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/dashboard-mobile.css">
     
+    <style>
+        /* =============================================
+           FIX URGENTE - SIDEBAR Y HAMBURGUESA
+           ============================================= */
+        
+        /* 1. Asegurar que el sidebar siempre esté visible en desktop */
+        @media (min-width: 1025px) {
+            .sidebar {
+                transform: translateX(0) !important;
+                position: fixed !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 280px !important;
+                height: 100vh !important;
+                z-index: 1000 !important;
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+            }
+            
+            .main-content {
+                margin-left: 300px !important;
+                width: calc(100% - 300px) !important;
+                max-width: calc(100% - 300px) !important;
+                padding: 1.5rem 2rem !important;
+            }
+            
+            .hamburger-menu {
+                display: none !important;
+            }
+            
+            .sidebar-overlay {
+                display: none !important;
+            }
+        }
+        
+        /* 2. En móvil, sidebar oculto y hamburguesa visible */
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-100%) !important;
+                position: fixed !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 280px !important;
+                height: 100vh !important;
+                z-index: 1000 !important;
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+            }
+            
+            .sidebar.open {
+                transform: translateX(0) !important;
+                box-shadow: 4px 0 30px rgba(0, 0, 0, 0.5) !important;
+            }
+            
+            .hamburger-menu {
+                display: flex !important;
+                position: fixed !important;
+                top: 12px !important;
+                left: 12px !important;
+                width: 44px !important;
+                height: 44px !important;
+                background: #C1121F !important;
+                border: none !important;
+                border-radius: 10px !important;
+                color: white !important;
+                font-size: 1.2rem !important;
+                cursor: pointer !important;
+                z-index: 1002 !important;
+                align-items: center !important;
+                justify-content: center !important;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+                transition: all 0.3s ease !important;
+                touch-action: manipulation !important;
+            }
+            
+            .hamburger-menu.active {
+                left: 275px !important;
+                background: #8B0F1A !important;
+            }
+            
+            .hamburger-menu:active {
+                transform: scale(0.92) !important;
+            }
+            
+            .sidebar-overlay {
+                display: none !important;
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                background: rgba(0, 0, 0, 0.7) !important;
+                backdrop-filter: blur(4px) !important;
+                z-index: 998 !important;
+                transition: opacity 0.3s ease !important;
+            }
+            
+            .sidebar-overlay.active {
+                display: block !important;
+                opacity: 1 !important;
+            }
+            
+            .main-content {
+                margin-left: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 1rem !important;
+                padding-top: 70px !important;
+            }
+        }
+        
+        /* 3. Móvil pequeño */
+        @media (max-width: 480px) {
+            .hamburger-menu {
+                width: 36px !important;
+                height: 36px !important;
+                font-size: 0.9rem !important;
+                top: 8px !important;
+                left: 8px !important;
+                border-radius: 8px !important;
+            }
+            
+            .hamburger-menu.active {
+                left: 275px !important;
+            }
+            
+            .main-content {
+                padding: 0.5rem !important;
+                padding-top: 60px !important;
+            }
+        }
+    </style>
+
     <!-- ========== CONFIGURACIÓN PWA ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TORQUE">
@@ -36,7 +172,7 @@
 </head>
 
 <body>
-    <!-- ✅ Botón hamburguesa MEJORADO - visible en móvil -->
+    <!-- ✅ Botón hamburguesa - siempre presente en móvil -->
     <button class="hamburger-menu" id="hamburgerMenu" aria-label="Menú">
         <i class="fas fa-bars"></i>
     </button>
@@ -47,11 +183,11 @@
     <div class="app">
         <div id="sidebar-container"></div>
 
-        <main class="main-content">
+        <main class="main-content" id="mainContent">
             <!-- ========== TOP BAR ========== -->
             <header class="top-bar">
                 <div class="page-title">
-                    <h1><i class="fas fa-chart-line" style="color: var(--rojo-primario); margin-right: 0.5rem;"></i> Panel de Control</h1>
+                    <h1><i class="fas fa-chart-line" style="color: #C1121F; margin-right: 0.5rem;"></i> Panel de Control</h1>
                     <p>Gestión de repuestos y compras</p>
                 </div>
                 <div class="top-actions">
@@ -71,7 +207,7 @@
 
             <!-- ========== KPIs ========== -->
             <div class="kpi-grid">
-                <div class="kpi-card" id="kpiPendientes" onclick="if(window.irASolicitudesCompra) irASolicitudesCompra()">
+                <div class="kpi-card" id="kpiPendientes">
                     <div class="kpi-icon"><i class="fas fa-clock"></i></div>
                     <div class="kpi-content">
                         <span class="kpi-label">Pendientes</span>
@@ -80,7 +216,7 @@
                         </span>
                     </div>
                 </div>
-                <div class="kpi-card" id="kpiCompradas" onclick="if(window.irASolicitudesCompra) irASolicitudesCompra()">
+                <div class="kpi-card" id="kpiCompradas">
                     <div class="kpi-icon"><i class="fas fa-check-circle"></i></div>
                     <div class="kpi-content">
                         <span class="kpi-label">Compradas</span>
@@ -89,7 +225,7 @@
                         </span>
                     </div>
                 </div>
-                <div class="kpi-card" id="kpiEntregadas" onclick="if(window.irASolicitudesCompra) irASolicitudesCompra()">
+                <div class="kpi-card" id="kpiEntregadas">
                     <div class="kpi-icon"><i class="fas fa-truck"></i></div>
                     <div class="kpi-content">
                         <span class="kpi-label">Entregadas</span>
@@ -98,7 +234,7 @@
                         </span>
                     </div>
                 </div>
-                <div class="kpi-card" id="kpiTotal" onclick="if(window.irASolicitudesCompra) irASolicitudesCompra()">
+                <div class="kpi-card" id="kpiTotal">
                     <div class="kpi-icon"><i class="fas fa-chart-line"></i></div>
                     <div class="kpi-content">
                         <span class="kpi-label">Total</span>
@@ -116,7 +252,7 @@
                         </span>
                     </div>
                 </div>
-                <div class="kpi-card" id="kpiOrdenesActivas" onclick="if(window.irASolicitudesCompra) irASolicitudesCompra()">
+                <div class="kpi-card" id="kpiOrdenesActivas">
                     <div class="kpi-icon"><i class="fas fa-tools"></i></div>
                     <div class="kpi-content">
                         <span class="kpi-label">Órdenes Activas</span>
@@ -238,10 +374,11 @@
     
     <script>
         // =====================================================
-        // FUNCIONES RESPONSIVE PARA MÓVIL - MEJORADAS
+        // FUNCIONES RESPONSIVE MEJORADAS
         // =====================================================
         
         let sidebarOpen = false;
+        const isMobile = () => window.innerWidth <= 1024;
         
         function toggleSidebar() {
             const sidebar = document.querySelector('.sidebar');
@@ -249,7 +386,7 @@
             const hamburger = document.getElementById('hamburgerMenu');
             const body = document.body;
             
-            if (!sidebar) return;
+            if (!sidebar || !isMobile()) return;
             
             sidebarOpen = !sidebarOpen;
             
@@ -272,7 +409,7 @@
             const hamburger = document.getElementById('hamburgerMenu');
             const body = document.body;
             
-            if (sidebar) {
+            if (sidebar && isMobile()) {
                 sidebar.classList.remove('open');
                 if (overlay) overlay.classList.remove('active');
                 if (hamburger) hamburger.classList.remove('active');
@@ -285,44 +422,78 @@
             sidebarOpen = false;
         }
         
-        // =====================================================
-        // FORZAR VISIBILIDAD DEL HAMBURGUESA EN MÓVIL - MEJORADO
-        // =====================================================
-        function forzarHamburguesaMovil() {
+        function initHamburger() {
             const hamburger = document.getElementById('hamburgerMenu');
+            const overlay = document.getElementById('sidebarOverlay');
+            const sidebar = document.querySelector('.sidebar');
+            
             if (!hamburger) return;
             
-            const isMobile = window.innerWidth <= 1024;
+            // Evento click hamburguesa
+            hamburger.addEventListener('click', function(e) {
+                e.stopPropagation();
+                toggleSidebar();
+            });
             
-            if (isMobile) {
-                hamburger.style.display = 'flex';
-                hamburger.style.position = 'fixed';
-                hamburger.style.top = '12px';
-                hamburger.style.left = '12px';
-                hamburger.style.zIndex = '1002';
-                hamburger.style.width = '44px';
-                hamburger.style.height = '44px';
-                hamburger.style.background = '#C1121F';
-                hamburger.style.border = 'none';
-                hamburger.style.borderRadius = '10px';
-                hamburger.style.color = 'white';
-                hamburger.style.fontSize = '1.2rem';
-                hamburger.style.cursor = 'pointer';
-                hamburger.style.alignItems = 'center';
-                hamburger.style.justifyContent = 'center';
-                hamburger.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
-            } else {
-                hamburger.style.display = 'none';
+            // Cerrar al hacer clic en overlay
+            if (overlay) {
+                overlay.addEventListener('click', closeSidebar);
             }
+            
+            // Cerrar al hacer clic fuera en móvil
+            document.addEventListener('click', function(e) {
+                if (isMobile() && sidebarOpen) {
+                    const target = e.target;
+                    if (sidebar && !sidebar.contains(target) && 
+                        hamburger && !hamburger.contains(target)) {
+                        closeSidebar();
+                    }
+                }
+            });
+            
+            // Cerrar al redimensionar a desktop
+            window.addEventListener('resize', function() {
+                if (!isMobile() && sidebarOpen) {
+                    closeSidebar();
+                }
+            });
         }
         
-        async function marcarTodasLeidas() {
-            if (typeof marcarTodasNotificacionesLeidas === 'function') {
-                await marcarTodasNotificacionesLeidas();
-            } else {
-                mostrarToast('Función en desarrollo', 'info');
+        // =====================================================
+        // INICIALIZACIÓN
+        // =====================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            initHamburger();
+            
+            // Marcador de leídas
+            const marcarBtn = document.getElementById('marcarLeidasBtn');
+            if (marcarBtn) {
+                marcarBtn.addEventListener('click', function() {
+                    if (typeof marcarTodasNotificacionesLeidas === 'function') {
+                        marcarTodasNotificacionesLeidas();
+                    } else {
+                        mostrarToast('Función en desarrollo', 'info');
+                    }
+                });
             }
-        }
+            
+            // Controles del gráfico
+            const controls = document.getElementById('chartControls');
+            if (controls) {
+                controls.querySelectorAll('button').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        controls.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                        this.classList.add('active');
+                        const period = parseInt(this.dataset.period);
+                        if (window.actualizarGraficoPeriodo) {
+                            window.actualizarGraficoPeriodo(period);
+                        }
+                    });
+                });
+            }
+            
+            console.log('✅ Dashboard responsive inicializado');
+        });
         
         function mostrarToast(mensaje, tipo = 'info') {
             let container = document.querySelector('.toast-container');
@@ -334,81 +505,21 @@
             
             const toast = document.createElement('div');
             toast.className = `toast-notification ${tipo}`;
-            const icon = tipo === 'success' ? 'fa-check-circle' : tipo === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+            const icon = tipo === 'success' ? 'fa-check-circle' : 
+                        tipo === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
             toast.innerHTML = `<i class="fas ${icon}"></i> ${mensaje}`;
             container.appendChild(toast);
             
             setTimeout(() => toast.remove(), 3000);
         }
         
-        function initChartControls() {
-            const controls = document.getElementById('chartControls');
-            if (!controls) return;
-            
-            controls.querySelectorAll('button').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    controls.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
-                    
-                    const period = parseInt(this.dataset.period);
-                    if (window.actualizarGraficoPeriodo) {
-                        window.actualizarGraficoPeriodo(period);
-                    }
-                });
-            });
-        }
-        
-        // =====================================================
-        // INICIALIZACIÓN
-        // =====================================================
-        document.addEventListener('DOMContentLoaded', function() {
-            // Forzar hamburguesa visible en móvil
-            forzarHamburguesaMovil();
-            
-            const hamburgerBtn = document.getElementById('hamburgerMenu');
-            if (hamburgerBtn) {
-                hamburgerBtn.addEventListener('click', toggleSidebar);
-            }
-            
-            const overlay = document.getElementById('sidebarOverlay');
-            if (overlay) {
-                overlay.addEventListener('click', closeSidebar);
-            }
-            
-            const marcarBtn = document.getElementById('marcarLeidasBtn');
-            if (marcarBtn) {
-                marcarBtn.addEventListener('click', marcarTodasLeidas);
-            }
-            
-            initChartControls();
-            
-            window.addEventListener('resize', function() {
-                forzarHamburguesaMovil();
-                if (window.innerWidth > 768 && sidebarOpen) {
-                    closeSidebar();
-                }
-            });
-            
-            document.addEventListener('click', function(e) {
-                if (window.innerWidth <= 768 && sidebarOpen) {
-                    const sidebar = document.querySelector('.sidebar');
-                    const hamburger = document.getElementById('hamburgerMenu');
-                    
-                    if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
-                        closeSidebar();
-                    }
-                }
-            });
-        });
-        
+        // Exponer funciones globales
         window.toggleSidebar = toggleSidebar;
         window.closeSidebar = closeSidebar;
-        window.marcarTodasLeidas = marcarTodasLeidas;
         window.mostrarToast = mostrarToast;
-        window.initChartControls = initChartControls;
-        window.forzarHamburguesaMovil = forzarHamburguesaMovil;
+        window.isMobile = isMobile;
         
-        console.log('✅ dashboard.html - Funciones responsive cargadas');
+        console.log('✅ Scripts responsive cargados');
     </script>
     <script src="/register_sw.js"></script>
 </body>

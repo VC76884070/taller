@@ -146,10 +146,22 @@ function extraerUrlsFotos(item) {
             return;
         }
         
+        // ✅ SI ES UN ARRAY, PROCESAR CADA ELEMENTO
         if (Array.isArray(obj)) {
             console.log(`📦 [buscarRecursivamente] Es array en nivel ${profundidad}, longitud: ${obj.length}`);
             obj.forEach(subItem => {
-                buscarRecursivamente(subItem, profundidad + 1);
+                // 🔥 SI EL ELEMENTO DEL ARRAY ES UN STRING Y ES URL, AGREGARLO DIRECTAMENTE
+                if (typeof subItem === 'string' && subItem.startsWith('http')) {
+                    console.log(`📸 [buscarRecursivamente] URL directa en array: ${subItem.substring(0, 50)}...`);
+                    const esImagen = /(drive\.google\.com|cloudinary\.com|res\.cloudinary\.com|googleusercontent\.com|\.(jpg|jpeg|png|gif|webp|svg))/i.test(subItem);
+                    if (esImagen && !urls.includes(subItem)) {
+                        urls.push(subItem);
+                        console.log(`✅ [buscarRecursivamente] URL agregada desde array: ${subItem.substring(0, 60)}...`);
+                    }
+                } else {
+                    // Si es objeto, seguir buscando
+                    buscarRecursivamente(subItem, profundidad + 1);
+                }
             });
             return;
         }
@@ -159,6 +171,7 @@ function extraerUrlsFotos(item) {
         for (const [key, value] of Object.entries(obj)) {
             console.log(`🔍 [buscarRecursivamente] key: "${key}", type: ${typeof value}, value:`, value);
             
+            // ✅ SI ES UN STRING Y ES URL
             if (typeof value === 'string' && value.startsWith('http')) {
                 const esImagen = /(drive\.google\.com|cloudinary\.com|res\.cloudinary\.com|googleusercontent\.com|\.(jpg|jpeg|png|gif|webp|svg))/i.test(value);
                 console.log(`📸 [buscarRecursivamente] URL encontrada en "${key}": ${value.substring(0, 50)}..., esImagen: ${esImagen}`);
@@ -167,7 +180,14 @@ function extraerUrlsFotos(item) {
                     urls.push(value);
                     console.log(`✅ [buscarRecursivamente] URL agregada: ${value.substring(0, 60)}...`);
                 }
-            } else if (typeof value === 'object' && value !== null) {
+            } 
+            // ✅ SI ES UN ARRAY, LLAMAR RECURSIVAMENTE
+            else if (Array.isArray(value)) {
+                console.log(`📦 [buscarRecursivamente] key "${key}" es un array, procesando...`);
+                buscarRecursivamente(value, profundidad + 1);
+            }
+            // ✅ SI ES UN OBJETO, LLAMAR RECURSIVAMENTE
+            else if (typeof value === 'object' && value !== null) {
                 console.log(`🔍 [buscarRecursivamente] Descendiendo a "${key}" que es objeto`);
                 buscarRecursivamente(value, profundidad + 1);
             }
@@ -510,30 +530,31 @@ function renderizarSolicitudes(solicitudes) {
         // =====================================================
         let itemsHtml = '';
         items.forEach((item, itemIdx) => {
-            // 🔥 OBTENER TODAS LAS FOTOS
+            // En renderizarSolicitudes(), dentro del forEach de items:
             const fotosUrls = extraerUrlsFotos(item);
             const tieneFotos = fotosUrls.length > 0;
-            
+
             console.log(`📸 [renderizarSolicitudes] Item ${itemIdx} - tieneFotos: ${tieneFotos}, fotosUrls:`, fotosUrls);
 
             let miniaturasHtml = '';
             if (tieneFotos) {
+                // ✅ MOSTRAR TODAS LAS FOTOS (hasta 3)
                 const fotosMostrar = fotosUrls.slice(0, 3);
                 miniaturasHtml = `
                     <div class="miniaturas-container" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px;">
                         ${fotosMostrar.map((url, i) => `
                             <div style="position:relative;width:40px;height:40px;border-radius:4px;overflow:hidden;border:2px solid var(--verde-exito);flex-shrink:0;cursor:pointer;" 
-                                 onclick="verFotoAmpliadaEncargado('${encodeURI(url)}')"
-                                 title="Haz clic para ver ampliada">
+                                onclick="verFotoAmpliadaEncargado('${encodeURI(url)}')"
+                                title="Haz clic para ver ampliada">
                                 <div class="miniatura-loader" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:var(--gris-oscuro);">
                                     <i class="fas fa-spinner fa-spin" style="font-size:12px;color:var(--gris-texto);"></i>
                                 </div>
                                 <img class="miniatura-img" 
-                                     src="" 
-                                     alt="Foto" 
-                                     style="width:100%;height:100%;object-fit:cover;display:none;"
-                                     data-url="${encodeURI(url)}"
-                                     data-loaded="false">
+                                    src="" 
+                                    alt="Foto" 
+                                    style="width:100%;height:100%;object-fit:cover;display:none;"
+                                    data-url="${encodeURI(url)}"
+                                    data-loaded="false">
                             </div>
                         `).join('')}
                         ${fotosUrls.length > 3 ? `
@@ -547,7 +568,6 @@ function renderizarSolicitudes(solicitudes) {
             } else {
                 console.log(`⚠️ [renderizarSolicitudes] Item ${itemIdx} NO tiene fotos`);
             }
-
             const descripcion = item.descripcion || item.nombre || 'Item';
             const cantidad = item.cantidad || 1;
             const detalle = item.detalle || '';

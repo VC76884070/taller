@@ -1137,7 +1137,7 @@ async function verDetalle(idSolicitud) {
 }
 
 // =====================================================
-// VER COMPROBANTE (CORREGIDO - SIEMPRE COMO IMAGEN)
+// VER COMPROBANTE (CORREGIDO - CON PRECARGA DE IMAGEN)
 // =====================================================
 
 async function verComprobante(idSolicitud) {
@@ -1152,6 +1152,9 @@ async function verComprobante(idSolicitud) {
     const modalBody = document.getElementById('modalVerComprobanteBody');
     const downloadBtn = document.getElementById('descargarComprobanteBtn');
     
+    // 🔥 ABRIR EL MODAL PRIMERO (pero con loader)
+    abrirModal('modalVerComprobante');
+    
     // Mostrar loader mientras se carga
     if (modalBody) {
         modalBody.innerHTML = `
@@ -1164,28 +1167,68 @@ async function verComprobante(idSolicitud) {
         `;
     }
     
-    abrirModal('modalVerComprobante');
-    
     try {
-        // 🔥 Cargar el comprobante a través del proxy (SIEMPRE como imagen)
+        // 🔥 Cargar el comprobante a través del proxy
         const base64Data = await cargarComprobanteProxy(solicitud.comprobante_url);
         
         if (modalBody) {
             if (base64Data) {
-                // ✅ Comprobante cargado exitosamente - SIEMPRE mostrar como imagen
-                modalBody.innerHTML = `
-                    <div style="text-align: center;">
-                        <img src="${base64Data}" alt="Comprobante" style="max-width: 100%; max-height: 60vh; border-radius: var(--radius-md);">
-                        <div style="margin-top: 1rem; text-align: left; background: var(--gris-oscuro); padding: 1rem; border-radius: var(--radius-md);">
-                            <p><strong>Factura/Comprobante N°:</strong> ${escapeHtml(solicitud.numero_factura || 'N/A')}</p>
-                            <p><strong>Proveedor:</strong> ${escapeHtml(solicitud.proveedor_nombre || solicitud.proveedor_info || 'N/A')}</p>
-                            <p><strong>Monto:</strong> Bs. ${(solicitud.precio_cotizado || 0).toFixed(2)}</p>
-                            <p><strong>Fecha de compra:</strong> ${formatDate(solicitud.fecha_compra)}</p>
+                // ✅ PRECARGAR LA IMAGEN antes de mostrarla
+                const img = new Image();
+                img.onload = function() {
+                    // Una vez cargada, mostrarla en el modal
+                    modalBody.innerHTML = `
+                        <div style="text-align: center;">
+                            <img src="${base64Data}" alt="Comprobante" style="max-width: 100%; max-height: 60vh; border-radius: var(--radius-md);">
+                            <div style="margin-top: 1rem; text-align: left; background: var(--gris-oscuro); padding: 1rem; border-radius: var(--radius-md);">
+                                <p><strong>Factura/Comprobante N°:</strong> ${escapeHtml(solicitud.numero_factura || 'N/A')}</p>
+                                <p><strong>Proveedor:</strong> ${escapeHtml(solicitud.proveedor_nombre || solicitud.proveedor_info || 'N/A')}</p>
+                                <p><strong>Monto:</strong> Bs. ${(solicitud.precio_cotizado || 0).toFixed(2)}</p>
+                                <p><strong>Fecha de compra:</strong> ${formatDate(solicitud.fecha_compra)}</p>
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                    
+                    // Actualizar botón de descarga
+                    if (downloadBtn) {
+                        downloadBtn.href = base64Data;
+                        downloadBtn.download = `comprobante_${solicitud.id}.jpg`;
+                        downloadBtn.style.display = 'inline-flex';
+                        downloadBtn.innerHTML = '<i class="fas fa-download"></i> Descargar';
+                    }
+                    
+                    mostrarLoading(false);
+                };
+                
+                img.onerror = function() {
+                    // Si falla la precarga, mostrar error
+                    modalBody.innerHTML = `
+                        <div style="text-align: center; padding: 2rem;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: var(--ambar-alerta);"></i>
+                            <p style="margin-top: 1rem;">Error al cargar la imagen del comprobante</p>
+                            <div style="margin-top: 1rem;">
+                                <a href="${solicitud.comprobante_url}" target="_blank" class="btn-primary" style="padding: 0.5rem 1rem; border-radius: var(--radius-sm); text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+                                    <i class="fas fa-external-link-alt"></i> Abrir en Google Drive
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                    
+                    if (downloadBtn) {
+                        downloadBtn.href = solicitud.comprobante_url;
+                        downloadBtn.target = '_blank';
+                        downloadBtn.style.display = 'inline-flex';
+                        downloadBtn.innerHTML = '<i class="fas fa-external-link-alt"></i> Abrir en Drive';
+                    }
+                    
+                    mostrarLoading(false);
+                };
+                
+                // 🔥 INICIAR LA CARGA DE LA IMAGEN
+                img.src = base64Data;
+                
             } else {
-                // ❌ Error al cargar el comprobante - mostrar enlace directo
+                // ❌ Error al cargar el comprobante
                 modalBody.innerHTML = `
                     <div style="text-align: center; padding: 2rem;">
                         <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: var(--ambar-alerta);"></i>
@@ -1198,21 +1241,15 @@ async function verComprobante(idSolicitud) {
                         </div>
                     </div>
                 `;
-            }
-        }
-        
-        // Actualizar botón de descarga
-        if (downloadBtn) {
-            if (base64Data) {
-                downloadBtn.href = base64Data;
-                downloadBtn.download = `comprobante_${solicitud.id}.jpg`;
-                downloadBtn.style.display = 'inline-flex';
-                downloadBtn.innerHTML = '<i class="fas fa-download"></i> Descargar';
-            } else {
-                downloadBtn.href = solicitud.comprobante_url;
-                downloadBtn.target = '_blank';
-                downloadBtn.style.display = 'inline-flex';
-                downloadBtn.innerHTML = '<i class="fas fa-external-link-alt"></i> Abrir en Drive';
+                
+                if (downloadBtn) {
+                    downloadBtn.href = solicitud.comprobante_url;
+                    downloadBtn.target = '_blank';
+                    downloadBtn.style.display = 'inline-flex';
+                    downloadBtn.innerHTML = '<i class="fas fa-external-link-alt"></i> Abrir en Drive';
+                }
+                
+                mostrarLoading(false);
             }
         }
         
@@ -1224,11 +1261,14 @@ async function verComprobante(idSolicitud) {
                     <i class="fas fa-exclamation-circle" style="font-size: 3rem; color: var(--rojo-primario);"></i>
                     <p style="margin-top: 1rem;">Error al cargar el comprobante</p>
                     <small style="color: var(--gris-texto);">${error.message}</small>
+                    <div style="margin-top: 1rem;">
+                        <a href="${solicitud.comprobante_url}" target="_blank" class="btn-primary" style="padding: 0.5rem 1rem; border-radius: var(--radius-sm); text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+                            <i class="fas fa-external-link-alt"></i> Abrir en Google Drive
+                        </a>
+                    </div>
                 </div>
             `;
         }
-        showToast('Error al cargar el comprobante', 'error');
-    } finally {
         mostrarLoading(false);
     }
 }
@@ -1240,7 +1280,6 @@ async function cargarComprobanteProxy(url) {
     if (!url) return null;
     
     try {
-        // Usar el mismo proxy que para imágenes
         const proxyUrl = `${API_URL}/proxy-imagen-encargado?url=${encodeURIComponent(url)}`;
         console.log('📸 Cargando comprobante desde proxy:', proxyUrl);
         
@@ -1250,6 +1289,7 @@ async function cargarComprobanteProxy(url) {
         });
         
         if (!response.ok) {
+            console.error('❌ HTTP Error:', response.status);
             throw new Error(`HTTP ${response.status}`);
         }
         
@@ -1257,8 +1297,12 @@ async function cargarComprobanteProxy(url) {
         console.log('📸 Respuesta proxy:', data.success ? '✅ Éxito' : '❌ Error', data.error || '');
         
         if (data.success && data.base64) {
+            // Verificar que el Base64 es válido
+            console.log('📸 Base64 length:', data.base64.length);
+            console.log('📸 Base64 preview:', data.base64.substring(0, 100) + '...');
             return data.base64;
         } else {
+            console.error('❌ Error en respuesta:', data.error || 'Sin datos');
             return null;
         }
     } catch (error) {

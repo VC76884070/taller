@@ -221,7 +221,7 @@ function extraerUrlsFotos(item) {
 }
 
 // =====================================================
-// 🔥 FUNCIÓN PARA CARGAR IMAGEN VÍA PROXY
+// 🔥 FUNCIÓN PARA CARGAR IMAGEN VÍA PROXY (CORREGIDA - USANDO ENDPOINT DE ENCARGADO)
 // =====================================================
 
 async function cargarImagenProxyEncargado(url, imgElement) {
@@ -229,17 +229,31 @@ async function cargarImagenProxyEncargado(url, imgElement) {
     if (imgElement.getAttribute('data-loaded') === 'true') return;
 
     try {
+        // ✅ USAR EL ENDPOINT DE ENCARGADO DE REPUESTOS
         const proxyUrl = `${API_URL}/proxy-imagen-encargado?url=${encodeURIComponent(url)}`;
-        const response = await fetch(proxyUrl, { headers: getAuthHeaders() });
+        
+        const response = await fetch(proxyUrl, { 
+            headers: getAuthHeaders(),
+            cache: 'no-cache'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
 
         if (data.success && data.base64) {
             return new Promise((resolve) => {
+                // Pre-cargar la imagen antes de mostrarla
                 const img = new Image();
                 img.onload = function() {
                     imgElement.src = data.base64;
                     imgElement.style.display = 'block';
+                    imgElement.style.opacity = '1';
                     imgElement.setAttribute('data-loaded', 'true');
+                    
+                    // Ocultar el loader
                     const parent = imgElement.parentElement;
                     if (parent) {
                         const loader = parent.querySelector('.miniatura-loader, .item-foto-loader, .detalle-loader');
@@ -248,6 +262,7 @@ async function cargarImagenProxyEncargado(url, imgElement) {
                     resolve(data.base64);
                 };
                 img.onerror = function() {
+                    console.error('❌ Error cargando imagen:', url);
                     const parent = imgElement.parentElement;
                     if (parent) {
                         const loader = parent.querySelector('.miniatura-loader, .item-foto-loader, .detalle-loader');
@@ -261,6 +276,7 @@ async function cargarImagenProxyEncargado(url, imgElement) {
                 img.src = data.base64;
             });
         } else {
+            console.warn('⚠️ No se pudo cargar la imagen:', url);
             const parent = imgElement.parentElement;
             if (parent) {
                 const loader = parent.querySelector('.miniatura-loader, .item-foto-loader, .detalle-loader');
@@ -272,7 +288,7 @@ async function cargarImagenProxyEncargado(url, imgElement) {
             return null;
         }
     } catch (error) {
-        console.error('❌ Error en proxy:', error);
+        console.error('❌ Error en proxy de imagen:', error);
         const parent = imgElement.parentElement;
         if (parent) {
             const loader = parent.querySelector('.miniatura-loader, .item-foto-loader, .detalle-loader');
@@ -636,7 +652,7 @@ async function guardarProveedorCompra(event) {
 }
 
 // =====================================================
-// VER FOTO AMPLIADA
+// VER FOTO AMPLIADA (CORREGIDO - USANDO ENDPOINT DE ENCARGADO)
 // =====================================================
 
 function verFotoAmpliadaEncargado(url) {
@@ -644,6 +660,7 @@ function verFotoAmpliadaEncargado(url) {
         showToast('No hay foto para mostrar', 'warning');
         return;
     }
+    
     let decodedUrl = url;
     try { decodedUrl = decodeURI(url); } catch(e) {}
 
@@ -673,10 +690,12 @@ function verFotoAmpliadaEncargado(url) {
             </div>
         `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
+        modalFoto = document.getElementById('modalFotoAmpliadaEncargado');
     }
 
     const loader = document.getElementById('fotoModalLoaderEncargado');
     const img = document.getElementById('fotoAmpliadaEncargadoImg');
+    
     if (loader) loader.style.display = 'flex';
     if (img) {
         img.style.display = 'none';
@@ -690,37 +709,45 @@ function verFotoAmpliadaEncargado(url) {
         document.body.style.overflow = 'hidden';
     }
 
+    // ✅ USAR EL ENDPOINT DE ENCARGADO DE REPUESTOS
     const proxyUrl = `${API_URL}/proxy-imagen-encargado?url=${encodeURIComponent(decodedUrl)}`;
-    fetch(proxyUrl, { headers: getAuthHeaders() })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.base64) {
-                const nuevaImg = new Image();
-                nuevaImg.onload = function() {
-                    if (img) { img.src = data.base64; img.style.display = 'block'; }
-                    if (loader) loader.style.display = 'none';
-                };
-                nuevaImg.onerror = function() {
-                    if (loader) {
-                        loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:3rem;"></i>';
-                    }
-                    showToast('Error al cargar la imagen', 'error');
-                };
-                nuevaImg.src = data.base64;
-            } else {
+    
+    fetch(proxyUrl, { 
+        headers: getAuthHeaders(),
+        cache: 'no-cache'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.base64) {
+            const nuevaImg = new Image();
+            nuevaImg.onload = function() {
+                if (img) { 
+                    img.src = data.base64; 
+                    img.style.display = 'block'; 
+                }
+                if (loader) loader.style.display = 'none';
+            };
+            nuevaImg.onerror = function() {
                 if (loader) {
-                    loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:3rem;"></i>';
+                    loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--rojo-primario);font-size:3rem;"></i>';
                 }
                 showToast('Error al cargar la imagen', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error cargando foto ampliada:', error);
+            };
+            nuevaImg.src = data.base64;
+        } else {
             if (loader) {
-                loader.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:3rem;"></i>';
+                loader.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--amarillo);font-size:3rem;"></i>';
             }
-            showToast('Error de conexión', 'error');
-        });
+            showToast('Error al cargar la imagen', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error cargando foto ampliada:', error);
+        if (loader) {
+            loader.innerHTML = '<i class="fas fa-exclamation-circle" style="color:var(--rojo-primario);font-size:3rem;"></i>';
+        }
+        showToast('Error de conexión', 'error');
+    });
 }
 
 function cerrarFotoAmpliadaEncargado() {

@@ -4828,3 +4828,28 @@
         }
     ]
 }
+
+
+ALTER TABLE avance_trabajo 
+ADD COLUMN IF NOT EXISTS numero_avance INTEGER DEFAULT 0;
+-- Actualizar los avances existentes con un número secuencial
+-- por cada orden de trabajo
+UPDATE avance_trabajo a
+SET numero_avance = subquery.numero
+FROM (
+    SELECT 
+        id,
+        ROW_NUMBER() OVER (
+            PARTITION BY id_orden_trabajo 
+            ORDER BY fecha_creacion
+        ) as numero
+    FROM avance_trabajo
+) subquery
+WHERE a.id = subquery.id;
+
+-- Crear índice para búsquedas rápidas
+CREATE INDEX IF NOT EXISTS idx_avance_numero_orden 
+ON avance_trabajo (id_orden_trabajo, numero_avance);
+
+
+ALTER TABLE solicitud_compra ADD COLUMN proveedor_id INTEGER;

@@ -72,42 +72,69 @@ def formatear_vehiculo(vehiculo_data: Optional[Dict]) -> str:
     return f"Vehículo ({placa})" if placa else 'Vehículo no registrado'
 
 
-def obtener_cliente_detalle(id_cliente: int) -> Dict:
-    """Obtener nombre, teléfono y coordenadas del cliente"""
+def obtener_cliente_detalle(id_orden: int) -> Dict:
+    """
+    Obtener nombre, teléfono y coordenadas del cliente a partir del ID de la orden.
+    La relación es: ordentrabajo -> vehiculo -> cliente -> usuario
+    """
     try:
-        if not id_cliente:
+        if not id_orden:
             return {'nombre': 'Cliente no registrado', 'latitud': None, 'longitud': None, 'telefono': None}
         
+        # 1. Obtener el vehículo de la orden
+        orden = supabase.table('ordentrabajo') \
+            .select('id_vehiculo') \
+            .eq('id', id_orden) \
+            .execute()
+        
+        if not orden.data or not orden.data[0].get('id_vehiculo'):
+            return {'nombre': 'Cliente no registrado', 'latitud': None, 'longitud': None, 'telefono': None}
+        
+        id_vehiculo = orden.data[0]['id_vehiculo']
+        
+        # 2. Obtener el cliente del vehículo
+        vehiculo = supabase.table('vehiculo') \
+            .select('id_cliente') \
+            .eq('id', id_vehiculo) \
+            .execute()
+        
+        if not vehiculo.data or not vehiculo.data[0].get('id_cliente'):
+            return {'nombre': 'Cliente no registrado', 'latitud': None, 'longitud': None, 'telefono': None}
+        
+        id_cliente = vehiculo.data[0]['id_cliente']
+        
+        # 3. Obtener los datos del cliente (latitud, longitud, id_usuario)
         cliente = supabase.table('cliente') \
             .select('id_usuario, latitud, longitud') \
             .eq('id', id_cliente) \
             .execute()
         
-        if cliente.data:
-            cliente_data = cliente.data[0]
-            resultado = {
-                'nombre': 'Cliente no registrado',
-                'latitud': cliente_data.get('latitud'),
-                'longitud': cliente_data.get('longitud'),
-                'telefono': None
-            }
-            
-            if cliente_data.get('id_usuario'):
-                usuario = supabase.table('usuario') \
-                    .select('nombre, contacto') \
-                    .eq('id', cliente_data['id_usuario']) \
-                    .execute()
-                if usuario.data:
-                    resultado['nombre'] = usuario.data[0].get('nombre', 'Cliente no registrado')
-                    resultado['telefono'] = usuario.data[0].get('contacto')
-            
-            return resultado
+        if not cliente.data:
+            return {'nombre': 'Cliente no registrado', 'latitud': None, 'longitud': None, 'telefono': None}
         
-        return {'nombre': 'Cliente no registrado', 'latitud': None, 'longitud': None, 'telefono': None}
+        cliente_data = cliente.data[0]
+        resultado = {
+            'nombre': 'Cliente no registrado',
+            'latitud': cliente_data.get('latitud'),
+            'longitud': cliente_data.get('longitud'),
+            'telefono': None
+        }
+        
+        # 4. Obtener el nombre del usuario
+        if cliente_data.get('id_usuario'):
+            usuario = supabase.table('usuario') \
+                .select('nombre, contacto') \
+                .eq('id', cliente_data['id_usuario']) \
+                .execute()
+            if usuario.data:
+                resultado['nombre'] = usuario.data[0].get('nombre', 'Cliente no registrado')
+                resultado['telefono'] = usuario.data[0].get('contacto')
+        
+        return resultado
+        
     except Exception as e:
-        logger.error(f"Error obteniendo cliente detalle: {e}")
+        logger.error(f"Error obteniendo cliente detalle para orden {id_orden}: {e}")
         return {'nombre': 'Cliente no registrado', 'latitud': None, 'longitud': None, 'telefono': None}
-
 
 def obtener_diagnostico_tecnico(id_orden: int) -> Dict:
     """Obtener diagnóstico técnico de una orden"""
@@ -270,10 +297,6 @@ def test_endpoint():
     }), 200
 
 
-# =====================================================
-# ENDPOINTS PRINCIPALES
-# =====================================================
-
 @control_calidad_bp.route('/ordenes-pendientes', methods=['GET'])
 @jefe_taller_required
 def obtener_ordenes_pendientes(current_user):
@@ -285,7 +308,6 @@ def obtener_ordenes_pendientes(current_user):
         
         logger.info(f"📋 Usuario {current_user.get('id')} - Pendientes | Estado: {estado} | Límite: {limit}")
         
-        # Órdenes con VehiculoArmado o ReparacionCompletada
         query = supabase.table('ordentrabajo') \
             .select('*') \
             .in_('estado_global', ['VehiculoArmado', 'ReparacionCompletada']) \
@@ -324,8 +346,8 @@ def obtener_ordenes_pendientes(current_user):
                 except Exception as e:
                     logger.error(f"Error obteniendo vehículo: {e}")
             
-            cliente_data = obtener_cliente_detalle(orden.get('id_cliente'))
-            
+            # 🔥 Usar la función corregida
+            cliente_data = obtener_cliente_detalle(orden_id)
             tecnicos_nombres = obtener_tecnicos_orden(orden_id)
             
             ordenes_formateadas.append({
@@ -401,7 +423,8 @@ def obtener_ordenes_finalizadas(current_user):
                 except Exception as e:
                     logger.error(f"Error obteniendo vehículo: {e}")
             
-            cliente_data = obtener_cliente_detalle(orden.get('id_cliente'))
+            # 🔥 Usar la función corregida
+            cliente_data = obtener_cliente_detalle(orden_id)
             tecnicos_nombres = obtener_tecnicos_orden(orden_id)
             
             ordenes_formateadas.append({
@@ -429,7 +452,6 @@ def obtener_ordenes_finalizadas(current_user):
         logger.error(f"❌ Error en obtener_ordenes_finalizadas: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
-
 @control_calidad_bp.route('/detalle-orden/<int:id_orden>', methods=['GET'])
 @jefe_taller_required
 def obtener_detalle_orden(current_user, id_orden):
@@ -456,7 +478,8 @@ def obtener_detalle_orden(current_user, id_orden):
             if vehiculo_result.data:
                 vehiculo_data = vehiculo_result.data[0]
         
-        cliente_data = obtener_cliente_detalle(orden_data.get('id_cliente'))
+        # 🔥 Usar la función corregida
+        cliente_data = obtener_cliente_detalle(id_orden)
         tecnicos_nombres = obtener_tecnicos_orden(id_orden)
         servicios = obtener_servicios_orden(id_orden)
         diagnostico_data = obtener_diagnostico_tecnico(id_orden)
@@ -504,7 +527,6 @@ def obtener_detalle_orden(current_user, id_orden):
     except Exception as e:
         logger.error(f"❌ Error en obtener_detalle_orden {id_orden}: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
-
 
 @control_calidad_bp.route('/finalizar-orden/<int:id_orden>', methods=['PUT'])
 @jefe_taller_required

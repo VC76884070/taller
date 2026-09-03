@@ -1137,7 +1137,7 @@ async function verDetalle(idSolicitud) {
 }
 
 // =====================================================
-// VER COMPROBANTE (CORREGIDO - CON PROXY)
+// VER COMPROBANTE (CORREGIDO - SIEMPRE COMO IMAGEN)
 // =====================================================
 
 async function verComprobante(idSolicitud) {
@@ -1167,20 +1167,15 @@ async function verComprobante(idSolicitud) {
     abrirModal('modalVerComprobante');
     
     try {
-        // 🔥 Cargar el comprobante a través del proxy
+        // 🔥 Cargar el comprobante a través del proxy (SIEMPRE como imagen)
         const base64Data = await cargarComprobanteProxy(solicitud.comprobante_url);
         
         if (modalBody) {
             if (base64Data) {
-                // ✅ Comprobante cargado exitosamente
-                const isImage = solicitud.comprobante_url.match(/\.(jpeg|jpg|gif|png|webp)$/i);
-                
+                // ✅ Comprobante cargado exitosamente - SIEMPRE mostrar como imagen
                 modalBody.innerHTML = `
                     <div style="text-align: center;">
-                        ${isImage ? 
-                            `<img src="${base64Data}" alt="Comprobante" style="max-width: 100%; max-height: 60vh; border-radius: var(--radius-md);">` :
-                            `<iframe src="${base64Data}" style="width: 100%; height: 60vh; border: none; border-radius: var(--radius-md);"></iframe>`
-                        }
+                        <img src="${base64Data}" alt="Comprobante" style="max-width: 100%; max-height: 60vh; border-radius: var(--radius-md);">
                         <div style="margin-top: 1rem; text-align: left; background: var(--gris-oscuro); padding: 1rem; border-radius: var(--radius-md);">
                             <p><strong>Factura/Comprobante N°:</strong> ${escapeHtml(solicitud.numero_factura || 'N/A')}</p>
                             <p><strong>Proveedor:</strong> ${escapeHtml(solicitud.proveedor_nombre || solicitud.proveedor_info || 'N/A')}</p>
@@ -1190,7 +1185,7 @@ async function verComprobante(idSolicitud) {
                     </div>
                 `;
             } else {
-                // ❌ Error al cargar el comprobante
+                // ❌ Error al cargar el comprobante - mostrar enlace directo
                 modalBody.innerHTML = `
                     <div style="text-align: center; padding: 2rem;">
                         <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: var(--ambar-alerta);"></i>
@@ -1210,14 +1205,13 @@ async function verComprobante(idSolicitud) {
         if (downloadBtn) {
             if (base64Data) {
                 downloadBtn.href = base64Data;
-                downloadBtn.download = `comprobante_${solicitud.id}.${solicitud.comprobante_url.match(/\.(jpeg|jpg|gif|png|webp|pdf)$/i) ? 'jpg' : 'pdf'}`;
+                downloadBtn.download = `comprobante_${solicitud.id}.jpg`;
                 downloadBtn.style.display = 'inline-flex';
+                downloadBtn.innerHTML = '<i class="fas fa-download"></i> Descargar';
             } else {
                 downloadBtn.href = solicitud.comprobante_url;
                 downloadBtn.target = '_blank';
-                downloadBtn.download = '';
                 downloadBtn.style.display = 'inline-flex';
-                downloadBtn.textContent = ' Abrir en Drive';
                 downloadBtn.innerHTML = '<i class="fas fa-external-link-alt"></i> Abrir en Drive';
             }
         }
@@ -1246,7 +1240,10 @@ async function cargarComprobanteProxy(url) {
     if (!url) return null;
     
     try {
+        // Usar el mismo proxy que para imágenes
         const proxyUrl = `${API_URL}/proxy-imagen-encargado?url=${encodeURIComponent(url)}`;
+        console.log('📸 Cargando comprobante desde proxy:', proxyUrl);
+        
         const response = await fetch(proxyUrl, { 
             headers: getAuthHeaders(),
             cache: 'no-cache'
@@ -1257,6 +1254,7 @@ async function cargarComprobanteProxy(url) {
         }
         
         const data = await response.json();
+        console.log('📸 Respuesta proxy:', data.success ? '✅ Éxito' : '❌ Error', data.error || '');
         
         if (data.success && data.base64) {
             return data.base64;

@@ -79,18 +79,18 @@
     </div>
 
     <!-- ===================================================== -->
-    <!-- 🔥 MODAL PARA MARCAR COMO COMPRADO (CON FOTOS Y MAPA) -->
+    <!-- 🔥 MODAL PARA MARCAR COMO COMPRADO (SIN MAPA) -->
     <!-- ===================================================== -->
     <div id="modalComprar" class="modal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
                 <h3><i class="fas fa-shopping-cart"></i> Registrar Compra</h3>
-                <span class="close-modal" onclick="cerrarModal('modalComprar')">&times;</span>
+                <span class="modal-close" onclick="cerrarModal('modalComprar')">&times;</span>
             </div>
-            <div id="modalComprarBody"></div>
-            <div class="modal-footer" style="display:flex; gap:0.75rem; justify-content:flex-end; padding:1rem; border-top:1px solid var(--border-color);">
+            <div id="modalComprarBody" class="modal-body"></div>
+            <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalComprar')">Cancelar</button>
-                <button class="btn-primary" onclick="confirmarCompra()" style="background:var(--rojo-primario); color:white;">
+                <button class="btn-primary" onclick="confirmarCompra()">
                     <i class="fas fa-check"></i> Confirmar Compra
                 </button>
             </div>
@@ -104,12 +104,12 @@
         <div class="modal-content modal-md">
             <div class="modal-header">
                 <h3><i class="fas fa-truck"></i> Registrar Entrega</h3>
-                <span class="close-modal" onclick="cerrarModal('modalEntregar')">&times;</span>
+                <span class="modal-close" onclick="cerrarModal('modalEntregar')">&times;</span>
             </div>
-            <div id="modalEntregarBody"></div>
-            <div class="modal-footer" style="display:flex; gap:0.75rem; justify-content:flex-end; padding:1rem; border-top:1px solid var(--border-color);">
+            <div id="modalEntregarBody" class="modal-body"></div>
+            <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalEntregar')">Cancelar</button>
-                <button class="btn-primary" onclick="confirmarEntrega()" style="background:var(--verde-exito); color:white;">
+                <button class="btn-primary" onclick="confirmarEntrega()" style="background:var(--verde-exito);">
                     <i class="fas fa-check"></i> Confirmar Entrega
                 </button>
             </div>
@@ -123,9 +123,9 @@
         <div class="modal-content modal-lg">
             <div class="modal-header">
                 <h3><i class="fas fa-info-circle"></i> Detalle de Solicitud</h3>
-                <span class="close-modal" onclick="cerrarModal('modalDetalle')">&times;</span>
+                <span class="modal-close" onclick="cerrarModal('modalDetalle')">&times;</span>
             </div>
-            <div id="modalDetalleBody"></div>
+            <div id="modalDetalleBody" class="modal-body"></div>
         </div>
     </div>
 
@@ -136,12 +136,12 @@
         <div class="modal-content modal-lg">
             <div class="modal-header">
                 <h3><i class="fas fa-receipt"></i> Comprobante de Compra</h3>
-                <span class="close-modal" onclick="cerrarModal('modalVerComprobante')">&times;</span>
+                <span class="modal-close" onclick="cerrarModal('modalVerComprobante')">&times;</span>
             </div>
-            <div id="modalVerComprobanteBody"></div>
-            <div class="modal-footer" style="display:flex; gap:0.75rem; justify-content:flex-end; padding:1rem; border-top:1px solid var(--border-color);">
+            <div id="modalVerComprobanteBody" class="modal-body"></div>
+            <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModal('modalVerComprobante')">Cerrar</button>
-                <a id="descargarComprobanteBtn" class="btn-primary" href="#" target="_blank" style="background:var(--rojo-primario); color:white; text-decoration:none; padding:0.5rem 1rem; border-radius:6px;">
+                <a id="descargarComprobanteBtn" class="btn-primary" href="#" target="_blank">
                     <i class="fas fa-download"></i> Descargar
                 </a>
             </div>
@@ -149,83 +149,87 @@
     </div>
 
     <!-- ===================================================== -->
-    <!-- 🔥 MODAL DE PROVEEDORES (REUTILIZADO) -->
+    <!-- 🔥 MODAL DE NUEVO PROVEEDOR (CON MAPA) -->
     <!-- ===================================================== -->
     <div id="modalProveedorCompra" class="modal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
                 <h3 id="modalTitleProveedorCompra"><i class="fas fa-truck"></i> Nuevo Proveedor</h3>
-                <span class="close-modal" onclick="cerrarModalProveedorCompra()">&times;</span>
+                <span class="modal-close" onclick="cerrarModalProveedorCompra()">&times;</span>
             </div>
-            <form id="proveedorFormCompra" novalidate>
-                <input type="hidden" id="proveedorIdCompra" value="">
-                <input type="hidden" id="latitudCompra" value="-17.7835">
-                <input type="hidden" id="longitudCompra" value="-63.1821">
+            <div class="modal-body">
+                <form id="proveedorFormCompra" novalidate>
+                    <input type="hidden" id="proveedorIdCompra" value="">
+                    <input type="hidden" id="latitudCompra" value="-17.7835">
+                    <input type="hidden" id="longitudCompra" value="-63.1821">
 
-                <!-- Fila 1: Nombre y Propietario -->
-                <div class="form-row">
-                    <div class="form-group">
-                        <label><i class="fas fa-building"></i> Nombre *</label>
-                        <input type="text" id="nombreCompra" required placeholder="Ej: Autorepuestos López">
-                    </div>
-                    <div class="form-group">
-                        <label><i class="fas fa-user"></i> Propietario</label>
-                        <input type="text" id="propietarioCompra" placeholder="Nombre del representante">
-                    </div>
-                </div>
-
-                <!-- Fila 2: Teléfono y Descripción -->
-                <div class="form-row">
-                    <div class="form-group">
-                        <label><i class="fas fa-phone"></i> Teléfono *</label>
-                        <input type="tel" id="telefonoCompra" required placeholder="Ej: 71234567">
-                    </div>
-                    <div class="form-group">
-                        <label><i class="fas fa-tags"></i> Repuestos que ofrece</label>
-                        <input type="text" id="descripcionCompra" placeholder="Ej: Motores, frenos, suspensión...">
-                    </div>
-                </div>
-
-                <!-- Mapa y Ubicación GPS -->
-                <div class="form-group">
-                    <label><i class="fas fa-map-marked-alt"></i> Ubicación GPS</label>
-                    <div id="mapContainerCompra" style="height: 220px; width: 100%; border-radius: 8px; border: 1px solid var(--border-color); background: var(--gris-oscuro);"></div>
-
-                    <div class="ubicacion-info" style="display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem; font-size:0.8rem; color:var(--gris-texto);">
-                        <i class="fas fa-map-pin"></i>
-                        <span>Coordenadas: </span>
-                        <span id="coordsDisplayCompra" class="coords">-17.7835, -63.1821</span>
-                    </div>
-
-                    <div class="coords-input-group" style="margin-top:0.5rem;">
-                        <div class="form-group" style="flex: 1;">
-                            <input type="text" id="ubicacion_gps_compra" placeholder="O ingresa coordenadas manualmente" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white;">
+                    <!-- Fila 1: Nombre y Propietario -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Nombre *</label>
+                            <input type="text" id="nombreCompra" required placeholder="Ej: Autorepuestos López">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-user"></i> Propietario</label>
+                            <input type="text" id="propietarioCompra" placeholder="Nombre del representante">
                         </div>
                     </div>
 
-                    <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <button type="button" class="btn-secondary btn-sm" onclick="obtenerUbicacionActualCompra()" style="padding:0.3rem 0.8rem; border-radius:4px; border:1px solid var(--border-color); background:transparent; cursor:pointer; font-size:0.75rem; color:var(--gris-texto);">
-                            <i class="fas fa-location-dot"></i> Mi Ubicación
+                    <!-- Fila 2: Teléfono y Descripción -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-phone"></i> Teléfono *</label>
+                            <input type="tel" id="telefonoCompra" required placeholder="Ej: 71234567">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-tags"></i> Repuestos que ofrece</label>
+                            <input type="text" id="descripcionCompra" placeholder="Ej: Motores, frenos, suspensión...">
+                        </div>
+                    </div>
+
+                    <!-- ===================================================== -->
+                    <!-- 🔥 MAPA Y UBICACIÓN GPS (AQUÍ DENTRO) -->
+                    <!-- ===================================================== -->
+                    <div class="form-group">
+                        <label><i class="fas fa-map-marked-alt"></i> Ubicación GPS</label>
+                        <div id="mapContainerCompra"></div>
+
+                        <div class="ubicacion-info">
+                            <i class="fas fa-map-pin"></i>
+                            <span>Coordenadas: </span>
+                            <span id="coordsDisplayCompra" class="coords">-17.7835, -63.1821</span>
+                        </div>
+
+                        <div class="coords-input-group">
+                            <div class="form-group" style="flex:1; margin-bottom:0;">
+                                <input type="text" id="ubicacion_gps_compra" placeholder="O ingresa coordenadas manualmente">
+                            </div>
+                        </div>
+
+                        <div class="ubicacion-actions">
+                            <button type="button" class="btn-sm" onclick="obtenerUbicacionActualCompra()">
+                                <i class="fas fa-location-dot"></i> Mi Ubicación
+                            </button>
+                            <button type="button" class="btn-sm" onclick="if(window.mapCompra){window.mapCompra.setView([DEFAULT_LAT_COMPRA, DEFAULT_LNG_COMPRA], 14); if(window.mapMarkerCompra){window.mapMarkerCompra.setLatLng([DEFAULT_LAT_COMPRA, DEFAULT_LNG_COMPRA]); actualizarCoordenadasCompra(DEFAULT_LAT_COMPRA, DEFAULT_LNG_COMPRA);}}">
+                                <i class="fas fa-home"></i> Predeterminada
+                            </button>
+                            <button type="button" class="btn-sm" onclick="if(window.mapCompra){window.mapCompra.invalidateSize();}">
+                                <i class="fas fa-expand"></i> Ajustar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Botones de acción -->
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" onclick="cerrarModalProveedorCompra()">
+                            <i class="fas fa-times"></i> Cancelar
                         </button>
-                        <button type="button" class="btn-secondary btn-sm" onclick="if(window.mapCompra){window.mapCompra.setView([DEFAULT_LAT_COMPRA, DEFAULT_LNG_COMPRA], 14); if(window.mapMarkerCompra){window.mapMarkerCompra.setLatLng([DEFAULT_LAT_COMPRA, DEFAULT_LNG_COMPRA]); actualizarCoordenadasCompra(DEFAULT_LAT_COMPRA, DEFAULT_LNG_COMPRA);}}" style="padding:0.3rem 0.8rem; border-radius:4px; border:1px solid var(--border-color); background:transparent; cursor:pointer; font-size:0.75rem; color:var(--gris-texto);">
-                            <i class="fas fa-home"></i> Predeterminada
-                        </button>
-                        <button type="button" class="btn-secondary btn-sm" onclick="if(window.mapCompra){window.mapCompra.invalidateSize();}" style="padding:0.3rem 0.8rem; border-radius:4px; border:1px solid var(--border-color); background:transparent; cursor:pointer; font-size:0.75rem; color:var(--gris-texto);">
-                            <i class="fas fa-expand"></i> Ajustar
+                        <button type="submit" class="btn-primary" id="btnGuardarProveedorCompra">
+                            <i class="fas fa-save"></i> Guardar
                         </button>
                     </div>
-                </div>
-
-                <!-- Botones de acción -->
-                <div class="form-actions" style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--border-color);">
-                    <button type="button" class="btn-secondary" onclick="cerrarModalProveedorCompra()" style="padding:0.5rem 1.5rem; border-radius:6px; border:none; cursor:pointer; background:var(--gris-oscuro); color:var(--texto-primario);">
-                        <i class="fas fa-times"></i> Cancelar
-                    </button>
-                    <button type="submit" class="btn-primary" id="btnGuardarProveedorCompra" style="padding:0.5rem 1.5rem; border-radius:6px; border:none; cursor:pointer; background:var(--rojo-primario); color:white;">
-                        <i class="fas fa-save"></i> Guardar
-                    </button>
-                </div>
-            </form>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -233,7 +237,7 @@
     <!-- 🔥 MODAL PARA FOTO AMPLIADA -->
     <!-- ===================================================== -->
     <div id="modalFotoAmpliadaEncargado" class="modal" onclick="cerrarFotoAmpliadaEncargado()">
-        <div class="modal-content" style="max-width: 900px; max-height: 95vh; background: var(--bg-card);" onclick="event.stopPropagation()">
+        <div class="modal-content" style="max-width: 900px; max-height: 95vh;" onclick="event.stopPropagation()">
             <div class="modal-header">
                 <h3><i class="fas fa-image"></i> Foto del Repuesto</h3>
                 <button class="modal-close" onclick="cerrarFotoAmpliadaEncargado()">&times;</button>
@@ -245,9 +249,9 @@
                 <img id="fotoAmpliadaEncargadoImg" src="" alt="Foto ampliada" loading="lazy" 
                      style="max-width:100%; max-height:75vh; object-fit:contain; border-radius:var(--radius-md); display:none;">
             </div>
-            <div class="modal-footer" style="display:flex; gap:0.75rem; justify-content:flex-end; padding:1rem; border-top:1px solid var(--border-color);">
-                <button class="btn-secondary" onclick="cerrarFotoAmpliadaEncargado()" style="padding:0.5rem 1.5rem; border-radius:6px; border:none; cursor:pointer; background:var(--gris-oscuro); color:var(--texto-primario);">Cerrar</button>
-                <button class="btn-primary" onclick="descargarFotoAmpliadaEncargado()" style="padding:0.5rem 1.5rem; border-radius:6px; border:none; cursor:pointer; background:var(--rojo-primario); color:white;">
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarFotoAmpliadaEncargado()">Cerrar</button>
+                <button class="btn-primary" onclick="descargarFotoAmpliadaEncargado()">
                     <i class="fas fa-download"></i> Descargar
                 </button>
             </div>

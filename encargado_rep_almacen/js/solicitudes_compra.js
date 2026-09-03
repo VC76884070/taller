@@ -1187,7 +1187,7 @@ async function subirComprobanteADrive(file, id_orden, codigo_orden) {
 }
 
 // =====================================================
-// 🔥 ABRIR MODAL COMPRAR (CON FOTOS, MAPA Y PROVEEDORES)
+// 🔥 ABRIR MODAL COMPRAR (SIN MAPA - EL MAPA ESTÁ EN EL MODAL DE PROVEEDOR)
 // =====================================================
 
 function abrirModalComprar(idSolicitud) {
@@ -1208,7 +1208,7 @@ function abrirModalComprar(idSolicitud) {
         mostrarLoading(false);
         const selectProveedoresHtml = renderizarSelectProveedoresCompra(proveedores);
 
-        // 🔥 RENDERIZAR ITEMS CON FOTOS
+        // 🔥 RENDERIZAR ITEMS CON FOTOS (sin mapa)
         const itemsHtml = items.map((item, idx) => {
             const fotosUrls = extraerUrlsFotos(item);
             const tieneFotos = fotosUrls.length > 0;
@@ -1301,7 +1301,7 @@ function abrirModalComprar(idSolicitud) {
                         <input type="text" id="numeroFactura" class="form-input" placeholder="Ej: 001-123456" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white;">
                     </div>
                     
-                    <!-- 🔥 SECCIÓN DE PROVEEDOR CON SELECT Y BOTÓN NUEVO -->
+                    <!-- 🔥 SECCIÓN DE PROVEEDOR CON SELECT Y BOTÓN NUEVO (SIN MAPA) -->
                     <div class="form-group proveedor-section" style="margin-bottom:0.75rem; padding:0.75rem; background:var(--bg-card); border-radius:8px; border:1px solid var(--border-color);">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
                             <label style="font-weight:600; font-size:0.9rem;">
@@ -1324,21 +1324,7 @@ function abrirModalComprar(idSolicitud) {
                         </div>
                     </div>
                     
-                    <!-- 🔥 MAPA PARA UBICACIÓN DEL PROVEEDOR -->
-                    <div class="form-group" style="margin-bottom:0.75rem;">
-                        <label style="font-weight:600; font-size:0.9rem;"><i class="fas fa-map-marked-alt"></i> Ubicación del Proveedor</label>
-                        <div id="mapContainerCompra" style="height: 200px; width: 100%; border-radius: 8px; border: 1px solid var(--border-color); background: var(--gris-oscuro);"></div>
-                        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
-                            <button type="button" class="btn-outline" onclick="obtenerUbicacionActualCompra()" style="padding: 0.2rem 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: transparent; cursor: pointer; font-size: 0.7rem; color: var(--gris-texto);">
-                                <i class="fas fa-location-dot"></i> Usar mi ubicación
-                            </button>
-                            <span style="font-size: 0.65rem; color: var(--gris-texto); align-self: center;">
-                                <i class="fas fa-info-circle"></i> Arrastra el marcador
-                            </span>
-                        </div>
-                        <input type="hidden" id="latitudCompra" value="${DEFAULT_LAT_COMPRA}">
-                        <input type="hidden" id="longitudCompra" value="${DEFAULT_LNG_COMPRA}">
-                    </div>
+                    <!-- 🔥 EL MAPA YA NO ESTÁ AQUÍ - SE MOVIÓ AL MODAL DE NUEVO PROVEEDOR -->
                     
                     <div class="form-group" style="margin-bottom:0.75rem;">
                         <label style="font-weight:600; font-size:0.9rem;">Monto total de la compra (Bs.)</label>
@@ -1373,10 +1359,9 @@ function abrirModalComprar(idSolicitud) {
         setTimeout(() => {
             configurarSubidaComprobante();
 
-            // 🔥 INICIALIZAR MAPA
-            setTimeout(() => {
-                initMapCompra(DEFAULT_LAT_COMPRA, DEFAULT_LNG_COMPRA);
-            }, 300);
+            // 🔥 INICIALIZAR MAPA SOLO EN EL MODAL DE PROVEEDOR
+            // El mapa se inicializa cuando se abre el modal de proveedor (abrirModalProveedorCompra)
+            // NO aquí
 
             const proveedorSelect = document.getElementById('proveedorSelectCompra');
             if (proveedorSelect) {

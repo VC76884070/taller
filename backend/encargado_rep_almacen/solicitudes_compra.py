@@ -459,10 +459,6 @@ def obtener_estadisticas(current_user):
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# ENDPOINT: SUBIR COMPROBANTE A GOOGLE DRIVE
-# =====================================================
-
 @solicitudes_compra_bp.route('/subir-comprobante-drive', methods=['POST'])
 @encargado_repuestos_required
 def subir_comprobante_drive(current_user):
@@ -508,11 +504,12 @@ def subir_comprobante_drive(current_user):
         
         logger.info(f"📁 Subiendo comprobante a: {folder_path}")
         
+        # 🔥 CAMBIAR public=False a public=True
         result = google_drive.upload_file(
             file_data=file,
             filename=filename,
             folder_path=folder_path,
-            public=False
+            public=True  # ✅ AHORA ES PÚBLICO
         )
         
         return jsonify({
@@ -528,7 +525,6 @@ def subir_comprobante_drive(current_user):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
-
 
 # =====================================================
 # ENDPOINT: PROXY IMAGEN PARA ENCARGADO DE REPUESTOS

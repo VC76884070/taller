@@ -48,7 +48,7 @@
         <main class="main-content">
             <div class="top-bar">
                 <div class="page-title">
-                    <h1><i class="fas fa-shopping-cart" style="color: var(--rojo-primario); margin-right: 0.5rem;"></i> Solicitudes de Compra</h1>
+                    <h1><i class="fas fa-shopping-cart"></i> Solicitudes de Compra</h1>
                     <p>Gestiona las compras de repuestos solicitadas por el Jefe de Taller</p>
                 </div>
                 <div class="top-actions">
@@ -59,16 +59,24 @@
                 </div>
             </div>
 
-            <!-- Filtros -->
+            <!-- ===================================================== -->
+            <!-- 🔥 FILTROS CON ESTILOS CORREGIDOS -->
+            <!-- ===================================================== -->
             <div class="filtros-bar">
-                <select id="filtroEstado">
-                    <option value="all">Todos los estados</option>
-                    <option value="pendiente">Pendientes</option>
-                    <option value="comprado">Comprados</option>
-                    <option value="entregado">Entregados</option>
-                </select>
-                <input type="text" id="searchInput" placeholder="Buscar por orden o repuesto...">
-                <button id="refreshBtn" class="btn-secondary">
+                <div class="filter-group">
+                    <label for="filtroEstado">Filtrar por estado</label>
+                    <select id="filtroEstado" class="form-select-sm">
+                        <option value="all">Todos los estados</option>
+                        <option value="pendiente">Pendientes</option>
+                        <option value="comprado">Comprados</option>
+                        <option value="entregado">Entregados</option>
+                    </select>
+                </div>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Buscar por orden o repuesto...">
+                </div>
+                <button id="refreshBtn" class="btn-outline">
                     <i class="fas fa-sync-alt"></i> Actualizar
                 </button>
             </div>
@@ -149,7 +157,7 @@
     </div>
 
     <!-- ===================================================== -->
-    <!-- 🔥 MODAL DE NUEVO PROVEEDOR (CON MAPA) -->
+    <!-- 🔥 MODAL DE NUEVO PROVEEDOR (CON MAPA DENTRO) -->
     <!-- ===================================================== -->
     <div id="modalProveedorCompra" class="modal">
         <div class="modal-content modal-lg">
@@ -167,11 +175,11 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label><i class="fas fa-building"></i> Nombre *</label>
-                            <input type="text" id="nombreCompra" required placeholder="Ej: Autorepuestos López">
+                            <input type="text" id="nombreCompra" class="form-input" required placeholder="Ej: Autorepuestos López">
                         </div>
                         <div class="form-group">
                             <label><i class="fas fa-user"></i> Propietario</label>
-                            <input type="text" id="propietarioCompra" placeholder="Nombre del representante">
+                            <input type="text" id="propietarioCompra" class="form-input" placeholder="Nombre del representante">
                         </div>
                     </div>
 
@@ -179,16 +187,16 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label><i class="fas fa-phone"></i> Teléfono *</label>
-                            <input type="tel" id="telefonoCompra" required placeholder="Ej: 71234567">
+                            <input type="tel" id="telefonoCompra" class="form-input" required placeholder="Ej: 71234567">
                         </div>
                         <div class="form-group">
                             <label><i class="fas fa-tags"></i> Repuestos que ofrece</label>
-                            <input type="text" id="descripcionCompra" placeholder="Ej: Motores, frenos, suspensión...">
+                            <input type="text" id="descripcionCompra" class="form-input" placeholder="Ej: Motores, frenos, suspensión...">
                         </div>
                     </div>
 
                     <!-- ===================================================== -->
-                    <!-- 🔥 MAPA Y UBICACIÓN GPS (AQUÍ DENTRO) -->
+                    <!-- 🔥 MAPA Y UBICACIÓN GPS (AQUÍ DENTRO DEL MODAL) -->
                     <!-- ===================================================== -->
                     <div class="form-group">
                         <label><i class="fas fa-map-marked-alt"></i> Ubicación GPS</label>
@@ -202,7 +210,7 @@
 
                         <div class="coords-input-group">
                             <div class="form-group" style="flex:1; margin-bottom:0;">
-                                <input type="text" id="ubicacion_gps_compra" placeholder="O ingresa coordenadas manualmente">
+                                <input type="text" id="ubicacion_gps_compra" class="form-input" placeholder="O ingresa coordenadas manualmente">
                             </div>
                         </div>
 
@@ -210,7 +218,7 @@
                             <button type="button" class="btn-sm" onclick="obtenerUbicacionActualCompra()">
                                 <i class="fas fa-location-dot"></i> Mi Ubicación
                             </button>
-                            <button type="button" class="btn-sm" onclick="if(window.mapCompra){window.mapCompra.setView([DEFAULT_LAT_COMPRA, DEFAULT_LNG_COMPRA], 14); if(window.mapMarkerCompra){window.mapMarkerCompra.setLatLng([DEFAULT_LAT_COMPRA, DEFAULT_LNG_COMPRA]); actualizarCoordenadasCompra(DEFAULT_LAT_COMPRA, DEFAULT_LNG_COMPRA);}}">
+                            <button type="button" class="btn-sm" onclick="if(window.mapCompra){window.mapCompra.setView([-17.7835, -63.1821], 14); if(window.mapMarkerCompra){window.mapMarkerCompra.setLatLng([-17.7835, -63.1821]); actualizarCoordenadasCompra(-17.7835, -63.1821);}}">
                                 <i class="fas fa-home"></i> Predeterminada
                             </button>
                             <button type="button" class="btn-sm" onclick="if(window.mapCompra){window.mapCompra.invalidateSize();}">

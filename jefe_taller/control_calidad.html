@@ -237,11 +237,22 @@
 
     <!-- Modal: FOTO AMPLIADA -->
     <div class="modal" id="fotoModal" onclick="cerrarFotoModal()">
-        <div class="modal-content modal-lg" style="max-width: 90%; background: transparent;" onclick="event.stopPropagation()">
-            <div style="text-align: right; margin-bottom: 0.5rem;">
-                <button class="modal-close" onclick="cerrarFotoModal()" style="background: var(--bg-card); padding: 0.3rem 0.8rem; border-radius: var(--radius-full);">&times;</button>
+        <div class="modal-content modal-lg" style="max-width: 90%; background: var(--bg-card); border-radius: var(--radius-xl);" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2><i class="fas fa-image"></i> Foto Ampliada</h2>
+                <button class="modal-close" onclick="cerrarFotoModal()">&times;</button>
             </div>
-            <img id="fotoAmpliada" src="" style="width: 100%; border-radius: var(--radius-lg);">
+            <div class="modal-body" style="display: flex; justify-content: center; align-items: center; padding: 1.5rem; min-height: 300px; position: relative; background: var(--negro);">
+                <!-- 🔥 LOADER PARA LA FOTO -->
+                <div id="fotoModalLoader" style="position: absolute; display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2.5rem; color: var(--rojo-primario);"></i>
+                    <span style="margin-left: 1rem; color: var(--gris-texto);">Cargando imagen...</span>
+                </div>
+                <img id="fotoAmpliada" src="" style="max-width: 100%; max-height: 70vh; object-fit: contain; border-radius: var(--radius-md); display: none;">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarFotoModal()">Cerrar</button>
+            </div>
         </div>
     </div>
 

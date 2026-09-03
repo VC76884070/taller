@@ -1,7 +1,7 @@
 // =====================================================
 // CONTROL_CALIDAD.JS - JEFE DE TALLER
 // GESTIÓN DE TRABAJOS COMPLETADOS POR TÉCNICOS
-// VERSIÓN COMPLETA CON FUNCIONALIDAD DE ENTREGA
+// VERSIÓN COMPLETA CON UBICACIÓN DEL CLIENTE Y ENTREGA
 // =====================================================
 
 // =====================================================
@@ -29,142 +29,7 @@ let ordenesFinalizadas = [];
 // =====================================================
 // FUNCIONES DE UTILIDAD
 // =====================================================
-// =====================================================
-// FUNCIONES PARA ARCHIVOS DE GOOGLE DRIVE
-// =====================================================
 
-/**
- * Extrae el file_id de una URL de Google Drive
- */
-function extraerFileIdDrive(url) {
-    if (!url) return null;
-    url = url.trim();
-    
-    const patterns = [
-        /[?&]id=([a-zA-Z0-9_-]+)/,
-        /\/file\/d\/([a-zA-Z0-9_-]+)/,
-        /open\?id=([a-zA-Z0-9_-]+)/,
-        /\/d\/([a-zA-Z0-9_-]+)/,
-        /thumbnail\?id=([a-zA-Z0-9_-]+)/
-    ];
-    
-    for (const pattern of patterns) {
-        const match = url.match(pattern);
-        if (match) return match[1];
-    }
-    
-    if (/^[a-zA-Z0-9_-]{10,}$/.test(url)) return url;
-    return null;
-}
-
-/**
- * Carga una imagen desde Google Drive usando el proxy
- */
-async function cargarImagenProxy(url, imgElement, loaderElement = null) {
-    if (!url) {
-        if (imgElement) imgElement.style.display = 'none';
-        return null;
-    }
-    
-    if (loaderElement) loaderElement.style.display = 'flex';
-    if (imgElement) {
-        imgElement.style.display = 'none';
-        imgElement.style.opacity = '0';
-    }
-    
-    try {
-        const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(url)}`;
-        const response = await fetch(proxyUrl, { headers: getAuthHeaders() });
-        const data = await response.json();
-        
-        if (data.success && data.base64) {
-            const nuevaImg = new Image();
-            return new Promise((resolve) => {
-                nuevaImg.onload = function() {
-                    if (imgElement) {
-                        imgElement.src = data.base64;
-                        imgElement.style.display = 'block';
-                        imgElement.style.opacity = '1';
-                    }
-                    if (loaderElement) loaderElement.style.display = 'none';
-                    resolve(data.base64);
-                };
-                nuevaImg.onerror = function() {
-                    if (loaderElement) {
-                        loaderElement.innerHTML = '<i class="fas fa-image"></i>';
-                        loaderElement.style.display = 'flex';
-                    }
-                    resolve(null);
-                };
-                nuevaImg.src = data.base64;
-            });
-        } else {
-            if (loaderElement) loaderElement.style.display = 'none';
-            return null;
-        }
-    } catch (error) {
-        console.error('Error cargando imagen:', error);
-        if (loaderElement) loaderElement.style.display = 'none';
-        return null;
-    }
-}
-
-/**
- * Carga un audio desde Google Drive usando fetch con token
- * 🔥 IMPORTANTE: Usa fetch() con token, NO URL directa en src
- */
-async function cargarAudioProxy(url, audioId, loaderId) {
-    if (!url) {
-        const loader = document.getElementById(loaderId);
-        if (loader) {
-            loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> No hay audio disponible';
-        }
-        return;
-    }
-    
-    const loader = document.getElementById(loaderId);
-    const audio = document.getElementById(audioId);
-    const source = document.getElementById(`${audioId}_source`);
-    
-    if (!audio || !source) {
-        console.warn('⚠️ Elementos de audio no encontrados');
-        return;
-    }
-    
-    try {
-        const proxyUrl = `${API_URL}/proxy-audio?url=${encodeURIComponent(url)}`;
-        const response = await fetch(proxyUrl, { headers: getAuthHeaders() });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const blob = await response.blob();
-        const localUrl = URL.createObjectURL(blob);
-        
-        source.src = localUrl;
-        audio.style.display = 'block';
-        audio.load();
-        
-        if (loader) loader.style.display = 'none';
-        
-        audio.addEventListener('error', function(e) {
-            if (loader) {
-                loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al reproducir audio';
-                loader.style.display = 'flex';
-            }
-            audio.style.display = 'none';
-        });
-        
-    } catch (error) {
-        console.error('❌ Error cargando audio:', error);
-        if (loader) {
-            loader.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error: ${error.message}`;
-            loader.style.display = 'flex';
-        }
-        audio.style.display = 'none';
-    }
-}
 function getAuthHeaders() {
     let token = localStorage.getItem('furia_token');
     if (!token) token = localStorage.getItem('token');
@@ -292,6 +157,158 @@ function mostrarMensajeLimite(container, limite, total) {
         if (containerParent && !containerParent.querySelector('.info-message')) {
             containerParent.insertBefore(infoMsg, container);
         }
+    }
+}
+
+// =====================================================
+// FUNCIÓN PARA ABRIR GOOGLE MAPS CON COORDENADAS
+// =====================================================
+
+function abrirGoogleMaps(latitud, longitud, nombreCliente = 'Cliente') {
+    if (!latitud || !longitud) {
+        showToast('El cliente no tiene coordenadas registradas', 'warning');
+        return;
+    }
+    
+    const url = `https://www.google.com/maps/search/?api=1&query=${latitud},${longitud}`;
+    window.open(url, '_blank');
+}
+
+window.abrirGoogleMaps = abrirGoogleMaps;
+
+// =====================================================
+// FUNCIONES PARA ARCHIVOS DE GOOGLE DRIVE
+// =====================================================
+
+/**
+ * Extrae el file_id de una URL de Google Drive
+ */
+function extraerFileIdDrive(url) {
+    if (!url) return null;
+    url = url.trim();
+    
+    const patterns = [
+        /[?&]id=([a-zA-Z0-9_-]+)/,
+        /\/file\/d\/([a-zA-Z0-9_-]+)/,
+        /open\?id=([a-zA-Z0-9_-]+)/,
+        /\/d\/([a-zA-Z0-9_-]+)/,
+        /thumbnail\?id=([a-zA-Z0-9_-]+)/
+    ];
+    
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match) return match[1];
+    }
+    
+    if (/^[a-zA-Z0-9_-]{10,}$/.test(url)) return url;
+    return null;
+}
+
+/**
+ * Carga una imagen desde Google Drive usando el proxy
+ */
+async function cargarImagenProxy(url, imgElement, loaderElement = null) {
+    if (!url) {
+        if (imgElement) imgElement.style.display = 'none';
+        return null;
+    }
+    
+    if (loaderElement) loaderElement.style.display = 'flex';
+    if (imgElement) {
+        imgElement.style.display = 'none';
+        imgElement.style.opacity = '0';
+    }
+    
+    try {
+        const proxyUrl = `${API_URL}/control-calidad/proxy-imagen?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl, { headers: getAuthHeaders() });
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            const nuevaImg = new Image();
+            return new Promise((resolve) => {
+                nuevaImg.onload = function() {
+                    if (imgElement) {
+                        imgElement.src = data.base64;
+                        imgElement.style.display = 'block';
+                        imgElement.style.opacity = '1';
+                    }
+                    if (loaderElement) loaderElement.style.display = 'none';
+                    resolve(data.base64);
+                };
+                nuevaImg.onerror = function() {
+                    if (loaderElement) {
+                        loaderElement.innerHTML = '<i class="fas fa-image"></i>';
+                        loaderElement.style.display = 'flex';
+                    }
+                    resolve(null);
+                };
+                nuevaImg.src = data.base64;
+            });
+        } else {
+            if (loaderElement) loaderElement.style.display = 'none';
+            return null;
+        }
+    } catch (error) {
+        console.error('Error cargando imagen:', error);
+        if (loaderElement) loaderElement.style.display = 'none';
+        return null;
+    }
+}
+
+/**
+ * Carga un audio desde Google Drive usando fetch con token
+ */
+async function cargarAudioProxy(url, audioId, loaderId) {
+    if (!url) {
+        const loader = document.getElementById(loaderId);
+        if (loader) {
+            loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> No hay audio disponible';
+        }
+        return;
+    }
+    
+    const loader = document.getElementById(loaderId);
+    const audio = document.getElementById(audioId);
+    const source = document.getElementById(`${audioId}_source`);
+    
+    if (!audio || !source) {
+        console.warn('⚠️ Elementos de audio no encontrados');
+        return;
+    }
+    
+    try {
+        const proxyUrl = `${API_URL}/control-calidad/proxy-audio?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl, { headers: getAuthHeaders() });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        const localUrl = URL.createObjectURL(blob);
+        
+        source.src = localUrl;
+        audio.style.display = 'block';
+        audio.load();
+        
+        if (loader) loader.style.display = 'none';
+        
+        audio.addEventListener('error', function(e) {
+            if (loader) {
+                loader.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al reproducir audio';
+                loader.style.display = 'flex';
+            }
+            audio.style.display = 'none';
+        });
+        
+    } catch (error) {
+        console.error('❌ Error cargando audio:', error);
+        if (loader) {
+            loader.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error: ${error.message}`;
+            loader.style.display = 'flex';
+        }
+        audio.style.display = 'none';
     }
 }
 
@@ -470,6 +487,7 @@ function renderizarOrdenesFinalizadas() {
     
     container.innerHTML = ordenesFinalizadas.map(orden => {
         const isEntregado = orden.estado_global === 'Entregado';
+        const tieneUbicacion = orden.latitud && orden.longitud;
         
         return `
         <div class="orden-card ${isEntregado ? 'entregado-card' : ''}" data-orden-id="${orden.id_orden}">
@@ -513,6 +531,16 @@ function renderizarOrdenesFinalizadas() {
                         <span class="detalle-value">${escapeHtml(orden.comentarios_aprobacion)}</span>
                     </div>
                 ` : ''}
+                ${tieneUbicacion ? `
+                    <div class="detalle-row" style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+                        <span class="detalle-label">
+                            <i class="fas fa-map-pin" style="color: var(--rojo-primario);"></i> Ubicación:
+                        </span>
+                        <span class="detalle-value" style="font-size: 0.7rem; color: var(--gris-texto);">
+                            ${parseFloat(orden.latitud).toFixed(6)}, ${parseFloat(orden.longitud).toFixed(6)}
+                        </span>
+                    </div>
+                ` : ''}
             </div>
             <div class="orden-footer">
                 <button class="action-btn view" onclick="verDetalleOrden(${orden.id_orden})">
@@ -527,10 +555,25 @@ function renderizarOrdenesFinalizadas() {
                         <i class="fas fa-check-circle"></i> Vehículo Entregado
                     </button>
                 ` : ''}
+                ${tieneUbicacion ? `
+                    <button class="action-btn location" onclick="abrirGoogleMaps(${orden.latitud}, ${orden.longitud}, '${escapeHtml(orden.cliente_nombre)}')" 
+                            style="background: var(--azul-acento, #3B82F6); color: white;" 
+                            title="Ver ubicación del cliente en Google Maps">
+                        <i class="fas fa-map-marker-alt"></i> Ubicación
+                    </button>
+                ` : `
+                    <button class="action-btn location" disabled style="opacity:0.4; cursor:not-allowed; background: var(--gris-medio); color: var(--gris-texto);" title="Cliente sin coordenadas registradas">
+                        <i class="fas fa-map-marker-alt"></i> Sin Ubicación
+                    </button>
+                `}
             </div>
         </div>
     `}).join('');
 }
+
+// =====================================================
+// VER DETALLE DE ORDEN
+// =====================================================
 
 window.verDetalleOrden = async function(ordenId) {
     mostrarLoading(true);
@@ -556,7 +599,7 @@ window.verDetalleOrden = async function(ordenId) {
         const anio = detalle.vehiculo?.anio && detalle.vehiculo.anio !== 'N/A' ? detalle.vehiculo.anio : 'No especificado';
         const marcaModelo = `${detalle.vehiculo?.marca || ''} ${detalle.vehiculo?.modelo || ''}`.trim() || 'No especificado';
         
-        // 🔥 Generar HTML para el audio con IDs FIJOS
+        // Generar HTML para el audio con IDs FIJOS
         let audioHtml = '';
         const audioId = `audio_${ordenId}`;
         const loaderId = `audioLoader_${ordenId}`;
@@ -576,7 +619,7 @@ window.verDetalleOrden = async function(ordenId) {
             `;
         }
         
-        // 🔥 Generar HTML para las imágenes con loaders
+        // Generar HTML para las imágenes con loaders
         let fotosHtml = '';
         if (fotosArray.length > 0) {
             fotosHtml = fotosArray.map(([nombre, url], index) => {
@@ -597,6 +640,11 @@ window.verDetalleOrden = async function(ordenId) {
                 `;
             }).join('');
         }
+        
+        // Coordenadas del cliente para el botón de ubicación en detalle
+        const clienteLat = detalle.cliente?.latitud;
+        const clienteLng = detalle.cliente?.longitud;
+        const tieneCoords = clienteLat && clienteLng;
         
         const detalleHtml = `
             <div style="display: grid; gap: 1rem;">
@@ -626,6 +674,24 @@ window.verDetalleOrden = async function(ordenId) {
                         <div><strong>Nombre:</strong> ${escapeHtml(detalle.cliente?.nombre || 'No registrado')}</div>
                         <div><strong>Teléfono:</strong> ${escapeHtml(detalle.cliente?.telefono || 'No registrado')}</div>
                         <div><strong>Email:</strong> ${escapeHtml(detalle.cliente?.email || 'No registrado')}</div>
+                        ${tieneCoords ? `
+                            <div style="grid-column: 1 / -1; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+                                <strong><i class="fas fa-map-pin" style="color: var(--rojo-primario);"></i> Ubicación:</strong>
+                                <span style="font-size: 0.75rem; color: var(--gris-texto); margin-left: 0.5rem;">
+                                    ${parseFloat(clienteLat).toFixed(6)}, ${parseFloat(clienteLng).toFixed(6)}
+                                </span>
+                                <button class="action-btn location" onclick="abrirGoogleMaps(${clienteLat}, ${clienteLng}, '${escapeHtml(detalle.cliente?.nombre || 'Cliente')}')" 
+                                        style="margin-left: 0.5rem; padding: 0.2rem 0.8rem; border-radius: var(--radius-sm); border: none; background: var(--azul-acento, #3B82F6); color: white; cursor: pointer; font-size: 0.7rem;">
+                                    <i class="fas fa-map-marker-alt"></i> Ver en Mapa
+                                </button>
+                            </div>
+                        ` : `
+                            <div style="grid-column: 1 / -1; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+                                <span style="color: var(--gris-texto); font-size: 0.75rem;">
+                                    <i class="fas fa-map-pin"></i> Cliente sin coordenadas registradas
+                                </span>
+                            </div>
+                        `}
                     </div>
                 </div>
                 
@@ -670,7 +736,7 @@ window.verDetalleOrden = async function(ordenId) {
             detalleBody.innerHTML = detalleHtml;
             abrirModal('modalDetalle');
             
-            // 🔥 Cargar las imágenes después de renderizar
+            // Cargar las imágenes después de renderizar
             setTimeout(() => {
                 // Cargar cada imagen
                 fotosArray.forEach(([nombre, url], index) => {
@@ -700,6 +766,10 @@ window.verDetalleOrden = async function(ordenId) {
     }
 };
 
+// =====================================================
+// VER FOTO AMPLIADA
+// =====================================================
+
 window.verFotoAmpliada = async function(url) {
     if (!url) {
         showToast('No hay URL de imagen', 'warning');
@@ -722,13 +792,11 @@ window.verFotoAmpliada = async function(url) {
     abrirModal('fotoModal');
     
     try {
-        // 🔥 Usar el proxy para obtener la imagen
-        const proxyUrl = `${API_URL}/proxy-imagen?url=${encodeURIComponent(url)}`;
+        const proxyUrl = `${API_URL}/control-calidad/proxy-imagen?url=${encodeURIComponent(url)}`;
         const response = await fetch(proxyUrl, { headers: getAuthHeaders() });
         const data = await response.json();
         
         if (data.success && data.base64) {
-            // Precargar la imagen
             const nuevaImg = new Image();
             nuevaImg.onload = function() {
                 modalImg.src = data.base64;
@@ -936,6 +1004,18 @@ window.abrirModalEntregar = async function(ordenId) {
                 <p><strong><i class="fas fa-user"></i> Cliente:</strong> ${escapeHtml(orden.cliente_nombre)}</p>
                 <p><strong><i class="fas fa-users"></i> Técnico(s):</strong> ${escapeHtml(orden.tecnicos_nombres || 'No asignado')}</p>
                 <p><strong><i class="fas fa-check-circle"></i> Estado actual:</strong> ${statusBadge(orden.estado_global)}</p>
+                ${orden.latitud && orden.longitud ? `
+                    <p style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+                        <strong><i class="fas fa-map-pin" style="color: var(--rojo-primario);"></i> Ubicación:</strong>
+                        <span style="font-size: 0.75rem; color: var(--gris-texto);">
+                            ${parseFloat(orden.latitud).toFixed(6)}, ${parseFloat(orden.longitud).toFixed(6)}
+                        </span>
+                        <button onclick="abrirGoogleMaps(${orden.latitud}, ${orden.longitud}, '${escapeHtml(orden.cliente_nombre)}')" 
+                                style="margin-left: 0.5rem; padding: 0.15rem 0.6rem; border-radius: var(--radius-sm); border: none; background: var(--azul-acento, #3B82F6); color: white; cursor: pointer; font-size: 0.65rem;">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </button>
+                    </p>
+                ` : ''}
             </div>
         `;
     }
@@ -1165,6 +1245,7 @@ window.abrirModalEntregar = abrirModalEntregar;
 window.confirmarEntregar = confirmarEntregar;
 window.cerrarModal = cerrarModal;
 window.logout = logout;
+window.abrirGoogleMaps = abrirGoogleMaps;
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', inicializar);

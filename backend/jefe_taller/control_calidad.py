@@ -1,6 +1,6 @@
 # =====================================================
 # CONTROL_CALIDAD.PY - JEFE DE TALLER
-# VERSIÓN COMPLETA CON FUNCIONALIDAD DE ENTREGA
+# VERSIÓN COMPLETA CON UBICACIÓN DEL CLIENTE Y ENTREGA
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -72,30 +72,41 @@ def formatear_vehiculo(vehiculo_data: Optional[Dict]) -> str:
     return f"Vehículo ({placa})" if placa else 'Vehículo no registrado'
 
 
-def obtener_cliente_nombre(id_cliente: int) -> str:
-    """Obtener nombre del cliente por ID de cliente"""
+def obtener_cliente_detalle(id_cliente: int) -> Dict:
+    """Obtener nombre, teléfono y coordenadas del cliente"""
     try:
         if not id_cliente:
-            return 'Cliente no registrado'
+            return {'nombre': 'Cliente no registrado', 'latitud': None, 'longitud': None, 'telefono': None}
         
-        # Obtener id_usuario desde tabla cliente
         cliente = supabase.table('cliente') \
-            .select('id_usuario') \
+            .select('id_usuario, latitud, longitud') \
             .eq('id', id_cliente) \
             .execute()
         
-        if cliente.data and cliente.data[0].get('id_usuario'):
-            usuario = supabase.table('usuario') \
-                .select('nombre') \
-                .eq('id', cliente.data[0]['id_usuario']) \
-                .execute()
-            if usuario.data:
-                return usuario.data[0].get('nombre', 'Cliente no registrado')
+        if cliente.data:
+            cliente_data = cliente.data[0]
+            resultado = {
+                'nombre': 'Cliente no registrado',
+                'latitud': cliente_data.get('latitud'),
+                'longitud': cliente_data.get('longitud'),
+                'telefono': None
+            }
+            
+            if cliente_data.get('id_usuario'):
+                usuario = supabase.table('usuario') \
+                    .select('nombre, contacto') \
+                    .eq('id', cliente_data['id_usuario']) \
+                    .execute()
+                if usuario.data:
+                    resultado['nombre'] = usuario.data[0].get('nombre', 'Cliente no registrado')
+                    resultado['telefono'] = usuario.data[0].get('contacto')
+            
+            return resultado
         
-        return 'Cliente no registrado'
+        return {'nombre': 'Cliente no registrado', 'latitud': None, 'longitud': None, 'telefono': None}
     except Exception as e:
-        logger.error(f"Error obteniendo cliente: {e}")
-        return 'Cliente no registrado'
+        logger.error(f"Error obteniendo cliente detalle: {e}")
+        return {'nombre': 'Cliente no registrado', 'latitud': None, 'longitud': None, 'telefono': None}
 
 
 def obtener_diagnostico_tecnico(id_orden: int) -> Dict:
@@ -313,9 +324,7 @@ def obtener_ordenes_pendientes(current_user):
                 except Exception as e:
                     logger.error(f"Error obteniendo vehículo: {e}")
             
-            cliente_nombre = 'Cliente no registrado'
-            if orden.get('id_cliente'):
-                cliente_nombre = obtener_cliente_nombre(orden['id_cliente'])
+            cliente_data = obtener_cliente_detalle(orden.get('id_cliente'))
             
             tecnicos_nombres = obtener_tecnicos_orden(orden_id)
             
@@ -324,7 +333,7 @@ def obtener_ordenes_pendientes(current_user):
                 'codigo_unico': orden.get('codigo_unico', 'N/A'),
                 'estado_global': orden.get('estado_global', 'Pendiente'),
                 'vehiculo': vehiculo_texto,
-                'cliente_nombre': cliente_nombre,
+                'cliente_nombre': cliente_data.get('nombre', 'Cliente no registrado'),
                 'tecnicos_nombres': tecnicos_nombres,
                 'fecha_inicio': orden.get('fecha_ingreso'),
                 'fecha_fin': orden.get('fecha_estimada_finalizacion') or orden.get('fecha_ingreso'),
@@ -346,7 +355,7 @@ def obtener_ordenes_pendientes(current_user):
 @control_calidad_bp.route('/ordenes-finalizadas', methods=['GET'])
 @jefe_taller_required
 def obtener_ordenes_finalizadas(current_user):
-    """Obtener ÚLTIMAS 10 órdenes finalizadas o entregadas"""
+    """Obtener ÚLTIMAS 10 órdenes finalizadas o entregadas con coordenadas del cliente"""
     try:
         estado = request.args.get('estado', 'all')
         limit = request.args.get('limit', 10, type=int)
@@ -354,7 +363,6 @@ def obtener_ordenes_finalizadas(current_user):
         
         logger.info(f"📋 Usuario {current_user.get('id')} - Finalizadas | Estado: {estado} | Límite: {limit}")
         
-        # Órdenes finalizadas o entregadas
         query = supabase.table('ordentrabajo') \
             .select('*') \
             .in_('estado_global', ['Finalizado', 'Entregado']) \
@@ -393,10 +401,7 @@ def obtener_ordenes_finalizadas(current_user):
                 except Exception as e:
                     logger.error(f"Error obteniendo vehículo: {e}")
             
-            cliente_nombre = 'Cliente no registrado'
-            if orden.get('id_cliente'):
-                cliente_nombre = obtener_cliente_nombre(orden['id_cliente'])
-            
+            cliente_data = obtener_cliente_detalle(orden.get('id_cliente'))
             tecnicos_nombres = obtener_tecnicos_orden(orden_id)
             
             ordenes_formateadas.append({
@@ -404,10 +409,13 @@ def obtener_ordenes_finalizadas(current_user):
                 'codigo_unico': orden.get('codigo_unico', 'N/A'),
                 'estado_global': orden.get('estado_global', 'Finalizado'),
                 'vehiculo': vehiculo_texto,
-                'cliente_nombre': cliente_nombre,
+                'cliente_nombre': cliente_data.get('nombre', 'Cliente no registrado'),
+                'cliente_telefono': cliente_data.get('telefono'),
                 'tecnicos_nombres': tecnicos_nombres,
                 'fecha_finalizacion': orden.get('fecha_salida') or orden.get('fecha_ingreso'),
-                'comentarios_aprobacion': orden.get('instrucciones_tecnico', '')
+                'comentarios_aprobacion': orden.get('instrucciones_tecnico', ''),
+                'latitud': cliente_data.get('latitud'),
+                'longitud': cliente_data.get('longitud')
             })
         
         return jsonify({
@@ -425,7 +433,7 @@ def obtener_ordenes_finalizadas(current_user):
 @control_calidad_bp.route('/detalle-orden/<int:id_orden>', methods=['GET'])
 @jefe_taller_required
 def obtener_detalle_orden(current_user, id_orden):
-    """Obtener detalle completo de una orden"""
+    """Obtener detalle completo de una orden con coordenadas del cliente"""
     try:
         logger.info(f"🔍 Usuario {current_user.get('id')} consultando detalle de orden {id_orden}")
         
@@ -448,10 +456,7 @@ def obtener_detalle_orden(current_user, id_orden):
             if vehiculo_result.data:
                 vehiculo_data = vehiculo_result.data[0]
         
-        cliente_nombre = 'No registrado'
-        if orden_data.get('id_cliente'):
-            cliente_nombre = obtener_cliente_nombre(orden_data['id_cliente'])
-        
+        cliente_data = obtener_cliente_detalle(orden_data.get('id_cliente'))
         tecnicos_nombres = obtener_tecnicos_orden(id_orden)
         servicios = obtener_servicios_orden(id_orden)
         diagnostico_data = obtener_diagnostico_tecnico(id_orden)
@@ -470,9 +475,11 @@ def obtener_detalle_orden(current_user, id_orden):
                 'fecha_estimada_finalizacion': orden_data.get('fecha_estimada_finalizacion')
             },
             'cliente': {
-                'nombre': cliente_nombre,
-                'telefono': 'No registrado',
-                'email': 'No registrado'
+                'nombre': cliente_data.get('nombre', 'No registrado'),
+                'telefono': cliente_data.get('telefono', 'No registrado'),
+                'email': 'No registrado',
+                'latitud': cliente_data.get('latitud'),
+                'longitud': cliente_data.get('longitud')
             },
             'vehiculo': {
                 'id': vehiculo_data.get('id'),
@@ -689,10 +696,6 @@ def rechazar_orden(current_user, id_orden):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-# =====================================================
-# NUEVO ENDPOINT: ENTREGAR VEHÍCULO
-# =====================================================
-
 @control_calidad_bp.route('/entregar-orden/<int:id_orden>', methods=['PUT'])
 @jefe_taller_required
 def entregar_orden(current_user, id_orden):
@@ -823,6 +826,7 @@ def obtener_contadores(current_user):
     except Exception as e:
         logger.error(f"Error en contadores: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
 
 # =====================================================
 # ENDPOINTS PROXY PARA GOOGLE DRIVE

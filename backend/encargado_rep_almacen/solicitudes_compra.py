@@ -526,10 +526,6 @@ def subir_comprobante_drive(current_user):
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# =====================================================
-# ENDPOINT: PROXY IMAGEN PARA ENCARGADO DE REPUESTOS
-# =====================================================
-
 @solicitudes_compra_bp.route('/proxy-imagen-encargado', methods=['GET'])
 @encargado_repuestos_required
 def proxy_imagen_encargado(current_user):
@@ -583,7 +579,12 @@ def proxy_imagen_encargado(current_user):
     if not file_id:
         return jsonify({'success': False, 'error': 'No se pudo extraer el ID de Google Drive'}), 400
     
+    # 🔥 ESTRATEGIAS DE DESCARGA - PRIORIZANDO LA QUE FUNCIONA
     estrategias = [
+        # 🔥 NUEVA: Usar drive.usercontent.google.com con authuser=0 (esta funciona)
+        f"https://drive.usercontent.google.com/download?id={file_id}&export=view&authuser=0",
+        f"https://drive.usercontent.google.com/download?id={file_id}&export=download&authuser=0",
+        # Estrategias originales (fallback)
         f"https://drive.google.com/thumbnail?id={file_id}&sz=w800",
         f"https://drive.google.com/uc?export=view&id={file_id}",
         f"https://drive.google.com/uc?export=download&id={file_id}",
@@ -594,8 +595,10 @@ def proxy_imagen_encargado(current_user):
     
     for download_url in estrategias:
         try:
+            logger.info(f"📸 Intentando descargar desde: {download_url[:80]}...")
             response = requests.get(download_url, timeout=30, allow_redirects=True)
             
+            # Manejar redirecciones de confirmación de Google
             if 'confirm' in response.url and 'download' in response.url:
                 confirm_match = re.search(r'confirm=([^&]+)', response.text)
                 if confirm_match:
@@ -605,14 +608,20 @@ def proxy_imagen_encargado(current_user):
             
             if response.status_code == 200:
                 content_type = response.headers.get('Content-Type', '')
+                # Verificar que es una imagen (o al menos tiene contenido)
                 if content_type.startswith('image/') or len(response.content) > 500:
                     image_data = response.content
                     mime_type = content_type if content_type.startswith('image/') else 'image/jpeg'
+                    logger.info(f"✅ Imagen descargada desde: {download_url[:80]}...")
                     break
+                else:
+                    logger.warning(f"⚠️ Contenido no es imagen: {content_type}, tamaño: {len(response.content)}")
         except Exception as e:
+            logger.warning(f"⚠️ Error en estrategia {download_url[:50]}: {str(e)}")
             continue
     
     if not image_data:
+        logger.error(f"❌ No se pudo descargar la imagen para file_id: {file_id}")
         return jsonify({'success': False, 'error': 'No se pudo descargar la imagen'}), 404
     
     base64_data = base64.b64encode(image_data).decode('utf-8')

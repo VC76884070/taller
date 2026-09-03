@@ -1137,44 +1137,139 @@ async function verDetalle(idSolicitud) {
 }
 
 // =====================================================
-// VER COMPROBANTE
+// VER COMPROBANTE (CORREGIDO - CON PROXY)
 // =====================================================
 
 async function verComprobante(idSolicitud) {
     const solicitud = solicitudesPendientes.find(s => s.id === idSolicitud);
-    if (!solicitud || !solicitud.comprobante_url) return;
+    if (!solicitud || !solicitud.comprobante_url) {
+        showToast('No hay comprobante para esta solicitud', 'warning');
+        return;
+    }
 
+    mostrarLoading(true);
+    
     const modalBody = document.getElementById('modalVerComprobanteBody');
-    const isImage = solicitud.comprobante_url.match(/\.(jpeg|jpg|gif|png|webp)$/i);
-
+    const downloadBtn = document.getElementById('descargarComprobanteBtn');
+    
+    // Mostrar loader mientras se carga
     if (modalBody) {
         modalBody.innerHTML = `
-            <div style="text-align: center;">
-                ${isImage ? 
-                    `<img src="${solicitud.comprobante_url}" alt="Comprobante" style="max-width: 100%; max-height: 60vh; border-radius: var(--radius-md);">` :
-                    `<iframe src="${solicitud.comprobante_url}" style="width: 100%; height: 60vh; border: none; border-radius: var(--radius-md);"></iframe>`
-                }
-                <div style="margin-top: 1rem; text-align: left;">
-                    <p><strong>Factura/Comprobante N°:</strong> ${escapeHtml(solicitud.numero_factura || 'N/A')}</p>
-                    <p><strong>Proveedor:</strong> ${escapeHtml(solicitud.proveedor_nombre || solicitud.proveedor_info || 'N/A')}</p>
-                    <p><strong>Monto:</strong> Bs. ${(solicitud.precio_cotizado || 0).toFixed(2)}</p>
-                    <p><strong>Fecha de compra:</strong> ${formatDate(solicitud.fecha_compra)}</p>
+            <div style="text-align: center; padding: 2rem;">
+                <div style="display: flex; justify-content: center; align-items: center; gap: 1rem; flex-direction: column;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 3rem; color: var(--rojo-primario);"></i>
+                    <p>Cargando comprobante...</p>
                 </div>
             </div>
         `;
     }
-
-    const downloadBtn = document.getElementById('descargarComprobanteBtn');
-    if (downloadBtn) {
-        downloadBtn.href = solicitud.comprobante_url;
-        downloadBtn.download = `comprobante_${solicitud.id}.${isImage ? 'jpg' : 'pdf'}`;
-    }
-
+    
     abrirModal('modalVerComprobante');
+    
+    try {
+        // 🔥 Cargar el comprobante a través del proxy
+        const base64Data = await cargarComprobanteProxy(solicitud.comprobante_url);
+        
+        if (modalBody) {
+            if (base64Data) {
+                // ✅ Comprobante cargado exitosamente
+                const isImage = solicitud.comprobante_url.match(/\.(jpeg|jpg|gif|png|webp)$/i);
+                
+                modalBody.innerHTML = `
+                    <div style="text-align: center;">
+                        ${isImage ? 
+                            `<img src="${base64Data}" alt="Comprobante" style="max-width: 100%; max-height: 60vh; border-radius: var(--radius-md);">` :
+                            `<iframe src="${base64Data}" style="width: 100%; height: 60vh; border: none; border-radius: var(--radius-md);"></iframe>`
+                        }
+                        <div style="margin-top: 1rem; text-align: left; background: var(--gris-oscuro); padding: 1rem; border-radius: var(--radius-md);">
+                            <p><strong>Factura/Comprobante N°:</strong> ${escapeHtml(solicitud.numero_factura || 'N/A')}</p>
+                            <p><strong>Proveedor:</strong> ${escapeHtml(solicitud.proveedor_nombre || solicitud.proveedor_info || 'N/A')}</p>
+                            <p><strong>Monto:</strong> Bs. ${(solicitud.precio_cotizado || 0).toFixed(2)}</p>
+                            <p><strong>Fecha de compra:</strong> ${formatDate(solicitud.fecha_compra)}</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // ❌ Error al cargar el comprobante
+                modalBody.innerHTML = `
+                    <div style="text-align: center; padding: 2rem;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: var(--ambar-alerta);"></i>
+                        <p style="margin-top: 1rem;">No se pudo cargar el comprobante</p>
+                        <small style="color: var(--gris-texto);">URL: ${escapeHtml(solicitud.comprobante_url)}</small>
+                        <div style="margin-top: 1rem;">
+                            <a href="${solicitud.comprobante_url}" target="_blank" class="btn-primary" style="padding: 0.5rem 1rem; border-radius: var(--radius-sm); text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas fa-external-link-alt"></i> Abrir en Google Drive
+                            </a>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Actualizar botón de descarga
+        if (downloadBtn) {
+            if (base64Data) {
+                downloadBtn.href = base64Data;
+                downloadBtn.download = `comprobante_${solicitud.id}.${solicitud.comprobante_url.match(/\.(jpeg|jpg|gif|png|webp|pdf)$/i) ? 'jpg' : 'pdf'}`;
+                downloadBtn.style.display = 'inline-flex';
+            } else {
+                downloadBtn.href = solicitud.comprobante_url;
+                downloadBtn.target = '_blank';
+                downloadBtn.download = '';
+                downloadBtn.style.display = 'inline-flex';
+                downloadBtn.textContent = ' Abrir en Drive';
+                downloadBtn.innerHTML = '<i class="fas fa-external-link-alt"></i> Abrir en Drive';
+            }
+        }
+        
+    } catch (error) {
+        console.error('❌ Error mostrando comprobante:', error);
+        if (modalBody) {
+            modalBody.innerHTML = `
+                <div style="text-align: center; padding: 2rem;">
+                    <i class="fas fa-exclamation-circle" style="font-size: 3rem; color: var(--rojo-primario);"></i>
+                    <p style="margin-top: 1rem;">Error al cargar el comprobante</p>
+                    <small style="color: var(--gris-texto);">${error.message}</small>
+                </div>
+            `;
+        }
+        showToast('Error al cargar el comprobante', 'error');
+    } finally {
+        mostrarLoading(false);
+    }
 }
-
 // =====================================================
-// SUBIR COMPROBANTE A DRIVE
+// 🔥 FUNCIÓN PARA CARGAR COMPROBANTE CON PROXY
+// =====================================================
+
+async function cargarComprobanteProxy(url) {
+    if (!url) return null;
+    
+    try {
+        const proxyUrl = `${API_URL}/proxy-imagen-encargado?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl, { 
+            headers: getAuthHeaders(),
+            cache: 'no-cache'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            return data.base64;
+        } else {
+            return null;
+        }
+    } catch (error) {
+        console.error('❌ Error cargando comprobante:', error);
+        return null;
+    }
+}
+// =====================================================
+// SUBIR COMPROBANTE A DRIVE (VERIFICAR QUE DEVUELVE LA URL CORRECTA)
 // =====================================================
 
 async function subirComprobanteADrive(file, id_orden, codigo_orden) {

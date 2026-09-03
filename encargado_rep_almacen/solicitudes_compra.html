@@ -3,46 +3,41 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Solicitudes de Compra | Encargado Repuestos - FURIA MOTOR</title>
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Leaflet CSS para OpenStreetMap -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/solicitudes_compra.css">
-    
-    <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
+
+    <!-- ========== CONFIGURACIÓN PWA ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TORQUE">
-    
-    <!-- ICONO PARA LA PESTAÑA DEL NAVEGADOR -->
+
     <link rel="icon" type="image/png" href="/icono.png">
     <link rel="shortcut icon" type="image/png" href="/icono.png">
-    
-    <!-- ICONO PARA IPHONE / IPAD (pantalla de inicio) -->
     <link rel="apple-touch-icon" href="/icono.png">
-    
-    <!-- ICONO PARA ANDROID (chrome) -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
-    <!-- ===================================================== -->
 </head>
 
 <body>
-    <!-- ========== BOTÓN HAMBURGUESA PARA MÓVIL/TABLET ========== -->
+    <!-- Botón hamburguesa para móvil/tablet -->
     <button class="hamburger-menu" id="hamburgerMenu" aria-label="Menú">
         <i class="fas fa-bars"></i>
     </button>
 
-    <!-- ========== OVERLAY PARA CERRAR SIDEBAR ========== -->
+    <!-- Overlay para cerrar sidebar -->
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <div class="app">
@@ -53,68 +48,27 @@
         <main class="main-content">
             <div class="top-bar">
                 <div class="page-title">
-                    <h1><i class="fas fa-shopping-cart"></i> Solicitudes de Compra</h1>
-                    <p>Gestiona las solicitudes de compra del Jefe de Taller</p>
+                    <h1><i class="fas fa-shopping-cart" style="color: var(--rojo-primario); margin-right: 0.5rem;"></i> Solicitudes de Compra</h1>
+                    <p>Gestiona las compras de repuestos solicitadas por el Jefe de Taller</p>
                 </div>
                 <div class="top-actions">
                     <div class="date-display">
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
                     </div>
-                    <button class="btn-logout" id="logoutBtn" onclick="logout()">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Estadísticas rápidas -->
-            <div class="stats-cards" id="statsContainer">
-                <div class="stat-card">
-                    <div class="stat-icon"><i class="fas fa-clock"></i></div>
-                    <div class="stat-info">
-                        <span class="stat-value" id="statPendientes">0</span>
-                        <span class="stat-label">Pendientes</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
-                    <div class="stat-info">
-                        <span class="stat-value" id="statComprados">0</span>
-                        <span class="stat-label">Comprados</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon"><i class="fas fa-truck"></i></div>
-                    <div class="stat-info">
-                        <span class="stat-value" id="statEntregados">0</span>
-                        <span class="stat-label">Entregados</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
-                    <div class="stat-info">
-                        <span class="stat-value" id="statTotal">0</span>
-                        <span class="stat-label">Total</span>
-                    </div>
                 </div>
             </div>
 
             <!-- Filtros -->
             <div class="filtros-bar">
-                <div class="filter-group">
-                    <label><i class="fas fa-filter"></i> Estado</label>
-                    <select id="filtroEstado" class="form-select-sm">
-                        <option value="all">Todos los estados</option>
-                        <option value="pendiente">Pendientes</option>
-                        <option value="comprado">Comprados</option>
-                        <option value="entregado">Entregados</option>
-                    </select>
-                </div>
-                <div class="search-box">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="searchInput" placeholder="Buscar por orden o repuesto...">
-                </div>
-                <button id="refreshBtn" class="btn-outline">
+                <select id="filtroEstado">
+                    <option value="all">Todos los estados</option>
+                    <option value="pendiente">Pendientes</option>
+                    <option value="comprado">Comprados</option>
+                    <option value="entregado">Entregados</option>
+                </select>
+                <input type="text" id="searchInput" placeholder="Buscar por orden o repuesto...">
+                <button id="refreshBtn" class="btn-secondary">
                     <i class="fas fa-sync-alt"></i> Actualizar
                 </button>
             </div>
@@ -124,67 +78,178 @@
         </main>
     </div>
 
-    <!-- Modal para ver detalle -->
-    <div id="modalDetalle" class="modal">
-        <div class="modal-content modal-lg">
-            <div class="modal-header">
-                <h3><i class="fas fa-info-circle"></i> Detalle de Solicitud de Compra</h3>
-                <button class="modal-close" onclick="cerrarModal('modalDetalle')">&times;</button>
-            </div>
-            <div class="modal-body" id="modalDetalleBody"></div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModal('modalDetalle')">Cerrar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal para marcar como comprado (CON SUBIDA DE COMPROBANTE) -->
+    <!-- ===================================================== -->
+    <!-- 🔥 MODAL PARA MARCAR COMO COMPRADO (CON FOTOS Y MAPA) -->
+    <!-- ===================================================== -->
     <div id="modalComprar" class="modal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
-                <h3><i class="fas fa-shopping-cart"></i> Marcar como Comprado</h3>
-                <button class="modal-close" onclick="cerrarModal('modalComprar')">&times;</button>
+                <h3><i class="fas fa-shopping-cart"></i> Registrar Compra</h3>
+                <span class="close-modal" onclick="cerrarModal('modalComprar')">&times;</span>
             </div>
-            <div class="modal-body" id="modalComprarBody"></div>
-            <div class="modal-footer">
+            <div id="modalComprarBody"></div>
+            <div class="modal-footer" style="display:flex; gap:0.75rem; justify-content:flex-end; padding:1rem; border-top:1px solid var(--border-color);">
                 <button class="btn-secondary" onclick="cerrarModal('modalComprar')">Cancelar</button>
-                <button class="btn-primary" id="confirmarCompraBtn" onclick="confirmarCompra()">
-                    <i class="fas fa-check-circle"></i> Confirmar Compra
+                <button class="btn-primary" onclick="confirmarCompra()" style="background:var(--rojo-primario); color:white;">
+                    <i class="fas fa-check"></i> Confirmar Compra
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Modal para registrar entrega -->
+    <!-- ===================================================== -->
+    <!-- 🔥 MODAL PARA REGISTRAR ENTREGA -->
+    <!-- ===================================================== -->
     <div id="modalEntregar" class="modal">
         <div class="modal-content modal-md">
             <div class="modal-header">
                 <h3><i class="fas fa-truck"></i> Registrar Entrega</h3>
-                <button class="modal-close" onclick="cerrarModal('modalEntregar')">&times;</button>
+                <span class="close-modal" onclick="cerrarModal('modalEntregar')">&times;</span>
             </div>
-            <div class="modal-body" id="modalEntregarBody"></div>
-            <div class="modal-footer">
+            <div id="modalEntregarBody"></div>
+            <div class="modal-footer" style="display:flex; gap:0.75rem; justify-content:flex-end; padding:1rem; border-top:1px solid var(--border-color);">
                 <button class="btn-secondary" onclick="cerrarModal('modalEntregar')">Cancelar</button>
-                <button class="btn-primary" id="confirmarEntregaBtn" onclick="confirmarEntrega()">
-                    <i class="fas fa-truck"></i> Confirmar Entrega
+                <button class="btn-primary" onclick="confirmarEntrega()" style="background:var(--verde-exito); color:white;">
+                    <i class="fas fa-check"></i> Confirmar Entrega
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Modal para ver comprobante -->
+    <!-- ===================================================== -->
+    <!-- 🔥 MODAL PARA VER DETALLE -->
+    <!-- ===================================================== -->
+    <div id="modalDetalle" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3><i class="fas fa-info-circle"></i> Detalle de Solicitud</h3>
+                <span class="close-modal" onclick="cerrarModal('modalDetalle')">&times;</span>
+            </div>
+            <div id="modalDetalleBody"></div>
+        </div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- 🔥 MODAL PARA VER COMPROBANTE -->
+    <!-- ===================================================== -->
     <div id="modalVerComprobante" class="modal">
-        <div class="modal-content modal-md">
+        <div class="modal-content modal-lg">
             <div class="modal-header">
                 <h3><i class="fas fa-receipt"></i> Comprobante de Compra</h3>
-                <button class="modal-close" onclick="cerrarModal('modalVerComprobante')">&times;</button>
+                <span class="close-modal" onclick="cerrarModal('modalVerComprobante')">&times;</span>
             </div>
-            <div class="modal-body" id="modalVerComprobanteBody"></div>
-            <div class="modal-footer">
+            <div id="modalVerComprobanteBody"></div>
+            <div class="modal-footer" style="display:flex; gap:0.75rem; justify-content:flex-end; padding:1rem; border-top:1px solid var(--border-color);">
                 <button class="btn-secondary" onclick="cerrarModal('modalVerComprobante')">Cerrar</button>
-                <a id="descargarComprobanteBtn" class="btn-primary" download style="text-decoration: none;">
+                <a id="descargarComprobanteBtn" class="btn-primary" href="#" target="_blank" style="background:var(--rojo-primario); color:white; text-decoration:none; padding:0.5rem 1rem; border-radius:6px;">
                     <i class="fas fa-download"></i> Descargar
                 </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- 🔥 MODAL DE PROVEEDORES (REUTILIZADO) -->
+    <!-- ===================================================== -->
+    <div id="modalProveedorCompra" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3 id="modalTitleProveedorCompra"><i class="fas fa-truck"></i> Nuevo Proveedor</h3>
+                <span class="close-modal" onclick="cerrarModalProveedorCompra()">&times;</span>
+            </div>
+            <form id="proveedorFormCompra" novalidate>
+                <input type="hidden" id="proveedorIdCompra" value="">
+                <input type="hidden" id="latitudCompra" value="-17.7835">
+                <input type="hidden" id="longitudCompra" value="-63.1821">
+
+                <!-- Fila 1: Nombre y Propietario -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-building"></i> Nombre *</label>
+                        <input type="text" id="nombreCompra" required placeholder="Ej: Autorepuestos López">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Propietario</label>
+                        <input type="text" id="propietarioCompra" placeholder="Nombre del representante">
+                    </div>
+                </div>
+
+                <!-- Fila 2: Teléfono y Descripción -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-phone"></i> Teléfono *</label>
+                        <input type="tel" id="telefonoCompra" required placeholder="Ej: 71234567">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-tags"></i> Repuestos que ofrece</label>
+                        <input type="text" id="descripcionCompra" placeholder="Ej: Motores, frenos, suspensión...">
+                    </div>
+                </div>
+
+                <!-- Mapa y Ubicación GPS -->
+                <div class="form-group">
+                    <label><i class="fas fa-map-marked-alt"></i> Ubicación GPS</label>
+                    <div id="mapContainerCompra" style="height: 220px; width: 100%; border-radius: 8px; border: 1px solid var(--border-color); background: var(--gris-oscuro);"></div>
+
+                    <div class="ubicacion-info" style="display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem; font-size:0.8rem; color:var(--gris-texto);">
+                        <i class="fas fa-map-pin"></i>
+                        <span>Coordenadas: </span>
+                        <span id="coordsDisplayCompra" class="coords">-17.7835, -63.1821</span>
+                    </div>
+
+                    <div class="coords-input-group" style="margin-top:0.5rem;">
+                        <div class="form-group" style="flex: 1;">
+                            <input type="text" id="ubicacion_gps_compra" placeholder="O ingresa coordenadas manualmente" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid var(--border-color); background:var(--gris-oscuro); color:white;">
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button type="button" class="btn-secondary btn-sm" onclick="obtenerUbicacionActualCompra()" style="padding:0.3rem 0.8rem; border-radius:4px; border:1px solid var(--border-color); background:transparent; cursor:pointer; font-size:0.75rem; color:var(--gris-texto);">
+                            <i class="fas fa-location-dot"></i> Mi Ubicación
+                        </button>
+                        <button type="button" class="btn-secondary btn-sm" onclick="if(window.mapCompra){window.mapCompra.setView([DEFAULT_LAT_COMPRA, DEFAULT_LNG_COMPRA], 14); if(window.mapMarkerCompra){window.mapMarkerCompra.setLatLng([DEFAULT_LAT_COMPRA, DEFAULT_LNG_COMPRA]); actualizarCoordenadasCompra(DEFAULT_LAT_COMPRA, DEFAULT_LNG_COMPRA);}}" style="padding:0.3rem 0.8rem; border-radius:4px; border:1px solid var(--border-color); background:transparent; cursor:pointer; font-size:0.75rem; color:var(--gris-texto);">
+                            <i class="fas fa-home"></i> Predeterminada
+                        </button>
+                        <button type="button" class="btn-secondary btn-sm" onclick="if(window.mapCompra){window.mapCompra.invalidateSize();}" style="padding:0.3rem 0.8rem; border-radius:4px; border:1px solid var(--border-color); background:transparent; cursor:pointer; font-size:0.75rem; color:var(--gris-texto);">
+                            <i class="fas fa-expand"></i> Ajustar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Botones de acción -->
+                <div class="form-actions" style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--border-color);">
+                    <button type="button" class="btn-secondary" onclick="cerrarModalProveedorCompra()" style="padding:0.5rem 1.5rem; border-radius:6px; border:none; cursor:pointer; background:var(--gris-oscuro); color:var(--texto-primario);">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="submit" class="btn-primary" id="btnGuardarProveedorCompra" style="padding:0.5rem 1.5rem; border-radius:6px; border:none; cursor:pointer; background:var(--rojo-primario); color:white;">
+                        <i class="fas fa-save"></i> Guardar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- 🔥 MODAL PARA FOTO AMPLIADA -->
+    <!-- ===================================================== -->
+    <div id="modalFotoAmpliadaEncargado" class="modal" onclick="cerrarFotoAmpliadaEncargado()">
+        <div class="modal-content" style="max-width: 900px; max-height: 95vh; background: var(--bg-card);" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3><i class="fas fa-image"></i> Foto del Repuesto</h3>
+                <button class="modal-close" onclick="cerrarFotoAmpliadaEncargado()">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; justify-content:center; align-items:center; padding:1.5rem; background:var(--negro); min-height:300px; position:relative;">
+                <div id="fotoModalLoaderEncargado" style="position:absolute; display:flex; align-items:center; justify-content:center; width:100%; height:100%;">
+                    <i class="fas fa-spinner fa-spin" style="font-size:3rem; color:var(--gris-texto);"></i>
+                </div>
+                <img id="fotoAmpliadaEncargadoImg" src="" alt="Foto ampliada" loading="lazy" 
+                     style="max-width:100%; max-height:75vh; object-fit:contain; border-radius:var(--radius-md); display:none;">
+            </div>
+            <div class="modal-footer" style="display:flex; gap:0.75rem; justify-content:flex-end; padding:1rem; border-top:1px solid var(--border-color);">
+                <button class="btn-secondary" onclick="cerrarFotoAmpliadaEncargado()" style="padding:0.5rem 1.5rem; border-radius:6px; border:none; cursor:pointer; background:var(--gris-oscuro); color:var(--texto-primario);">Cerrar</button>
+                <button class="btn-primary" onclick="descargarFotoAmpliadaEncargado()" style="padding:0.5rem 1.5rem; border-radius:6px; border:none; cursor:pointer; background:var(--rojo-primario); color:white;">
+                    <i class="fas fa-download"></i> Descargar
+                </button>
             </div>
         </div>
     </div>
@@ -192,114 +257,94 @@
     <!-- LOADING OVERLAY -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
+        <p>Cargando...</p>
     </div>
 
+    <!-- ===================================================== -->
+    <!-- SCRIPTS -->
+    <!-- ===================================================== -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="js/include.js"></script>
     <script src="js/solicitudes_compra.js"></script>
-    
-    <!-- ========== SCRIPT RESPONSIVE PARA SIDEBAR ========== -->
+
+    <!-- ===================================================== -->
+    <!-- 🔥 FUNCIONES RESPONSIVE Y DE MAPA -->
+    <!-- ===================================================== -->
     <script>
         // =====================================================
-        // FUNCIONES RESPONSIVE PARA SIDEBAR (SOLICITUDES COMPRA)
+        // FUNCIONES RESPONSIVE PARA SIDEBAR
         // =====================================================
-        
         let sidebarOpen = false;
-        
-        // Función para toggle sidebar en móvil/tablet
+
         function toggleSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             const hamburger = document.getElementById('hamburgerMenu');
             const body = document.body;
-            
+
             if (!sidebar) return;
-            
+
             sidebarOpen = !sidebarOpen;
-            
+
             if (sidebarOpen) {
                 sidebar.classList.add('open');
                 if (overlay) overlay.classList.add('active');
                 if (hamburger) hamburger.classList.add('active');
-                body.classList.add('sidebar-open');
-                
-                // Cambiar icono del hamburguesa
+                body.style.overflow = 'hidden';
                 const icon = hamburger.querySelector('i');
                 if (icon) icon.className = 'fas fa-times';
             } else {
                 closeSidebar();
             }
         }
-        
-        // Función para cerrar sidebar
+
         function closeSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             const hamburger = document.getElementById('hamburgerMenu');
             const body = document.body;
-            
+
             if (sidebar) {
                 sidebar.classList.remove('open');
                 if (overlay) overlay.classList.remove('active');
                 if (hamburger) hamburger.classList.remove('active');
-                body.classList.remove('sidebar-open');
-                
+                body.style.overflow = '';
                 const icon = hamburger.querySelector('i');
                 if (icon) icon.className = 'fas fa-bars';
             }
-            
             sidebarOpen = false;
         }
-        
-        // Event Listeners
+
         document.addEventListener('DOMContentLoaded', function() {
-            // Botón hamburguesa
             const hamburgerBtn = document.getElementById('hamburgerMenu');
             if (hamburgerBtn) {
                 hamburgerBtn.addEventListener('click', toggleSidebar);
             }
-            
-            // Overlay
+
             const overlay = document.getElementById('sidebarOverlay');
             if (overlay) {
                 overlay.addEventListener('click', closeSidebar);
             }
-            
-            // Cerrar sidebar al redimensionar a desktop
+
             window.addEventListener('resize', function() {
                 if (window.innerWidth > 1024 && sidebarOpen) {
                     closeSidebar();
                 }
             });
-            
-            // Cerrar sidebar al hacer click en enlaces (móvil)
+
             document.addEventListener('click', function(e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
                     const hamburger = document.getElementById('hamburgerMenu');
-                    
-                    // Si el click no fue en el sidebar ni en el botón hamburguesa
                     if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
                         closeSidebar();
                     }
                 }
             });
-            
-            // Prevenir scroll del body cuando sidebar está abierto
-            document.addEventListener('touchmove', function(e) {
-                if (window.innerWidth <= 1024 && sidebarOpen) {
-                    const sidebar = document.querySelector('.sidebar');
-                    if (sidebar && !sidebar.contains(e.target)) {
-                        e.preventDefault();
-                    }
-                }
-            });
         });
-        
-        // Exponer funciones globalmente
+
         window.toggleSidebar = toggleSidebar;
         window.closeSidebar = closeSidebar;
-        
-        console.log('✅ solicitudes_compra.html - Funciones responsive cargadas');
     </script>
     <script src="/register_sw.js"></script>
 </body>

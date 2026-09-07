@@ -4700,7 +4700,89 @@ function confirmarUbicacionLeaflet() {
     validarCompletadoCliente();
     if (codigoSesion) { guardarSeccion('cliente'); mostrarNotificacion('Ubicación guardada', 'success'); }
 }
+// =====================================================
+// OBTENER UBICACIÓN ACTUAL (GEOLOCALIZACIÓN)
+// =====================================================
 
+async function obtenerUbicacionActual() {
+    const btn = document.getElementById('btnMiUbicacion');
+    
+    // Verificar soporte de geolocalización
+    if (!navigator.geolocation) {
+        mostrarNotificacion('⚠️ Tu navegador no soporta geolocalización', 'warning');
+        return;
+    }
+    
+    // Cambiar estado del botón
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Obteniendo ubicación...';
+    btn.classList.add('cargando');
+    
+    try {
+        // Obtener posición con Promise
+        const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+                resolve,
+                reject,
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        });
+        
+        const { latitude, longitude } = position.coords;
+        console.log(`📍 Ubicación obtenida: ${latitude}, ${longitude}`);
+        
+        // Mover el mapa a la ubicación
+        if (mapCliente) {
+            mapCliente.setView([latitude, longitude], 16);
+            markerCliente.setLatLng([latitude, longitude]);
+        }
+        
+        // Obtener dirección
+        const direccion = await obtenerDireccion(latitude, longitude);
+        ubicacionTemporal = { 
+            texto: direccion, 
+            lat: latitude, 
+            lng: longitude 
+        };
+        actualizarInfoUbicacion();
+        
+        mostrarNotificacion('✅ Ubicación actualizada', 'success');
+        
+    } catch (error) {
+        console.error('Error obteniendo ubicación:', error);
+        
+        let mensaje = 'Error al obtener ubicación';
+        if (error.code === 1) {
+            mensaje = '⚠️ Permiso denegado para acceder a la ubicación';
+        } else if (error.code === 2) {
+            mensaje = '⚠️ Señal GPS no disponible, intenta de nuevo';
+        } else if (error.code === 3) {
+            mensaje = '⚠️ Tiempo de espera agotado, intenta de nuevo';
+        }
+        mostrarNotificacion(mensaje, 'error');
+        
+    } finally {
+        // Restaurar botón
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-location-dot"></i> 📍 Mi Ubicación Actual';
+        btn.classList.remove('cargando');
+    }
+}
+
+// =====================================================
+// CONFIGURAR BOTÓN DE UBICACIÓN ACTUAL
+// =====================================================
+
+function setupBotonUbicacionActual() {
+    const btn = document.getElementById('btnMiUbicacion');
+    if (btn) {
+        btn.addEventListener('click', obtenerUbicacionActual);
+    }
+}
 function setupModalUbicacionLeaflet() {
     if (!btnAbrirModalUbicacion) return;
     btnAbrirModalUbicacion.addEventListener('click', abrirModalLeaflet);
@@ -4710,6 +4792,9 @@ function setupModalUbicacionLeaflet() {
     document.getElementById('btnBuscarUbicacionLeaflet')?.addEventListener('click', buscarYMostrarLeaflet);
     document.getElementById('modalBuscarUbicacionLeaflet')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') buscarYMostrarLeaflet(); });
     document.getElementById('modalUbicacionLeaflet')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) cerrarModalLeaflet(); });
+    
+    // 🔥 AGREGAR ESTA LÍNEA - Configurar botón de ubicación actual
+    setupBotonUbicacionActual();
 }
 
 async function buscarYMostrarLeaflet() {

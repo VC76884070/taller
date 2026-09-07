@@ -4559,3 +4559,73 @@ body.sidebar-open {
         min-height: 40px !important;
     }
 }
+/* ============================================================
+   ESTILOS - BOTÓN UBICACIÓN ACTUAL
+   ============================================================ */
+
+.btn-ubicacion-actual {
+    background: #C1121F;
+    color: #ffffff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(193, 18, 31, 0.3);
+    font-family: 'Inter', sans-serif;
+}
+
+.btn-ubicacion-actual:hover:not(:disabled) {
+    background: #a00f1a;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(193, 18, 31, 0.4);
+}
+
+.btn-ubicacion-actual:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-ubicacion-actual.cargando {
+    background: #6b6b6b;
+    pointer-events: none;
+}
+
+.btn-ubicacion-actual.cargando i {
+    animation: spin 1s linear infinite;
+}
+
+.btn-ubicacion-actual i {
+    font-size: 18px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   CONTROLES DE UBICACIÓN
+   ============================================================ */
+
+.ubicacion-controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.ubicacion-controls-row .info-hint {
+    font-size: 12px;
+    color: #8E8E93;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}

@@ -3042,3 +3042,48 @@ def guardar_transcripcion(current_user):
             'success': False,
             'error': str(e)
         }), 500
+# =====================================================
+# ENDPOINT: GUARDAR COMENTARIOS DE FOTOS OPCIONALES
+# =====================================================
+
+@recepcion_jefe_bp.route('/guardar-comentarios-opcionales', methods=['POST'])
+@jefe_operativo_required
+def guardar_comentarios_opcionales(current_user):
+    """Guarda los comentarios de fotos opcionales en la sesión"""
+    try:
+        data = request.get_json()
+        codigo_sesion = data.get('codigo')
+        comentarios = data.get('comentarios', {})
+        
+        if not codigo_sesion:
+            return jsonify({'error': 'Código requerido'}), 400
+        
+        if codigo_sesion not in sesiones_activas:
+            sesion = cargar_sesion_de_db(codigo_sesion)
+            if not sesion:
+                return jsonify({'error': 'Sesión no encontrada'}), 404
+            sesiones_activas[codigo_sesion] = sesion
+        
+        sesion = sesiones_activas[codigo_sesion]
+        
+        if 'datos' not in sesion:
+            sesion['datos'] = {}
+        if 'comentarios' not in sesion['datos']:
+            sesion['datos']['comentarios'] = {}
+        
+        for campo, valor in comentarios.items():
+            if valor and valor.strip():
+                sesion['datos']['comentarios'][campo] = valor.strip()
+            else:
+                sesion['datos']['comentarios'].pop(campo, None)
+        
+        guardar_sesion_en_db(sesion)
+        
+        return jsonify({
+            'success': True,
+            'comentarios': sesion['datos']['comentarios']
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error guardando comentarios opcionales: {str(e)}")
+        return jsonify({'error': str(e)}), 500

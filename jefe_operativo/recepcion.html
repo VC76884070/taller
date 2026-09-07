@@ -41,114 +41,161 @@
     <link rel="stylesheet" href="/jefe_operativo/css/recepcion.css">
 
     <!-- ============================================= -->
-    <!-- ESTILOS ADICIONALES PARA TRANSCRIPCIÓN Y UBICACIÓN -->
+    <!-- ESTILOS ADICIONALES PARA FOTOS OPCIONALES    -->
     <!-- ============================================= -->
     <style>
         /* =============================================
-           BOTÓN DE TRANSCRIPCIÓN EN EL FORMULARIO
+           SECCIÓN DE FOTOS - OBLIGATORIAS Y OPCIONALES
            ============================================= */
-        .btn-transcribir-form {
-            background: linear-gradient(135deg, #7C3AED, #6D28D9) !important;
-            color: white !important;
-            border: none !important;
-            padding: 0.7rem 1.5rem !important;
-            border-radius: var(--radius-md, 8px) !important;
-            font-size: 0.85rem !important;
-            font-weight: 500 !important;
-            cursor: pointer !important;
-            transition: all 0.3s ease !important;
-            display: none;
-            align-items: center !important;
-            gap: 0.5rem !important;
-            box-shadow: 0 2px 12px rgba(124, 58, 237, 0.3) !important;
+
+        .photo-section-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 15px;
+            color: #fff;
+            margin: 20px 0 12px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #2C2C2E;
         }
 
-        .btn-transcribir-form:hover:not(:disabled) {
-            transform: translateY(-2px) !important;
-            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4) !important;
+        .photo-section-title:first-of-type {
+            margin-top: 0;
         }
 
-        .btn-transcribir-form:disabled {
-            opacity: 0.6 !important;
-            cursor: not-allowed !important;
-            transform: none !important;
-            box-shadow: none !important;
+        .photo-section-title .section-badge {
+            font-size: 10px;
+            font-weight: 500;
+            padding: 2px 12px;
+            border-radius: 20px;
+            background: #2C2C2E;
+            color: #8E8E93;
         }
 
-        .btn-transcribir-form i {
-            font-size: 14px;
+        .photo-section-title .section-badge.optional {
+            background: rgba(107, 114, 128, 0.2);
+            color: #8E8E93;
         }
 
-        /* =============================================
-           ESTADO DE TRANSCRIPCIÓN EN FORMULARIO
-           ============================================= */
-        #transcripcionStatusForm {
-            font-size: 12px;
-            padding: 6px 12px;
-            border-radius: 6px;
-            margin-top: 6px;
-            display: none;
+        .photo-section-title i {
+            font-size: 18px;
+        }
+
+        .optional-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px dashed #2C2C2E;
+        }
+
+        .optional-hint {
+            color: #8E8E93;
+            font-size: 13px;
+            margin-bottom: 15px;
+            display: flex;
             align-items: center;
             gap: 8px;
-            animation: fadeIn 0.3s ease;
         }
 
-        #transcripcionStatusForm i {
-            font-size: 14px;
-        }
-
-        #transcripcionStatusForm.loading {
-            color: #f59e0b;
-            background: rgba(245, 158, 11, 0.15);
-        }
-
-        #transcripcionStatusForm.success {
-            color: #10B981;
-            background: rgba(16, 185, 129, 0.15);
-        }
-
-        #transcripcionStatusForm.error {
-            color: #ef4444;
-            background: rgba(239, 68, 68, 0.15);
+        .optional-hint i {
+            color: #6B7280;
         }
 
         /* =============================================
-           BOTÓN DE TRANSCRIPCIÓN EN MODAL DE DETALLE
+           GRID DE FOTOS OPCIONALES
            ============================================= */
-        .btn-transcribir {
-            background: #C1121F !important;
-            color: white !important;
-            border: none !important;
-            padding: 6px 16px !important;
-            border-radius: 6px !important;
-            cursor: pointer !important;
-            font-size: 12px !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 6px !important;
-            transition: all 0.3s ease !important;
-            font-weight: 600 !important;
-            white-space: nowrap !important;
+
+        .photo-grid-optional {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 10px;
         }
 
-        .btn-transcribir:hover {
-            background: #a00e18 !important;
-            transform: scale(1.02);
+        /* =============================================
+           FOTO OPCIONAL - ESTILOS
+           ============================================= */
+
+        .photo-upload.optional {
+            border: 2px dashed #2C2C2E;
+            background: rgba(44, 44, 46, 0.2);
+            border-radius: 12px;
+            transition: all 0.3s ease;
         }
 
-        .btn-transcribir:disabled {
-            opacity: 0.6 !important;
-            cursor: not-allowed !important;
-            transform: none !important;
+        .photo-upload.optional:hover {
+            border-color: #6B7280;
+            background: rgba(44, 44, 46, 0.4);
         }
 
-        .btn-transcribir i {
-            font-size: 13px;
+        .photo-upload.optional .upload-placeholder {
+            background: transparent;
+        }
+
+        .photo-upload.optional .upload-placeholder i {
+            color: #6B7280;
+        }
+
+        /* =============================================
+           COMENTARIO DE FOTO OPCIONAL
+           ============================================= */
+
+        .foto-comentario {
+            margin-top: 8px;
+            padding: 0 4px;
+        }
+
+        .foto-comentario-input {
+            width: 100%;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid #2C2C2E;
+            background: #1A1A1C;
+            color: #fff;
+            font-size: 11px;
+            font-family: inherit;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .foto-comentario-input::placeholder {
+            color: #6B7280;
+            font-size: 10px;
+        }
+
+        .foto-comentario-input:focus {
+            border-color: #6B7280;
+            box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.2);
+        }
+
+        .foto-comentario-input:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* =============================================
+           BADGE DE REQUERIDO
+           ============================================= */
+
+        .required-badge {
+            color: #C1121F;
+            font-weight: 800;
+            font-size: 14px;
+            margin-left: 2px;
+        }
+
+        .photo-upload.required {
+            border: 2px solid rgba(193, 18, 31, 0.3);
+        }
+
+        .photo-upload.required.has-image {
+            border-color: rgba(16, 185, 129, 0.4);
         }
 
         /* =============================================
            BOTÓN DE UBICACIÓN ACTUAL
            ============================================= */
+
         .ubicacion-controls-row {
             display: flex;
             flex-wrap: wrap;
@@ -199,15 +246,6 @@
             font-size: 18px !important;
         }
 
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
         .info-hint {
             font-size: 12px;
             color: #8E8E93;
@@ -217,8 +255,157 @@
         }
 
         /* =============================================
-           RESPONSIVE
+           RESPONSIVE - FOTOS OPCIONALES
            ============================================= */
+
+        @media (max-width: 768px) {
+            .photo-grid-optional {
+                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+                gap: 10px;
+            }
+
+            .photo-section-title {
+                font-size: 13px;
+                flex-wrap: wrap;
+            }
+
+            .foto-comentario-input {
+                font-size: 10px;
+                padding: 5px 8px;
+            }
+
+            .ubicacion-controls-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .btn-ubicacion-actual {
+                justify-content: center;
+                padding: 12px !important;
+                font-size: 13px !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .photo-grid-optional {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+
+            .photo-upload.optional .upload-placeholder span {
+                font-size: 9px;
+            }
+        }
+
+        /* =============================================
+           BOTÓN DE TRANSCRIPCIÓN EN FORMULARIO
+           ============================================= */
+
+        .btn-transcribir-form {
+            background: linear-gradient(135deg, #7C3AED, #6D28D9) !important;
+            color: white !important;
+            border: none !important;
+            padding: 0.7rem 1.5rem !important;
+            border-radius: var(--radius-md, 8px) !important;
+            font-size: 0.85rem !important;
+            font-weight: 500 !important;
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+            display: none;
+            align-items: center !important;
+            gap: 0.5rem !important;
+            box-shadow: 0 2px 12px rgba(124, 58, 237, 0.3) !important;
+        }
+
+        .btn-transcribir-form:hover:not(:disabled) {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4) !important;
+        }
+
+        .btn-transcribir-form:disabled {
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .btn-transcribir-form i {
+            font-size: 14px;
+        }
+
+        /* =============================================
+           ESTADO DE TRANSCRIPCIÓN EN FORMULARIO
+           ============================================= */
+
+        #transcripcionStatusForm {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            margin-top: 6px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        #transcripcionStatusForm i {
+            font-size: 14px;
+        }
+
+        #transcripcionStatusForm.loading {
+            color: #f59e0b;
+            background: rgba(245, 158, 11, 0.15);
+        }
+
+        #transcripcionStatusForm.success {
+            color: #10B981;
+            background: rgba(16, 185, 129, 0.15);
+        }
+
+        #transcripcionStatusForm.error {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.15);
+        }
+
+        /* =============================================
+           BOTÓN DE TRANSCRIPCIÓN EN MODAL DE DETALLE
+           ============================================= */
+
+        .btn-transcribir {
+            background: #C1121F !important;
+            color: white !important;
+            border: none !important;
+            padding: 6px 16px !important;
+            border-radius: 6px !important;
+            cursor: pointer !important;
+            font-size: 12px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            transition: all 0.3s ease !important;
+            font-weight: 600 !important;
+            white-space: nowrap !important;
+        }
+
+        .btn-transcribir:hover {
+            background: #a00e18 !important;
+            transform: scale(1.02);
+        }
+
+        .btn-transcribir:disabled {
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+            transform: none !important;
+        }
+
+        .btn-transcribir i {
+            font-size: 13px;
+        }
+
+        /* =============================================
+           RESPONSIVE - BOTÓN DE TRANSCRIPCIÓN
+           ============================================= */
+
         @media (max-width: 768px) {
             .btn-transcribir-form {
                 width: 100%;
@@ -235,17 +422,6 @@
             .audio-buttons .btn-transcribir-form {
                 width: 100%;
                 justify-content: center;
-            }
-
-            .ubicacion-controls-row {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .btn-ubicacion-actual {
-                justify-content: center;
-                padding: 12px !important;
-                font-size: 13px !important;
             }
         }
 
@@ -359,6 +535,7 @@
 
                 <!-- FORMULARIO DE RECEPCIÓN -->
                 <form id="recepcionForm" class="recepcion-form" style="display: none;">
+
                     <!-- 1️⃣ DATOS DEL CLIENTE -->
                     <div class="form-card" data-seccion="cliente">
                         <div class="card-header">
@@ -384,19 +561,16 @@
                                     <input type="tel" id="clienteTelefono" placeholder="Ej: 77712345">
                                 </div>
                                 <div class="form-group full-width">
-                                    <label for="clienteUbicacion"><i class="fas fa-map-marker-alt"></i>
-                                        Ubicación</label>
+                                    <label for="clienteUbicacion"><i class="fas fa-map-marker-alt"></i> Ubicación</label>
                                     <div class="ubicacion-input-group">
-                                        <input type="text" id="clienteUbicacion"
-                                            placeholder="Selecciona una ubicación en el mapa..." readonly>
+                                        <input type="text" id="clienteUbicacion" placeholder="Selecciona una ubicación en el mapa..." readonly>
                                         <button type="button" class="btn-ubicacion" id="btnAbrirModalUbicacion">
                                             <i class="fas fa-map-pin"></i> Elegir en mapa
                                         </button>
                                     </div>
                                     <input type="hidden" id="clienteLatitud" value="">
                                     <input type="hidden" id="clienteLongitud" value="">
-                                    <small class="form-hint"><i class="fas fa-info-circle"></i> Haz clic en "Elegir en
-                                        mapa" para seleccionar la ubicación exacta</small>
+                                    <small class="form-hint"><i class="fas fa-info-circle"></i> Haz clic en "Elegir en mapa" para seleccionar la ubicación exacta</small>
                                 </div>
                             </div>
                             <div class="form-actions-seccion">
@@ -426,8 +600,7 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="vehiculoPlaca"><i class="fas fa-id-card"></i> Placa *</label>
-                                    <input type="text" id="vehiculoPlaca" placeholder="Ej: ABC123" maxlength="8"
-                                        style="text-transform: uppercase;">
+                                    <input type="text" id="vehiculoPlaca" placeholder="Ej: ABC123" maxlength="8" style="text-transform: uppercase;">
                                 </div>
                                 <div class="form-group">
                                     <label for="vehiculoMarca"><i class="fas fa-tag"></i> Marca *</label>
@@ -446,8 +619,7 @@
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="vehiculoKilometraje"><i class="fas fa-tachometer-alt"></i>
-                                        Kilometraje</label>
+                                    <label for="vehiculoKilometraje"><i class="fas fa-tachometer-alt"></i> Kilometraje</label>
                                     <input type="number" id="vehiculoKilometraje" placeholder="Ej: 45000">
                                 </div>
                             </div>
@@ -467,28 +639,35 @@
                         <div class="card-header">
                             <div class="card-icon"><i class="fas fa-camera"></i></div>
                             <h2>Registro Fotográfico</h2>
-                            <span class="card-badge">7 vistas requeridas</span>
+                            <span class="card-badge">7 obligatorias</span>
                             <div class="seccion-status">
                                 <span class="status-badge" id="statusFotos">○ Pendiente</span>
                             </div>
                         </div>
                         <div class="card-body">
+
+                            <!-- ============================================= -->
+                            <!-- FOTOS OBLIGATORIAS (7)                        -->
+                            <!-- ============================================= -->
+                            <div class="photo-section-title">
+                                <i class="fas fa-star" style="color: #C1121F;"></i>
+                                <span>Fotos Obligatorias (7 vistas)</span>
+                                <span class="section-badge">requeridas</span>
+                            </div>
                             <div class="photo-grid" id="photoGrid">
-                                <!-- ============================================= -->
                                 <!-- FOTO 1: LATERAL IZQUIERDO -->
-                                <!-- ============================================= -->
-                                <div class="photo-upload" id="upload-fotoLateralIzq" data-campo="lateral_izquierdo">
+                                <div class="photo-upload required" id="upload-fotoLateralIzq" data-campo="lateral_izquierdo">
                                     <input type="file" id="fotoLateralIzq" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-car-side"></i>
                                         <span>Lateral Izquierdo</span>
+                                        <span class="required-badge">*</span>
                                     </div>
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
                                                 <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" cx="25" cy="25" r="22"
-                                                    id="ring-lateral_izquierdo" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-lateral_izquierdo" />
                                             </svg>
                                             <span class="progress-percent" id="percent-lateral_izquierdo">0%</span>
                                         </div>
@@ -508,21 +687,19 @@
                                     </button>
                                 </div>
 
-                                <!-- ============================================= -->
                                 <!-- FOTO 2: LATERAL DERECHO -->
-                                <!-- ============================================= -->
-                                <div class="photo-upload" id="upload-fotoLateralDer" data-campo="lateral_derecho">
+                                <div class="photo-upload required" id="upload-fotoLateralDer" data-campo="lateral_derecho">
                                     <input type="file" id="fotoLateralDer" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-car-side"></i>
                                         <span>Lateral Derecho</span>
+                                        <span class="required-badge">*</span>
                                     </div>
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
                                                 <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" cx="25" cy="25" r="22"
-                                                    id="ring-lateral_derecho" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-lateral_derecho" />
                                             </svg>
                                             <span class="progress-percent" id="percent-lateral_derecho">0%</span>
                                         </div>
@@ -542,14 +719,13 @@
                                     </button>
                                 </div>
 
-                                <!-- ============================================= -->
                                 <!-- FOTO 3: FRONTAL -->
-                                <!-- ============================================= -->
-                                <div class="photo-upload" id="upload-fotoFrontal" data-campo="frontal">
+                                <div class="photo-upload required" id="upload-fotoFrontal" data-campo="frontal">
                                     <input type="file" id="fotoFrontal" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-car"></i>
                                         <span>Frontal</span>
+                                        <span class="required-badge">*</span>
                                     </div>
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
@@ -575,14 +751,13 @@
                                     </button>
                                 </div>
 
-                                <!-- ============================================= -->
                                 <!-- FOTO 4: TRASERA -->
-                                <!-- ============================================= -->
-                                <div class="photo-upload" id="upload-fotoTrasera" data-campo="trasera">
+                                <div class="photo-upload required" id="upload-fotoTrasera" data-campo="trasera">
                                     <input type="file" id="fotoTrasera" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-car"></i>
                                         <span>Trasera</span>
+                                        <span class="required-badge">*</span>
                                     </div>
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
@@ -608,14 +783,13 @@
                                     </button>
                                 </div>
 
-                                <!-- ============================================= -->
                                 <!-- FOTO 5: SUPERIOR -->
-                                <!-- ============================================= -->
-                                <div class="photo-upload" id="upload-fotoSuperior" data-campo="superior">
+                                <div class="photo-upload required" id="upload-fotoSuperior" data-campo="superior">
                                     <input type="file" id="fotoSuperior" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-arrow-up"></i>
                                         <span>Superior</span>
+                                        <span class="required-badge">*</span>
                                     </div>
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
@@ -641,14 +815,13 @@
                                     </button>
                                 </div>
 
-                                <!-- ============================================= -->
                                 <!-- FOTO 6: INFERIOR -->
-                                <!-- ============================================= -->
-                                <div class="photo-upload" id="upload-fotoInferior" data-campo="inferior">
+                                <div class="photo-upload required" id="upload-fotoInferior" data-campo="inferior">
                                     <input type="file" id="fotoInferior" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-arrow-down"></i>
                                         <span>Inferior</span>
+                                        <span class="required-badge">*</span>
                                     </div>
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
@@ -674,14 +847,13 @@
                                     </button>
                                 </div>
 
-                                <!-- ============================================= -->
                                 <!-- FOTO 7: TABLERO -->
-                                <!-- ============================================= -->
-                                <div class="photo-upload" id="upload-fotoTablero" data-campo="tablero">
+                                <div class="photo-upload required" id="upload-fotoTablero" data-campo="tablero">
                                     <input type="file" id="fotoTablero" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-tachometer-alt"></i>
                                         <span>Tablero</span>
+                                        <span class="required-badge">*</span>
                                     </div>
                                     <div class="upload-preview">
                                         <div class="progress-ring-container">
@@ -706,6 +878,372 @@
                                         <i class="fas fa-times"></i>
                                     </button>
                                 </div>
+                            </div>
+
+                            <!-- ============================================= -->
+                            <!-- FOTOS OPCIONALES (10) CON COMENTARIO         -->
+                            <!-- ============================================= -->
+                            <div class="photo-section-title optional-section">
+                                <i class="fas fa-plus-circle" style="color: #6B7280;"></i>
+                                <span>Fotos Adicionales (Opcionales)</span>
+                                <span class="section-badge optional">no requeridas</span>
+                            </div>
+                            <p class="optional-hint">
+                                <i class="fas fa-info-circle"></i> Sube fotos adicionales de detalles específicos: raspaduras, abolladuras, partes dañadas, etc.
+                            </p>
+
+                            <div class="photo-grid photo-grid-optional" id="photoGridOptional">
+
+                                <!-- FOTO OPCIONAL 1 -->
+                                <div class="photo-upload optional" id="upload-opcional1" data-campo="opcional1">
+                                    <input type="file" id="fotoOpcional1" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Adicional 1</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional1" />
+                                            </svg>
+                                            <span class="progress-percent" id="percent-opcional1">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-opcional1">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-opcional1"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-opcional1">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    <div class="foto-comentario">
+                                        <input type="text" class="foto-comentario-input" id="comentario-opcional1"
+                                            placeholder="Ej: Raspadura en puerta izquierda..." maxlength="200">
+                                    </div>
+                                </div>
+
+                                <!-- FOTO OPCIONAL 2 -->
+                                <div class="photo-upload optional" id="upload-opcional2" data-campo="opcional2">
+                                    <input type="file" id="fotoOpcional2" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Adicional 2</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional2" />
+                                            </svg>
+                                            <span class="progress-percent" id="percent-opcional2">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-opcional2">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-opcional2"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-opcional2">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    <div class="foto-comentario">
+                                        <input type="text" class="foto-comentario-input" id="comentario-opcional2"
+                                            placeholder="Ej: Abolladura en guardafango..." maxlength="200">
+                                    </div>
+                                </div>
+
+                                <!-- FOTO OPCIONAL 3 -->
+                                <div class="photo-upload optional" id="upload-opcional3" data-campo="opcional3">
+                                    <input type="file" id="fotoOpcional3" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Adicional 3</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional3" />
+                                            </svg>
+                                            <span class="progress-percent" id="percent-opcional3">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-opcional3">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-opcional3"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-opcional3">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    <div class="foto-comentario">
+                                        <input type="text" class="foto-comentario-input" id="comentario-opcional3"
+                                            placeholder="Ej: Rayón en pintura..." maxlength="200">
+                                    </div>
+                                </div>
+
+                                <!-- FOTO OPCIONAL 4 -->
+                                <div class="photo-upload optional" id="upload-opcional4" data-campo="opcional4">
+                                    <input type="file" id="fotoOpcional4" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Adicional 4</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional4" />
+                                            </svg>
+                                            <span class="progress-percent" id="percent-opcional4">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-opcional4">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-opcional4"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-opcional4">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    <div class="foto-comentario">
+                                        <input type="text" class="foto-comentario-input" id="comentario-opcional4"
+                                            placeholder="Ej: Goma de la puerta dañada..." maxlength="200">
+                                    </div>
+                                </div>
+
+                                <!-- FOTO OPCIONAL 5 -->
+                                <div class="photo-upload optional" id="upload-opcional5" data-campo="opcional5">
+                                    <input type="file" id="fotoOpcional5" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Adicional 5</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional5" />
+                                            </svg>
+                                            <span class="progress-percent" id="percent-opcional5">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-opcional5">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-opcional5"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-opcional5">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    <div class="foto-comentario">
+                                        <input type="text" class="foto-comentario-input" id="comentario-opcional5"
+                                            placeholder="Ej: Daño en el parachoques..." maxlength="200">
+                                    </div>
+                                </div>
+
+                                <!-- FOTO OPCIONAL 6 -->
+                                <div class="photo-upload optional" id="upload-opcional6" data-campo="opcional6">
+                                    <input type="file" id="fotoOpcional6" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Adicional 6</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional6" />
+                                            </svg>
+                                            <span class="progress-percent" id="percent-opcional6">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-opcional6">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-opcional6"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-opcional6">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    <div class="foto-comentario">
+                                        <input type="text" class="foto-comentario-input" id="comentario-opcional6"
+                                            placeholder="Ej: Pieza faltante..." maxlength="200">
+                                    </div>
+                                </div>
+
+                                <!-- FOTO OPCIONAL 7 -->
+                                <div class="photo-upload optional" id="upload-opcional7" data-campo="opcional7">
+                                    <input type="file" id="fotoOpcional7" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Adicional 7</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional7" />
+                                            </svg>
+                                            <span class="progress-percent" id="percent-opcional7">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-opcional7">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-opcional7"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-opcional7">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    <div class="foto-comentario">
+                                        <input type="text" class="foto-comentario-input" id="comentario-opcional7"
+                                            placeholder="Ej: Detalle del motor..." maxlength="200">
+                                    </div>
+                                </div>
+
+                                <!-- FOTO OPCIONAL 8 -->
+                                <div class="photo-upload optional" id="upload-opcional8" data-campo="opcional8">
+                                    <input type="file" id="fotoOpcional8" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Adicional 8</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional8" />
+                                            </svg>
+                                            <span class="progress-percent" id="percent-opcional8">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-opcional8">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-opcional8"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-opcional8">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    <div class="foto-comentario">
+                                        <input type="text" class="foto-comentario-input" id="comentario-opcional8"
+                                            placeholder="Ej: Interior del vehículo..." maxlength="200">
+                                    </div>
+                                </div>
+
+                                <!-- FOTO OPCIONAL 9 -->
+                                <div class="photo-upload optional" id="upload-opcional9" data-campo="opcional9">
+                                    <input type="file" id="fotoOpcional9" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Adicional 9</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional9" />
+                                            </svg>
+                                            <span class="progress-percent" id="percent-opcional9">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-opcional9">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-opcional9"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-opcional9">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    <div class="foto-comentario">
+                                        <input type="text" class="foto-comentario-input" id="comentario-opcional9"
+                                            placeholder="Ej: Detalle de la llanta..." maxlength="200">
+                                    </div>
+                                </div>
+
+                                <!-- FOTO OPCIONAL 10 -->
+                                <div class="photo-upload optional" id="upload-opcional10" data-campo="opcional10">
+                                    <input type="file" id="fotoOpcional10" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Adicional 10</span>
+                                    </div>
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
+                                            <svg viewBox="0 0 50 50">
+                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional10" />
+                                            </svg>
+                                            <span class="progress-percent" id="percent-opcional10">0%</span>
+                                        </div>
+                                        <div class="status-badge-foto pending" id="badge-opcional10">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-opcional10"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-opcional10">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    <div class="foto-comentario">
+                                        <input type="text" class="foto-comentario-input" id="comentario-opcional10"
+                                            placeholder="Ej: Detalle del interior..." maxlength="200">
+                                    </div>
+                                </div>
+
                             </div>
 
                             <p class="photo-hint">* Las imágenes se comprimirán automáticamente (máx 1.2MB)</p>
@@ -735,29 +1273,23 @@
                         </div>
                         <div class="card-body">
                             <div class="form-group">
-                                <label for="descripcionProblema"><i class="fas fa-align-left"></i> Describa el
-                                    problema</label>
-                                <textarea id="descripcionProblema" rows="5"
-                                    placeholder="Ej: El vehículo hace un ruido extraño al frenar..."></textarea>
+                                <label for="descripcionProblema"><i class="fas fa-align-left"></i> Describa el problema</label>
+                                <textarea id="descripcionProblema" rows="5" placeholder="Ej: El vehículo hace un ruido extraño al frenar..."></textarea>
                             </div>
                             <div class="audio-controls">
                                 <div class="audio-buttons">
                                     <button type="button" class="btn-audio" id="btnGrabarAudio">
                                         <i class="fas fa-microphone"></i> Grabar Audio
                                     </button>
-                                    <button type="button" class="btn-eliminar-audio" id="btnEliminarAudio"
-                                        style="display: none;">
+                                    <button type="button" class="btn-eliminar-audio" id="btnEliminarAudio" style="display: none;">
                                         <i class="fas fa-trash-alt"></i> Eliminar Grabación
                                     </button>
-                                    <!-- 🔥 BOTÓN DE TRANSCRIPCIÓN EN EL FORMULARIO -->
-                                    <button type="button" class="btn-transcribir-form" id="btnTranscribirAudio"
-                                        style="display: none;">
+                                    <button type="button" class="btn-transcribir-form" id="btnTranscribirAudio" style="display: none;">
                                         <i class="fas fa-microphone-alt"></i> 🎙️ Transcribir Audio
                                     </button>
                                 </div>
                                 <div class="audio-status-container">
                                     <span class="audio-status" id="audioStatus"></span>
-                                    <!-- 🔥 ESTADO DE TRANSCRIPCIÓN EN FORMULARIO -->
                                     <div id="transcripcionStatusForm" style="display: none;">
                                         <i class="fas fa-check-circle"></i>
                                         <span id="transcripcionTextoStatus">Transcripción completada</span>
@@ -794,32 +1326,26 @@
                     <div class="filtros-recepciones">
                         <div class="filtro-grupo" style="flex: 2; min-width: 200px;">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="searchRecepcion" placeholder="Buscar por código o placa..."
-                                class="filtro-input">
+                            <input type="text" id="searchRecepcion" placeholder="Buscar por código o placa..." class="filtro-input">
                         </div>
                         <div class="filtro-grupo" style="flex: 1.5; min-width: 180px;">
                             <i class="fas fa-filter"></i>
                             <select id="estadoFiltro" class="filtro-select">
                                 <option value="todos">Todos los estados</option>
-                                <!-- Recepción -->
                                 <option value="EnRecepcion">📋 En Recepción</option>
-                                <!-- Diagnóstico -->
                                 <option value="EnDiagnostico">🔍 En Diagnóstico</option>
                                 <option value="DiagnosticoCompletado">✅ Diagnóstico Completado</option>
                                 <option value="DiagnosticoAprobado">👍 Diagnóstico Aprobado</option>
                                 <option value="DiagnosticoRechazado">👎 Diagnóstico Rechazado</option>
-                                <!-- Cotización -->
                                 <option value="CotizacionEnviada">📨 Cotización Enviada</option>
                                 <option value="CotizacionAceptada">✅ Cotización Aceptada</option>
                                 <option value="CotizacionParcial">🟡 Cotización Parcial</option>
                                 <option value="CotizacionRechazada">❌ Cotización Rechazada</option>
-                                <!-- Reparación -->
                                 <option value="EnArmadoVehiculo">🔧 En Armado</option>
                                 <option value="VehiculoArmado">✅ Vehículo Armado</option>
                                 <option value="EnReparacion">🔧 En Reparación</option>
                                 <option value="EnPausa">⏸️ En Pausa</option>
                                 <option value="ReparacionCompletada">✅ Reparación Completada</option>
-                                <!-- Final -->
                                 <option value="Finalizado">🏁 Finalizado</option>
                                 <option value="Entregado">🚗 Entregado</option>
                             </select>
@@ -864,8 +1390,7 @@
             <div class="modal-body">
                 <p>Ingresa el código de la sesión:</p>
                 <div class="form-group">
-                    <input type="text" id="codigoUnirseInput" placeholder="Ej: S-ABC123" class="codigo-input"
-                        autocomplete="off" style="text-transform: uppercase;">
+                    <input type="text" id="codigoUnirseInput" placeholder="Ej: S-ABC123" class="codigo-input" autocomplete="off" style="text-transform: uppercase;">
                 </div>
                 <p class="modal-hint">* Máximo 2 colaboradores por sesión</p>
             </div>
@@ -912,18 +1437,14 @@
                 <button class="btn-secondary" onclick="cerrarModalOrden()">
                     <i class="fas fa-times"></i> Cerrar
                 </button>
-                <button class="btn-primary" id="btnDescargarPDFFinal"
-                    style="display: inline-flex; background: linear-gradient(135deg, #C1121F, #8B0F1A);">
+                <button class="btn-primary" id="btnDescargarPDFFinal" style="display: inline-flex; background: linear-gradient(135deg, #C1121F, #8B0F1A);">
                     <i class="fas fa-file-pdf"></i> 📥 Descargar PDF
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- ===================================================== -->
-    <!-- ✅ MODAL PARA VER DETALLES DE RECEPCIÓN              -->
-    <!-- CON BOTÓN DE TRANSCRIPCIÓN DE AUDIO                    -->
-    <!-- ===================================================== -->
+    <!-- Modal para ver detalles de recepción -->
     <div class="modal modal-detalle" id="modalDetalleRecepcion">
         <div class="modal-content modal-detalle-content">
             <div class="modal-header">
@@ -934,10 +1455,8 @@
                 <!-- El contenido se genera dinámicamente desde recepcion.js -->
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalDetalle()"><i class="fas fa-times"></i>
-                    Cerrar</button>
-                <button class="btn-primary" id="btnExportarPDFDetalle"><i class="fas fa-file-pdf"></i> 📥 Descargar
-                    PDF</button>
+                <button class="btn-secondary" onclick="cerrarModalDetalle()"><i class="fas fa-times"></i> Cerrar</button>
+                <button class="btn-primary" id="btnExportarPDFDetalle"><i class="fas fa-file-pdf"></i> 📥 Descargar PDF</button>
             </div>
         </div>
     </div>
@@ -955,18 +1474,13 @@
                 <div id="eliminarInfo"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalEliminar()"><i class="fas fa-times"></i>
-                    Cancelar</button>
-                <button class="btn-danger" id="btnConfirmarEliminar"><i class="fas fa-trash-alt"></i> Sí,
-                    Eliminar</button>
+                <button class="btn-secondary" onclick="cerrarModalEliminar()"><i class="fas fa-times"></i> Cancelar</button>
+                <button class="btn-danger" id="btnConfirmarEliminar"><i class="fas fa-trash-alt"></i> Sí, Eliminar</button>
             </div>
         </div>
     </div>
 
-    <!-- ===================================================== -->
-    <!-- MODAL DE UBICACIÓN CON LEAFLET                        -->
-    <!-- CON BOTÓN "MI UBICACIÓN ACTUAL"                      -->
-    <!-- ===================================================== -->
+    <!-- Modal para seleccionar ubicación con Leaflet -->
     <div class="modal" id="modalUbicacionLeaflet">
         <div class="modal-content modal-ubicacion">
             <div class="modal-header">
@@ -974,7 +1488,7 @@
                 <button class="modal-close" id="btnCerrarModalUbicacionLeaflet">&times;</button>
             </div>
             <div class="modal-body">
-                <!-- 🔥 BOTÓN DE UBICACIÓN ACTUAL - AGREGADO AQUÍ -->
+                <!-- 🔥 BOTÓN DE UBICACIÓN ACTUAL -->
                 <div class="ubicacion-controls-row">
                     <button id="btnMiUbicacion" class="btn-ubicacion-actual" type="button">
                         <i class="fas fa-location-dot"></i> 📍 Mi Ubicación Actual
@@ -987,14 +1501,12 @@
                 <div class="ubicacion-busqueda">
                     <div class="search-container">
                         <i class="fas fa-search"></i>
-                        <input type="text" id="modalBuscarUbicacionLeaflet" placeholder="Buscar dirección..."
-                            class="ubicacion-search">
+                        <input type="text" id="modalBuscarUbicacionLeaflet" placeholder="Buscar dirección..." class="ubicacion-search">
                         <button type="button" id="btnBuscarUbicacionLeaflet" class="btn-buscar">
                             <i class="fas fa-search"></i> Buscar
                         </button>
                     </div>
-                    <div id="leafletMapa" style="height: 400px; width: 100%; border-radius: 12px; margin: 15px 0;">
-                    </div>
+                    <div id="leafletMapa" style="height: 400px; width: 100%; border-radius: 12px; margin: 15px 0;"></div>
                     <div class="ubicacion-info" id="ubicacionInfoLeaflet" style="display: none;">
                         <div class="info-card">
                             <i class="fas fa-check-circle"></i>
@@ -1007,10 +1519,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" id="btnCancelarUbicacionLeaflet"><i class="fas fa-times"></i>
-                    Cancelar</button>
-                <button class="btn-primary" id="btnConfirmarUbicacionLeaflet" disabled><i class="fas fa-check"></i> Usar
-                    esta ubicación</button>
+                <button class="btn-secondary" id="btnCancelarUbicacionLeaflet"><i class="fas fa-times"></i> Cancelar</button>
+                <button class="btn-primary" id="btnConfirmarUbicacionLeaflet" disabled><i class="fas fa-check"></i> Usar esta ubicación</button>
             </div>
         </div>
     </div>
@@ -1106,15 +1616,15 @@
             sidebarOpen = false;
         }
 
-        document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', function() {
             const hamburgerBtn = document.getElementById('hamburgerMenu');
             if (hamburgerBtn) hamburgerBtn.addEventListener('click', toggleSidebar);
             const overlay = document.getElementById('sidebarOverlay');
             if (overlay) overlay.addEventListener('click', closeSidebar);
-            window.addEventListener('resize', function () {
+            window.addEventListener('resize', function() {
                 if (window.innerWidth > 1024 && sidebarOpen) closeSidebar();
             });
-            document.addEventListener('click', function (e) {
+            document.addEventListener('click', function(e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
                     const hamburger = document.getElementById('hamburgerMenu');
@@ -1123,7 +1633,7 @@
                     }
                 }
             });
-            document.addEventListener('touchmove', function (e) {
+            document.addEventListener('touchmove', function(e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
                     if (sidebar && !sidebar.contains(e.target)) e.preventDefault();

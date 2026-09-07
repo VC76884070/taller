@@ -119,24 +119,54 @@ const clienteLatitudInput = document.getElementById('clienteLatitud');
 const clienteLongitudInput = document.getElementById('clienteLongitud');
 const btnAbrirModalUbicacion = document.getElementById('btnAbrirModalUbicacion');
 
+// =====================================================
+// CONFIGURACIÓN DE FOTOS - OBLIGATORIAS + OPCIONALES
+// =====================================================
+
 const FOTOS_CONFIG = [
-    { id: 'fotoLateralIzq', campo: 'lateral_izquierdo', label: 'Lateral Izquierdo' },
-    { id: 'fotoLateralDer', campo: 'lateral_derecho', label: 'Lateral Derecho' },
-    { id: 'fotoFrontal', campo: 'frontal', label: 'Frontal' },
-    { id: 'fotoTrasera', campo: 'trasera', label: 'Trasera' },
-    { id: 'fotoSuperior', campo: 'superior', label: 'Superior' },
-    { id: 'fotoInferior', campo: 'inferior', label: 'Inferior' },
-    { id: 'fotoTablero', campo: 'tablero', label: 'Tablero' }
+    // FOTOS OBLIGATORIAS (7)
+    { id: 'fotoLateralIzq', campo: 'lateral_izquierdo', label: 'Lateral Izquierdo', required: true },
+    { id: 'fotoLateralDer', campo: 'lateral_derecho', label: 'Lateral Derecho', required: true },
+    { id: 'fotoFrontal', campo: 'frontal', label: 'Frontal', required: true },
+    { id: 'fotoTrasera', campo: 'trasera', label: 'Trasera', required: true },
+    { id: 'fotoSuperior', campo: 'superior', label: 'Superior', required: true },
+    { id: 'fotoInferior', campo: 'inferior', label: 'Inferior', required: true },
+    { id: 'fotoTablero', campo: 'tablero', label: 'Tablero', required: true },
+    
+    // FOTOS OPCIONALES (10) CON COMENTARIO
+    { id: 'fotoOpcional1', campo: 'opcional1', label: 'Adicional 1', optional: true, tieneComentario: true },
+    { id: 'fotoOpcional2', campo: 'opcional2', label: 'Adicional 2', optional: true, tieneComentario: true },
+    { id: 'fotoOpcional3', campo: 'opcional3', label: 'Adicional 3', optional: true, tieneComentario: true },
+    { id: 'fotoOpcional4', campo: 'opcional4', label: 'Adicional 4', optional: true, tieneComentario: true },
+    { id: 'fotoOpcional5', campo: 'opcional5', label: 'Adicional 5', optional: true, tieneComentario: true },
+    { id: 'fotoOpcional6', campo: 'opcional6', label: 'Adicional 6', optional: true, tieneComentario: true },
+    { id: 'fotoOpcional7', campo: 'opcional7', label: 'Adicional 7', optional: true, tieneComentario: true },
+    { id: 'fotoOpcional8', campo: 'opcional8', label: 'Adicional 8', optional: true, tieneComentario: true },
+    { id: 'fotoOpcional9', campo: 'opcional9', label: 'Adicional 9', optional: true, tieneComentario: true },
+    { id: 'fotoOpcional10', campo: 'opcional10', label: 'Adicional 10', optional: true, tieneComentario: true }
 ];
 
 const CAMPO_MAP = {
+    // Fotos obligatorias
     'lateral_izquierdo': 'url_lateral_izquierda',
     'lateral_derecho': 'url_lateral_derecha',
     'frontal': 'url_foto_frontal',
     'trasera': 'url_foto_trasera',
     'superior': 'url_foto_superior',
     'inferior': 'url_foto_inferior',
-    'tablero': 'url_foto_tablero'
+    'tablero': 'url_foto_tablero',
+    
+    // Fotos opcionales
+    'opcional1': 'url_opcional1',
+    'opcional2': 'url_opcional2',
+    'opcional3': 'url_opcional3',
+    'opcional4': 'url_opcional4',
+    'opcional5': 'url_opcional5',
+    'opcional6': 'url_opcional6',
+    'opcional7': 'url_opcional7',
+    'opcional8': 'url_opcional8',
+    'opcional9': 'url_opcional9',
+    'opcional10': 'url_opcional10'
 };
 
 // =====================================================
@@ -970,31 +1000,32 @@ function mostrarErrorEnPreview(campo, mensaje) {
     actualizarProgresoFoto(campo, 0, 'error');
 }
 // =====================================================
-// VALIDAR COMPLETADO DE FOTOS (CORREGIDO - RECALCULA CORRECTAMENTE)
+// VALIDAR COMPLETADO DE FOTOS (SOLO OBLIGATORIAS)
 // =====================================================
+
 function validarCompletadoFotos() {
     let fotosConUrl = 0;
     let fotosConImagen = 0;
     let fotosDetalle = {};
     let fotosEliminadas = 0;
     
-    console.log('📸 Validando fotos...');
+    console.log('📸 Validando fotos obligatorias...');
     
-    for (const foto of FOTOS_CONFIG) {
+    // Solo validar fotos obligatorias
+    const fotosObligatorias = FOTOS_CONFIG.filter(f => f.required === true);
+    
+    for (const foto of fotosObligatorias) {
         const uploadDiv = document.getElementById(`upload-${foto.id}`);
         const hasImage = uploadDiv?.classList.contains('has-image') || false;
         
-        // 🔥 OBTENER URL DEL DOM (LA FUENTE MÁS CONFIABLE)
         let driveUrl = uploadDiv?.getAttribute('data-drive-url') || 
                        uploadDiv?.dataset?.driveUrl || 
                        null;
         
-        // 🔥 VERIFICAR EN fotosSubidasLocal SOLO SI NO HAY URL EN EL DOM
         if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
             const localUrl = fotosSubidasLocal[foto.campo];
             if (localUrl && localUrl !== 'null' && localUrl !== '' && localUrl !== 'undefined') {
                 driveUrl = localUrl;
-                // Restaurar en el DOM
                 if (uploadDiv) {
                     uploadDiv.setAttribute('data-drive-url', driveUrl);
                     uploadDiv.dataset.driveUrl = driveUrl;
@@ -1002,13 +1033,11 @@ function validarCompletadoFotos() {
             }
         }
         
-        // 🔥 SOLO COMO FALLBACK: Buscar en datos originales
         if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
             if (window.datosOriginalesRecepcion?.fotos) {
                 const url = window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]];
                 if (url && url !== 'null' && url !== '' && url !== 'undefined') {
                     driveUrl = url;
-                    // Restaurar en el DOM
                     if (uploadDiv) {
                         uploadDiv.setAttribute('data-drive-url', driveUrl);
                         uploadDiv.dataset.driveUrl = driveUrl;
@@ -1018,7 +1047,6 @@ function validarCompletadoFotos() {
             }
         }
         
-        // 🔥 SOLO COMO FALLBACK ULTIMO: Buscar en sesión
         if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
             if (sesionActual?.datos?.fotos) {
                 const url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
@@ -1033,17 +1061,14 @@ function validarCompletadoFotos() {
             }
         }
         
-        // 🔥 VERIFICAR SI LA FOTO FUE ELIMINADA (no tiene imagen ni URL)
         const esEliminada = !hasImage && (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined');
         if (esEliminada) {
             fotosEliminadas++;
-            // Asegurar que no queden vestigios
             if (uploadDiv) {
                 uploadDiv.removeAttribute('data-drive-url');
                 delete uploadDiv.dataset.driveUrl;
                 delete fotosSubidasLocal[foto.campo];
             }
-            // Eliminar de datos originales también
             if (window.datosOriginalesRecepcion?.fotos) {
                 window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]] = null;
             }
@@ -1052,9 +1077,7 @@ function validarCompletadoFotos() {
             }
         }
         
-        // 🔥 CONTAR URLS VÁLIDAS
         if (driveUrl && driveUrl !== 'null' && driveUrl !== '' && driveUrl !== 'undefined') {
-            // Verificar que la URL no sea de una foto eliminada que quedó en cache
             const esValida = !esEliminada && (uploadDiv?.classList.contains('has-image') || true);
             if (esValida) {
                 fotosConUrl++;
@@ -1073,7 +1096,6 @@ function validarCompletadoFotos() {
                 console.log(`📸 ${foto.campo}: URL inválida (eliminada) ❌`);
             }
         } else if (hasImage) {
-            // Tiene imagen pero no URL - podría estar subiendo
             fotosConImagen++;
             fotosDetalle[foto.campo] = { 
                 url: null, 
@@ -1091,10 +1113,8 @@ function validarCompletadoFotos() {
         }
     }
     
-    // 🔥 CALCULAR COMPLETADO - SOLO SI HAY 7 FOTOS CON URL VÁLIDA
     const completado = fotosConUrl === 7;
     
-    // 🔥 ACTUALIZAR BADGE VISUAL
     const fotosBadge = document.getElementById('statusFotos');
     if (fotosBadge) {
         if (completado) {
@@ -1112,14 +1132,13 @@ function validarCompletadoFotos() {
         }
     }
     
-    // 🔥 ACTUALIZAR ESTADO LOCAL
     if (seccionesCompletadasLocal.fotos !== completado) {
         seccionesCompletadasLocal.fotos = completado;
         actualizarBotonFinalizar();
         console.log(`📸 Estado actualizado: ${completado ? 'COMPLETADO ✅' : 'PENDIENTE ❌'}`);
     }
     
-    console.log('📸 Resumen final:', {
+    console.log('📸 Resumen final (obligatorias):', {
         total: fotosConUrl,
         completado: completado,
         eliminadas: fotosEliminadas,
@@ -1133,6 +1152,10 @@ function validarCompletadoFotos() {
 // =====================================================
 // GUARDAR SECCIÓN
 // =====================================================
+// =====================================================
+// GUARDAR SECCIÓN
+// =====================================================
+
 async function guardarSeccion(seccion) {
     if (!codigoSesion) return;
     let datos = {};
@@ -1158,26 +1181,44 @@ async function guardarSeccion(seccion) {
             break;
         case 'fotos':
             const fotosData = {};
+            const comentariosData = obtenerComentariosOpcionales();
+            
             for (const foto of FOTOS_CONFIG) {
                 const uploadDiv = document.getElementById(`upload-${foto.id}`);
                 let url = uploadDiv?.getAttribute('data-drive-url') || uploadDiv?.dataset?.driveUrl || null;
                 if (!url && sesionActual?.datos?.fotos) url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
                 fotosData[foto.campo] = url || null;
             }
-            datos = fotosData;
+            
+            datos = {
+                fotos: fotosData,
+                comentarios: comentariosData
+            };
             break;
         case 'descripcion':
-            datos = { texto: descripcionProblema?.value || '', audio_url: audioDriveUrl };
+            datos = { 
+                texto: descripcionProblema?.value || '', 
+                audio_url: audioDriveUrl 
+            };
             break;
     }
     
     const btnGuardar = document.querySelector(`.btn-guardar-seccion[data-seccion="${seccion}"]`);
-    if (btnGuardar) { btnGuardar.disabled = true; btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+    if (btnGuardar) { 
+        btnGuardar.disabled = true; 
+        btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; 
+    }
     
     try {
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/guardar-seccion`, {
             method: 'POST',
-            body: JSON.stringify({ codigo: codigoSesion, seccion, datos, usuario_id: userInfo?.id, usuario_nombre: userInfo?.nombre })
+            body: JSON.stringify({ 
+                codigo: codigoSesion, 
+                seccion, 
+                datos, 
+                usuario_id: userInfo?.id, 
+                usuario_nombre: userInfo?.nombre 
+            })
         });
         const data = await response.json();
         
@@ -1204,10 +1245,89 @@ async function guardarSeccion(seccion) {
     } catch (error) {
         mostrarNotificacion('Error al guardar', 'error');
     } finally {
-        if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.innerHTML = `<i class="fas fa-save"></i> Guardar`; }
+        if (btnGuardar) { 
+            btnGuardar.disabled = false; 
+            btnGuardar.innerHTML = `<i class="fas fa-save"></i> Guardar`; 
+        }
     }
 }
+// =====================================================
+// CARGAR COMENTARIOS DE FOTOS OPCIONALES
+// =====================================================
 
+function cargarComentariosOpcionales(comentarios) {
+    if (!comentarios) return;
+    
+    for (const foto of FOTOS_CONFIG) {
+        if (foto.optional && foto.tieneComentario) {
+            const input = document.getElementById(`comentario-${foto.campo}`);
+            if (input && comentarios[foto.campo]) {
+                input.value = comentarios[foto.campo];
+            }
+        }
+    }
+}
+// =====================================================
+// OBTENER COMENTARIOS ACTUALES DE FOTOS OPCIONALES
+// =====================================================
+
+function obtenerComentariosOpcionales() {
+    const comentarios = {};
+    
+    for (const foto of FOTOS_CONFIG) {
+        if (foto.optional && foto.tieneComentario) {
+            const input = document.getElementById(`comentario-${foto.campo}`);
+            if (input && input.value.trim()) {
+                comentarios[foto.campo] = input.value.trim();
+            }
+        }
+    }
+    
+    return comentarios;
+}
+// =====================================================
+// GUARDAR COMENTARIOS DE FOTOS OPCIONALES
+// =====================================================
+
+async function guardarComentariosOpcionales() {
+    if (!codigoSesion) return;
+    
+    const comentarios = {};
+    let hayCambios = false;
+    
+    for (const foto of FOTOS_CONFIG) {
+        if (foto.optional && foto.tieneComentario) {
+            const input = document.getElementById(`comentario-${foto.campo}`);
+            if (input) {
+                const valor = input.value.trim();
+                if (valor) {
+                    comentarios[foto.campo] = valor;
+                    hayCambios = true;
+                }
+            }
+        }
+    }
+    
+    if (!hayCambios) return;
+    
+    try {
+        const response = await fetchWithToken(`${API_URL}/jefe-operativo/guardar-comentarios-opcionales`, {
+            method: 'POST',
+            body: JSON.stringify({
+                codigo: codigoSesion,
+                comentarios: comentarios
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            console.log('✅ Comentarios opcionales guardados');
+            mostrarNotificacion('📝 Comentarios adicionales guardados', 'success');
+        }
+    } catch (error) {
+        console.warn('⚠️ Error guardando comentarios opcionales:', error);
+    }
+}
 // =====================================================
 // AUDIO
 // =====================================================
@@ -1478,6 +1598,10 @@ function activarSesion() {
     iniciarKeepAlive();
 }
 
+// =====================================================
+// CARGAR DATOS DE SESIÓN INICIAL
+// =====================================================
+
 async function cargarDatosSesionInicial() {
     if (!codigoSesion) return;
     try {
@@ -1492,6 +1616,7 @@ async function cargarDatosSesionInicial() {
         sesionActual = data.sesion;
         const datos = sesionActual.datos;
         
+        // ========== CARGAR CLIENTE ==========
         if (datos.cliente) {
             document.getElementById('clienteNombre').value = datos.cliente.nombre || '';
             document.getElementById('clienteTelefono').value = datos.cliente.telefono || '';
@@ -1501,6 +1626,7 @@ async function cargarDatosSesionInicial() {
             validarCompletadoCliente();
         }
         
+        // ========== CARGAR VEHÍCULO ==========
         if (datos.vehiculo) {
             document.getElementById('vehiculoPlaca').value = datos.vehiculo.placa || '';
             document.getElementById('vehiculoMarca').value = datos.vehiculo.marca || '';
@@ -1510,6 +1636,7 @@ async function cargarDatosSesionInicial() {
             validarCompletadoVehiculo();
         }
         
+        // ========== CARGAR FOTOS ==========
         if (datos.fotos) {
             for (const foto of FOTOS_CONFIG) {
                 const url = datos.fotos[CAMPO_MAP[foto.campo]];
@@ -1534,6 +1661,12 @@ async function cargarDatosSesionInicial() {
             validarCompletadoFotos();
         }
         
+        // ========== CARGAR COMENTARIOS DE FOTOS OPCIONALES ==========
+        if (datos.comentarios) {
+            cargarComentariosOpcionales(datos.comentarios);
+        }
+        
+        // ========== CARGAR DESCRIPCIÓN ==========
         if (datos.descripcion) {
             descripcionProblema.value = datos.descripcion.texto || '';
             if (datos.descripcion.audio_url) {
@@ -1546,6 +1679,7 @@ async function cargarDatosSesionInicial() {
             validarCompletadoDescripcion();
         }
         
+        // ========== CARGAR COLABORADORES ==========
         if (sesionActual.colaboradores_nombres) {
             const count = sesionActual.colaboradores_nombres.length;
             colaboradoresCount.textContent = count;
@@ -1555,11 +1689,14 @@ async function cargarDatosSesionInicial() {
             ).join('');
         }
         
+        // ========== CARGAR SECCIONES COMPLETADAS ==========
         if (sesionActual.secciones_completadas) {
             seccionesCompletadasLocal = { ...sesionActual.secciones_completadas };
             actualizarBotonFinalizar();
         }
-    } catch (error) {}
+    } catch (error) {
+        console.error('Error cargando datos de sesión:', error);
+    }
 }
 
 async function recuperarSesionActiva() {
@@ -1875,6 +2012,10 @@ async function finalizarSesionConReporte() {
 // =====================================================
 // LIMPIAR SESIÓN COMPLETA
 // =====================================================
+// =====================================================
+// LIMPIAR SESIÓN COMPLETA
+// =====================================================
+
 function limpiarSesionCompleta() {
     detenerPolling();
     detenerKeepAlive();
@@ -1889,13 +2030,13 @@ function limpiarSesionCompleta() {
     seccionesCompletadasLocal = { cliente: false, vehiculo: false, fotos: false, descripcion: false };
     localStorage.removeItem('sesion_actual');
     
-    // 🔥 LIMPIAR VARIABLES DE EDICIÓN
+    // LIMPIAR VARIABLES DE EDICIÓN
     window.sesionCodigoOriginal = null;
     window.datosOriginalesRecepcion = null;
     window.fotosOriginalesRecepcion = null;
     window.audioOriginalRecepcion = null;
     
-    // 🔥 LIMPIAR URL DE BLOB DE AUDIO
+    // LIMPIAR URL DE BLOB DE AUDIO
     if (window.audioBlobUrl) {
         try {
             URL.revokeObjectURL(window.audioBlobUrl);
@@ -1903,7 +2044,7 @@ function limpiarSesionCompleta() {
         window.audioBlobUrl = null;
     }
     
-    // 🔥 LIMPIAR CACHÉ DE IMÁGENES (opcional - si quieres liberar memoria)
+    // LIMPIAR CACHÉ DE IMÁGENES
     if (window.imageCache) {
         window.imageCache.clear();
     }
@@ -1918,7 +2059,6 @@ function limpiarSesionCompleta() {
         if (input.id !== 'clienteLatitud' && input.id !== 'clienteLongitud') {
             input.value = '';
         }
-        // Limpiar cualquier estado de error
         input.classList.remove('error', 'success');
     });
     if (clienteLatitudInput) clienteLatitudInput.value = '';
@@ -1947,9 +2087,13 @@ function limpiarSesionCompleta() {
         }
         const campo = upload.dataset.campo;
         if (campo) actualizarProgresoFoto(campo, 0, 'pending');
-        // Limpiar el input file
         const fileInput = upload.querySelector('input[type="file"]');
         if (fileInput) fileInput.value = '';
+    });
+    
+    // ========== LIMPIAR COMENTARIOS DE FOTOS OPCIONALES ==========
+    document.querySelectorAll('.foto-comentario-input').forEach(input => {
+        input.value = '';
     });
     
     // Limpiar audio
@@ -4239,6 +4383,10 @@ async function cargarAudioConToken(audioUrl) {
 // =====================================================
 // EDITAR RECEPCIÓN (COMPLETO - CON AUDIO CORREGIDO)
 // =====================================================
+// =====================================================
+// EDITAR RECEPCIÓN
+// =====================================================
+
 async function editarRecepcion(id) {
     try {
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/detalle-recepcion/${id}`, { method: 'GET' });
@@ -4289,29 +4437,23 @@ async function editarRecepcion(id) {
         seccionesCompletadasLocal.descripcion = !!(detalle.transcripcion_problema && detalle.transcripcion_problema.trim().length > 0);
         actualizarEstadoVisualSeccion('descripcion', seccionesCompletadasLocal.descripcion);
         
-        // ========== 🔥 CARGAR AUDIO (CORREGIDO CON FETCH) ==========
+        // ========== CARGAR AUDIO ==========
         const audioUrl = detalle.audio_url;
         const tieneAudio = audioUrl && audioUrl !== 'null' && audioUrl !== 'None' && audioUrl !== '' && audioUrl !== null && audioUrl !== 'undefined';
-        
-        // Guardar URL original para referencia
         audioDriveUrl = tieneAudio ? audioUrl : null;
         
         if (tieneAudio) {
-            // Mostrar indicador de carga
             if (audioStatus) {
                 audioStatus.textContent = '⏳ Cargando audio...';
                 audioStatus.style.color = '#f59e0b';
             }
             
-            // 🔥 CARGAR AUDIO CON FETCH Y TOKEN
             const localAudioUrl = await cargarAudioConToken(audioUrl);
             
             if (localAudioUrl && audioPreview) {
-                // Usar la URL local (blob)
                 audioPreview.src = localAudioUrl;
                 audioPreview.style.display = 'block';
                 
-                // Guardar referencia para limpiar después
                 if (window.audioBlobUrl) {
                     URL.revokeObjectURL(window.audioBlobUrl);
                 }
@@ -4329,7 +4471,6 @@ async function editarRecepcion(id) {
                 
                 audioPreview.onerror = function(e) {
                     console.warn('⚠️ Error reproduciendo audio:', e);
-                    // Si falla la URL local, intentar con la URL directa de Drive
                     const fileId = extraerFileIdDrive(audioUrl);
                     if (fileId) {
                         const directUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
@@ -4344,7 +4485,6 @@ async function editarRecepcion(id) {
                     btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Regrabar Audio';
                 };
             } else if (audioPreview) {
-                // Fallback: usar URL directa
                 audioPreview.src = audioUrl;
                 audioPreview.style.display = 'block';
                 if (audioStatus) {
@@ -4355,12 +4495,10 @@ async function editarRecepcion(id) {
                 btnGrabarAudio.innerHTML = '<i class="fas fa-microphone"></i> Regrabar Audio';
             }
         } else {
-            // No hay audio
             audioDriveUrl = null;
             if (audioPreview) {
                 audioPreview.src = '';
                 audioPreview.style.display = 'none';
-                // Limpiar URL de blob si existe
                 if (window.audioBlobUrl) {
                     URL.revokeObjectURL(window.audioBlobUrl);
                     window.audioBlobUrl = null;
@@ -4377,14 +4515,19 @@ async function editarRecepcion(id) {
         // ========== CARGAR FOTOS ==========
         await cargarFotosExistentes(detalle.fotos);
         
+        // ========== CARGAR COMENTARIOS DE FOTOS OPCIONALES ==========
+        if (detalle.comentarios) {
+            cargarComentariosOpcionales(detalle.comentarios);
+        }
+        
         // ========== CONFIGURAR MODO EDICIÓN ==========
         modoEdicionRecepcion = true;
         recepcionEditandoId = id;
         window.datosOriginalesRecepcion = detalle;
         window.fotosOriginalesRecepcion = JSON.parse(JSON.stringify(detalle.fotos || {}));
         window.audioOriginalRecepcion = detalle.audio_url || null;
-        window.datosOriginalesRecepcion.codigo_unico = detalle.codigo_unico; 
-        // Cambiar botón finalizar
+        window.datosOriginalesRecepcion.codigo_unico = detalle.codigo_unico;
+        
         if (btnFinalizar) {
             btnFinalizar.innerHTML = '<i class="fas fa-save"></i> Guardar Cambios';
             btnFinalizar.disabled = false;
@@ -4412,10 +4555,7 @@ async function editarRecepcion(id) {
         }
         
         actualizarBotonFinalizar();
-        
-        // Validar descripción con audio
         validarCompletadoDescripcion();
-        
         mostrarNotificacion(`✅ Editando recepción: ${detalle.codigo_unico}`, 'success');
         
     } catch (error) {
@@ -4423,7 +4563,6 @@ async function editarRecepcion(id) {
         mostrarNotificacion('Error cargando datos: ' + error.message, 'error');
     }
 }
-
 function cancelarEdicion() {
     if (confirm('¿Cancelar la edición? Los cambios no guardados se perderán.')) {
         if (btnFinalizar) {
@@ -4927,48 +5066,54 @@ function setupUnirsePorCodigo() {
 // =====================================================
 // SETUP PHOTO UPLOADS (CON ELIMINACIÓN DE DRIVE CORREGIDA)
 // =====================================================
+// =====================================================
+// SETUP PHOTO UPLOADS (CON ELIMINACIÓN DE DRIVE CORREGIDA)
+// =====================================================
+
 function setupPhotoUploads() {
+    // Configurar todas las fotos (obligatorias y opcionales)
     for (const foto of FOTOS_CONFIG) {
         const input = document.getElementById(foto.id);
         if (input) {
-            input.addEventListener('change', () => procesarFoto(input, foto));
+            // Eliminar eventos anteriores para evitar duplicados
+            input.removeEventListener('change', input._handler);
+            input._handler = () => procesarFoto(input, foto);
+            input.addEventListener('change', input._handler);
         }
         
         const uploadDiv = document.getElementById(`upload-${foto.id}`);
-        const removeBtn = uploadDiv?.querySelector('.remove-photo');
+        if (!uploadDiv) continue;
         
+        const removeBtn = uploadDiv.querySelector('.remove-photo');
         if (removeBtn) {
-            removeBtn.addEventListener('click', async function(e) {
+            removeBtn.removeEventListener('click', removeBtn._handler);
+            removeBtn._handler = async function(e) {
                 e.stopPropagation();
                 e.preventDefault();
                 
-                // 🔥 OBTENER LA URL ACTUAL DEL DOM
+                // OBTENER LA URL ACTUAL DEL DOM
                 let urlAnterior = uploadDiv?.getAttribute('data-drive-url') || 
                                   uploadDiv?.dataset?.driveUrl || 
                                   fotosSubidasLocal[foto.campo];
                 
-                // 🔥 SI NO HAY URL EN EL DOM, BUSCAR EN window.datosOriginalesRecepcion
+                // SI NO HAY URL EN EL DOM, BUSCAR EN window.datosOriginalesRecepcion
                 if (!urlAnterior || urlAnterior === 'null' || urlAnterior === '' || urlAnterior === 'undefined') {
                     if (window.datosOriginalesRecepcion?.fotos) {
                         urlAnterior = window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]];
-                        console.log(`📸 URL recuperada de datosOriginales: ${urlAnterior}`);
                     }
                 }
                 
-                // 🔥 SI AÚN NO HAY URL, BUSCAR EN window.fotosOriginalesRecepcion
+                // SI AÚN NO HAY URL, BUSCAR EN window.fotosOriginalesRecepcion
                 if (!urlAnterior || urlAnterior === 'null' || urlAnterior === '' || urlAnterior === 'undefined') {
                     if (window.fotosOriginalesRecepcion) {
                         urlAnterior = window.fotosOriginalesRecepcion[CAMPO_MAP[foto.campo]];
-                        console.log(`📸 URL recuperada de fotosOriginales: ${urlAnterior}`);
                     }
                 }
-                
-                console.log(`📸 URL anterior encontrada para ${foto.campo}: ${urlAnterior ? urlAnterior.substring(0, 50) + '...' : 'null'}`);
                 
                 const confirmar = confirm(`¿Eliminar la foto ${foto.label}?`);
                 if (!confirmar) return;
                 
-                // 🔥 SI HAY URL Y ESTÁ EN MODO EDICIÓN, ELIMINAR DE DRIVE
+                // SI HAY URL Y ESTÁ EN MODO EDICIÓN, ELIMINAR DE DRIVE
                 if (modoEdicionRecepcion && urlAnterior && urlAnterior !== 'null' && urlAnterior !== '' && urlAnterior !== 'undefined') {
                     try {
                         mostrarNotificacion(`🗑️ Eliminando ${foto.label} de Drive...`, 'info');
@@ -4994,16 +5139,14 @@ function setupPhotoUploads() {
                         mostrarNotificacion(`⚠️ Error al eliminar de Drive: ${error.message}`, 'warning');
                     }
                 } else if (!modoEdicionRecepcion) {
-                    // Si no está en modo edición, solo eliminar del DOM
                     mostrarNotificacion(`📸 ${foto.label} eliminada del formulario`, 'info');
                 }
                 
-                // 🔥 ELIMINAR LA FOTO DEL DOM (SIEMPRE)
+                // ELIMINAR LA FOTO DEL DOM (SIEMPRE)
                 uploadDiv.removeAttribute('data-drive-url');
                 delete uploadDiv.dataset.driveUrl;
                 delete fotosSubidasLocal[foto.campo];
                 
-                // Si hay URL de objeto local (blob), revocarla
                 if (uploadDiv.dataset.objectUrl) {
                     URL.revokeObjectURL(uploadDiv.dataset.objectUrl);
                     delete uploadDiv.dataset.objectUrl;
@@ -5025,24 +5168,26 @@ function setupPhotoUploads() {
                 this.style.display = 'none';
                 actualizarProgresoFoto(foto.campo, 0, 'pending');
                 
-                // 🔥 ACTUALIZAR DATOS ORIGINALES ANTES DE VALIDAR
+                // ACTUALIZAR DATOS ORIGINALES
                 if (window.datosOriginalesRecepcion?.fotos) {
                     window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]] = null;
-                    console.log(`📸 datosOriginales actualizado: ${foto.campo} = null`);
                 }
                 if (window.fotosOriginalesRecepcion) {
                     window.fotosOriginalesRecepcion[CAMPO_MAP[foto.campo]] = null;
-                    console.log(`📸 fotosOriginales actualizado: ${foto.campo} = null`);
                 }
                 
-                // 🔥 ACTUALIZAR CONTADOR - FORZAR RECALCULO
+                // Si es una foto opcional, limpiar comentario
+                if (foto.optional && foto.tieneComentario) {
+                    const comentarioInput = document.getElementById(`comentario-${foto.campo}`);
+                    if (comentarioInput) {
+                        comentarioInput.value = '';
+                    }
+                }
+                
                 setTimeout(() => {
                     const completado = validarCompletadoFotos();
-                    console.log(`📸 Estado después de eliminar: ${completado ? 'COMPLETADO' : 'PENDIENTE'}`);
                     
-                    // 🔥 SI ESTÁ EN MODO EDICIÓN, GUARDAR LA SESIÓN
                     if (modoEdicionRecepcion && codigoSesion) {
-                        // Recolectar URLs restantes
                         const fotosData = {};
                         for (const f of FOTOS_CONFIG) {
                             const div = document.getElementById(`upload-${f.id}`);
@@ -5052,16 +5197,14 @@ function setupPhotoUploads() {
                             if (url && url !== 'null' && url !== '' && url !== 'undefined') {
                                 fotosData[f.campo] = url;
                             } else {
-                                // IMPORTANTE: Si no tiene URL, enviar null
                                 fotosData[f.campo] = null;
                             }
                         }
-                        console.log('📸 Guardando sesión con fotosData:', fotosData);
                         guardarSeccion('fotos');
                     }
                 }, 300);
                 
-                // 🔥 DESTACAR EL INPUT PARA QUE EL USUARIO SUBA UNA NUEVA FOTO
+                // DESTACAR EL INPUT PARA QUE EL USUARIO SUBA UNA NUEVA FOTO
                 const inputFile = document.getElementById(foto.id);
                 if (inputFile) {
                     inputFile.style.border = '2px solid #C1121F';
@@ -5071,7 +5214,26 @@ function setupPhotoUploads() {
                         inputFile.style.borderRadius = '';
                     }, 3000);
                 }
-            });
+            };
+            removeBtn.addEventListener('click', removeBtn._handler);
+        }
+    }
+    
+    // 🔥 GUARDAR COMENTARIOS AUTOMÁTICAMENTE CUANDO EL USUARIO TERMINE DE ESCRIBIR
+    for (const foto of FOTOS_CONFIG) {
+        if (foto.optional && foto.tieneComentario) {
+            const input = document.getElementById(`comentario-${foto.campo}`);
+            if (input) {
+                let timeoutId = null;
+                input.addEventListener('input', () => {
+                    clearTimeout(timeoutId);
+                    timeoutId = setTimeout(() => {
+                        if (codigoSesion) {
+                            guardarComentariosOpcionales();
+                        }
+                    }, 800);
+                });
+            }
         }
     }
 }

@@ -976,10 +976,7 @@ function actualizarProgresoFotoDirecto(campo, progreso) {
     }
 }
 // =====================================================
-// ACTUALIZAR PREVIEW CON URL (DESPUÉS DE SUBIR)
-// =====================================================
-// =====================================================
-// ACTUALIZAR PREVIEW CON URL (DESPUÉS DE SUBIR)
+// ACTUALIZAR PREVIEW CON URL (USANDO PROXY)
 // =====================================================
 function actualizarPreviewConUrl(campo, url) {
     const fotoConfig = FOTOS_CONFIG.find(f => f.campo === campo);
@@ -991,70 +988,27 @@ function actualizarPreviewConUrl(campo, url) {
     const preview = uploadDiv.querySelector('.upload-preview');
     if (!preview) return;
     
-    // 🔥 ELIMINAR OVERLAY DE CARGA
-    const loadingOverlay = document.getElementById(`loading-${campo}`);
-    if (loadingOverlay) {
-        loadingOverlay.remove();
-    }
-    
-    // 🔥 LIMPIAR PREVIEW (eliminar imagen local si existe)
-    preview.innerHTML = '';
-    preview.style.backgroundImage = '';
-    preview.style.backgroundSize = '';
-    preview.style.backgroundPosition = '';
-    
-    // Revocar URL de objeto local si existe
-    if (uploadDiv.dataset.objectUrl) {
-        try {
-            URL.revokeObjectURL(uploadDiv.dataset.objectUrl);
-        } catch (e) {}
-        delete uploadDiv.dataset.objectUrl;
-    }
-    
     // 🔥 GUARDAR URL EN EL DOM
     uploadDiv.setAttribute('data-drive-url', url);
     uploadDiv.dataset.driveUrl = url;
     fotosSubidasLocal[campo] = url;
     
-    // 🔥 MOSTRAR IMAGEN CON URL DE DRIVE
-    preview.style.display = 'block';
-    const img = document.createElement('img');
-    img.src = url;
-    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;border-radius:8px;';
-    img.onerror = function() {
-        console.warn(`⚠️ No se pudo cargar ${campo} directamente, intentando con proxy...`);
-        cargarImagenConProxy(campo, url);
-    };
-    img.onload = function() {
-        console.log(`✅ Imagen ${campo} cargada correctamente`);
-    };
-    preview.appendChild(img);
-    
-    uploadDiv.classList.add('has-image');
-    uploadDiv.classList.remove('error');
-    
-    // Mostrar botón eliminar
-    const removeBtn = uploadDiv.querySelector('.remove-photo');
-    if (removeBtn) removeBtn.style.display = 'flex';
-    
-    // Ocultar barra de progreso
-    const barContainer = uploadDiv.querySelector('.progress-bar-foto');
-    if (barContainer) barContainer.style.display = 'none';
-    
-    const statusContainer = uploadDiv.querySelector('.uploading-status');
-    if (statusContainer) {
-        statusContainer.style.display = 'none';
-        statusContainer.className = 'uploading-status completed';
-    }
-    
-    // Actualizar badge
-    const badge = document.getElementById(`badge-${campo}`);
-    if (badge) {
-        badge.className = 'status-badge-foto completed';
-        badge.innerHTML = '<i class="fas fa-check"></i>';
-    }
-    
-    console.log(`✅ Preview actualizado con URL para ${campo}`);
+    // 🔥 CARGAR IMAGEN CON PROXY
+    cargarImagenProxy(url, preview, true).then((result) => {
+        if (result) {
+            uploadDiv.classList.add('has-image');
+            uploadDiv.classList.remove('error');
+            
+            const removeBtn = uploadDiv.querySelector('.remove-photo');
+            if (removeBtn) removeBtn.style.display = 'flex';
+            
+            actualizarProgresoFoto(campo, 100, 'completed');
+            console.log(`✅ Preview actualizado con proxy para ${campo}`);
+        } else {
+            uploadDiv.classList.add('error');
+            mostrarErrorEnPreview(campo, 'No se pudo cargar la imagen');
+        }
+    });
 }
 // =====================================================
 // CARGAR IMAGEN CON PROXY (FALLBACK)
@@ -5448,6 +5402,9 @@ window.logout = () => {
 // =====================================================
 // CARGAR FOTOS EXISTENTES (CORREGIDO - CON BASE64)
 // =====================================================
+// =====================================================
+// CARGAR FOTOS EXISTENTES (CON PROXY)
+// =====================================================
 async function cargarFotosExistentes(fotos) {
     if (!fotos) return;
     
@@ -5471,38 +5428,104 @@ async function cargarFotosExistentes(fotos) {
         return;
     }
     
-    console.log(`📸 Cargando ${fotosAProcesar.length} fotos...`);
+    console.log(`📸 Cargando ${fotosAProcesar.length} fotos con proxy...`);
     
-    // 🔥 CARGAR CADA FOTO CON BASE64
     let fotosCargadas = 0;
     
     for (const foto of fotosAProcesar) {
+        const uploadDiv = document.getElementById(`upload-${foto.id}`);
+        const preview = uploadDiv?.querySelector('.upload-preview');
+        
+        if (!preview) continue;
+        
+        // 🔥 MOSTRAR LOADER
+        preview.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:8px;height:100%;background:rgba(0,0,0,0.4);border-radius:8px;">
+                <i class="fas fa-spinner fa-spin" style="font-size:28px;color:#C1121F;"></i>
+                <span style="font-size:11px;">Cargando...</span>
+            </div>
+        `;
+        preview.style.display = 'block';
+        uploadDiv.classList.add('has-image');
+        
         try {
-            // 🔥 OBTENER BASE64 DESDE EL BACKEND
-            const response = await fetchWithToken(`${API_URL}/jefe-operativo/imagen-base64`, {
-                method: 'POST',
-                body: JSON.stringify({ 
-                    url: foto.url,
-                    thumbnail: true,
-                    size: 'w400'
-                })
+            // 🔥 USAR EL PROXY PARA OBTENER LA IMAGEN
+            const proxyUrl = `${API_URL}/jefe-operativo/proxy-imagen?url=${encodeURIComponent(foto.url)}`;
+            const token = localStorage.getItem('furia_token');
+            
+            const response = await fetch(proxyUrl, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
             });
             
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
             
             const data = await response.json();
             
             if (data.success && data.base64) {
-                // 🔥 ACTUALIZAR PREVIEW CON BASE64
-                actualizarPreviewConBase64(foto.campo, data.base64);
-                fotosCargadas++;
-                console.log(`✅ ${foto.label} cargada (base64)`);
+                // 🔥 PRECARGAR LA IMAGEN ANTES DE MOSTRAR
+                const img = new Image();
+                
+                await new Promise((resolve) => {
+                    img.onload = function() {
+                        // Limpiar preview y mostrar imagen
+                        preview.innerHTML = '';
+                        preview.style.backgroundImage = '';
+                        preview.style.backgroundSize = '';
+                        preview.style.backgroundPosition = '';
+                        
+                        const imgElement = document.createElement('img');
+                        imgElement.src = data.base64;
+                        imgElement.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;border-radius:8px;';
+                        preview.appendChild(imgElement);
+                        
+                        uploadDiv.classList.add('has-image');
+                        uploadDiv.classList.remove('error');
+                        
+                        // Mostrar botón eliminar
+                        const removeBtn = uploadDiv.querySelector('.remove-photo');
+                        if (removeBtn) removeBtn.style.display = 'flex';
+                        
+                        // Guardar URL en el DOM
+                        uploadDiv.setAttribute('data-drive-url', foto.url);
+                        uploadDiv.dataset.driveUrl = foto.url;
+                        fotosSubidasLocal[foto.campo] = foto.url;
+                        
+                        actualizarProgresoFoto(foto.campo, 100, 'completed');
+                        fotosCargadas++;
+                        console.log(`✅ ${foto.label} cargada con proxy`);
+                        resolve();
+                    };
+                    
+                    img.onerror = function() {
+                        console.warn(`⚠️ Error cargando ${foto.label}, mostrando placeholder`);
+                        preview.innerHTML = `
+                            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:4px;height:100%;background:rgba(0,0,0,0.3);border-radius:8px;">
+                                <i class="fas fa-exclamation-triangle" style="font-size:24px;color:#ef4444;"></i>
+                                <span style="font-size:10px;">Error al cargar</span>
+                            </div>
+                        `;
+                        uploadDiv.classList.add('error');
+                        resolve();
+                    };
+                    
+                    img.src = data.base64;
+                });
             } else {
-                throw new Error(data.error || 'Error convirtiendo imagen');
+                throw new Error(data.error || 'Error obteniendo imagen');
             }
         } catch (error) {
             console.warn(`⚠️ Error cargando ${foto.label}:`, error.message);
-            mostrarErrorEnPreview(foto.campo, 'Error al cargar');
+            preview.innerHTML = `
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:4px;height:100%;background:rgba(0,0,0,0.3);border-radius:8px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size:24px;color:#ef4444;"></i>
+                    <span style="font-size:10px;">Error al cargar</span>
+                </div>
+            `;
+            uploadDiv.classList.add('error');
         }
     }
     
@@ -5525,6 +5548,83 @@ async function cargarFotosExistentes(fotos) {
     
     console.log(`📸 ${fotosCargadas}/7 fotos cargadas`);
     return fotosCargadas;
+}
+// =====================================================
+// CARGAR IMAGEN CON PROXY (FUNCIÓN REUTILIZABLE)
+// =====================================================
+async function cargarImagenProxy(url, contenedor, mostrarError = true) {
+    if (!url) {
+        if (contenedor) contenedor.innerHTML = `<div style="color:#8E8E93;font-size:12px;">Sin imagen</div>`;
+        return null;
+    }
+    
+    // Mostrar loader
+    if (contenedor) {
+        contenedor.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:8px;height:100%;background:rgba(0,0,0,0.3);border-radius:8px;">
+                <i class="fas fa-spinner fa-spin" style="font-size:28px;color:#C1121F;"></i>
+                <span style="font-size:11px;">Cargando...</span>
+            </div>
+        `;
+    }
+    
+    try {
+        const proxyUrl = `${API_URL}/jefe-operativo/proxy-imagen?url=${encodeURIComponent(url)}`;
+        const token = localStorage.getItem('furia_token');
+        
+        const response = await fetch(proxyUrl, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.base64) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = function() {
+                    if (contenedor) {
+                        contenedor.innerHTML = '';
+                        const imgElement = document.createElement('img');
+                        imgElement.src = data.base64;
+                        imgElement.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;border-radius:8px;';
+                        contenedor.appendChild(imgElement);
+                    }
+                    resolve(data.base64);
+                };
+                img.onerror = function() {
+                    if (contenedor && mostrarError) {
+                        contenedor.innerHTML = `
+                            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:4px;height:100%;background:rgba(0,0,0,0.3);border-radius:8px;">
+                                <i class="fas fa-exclamation-triangle" style="font-size:24px;color:#ef4444;"></i>
+                                <span style="font-size:10px;">Error al cargar</span>
+                            </div>
+                        `;
+                    }
+                    resolve(null);
+                };
+                img.src = data.base64;
+            });
+        } else {
+            throw new Error(data.error || 'Error obteniendo imagen');
+        }
+    } catch (error) {
+        console.warn('⚠️ Error cargando imagen con proxy:', error);
+        if (contenedor && mostrarError) {
+            contenedor.innerHTML = `
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:4px;height:100%;background:rgba(0,0,0,0.3);border-radius:8px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size:24px;color:#ef4444;"></i>
+                    <span style="font-size:10px;">Error</span>
+                </div>
+            `;
+        }
+        return null;
+    }
 }
 // =====================================================
 // ACTUALIZAR PREVIEW CON BASE64

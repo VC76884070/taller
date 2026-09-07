@@ -3087,3 +3087,92 @@ def guardar_comentarios_opcionales(current_user):
     except Exception as e:
         logger.error(f"❌ Error guardando comentarios opcionales: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+# =====================================================
+# ENDPOINT: PROXY PARA IMÁGENES DE GOOGLE DRIVE
+# =====================================================
+
+@recepcion_jefe_bp.route('/proxy-imagen', methods=['GET'])
+@jefe_operativo_required
+def proxy_imagen(current_user):
+    """Proxy para imágenes de Google Drive - Devuelve en Base64"""
+    try:
+        import base64
+        import re
+        import requests
+        
+        url = request.args.get('url')
+        if not url:
+            return jsonify({'success': False, 'error': 'URL no proporcionada'}), 400
+        
+        # Extraer file_id
+        file_id = None
+        patterns = [
+            r'[?&]id=([a-zA-Z0-9_-]+)',
+            r'/file/d/([a-zA-Z0-9_-]+)',
+            r'open\?id=([a-zA-Z0-9_-]+)',
+            r'/d/([a-zA-Z0-9_-]+)',
+            r'thumbnail\?id=([a-zA-Z0-9_-]+)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                file_id = match.group(1)
+                break
+        
+        if not file_id and re.match(r'^[a-zA-Z0-9_-]{10,}$', url):
+            file_id = url
+        
+        if not file_id:
+            return jsonify({'success': False, 'error': 'No se pudo extraer el ID'}), 400
+        
+        logger.info(f"📸 Proxy imagen - File ID: {file_id}")
+        
+        # Estrategias de descarga
+        urls = [
+            f"https://drive.google.com/thumbnail?id={file_id}&sz=w800",
+            f"https://drive.google.com/uc?export=view&id={file_id}",
+            f"https://drive.google.com/uc?export=download&id={file_id}",
+        ]
+        
+        image_data = None
+        mime_type = 'image/jpeg'
+        
+        for download_url in urls:
+            try:
+                response = requests.get(download_url, timeout=30, allow_redirects=True)
+                
+                # Manejar redirecciones de confirmación de Google
+                if 'confirm' in response.url and 'download' in response.url:
+                    confirm_match = re.search(r'confirm=([^&]+)', response.text)
+                    if confirm_match:
+                        confirm_token = confirm_match.group(1)
+                        download_url_confirm = f"{response.url}&confirm={confirm_token}"
+                        response = requests.get(download_url_confirm, timeout=30, allow_redirects=True)
+                
+                if response.status_code == 200:
+                    content_type = response.headers.get('Content-Type', '')
+                    if content_type.startswith('image/') or len(response.content) > 1000:
+                        image_data = response.content
+                        mime_type = content_type if content_type.startswith('image/') else 'image/jpeg'
+                        break
+            except Exception as e:
+                logger.warning(f"⚠️ Error en estrategia {download_url}: {e}")
+                continue
+        
+        if not image_data:
+            return jsonify({'success': False, 'error': 'No se pudo descargar la imagen'}), 404
+        
+        # Convertir a Base64
+        base64_data = base64.b64encode(image_data).decode('utf-8')
+        
+        return jsonify({
+            'success': True,
+            'base64': f'data:{mime_type};base64,{base64_data}',
+            'file_id': file_id
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error en proxy-imagen: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500

@@ -1,85 +1,202 @@
-<!-- ============================================================
-     RECEPCIÓN - JEFE OPERATIVO
-     VERSIÓN COMPLETA CON BOTÓN DE UBICACIÓN ACTUAL
-     ============================================================ -->
-
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Recepción - Jefe Operativo | FURIA MOTOR</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
+    <title>Jefe Operativo - Recepción | FURIA MOTOR</title>
 
-    <!-- ============================================================
-         FAVICON
-         ============================================================ -->
-    <link rel="icon" type="image/png" href="/icono.png" />
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
 
-    <!-- ============================================================
-         FONTS & ICONS
-         ============================================================ -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-
-    <!-- ============================================================
-         LEAFLET (Mapa)
-         ============================================================ -->
+    <!-- Leaflet CSS (para mapa gratuito) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
-    </script>
 
-    <!-- ============================================================
-         ESTILOS PROPIOS
-         ============================================================ -->
-    <link rel="stylesheet" href="/jefe_operativo/css/recepcion.css" />
+    <!-- ========== CONFIGURACIÓN PWA ========== -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#C1121F">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TORQUE">
 
+    <!-- ICONOS -->
+    <link rel="icon" type="image/png" href="/icono.png">
+    <link rel="shortcut icon" type="image/png" href="/icono.png">
+    <link rel="apple-touch-icon" href="/icono.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
+
+    <!-- Librerías para exportación -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
+        integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/jefe_operativo/css/dashboard.css">
+    <link rel="stylesheet" href="/jefe_operativo/css/recepcion.css">
+
+    <!-- ============================================= -->
+    <!-- ESTILOS ADICIONALES PARA TRANSCRIPCIÓN Y UBICACIÓN -->
+    <!-- ============================================= -->
     <style>
-        /* ============================================================
-           ESTILOS ADICIONALES - BOTÓN UBICACIÓN ACTUAL
-           ============================================================ */
+        /* =============================================
+           BOTÓN DE TRANSCRIPCIÓN EN EL FORMULARIO
+           ============================================= */
+        .btn-transcribir-form {
+            background: linear-gradient(135deg, #7C3AED, #6D28D9) !important;
+            color: white !important;
+            border: none !important;
+            padding: 0.7rem 1.5rem !important;
+            border-radius: var(--radius-md, 8px) !important;
+            font-size: 0.85rem !important;
+            font-weight: 500 !important;
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+            display: none;
+            align-items: center !important;
+            gap: 0.5rem !important;
+            box-shadow: 0 2px 12px rgba(124, 58, 237, 0.3) !important;
+        }
+
+        .btn-transcribir-form:hover:not(:disabled) {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4) !important;
+        }
+
+        .btn-transcribir-form:disabled {
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .btn-transcribir-form i {
+            font-size: 14px;
+        }
+
+        /* =============================================
+           ESTADO DE TRANSCRIPCIÓN EN FORMULARIO
+           ============================================= */
+        #transcripcionStatusForm {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            margin-top: 6px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        #transcripcionStatusForm i {
+            font-size: 14px;
+        }
+
+        #transcripcionStatusForm.loading {
+            color: #f59e0b;
+            background: rgba(245, 158, 11, 0.15);
+        }
+
+        #transcripcionStatusForm.success {
+            color: #10B981;
+            background: rgba(16, 185, 129, 0.15);
+        }
+
+        #transcripcionStatusForm.error {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.15);
+        }
+
+        /* =============================================
+           BOTÓN DE TRANSCRIPCIÓN EN MODAL DE DETALLE
+           ============================================= */
+        .btn-transcribir {
+            background: #C1121F !important;
+            color: white !important;
+            border: none !important;
+            padding: 6px 16px !important;
+            border-radius: 6px !important;
+            cursor: pointer !important;
+            font-size: 12px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            transition: all 0.3s ease !important;
+            font-weight: 600 !important;
+            white-space: nowrap !important;
+        }
+
+        .btn-transcribir:hover {
+            background: #a00e18 !important;
+            transform: scale(1.02);
+        }
+
+        .btn-transcribir:disabled {
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+            transform: none !important;
+        }
+
+        .btn-transcribir i {
+            font-size: 13px;
+        }
+
+        /* =============================================
+           BOTÓN DE UBICACIÓN ACTUAL
+           ============================================= */
+        .ubicacion-controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 12px;
+        }
 
         .btn-ubicacion-actual {
-            background: #C1121F;
-            color: #ffffff;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 8px rgba(193, 18, 31, 0.3);
-            font-family: 'Inter', sans-serif;
+            background: #C1121F !important;
+            color: #ffffff !important;
+            border: none !important;
+            padding: 10px 20px !important;
+            border-radius: 10px !important;
+            cursor: pointer !important;
+            font-size: 14px !important;
+            font-weight: 600 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+            transition: all 0.3s ease !important;
+            box-shadow: 0 2px 8px rgba(193, 18, 31, 0.3) !important;
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
         }
 
         .btn-ubicacion-actual:hover:not(:disabled) {
-            background: #a00f1a;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 16px rgba(193, 18, 31, 0.4);
+            background: #a00f1a !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 16px rgba(193, 18, 31, 0.4) !important;
         }
 
         .btn-ubicacion-actual:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+            transform: none !important;
         }
 
         .btn-ubicacion-actual.cargando {
-            background: #6b6b6b;
-            pointer-events: none;
+            background: #6b6b6b !important;
+            pointer-events: none !important;
         }
 
         .btn-ubicacion-actual.cargando i {
-            animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite !important;
         }
 
         .btn-ubicacion-actual i {
-            font-size: 18px;
+            font-size: 18px !important;
         }
 
         @keyframes spin {
@@ -91,28 +208,7 @@
             }
         }
 
-        /* ============================================================
-           ESTILOS DEL MODAL DE UBICACIÓN
-           ============================================================ */
-
-        .modal-ubicacion .modal-body {
-            padding: 20px;
-        }
-
-        .modal-ubicacion .modal-content {
-            max-width: 700px;
-            width: 95%;
-        }
-
-        .ubicacion-controls-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .ubicacion-controls-row .info-hint {
+        .info-hint {
             font-size: 12px;
             color: #8E8E93;
             display: flex;
@@ -120,147 +216,27 @@
             gap: 6px;
         }
 
-        .modal-buscar-ubicacion {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 12px;
-        }
-
-        .modal-buscar-ubicacion input {
-            flex: 1;
-            padding: 10px 14px;
-            border-radius: 8px;
-            border: 1px solid #2C2C2E;
-            background: #1A1A1C;
-            color: #fff;
-            font-size: 14px;
-            font-family: 'Inter', sans-serif;
-        }
-
-        .modal-buscar-ubicacion input::placeholder {
-            color: #6b6b6b;
-        }
-
-        .modal-buscar-ubicacion input:focus {
-            outline: none;
-            border-color: #C1121F;
-        }
-
-        .modal-buscar-ubicacion button {
-            background: #C1121F;
-            color: #fff;
-            border: none;
-            padding: 10px 18px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: all 0.3s;
-        }
-
-        .modal-buscar-ubicacion button:hover {
-            background: #a00f1a;
-        }
-
-        #leafletMapa {
-            width: 100%;
-            height: 350px;
-            border-radius: 12px;
-            border: 1px solid #2C2C2E;
-            background: #0d0d0d;
-            z-index: 1;
-        }
-
-        .ubicacion-info-seleccionada {
-            display: none;
-            margin-top: 12px;
-            padding: 14px 16px;
-            background: #1A1A1C;
-            border-radius: 10px;
-            border: 1px solid #2C2C2E;
-        }
-
-        .ubicacion-info-seleccionada.visible {
-            display: block;
-        }
-
-        .ubicacion-info-seleccionada .info-row {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-        }
-
-        .ubicacion-info-seleccionada .info-row i {
-            color: #10B981;
-            margin-top: 2px;
-            font-size: 18px;
-        }
-
-        .ubicacion-info-seleccionada .info-label {
-            font-size: 11px;
-            color: #8E8E93;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .ubicacion-info-seleccionada .info-text {
-            font-size: 14px;
-            color: #fff;
-            line-height: 1.4;
-        }
-
-        .modal-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-            padding: 16px 20px;
-            border-top: 1px solid #2C2C2E;
-        }
-
-        .modal-footer .btn-secondary {
-            background: transparent;
-            color: #8E8E93;
-            border: 1px solid #2C2C2E;
-            padding: 10px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            font-family: 'Inter', sans-serif;
-            transition: all 0.3s;
-        }
-
-        .modal-footer .btn-secondary:hover {
-            background: #2C2C2E;
-            color: #fff;
-        }
-
-        .modal-footer .btn-primary {
-            background: #C1121F;
-            color: #fff;
-            border: none;
-            padding: 10px 28px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            font-family: 'Inter', sans-serif;
-            transition: all 0.3s;
-        }
-
-        .modal-footer .btn-primary:hover:not(:disabled) {
-            background: #a00f1a;
-        }
-
-        .modal-footer .btn-primary:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* ============================================================
+        /* =============================================
            RESPONSIVE
-           ============================================================ */
+           ============================================= */
+        @media (max-width: 768px) {
+            .btn-transcribir-form {
+                width: 100%;
+                justify-content: center;
+                padding: 0.8rem !important;
+            }
 
-        @media (max-width: 600px) {
+            .audio-buttons {
+                flex-direction: column;
+            }
+
+            .audio-buttons .btn-audio,
+            .audio-buttons .btn-eliminar-audio,
+            .audio-buttons .btn-transcribir-form {
+                width: 100%;
+                justify-content: center;
+            }
+
             .ubicacion-controls-row {
                 flex-direction: column;
                 align-items: stretch;
@@ -268,585 +244,737 @@
 
             .btn-ubicacion-actual {
                 justify-content: center;
-                padding: 12px;
-                font-size: 13px;
+                padding: 12px !important;
+                font-size: 13px !important;
             }
+        }
 
-            #leafletMapa {
-                height: 250px;
-            }
-
-            .modal-footer {
+        @media (max-width: 600px) {
+            .detalle-card-title {
                 flex-direction: column;
+                align-items: flex-start;
             }
 
-            .modal-footer button {
+            .detalle-card-title .btn-transcribir {
                 width: 100%;
                 justify-content: center;
+            }
+
+            .btn-transcribir {
+                font-size: 11px !important;
+                padding: 8px 14px !important;
             }
         }
     </style>
 </head>
 
 <body>
+    <!-- ========== BOTÓN HAMBURGUESA PARA MÓVIL/TABLET ========== -->
+    <button class="hamburger-menu" id="hamburgerMenu" aria-label="Menú">
+        <i class="fas fa-bars"></i>
+    </button>
 
-    <!-- ============================================================
-         CONTENEDOR PRINCIPAL
-         ============================================================ -->
-    <div id="app">
+    <!-- ========== OVERLAY PARA CERRAR SIDEBAR ========== -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-        <!-- ============================================================
-             SIDEBAR (Incluido desde components)
-             ============================================================ -->
-        <div id="sidebar-container">
-            <!-- El sidebar se carga dinámicamente con include.js -->
-        </div>
+    <div class="app">
+        <div id="sidebar-container"></div>
 
-        <!-- ============================================================
-             CONTENIDO PRINCIPAL
-             ============================================================ -->
         <main class="main-content">
-
-            <!-- ============================================================
-                 ENCABEZADO
-                 ============================================================ -->
-            <header class="page-header">
-                <div class="header-left">
-                    <h1><i class="fas fa-clipboard-list"></i> Recepción de Vehículos</h1>
-                    <span class="page-subtitle">Gestión colaborativa de recepciones</span>
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1>Recepción de Vehículo</h1>
+                    <p>Trabajo colaborativo en tiempo real</p>
                 </div>
-                <div class="header-right">
-                    <span id="currentDate" class="current-date"></span>
-                    <button onclick="logout()" class="btn-logout" title="Cerrar sesión">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </button>
+                <div class="top-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
                 </div>
             </header>
 
-            <!-- ============================================================
-                 CONTENIDO
-                 ============================================================ -->
-            <div class="page-content">
-
-                <!-- ============================================================
-                     PANEL DE SESIONES ACTIVAS
-                     ============================================================ -->
-                <section id="sesionesActivasPanel" class="panel-sesiones">
+            <div class="content">
+                <!-- Panel de Sesiones Activas -->
+                <div class="sesiones-activas-panel" id="sesionesActivasPanel">
                     <div class="panel-header">
-                        <h2><i class="fas fa-users"></i> Sesiones Activas</h2>
-                        <div class="panel-actions">
-                            <span id="sesionesCount" class="badge-count">0</span>
-                            <button id="btnCrearSesion" class="btn-primary">
-                                <i class="fas fa-plus-circle"></i> Crear Sesión
-                            </button>
-                            <button id="btnUnirsePorCodigo" class="btn-secondary">
-                                <i class="fas fa-link"></i> Unirse por Código
-                            </button>
-                            <button id="btnRefreshSesiones" class="btn-icon" title="Actualizar">
-                                <i class="fas fa-sync-alt"></i>
-                            </button>
-                        </div>
+                        <i class="fas fa-users-viewfinder"></i>
+                        <h3>Sesiones Activas</h3>
+                        <span class="badge" id="sesionesCount">0</span>
                     </div>
-                    <div id="sesionesList" class="sesiones-grid">
+                    <div class="sesiones-actions-buttons">
+                        <button class="btn-crear-sesion" id="btnCrearSesion">
+                            <i class="fas fa-plus-circle"></i> Crear nueva sesión
+                        </button>
+                        <button class="btn-unirse-codigo" id="btnUnirsePorCodigo">
+                            <i class="fas fa-qrcode"></i> Unirse con código
+                        </button>
+                    </div>
+                    <div class="sesiones-list" id="sesionesList">
                         <div class="empty-state">
                             <i class="fas fa-inbox"></i>
-                            <p>Cargando sesiones...</p>
+                            <p>No hay sesiones activas</p>
                         </div>
                     </div>
-                </section>
+                </div>
 
-                <!-- ============================================================
-                     PANEL DE SESIÓN ACTIVA (oculto inicialmente)
-                     ============================================================ -->
-                <section id="sessionPanel" class="panel-sesion-activa" style="display: none;">
-                    <div class="session-header">
-                        <div class="session-info">
-                            <h2><i class="fas fa-code-branch"></i> Sesión: <span id="codigoActivo">---</span></h2>
-                            <button id="btnCopiarCodigoSesion" class="btn-icon" title="Copiar código">
+                <!-- Panel de Control de Sesión Actual -->
+                <div class="session-panel" id="sessionPanel" style="display: none;">
+                    <div class="session-info">
+                        <div class="status-indicator" id="statusIndicator">
+                            <i class="fas fa-circle"></i>
+                            <span>Sesión activa</span>
+                        </div>
+                        <div class="codigo-actual">
+                            <span class="label">Código:</span>
+                            <span class="codigo" id="codigoActivo">-</span>
+                            <button class="btn-copy" id="btnCopiarCodigoSesion" title="Copiar código">
                                 <i class="fas fa-copy"></i>
                             </button>
-                            <button id="btnCancelarSesion" class="btn-danger">
-                                <i class="fas fa-times-circle"></i> Cancelar
-                            </button>
                         </div>
-                        <div class="session-progress">
-                            <span class="progress-label">Progreso:</span>
-                            <div class="progress-dots">
-                                <span id="statusCliente" class="status-badge en-proceso">○ Cliente</span>
-                                <span id="statusVehiculo" class="status-badge en-proceso">○ Vehículo</span>
-                                <span id="statusFotos" class="status-badge en-proceso">○ Fotos</span>
-                                <span id="statusDescripcion" class="status-badge en-proceso">○ Descripción</span>
-                            </div>
+                        <div class="colaboradores-info">
+                            <i class="fas fa-users"></i>
+                            <span id="colaboradoresCount">1</span> colaboradores
                         </div>
                     </div>
-
-                    <!-- Banner de edición (se muestra dinámicamente) -->
-                    <div id="editBannerContainer"></div>
-
-                    <!-- ============================================================
-                         COLABORADORES
-                         ============================================================ -->
-                    <div id="colaboradoresPanel" class="colaboradores-panel">
-                        <div class="colaboradores-header">
-                            <h3><i class="fas fa-user-friends"></i> Colaboradores <span id="colaboradoresCount">0</span></h3>
-                        </div>
-                        <div id="colaboradoresList" class="colaboradores-list"></div>
-                        <div class="colaboradores-detail">
-                            <span><i class="fas fa-users"></i> Total: <span id="colaboradoresCountDetail">0</span></span>
-                        </div>
+                    <div class="session-actions">
+                        <button type="button" class="btn-cancelar-sesion" id="btnCancelarSesion">
+                            <i class="fas fa-trash-alt"></i> Cancelar Sesión
+                        </button>
+                        <button type="button" class="btn-finalizar" id="btnFinalizar" disabled>
+                            <i class="fas fa-check-circle"></i> Finalizar Recepción
+                        </button>
                     </div>
+                </div>
 
-                    <!-- ============================================================
-                         FORMULARIO DE RECEPCIÓN
-                         ============================================================ -->
-                    <div id="recepcionForm" class="recepcion-form">
+                <!-- Panel de Colaboradores en la sesión actual -->
+                <div class="colaboradores-panel" id="colaboradoresPanel" style="display: none;">
+                    <div class="colaboradores-header">
+                        <i class="fas fa-users"></i>
+                        <span>Equipo trabajando</span>
+                        <span class="badge" id="colaboradoresCountDetail">0</span>
+                    </div>
+                    <div class="colaboradores-list" id="colaboradoresList"></div>
+                </div>
 
-                        <!-- ============================================================
-                             SECCIÓN CLIENTE
-                             ============================================================ -->
-                        <div class="form-section">
-                            <div class="section-header">
-                                <h3><i class="fas fa-user"></i> Datos del Cliente</h3>
-                                <span id="statusCliente" class="status-badge en-proceso">○ Pendiente</span>
-                                <button class="btn-guardar-seccion" data-seccion="cliente">
-                                    <i class="fas fa-save"></i> Guardar
-                                </button>
+                <!-- FORMULARIO DE RECEPCIÓN -->
+                <form id="recepcionForm" class="recepcion-form" style="display: none;">
+                    <!-- 1️⃣ DATOS DEL CLIENTE -->
+                    <div class="form-card" data-seccion="cliente">
+                        <div class="card-header">
+                            <div class="card-icon"><i class="fas fa-user"></i></div>
+                            <h2>Datos del Cliente</h2>
+                            <div class="seccion-status">
+                                <span class="status-badge" id="statusCliente">○ Pendiente</span>
                             </div>
+                            <span class="colaborador-editando" id="editandoCliente" style="display: none;">
+                                <i class="fas fa-pen"></i> Alguien está editando...
+                            </span>
+                        </div>
+                        <div class="card-body">
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="clienteNombre">Nombre completo <span class="required">*</span></label>
-                                    <input type="text" id="clienteNombre" placeholder="Ej: Juan Pérez" autocomplete="name" />
-                                </div>
-                                <div class="form-group">
-                                    <label for="clienteTelefono">Teléfono <span class="required">*</span></label>
-                                    <input type="tel" id="clienteTelefono" placeholder="Ej: 76543210" autocomplete="tel" />
+                                    <label for="clienteNombre"><i class="fas fa-user"></i> Nombre completo *</label>
+                                    <input type="text" id="clienteNombre" placeholder="Ej: Juan Pérez">
                                 </div>
                             </div>
                             <div class="form-row">
-                                <div class="form-group" style="flex:2;">
-                                    <label for="clienteUbicacion">Ubicación <span class="required">*</span></label>
-                                    <div style="display:flex;gap:8px;">
-                                        <input type="text" id="clienteUbicacion" placeholder="Ej: Av. América #123" style="flex:1;" />
-                                        <button id="btnAbrirModalUbicacion" class="btn-map" type="button" title="Seleccionar en mapa">
-                                            <i class="fas fa-map-pin"></i>
+                                <div class="form-group">
+                                    <label for="clienteTelefono"><i class="fas fa-phone"></i> Teléfono *</label>
+                                    <input type="tel" id="clienteTelefono" placeholder="Ej: 77712345">
+                                </div>
+                                <div class="form-group full-width">
+                                    <label for="clienteUbicacion"><i class="fas fa-map-marker-alt"></i>
+                                        Ubicación</label>
+                                    <div class="ubicacion-input-group">
+                                        <input type="text" id="clienteUbicacion"
+                                            placeholder="Selecciona una ubicación en el mapa..." readonly>
+                                        <button type="button" class="btn-ubicacion" id="btnAbrirModalUbicacion">
+                                            <i class="fas fa-map-pin"></i> Elegir en mapa
                                         </button>
                                     </div>
-                                </div>
-                                <div class="form-group" style="flex:1;">
-                                    <label>Coordenadas</label>
-                                    <div style="display:flex;gap:4px;">
-                                        <input type="text" id="clienteLatitud" placeholder="Lat" readonly style="width:50%;background:#1A1A1C;" />
-                                        <input type="text" id="clienteLongitud" placeholder="Lng" readonly style="width:50%;background:#1A1A1C;" />
-                                    </div>
+                                    <input type="hidden" id="clienteLatitud" value="">
+                                    <input type="hidden" id="clienteLongitud" value="">
+                                    <small class="form-hint"><i class="fas fa-info-circle"></i> Haz clic en "Elegir en
+                                        mapa" para seleccionar la ubicación exacta</small>
                                 </div>
                             </div>
-                        </div>
-
-                        <!-- ============================================================
-                             SECCIÓN VEHÍCULO
-                             ============================================================ -->
-                        <div class="form-section">
-                            <div class="section-header">
-                                <h3><i class="fas fa-car"></i> Datos del Vehículo</h3>
-                                <span id="statusVehiculo" class="status-badge en-proceso">○ Pendiente</span>
-                                <button class="btn-guardar-seccion" data-seccion="vehiculo">
-                                    <i class="fas fa-save"></i> Guardar
+                            <div class="form-actions-seccion">
+                                <button type="button" class="btn-guardar-seccion" data-seccion="cliente">
+                                    <i class="fas fa-save"></i> Guardar Cliente
                                 </button>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="vehiculoPlaca">Placa <span class="required">*</span></label>
-                                    <input type="text" id="vehiculoPlaca" placeholder="Ej: 1234ABC" style="text-transform:uppercase;" />
-                                </div>
-                                <div class="form-group">
-                                    <label for="vehiculoMarca">Marca <span class="required">*</span></label>
-                                    <input type="text" id="vehiculoMarca" placeholder="Ej: Toyota" />
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="vehiculoModelo">Modelo <span class="required">*</span></label>
-                                    <input type="text" id="vehiculoModelo" placeholder="Ej: Corolla" />
-                                </div>
-                                <div class="form-group">
-                                    <label for="vehiculoAnio">Año</label>
-                                    <input type="number" id="vehiculoAnio" placeholder="2024" min="1990" max="2099" />
-                                </div>
-                                <div class="form-group">
-                                    <label for="vehiculoKilometraje">Kilometraje</label>
-                                    <input type="number" id="vehiculoKilometraje" placeholder="0" min="0" />
-                                </div>
+                                <span class="guardado-indicator" id="guardadoCliente" style="display: none;">
+                                    <i class="fas fa-check-circle"></i> Guardado
+                                </span>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- ============================================================
-                             SECCIÓN FOTOS
-                             ============================================================ -->
-                        <div class="form-section">
-                            <div class="section-header">
-                                <h3><i class="fas fa-camera"></i> Fotos del Vehículo</h3>
-                                <span id="statusFotos" class="status-badge en-proceso">○ Pendiente</span>
+                    <!-- 2️⃣ DATOS DEL VEHÍCULO -->
+                    <div class="form-card" data-seccion="vehiculo">
+                        <div class="card-header">
+                            <div class="card-icon"><i class="fas fa-car"></i></div>
+                            <h2>Datos del Vehículo</h2>
+                            <div class="seccion-status">
+                                <span class="status-badge" id="statusVehiculo">○ Pendiente</span>
                             </div>
-                            <div class="fotos-grid">
-                                <!-- 7 campos de foto -->
-                                <div class="photo-upload" id="upload-lateral_izquierdo" data-campo="lateral_izquierdo">
-                                    <div class="upload-preview">
+                            <span class="colaborador-editando" id="editandoVehiculo" style="display: none;">
+                                <i class="fas fa-pen"></i> Alguien está editando...
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="vehiculoPlaca"><i class="fas fa-id-card"></i> Placa *</label>
+                                    <input type="text" id="vehiculoPlaca" placeholder="Ej: ABC123" maxlength="8"
+                                        style="text-transform: uppercase;">
+                                </div>
+                                <div class="form-group">
+                                    <label for="vehiculoMarca"><i class="fas fa-tag"></i> Marca *</label>
+                                    <input type="text" id="vehiculoMarca" placeholder="Ej: Toyota">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="vehiculoModelo"><i class="fas fa-car-side"></i> Modelo *</label>
+                                    <input type="text" id="vehiculoModelo" placeholder="Ej: Corolla">
+                                </div>
+                                <div class="form-group">
+                                    <label for="vehiculoAnio"><i class="fas fa-calendar"></i> Año</label>
+                                    <input type="number" id="vehiculoAnio" placeholder="Ej: 2020" min="1900" max="2026">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="vehiculoKilometraje"><i class="fas fa-tachometer-alt"></i>
+                                        Kilometraje</label>
+                                    <input type="number" id="vehiculoKilometraje" placeholder="Ej: 45000">
+                                </div>
+                            </div>
+                            <div class="form-actions-seccion">
+                                <button type="button" class="btn-guardar-seccion" data-seccion="vehiculo">
+                                    <i class="fas fa-save"></i> Guardar Vehículo
+                                </button>
+                                <span class="guardado-indicator" id="guardadoVehiculo" style="display: none;">
+                                    <i class="fas fa-check-circle"></i> Guardado
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3️⃣ REGISTRO FOTOGRÁFICO -->
+                    <div class="form-card" data-seccion="fotos">
+                        <div class="card-header">
+                            <div class="card-icon"><i class="fas fa-camera"></i></div>
+                            <h2>Registro Fotográfico</h2>
+                            <span class="card-badge">7 vistas requeridas</span>
+                            <div class="seccion-status">
+                                <span class="status-badge" id="statusFotos">○ Pendiente</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="photo-grid" id="photoGrid">
+                                <!-- ============================================= -->
+                                <!-- FOTO 1: LATERAL IZQUIERDO -->
+                                <!-- ============================================= -->
+                                <div class="photo-upload" id="upload-fotoLateralIzq" data-campo="lateral_izquierdo">
+                                    <input type="file" id="fotoLateralIzq" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
                                         <i class="fas fa-car-side"></i>
                                         <span>Lateral Izquierdo</span>
                                     </div>
-                                    <input type="file" id="fotoLateralIzq" accept="image/*" capture="environment" />
-                                    <button class="remove-photo" style="display:none;">&times;</button>
-                                    <div class="upload-progress" style="display:none;">
-                                        <div class="progress-ring">
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
                                                 <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" id="ring-lateral_izquierdo" cx="25" cy="25" r="22" stroke-dasharray="138.23" stroke-dashoffset="138.23" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22"
+                                                    id="ring-lateral_izquierdo" />
                                             </svg>
                                             <span class="progress-percent" id="percent-lateral_izquierdo">0%</span>
                                         </div>
                                         <div class="status-badge-foto pending" id="badge-lateral_izquierdo">
                                             <i class="fas fa-circle"></i>
                                         </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-lateral_izquierdo"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-lateral_izquierdo">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
                                     </div>
-                                    <div class="progress-bar-foto" style="display:none;">
-                                        <div class="fill" id="bar-lateral_izquierdo" style="width:0%;"></div>
-                                    </div>
-                                    <div class="uploading-status pending" id="status-lateral_izquierdo" style="display:none;">
-                                        <i class="fas fa-clock"></i> <span>En cola...</span>
-                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
                                 </div>
 
-                                <div class="photo-upload" id="upload-lateral_derecho" data-campo="lateral_derecho">
-                                    <div class="upload-preview">
+                                <!-- ============================================= -->
+                                <!-- FOTO 2: LATERAL DERECHO -->
+                                <!-- ============================================= -->
+                                <div class="photo-upload" id="upload-fotoLateralDer" data-campo="lateral_derecho">
+                                    <input type="file" id="fotoLateralDer" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
                                         <i class="fas fa-car-side"></i>
                                         <span>Lateral Derecho</span>
                                     </div>
-                                    <input type="file" id="fotoLateralDer" accept="image/*" capture="environment" />
-                                    <button class="remove-photo" style="display:none;">&times;</button>
-                                    <div class="upload-progress" style="display:none;">
-                                        <div class="progress-ring">
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
                                                 <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" id="ring-lateral_derecho" cx="25" cy="25" r="22" stroke-dasharray="138.23" stroke-dashoffset="138.23" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22"
+                                                    id="ring-lateral_derecho" />
                                             </svg>
                                             <span class="progress-percent" id="percent-lateral_derecho">0%</span>
                                         </div>
                                         <div class="status-badge-foto pending" id="badge-lateral_derecho">
                                             <i class="fas fa-circle"></i>
                                         </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-lateral_derecho"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-lateral_derecho">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
                                     </div>
-                                    <div class="progress-bar-foto" style="display:none;">
-                                        <div class="fill" id="bar-lateral_derecho" style="width:0%;"></div>
-                                    </div>
-                                    <div class="uploading-status pending" id="status-lateral_derecho" style="display:none;">
-                                        <i class="fas fa-clock"></i> <span>En cola...</span>
-                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
                                 </div>
 
-                                <div class="photo-upload" id="upload-frontal" data-campo="frontal">
-                                    <div class="upload-preview">
+                                <!-- ============================================= -->
+                                <!-- FOTO 3: FRONTAL -->
+                                <!-- ============================================= -->
+                                <div class="photo-upload" id="upload-fotoFrontal" data-campo="frontal">
+                                    <input type="file" id="fotoFrontal" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
                                         <i class="fas fa-car"></i>
                                         <span>Frontal</span>
                                     </div>
-                                    <input type="file" id="fotoFrontal" accept="image/*" capture="environment" />
-                                    <button class="remove-photo" style="display:none;">&times;</button>
-                                    <div class="upload-progress" style="display:none;">
-                                        <div class="progress-ring">
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
                                                 <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" id="ring-frontal" cx="25" cy="25" r="22" stroke-dasharray="138.23" stroke-dashoffset="138.23" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-frontal" />
                                             </svg>
                                             <span class="progress-percent" id="percent-frontal">0%</span>
                                         </div>
                                         <div class="status-badge-foto pending" id="badge-frontal">
                                             <i class="fas fa-circle"></i>
                                         </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-frontal"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-frontal">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
                                     </div>
-                                    <div class="progress-bar-foto" style="display:none;">
-                                        <div class="fill" id="bar-frontal" style="width:0%;"></div>
-                                    </div>
-                                    <div class="uploading-status pending" id="status-frontal" style="display:none;">
-                                        <i class="fas fa-clock"></i> <span>En cola...</span>
-                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
                                 </div>
 
-                                <div class="photo-upload" id="upload-trasera" data-campo="trasera">
-                                    <div class="upload-preview">
+                                <!-- ============================================= -->
+                                <!-- FOTO 4: TRASERA -->
+                                <!-- ============================================= -->
+                                <div class="photo-upload" id="upload-fotoTrasera" data-campo="trasera">
+                                    <input type="file" id="fotoTrasera" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
                                         <i class="fas fa-car"></i>
                                         <span>Trasera</span>
                                     </div>
-                                    <input type="file" id="fotoTrasera" accept="image/*" capture="environment" />
-                                    <button class="remove-photo" style="display:none;">&times;</button>
-                                    <div class="upload-progress" style="display:none;">
-                                        <div class="progress-ring">
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
                                                 <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" id="ring-trasera" cx="25" cy="25" r="22" stroke-dasharray="138.23" stroke-dashoffset="138.23" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-trasera" />
                                             </svg>
                                             <span class="progress-percent" id="percent-trasera">0%</span>
                                         </div>
                                         <div class="status-badge-foto pending" id="badge-trasera">
                                             <i class="fas fa-circle"></i>
                                         </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-trasera"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-trasera">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
                                     </div>
-                                    <div class="progress-bar-foto" style="display:none;">
-                                        <div class="fill" id="bar-trasera" style="width:0%;"></div>
-                                    </div>
-                                    <div class="uploading-status pending" id="status-trasera" style="display:none;">
-                                        <i class="fas fa-clock"></i> <span>En cola...</span>
-                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
                                 </div>
 
-                                <div class="photo-upload" id="upload-superior" data-campo="superior">
-                                    <div class="upload-preview">
+                                <!-- ============================================= -->
+                                <!-- FOTO 5: SUPERIOR -->
+                                <!-- ============================================= -->
+                                <div class="photo-upload" id="upload-fotoSuperior" data-campo="superior">
+                                    <input type="file" id="fotoSuperior" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
                                         <i class="fas fa-arrow-up"></i>
                                         <span>Superior</span>
                                     </div>
-                                    <input type="file" id="fotoSuperior" accept="image/*" capture="environment" />
-                                    <button class="remove-photo" style="display:none;">&times;</button>
-                                    <div class="upload-progress" style="display:none;">
-                                        <div class="progress-ring">
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
                                                 <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" id="ring-superior" cx="25" cy="25" r="22" stroke-dasharray="138.23" stroke-dashoffset="138.23" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-superior" />
                                             </svg>
                                             <span class="progress-percent" id="percent-superior">0%</span>
                                         </div>
                                         <div class="status-badge-foto pending" id="badge-superior">
                                             <i class="fas fa-circle"></i>
                                         </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-superior"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-superior">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
                                     </div>
-                                    <div class="progress-bar-foto" style="display:none;">
-                                        <div class="fill" id="bar-superior" style="width:0%;"></div>
-                                    </div>
-                                    <div class="uploading-status pending" id="status-superior" style="display:none;">
-                                        <i class="fas fa-clock"></i> <span>En cola...</span>
-                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
                                 </div>
 
-                                <div class="photo-upload" id="upload-inferior" data-campo="inferior">
-                                    <div class="upload-preview">
+                                <!-- ============================================= -->
+                                <!-- FOTO 6: INFERIOR -->
+                                <!-- ============================================= -->
+                                <div class="photo-upload" id="upload-fotoInferior" data-campo="inferior">
+                                    <input type="file" id="fotoInferior" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
                                         <i class="fas fa-arrow-down"></i>
                                         <span>Inferior</span>
                                     </div>
-                                    <input type="file" id="fotoInferior" accept="image/*" capture="environment" />
-                                    <button class="remove-photo" style="display:none;">&times;</button>
-                                    <div class="upload-progress" style="display:none;">
-                                        <div class="progress-ring">
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
                                                 <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" id="ring-inferior" cx="25" cy="25" r="22" stroke-dasharray="138.23" stroke-dashoffset="138.23" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-inferior" />
                                             </svg>
                                             <span class="progress-percent" id="percent-inferior">0%</span>
                                         </div>
                                         <div class="status-badge-foto pending" id="badge-inferior">
                                             <i class="fas fa-circle"></i>
                                         </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-inferior"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-inferior">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
                                     </div>
-                                    <div class="progress-bar-foto" style="display:none;">
-                                        <div class="fill" id="bar-inferior" style="width:0%;"></div>
-                                    </div>
-                                    <div class="uploading-status pending" id="status-inferior" style="display:none;">
-                                        <i class="fas fa-clock"></i> <span>En cola...</span>
-                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
                                 </div>
 
-                                <div class="photo-upload" id="upload-tablero" data-campo="tablero">
-                                    <div class="upload-preview">
+                                <!-- ============================================= -->
+                                <!-- FOTO 7: TABLERO -->
+                                <!-- ============================================= -->
+                                <div class="photo-upload" id="upload-fotoTablero" data-campo="tablero">
+                                    <input type="file" id="fotoTablero" accept="image/*" capture="environment">
+                                    <div class="upload-placeholder">
                                         <i class="fas fa-tachometer-alt"></i>
                                         <span>Tablero</span>
                                     </div>
-                                    <input type="file" id="fotoTablero" accept="image/*" capture="environment" />
-                                    <button class="remove-photo" style="display:none;">&times;</button>
-                                    <div class="upload-progress" style="display:none;">
-                                        <div class="progress-ring">
+                                    <div class="upload-preview">
+                                        <div class="progress-ring-container">
                                             <svg viewBox="0 0 50 50">
                                                 <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" id="ring-tablero" cx="25" cy="25" r="22" stroke-dasharray="138.23" stroke-dashoffset="138.23" />
+                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-tablero" />
                                             </svg>
                                             <span class="progress-percent" id="percent-tablero">0%</span>
                                         </div>
                                         <div class="status-badge-foto pending" id="badge-tablero">
                                             <i class="fas fa-circle"></i>
                                         </div>
+                                        <div class="progress-bar-foto">
+                                            <div class="fill" id="bar-tablero"></div>
+                                        </div>
+                                        <div class="uploading-status" id="status-tablero">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Esperando...</span>
+                                        </div>
                                     </div>
-                                    <div class="progress-bar-foto" style="display:none;">
-                                        <div class="fill" id="bar-tablero" style="width:0%;"></div>
-                                    </div>
-                                    <div class="uploading-status pending" id="status-tablero" style="display:none;">
-                                        <i class="fas fa-clock"></i> <span>En cola...</span>
-                                    </div>
+                                    <button type="button" class="remove-photo" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- ============================================================
-                             SECCIÓN DESCRIPCIÓN
-                             ============================================================ -->
-                        <div class="form-section">
-                            <div class="section-header">
-                                <h3><i class="fas fa-align-left"></i> Descripción del Problema</h3>
-                                <span id="statusDescripcion" class="status-badge en-proceso">○ Pendiente</span>
-                                <button class="btn-guardar-seccion" data-seccion="descripcion">
-                                    <i class="fas fa-save"></i> Guardar
+                            <p class="photo-hint">* Las imágenes se comprimirán automáticamente (máx 1.2MB)</p>
+
+                            <div class="form-actions-seccion">
+                                <button type="button" class="btn-guardar-seccion" data-seccion="fotos">
+                                    <i class="fas fa-save"></i> Guardar Fotos
                                 </button>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group" style="flex:1;">
-                                    <label for="descripcionProblema">Descripción <span class="required">*</span></label>
-                                    <textarea id="descripcionProblema" rows="3" placeholder="Describe el problema que presenta el vehículo..."></textarea>
-                                </div>
-                            </div>
-                            <div class="form-row audio-row">
-                                <div class="form-group audio-controls">
-                                    <label>Audio de la descripción <span class="required">*</span></label>
-                                    <div class="audio-buttons">
-                                        <button id="btnGrabarAudio" class="btn-audio" type="button">
-                                            <i class="fas fa-microphone"></i> Grabar Audio
-                                        </button>
-                                        <button id="btnEliminarAudio" class="btn-audio-danger" type="button" style="display:none;">
-                                            <i class="fas fa-trash-alt"></i> Eliminar
-                                        </button>
-                                        <button id="btnTranscribirAudio" class="btn-transcribir" type="button" style="display:none;">
-                                            <i class="fas fa-microphone-alt"></i> 🎙️ Transcribir Audio
-                                        </button>
-                                    </div>
-                                    <div id="audioStatus" class="audio-status">Sin audio</div>
-                                    <div id="transcripcionStatusForm" class="transcripcion-status" style="display:none;">
-                                        <span id="transcripcionTextoStatus"></span>
-                                    </div>
-                                    <audio id="audioPreview" controls style="display:none; width:100%; margin-top:8px; border-radius:8px;"></audio>
-                                </div>
+                                <span class="guardado-indicator" id="guardadoFotos" style="display: none;">
+                                    <i class="fas fa-check-circle"></i> Guardado
+                                </span>
                             </div>
                         </div>
-
-                        <!-- ============================================================
-                             BOTONES ACCIÓN
-                             ============================================================ -->
-                        <div class="form-actions">
-                            <button id="btnFinalizar" class="btn-success" disabled>
-                                <i class="fas fa-check-circle"></i> Finalizar Recepción
-                            </button>
-                            <button id="btnCancelarSesionForm" class="btn-danger">
-                                <i class="fas fa-times-circle"></i> Cancelar
-                            </button>
-                        </div>
-
                     </div>
-                    <!-- Fin #recepcionForm -->
-                </section>
-                <!-- Fin #sessionPanel -->
 
-                <!-- ============================================================
-                     PANEL DE RECEPCIONES GUARDADAS
-                     ============================================================ -->
-                <section class="panel-recepciones">
+                    <!-- 4️⃣ DESCRIPCIÓN DEL PROBLEMA -->
+                    <div class="form-card" data-seccion="descripcion">
+                        <div class="card-header">
+                            <div class="card-icon"><i class="fas fa-pencil-alt"></i></div>
+                            <h2>Descripción del Problema</h2>
+                            <div class="seccion-status">
+                                <span class="status-badge" id="statusDescripcion">○ Pendiente</span>
+                            </div>
+                            <span class="colaborador-editando" id="editandoDescripcion" style="display: none;">
+                                <i class="fas fa-pen"></i> Alguien está editando...
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="descripcionProblema"><i class="fas fa-align-left"></i> Describa el
+                                    problema</label>
+                                <textarea id="descripcionProblema" rows="5"
+                                    placeholder="Ej: El vehículo hace un ruido extraño al frenar..."></textarea>
+                            </div>
+                            <div class="audio-controls">
+                                <div class="audio-buttons">
+                                    <button type="button" class="btn-audio" id="btnGrabarAudio">
+                                        <i class="fas fa-microphone"></i> Grabar Audio
+                                    </button>
+                                    <button type="button" class="btn-eliminar-audio" id="btnEliminarAudio"
+                                        style="display: none;">
+                                        <i class="fas fa-trash-alt"></i> Eliminar Grabación
+                                    </button>
+                                    <!-- 🔥 BOTÓN DE TRANSCRIPCIÓN EN EL FORMULARIO -->
+                                    <button type="button" class="btn-transcribir-form" id="btnTranscribirAudio"
+                                        style="display: none;">
+                                        <i class="fas fa-microphone-alt"></i> 🎙️ Transcribir Audio
+                                    </button>
+                                </div>
+                                <div class="audio-status-container">
+                                    <span class="audio-status" id="audioStatus"></span>
+                                    <!-- 🔥 ESTADO DE TRANSCRIPCIÓN EN FORMULARIO -->
+                                    <div id="transcripcionStatusForm" style="display: none;">
+                                        <i class="fas fa-check-circle"></i>
+                                        <span id="transcripcionTextoStatus">Transcripción completada</span>
+                                    </div>
+                                    <audio id="audioPreview" controls style="display: none;"></audio>
+                                </div>
+                            </div>
+                            <div class="form-actions-seccion">
+                                <button type="button" class="btn-limpiar" id="btnLimpiarDescripcion">
+                                    <i class="fas fa-trash-alt"></i> Limpiar
+                                </button>
+                                <button type="button" class="btn-guardar-seccion" data-seccion="descripcion">
+                                    <i class="fas fa-save"></i> Guardar Descripción
+                                </button>
+                                <span class="guardado-indicator" id="guardadoDescripcion" style="display: none;">
+                                    <i class="fas fa-check-circle"></i> Guardado
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- PANEL DE RECEPCIONES GUARDADAS -->
+                <div class="recepciones-guardadas-panel" id="recepcionesGuardadasPanel">
                     <div class="panel-header">
-                        <h2><i class="fas fa-history"></i> Recepciones Guardadas</h2>
-                        <div class="panel-actions">
-                            <span id="recepcionesCount" class="badge-count">0</span>
-                            <div class="filtros-container">
-                                <input type="text" id="searchRecepcion" placeholder="🔍 Buscar por placa, código o cliente..." />
-                                <select id="estadoFiltro">
-                                    <option value="todos">Todos los estados</option>
-                                    <option value="EnRecepcion">📋 En Recepción</option>
-                                    <option value="EnDiagnostico">🔍 En Diagnóstico</option>
-                                    <option value="DiagnosticoCompletado">✅ Diagnóstico Completado</option>
-                                    <option value="CotizacionEnviada">📨 Cotización Enviada</option>
-                                    <option value="CotizacionAceptada">✅ Cotización Aceptada</option>
-                                    <option value="CotizacionRechazada">❌ Cotización Rechazada</option>
-                                    <option value="EnReparacion">🔧 En Reparación</option>
-                                    <option value="ReparacionCompletada">✅ Reparación Completada</option>
-                                    <option value="Finalizado">🏁 Finalizado</option>
-                                </select>
-                                <button id="btnLimpiarFiltros" class="btn-icon" title="Limpiar filtros">
-                                    <i class="fas fa-eraser"></i>
-                                </button>
-                                <button id="btnRefreshRecepciones" class="btn-icon" title="Actualizar">
-                                    <i class="fas fa-sync-alt"></i>
-                                </button>
-                            </div>
-                        </div>
+                        <i class="fas fa-archive"></i>
+                        <h3>Historial de Recepciones</h3>
+                        <button class="btn-refresh" id="btnRefreshRecepciones" title="Actualizar lista">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <span class="badge" id="recepcionesCount">0</span>
                     </div>
-                    <div id="recepcionesList" class="recepciones-list">
+
+                    <div class="filtros-recepciones">
+                        <div class="filtro-grupo" style="flex: 2; min-width: 200px;">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchRecepcion" placeholder="Buscar por código o placa..."
+                                class="filtro-input">
+                        </div>
+                        <div class="filtro-grupo" style="flex: 1.5; min-width: 180px;">
+                            <i class="fas fa-filter"></i>
+                            <select id="estadoFiltro" class="filtro-select">
+                                <option value="todos">Todos los estados</option>
+                                <!-- Recepción -->
+                                <option value="EnRecepcion">📋 En Recepción</option>
+                                <!-- Diagnóstico -->
+                                <option value="EnDiagnostico">🔍 En Diagnóstico</option>
+                                <option value="DiagnosticoCompletado">✅ Diagnóstico Completado</option>
+                                <option value="DiagnosticoAprobado">👍 Diagnóstico Aprobado</option>
+                                <option value="DiagnosticoRechazado">👎 Diagnóstico Rechazado</option>
+                                <!-- Cotización -->
+                                <option value="CotizacionEnviada">📨 Cotización Enviada</option>
+                                <option value="CotizacionAceptada">✅ Cotización Aceptada</option>
+                                <option value="CotizacionParcial">🟡 Cotización Parcial</option>
+                                <option value="CotizacionRechazada">❌ Cotización Rechazada</option>
+                                <!-- Reparación -->
+                                <option value="EnArmadoVehiculo">🔧 En Armado</option>
+                                <option value="VehiculoArmado">✅ Vehículo Armado</option>
+                                <option value="EnReparacion">🔧 En Reparación</option>
+                                <option value="EnPausa">⏸️ En Pausa</option>
+                                <option value="ReparacionCompletada">✅ Reparación Completada</option>
+                                <!-- Final -->
+                                <option value="Finalizado">🏁 Finalizado</option>
+                                <option value="Entregado">🚗 Entregado</option>
+                            </select>
+                        </div>
+                        <button class="btn-limpiar-filtros" id="btnLimpiarFiltros" title="Limpiar filtros">
+                            <i class="fas fa-times"></i> Limpiar
+                        </button>
+                    </div>
+
+                    <div class="recepciones-list" id="recepcionesList">
                         <div class="empty-state">
-                            <i class="fas fa-spinner fa-spin"></i>
+                            <i class="fas fa-folder-open"></i>
                             <p>Cargando recepciones...</p>
                         </div>
                     </div>
-                    <div class="paginacion-controls">
-                        <button id="btnPaginaAnterior" disabled>
+
+                    <div class="paginacion" id="paginacion">
+                        <button class="btn-pagina" id="btnPaginaAnterior" disabled>
                             <i class="fas fa-chevron-left"></i> Anterior
                         </button>
-                        <span id="paginaInfo">Página 1 de 1</span>
-                        <button id="btnPaginaSiguiente" disabled>
+                        <span class="pagina-info" id="paginaInfo">Página 1 de 1</span>
+                        <button class="btn-pagina" id="btnPaginaSiguiente" disabled>
                             Siguiente <i class="fas fa-chevron-right"></i>
                         </button>
                     </div>
-                </section>
-
+                </div>
             </div>
-            <!-- Fin .page-content -->
         </main>
     </div>
-    <!-- Fin #app -->
 
-    <!-- ============================================================
-         MODAL: CÓDIGO DE SESIÓN CREADA
-         ============================================================ -->
-    <div id="codigoModal" class="modal-overlay">
-        <div class="modal-content modal-small">
-            <div class="modal-header">
-                <h2><i class="fas fa-check-circle" style="color:#10B981;"></i> Sesión Creada</h2>
-                <button class="modal-close" onclick="cerrarModal()">&times;</button>
-            </div>
-            <div class="modal-body" style="text-align:center;padding:24px;">
-                <p style="color:#8E8E93;margin-bottom:8px;">Comparte este código con otro jefe operativo:</p>
-                <div class="codigo-grande" id="codigoSesionModal" style="font-size:32px;font-weight:800;color:#C1121F;letter-spacing:3px;background:#1A1A1C;padding:12px 24px;border-radius:12px;display:inline-block;font-family:monospace;">S-XXXXXX</div>
-                <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;">
-                    <button onclick="navigator.clipboard.writeText(document.getElementById('codigoSesionModal').textContent);mostrarNotificacion('Código copiado','success');" class="btn-primary">
-                        <i class="fas fa-copy"></i> Copiar
-                    </button>
-                    <button onclick="cerrarModal()" class="btn-secondary">Cerrar</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- ===================================================== -->
+    <!-- MODALES -->
+    <!-- ===================================================== -->
 
-    <!-- ============================================================
-         MODAL: UNIRSE POR CÓDIGO
-         ============================================================ -->
-    <div id="modalUnirsePorCodigo" class="modal-overlay">
-        <div class="modal-content modal-small">
+    <!-- Modal para unirse por código -->
+    <div class="modal" id="modalUnirsePorCodigo">
+        <div class="modal-content">
             <div class="modal-header">
-                <h2><i class="fas fa-link"></i> Unirse a Sesión</h2>
-                <button class="modal-close" onclick="document.getElementById('modalUnirsePorCodigo').classList.remove('show')">&times;</button>
-            </div>
-            <div class="modal-body" style="padding:20px;">
-                <p style="color:#8E8E93;margin-bottom:12px;">Ingresa el código de la sesión a la que deseas unirte:</p>
-                <input type="text" id="codigoUnirseInput" placeholder="Ej: S-ABC123" style="width:100%;padding:12px;border-radius:8px;border:1px solid #2C2C2E;background:#1A1A1C;color:#fff;font-size:18px;text-transform:uppercase;font-family:monospace;text-align:center;" />
-                <div style="display:flex;gap:10px;margin-top:16px;justify-content:center;">
-                    <button id="btnConfirmarUnirse" class="btn-primary">
-                        <i class="fas fa-sign-in-alt"></i> Unirse
-                    </button>
-                    <button id="btnCerrarModalUnirse" class="btn-secondary">Cancelar</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ============================================================
-     MODAL: UBICACIÓN CON LEAFLET (CON BOTÓN DE UBICACIÓN ACTUAL)
-     ============================================================ -->
-    <div id="modalUbicacionLeaflet" class="modal-overlay">
-        <div class="modal-content modal-ubicacion">
-            <div class="modal-header">
-                <h2><i class="fas fa-map-pin"></i> Seleccionar Ubicación</h2>
-                <button class="modal-close" onclick="cerrarModalLeaflet()">&times;</button>
+                <h2><i class="fas fa-sign-in-alt"></i> Unirse a sesión</h2>
+                <button class="modal-close" id="btnCerrarModalUnirse">&times;</button>
             </div>
             <div class="modal-body">
+                <p>Ingresa el código de la sesión:</p>
+                <div class="form-group">
+                    <input type="text" id="codigoUnirseInput" placeholder="Ej: S-ABC123" class="codigo-input"
+                        autocomplete="off" style="text-transform: uppercase;">
+                </div>
+                <p class="modal-hint">* Máximo 2 colaboradores por sesión</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnCerrarModalUnirseFooter">Cancelar</button>
+                <button class="btn-primary" id="btnConfirmarUnirse"><i class="fas fa-sign-in-alt"></i> Unirse</button>
+            </div>
+        </div>
+    </div>
 
-                <!-- 🔥 BOTÓN DE UBICACIÓN ACTUAL - AGREGAR ESTO -->
+    <!-- Modal de código generado (sesión creada) -->
+    <div class="modal" id="codigoModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-qrcode"></i> Sesión Creada</h2>
+                <button class="modal-close" onclick="cerrarModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Comparte este código con otros técnicos:</p>
+                <div class="codigo-sesion" id="codigoSesionModal">S-XXXXXX</div>
+                <button class="btn-copy" id="btnCopiarCodigoModal"><i class="fas fa-copy"></i> Copiar código</button>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" onclick="cerrarModal()">Empezar a trabajar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de orden finalizada -->
+    <div class="modal" id="codigoOrdenModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2><i class="fas fa-check-circle" style="color: var(--verde-exito);"></i> ✅ ¡Recepción Finalizada!</h2>
+                <button class="modal-close" onclick="cerrarModalOrden()">&times;</button>
+            </div>
+            <div class="modal-body" id="ordenCompletadaBody">
+                <div style="text-align: center; padding: 40px 20px;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 48px; color: #C1121F; margin-bottom: 20px;"></i>
+                    <h3 style="color: white; margin-bottom: 10px;">Generando reporte...</h3>
+                    <p style="color: #8E8E93;">Por favor espera, estamos preparando tu documento</p>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+                <button class="btn-secondary" onclick="cerrarModalOrden()">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+                <button class="btn-primary" id="btnDescargarPDFFinal"
+                    style="display: inline-flex; background: linear-gradient(135deg, #C1121F, #8B0F1A);">
+                    <i class="fas fa-file-pdf"></i> 📥 Descargar PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- ✅ MODAL PARA VER DETALLES DE RECEPCIÓN              -->
+    <!-- CON BOTÓN DE TRANSCRIPCIÓN DE AUDIO                    -->
+    <!-- ===================================================== -->
+    <div class="modal modal-detalle" id="modalDetalleRecepcion">
+        <div class="modal-content modal-detalle-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-file-alt"></i> Detalle de Recepción</h2>
+                <button class="modal-close" onclick="cerrarModalDetalle()">&times;</button>
+            </div>
+            <div class="modal-body" id="detalleRecepcionBody">
+                <!-- El contenido se genera dinámicamente desde recepcion.js -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalDetalle()"><i class="fas fa-times"></i>
+                    Cerrar</button>
+                <button class="btn-primary" id="btnExportarPDFDetalle"><i class="fas fa-file-pdf"></i> 📥 Descargar
+                    PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para confirmar eliminación -->
+    <div class="modal" id="modalConfirmarEliminar">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i> Confirmar Eliminación</h2>
+                <button class="modal-close" onclick="cerrarModalEliminar()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de eliminar esta recepción?</p>
+                <p><strong>Esta acción no se puede deshacer.</strong></p>
+                <div id="eliminarInfo"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalEliminar()"><i class="fas fa-times"></i>
+                    Cancelar</button>
+                <button class="btn-danger" id="btnConfirmarEliminar"><i class="fas fa-trash-alt"></i> Sí,
+                    Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- MODAL DE UBICACIÓN CON LEAFLET                        -->
+    <!-- CON BOTÓN "MI UBICACIÓN ACTUAL"                      -->
+    <!-- ===================================================== -->
+    <div class="modal" id="modalUbicacionLeaflet">
+        <div class="modal-content modal-ubicacion">
+            <div class="modal-header">
+                <h2><i class="fas fa-map-marker-alt"></i> Seleccionar Ubicación</h2>
+                <button class="modal-close" id="btnCerrarModalUbicacionLeaflet">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 🔥 BOTÓN DE UBICACIÓN ACTUAL - AGREGADO AQUÍ -->
                 <div class="ubicacion-controls-row">
                     <button id="btnMiUbicacion" class="btn-ubicacion-actual" type="button">
                         <i class="fas fa-location-dot"></i> 📍 Mi Ubicación Actual
@@ -856,121 +984,158 @@
                     </span>
                 </div>
 
-                <!-- Buscador -->
-                <div class="modal-buscar-ubicacion">
-                    <input type="text" id="modalBuscarUbicacionLeaflet" placeholder="Buscar dirección o lugar..." />
-                    <button id="btnBuscarUbicacionLeaflet"><i class="fas fa-search"></i></button>
-                </div>
-
-                <!-- Mapa -->
-                <div id="leafletMapa"></div>
-
-                <!-- Información de ubicación seleccionada -->
-                <div id="ubicacionInfoLeaflet" class="ubicacion-info-seleccionada">
-                    <div class="info-row">
-                        <i class="fas fa-check-circle"></i>
-                        <div>
-                            <div class="info-label">Ubicación seleccionada:</div>
-                            <div id="ubicacionSeleccionadaTextoLeaflet" class="info-text"></div>
+                <div class="ubicacion-busqueda">
+                    <div class="search-container">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="modalBuscarUbicacionLeaflet" placeholder="Buscar dirección..."
+                            class="ubicacion-search">
+                        <button type="button" id="btnBuscarUbicacionLeaflet" class="btn-buscar">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                    </div>
+                    <div id="leafletMapa" style="height: 400px; width: 100%; border-radius: 12px; margin: 15px 0;">
+                    </div>
+                    <div class="ubicacion-info" id="ubicacionInfoLeaflet" style="display: none;">
+                        <div class="info-card">
+                            <i class="fas fa-check-circle"></i>
+                            <div>
+                                <strong>Ubicación seleccionada:</strong>
+                                <span id="ubicacionSeleccionadaTextoLeaflet">-</span>
+                            </div>
                         </div>
                     </div>
                 </div>
-
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="cerrarModalLeaflet()">Cancelar</button>
-                <button id="btnConfirmarUbicacionLeaflet" class="btn-primary" disabled>
-                    <i class="fas fa-check"></i> Confirmar Ubicación
-                </button>
-            </div>
-        </div>
-    </div>
-    <!-- ============================================================
-         MODAL: DETALLE DE RECEPCIÓN
-         ============================================================ -->
-    <div id="modalDetalleRecepcion" class="modal-overlay">
-        <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h2><i class="fas fa-file-alt"></i> Detalle de Recepción</h2>
-                <div class="modal-actions">
-                    <button id="btnExportarPDFDetalle" class="btn-pdf" onclick="exportarDetallePDF()">
-                        <i class="fas fa-file-pdf"></i> 📥 Descargar PDF
-                    </button>
-                    <button class="modal-close" onclick="cerrarModalDetalle()">&times;</button>
-                </div>
-            </div>
-            <div id="detalleRecepcionBody" class="modal-body">
-                <div style="text-align:center;padding:40px;">
-                    <i class="fas fa-spinner fa-spin" style="font-size:40px;color:#C1121F;"></i>
-                    <p style="color:#8E8E93;margin-top:12px;">Cargando detalle...</p>
-                </div>
+                <button class="btn-secondary" id="btnCancelarUbicacionLeaflet"><i class="fas fa-times"></i>
+                    Cancelar</button>
+                <button class="btn-primary" id="btnConfirmarUbicacionLeaflet" disabled><i class="fas fa-check"></i> Usar
+                    esta ubicación</button>
             </div>
         </div>
     </div>
 
-    <!-- ============================================================
-         MODAL: ORDEN COMPLETADA (Reporte final)
-         ============================================================ -->
-    <div id="codigoOrdenModal" class="modal-overlay">
-        <div class="modal-content modal-medium">
-            <div class="modal-header">
-                <h2><i class="fas fa-check-circle" style="color:#10B981;"></i> ✅ Recepción Finalizada</h2>
-                <button class="modal-close" onclick="cerrarModalOrden()">&times;</button>
-            </div>
-            <div id="ordenCompletadaBody" class="modal-body">
-                <div style="text-align:center;padding:30px;">
-                    <i class="fas fa-spinner fa-spin" style="font-size:40px;color:#C1121F;"></i>
-                    <p style="color:#8E8E93;margin-top:12px;">Generando reporte...</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ============================================================
-         OVERLAY DE PROGRESO
-         ============================================================ -->
-    <div id="progressOverlay" class="progress-overlay">
+    <!-- ===================================================== -->
+    <!-- BARRA DE PROGRESO PARA OPERACIONES -->
+    <!-- ===================================================== -->
+    <div class="progress-overlay" id="progressOverlay">
         <div class="progress-container">
-            <div id="progressIcon" class="progress-icon">
+            <div class="progress-icon" id="progressIcon">
                 <i class="fas fa-spinner fa-spin"></i>
             </div>
-            <h3 id="progressTitle">Procesando...</h3>
-            <p id="progressMessage">Por favor espera</p>
+            <h3 class="progress-title" id="progressTitle">Procesando...</h3>
+            <p class="progress-message" id="progressMessage">Por favor espera</p>
             <div class="progress-bar-wrapper">
-                <div class="progress-bar-track">
-                    <div id="progressBarFill" class="progress-bar-fill" style="width:0%;"></div>
+                <div class="progress-bar-fill" id="progressBarFill"></div>
+            </div>
+            <div class="progress-percentage" id="progressPercentage">0%</div>
+            <div class="progress-steps" id="progressSteps">
+                <div class="progress-step" data-step="1">
+                    <span class="progress-step-icon"><i class="far fa-circle"></i></span>
+                    <span>Validando datos</span>
                 </div>
-                <span id="progressPercentage" class="progress-percentage-text">0%</span>
+                <div class="progress-step" data-step="2">
+                    <span class="progress-step-icon"><i class="far fa-circle"></i></span>
+                    <span>Guardando información</span>
+                </div>
+                <div class="progress-step" data-step="3">
+                    <span class="progress-step-icon"><i class="far fa-circle"></i></span>
+                    <span>Generando orden de trabajo</span>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- ============================================================
-         SCRIPTS
-         ============================================================ -->
+    <!-- ===================================================== -->
+    <!-- SCRIPTS -->
+    <!-- ===================================================== -->
 
-    <!-- API Base URL -->
-    <script>
-        if (typeof window.API_BASE_URL === 'undefined') {
-            window.API_BASE_URL = (() => {
-                if (window.location.hostname === 'localhost' ||
-                    window.location.hostname === '127.0.0.1' ||
-                    window.location.hostname.includes('192.168.')) {
-                    return 'http://localhost:5000';
-                }
-                return '';
-            })();
-        }
-    </script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
-    <!-- Include.js para componentes (sidebar) -->
+    <!-- Sidebar include -->
     <script src="/jefe_operativo/js/include.js"></script>
 
-    <!-- Compresor de imágenes -->
+    <!-- COMPRESOR DE IMÁGENES -->
     <script src="/jefe_operativo/js/imageCompressor.js"></script>
 
-    <!-- Script principal de recepción -->
+    <!-- RECEPCION.JS -->
     <script src="/jefe_operativo/js/recepcion.js"></script>
 
+    <!-- Sidebar responsive -->
+    <script>
+        let sidebarOpen = false;
+
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+
+            if (!sidebar) return;
+
+            sidebarOpen = !sidebarOpen;
+
+            if (sidebarOpen) {
+                sidebar.classList.add('open');
+                if (overlay) overlay.classList.add('active');
+                if (hamburger) hamburger.classList.add('active');
+                body.classList.add('sidebar-open');
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-times';
+            } else {
+                closeSidebar();
+            }
+        }
+
+        function closeSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerMenu');
+            const body = document.body;
+
+            if (sidebar) {
+                sidebar.classList.remove('open');
+                if (overlay) overlay.classList.remove('active');
+                if (hamburger) hamburger.classList.remove('active');
+                body.classList.remove('sidebar-open');
+                const icon = hamburger.querySelector('i');
+                if (icon) icon.className = 'fas fa-bars';
+            }
+            sidebarOpen = false;
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const hamburgerBtn = document.getElementById('hamburgerMenu');
+            if (hamburgerBtn) hamburgerBtn.addEventListener('click', toggleSidebar);
+            const overlay = document.getElementById('sidebarOverlay');
+            if (overlay) overlay.addEventListener('click', closeSidebar);
+            window.addEventListener('resize', function () {
+                if (window.innerWidth > 1024 && sidebarOpen) closeSidebar();
+            });
+            document.addEventListener('click', function (e) {
+                if (window.innerWidth <= 1024 && sidebarOpen) {
+                    const sidebar = document.querySelector('.sidebar');
+                    const hamburger = document.getElementById('hamburgerMenu');
+                    if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
+                        closeSidebar();
+                    }
+                }
+            });
+            document.addEventListener('touchmove', function (e) {
+                if (window.innerWidth <= 1024 && sidebarOpen) {
+                    const sidebar = document.querySelector('.sidebar');
+                    if (sidebar && !sidebar.contains(e.target)) e.preventDefault();
+                }
+            });
+        });
+
+        window.toggleSidebar = toggleSidebar;
+        window.closeSidebar = closeSidebar;
+        console.log('✅ Sidebar responsive cargado');
+    </script>
+    <script src="/register_sw.js"></script>
 </body>
+
 </html>

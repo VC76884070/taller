@@ -4853,3 +4853,6 @@ ON avance_trabajo (id_orden_trabajo, numero_avance);
 
 
 ALTER TABLE solicitud_compra ADD COLUMN proveedor_id INTEGER;
+
+
+ALTER TABLE sesion_colaborativa ADD COLUMN IF NOT EXISTS comentarios JSONB DEFAULT '{}';

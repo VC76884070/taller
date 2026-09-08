@@ -767,6 +767,8 @@ async function procesarCola() {
 
 // En recepcion.js - Función procesarFoto (CORREGIDA)
 
+// En recepcion.js - Función procesarFoto (CORREGIDA)
+
 async function procesarFoto(input, foto) {
     const file = input.files[0];
     if (!file) return;
@@ -884,23 +886,52 @@ async function procesarFoto(input, foto) {
         // --- COMPLETAR PROGRESO ---
         actualizarProgresoFotoDirecto(foto.campo, 100);
 
-        // --- 🔥 ACTUALIZAR PREVIEW CON LA URL (PARA TODAS LAS FOTOS) ---
-        // Guardar URL en el DOM
+        // --- GUARDAR URL EN EL DOM ---
         if (uploadDiv) {
             uploadDiv.setAttribute('data-drive-url', url);
             uploadDiv.dataset.driveUrl = url;
             fotosSubidasLocal[foto.campo] = url;
         }
 
-        // 🔥 LLAMAR A actualizarPreviewConUrl PARA TODAS LAS FOTOS
-        // Esto usará el proxy para mostrar la imagen desde Drive
+        // 🔥 ACTUALIZAR PREVIEW CON LA URL
         setTimeout(() => {
             actualizarPreviewConUrl(foto.campo, url);
             mostrarNotificacion(`✅ ${foto.label} subida exitosamente`, 'success');
         }, 300);
 
-        // Guardar en sesión
-        try { await actualizarSesionFoto(foto.campo, url); } catch (e) {}
+        // 🔥 GUARDAR EN SESIÓN (PARA TODAS LAS FOTOS, INCLUIDAS OPCIONALES)
+        try {
+            // Recopilar todas las fotos actuales
+            const fotosData = {};
+            for (const f of FOTOS_CONFIG) {
+                const div = document.getElementById(`upload-${f.id}`);
+                let urlFoto = div?.getAttribute('data-drive-url') || 
+                              div?.dataset?.driveUrl || 
+                              fotosSubidasLocal[f.campo];
+                if (urlFoto && urlFoto !== 'null' && urlFoto !== '' && urlFoto !== 'undefined') {
+                    fotosData[f.campo] = urlFoto;
+                }
+            }
+            
+            // Recopilar comentarios
+            const comentariosData = obtenerComentariosOpcionales();
+            
+            // Guardar en sesión
+            await fetchWithToken(`${API_URL}/jefe-operativo/guardar-seccion`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    codigo: codigoSesion,
+                    seccion: 'fotos',
+                    datos: {
+                        fotos: fotosData,
+                        comentarios: comentariosData
+                    }
+                })
+            });
+            console.log(`✅ Sección de fotos guardada en sesión (${Object.keys(fotosData).length} fotos)`);
+        } catch (e) {
+            console.warn('⚠️ Error guardando fotos en sesión:', e);
+        }
 
         console.log(`✅ Foto ${foto.campo} subida exitosamente`);
 
@@ -1219,12 +1250,7 @@ function validarCompletadoFotos() {
     return completado;
 }
 
-// =====================================================
-// GUARDAR SECCIÓN
-// =====================================================
-// =====================================================
-// GUARDAR SECCIÓN
-// =====================================================
+// En recepcion.js - Función guardarSeccion (CORREGIDA)
 
 async function guardarSeccion(seccion) {
     if (!codigoSesion) return;
@@ -1250,20 +1276,33 @@ async function guardarSeccion(seccion) {
             };
             break;
         case 'fotos':
+            // 🔥 RECOLECTAR TODAS LAS FOTOS (OBLIGATORIAS + OPCIONALES)
             const fotosData = {};
             const comentariosData = obtenerComentariosOpcionales();
             
             for (const foto of FOTOS_CONFIG) {
                 const uploadDiv = document.getElementById(`upload-${foto.id}`);
-                let url = uploadDiv?.getAttribute('data-drive-url') || uploadDiv?.dataset?.driveUrl || null;
-                if (!url && sesionActual?.datos?.fotos) url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
-                fotosData[foto.campo] = url || null;
+                let url = uploadDiv?.getAttribute('data-drive-url') || 
+                          uploadDiv?.dataset?.driveUrl || 
+                          fotosSubidasLocal[foto.campo];
+                
+                if (!url && sesionActual?.datos?.fotos) {
+                    url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
+                }
+                
+                if (url && url !== 'null' && url !== '' && url !== 'undefined') {
+                    fotosData[foto.campo] = url;
+                }
             }
             
+            // 🔥 Enviar todas las fotos (incluyendo opcionales)
             datos = {
                 fotos: fotosData,
                 comentarios: comentariosData
             };
+            
+            console.log(`📸 Guardando ${Object.keys(fotosData).length} fotos en sesión`);
+            console.log('📸 Fotos:', fotosData);
             break;
         case 'descripcion':
             datos = { 
@@ -1290,6 +1329,7 @@ async function guardarSeccion(seccion) {
                 usuario_nombre: userInfo?.nombre 
             })
         });
+        
         const data = await response.json();
         
         if (data.success) {
@@ -1297,7 +1337,8 @@ async function guardarSeccion(seccion) {
             if (data.sesion.secciones_completadas) {
                 if (seccion === 'fotos') {
                     const fotos = data.sesion.datos?.fotos || {};
-                    const fotos_validas = Object.values(fotos).filter(v => v && v !== 'null' && v !== '').length;
+                    const campos_obligatorios = ['lateral_izquierdo', 'lateral_derecho', 'frontal', 'trasera', 'superior', 'inferior', 'tablero'];
+                    const fotos_validas = campos_obligatorios.filter(c => fotos[c] && fotos[c] !== 'null' && fotos[c] !== '').length;
                     seccionesCompletadasLocal.fotos = fotos_validas === 7;
                     const fotosBadge = document.getElementById('statusFotos');
                     if (fotosBadge) {
@@ -1313,7 +1354,8 @@ async function guardarSeccion(seccion) {
             mostrarNotificacion(`✓ ${seccion} guardado`, 'success');
         }
     } catch (error) {
-        mostrarNotificacion('Error al guardar', 'error');
+        console.error('❌ Error guardando sección:', error);
+        mostrarNotificacion('Error al guardar: ' + error.message, 'error');
     } finally {
         if (btnGuardar) { 
             btnGuardar.disabled = false; 

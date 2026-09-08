@@ -692,31 +692,38 @@ def guardar_seccion(current_user):
             if 'fotos' not in sesion['datos']:
                 sesion['datos']['fotos'] = {}
             
-            # 🔥 CORREGIDO: Manejar fotos correctamente
+            # 🔥 CORREGIDO: Guardar TODAS las fotos (obligatorias + opcionales)
+            # Si datos_seccion contiene un objeto 'fotos'
             if 'fotos' in datos_seccion:
                 fotos_data = datos_seccion.get('fotos', {})
                 for campo, valor in fotos_data.items():
                     if valor and valor != 'null' and valor != '' and valor != 'undefined':
                         sesion['datos']['fotos'][campo] = valor
+                        print(f"📸 Guardando foto: {campo} -> {valor[:50]}...")
             else:
+                # Si datos_seccion son las fotos directamente
                 for campo, valor in datos_seccion.items():
                     if valor and valor != 'null' and valor != '' and valor != 'undefined':
                         sesion['datos']['fotos'][campo] = valor
+                        print(f"📸 Guardando foto: {campo} -> {valor[:50]}...")
             
-            # 🔥 Guardar comentarios de fotos opcionales (sin usar columna separada)
-            # Los comentarios se guardan dentro del campo datos como JSON
+            # 🔥 GUARDAR COMENTARIOS DE FOTOS OPCIONALES
             if 'comentarios' in datos_seccion:
                 if 'comentarios' not in sesion['datos']:
                     sesion['datos']['comentarios'] = {}
                 for campo, valor in datos_seccion.get('comentarios', {}).items():
                     if valor and valor.strip():
                         sesion['datos']['comentarios'][campo] = valor.strip()
+                        print(f"📝 Guardando comentario: {campo} -> {valor}")
             
             # Recalcular completado (solo obligatorias)
             fotos = sesion['datos']['fotos']
             campos_obligatorios = ['lateral_izquierdo', 'lateral_derecho', 'frontal', 'trasera', 'superior', 'inferior', 'tablero']
             fotos_validas = sum(1 for c in campos_obligatorios if fotos.get(c) and fotos.get(c) != 'null' and fotos.get(c) != '')
             sesion['secciones_completadas']['fotos'] = fotos_validas == 7
+            
+            print(f"📸 Total fotos en sesión: {len(fotos)}")
+            print(f"📸 Fotos obligatorias válidas: {fotos_validas}/7")
             
         elif seccion == 'descripcion':
             sesion['datos']['descripcion'] = {
@@ -737,7 +744,6 @@ def guardar_seccion(current_user):
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
-
 # =====================================================
 # ENDPOINT 8: UNIRSE A SESIÓN
 # =====================================================

@@ -2655,9 +2655,8 @@ async function verDetalleRecepcion(id) {
     }
 }
 
-// =====================================================
-// MOSTRAR MODAL DETALLE (CON PRECARGA DE FOTOS OPTIMIZADA Y BOTÓN DE TRANSCRIPCIÓN)
-// =====================================================
+// En recepcion.js - Función mostrarModalDetalle (MODIFICADA)
+
 function mostrarModalDetalle(detalle) {
     const modal = document.getElementById('modalDetalleRecepcion');
     const body = document.getElementById('detalleRecepcionBody');
@@ -2665,7 +2664,12 @@ function mostrarModalDetalle(detalle) {
     
     datosReporteFinal = detalle;
     const fotos = detalle.fotos || {};
-    const camposFotos = [
+    const comentarios = detalle.comentarios || {};
+    
+    // =============================================
+    // FOTOS OBLIGATORIAS (7)
+    // =============================================
+    const camposFotosObligatorias = [
         { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo', icono: 'fa-car-side' },
         { campo: 'url_lateral_derecha', label: 'Lateral Derecho', icono: 'fa-car-side' },
         { campo: 'url_foto_frontal', label: 'Frontal', icono: 'fa-car' },
@@ -2675,18 +2679,44 @@ function mostrarModalDetalle(detalle) {
         { campo: 'url_foto_tablero', label: 'Tablero', icono: 'fa-tachometer-alt' }
     ];
     
-    const fotosExistentes = camposFotos.filter(f => {
+    const fotosObligatoriasExistentes = camposFotosObligatorias.filter(f => {
         const url = fotos[f.campo];
         return url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined';
     });
-    const fotosCount = fotosExistentes.length;
+    const fotosObligatoriasCount = fotosObligatoriasExistentes.length;
     
-    let fotosHtml = '';
-    if (fotosCount === 0) {
-        fotosHtml = `<div class="detalle-fotos-vacio"><i class="fas fa-camera"></i><p>No se registraron fotos</p></div>`;
+    // =============================================
+    // FOTOS OPCIONALES (con comentarios)
+    // =============================================
+    // Mapeo de campos opcionales
+    const camposOpcionales = [
+        { campo: 'url_opcional1', label: 'Adicional 1' },
+        { campo: 'url_opcional2', label: 'Adicional 2' },
+        { campo: 'url_opcional3', label: 'Adicional 3' },
+        { campo: 'url_opcional4', label: 'Adicional 4' },
+        { campo: 'url_opcional5', label: 'Adicional 5' },
+        { campo: 'url_opcional6', label: 'Adicional 6' },
+        { campo: 'url_opcional7', label: 'Adicional 7' },
+        { campo: 'url_opcional8', label: 'Adicional 8' },
+        { campo: 'url_opcional9', label: 'Adicional 9' },
+        { campo: 'url_opcional10', label: 'Adicional 10' }
+    ];
+    
+    // Mapeo de campo a comentario (opcional1 -> comentario-opcional1)
+    const fotosOpcionalesExistentes = camposOpcionales.filter(f => {
+        const url = fotos[f.campo];
+        return url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined';
+    });
+    
+    // =============================================
+    // GENERAR HTML DE FOTOS OBLIGATORIAS
+    // =============================================
+    let fotosObligatoriasHtml = '';
+    if (fotosObligatoriasCount === 0) {
+        fotosObligatoriasHtml = `<div class="detalle-fotos-vacio"><i class="fas fa-camera"></i><p>No se registraron fotos</p></div>`;
     } else {
         const timestamp = Date.now();
-        fotosHtml = `<div class="detalle-fotos-grid">${fotosExistentes.map((f, index) => {
+        fotosObligatoriasHtml = `<div class="detalle-fotos-grid">${fotosObligatoriasExistentes.map((f, index) => {
             const url = fotos[f.campo];
             const imgId = `foto-${f.campo}-${timestamp}-${index}`;
             return `<div class="detalle-foto" onclick="verImagenAmpliadaPorId('${imgId}', '${f.label}')">
@@ -2696,7 +2726,37 @@ function mostrarModalDetalle(detalle) {
         }).join('')}</div>`;
     }
     
-    // Audio
+    // =============================================
+    // GENERAR HTML DE FOTOS OPCIONALES CON COMENTARIOS
+    // =============================================
+    let fotosOpcionalesHtml = '';
+    if (fotosOpcionalesExistentes.length === 0) {
+        fotosOpcionalesHtml = `<div class="detalle-opcionales-vacio"><i class="fas fa-plus-circle"></i><p>No hay fotos de detalle adicionales</p></div>`;
+    } else {
+        const timestamp = Date.now();
+        fotosOpcionalesHtml = `<div class="detalle-opcionales-grid">${fotosOpcionalesExistentes.map((f, index) => {
+            const url = fotos[f.campo];
+            const imgId = `foto-${f.campo}-${timestamp}-${index}`;
+            
+            // Obtener el comentario correspondiente
+            // El comentario viene en el campo "comentarios" del detalle
+            // O buscamos en el campo opcional correspondiente
+            const campoOpcional = f.campo.replace('url_', ''); // 'opcional1', 'opcional2', etc.
+            const comentario = comentarios[campoOpcional] || '';
+            
+            return `<div class="detalle-foto-opcional" onclick="verImagenAmpliadaPorId('${imgId}', '${f.label}')">
+                <div class="detalle-foto-opcional-inner">
+                    <div id="${imgId}" class="detalle-foto-placeholder"><i class="fas fa-spinner fa-spin"></i><span>Cargando...</span></div>
+                    <div class="detalle-foto-label-opcional"><i class="fas fa-camera"></i> ${f.label}</div>
+                </div>
+                ${comentario ? `<div class="detalle-foto-comentario"><i class="fas fa-quote-left"></i> ${escapeHtml(comentario)}</div>` : ''}
+            </div>`;
+        }).join('')}</div>`;
+    }
+    
+    // =============================================
+    // AUDIO
+    // =============================================
     const audioUrl = detalle.audio_url;
     const tieneAudio = audioUrl && audioUrl !== 'null' && audioUrl !== 'None' && audioUrl !== '' && audioUrl !== null && audioUrl !== 'undefined';
     let audioHtml = '';
@@ -2746,10 +2806,8 @@ function mostrarModalDetalle(detalle) {
     }
     
     // =============================================
-    // 🔥 DESCRIPCIÓN CON BOTÓN DE TRANSCRIPCIÓN
+    // DESCRIPCIÓN CON BOTÓN DE TRANSCRIPCIÓN
     // =============================================
-    
-    // Verificar si hay audio para mostrar el botón
     const tieneAudioParaTranscribir = detalle.audio_url && 
                                       detalle.audio_url !== 'null' && 
                                       detalle.audio_url !== 'None' && 
@@ -2757,7 +2815,6 @@ function mostrarModalDetalle(detalle) {
                                       detalle.audio_url !== null && 
                                       detalle.audio_url !== 'undefined';
     
-    // Texto de la transcripción (si existe)
     const transcripcionActual = detalle.transcripcion_problema || 'No se registró descripción';
     
     const descripcionHtml = `
@@ -2774,9 +2831,7 @@ function mostrarModalDetalle(detalle) {
                 `}
             </div>
             <div class="detalle-descripcion-texto">
-                <textarea id="transcripcionManual" style="width:100%;min-height:80px;background:#1A1A1C;color:#fff;border:1px solid #2C2C2E;border-radius:8px;padding:12px;font-size:13px;resize:vertical;font-family:inherit;line-height:1.6;">
-                    ${escapeHtml(transcripcionActual)}
-                </textarea>
+                <textarea id="transcripcionManual" style="width:100%;min-height:80px;background:#1A1A1C;color:#fff;border:1px solid #2C2C2E;border-radius:8px;padding:12px;font-size:13px;resize:vertical;font-family:inherit;line-height:1.6;">${escapeHtml(transcripcionActual)}</textarea>
             </div>
         </div>
     `;
@@ -2784,10 +2839,9 @@ function mostrarModalDetalle(detalle) {
     // =============================================
     // CONSTRUIR HTML COMPLETO
     // =============================================
-    
     const html = `<div class="detalle-tabs">
         <button class="detalle-tab active" data-tab="info"><i class="fas fa-info-circle"></i> Información</button>
-        <button class="detalle-tab" data-tab="fotos"><i class="fas fa-images"></i> Fotos <span class="tab-badge">${fotosCount}/7</span></button>
+        <button class="detalle-tab" data-tab="fotos"><i class="fas fa-images"></i> Fotos <span class="tab-badge">${fotosObligatoriasCount}/7</span></button>
         <button class="detalle-tab" data-tab="descripcion"><i class="fas fa-align-left"></i> Descripción</button>
     </div>
     <div class="detalle-panes">
@@ -2819,7 +2873,25 @@ function mostrarModalDetalle(detalle) {
                 </div>
             </div>
         </div>
-        <div class="detalle-pane" id="pane-fotos">${fotosHtml}</div>
+        <div class="detalle-pane" id="pane-fotos">
+            <!-- FOTOS OBLIGATORIAS -->
+            <div class="detalle-subseccion">
+                <div class="detalle-subseccion-titulo">
+                    <i class="fas fa-star" style="color:#C1121F;"></i>
+                    <span>Fotos Obligatorias (${fotosObligatoriasCount}/7)</span>
+                </div>
+                ${fotosObligatoriasHtml}
+            </div>
+            
+            <!-- FOTOS OPCIONALES CON COMENTARIOS -->
+            <div class="detalle-subseccion detalle-subseccion-opcional">
+                <div class="detalle-subseccion-titulo">
+                    <i class="fas fa-plus-circle" style="color:#6B7280;"></i>
+                    <span>Fotos de Detalle (${fotosOpcionalesExistentes.length} adicionales)</span>
+                </div>
+                ${fotosOpcionalesHtml}
+            </div>
+        </div>
         <div class="detalle-pane" id="pane-descripcion">
             ${descripcionHtml}
             ${audioHtml}
@@ -2829,7 +2901,9 @@ function mostrarModalDetalle(detalle) {
     body.innerHTML = html;
     modal.classList.add('show');
     
-    // 🔥 CONFIGURAR TABS - OPTIMIZADO
+    // =============================================
+    // CONFIGURAR TABS
+    // =============================================
     document.querySelectorAll('.detalle-tab').forEach(tab => {
         tab.addEventListener('click', function() {
             const tabId = this.dataset.tab;
@@ -2840,42 +2914,153 @@ function mostrarModalDetalle(detalle) {
             if (activePane) activePane.classList.add('active');
             
             if (tabId === 'fotos') {
-                // 🔥 VERIFICAR SI YA ESTÁN CARGADAS
-                const panelFotos = document.getElementById('pane-fotos');
-                const imagenesCargadas = panelFotos?.querySelectorAll('.detalle-foto.loaded').length || 0;
-                const totalFotos = Object.values(detalle.fotos || {}).filter(v => v && v !== 'null' && v !== 'None' && v !== '' && v !== 'undefined').length;
-                
-                if (imagenesCargadas < totalFotos) {
-                    // Solo cargar si no todas están cargadas
-                    setTimeout(() => cargarImagenesFotos(detalle.fotos), 200);
-                } else {
-                    console.log('📸 Fotos ya cargadas, no es necesario recargar');
-                }
+                // Cargar todas las fotos (obligatorias y opcionales)
+                setTimeout(() => cargarTodasLasFotos(detalle.fotos), 200);
             }
         });
     });
     
-    // 🔥 PRECARGAR FOTOS EN PARALELO (incluso si no están visibles)
+    // =============================================
+    // PRECARGAR FOTOS
+    // =============================================
     setTimeout(() => {
-        // Verificar si el tab de fotos está activo
         const fotosTab = document.querySelector('.detalle-tab[data-tab="fotos"]');
         const isFotosTabActive = fotosTab?.classList.contains('active') || false;
         
         if (isFotosTabActive) {
-            // Si el tab está activo, cargar inmediatamente
-            cargarImagenesFotos(detalle.fotos);
+            cargarTodasLasFotos(detalle.fotos);
         } else {
-            // Si no está activo, precargar en segundo plano
-            console.log('📸 Precargando fotos en segundo plano...');
-            // Esperar un poco antes de precargar para no bloquear la UI
-            setTimeout(() => {
-                cargarImagenesFotos(detalle.fotos);
-            }, 500);
+            setTimeout(() => cargarTodasLasFotos(detalle.fotos), 500);
         }
     }, 300);
     
-    // 🔥 BOTÓN PDF
-    document.getElementById('btnExportarPDFDetalle').onclick = () => { datosReporteFinal = detalle; descargarPDFFinal(); };
+    // =============================================
+    // BOTÓN PDF
+    // =============================================
+    document.getElementById('btnExportarPDFDetalle').onclick = () => { 
+        datosReporteFinal = detalle; 
+        descargarPDFFinal(); 
+    };
+}
+// En recepcion.js - Función para cargar todas las fotos (obligatorias y opcionales)
+
+async function cargarTodasLasFotos(fotos) {
+    if (!fotos) return;
+    
+    const panelFotos = document.getElementById('pane-fotos');
+    if (!panelFotos) return;
+    
+    // Todas las fotos (obligatorias + opcionales)
+    const todasLasFotos = [
+        // Obligatorias
+        { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo' },
+        { campo: 'url_lateral_derecha', label: 'Lateral Derecho' },
+        { campo: 'url_foto_frontal', label: 'Frontal' },
+        { campo: 'url_foto_trasera', label: 'Trasera' },
+        { campo: 'url_foto_superior', label: 'Superior' },
+        { campo: 'url_foto_inferior', label: 'Inferior' },
+        { campo: 'url_foto_tablero', label: 'Tablero' },
+        // Opcionales
+        { campo: 'url_opcional1', label: 'Adicional 1' },
+        { campo: 'url_opcional2', label: 'Adicional 2' },
+        { campo: 'url_opcional3', label: 'Adicional 3' },
+        { campo: 'url_opcional4', label: 'Adicional 4' },
+        { campo: 'url_opcional5', label: 'Adicional 5' },
+        { campo: 'url_opcional6', label: 'Adicional 6' },
+        { campo: 'url_opcional7', label: 'Adicional 7' },
+        { campo: 'url_opcional8', label: 'Adicional 8' },
+        { campo: 'url_opcional9', label: 'Adicional 9' },
+        { campo: 'url_opcional10', label: 'Adicional 10' }
+    ];
+    
+    // Identificar qué fotos tienen URL válida
+    const fotosAProcesar = [];
+    for (const f of todasLasFotos) {
+        const url = fotos[f.campo];
+        if (url && url !== 'null' && url !== 'None' && url !== '' && url !== 'undefined') {
+            fotosAProcesar.push({
+                ...f,
+                url: url,
+                contenedorId: null
+            });
+        }
+    }
+    
+    if (fotosAProcesar.length === 0) {
+        console.log('📸 No hay fotos para cargar');
+        return;
+    }
+    
+    console.log(`📸 Cargando ${fotosAProcesar.length} fotos...`);
+    
+    // Asignar contenedores
+    for (const foto of fotosAProcesar) {
+        const contenedores = panelFotos.querySelectorAll(`.detalle-foto-placeholder[id^="foto-${foto.campo}-"]`);
+        if (contenedores.length > 0) {
+            foto.contenedorId = contenedores[0].id;
+            const contenedor = contenedores[0];
+            contenedor.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:8px;height:100%;">
+                <i class="fas fa-spinner fa-spin" style="font-size:24px;color:#C1121F;"></i>
+                <span style="font-size:10px;text-align:center;">Cargando...</span>
+            </div>`;
+        }
+    }
+    
+    // Cargar todas en paralelo
+    const startTime = Date.now();
+    const promesas = fotosAProcesar.map(async (foto) => {
+        try {
+            const response = await fetchWithToken(`${API_URL}/jefe-operativo/imagen-base64`, {
+                method: 'POST',
+                body: JSON.stringify({ 
+                    url: foto.url, 
+                    thumbnail: true, 
+                    size: 'w400' 
+                })
+            });
+            
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            
+            if (data.success && data.base64) {
+                return { ...foto, base64: data.base64, success: true };
+            } else {
+                throw new Error(data.error || 'Error convirtiendo imagen');
+            }
+        } catch (error) {
+            console.warn(`⚠️ Error cargando ${foto.campo}:`, error.message);
+            return { ...foto, success: false, error: error.message };
+        }
+    });
+    
+    const resultados = await Promise.all(promesas);
+    const tiempoTotal = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`✅ Todas las fotos cargadas en ${tiempoTotal} segundos`);
+    
+    // Procesar resultados
+    let fotosCargadas = 0;
+    for (const resultado of resultados) {
+        const contenedor = document.getElementById(resultado.contenedorId);
+        if (!contenedor) continue;
+        
+        const fotoDiv = contenedor.closest('.detalle-foto') || contenedor.closest('.detalle-foto-opcional');
+        
+        if (resultado.success && resultado.base64) {
+            contenedor.innerHTML = `<img src="${resultado.base64}" alt="${resultado.label}" 
+                style="width:100%;height:100%;object-fit:cover;display:block;" 
+                onerror="this.parentElement.innerHTML='<div style=\\'display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:4px;height:100%;\\'><i class=\\'fas fa-exclamation-triangle\\' style=\\'font-size:20px;\\'></i><span style=\\'font-size:10px;text-align:center;\\'>Error</span></div>'">`;
+            if (fotoDiv) fotoDiv.classList.add('loaded');
+            fotosCargadas++;
+        } else {
+            contenedor.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8E8E93;gap:4px;height:100%;">
+                <i class="fas fa-exclamation-triangle" style="font-size:20px;color:#ef4444;"></i>
+                <span style="font-size:9px;text-align:center;">Error</span>
+            </div>`;
+        }
+    }
+    
+    console.log(`📸 ${fotosCargadas}/${resultados.length} fotos cargadas en ${tiempoTotal}s`);
+    return fotosCargadas;
 }
 // =====================================================
 // CARGAR IMÁGENES DE FOTOS EN EL DETALLE (OPTIMIZADO - EN PARALELO)

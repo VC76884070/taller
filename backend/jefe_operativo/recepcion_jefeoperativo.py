@@ -1978,7 +1978,77 @@ def detalle_recepcion(current_user, id_orden):
         
         orden = orden_result.data[0]
         
-        # Obtener recepción
+        # =============================================
+        # OBTENER JEFE OPERATIVO PRINCIPAL
+        # =============================================
+        jefe_principal = {}
+        if orden.get('id_jefe_operativo'):
+            try:
+                j1 = supabase.table('usuario') \
+                    .select('id, nombre, contacto, email') \
+                    .eq('id', orden['id_jefe_operativo']) \
+                    .execute()
+                if j1.data:
+                    jefe_principal = j1.data[0]
+            except Exception as e:
+                logger.warning(f"⚠️ Error obteniendo jefe principal: {e}")
+        
+        # =============================================
+        # OBTENER JEFE OPERATIVO SECUNDARIO
+        # =============================================
+        jefe_secundario = {}
+        if orden.get('id_jefe_operativo_2'):
+            try:
+                j2 = supabase.table('usuario') \
+                    .select('id, nombre, contacto, email') \
+                    .eq('id', orden['id_jefe_operativo_2']) \
+                    .execute()
+                if j2.data:
+                    jefe_secundario = j2.data[0]
+            except Exception as e:
+                logger.warning(f"⚠️ Error obteniendo jefe secundario: {e}")
+        
+        # =============================================
+        # OBTENER VEHÍCULO
+        # =============================================
+        vehiculo = {}
+        if orden.get('id_vehiculo'):
+            try:
+                vehiculo_result = supabase.table('vehiculo') \
+                    .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
+                    .eq('id', orden['id_vehiculo']) \
+                    .execute()
+                if vehiculo_result.data:
+                    vehiculo = vehiculo_result.data[0]
+            except Exception as e:
+                logger.warning(f"⚠️ Error obteniendo vehículo: {e}")
+        
+        # =============================================
+        # OBTENER CLIENTE Y USUARIO
+        # =============================================
+        usuario = {}
+        cliente_data = {}
+        if vehiculo.get('id_cliente'):
+            try:
+                c_result = supabase.table('cliente') \
+                    .select('id, id_usuario, latitud, longitud, ubicacion_confirmada') \
+                    .eq('id', vehiculo['id_cliente']) \
+                    .execute()
+                if c_result.data:
+                    cliente_data = c_result.data[0]
+                    if cliente_data.get('id_usuario'):
+                        u_result = supabase.table('usuario') \
+                            .select('id, nombre, contacto, ubicacion, email') \
+                            .eq('id', cliente_data['id_usuario']) \
+                            .execute()
+                        if u_result.data:
+                            usuario = u_result.data[0]
+            except Exception as e:
+                logger.warning(f"⚠️ Error obteniendo cliente: {e}")
+        
+        # =============================================
+        # OBTENER RECEPCIÓN
+        # =============================================
         recepcion_result = supabase.table('recepcion') \
             .select('*') \
             .eq('id_orden_trabajo', id_orden) \
@@ -1986,10 +2056,16 @@ def detalle_recepcion(current_user, id_orden):
         
         recepcion = recepcion_result.data[0] if recepcion_result.data else {}
         
-        # Obtener sesión colaborativa para recuperar fotos opcionales y comentarios
+        # =============================================
+        # OBTENER SESIÓN COLABORATIVA PARA FOTOS OPCIONALES
+        # =============================================
         sesion = None
+        comentarios = {}
+        fotos_opcionales = {}
+        
         try:
-            # Buscar sesión por código de orden o por datos
+            # Buscar sesión colaborativa por código de orden
+            # Primero intentamos obtener la sesión por el código de la orden
             sesion_result = supabase.table('sesion_colaborativa') \
                 .select('datos, comentarios') \
                 .eq('estado', 'finalizada') \
@@ -1998,18 +2074,15 @@ def detalle_recepcion(current_user, id_orden):
             for s in (sesion_result.data or []):
                 datos_sesion = s.get('datos', {})
                 # Buscar si los datos de la sesión coinciden con la orden
-                if datos_sesion.get('vehiculo', {}).get('placa') == orden.get('placa'):
+                if datos_sesion.get('vehiculo', {}).get('placa') == vehiculo.get('placa'):
                     sesion = s
                     break
         except Exception as e:
             logger.warning(f"⚠️ Error obteniendo sesión: {e}")
         
         # =============================================
-        # 🔥 RECUPERAR FOTOS OPCIONALES DE LA SESIÓN
+        # RECUPERAR FOTOS OPCIONALES DE LA SESIÓN
         # =============================================
-        fotos_opcionales = {}
-        comentarios = {}
-        
         if sesion:
             datos_sesion = sesion.get('datos', {})
             fotos_sesion = datos_sesion.get('fotos', {})
@@ -2024,10 +2097,8 @@ def detalle_recepcion(current_user, id_orden):
             logger.info(f"📸 Fotos opcionales recuperadas: {len(fotos_opcionales)}")
         
         # =============================================
-        # CONSTRUIR DETALLE CON TODAS LAS FOTOS
+        # CONSTRUIR FOTOS COMPLETAS
         # =============================================
-        
-        # Fotos obligatorias de la tabla recepcion
         fotos_obligatorias = {
             'url_lateral_izquierda': recepcion.get('url_lateral_izquierda'),
             'url_lateral_derecha': recepcion.get('url_lateral_derecha'),
@@ -2049,8 +2120,9 @@ def detalle_recepcion(current_user, id_orden):
             else:
                 fotos_limpias[key] = None
         
-        # ... resto del código de detalle ...
-        
+        # =============================================
+        # CONSTRUIR DETALLE COMPLETO
+        # =============================================
         detalle = {
             'id': orden['id'],
             'codigo_unico': orden.get('codigo_unico', 'OT-N/A'),
@@ -2069,8 +2141,8 @@ def detalle_recepcion(current_user, id_orden):
             'latitud': cliente_data.get('latitud'),
             'longitud': cliente_data.get('longitud'),
             'ubicacion_confirmada': cliente_data.get('ubicacion_confirmada', False),
-            'fotos': fotos_limpias,  # 🔥 Todas las fotos (obligatorias + opcionales)
-            'comentarios': comentarios,  # 🔥 Comentarios de fotos opcionales
+            'fotos': fotos_limpias,
+            'comentarios': comentarios,
             'audio_url': normalizar_url_drive(recepcion.get('url_grabacion_problema')),
             'transcripcion_problema': recepcion.get('transcripcion_problema', ''),
             'url_pdf': recepcion.get('url_pdf')

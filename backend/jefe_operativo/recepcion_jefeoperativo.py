@@ -779,37 +779,80 @@ def unirse_sesion(current_user):
 @jefe_operativo_required
 def finalizar_sesion(current_user):
     """Finaliza una sesión y crea la orden de trabajo con renombrado de carpeta"""
+    
+    # 🔥 PRINT STATEMENTS PARA DEBUG (aparecen en la consola de Gunicorn)
+    import sys
+    def debug_print(*args):
+        msg = " ".join(str(a) for a in args)
+        print(f"[DEBUG] {msg}")
+        sys.stdout.flush()
+    
+    debug_print("=" * 60)
+    debug_print("🚀 INICIANDO FINALIZACIÓN DE SESIÓN")
+    debug_print("=" * 60)
+    debug_print(f"👤 Usuario ID: {current_user.get('id')}, Nombre: {current_user.get('nombre')}")
+    
     global sesiones_activas
     try:
         from google_drive import google_drive
         
         data = request.get_json()
+        debug_print(f"📦 Datos recibidos: {data.keys() if data else 'None'}")
+        
         codigo_sesion = data.get('codigo')
-        datos_directos = data.get('datos', {})
+        debug_print(f"🔑 Código sesión: {codigo_sesion}")
         
         if not codigo_sesion:
+            debug_print("❌ Error: Código requerido")
             return jsonify({'error': 'Código requerido'}), 400
+        
+        datos_directos = data.get('datos', {})
+        debug_print(f"📋 Datos directos keys: {datos_directos.keys() if datos_directos else 'None'}")
+        
+        # Verificar cliente
+        cliente = datos_directos.get('cliente', {})
+        debug_print(f"👤 Cliente: {cliente.get('nombre', 'NO')} - {cliente.get('telefono', 'NO')}")
+        
+        # Verificar vehículo
+        vehiculo = datos_directos.get('vehiculo', {})
+        debug_print(f"🚗 Vehículo: {vehiculo.get('placa', 'NO')} - {vehiculo.get('marca', 'NO')}")
+        
+        # Verificar fotos
+        fotos = datos_directos.get('fotos', {})
+        fotos_validas = {k: v for k, v in fotos.items() if v and v != 'null' and v != '' and v != 'undefined'}
+        debug_print(f"📸 Fotos válidas: {len(fotos_validas)}/7")
+        
+        # Verificar descripción
+        descripcion = datos_directos.get('descripcion', {})
+        debug_print(f"📝 Descripción: {descripcion.get('texto', '')[:50]}...")
+        debug_print(f"🎵 Audio: {'✅' if descripcion.get('audio_url') else '❌'}")
         
         logger.info(f"📋 Finalizando sesión: {codigo_sesion}")
         
         if codigo_sesion not in sesiones_activas:
+            debug_print("🔄 Sesión no en memoria, cargando desde BD...")
             sesion = cargar_sesion_de_db(codigo_sesion)
             if not sesion:
+                debug_print("❌ Sesión no encontrada en BD")
                 return jsonify({'error': 'Sesión no encontrada'}), 404
             sesiones_activas[codigo_sesion] = sesion
         
         sesion = sesiones_activas[codigo_sesion]
+        debug_print(f"✅ Sesión encontrada: {sesion.get('codigo')}")
         
         if sesion.get('estado') != 'activa':
+            debug_print(f"❌ Sesión no activa: {sesion.get('estado')}")
             return jsonify({'error': 'Sesión no activa'}), 400
         
         if datos_directos:
             sesion['datos'] = datos_directos
+            debug_print("✅ Datos actualizados en sesión")
         
         # 🔥 FORZAR RECALCULO DE FOTOS
         fotos = sesion.get('datos', {}).get('fotos', {})
         fotos_validas = sum(1 for v in fotos.values() if v and v != 'null' and v != '' and v != 'undefined')
         sesion['secciones_completadas']['fotos'] = fotos_validas == 7
+        debug_print(f"📸 Fotos en sesión: {fotos_validas}/7")
         
         # Verificar secciones faltantes
         secciones_faltantes = []
@@ -823,6 +866,7 @@ def finalizar_sesion(current_user):
             secciones_faltantes.append('descripcion')
         
         if secciones_faltantes:
+            debug_print(f"⚠️ Secciones faltantes: {secciones_faltantes}")
             logger.warning(f"⚠️ Secciones faltantes: {secciones_faltantes}")
             return jsonify({
                 'error': f'Faltan: {", ".join(secciones_faltantes)}',
@@ -830,14 +874,21 @@ def finalizar_sesion(current_user):
                 'secciones': sesion.get('secciones_completadas', {})
             }), 400
         
+        debug_print("✅ Todas las secciones están completas")
+        
         # =============================================
         # CREAR ORDEN DE TRABAJO
         # =============================================
+        debug_print("🔄 Creando orden de trabajo...")
+        
         try:
             cliente_data = sesion['datos'].get('cliente', {})
             vehiculo_data = sesion['datos'].get('vehiculo', {})
             descripcion_data = sesion['datos'].get('descripcion', {})
             fotos = sesion['datos'].get('fotos', {})
+            
+            debug_print(f"📋 Cliente data: {cliente_data}")
+            debug_print(f"🚗 Vehiculo data: {vehiculo_data}")
             
             # 1. Obtener o crear cliente
             id_cliente = None
@@ -849,11 +900,15 @@ def finalizar_sesion(current_user):
             latitud = cliente_data.get('latitud')
             longitud = cliente_data.get('longitud')
             
+            debug_print(f"👤 Buscando/creando cliente con teléfono: {telefono}")
+            
             if telefono:
                 usuario_existente = supabase.table('usuario') \
                     .select('id') \
                     .eq('contacto', telefono) \
                     .execute()
+                
+                debug_print(f"📊 Usuario existente: {usuario_existente.data if usuario_existente.data else 'No'}")
                 
                 if usuario_existente.data:
                     id_usuario = usuario_existente.data[0]['id']
@@ -865,8 +920,10 @@ def finalizar_sesion(current_user):
                     
                     if cliente_existente.data:
                         id_cliente = cliente_existente.data[0]['id']
+                        debug_print(f"✅ Cliente existente: {id_cliente}")
             
             if not id_cliente:
+                debug_print("🆕 Creando nuevo cliente...")
                 import uuid
                 from werkzeug.security import generate_password_hash
                 
@@ -881,6 +938,8 @@ def finalizar_sesion(current_user):
                     'fecha_registro': datetime.datetime.now().isoformat(),
                     'email': email_cliente
                 }).execute()
+                
+                debug_print(f"📊 User result: {user_result.data if user_result.data else 'Error'}")
                 
                 if user_result.data:
                     id_usuario = user_result.data[0]['id']
@@ -902,13 +961,16 @@ def finalizar_sesion(current_user):
                     
                     if cliente_result.data:
                         id_cliente = cliente_result.data[0]['id']
+                        debug_print(f"✅ Cliente creado: {id_cliente}")
             
             if not id_cliente:
+                debug_print("❌ Error creando cliente")
                 return jsonify({'error': 'Error creando cliente'}), 500
             
             # 2. Obtener o crear vehículo
             placa = vehiculo_data.get('placa', '').upper()
             id_vehiculo = None
+            debug_print(f"🚗 Buscando/creando vehículo con placa: {placa}")
             
             if placa:
                 vehiculo_existente = supabase.table('vehiculo') \
@@ -918,6 +980,7 @@ def finalizar_sesion(current_user):
                 
                 if vehiculo_existente.data:
                     id_vehiculo = vehiculo_existente.data[0]['id']
+                    debug_print(f"✅ Vehículo existente: {id_vehiculo}")
                     supabase.table('vehiculo') \
                         .update({
                             'marca': vehiculo_data.get('marca', ''),
@@ -929,6 +992,7 @@ def finalizar_sesion(current_user):
                         .eq('id', id_vehiculo) \
                         .execute()
                 else:
+                    debug_print("🆕 Creando nuevo vehículo...")
                     vehiculo_result = supabase.table('vehiculo').insert({
                         'id_cliente': id_cliente,
                         'placa': placa,
@@ -940,8 +1004,10 @@ def finalizar_sesion(current_user):
                     
                     if vehiculo_result.data:
                         id_vehiculo = vehiculo_result.data[0]['id']
+                        debug_print(f"✅ Vehículo creado: {id_vehiculo}")
             
             if not id_vehiculo:
+                debug_print("❌ Error creando vehículo")
                 return jsonify({'error': 'Error creando vehículo'}), 500
             
             # 3. Generar código único
@@ -971,6 +1037,7 @@ def finalizar_sesion(current_user):
                 siguiente += 1
             
             codigo_unico = f"OT-{fecha.strftime('%y%m%d')}-{str(siguiente).zfill(3)}"
+            debug_print(f"📋 Código único generado: {codigo_unico}")
             
             # 4. Crear orden de trabajo
             orden_data = {
@@ -987,22 +1054,23 @@ def finalizar_sesion(current_user):
                         orden_data['id_jefe_operativo_2'] = colab_id
                         break
             
+            debug_print(f"📋 Creando orden con datos: {orden_data}")
+            
             orden_result = supabase.table('ordentrabajo').insert(orden_data).execute()
             
             if not orden_result.data:
+                debug_print("❌ Error creando orden de trabajo")
                 return jsonify({'error': 'Error creando orden de trabajo'}), 500
             
             id_orden = orden_result.data[0]['id']
+            debug_print(f"✅ Orden creada: {id_orden}")
             
             # =============================================
-            # 5. Guardar recepción - MAPEO CORRECTO DE FOTOS
+            # 5. Guardar recepción
             # =============================================
+            debug_print("🔄 Guardando recepción...")
             
-            # 🔥 MAPEAR LAS CLAVES CORRECTAMENTE
-            # Las fotos pueden venir con diferentes nombres de clave
-            # Necesitamos mapearlas a los nombres correctos de la tabla RECEPCION
-            
-            # Mapeo de claves de fotos (short) a claves de la tabla (full)
+            # Mapeo de fotos
             MAPEO_FOTOS = {
                 'lateral_izquierdo': 'url_lateral_izquierda',
                 'lateral_derecho': 'url_lateral_derecha',
@@ -1011,7 +1079,6 @@ def finalizar_sesion(current_user):
                 'superior': 'url_foto_superior',
                 'inferior': 'url_foto_inferior',
                 'tablero': 'url_foto_tablero',
-                # También soportar claves ya mapeadas
                 'url_lateral_izquierda': 'url_lateral_izquierda',
                 'url_lateral_derecha': 'url_lateral_derecha',
                 'url_foto_frontal': 'url_foto_frontal',
@@ -1021,47 +1088,21 @@ def finalizar_sesion(current_user):
                 'url_foto_tablero': 'url_foto_tablero'
             }
             
-            # 🔥 OBTENER FOTOS DE TODAS LAS FUENTES
             fotos_combinadas = {}
-            
-            # Fuente 1: datos_directos
             if datos_directos and 'fotos' in datos_directos:
                 fotos_combinadas.update(datos_directos.get('fotos', {}))
-            
-            # Fuente 2: sesion.datos.fotos
             if sesion and 'datos' in sesion and 'fotos' in sesion['datos']:
                 fotos_combinadas.update(sesion['datos']['fotos'])
-            
-            # Fuente 3: variable local
             if fotos:
                 fotos_combinadas.update(fotos)
             
-            logger.info(f"📸 Fotos combinadas (antes de mapear): {fotos_combinadas}")
-            
-            # 🔥 MAPEAR LAS FOTOS A LOS NOMBRES CORRECTOS DE LA TABLA
             fotos_mapeadas = {}
             for key, value in fotos_combinadas.items():
                 if value and value != 'null' and value != 'None' and value != '' and value != 'undefined':
-                    # Buscar el mapeo
                     if key in MAPEO_FOTOS:
                         nueva_key = MAPEO_FOTOS[key]
                         fotos_mapeadas[nueva_key] = value
-                        logger.info(f"📸 Mapeo: {key} -> {nueva_key}")
-                    else:
-                        # Si no está en el mapeo, intentar usar la clave tal cual
-                        # pero solo si parece una URL válida
-                        if value.startswith('http'):
-                            fotos_mapeadas[key] = value
-                            logger.info(f"📸 Clave directa: {key}")
             
-            logger.info(f"📸 Fotos mapeadas: {fotos_mapeadas}")
-            logger.info(f"📸 Total fotos mapeadas: {len(fotos_mapeadas)}")
-            
-            # Verificar que tengamos 7 fotos
-            if len(fotos_mapeadas) < 7:
-                logger.warning(f"⚠️ Solo {len(fotos_mapeadas)} fotos mapeadas, se esperaban 7")
-            
-            # Construir datos de recepción con las fotos mapeadas
             recepcion_data = {
                 'id_orden_trabajo': id_orden,
                 'url_lateral_izquierda': fotos_mapeadas.get('url_lateral_izquierda'),
@@ -1075,51 +1116,45 @@ def finalizar_sesion(current_user):
                 'transcripcion_problema': descripcion_data.get('texto', '')
             }
             
-            # 🔥 FILTRAR SOLO CAMPOS CON VALORES VÁLIDOS
             recepcion_data_limpia = {}
             for key, value in recepcion_data.items():
                 if value and value != 'null' and value != 'None' and value != '' and value != 'undefined':
                     recepcion_data_limpia[key] = value
             
-            logger.info(f"📸 Datos FINALES a guardar en recepcion: {recepcion_data_limpia}")
+            debug_print(f"📸 Recepcion data: {recepcion_data_limpia}")
             
-            # Insertar en la base de datos
             if recepcion_data_limpia:
                 try:
                     resultado = supabase.table('recepcion').insert(recepcion_data_limpia).execute()
-                    logger.info(f"✅ Recepción guardada exitosamente: {resultado.data}")
+                    debug_print(f"✅ Recepción guardada: {resultado.data}")
                 except Exception as e:
-                    logger.error(f"❌ Error guardando recepción: {e}")
-                    # Intentar guardar solo el id_orden_trabajo
+                    debug_print(f"❌ Error guardando recepción: {e}")
                     resultado = supabase.table('recepcion').insert({
                         'id_orden_trabajo': id_orden
                     }).execute()
-                    logger.info(f"✅ Recepción básica guardada: {resultado.data}")
+                    debug_print(f"✅ Recepción básica guardada")
             else:
-                logger.warning("⚠️ No hay datos para guardar en recepción")
+                debug_print("⚠️ No hay datos para guardar en recepción")
                 resultado = supabase.table('recepcion').insert({
                     'id_orden_trabajo': id_orden
                 }).execute()
-                logger.info(f"✅ Recepción básica guardada: {resultado.data}")
             
             # 6. Renombrar carpeta en Drive
             carpeta_renombrada = False
             try:
-                logger.info(f"📁 Intentando renombrar carpeta {codigo_sesion} a {codigo_unico}")
+                debug_print(f"📁 Intentando renombrar carpeta {codigo_sesion} a {codigo_unico}")
                 folder_id = google_drive.get_folder_id_by_name(codigo_sesion)
-                
                 if folder_id:
                     rename_result = google_drive.rename_folder(folder_id, codigo_unico)
                     if rename_result:
                         carpeta_renombrada = True
-                        logger.info(f"✅ Carpeta renombrada exitosamente: {codigo_sesion} -> {codigo_unico}")
+                        debug_print(f"✅ Carpeta renombrada: {codigo_sesion} -> {codigo_unico}")
                     else:
-                        logger.warning(f"⚠️ No se pudo renombrar la carpeta {codigo_sesion}")
+                        debug_print(f"⚠️ No se pudo renombrar la carpeta")
                 else:
-                    logger.warning(f"⚠️ No se encontró la carpeta con nombre: {codigo_sesion}")
-                    
+                    debug_print(f"⚠️ No se encontró la carpeta con nombre: {codigo_sesion}")
             except Exception as e:
-                logger.error(f"❌ Error renombrando carpeta: {str(e)}")
+                debug_print(f"❌ Error renombrando carpeta: {str(e)}")
             
             # 7. Marcar sesión como finalizada
             sesion['estado'] = 'finalizada'
@@ -1129,7 +1164,8 @@ def finalizar_sesion(current_user):
             if codigo_sesion in sesiones_activas:
                 del sesiones_activas[codigo_sesion]
             
-            logger.info(f"✅ Sesión {codigo_sesion} finalizada. Orden: {codigo_unico}")
+            debug_print(f"✅ SESIÓN {codigo_sesion} FINALIZADA. Orden: {codigo_unico}")
+            debug_print("=" * 60)
             
             return jsonify({
                 'success': True,
@@ -1140,17 +1176,16 @@ def finalizar_sesion(current_user):
             }), 200
             
         except Exception as e:
-            logger.error(f"Error creando orden: {str(e)}")
+            debug_print(f"❌ Error creando orden: {str(e)}")
             import traceback
-            logger.error(traceback.format_exc())
+            debug_print(traceback.format_exc())
             return jsonify({'error': str(e)}), 500
         
     except Exception as e:
-        logger.error(f"Error finalizando: {str(e)}")
+        debug_print(f"❌ Error finalizando: {str(e)}")
         import traceback
-        logger.error(traceback.format_exc())
+        debug_print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
-
 
 # =====================================================
 # ENDPOINT: SUBIR PDF A GOOGLE DRIVE DESDE FRONTEND

@@ -765,68 +765,53 @@ async function procesarCola() {
     setTimeout(procesarCola, 500);
 }
 
-// =====================================================
-// PROCESAR FOTO (CORREGIDO)
-// =====================================================
-// =====================================================
-// PROCESAR FOTO (CORREGIDO - CON PREVIEW Y PROGRESO)
-// =====================================================
+// En recepcion.js - Función procesarFoto (CORREGIDA)
+
 async function procesarFoto(input, foto) {
     const file = input.files[0];
     if (!file) return;
-    
+
     const uploadDiv = document.getElementById(`upload-${foto.id}`);
     const preview = uploadDiv?.querySelector('.upload-preview');
     const removeBtn = uploadDiv?.querySelector('.remove-photo');
     const placeholder = uploadDiv?.querySelector('.upload-placeholder');
-    
-    // 🔥 OBTENER URL ANTERIOR
-    let urlAnterior = uploadDiv?.getAttribute('data-drive-url') || 
-                      uploadDiv?.dataset?.driveUrl || 
+
+    // Obtener URL anterior (para modo edición)
+    let urlAnterior = uploadDiv?.getAttribute('data-drive-url') ||
+                      uploadDiv?.dataset?.driveUrl ||
                       fotosSubidasLocal[foto.campo];
-    
-    if (modoEdicionRecepcion && urlAnterior && 
+
+    if (modoEdicionRecepcion && urlAnterior &&
         urlAnterior !== 'null' && urlAnterior !== '' && urlAnterior !== 'undefined') {
         console.log(`🔄 Reemplazando foto anterior para ${foto.campo}`);
     } else {
         urlAnterior = null;
     }
-    
-    // 🔥 MOSTRAR PREVIEW LOCAL INMEDIATAMENTE
+
+    // --- MOSTRAR PREVIEW LOCAL INMEDIATO ---
     if (preview) {
-        // Ocultar placeholder
         if (placeholder) placeholder.style.display = 'none';
-        
-        // Limpiar preview
         preview.innerHTML = '';
         preview.style.backgroundImage = '';
-        preview.style.backgroundSize = '';
-        preview.style.backgroundPosition = '';
         preview.style.display = 'block';
-        
-        // Crear imagen local
+
         const objectUrl = URL.createObjectURL(file);
         const img = document.createElement('img');
         img.src = objectUrl;
         img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;border-radius:8px;';
-        img.onload = () => {
-            // No revocar inmediatamente, se revocará al eliminar o al finalizar
-        };
         preview.appendChild(img);
         uploadDiv.classList.add('has-image');
         uploadDiv.classList.remove('error');
         uploadDiv.dataset.objectUrl = objectUrl;
-        
+
         if (removeBtn) removeBtn.style.display = 'flex';
     }
-    
-    // 🔥 CREAR OVERLAY DE PROGRESO SOBRE EL PREVIEW
+
+    // --- CREAR OVERLAY DE PROGRESO ---
     if (preview) {
-        // Eliminar overlay existente
         const overlayExistente = document.getElementById(`loading-${foto.campo}`);
         if (overlayExistente) overlayExistente.remove();
-        
-        // Crear nuevo overlay
+
         const loadingOverlay = document.createElement('div');
         loadingOverlay.className = 'loading-overlay';
         loadingOverlay.id = `loading-${foto.campo}`;
@@ -845,14 +830,13 @@ async function procesarFoto(input, foto) {
             z-index: 10;
             backdrop-filter: blur(2px);
         `;
-        
-        // Usar el ring de progreso SVG (como en el HTML)
+
         loadingOverlay.innerHTML = `
             <div style="position:relative;width:60px;height:60px;display:flex;align-items:center;justify-content:center;">
                 <svg viewBox="0 0 50 50" style="transform:rotate(-90deg);width:60px;height:60px;">
                     <circle cx="25" cy="25" r="22" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="4"/>
-                    <circle id="ring-${foto.campo}" cx="25" cy="25" r="22" fill="none" stroke="#C1121F" stroke-width="4" 
-                        stroke-linecap="round" stroke-dasharray="138.23" stroke-dashoffset="138.23" 
+                    <circle id="ring-${foto.campo}" cx="25" cy="25" r="22" fill="none" stroke="#C1121F" stroke-width="4"
+                        stroke-linecap="round" stroke-dasharray="138.23" stroke-dashoffset="138.23"
                         style="transition: stroke-dashoffset 0.3s ease;"/>
                 </svg>
                 <span id="percent-${foto.campo}" style="position:absolute;color:white;font-size:14px;font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,0.9);">0%</span>
@@ -861,15 +845,14 @@ async function procesarFoto(input, foto) {
         `;
         preview.style.position = 'relative';
         preview.appendChild(loadingOverlay);
-        
-        // También mostrar la barra de progreso inferior
+
         const barContainer = uploadDiv.querySelector('.progress-bar-foto');
         if (barContainer) {
             barContainer.style.display = 'block';
             const fill = barContainer.querySelector('.fill');
             if (fill) fill.style.width = '0%';
         }
-        
+
         const statusContainer = uploadDiv.querySelector('.uploading-status');
         if (statusContainer) {
             statusContainer.style.display = 'flex';
@@ -877,46 +860,55 @@ async function procesarFoto(input, foto) {
             statusContainer.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Subiendo...</span>';
         }
     }
-    
-    // 🔥 ACTUALIZAR PROGRESO MANUALMENTE (simular progreso)
+
+    // --- SIMULAR PROGRESO ---
     let progreso = 0;
     const interval = setInterval(() => {
         progreso += Math.random() * 10 + 5;
         if (progreso > 95) progreso = 95;
         actualizarProgresoFotoDirecto(foto.campo, progreso);
     }, 300);
-    
+
     try {
         const fileToUpload = await comprimirImagen(file);
-        
+
         let url;
         if (urlAnterior && modoEdicionRecepcion) {
             url = await reemplazarFotoEnDrive(fileToUpload, foto.campo, urlAnterior);
         } else {
             url = await subirFotoGoogleDrive(fileToUpload, codigoSesion || 'temp', foto.campo);
         }
-        
+
         clearInterval(interval);
-        
-        // 🔥 COMPLETAR PROGRESO
+
+        // --- COMPLETAR PROGRESO ---
         actualizarProgresoFotoDirecto(foto.campo, 100);
-        
-        // 🔥 ACTUALIZAR PREVIEW CON LA URL FINAL (eliminar overlay)
+
+        // --- 🔥 ACTUALIZAR PREVIEW CON LA URL (PARA TODAS LAS FOTOS) ---
+        // Guardar URL en el DOM
+        if (uploadDiv) {
+            uploadDiv.setAttribute('data-drive-url', url);
+            uploadDiv.dataset.driveUrl = url;
+            fotosSubidasLocal[foto.campo] = url;
+        }
+
+        // 🔥 LLAMAR A actualizarPreviewConUrl PARA TODAS LAS FOTOS
+        // Esto usará el proxy para mostrar la imagen desde Drive
         setTimeout(() => {
             actualizarPreviewConUrl(foto.campo, url);
             mostrarNotificacion(`✅ ${foto.label} subida exitosamente`, 'success');
         }, 300);
-        
+
         // Guardar en sesión
         try { await actualizarSesionFoto(foto.campo, url); } catch (e) {}
-        
+
         console.log(`✅ Foto ${foto.campo} subida exitosamente`);
-        
+
     } catch (error) {
         clearInterval(interval);
         console.error(`❌ Error subiendo ${foto.label}:`, error);
-        
-        // 🔥 MOSTRAR ERROR EN EL PREVIEW
+
+        // Mostrar error en el preview
         const overlay = document.getElementById(`loading-${foto.campo}`);
         if (overlay) {
             overlay.innerHTML = `
@@ -930,7 +922,7 @@ async function procesarFoto(input, foto) {
                 uploadDiv.classList.add('error');
             }, 2000);
         }
-        
+
         uploadDiv.classList.add('error');
         mostrarNotificacion(`❌ Error en ${foto.label}: ${error.message}`, 'error');
     }
@@ -975,35 +967,45 @@ function actualizarProgresoFotoDirecto(campo, progreso) {
         }
     }
 }
-// =====================================================
-// ACTUALIZAR PREVIEW CON URL (USANDO PROXY)
-// =====================================================
+// En recepcion.js - Función actualizarPreviewConUrl (CORREGIDA)
+
 function actualizarPreviewConUrl(campo, url) {
+    // Buscar la configuración de la foto (obligatoria u opcional)
     const fotoConfig = FOTOS_CONFIG.find(f => f.campo === campo);
-    if (!fotoConfig) return;
-    
+    if (!fotoConfig) {
+        console.warn(`⚠️ Configuración no encontrada para: ${campo}`);
+        return;
+    }
+
     const uploadDiv = document.getElementById(`upload-${fotoConfig.id}`);
-    if (!uploadDiv) return;
-    
+    if (!uploadDiv) {
+        console.warn(`⚠️ Elemento upload no encontrado para: ${fotoConfig.id}`);
+        return;
+    }
+
     const preview = uploadDiv.querySelector('.upload-preview');
     if (!preview) return;
-    
-    // 🔥 GUARDAR URL EN EL DOM
+
+    // Guardar URL en el DOM
     uploadDiv.setAttribute('data-drive-url', url);
     uploadDiv.dataset.driveUrl = url;
     fotosSubidasLocal[campo] = url;
-    
-    // 🔥 CARGAR IMAGEN CON PROXY
+
+    // 🔥 Cargar imagen con proxy (funciona para todas las fotos)
     cargarImagenProxy(url, preview, true).then((result) => {
         if (result) {
             uploadDiv.classList.add('has-image');
             uploadDiv.classList.remove('error');
-            
+
             const removeBtn = uploadDiv.querySelector('.remove-photo');
             if (removeBtn) removeBtn.style.display = 'flex';
-            
+
+            // Ocultar overlay de carga
+            const loadingOverlay = document.getElementById(`loading-${campo}`);
+            if (loadingOverlay) loadingOverlay.remove();
+
             actualizarProgresoFoto(campo, 100, 'completed');
-            console.log(`✅ Preview actualizado con proxy para ${campo}`);
+            console.log(`✅ Preview actualizado con proxy para ${campo} (${fotoConfig.label})`);
         } else {
             uploadDiv.classList.add('error');
             mostrarErrorEnPreview(campo, 'No se pudo cargar la imagen');
@@ -5549,15 +5551,16 @@ async function cargarFotosExistentes(fotos) {
     console.log(`📸 ${fotosCargadas}/7 fotos cargadas`);
     return fotosCargadas;
 }
-// =====================================================
-// CARGAR IMAGEN CON PROXY (FUNCIÓN REUTILIZABLE)
-// =====================================================
+// En recepcion.js - Función cargarImagenProxy
+
 async function cargarImagenProxy(url, contenedor, mostrarError = true) {
-    if (!url) {
-        if (contenedor) contenedor.innerHTML = `<div style="color:#8E8E93;font-size:12px;">Sin imagen</div>`;
+    if (!url || url === 'null' || url === 'None' || url === '' || url === 'undefined') {
+        if (contenedor) {
+            contenedor.innerHTML = `<div style="color:#8E8E93;font-size:12px;display:flex;align-items:center;justify-content:center;height:100%;">Sin imagen</div>`;
+        }
         return null;
     }
-    
+
     // Mostrar loader
     if (contenedor) {
         contenedor.innerHTML = `
@@ -5567,23 +5570,24 @@ async function cargarImagenProxy(url, contenedor, mostrarError = true) {
             </div>
         `;
     }
-    
+
     try {
+        // 🔥 Usar el proxy para obtener la imagen en Base64
         const proxyUrl = `${API_URL}/jefe-operativo/proxy-imagen?url=${encodeURIComponent(url)}`;
         const token = localStorage.getItem('furia_token');
-        
+
         const response = await fetch(proxyUrl, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
         });
-        
+
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         if (data.success && data.base64) {
             return new Promise((resolve) => {
                 const img = new Image();

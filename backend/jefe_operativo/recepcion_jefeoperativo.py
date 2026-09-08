@@ -212,33 +212,30 @@ def guardar_sesion_en_db(sesion):
             .eq('codigo', sesion['codigo']) \
             .execute()
         
+        # Datos a guardar (sin la columna comentarios separada)
+        datos_guardar = {
+            'colaboradores_ids': sesion.get('colaboradores', []),
+            'colaboradores_nombres': sesion.get('colaboradores_nombres', []),
+            'datos': sesion.get('datos', {}),
+            'secciones_completadas': sesion.get('secciones_completadas', {}),
+            'secciones_editando': sesion.get('secciones_editando', {}),
+            'estado': sesion.get('estado', 'activa'),
+            'ultima_actividad': datetime.datetime.now().isoformat()
+        }
+        
         if existente.data:
             supabase.table('sesion_colaborativa') \
-                .update({
-                    'colaboradores_ids': sesion.get('colaboradores', []),
-                    'colaboradores_nombres': sesion.get('colaboradores_nombres', []),
-                    'datos': sesion.get('datos', {}),
-                    'secciones_completadas': sesion.get('secciones_completadas', {}),
-                    'secciones_editando': sesion.get('secciones_editando', {}),
-                    'estado': sesion.get('estado', 'activa'),
-                    'ultima_actividad': datetime.datetime.now().isoformat()
-                }) \
+                .update(datos_guardar) \
                 .eq('codigo', sesion['codigo']) \
                 .execute()
         else:
+            datos_guardar['codigo'] = sesion['codigo']
+            datos_guardar['creador_id'] = sesion['creador']
+            datos_guardar['creador_nombre'] = sesion['creador_nombre']
+            datos_guardar['fecha_creacion'] = sesion.get('fecha_creacion', datetime.datetime.now().isoformat())
+            
             supabase.table('sesion_colaborativa') \
-                .insert({
-                    'codigo': sesion['codigo'],
-                    'creador_id': sesion['creador'],
-                    'creador_nombre': sesion['creador_nombre'],
-                    'colaboradores_ids': sesion.get('colaboradores', []),
-                    'colaboradores_nombres': sesion.get('colaboradores_nombres', []),
-                    'datos': sesion.get('datos', {}),
-                    'secciones_completadas': sesion.get('secciones_completadas', {}),
-                    'secciones_editando': sesion.get('secciones_editando', {}),
-                    'estado': sesion.get('estado', 'activa'),
-                    'fecha_creacion': sesion.get('fecha_creacion', datetime.datetime.now().isoformat())
-                }) \
+                .insert(datos_guardar) \
                 .execute()
         return True
     except Exception as e:
@@ -639,10 +636,6 @@ def obtener_sesion(current_user, codigo):
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# ENDPOINT: GUARDAR SECCIÓN (CORREGIDO)
-# =====================================================
-
 @recepcion_jefe_bp.route('/guardar-seccion', methods=['POST'])
 @jefe_operativo_required
 def guardar_seccion(current_user):
@@ -668,6 +661,7 @@ def guardar_seccion(current_user):
         if sesion.get('estado') != 'activa':
             return jsonify({'error': 'Sesión finalizada'}), 400
         
+        # Procesar sección
         if seccion == 'cliente':
             sesion['datos']['cliente'] = {
                 'nombre': datos_seccion.get('nombre', ''),
@@ -698,26 +692,40 @@ def guardar_seccion(current_user):
             if 'fotos' not in sesion['datos']:
                 sesion['datos']['fotos'] = {}
             
-            # 🔥 GUARDAR CADA FOTO INDIVIDUALMENTE
-            for campo, valor in datos_seccion.items():
-                if valor and valor != 'null' and valor != '' and valor != 'undefined':
-                    sesion['datos']['fotos'][campo] = valor
-                    logger.info(f"📸 Foto guardada en sesión: {campo} -> {valor[:50]}...")
+            # 🔥 CORREGIDO: Manejar fotos correctamente
+            if 'fotos' in datos_seccion:
+                fotos_data = datos_seccion.get('fotos', {})
+                for campo, valor in fotos_data.items():
+                    if valor and valor != 'null' and valor != '' and valor != 'undefined':
+                        sesion['datos']['fotos'][campo] = valor
+            else:
+                for campo, valor in datos_seccion.items():
+                    if valor and valor != 'null' and valor != '' and valor != 'undefined':
+                        sesion['datos']['fotos'][campo] = valor
             
-            # Recalcular completado
+            # 🔥 Guardar comentarios de fotos opcionales (sin usar columna separada)
+            # Los comentarios se guardan dentro del campo datos como JSON
+            if 'comentarios' in datos_seccion:
+                if 'comentarios' not in sesion['datos']:
+                    sesion['datos']['comentarios'] = {}
+                for campo, valor in datos_seccion.get('comentarios', {}).items():
+                    if valor and valor.strip():
+                        sesion['datos']['comentarios'][campo] = valor.strip()
+            
+            # Recalcular completado (solo obligatorias)
             fotos = sesion['datos']['fotos']
-            fotos_validas = sum(1 for v in fotos.values() if v and v != 'null' and v != '' and v != 'undefined')
+            campos_obligatorios = ['lateral_izquierdo', 'lateral_derecho', 'frontal', 'trasera', 'superior', 'inferior', 'tablero']
+            fotos_validas = sum(1 for c in campos_obligatorios if fotos.get(c) and fotos.get(c) != 'null' and fotos.get(c) != '')
             sesion['secciones_completadas']['fotos'] = fotos_validas == 7
             
-            logger.info(f"📸 Total fotos en sesión: {fotos_validas}/7")
-            logger.info(f"📸 Fotos: {fotos}")
-            
         elif seccion == 'descripcion':
-            sesion['datos']['descripcion']['texto'] = datos_seccion.get('texto', '')
-            audio_url = datos_seccion.get('audio_url')
-            if audio_url and audio_url.startswith('http'):
-                sesion['datos']['descripcion']['audio_url'] = audio_url
-            sesion['secciones_completadas']['descripcion'] = bool(datos_seccion.get('texto'))
+            sesion['datos']['descripcion'] = {
+                'texto': datos_seccion.get('texto', ''),
+                'audio_url': datos_seccion.get('audio_url')
+            }
+            sesion['secciones_completadas']['descripcion'] = bool(
+                datos_seccion.get('texto') and datos_seccion.get('audio_url')
+            )
         
         sesion['ultima_actividad'] = datetime.datetime.now().isoformat()
         guardar_sesion_en_db(sesion)
@@ -726,8 +734,9 @@ def guardar_seccion(current_user):
         
     except Exception as e:
         logger.error(f"Error guardando sección: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
-
 
 # =====================================================
 # ENDPOINT 8: UNIRSE A SESIÓN

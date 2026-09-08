@@ -4856,3 +4856,6 @@ ALTER TABLE solicitud_compra ADD COLUMN proveedor_id INTEGER;
 
 
 ALTER TABLE sesion_colaborativa ADD COLUMN IF NOT EXISTS comentarios JSONB DEFAULT '{}';
+
+ALTER TABLE sesion_colaborativa 
+ADD COLUMN IF NOT EXISTS comentarios JSONB DEFAULT '{}';

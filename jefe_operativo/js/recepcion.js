@@ -2147,7 +2147,7 @@ async function finalizarSesionConReporte() {
             }
         }
         
-        // Log para debug
+        // 🔥 LOG PARA DEBUG - VER QUÉ SE ESTÁ ENVIANDO
         console.log('📸 Fotos finales para backend:', fotosFinales);
         const totalFotosValidas = Object.values(fotosFinales).filter(v => v !== null).length;
         console.log(`📸 Total fotos válidas: ${totalFotosValidas}/7`);
@@ -2173,7 +2173,8 @@ async function finalizarSesionConReporte() {
             }
         }
         
-        // CONSTRUIR OBJETO FINAL - FORMATO CORRECTO
+        // 🔥 CONSTRUIR OBJETO FINAL - FORMATO QUE ESPERA EL BACKEND
+        // El backend espera que las fotos estén en la raíz del objeto
         const datosFinales = {
             cliente: {
                 nombre: clienteNombre,
@@ -2189,7 +2190,15 @@ async function finalizarSesionConReporte() {
                 anio: parseInt(document.getElementById('vehiculoAnio')?.value) || null,
                 kilometraje: parseInt(document.getElementById('vehiculoKilometraje')?.value) || 0
             },
-            // ✅ FOTOS OBLIGATORIAS - EN EL FORMATO QUE ESPERA EL BACKEND
+            // ✅ FOTOS OBLIGATORIAS - EN LA RAÍZ DEL OBJETO
+            lateral_izquierdo: fotosFinales.lateral_izquierdo,
+            lateral_derecho: fotosFinales.lateral_derecho,
+            frontal: fotosFinales.frontal,
+            trasera: fotosFinales.trasera,
+            superior: fotosFinales.superior,
+            inferior: fotosFinales.inferior,
+            tablero: fotosFinales.tablero,
+            // ✅ TAMBIÉN ENVIAR COMO "fotos" POR SI ACASO
             fotos: fotosFinales,
             // ✅ FOTOS OPCIONALES
             fotos_opcionales: fotosOpcionales,
@@ -2199,7 +2208,6 @@ async function finalizarSesionConReporte() {
                 texto: descripcionTexto,
                 audio_url: audioDriveUrl || null
             },
-            // ✅ CAMPOS ADICIONALES QUE EL BACKEND PUEDE NECESITAR
             codigo_sesion: codigoSesion,
             usuario_id: userInfo?.id,
             usuario_nombre: userInfo?.nombre
@@ -2208,8 +2216,16 @@ async function finalizarSesionConReporte() {
         // 🔥 LOG PARA DEBUG - VER QUÉ SE ESTÁ ENVIANDO
         console.log('📤 ENVIANDO AL BACKEND:');
         console.log('📤 codigoSesion:', codigoSesion);
-        console.log('📤 fotos:', datosFinales.fotos);
-        console.log('📤 Total fotos con URL:', Object.values(datosFinales.fotos).filter(v => v !== null).length);
+        console.log('📤 fotos en raíz:', {
+            lateral_izquierdo: datosFinales.lateral_izquierdo,
+            lateral_derecho: datosFinales.lateral_derecho,
+            frontal: datosFinales.frontal,
+            trasera: datosFinales.trasera,
+            superior: datosFinales.superior,
+            inferior: datosFinales.inferior,
+            tablero: datosFinales.tablero
+        });
+        console.log('📤 Total fotos con URL:', Object.values(fotosFinales).filter(v => v !== null).length);
 
         // =============================================
         // 7. ENVIAR AL SERVIDOR PARA FINALIZAR

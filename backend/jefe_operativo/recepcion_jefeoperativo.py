@@ -814,8 +814,38 @@ def finalizar_sesion(current_user):
         if sesion.get('estado') != 'activa':
             return jsonify({'error': 'Sesión no activa'}), 400
         
+        # =============================================
+        # 🔥 GUARDAR TODAS LAS FOTOS EN LA SESIÓN ANTES DE FINALIZAR
+        # =============================================
         if datos_directos:
-            sesion['datos'] = datos_directos
+            # Si vienen fotos del frontend, actualizar la sesión
+            if 'fotos' in datos_directos:
+                if 'fotos' not in sesion['datos']:
+                    sesion['datos']['fotos'] = {}
+                for campo, url in datos_directos.get('fotos', {}).items():
+                    if url and url != 'null' and url != '' and url != 'undefined':
+                        sesion['datos']['fotos'][campo] = url
+                        logger.info(f"📸 Guardando foto en sesión: {campo}")
+            
+            # Si vienen comentarios del frontend
+            if 'comentarios' in datos_directos:
+                if 'comentarios' not in sesion['datos']:
+                    sesion['datos']['comentarios'] = {}
+                for campo, texto in datos_directos.get('comentarios', {}).items():
+                    if texto and texto.strip():
+                        sesion['datos']['comentarios'][campo] = texto.strip()
+                        logger.info(f"📝 Guardando comentario en sesión: {campo}")
+            
+            # Actualizar otros datos
+            if 'cliente' in datos_directos:
+                sesion['datos']['cliente'] = datos_directos['cliente']
+            if 'vehiculo' in datos_directos:
+                sesion['datos']['vehiculo'] = datos_directos['vehiculo']
+            if 'descripcion' in datos_directos:
+                sesion['datos']['descripcion'] = datos_directos['descripcion']
+        
+        # Guardar la sesión actualizada en la base de datos
+        guardar_sesion_en_db(sesion)
         
         # 🔥 FORZAR RECALCULO DE FOTOS
         fotos = sesion.get('datos', {}).get('fotos', {})
@@ -849,6 +879,11 @@ def finalizar_sesion(current_user):
             vehiculo_data = sesion['datos'].get('vehiculo', {})
             descripcion_data = sesion['datos'].get('descripcion', {})
             fotos = sesion['datos'].get('fotos', {})
+            comentarios = sesion['datos'].get('comentarios', {})
+            
+            logger.info(f"📸 Total fotos en sesión al finalizar: {len(fotos)}")
+            logger.info(f"📸 Fotos: {list(fotos.keys())}")
+            logger.info(f"📝 Comentarios: {list(comentarios.keys())}")
             
             # 1. Obtener o crear cliente
             id_cliente = None
@@ -1009,7 +1044,7 @@ def finalizar_sesion(current_user):
             # 5. Guardar recepción - MAPEO CORRECTO DE FOTOS
             # =============================================
             
-            # MAPEO DE CLAVES DE FOTOS
+            # MAPEO DE CLAVES DE FOTOS OBLIGATORIAS
             MAPEO_FOTOS = {
                 'lateral_izquierdo': 'url_lateral_izquierda',
                 'lateral_derecho': 'url_lateral_derecha',
@@ -1027,7 +1062,7 @@ def finalizar_sesion(current_user):
                 'url_foto_tablero': 'url_foto_tablero'
             }
             
-            # OBTENER FOTOS DE TODAS LAS FUENTES
+            # OBTENER TODAS LAS FOTOS DE LA SESIÓN
             fotos_combinadas = {}
             if datos_directos and 'fotos' in datos_directos:
                 fotos_combinadas.update(datos_directos.get('fotos', {}))
@@ -1036,7 +1071,7 @@ def finalizar_sesion(current_user):
             if fotos:
                 fotos_combinadas.update(fotos)
             
-            logger.info(f"📸 Fotos combinadas: {len(fotos_combinadas)}")
+            logger.info(f"📸 Total fotos combinadas: {len(fotos_combinadas)}")
             
             # MAPEAR FOTOS OBLIGATORIAS
             fotos_mapeadas = {}
@@ -1046,7 +1081,7 @@ def finalizar_sesion(current_user):
                         nueva_key = MAPEO_FOTOS[key]
                         fotos_mapeadas[nueva_key] = value
             
-            # Construir datos de recepción
+            # Construir datos de recepción (solo obligatorias)
             recepcion_data = {
                 'id_orden_trabajo': id_orden,
                 'url_lateral_izquierda': fotos_mapeadas.get('url_lateral_izquierda'),
@@ -1072,45 +1107,37 @@ def finalizar_sesion(current_user):
             if recepcion_data_limpia:
                 try:
                     resultado = supabase.table('recepcion').insert(recepcion_data_limpia).execute()
-                    logger.info(f"✅ Recepción guardada exitosamente: {resultado.data}")
+                    logger.info(f"✅ Recepción guardada exitosamente")
                 except Exception as e:
                     logger.error(f"❌ Error guardando recepción: {e}")
                     resultado = supabase.table('recepcion').insert({
                         'id_orden_trabajo': id_orden
                     }).execute()
-                    logger.info(f"✅ Recepción básica guardada: {resultado.data}")
+                    logger.info(f"✅ Recepción básica guardada")
             else:
                 logger.warning("⚠️ No hay datos para guardar en recepción")
                 resultado = supabase.table('recepcion').insert({
                     'id_orden_trabajo': id_orden
                 }).execute()
-                logger.info(f"✅ Recepción básica guardada: {resultado.data}")
+                logger.info(f"✅ Recepción básica guardada")
             
             # =============================================
             # 6. GUARDAR FOTOS OPCIONALES Y COMENTARIOS EN LA SESIÓN
             # =============================================
             
-            # Obtener fotos opcionales y comentarios de la sesión
-            datos_sesion = sesion.get('datos', {})
-            fotos_sesion = datos_sesion.get('fotos', {})
-            
             # Extraer fotos opcionales (opcional1 a opcional10)
             fotos_opcionales = {}
-            comentarios = {}
-            
             for i in range(1, 11):
                 campo = f'opcional{i}'
-                if campo in fotos_sesion and fotos_sesion[campo]:
-                    fotos_opcionales[campo] = fotos_sesion[campo]
+                if campo in fotos_combinadas and fotos_combinadas[campo]:
+                    fotos_opcionales[campo] = fotos_combinadas[campo]
             
             # Obtener comentarios de la sesión
-            if 'comentarios' in datos_sesion:
-                comentarios = datos_sesion.get('comentarios', {})
+            comentarios_guardar = sesion.get('datos', {}).get('comentarios', {})
             
             # Guardar fotos opcionales y comentarios en la sesión colaborativa
-            if fotos_opcionales or comentarios:
+            if fotos_opcionales or comentarios_guardar:
                 try:
-                    # Actualizar el campo datos de la sesión con las fotos opcionales
                     datos_actualizados = sesion.get('datos', {})
                     if 'fotos' not in datos_actualizados:
                         datos_actualizados['fotos'] = {}
@@ -1120,20 +1147,20 @@ def finalizar_sesion(current_user):
                         datos_actualizados['fotos'][campo] = url
                     
                     # Agregar comentarios
-                    if comentarios:
-                        datos_actualizados['comentarios'] = comentarios
+                    if comentarios_guardar:
+                        datos_actualizados['comentarios'] = comentarios_guardar
                     
                     # Guardar en Supabase
                     supabase.table('sesion_colaborativa') \
                         .update({
                             'datos': datos_actualizados,
-                            'comentarios': comentarios
+                            'comentarios': comentarios_guardar
                         }) \
                         .eq('codigo', codigo_sesion) \
                         .execute()
                     
-                    logger.info(f"✅ Fotos opcionales guardadas: {len(fotos_opcionales)}")
-                    logger.info(f"✅ Comentarios guardados: {len(comentarios)}")
+                    logger.info(f"✅ Fotos opcionales guardadas en sesión: {len(fotos_opcionales)}")
+                    logger.info(f"✅ Comentarios guardados en sesión: {len(comentarios_guardar)}")
                 except Exception as e:
                     logger.error(f"❌ Error guardando fotos opcionales: {e}")
             

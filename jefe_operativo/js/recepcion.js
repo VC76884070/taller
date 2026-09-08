@@ -2098,35 +2098,82 @@ async function finalizarSesionConReporte() {
         }
 
         // =============================================
-        // 6. PREPARAR DATOS PARA ENVIAR
+        // 6. PREPARAR DATOS PARA ENVIAR - FORMATO CORREGIDO
         // =============================================
         updateProgressBar(50);
         updateProgressMessage('Preparando datos...');
         
         // Recolectar todas las URLs de fotos de la sesión o del DOM
         const fotosFinales = {};
-        for (const foto of FOTOS_CONFIG) {
-            const uploadDiv = document.getElementById(`upload-${foto.id}`);
+        
+        // 🔥 SOLO LAS 7 OBLIGATORIAS CON VALIDACIÓN ESTRICTA
+        const camposObligatorios = ['lateral_izquierdo', 'lateral_derecho', 'frontal', 'trasera', 'superior', 'inferior', 'tablero'];
+        
+        for (const campo of camposObligatorios) {
+            // Buscar en el DOM
+            const fotoConfig = FOTOS_CONFIG.find(f => f.campo === campo);
+            const uploadDiv = document.getElementById(`upload-${fotoConfig?.id}`);
+            
             let url = uploadDiv?.getAttribute('data-drive-url') || 
                      uploadDiv?.dataset?.driveUrl || 
-                     fotosSubidasLocal[foto.campo];
+                     fotosSubidasLocal[campo];
             
+            // Buscar en sesión
             if (!url || url === 'null' || url === '' || url === 'undefined') {
                 if (sesionActual?.datos?.fotos) {
-                    url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
+                    url = sesionActual.datos.fotos[CAMPO_MAP[campo]];
                 }
             }
             
+            // Buscar en datos originales
+            if (!url || url === 'null' || url === '' || url === 'undefined') {
+                if (window.datosOriginalesRecepcion?.fotos) {
+                    url = window.datosOriginalesRecepcion.fotos[CAMPO_MAP[campo]];
+                }
+            }
+            
+            // Buscar en fotos originales
+            if (!url || url === 'null' || url === '' || url === 'undefined') {
+                if (window.fotosOriginalesRecepcion) {
+                    url = window.fotosOriginalesRecepcion[CAMPO_MAP[campo]];
+                }
+            }
+            
+            // ✅ SI TIENE URL VÁLIDA, GUARDARLA; SI NO, GUARDAR null
             if (url && url !== 'null' && url !== '' && url !== 'undefined') {
-                fotosFinales[foto.campo] = url;
+                fotosFinales[campo] = url;
             } else {
-                fotosFinales[foto.campo] = null;
+                fotosFinales[campo] = null;
             }
         }
+        
+        // Log para debug
+        console.log('📸 Fotos finales para backend:', fotosFinales);
+        const totalFotosValidas = Object.values(fotosFinales).filter(v => v !== null).length;
+        console.log(`📸 Total fotos válidas: ${totalFotosValidas}/7`);
         
         // Recolectar comentarios de fotos opcionales
         const comentariosOpcionales = obtenerComentariosOpcionales();
         
+        // Recolectar fotos opcionales (10 adicionales) - SOLO PARA GUARDAR COMO DATO ADICIONAL
+        const fotosOpcionales = {};
+        const camposOpcionales = ['opcional1', 'opcional2', 'opcional3', 'opcional4', 'opcional5', 
+                                  'opcional6', 'opcional7', 'opcional8', 'opcional9', 'opcional10'];
+        
+        for (const campo of camposOpcionales) {
+            const fotoConfig = FOTOS_CONFIG.find(f => f.campo === campo);
+            const uploadDiv = document.getElementById(`upload-${fotoConfig?.id}`);
+            
+            let url = uploadDiv?.getAttribute('data-drive-url') || 
+                     uploadDiv?.dataset?.driveUrl || 
+                     fotosSubidasLocal[campo];
+            
+            if (url && url !== 'null' && url !== '' && url !== 'undefined') {
+                fotosOpcionales[campo] = url;
+            }
+        }
+        
+        // CONSTRUIR OBJETO FINAL - FORMATO CORRECTO
         const datosFinales = {
             cliente: {
                 nombre: clienteNombre,
@@ -2142,13 +2189,27 @@ async function finalizarSesionConReporte() {
                 anio: parseInt(document.getElementById('vehiculoAnio')?.value) || null,
                 kilometraje: parseInt(document.getElementById('vehiculoKilometraje')?.value) || 0
             },
+            // ✅ FOTOS OBLIGATORIAS - EN EL FORMATO QUE ESPERA EL BACKEND
             fotos: fotosFinales,
+            // ✅ FOTOS OPCIONALES
+            fotos_opcionales: fotosOpcionales,
+            // ✅ COMENTARIOS DE FOTOS OPCIONALES
             comentarios: comentariosOpcionales,
             descripcion: {
                 texto: descripcionTexto,
                 audio_url: audioDriveUrl || null
-            }
+            },
+            // ✅ CAMPOS ADICIONALES QUE EL BACKEND PUEDE NECESITAR
+            codigo_sesion: codigoSesion,
+            usuario_id: userInfo?.id,
+            usuario_nombre: userInfo?.nombre
         };
+
+        // 🔥 LOG PARA DEBUG - VER QUÉ SE ESTÁ ENVIANDO
+        console.log('📤 ENVIANDO AL BACKEND:');
+        console.log('📤 codigoSesion:', codigoSesion);
+        console.log('📤 fotos:', datosFinales.fotos);
+        console.log('📤 Total fotos con URL:', Object.values(datosFinales.fotos).filter(v => v !== null).length);
 
         // =============================================
         // 7. ENVIAR AL SERVIDOR PARA FINALIZAR

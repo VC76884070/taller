@@ -107,19 +107,23 @@
 
         .photo-grid-optional {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
             gap: 15px;
             margin-bottom: 10px;
         }
 
         /* =============================================
-           FOTO OPCIONAL - ESTILOS
+           FOTO OPCIONAL - ESTRUCTURA CORREGIDA
            ============================================= */
 
         .photo-upload.optional {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
             border: 2px dashed #2C2C2E;
             background: rgba(44, 44, 46, 0.2);
             border-radius: 12px;
+            padding: 10px;
             transition: all 0.3s ease;
         }
 
@@ -128,26 +132,286 @@
             background: rgba(44, 44, 46, 0.4);
         }
 
-        .photo-upload.optional .upload-placeholder {
-            background: transparent;
+        .photo-upload.optional.has-image {
+            border-color: rgba(16, 185, 129, 0.3);
         }
 
-        .photo-upload.optional .upload-placeholder i {
+        .photo-upload-inner {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1/1;
+            border-radius: 8px;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+        }
+
+        .photo-upload-inner .upload-placeholder {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            color: #6B7280;
+            background: transparent;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .photo-upload-inner .upload-placeholder i {
+            font-size: 32px;
             color: #6B7280;
         }
 
-        /* =============================================
-           COMENTARIO DE FOTO OPCIONAL
-           ============================================= */
+        .photo-upload-inner .upload-placeholder span {
+            font-size: 11px;
+            font-weight: 500;
+        }
 
-        .foto-comentario {
+        .photo-upload-inner input[type="file"] {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 3;
+        }
+
+        .photo-upload-inner .upload-preview {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            overflow: hidden;
+            display: none;
+            z-index: 2;
+        }
+
+        .photo-upload-inner .upload-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* 🔥 PROGRESO DENTRO DEL PREVIEW */
+        .photo-upload-inner .progress-ring-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            z-index: 6;
+        }
+
+        .photo-upload-inner .progress-ring-container svg {
+            width: 60px;
+            height: 60px;
+            transform: rotate(-90deg);
+        }
+
+        .photo-upload-inner .ring-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.15);
+            stroke-width: 4;
+        }
+
+        .photo-upload-inner .ring-fg {
+            fill: none;
+            stroke: #C1121F;
+            stroke-width: 4;
+            stroke-linecap: round;
+            stroke-dasharray: 138.23;
+            stroke-dashoffset: 138.23;
+            transition: stroke-dashoffset 0.3s ease, stroke 0.3s ease;
+        }
+
+        .photo-upload-inner .ring-fg.completed {
+            stroke: #10B981;
+        }
+
+        .photo-upload-inner .ring-fg.error {
+            stroke: #ef4444;
+        }
+
+        .photo-upload-inner .progress-percent {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 14px;
+            font-weight: 700;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+            z-index: 7;
+        }
+
+        .photo-upload-inner .progress-percent.completed {
+            color: #10B981;
+            font-size: 20px;
+        }
+
+        .photo-upload-inner .progress-percent.error {
+            color: #ef4444;
+            font-size: 20px;
+        }
+
+        .photo-upload-inner .status-badge-foto {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            z-index: 8;
+            background: rgba(0, 0, 0, 0.6);
+            color: #8E8E93;
+        }
+
+        .photo-upload-inner .status-badge-foto.pending {
+            color: #8E8E93;
+        }
+
+        .photo-upload-inner .status-badge-foto.uploading {
+            color: #f59e0b;
+        }
+
+        .photo-upload-inner .status-badge-foto.completed {
+            color: #10B981;
+        }
+
+        .photo-upload-inner .status-badge-foto.error {
+            color: #ef4444;
+        }
+
+        .photo-upload-inner .progress-bar-foto {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.15);
+            z-index: 9;
+            display: none;
+        }
+
+        .photo-upload-inner .progress-bar-foto .fill {
+            height: 100%;
+            width: 0%;
+            background: #C1121F;
+            transition: width 0.3s ease;
+        }
+
+        .photo-upload-inner .progress-bar-foto .fill.completed {
+            background: #10B981;
+        }
+
+        .photo-upload-inner .progress-bar-foto .fill.error {
+            background: #ef4444;
+        }
+
+        .photo-upload-inner .uploading-status {
+            position: absolute;
+            bottom: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 3px 12px;
+            border-radius: 12px;
+            z-index: 9;
+            display: none;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .photo-upload-inner .uploading-status.uploading {
+            display: flex;
+        }
+
+        .photo-upload-inner .uploading-status i {
+            font-size: 11px;
+        }
+
+        /* 🔥 OVERLAY DE CARGA - SOLO DENTRO DEL PREVIEW */
+        .photo-upload-inner .upload-preview .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            z-index: 5;
+            backdrop-filter: blur(2px);
+        }
+
+        .photo-upload-inner .upload-preview .loading-overlay i {
+            font-size: 30px;
+            color: #C1121F;
+        }
+
+        .photo-upload-inner .upload-preview .loading-overlay span {
+            color: white;
+            font-size: 12px;
             margin-top: 8px;
-            padding: 0 4px;
+        }
+
+        /* 🔥 BOTÓN ELIMINAR */
+        .photo-upload-inner .remove-photo {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.75);
+            color: #ef4444;
+            border: none;
+            cursor: pointer;
+            z-index: 10;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .photo-upload-inner .remove-photo:hover {
+            background: #ef4444;
+            color: white;
+            transform: scale(1.1);
+        }
+
+        /* 🔥 COMENTARIO - SIEMPRE VISIBLE DEBAJO */
+        .foto-comentario {
+            width: 100%;
+            padding: 0 2px;
         }
 
         .foto-comentario-input {
             width: 100%;
-            padding: 6px 10px;
+            padding: 8px 12px;
             border-radius: 6px;
             border: 1px solid #2C2C2E;
             background: #1A1A1C;
@@ -173,23 +437,30 @@
             cursor: not-allowed;
         }
 
-        /* =============================================
-           BADGE DE REQUERIDO
-           ============================================= */
-
-        .required-badge {
-            color: #C1121F;
-            font-weight: 800;
-            font-size: 14px;
-            margin-left: 2px;
+        /* 🔥 ESTADO CON IMAGEN */
+        .photo-upload.optional.has-image .photo-upload-inner .upload-placeholder {
+            display: none;
         }
 
-        .photo-upload.required {
-            border: 2px solid rgba(193, 18, 31, 0.3);
+        .photo-upload.optional.has-image .photo-upload-inner .upload-preview {
+            display: block;
         }
 
-        .photo-upload.required.has-image {
-            border-color: rgba(16, 185, 129, 0.4);
+        .photo-upload.optional.has-image .photo-upload-inner .remove-photo {
+            display: flex;
+        }
+
+        .photo-upload.optional.has-image .foto-comentario-input {
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        /* 🔥 ESTADO ERROR */
+        .photo-upload.optional.error {
+            border-color: rgba(239, 68, 68, 0.5);
+        }
+
+        .photo-upload.optional.error .foto-comentario-input {
+            border-color: rgba(239, 68, 68, 0.5);
         }
 
         /* =============================================
@@ -255,50 +526,7 @@
         }
 
         /* =============================================
-           RESPONSIVE - FOTOS OPCIONALES
-           ============================================= */
-
-        @media (max-width: 768px) {
-            .photo-grid-optional {
-                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-                gap: 10px;
-            }
-
-            .photo-section-title {
-                font-size: 13px;
-                flex-wrap: wrap;
-            }
-
-            .foto-comentario-input {
-                font-size: 10px;
-                padding: 5px 8px;
-            }
-
-            .ubicacion-controls-row {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .btn-ubicacion-actual {
-                justify-content: center;
-                padding: 12px !important;
-                font-size: 13px !important;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .photo-grid-optional {
-                grid-template-columns: 1fr 1fr;
-                gap: 8px;
-            }
-
-            .photo-upload.optional .upload-placeholder span {
-                font-size: 9px;
-            }
-        }
-
-        /* =============================================
-           BOTÓN DE TRANSCRIPCIÓN EN FORMULARIO
+           BOTÓN DE TRANSCRIPCIÓN
            ============================================= */
 
         .btn-transcribir-form {
@@ -334,7 +562,7 @@
         }
 
         /* =============================================
-           ESTADO DE TRANSCRIPCIÓN EN FORMULARIO
+           ESTADO DE TRANSCRIPCIÓN
            ============================================= */
 
         #transcripcionStatusForm {
@@ -368,7 +596,7 @@
         }
 
         /* =============================================
-           BOTÓN DE TRANSCRIPCIÓN EN MODAL DE DETALLE
+           BOTÓN DE TRANSCRIPCIÓN EN MODAL
            ============================================= */
 
         .btn-transcribir {
@@ -403,10 +631,36 @@
         }
 
         /* =============================================
-           RESPONSIVE - BOTÓN DE TRANSCRIPCIÓN
+           RESPONSIVE
            ============================================= */
 
         @media (max-width: 768px) {
+            .photo-grid-optional {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 10px;
+            }
+
+            .photo-section-title {
+                font-size: 13px;
+                flex-wrap: wrap;
+            }
+
+            .foto-comentario-input {
+                font-size: 10px;
+                padding: 6px 10px;
+            }
+
+            .ubicacion-controls-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .btn-ubicacion-actual {
+                justify-content: center;
+                padding: 12px !important;
+                font-size: 13px !important;
+            }
+
             .btn-transcribir-form {
                 width: 100%;
                 justify-content: center;
@@ -423,9 +677,7 @@
                 width: 100%;
                 justify-content: center;
             }
-        }
 
-        @media (max-width: 600px) {
             .detalle-card-title {
                 flex-direction: column;
                 align-items: flex-start;
@@ -435,10 +687,53 @@
                 width: 100%;
                 justify-content: center;
             }
+        }
+
+        @media (max-width: 480px) {
+            .photo-grid-optional {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+
+            .photo-upload.optional {
+                padding: 6px;
+            }
+
+            .photo-upload-inner .upload-placeholder i {
+                font-size: 24px;
+            }
+
+            .photo-upload-inner .upload-placeholder span {
+                font-size: 9px;
+            }
 
             .btn-transcribir {
                 font-size: 11px !important;
                 padding: 8px 14px !important;
+            }
+        }
+
+        /* =============================================
+           ANIMACIONES
+           ============================================= */
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-5px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
             }
         }
     </style>
@@ -894,353 +1189,373 @@
 
                             <div class="photo-grid photo-grid-optional" id="photoGridOptional">
 
-                                <!-- FOTO OPCIONAL 1 -->
+                                <!-- 🔥 FOTO OPCIONAL 1 -->
                                 <div class="photo-upload optional" id="upload-fotoOpcional1" data-campo="opcional1">
-                                    <input type="file" id="fotoOpcional1" accept="image/*" capture="environment">
-                                    <div class="upload-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>Adicional 1</span>
+                                    <div class="photo-upload-inner">
+                                        <input type="file" id="fotoOpcional1" accept="image/*" capture="environment">
+                                        <div class="upload-placeholder">
+                                            <i class="fas fa-camera"></i>
+                                            <span>Adicional 1</span>
+                                        </div>
+                                        <div class="upload-preview">
+                                            <div class="progress-ring-container">
+                                                <svg viewBox="0 0 50 50">
+                                                    <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                    <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional1" />
+                                                </svg>
+                                                <span class="progress-percent" id="percent-opcional1">0%</span>
+                                            </div>
+                                            <div class="status-badge-foto pending" id="badge-opcional1">
+                                                <i class="fas fa-circle"></i>
+                                            </div>
+                                            <div class="progress-bar-foto">
+                                                <div class="fill" id="bar-opcional1"></div>
+                                            </div>
+                                            <div class="uploading-status" id="status-opcional1">
+                                                <i class="fas fa-clock"></i>
+                                                <span>Esperando...</span>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="remove-photo" style="display: none;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
                                     </div>
-                                    <div class="upload-preview">
-                                        <div class="progress-ring-container">
-                                            <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional1" />
-                                            </svg>
-                                            <span class="progress-percent" id="percent-opcional1">0%</span>
-                                        </div>
-                                        <div class="status-badge-foto pending" id="badge-opcional1">
-                                            <i class="fas fa-circle"></i>
-                                        </div>
-                                        <div class="progress-bar-foto">
-                                            <div class="fill" id="bar-opcional1"></div>
-                                        </div>
-                                        <div class="uploading-status" id="status-opcional1">
-                                            <i class="fas fa-clock"></i>
-                                            <span>Esperando...</span>
-                                        </div>
-                                    </div>
-                                    <button type="button" class="remove-photo" style="display: none;">
-                                        <i class="fas fa-times"></i>
-                                    </button>
                                     <div class="foto-comentario">
                                         <input type="text" class="foto-comentario-input" id="comentario-opcional1"
-                                            placeholder="Ej: Raspadura en puerta izquierda..." maxlength="200">
+                                            placeholder="📝 Descripción del detalle (ej: Raspadura en puerta izquierda...)" maxlength="200">
                                     </div>
                                 </div>
 
-                                <!-- FOTO OPCIONAL 2 -->
-                                <div class="photo-upload optional" id="upload-opcional2" data-campo="opcional2">
-                                    <input type="file" id="fotoOpcional2" accept="image/*" capture="environment">
-                                    <div class="upload-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>Adicional 2</span>
+                                <!-- 🔥 FOTO OPCIONAL 2 -->
+                                <div class="photo-upload optional" id="upload-fotoOpcional2" data-campo="opcional2">
+                                    <div class="photo-upload-inner">
+                                        <input type="file" id="fotoOpcional2" accept="image/*" capture="environment">
+                                        <div class="upload-placeholder">
+                                            <i class="fas fa-camera"></i>
+                                            <span>Adicional 2</span>
+                                        </div>
+                                        <div class="upload-preview">
+                                            <div class="progress-ring-container">
+                                                <svg viewBox="0 0 50 50">
+                                                    <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                    <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional2" />
+                                                </svg>
+                                                <span class="progress-percent" id="percent-opcional2">0%</span>
+                                            </div>
+                                            <div class="status-badge-foto pending" id="badge-opcional2">
+                                                <i class="fas fa-circle"></i>
+                                            </div>
+                                            <div class="progress-bar-foto">
+                                                <div class="fill" id="bar-opcional2"></div>
+                                            </div>
+                                            <div class="uploading-status" id="status-opcional2">
+                                                <i class="fas fa-clock"></i>
+                                                <span>Esperando...</span>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="remove-photo" style="display: none;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
                                     </div>
-                                    <div class="upload-preview">
-                                        <div class="progress-ring-container">
-                                            <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional2" />
-                                            </svg>
-                                            <span class="progress-percent" id="percent-opcional2">0%</span>
-                                        </div>
-                                        <div class="status-badge-foto pending" id="badge-opcional2">
-                                            <i class="fas fa-circle"></i>
-                                        </div>
-                                        <div class="progress-bar-foto">
-                                            <div class="fill" id="bar-opcional2"></div>
-                                        </div>
-                                        <div class="uploading-status" id="status-opcional2">
-                                            <i class="fas fa-clock"></i>
-                                            <span>Esperando...</span>
-                                        </div>
-                                    </div>
-                                    <button type="button" class="remove-photo" style="display: none;">
-                                        <i class="fas fa-times"></i>
-                                    </button>
                                     <div class="foto-comentario">
                                         <input type="text" class="foto-comentario-input" id="comentario-opcional2"
-                                            placeholder="Ej: Abolladura en guardafango..." maxlength="200">
+                                            placeholder="📝 Descripción del detalle (ej: Abolladura en guardafango...)" maxlength="200">
                                     </div>
                                 </div>
 
-                                <!-- FOTO OPCIONAL 3 -->
-                                <div class="photo-upload optional" id="upload-opcional3" data-campo="opcional3">
-                                    <input type="file" id="fotoOpcional3" accept="image/*" capture="environment">
-                                    <div class="upload-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>Adicional 3</span>
+                                <!-- 🔥 FOTO OPCIONAL 3 -->
+                                <div class="photo-upload optional" id="upload-fotoOpcional3" data-campo="opcional3">
+                                    <div class="photo-upload-inner">
+                                        <input type="file" id="fotoOpcional3" accept="image/*" capture="environment">
+                                        <div class="upload-placeholder">
+                                            <i class="fas fa-camera"></i>
+                                            <span>Adicional 3</span>
+                                        </div>
+                                        <div class="upload-preview">
+                                            <div class="progress-ring-container">
+                                                <svg viewBox="0 0 50 50">
+                                                    <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                    <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional3" />
+                                                </svg>
+                                                <span class="progress-percent" id="percent-opcional3">0%</span>
+                                            </div>
+                                            <div class="status-badge-foto pending" id="badge-opcional3">
+                                                <i class="fas fa-circle"></i>
+                                            </div>
+                                            <div class="progress-bar-foto">
+                                                <div class="fill" id="bar-opcional3"></div>
+                                            </div>
+                                            <div class="uploading-status" id="status-opcional3">
+                                                <i class="fas fa-clock"></i>
+                                                <span>Esperando...</span>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="remove-photo" style="display: none;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
                                     </div>
-                                    <div class="upload-preview">
-                                        <div class="progress-ring-container">
-                                            <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional3" />
-                                            </svg>
-                                            <span class="progress-percent" id="percent-opcional3">0%</span>
-                                        </div>
-                                        <div class="status-badge-foto pending" id="badge-opcional3">
-                                            <i class="fas fa-circle"></i>
-                                        </div>
-                                        <div class="progress-bar-foto">
-                                            <div class="fill" id="bar-opcional3"></div>
-                                        </div>
-                                        <div class="uploading-status" id="status-opcional3">
-                                            <i class="fas fa-clock"></i>
-                                            <span>Esperando...</span>
-                                        </div>
-                                    </div>
-                                    <button type="button" class="remove-photo" style="display: none;">
-                                        <i class="fas fa-times"></i>
-                                    </button>
                                     <div class="foto-comentario">
                                         <input type="text" class="foto-comentario-input" id="comentario-opcional3"
-                                            placeholder="Ej: Rayón en pintura..." maxlength="200">
+                                            placeholder="📝 Descripción del detalle (ej: Rayón en pintura...)" maxlength="200">
                                     </div>
                                 </div>
 
-                                <!-- FOTO OPCIONAL 4 -->
-                                <div class="photo-upload optional" id="upload-opcional4" data-campo="opcional4">
-                                    <input type="file" id="fotoOpcional4" accept="image/*" capture="environment">
-                                    <div class="upload-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>Adicional 4</span>
+                                <!-- 🔥 FOTO OPCIONAL 4 -->
+                                <div class="photo-upload optional" id="upload-fotoOpcional4" data-campo="opcional4">
+                                    <div class="photo-upload-inner">
+                                        <input type="file" id="fotoOpcional4" accept="image/*" capture="environment">
+                                        <div class="upload-placeholder">
+                                            <i class="fas fa-camera"></i>
+                                            <span>Adicional 4</span>
+                                        </div>
+                                        <div class="upload-preview">
+                                            <div class="progress-ring-container">
+                                                <svg viewBox="0 0 50 50">
+                                                    <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                    <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional4" />
+                                                </svg>
+                                                <span class="progress-percent" id="percent-opcional4">0%</span>
+                                            </div>
+                                            <div class="status-badge-foto pending" id="badge-opcional4">
+                                                <i class="fas fa-circle"></i>
+                                            </div>
+                                            <div class="progress-bar-foto">
+                                                <div class="fill" id="bar-opcional4"></div>
+                                            </div>
+                                            <div class="uploading-status" id="status-opcional4">
+                                                <i class="fas fa-clock"></i>
+                                                <span>Esperando...</span>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="remove-photo" style="display: none;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
                                     </div>
-                                    <div class="upload-preview">
-                                        <div class="progress-ring-container">
-                                            <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional4" />
-                                            </svg>
-                                            <span class="progress-percent" id="percent-opcional4">0%</span>
-                                        </div>
-                                        <div class="status-badge-foto pending" id="badge-opcional4">
-                                            <i class="fas fa-circle"></i>
-                                        </div>
-                                        <div class="progress-bar-foto">
-                                            <div class="fill" id="bar-opcional4"></div>
-                                        </div>
-                                        <div class="uploading-status" id="status-opcional4">
-                                            <i class="fas fa-clock"></i>
-                                            <span>Esperando...</span>
-                                        </div>
-                                    </div>
-                                    <button type="button" class="remove-photo" style="display: none;">
-                                        <i class="fas fa-times"></i>
-                                    </button>
                                     <div class="foto-comentario">
                                         <input type="text" class="foto-comentario-input" id="comentario-opcional4"
-                                            placeholder="Ej: Goma de la puerta dañada..." maxlength="200">
+                                            placeholder="📝 Descripción del detalle (ej: Goma de la puerta dañada...)" maxlength="200">
                                     </div>
                                 </div>
 
-                                <!-- FOTO OPCIONAL 5 -->
-                                <div class="photo-upload optional" id="upload-opcional5" data-campo="opcional5">
-                                    <input type="file" id="fotoOpcional5" accept="image/*" capture="environment">
-                                    <div class="upload-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>Adicional 5</span>
+                                <!-- 🔥 FOTO OPCIONAL 5 -->
+                                <div class="photo-upload optional" id="upload-fotoOpcional5" data-campo="opcional5">
+                                    <div class="photo-upload-inner">
+                                        <input type="file" id="fotoOpcional5" accept="image/*" capture="environment">
+                                        <div class="upload-placeholder">
+                                            <i class="fas fa-camera"></i>
+                                            <span>Adicional 5</span>
+                                        </div>
+                                        <div class="upload-preview">
+                                            <div class="progress-ring-container">
+                                                <svg viewBox="0 0 50 50">
+                                                    <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                    <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional5" />
+                                                </svg>
+                                                <span class="progress-percent" id="percent-opcional5">0%</span>
+                                            </div>
+                                            <div class="status-badge-foto pending" id="badge-opcional5">
+                                                <i class="fas fa-circle"></i>
+                                            </div>
+                                            <div class="progress-bar-foto">
+                                                <div class="fill" id="bar-opcional5"></div>
+                                            </div>
+                                            <div class="uploading-status" id="status-opcional5">
+                                                <i class="fas fa-clock"></i>
+                                                <span>Esperando...</span>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="remove-photo" style="display: none;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
                                     </div>
-                                    <div class="upload-preview">
-                                        <div class="progress-ring-container">
-                                            <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional5" />
-                                            </svg>
-                                            <span class="progress-percent" id="percent-opcional5">0%</span>
-                                        </div>
-                                        <div class="status-badge-foto pending" id="badge-opcional5">
-                                            <i class="fas fa-circle"></i>
-                                        </div>
-                                        <div class="progress-bar-foto">
-                                            <div class="fill" id="bar-opcional5"></div>
-                                        </div>
-                                        <div class="uploading-status" id="status-opcional5">
-                                            <i class="fas fa-clock"></i>
-                                            <span>Esperando...</span>
-                                        </div>
-                                    </div>
-                                    <button type="button" class="remove-photo" style="display: none;">
-                                        <i class="fas fa-times"></i>
-                                    </button>
                                     <div class="foto-comentario">
                                         <input type="text" class="foto-comentario-input" id="comentario-opcional5"
-                                            placeholder="Ej: Daño en el parachoques..." maxlength="200">
+                                            placeholder="📝 Descripción del detalle (ej: Daño en el parachoques...)" maxlength="200">
                                     </div>
                                 </div>
 
-                                <!-- FOTO OPCIONAL 6 -->
-                                <div class="photo-upload optional" id="upload-opcional6" data-campo="opcional6">
-                                    <input type="file" id="fotoOpcional6" accept="image/*" capture="environment">
-                                    <div class="upload-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>Adicional 6</span>
+                                <!-- 🔥 FOTO OPCIONAL 6 -->
+                                <div class="photo-upload optional" id="upload-fotoOpcional6" data-campo="opcional6">
+                                    <div class="photo-upload-inner">
+                                        <input type="file" id="fotoOpcional6" accept="image/*" capture="environment">
+                                        <div class="upload-placeholder">
+                                            <i class="fas fa-camera"></i>
+                                            <span>Adicional 6</span>
+                                        </div>
+                                        <div class="upload-preview">
+                                            <div class="progress-ring-container">
+                                                <svg viewBox="0 0 50 50">
+                                                    <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                    <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional6" />
+                                                </svg>
+                                                <span class="progress-percent" id="percent-opcional6">0%</span>
+                                            </div>
+                                            <div class="status-badge-foto pending" id="badge-opcional6">
+                                                <i class="fas fa-circle"></i>
+                                            </div>
+                                            <div class="progress-bar-foto">
+                                                <div class="fill" id="bar-opcional6"></div>
+                                            </div>
+                                            <div class="uploading-status" id="status-opcional6">
+                                                <i class="fas fa-clock"></i>
+                                                <span>Esperando...</span>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="remove-photo" style="display: none;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
                                     </div>
-                                    <div class="upload-preview">
-                                        <div class="progress-ring-container">
-                                            <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional6" />
-                                            </svg>
-                                            <span class="progress-percent" id="percent-opcional6">0%</span>
-                                        </div>
-                                        <div class="status-badge-foto pending" id="badge-opcional6">
-                                            <i class="fas fa-circle"></i>
-                                        </div>
-                                        <div class="progress-bar-foto">
-                                            <div class="fill" id="bar-opcional6"></div>
-                                        </div>
-                                        <div class="uploading-status" id="status-opcional6">
-                                            <i class="fas fa-clock"></i>
-                                            <span>Esperando...</span>
-                                        </div>
-                                    </div>
-                                    <button type="button" class="remove-photo" style="display: none;">
-                                        <i class="fas fa-times"></i>
-                                    </button>
                                     <div class="foto-comentario">
                                         <input type="text" class="foto-comentario-input" id="comentario-opcional6"
-                                            placeholder="Ej: Pieza faltante..." maxlength="200">
+                                            placeholder="📝 Descripción del detalle (ej: Pieza faltante...)" maxlength="200">
                                     </div>
                                 </div>
 
-                                <!-- FOTO OPCIONAL 7 -->
-                                <div class="photo-upload optional" id="upload-opcional7" data-campo="opcional7">
-                                    <input type="file" id="fotoOpcional7" accept="image/*" capture="environment">
-                                    <div class="upload-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>Adicional 7</span>
+                                <!-- 🔥 FOTO OPCIONAL 7 -->
+                                <div class="photo-upload optional" id="upload-fotoOpcional7" data-campo="opcional7">
+                                    <div class="photo-upload-inner">
+                                        <input type="file" id="fotoOpcional7" accept="image/*" capture="environment">
+                                        <div class="upload-placeholder">
+                                            <i class="fas fa-camera"></i>
+                                            <span>Adicional 7</span>
+                                        </div>
+                                        <div class="upload-preview">
+                                            <div class="progress-ring-container">
+                                                <svg viewBox="0 0 50 50">
+                                                    <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                    <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional7" />
+                                                </svg>
+                                                <span class="progress-percent" id="percent-opcional7">0%</span>
+                                            </div>
+                                            <div class="status-badge-foto pending" id="badge-opcional7">
+                                                <i class="fas fa-circle"></i>
+                                            </div>
+                                            <div class="progress-bar-foto">
+                                                <div class="fill" id="bar-opcional7"></div>
+                                            </div>
+                                            <div class="uploading-status" id="status-opcional7">
+                                                <i class="fas fa-clock"></i>
+                                                <span>Esperando...</span>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="remove-photo" style="display: none;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
                                     </div>
-                                    <div class="upload-preview">
-                                        <div class="progress-ring-container">
-                                            <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional7" />
-                                            </svg>
-                                            <span class="progress-percent" id="percent-opcional7">0%</span>
-                                        </div>
-                                        <div class="status-badge-foto pending" id="badge-opcional7">
-                                            <i class="fas fa-circle"></i>
-                                        </div>
-                                        <div class="progress-bar-foto">
-                                            <div class="fill" id="bar-opcional7"></div>
-                                        </div>
-                                        <div class="uploading-status" id="status-opcional7">
-                                            <i class="fas fa-clock"></i>
-                                            <span>Esperando...</span>
-                                        </div>
-                                    </div>
-                                    <button type="button" class="remove-photo" style="display: none;">
-                                        <i class="fas fa-times"></i>
-                                    </button>
                                     <div class="foto-comentario">
                                         <input type="text" class="foto-comentario-input" id="comentario-opcional7"
-                                            placeholder="Ej: Detalle del motor..." maxlength="200">
+                                            placeholder="📝 Descripción del detalle (ej: Detalle del motor...)" maxlength="200">
                                     </div>
                                 </div>
 
-                                <!-- FOTO OPCIONAL 8 -->
-                                <div class="photo-upload optional" id="upload-opcional8" data-campo="opcional8">
-                                    <input type="file" id="fotoOpcional8" accept="image/*" capture="environment">
-                                    <div class="upload-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>Adicional 8</span>
+                                <!-- 🔥 FOTO OPCIONAL 8 -->
+                                <div class="photo-upload optional" id="upload-fotoOpcional8" data-campo="opcional8">
+                                    <div class="photo-upload-inner">
+                                        <input type="file" id="fotoOpcional8" accept="image/*" capture="environment">
+                                        <div class="upload-placeholder">
+                                            <i class="fas fa-camera"></i>
+                                            <span>Adicional 8</span>
+                                        </div>
+                                        <div class="upload-preview">
+                                            <div class="progress-ring-container">
+                                                <svg viewBox="0 0 50 50">
+                                                    <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                    <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional8" />
+                                                </svg>
+                                                <span class="progress-percent" id="percent-opcional8">0%</span>
+                                            </div>
+                                            <div class="status-badge-foto pending" id="badge-opcional8">
+                                                <i class="fas fa-circle"></i>
+                                            </div>
+                                            <div class="progress-bar-foto">
+                                                <div class="fill" id="bar-opcional8"></div>
+                                            </div>
+                                            <div class="uploading-status" id="status-opcional8">
+                                                <i class="fas fa-clock"></i>
+                                                <span>Esperando...</span>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="remove-photo" style="display: none;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
                                     </div>
-                                    <div class="upload-preview">
-                                        <div class="progress-ring-container">
-                                            <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional8" />
-                                            </svg>
-                                            <span class="progress-percent" id="percent-opcional8">0%</span>
-                                        </div>
-                                        <div class="status-badge-foto pending" id="badge-opcional8">
-                                            <i class="fas fa-circle"></i>
-                                        </div>
-                                        <div class="progress-bar-foto">
-                                            <div class="fill" id="bar-opcional8"></div>
-                                        </div>
-                                        <div class="uploading-status" id="status-opcional8">
-                                            <i class="fas fa-clock"></i>
-                                            <span>Esperando...</span>
-                                        </div>
-                                    </div>
-                                    <button type="button" class="remove-photo" style="display: none;">
-                                        <i class="fas fa-times"></i>
-                                    </button>
                                     <div class="foto-comentario">
                                         <input type="text" class="foto-comentario-input" id="comentario-opcional8"
-                                            placeholder="Ej: Interior del vehículo..." maxlength="200">
+                                            placeholder="📝 Descripción del detalle (ej: Interior del vehículo...)" maxlength="200">
                                     </div>
                                 </div>
 
-                                <!-- FOTO OPCIONAL 9 -->
-                                <div class="photo-upload optional" id="upload-opcional9" data-campo="opcional9">
-                                    <input type="file" id="fotoOpcional9" accept="image/*" capture="environment">
-                                    <div class="upload-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>Adicional 9</span>
+                                <!-- 🔥 FOTO OPCIONAL 9 -->
+                                <div class="photo-upload optional" id="upload-fotoOpcional9" data-campo="opcional9">
+                                    <div class="photo-upload-inner">
+                                        <input type="file" id="fotoOpcional9" accept="image/*" capture="environment">
+                                        <div class="upload-placeholder">
+                                            <i class="fas fa-camera"></i>
+                                            <span>Adicional 9</span>
+                                        </div>
+                                        <div class="upload-preview">
+                                            <div class="progress-ring-container">
+                                                <svg viewBox="0 0 50 50">
+                                                    <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                    <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional9" />
+                                                </svg>
+                                                <span class="progress-percent" id="percent-opcional9">0%</span>
+                                            </div>
+                                            <div class="status-badge-foto pending" id="badge-opcional9">
+                                                <i class="fas fa-circle"></i>
+                                            </div>
+                                            <div class="progress-bar-foto">
+                                                <div class="fill" id="bar-opcional9"></div>
+                                            </div>
+                                            <div class="uploading-status" id="status-opcional9">
+                                                <i class="fas fa-clock"></i>
+                                                <span>Esperando...</span>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="remove-photo" style="display: none;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
                                     </div>
-                                    <div class="upload-preview">
-                                        <div class="progress-ring-container">
-                                            <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional9" />
-                                            </svg>
-                                            <span class="progress-percent" id="percent-opcional9">0%</span>
-                                        </div>
-                                        <div class="status-badge-foto pending" id="badge-opcional9">
-                                            <i class="fas fa-circle"></i>
-                                        </div>
-                                        <div class="progress-bar-foto">
-                                            <div class="fill" id="bar-opcional9"></div>
-                                        </div>
-                                        <div class="uploading-status" id="status-opcional9">
-                                            <i class="fas fa-clock"></i>
-                                            <span>Esperando...</span>
-                                        </div>
-                                    </div>
-                                    <button type="button" class="remove-photo" style="display: none;">
-                                        <i class="fas fa-times"></i>
-                                    </button>
                                     <div class="foto-comentario">
                                         <input type="text" class="foto-comentario-input" id="comentario-opcional9"
-                                            placeholder="Ej: Detalle de la llanta..." maxlength="200">
+                                            placeholder="📝 Descripción del detalle (ej: Detalle de la llanta...)" maxlength="200">
                                     </div>
                                 </div>
 
-                                <!-- FOTO OPCIONAL 10 -->
-                                <div class="photo-upload optional" id="upload-opcional10" data-campo="opcional10">
-                                    <input type="file" id="fotoOpcional10" accept="image/*" capture="environment">
-                                    <div class="upload-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>Adicional 10</span>
+                                <!-- 🔥 FOTO OPCIONAL 10 -->
+                                <div class="photo-upload optional" id="upload-fotoOpcional10" data-campo="opcional10">
+                                    <div class="photo-upload-inner">
+                                        <input type="file" id="fotoOpcional10" accept="image/*" capture="environment">
+                                        <div class="upload-placeholder">
+                                            <i class="fas fa-camera"></i>
+                                            <span>Adicional 10</span>
+                                        </div>
+                                        <div class="upload-preview">
+                                            <div class="progress-ring-container">
+                                                <svg viewBox="0 0 50 50">
+                                                    <circle class="ring-bg" cx="25" cy="25" r="22" />
+                                                    <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional10" />
+                                                </svg>
+                                                <span class="progress-percent" id="percent-opcional10">0%</span>
+                                            </div>
+                                            <div class="status-badge-foto pending" id="badge-opcional10">
+                                                <i class="fas fa-circle"></i>
+                                            </div>
+                                            <div class="progress-bar-foto">
+                                                <div class="fill" id="bar-opcional10"></div>
+                                            </div>
+                                            <div class="uploading-status" id="status-opcional10">
+                                                <i class="fas fa-clock"></i>
+                                                <span>Esperando...</span>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="remove-photo" style="display: none;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
                                     </div>
-                                    <div class="upload-preview">
-                                        <div class="progress-ring-container">
-                                            <svg viewBox="0 0 50 50">
-                                                <circle class="ring-bg" cx="25" cy="25" r="22" />
-                                                <circle class="ring-fg" cx="25" cy="25" r="22" id="ring-opcional10" />
-                                            </svg>
-                                            <span class="progress-percent" id="percent-opcional10">0%</span>
-                                        </div>
-                                        <div class="status-badge-foto pending" id="badge-opcional10">
-                                            <i class="fas fa-circle"></i>
-                                        </div>
-                                        <div class="progress-bar-foto">
-                                            <div class="fill" id="bar-opcional10"></div>
-                                        </div>
-                                        <div class="uploading-status" id="status-opcional10">
-                                            <i class="fas fa-clock"></i>
-                                            <span>Esperando...</span>
-                                        </div>
-                                    </div>
-                                    <button type="button" class="remove-photo" style="display: none;">
-                                        <i class="fas fa-times"></i>
-                                    </button>
                                     <div class="foto-comentario">
                                         <input type="text" class="foto-comentario-input" id="comentario-opcional10"
-                                            placeholder="Ej: Detalle del interior..." maxlength="200">
+                                            placeholder="📝 Descripción del detalle (ej: Detalle del interior...)" maxlength="200">
                                     </div>
                                 </div>
 
@@ -1488,7 +1803,6 @@
                 <button class="modal-close" id="btnCerrarModalUbicacionLeaflet">&times;</button>
             </div>
             <div class="modal-body">
-                <!-- 🔥 BOTÓN DE UBICACIÓN ACTUAL -->
                 <div class="ubicacion-controls-row">
                     <button id="btnMiUbicacion" class="btn-ubicacion-actual" type="button">
                         <i class="fas fa-location-dot"></i> 📍 Mi Ubicación Actual

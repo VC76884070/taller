@@ -2657,6 +2657,10 @@ async function verDetalleRecepcion(id) {
 
 // En recepcion.js - Función mostrarModalDetalle (MODIFICADA)
 
+// =====================================================
+// MOSTRAR MODAL DETALLE (CON FOTOS OPCIONALES Y COMENTARIOS)
+// =====================================================
+
 function mostrarModalDetalle(detalle) {
     const modal = document.getElementById('modalDetalleRecepcion');
     const body = document.getElementById('detalleRecepcionBody');
@@ -2679,30 +2683,26 @@ function mostrarModalDetalle(detalle) {
         { campo: 'url_foto_tablero', label: 'Tablero', icono: 'fa-tachometer-alt' }
     ];
     
+    // =============================================
+    // FOTOS OPCIONALES (10) - Generar dinámicamente
+    // =============================================
+    const camposOpcionales = [];
+    for (let i = 1; i <= 10; i++) {
+        camposOpcionales.push({ 
+            campo: `url_opcional${i}`, 
+            label: `Adicional ${i}`,
+            comentario_campo: `opcional${i}`
+        });
+    }
+    
+    // Filtrar fotos obligatorias existentes
     const fotosObligatoriasExistentes = camposFotosObligatorias.filter(f => {
         const url = fotos[f.campo];
         return url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined';
     });
     const fotosObligatoriasCount = fotosObligatoriasExistentes.length;
     
-    // =============================================
-    // FOTOS OPCIONALES (con comentarios)
-    // =============================================
-    // Mapeo de campos opcionales
-    const camposOpcionales = [
-        { campo: 'url_opcional1', label: 'Adicional 1' },
-        { campo: 'url_opcional2', label: 'Adicional 2' },
-        { campo: 'url_opcional3', label: 'Adicional 3' },
-        { campo: 'url_opcional4', label: 'Adicional 4' },
-        { campo: 'url_opcional5', label: 'Adicional 5' },
-        { campo: 'url_opcional6', label: 'Adicional 6' },
-        { campo: 'url_opcional7', label: 'Adicional 7' },
-        { campo: 'url_opcional8', label: 'Adicional 8' },
-        { campo: 'url_opcional9', label: 'Adicional 9' },
-        { campo: 'url_opcional10', label: 'Adicional 10' }
-    ];
-    
-    // Mapeo de campo a comentario (opcional1 -> comentario-opcional1)
+    // Filtrar fotos opcionales existentes
     const fotosOpcionalesExistentes = camposOpcionales.filter(f => {
         const url = fotos[f.campo];
         return url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined';
@@ -2713,7 +2713,7 @@ function mostrarModalDetalle(detalle) {
     // =============================================
     let fotosObligatoriasHtml = '';
     if (fotosObligatoriasCount === 0) {
-        fotosObligatoriasHtml = `<div class="detalle-fotos-vacio"><i class="fas fa-camera"></i><p>No se registraron fotos</p></div>`;
+        fotosObligatoriasHtml = `<div class="detalle-fotos-vacio"><i class="fas fa-camera"></i><p>No se registraron fotos obligatorias</p></div>`;
     } else {
         const timestamp = Date.now();
         fotosObligatoriasHtml = `<div class="detalle-fotos-grid">${fotosObligatoriasExistentes.map((f, index) => {
@@ -2739,10 +2739,7 @@ function mostrarModalDetalle(detalle) {
             const imgId = `foto-${f.campo}-${timestamp}-${index}`;
             
             // Obtener el comentario correspondiente
-            // El comentario viene en el campo "comentarios" del detalle
-            // O buscamos en el campo opcional correspondiente
-            const campoOpcional = f.campo.replace('url_', ''); // 'opcional1', 'opcional2', etc.
-            const comentario = comentarios[campoOpcional] || '';
+            const comentario = comentarios[f.comentario_campo] || '';
             
             return `<div class="detalle-foto-opcional" onclick="verImagenAmpliadaPorId('${imgId}', '${f.label}')">
                 <div class="detalle-foto-opcional-inner">

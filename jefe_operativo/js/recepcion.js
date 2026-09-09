@@ -123,6 +123,10 @@ const btnAbrirModalUbicacion = document.getElementById('btnAbrirModalUbicacion')
 // CONFIGURACIÓN DE FOTOS - OBLIGATORIAS + OPCIONALES
 // =====================================================
 
+// =====================================================
+// CONFIGURACIÓN DE FOTOS - OBLIGATORIAS + OPCIONALES
+// =====================================================
+
 const FOTOS_CONFIG = [
     // FOTOS OBLIGATORIAS (7)
     { id: 'fotoLateralIzq', campo: 'lateral_izquierdo', label: 'Lateral Izquierdo', required: true },
@@ -1143,59 +1147,25 @@ function mostrarErrorEnPreview(campo, mensaje) {
 // VALIDAR COMPLETADO DE FOTOS (SOLO OBLIGATORIAS)
 // =====================================================
 
-// =====================================================
-// VALIDAR COMPLETADO DE FOTOS (SOLO OBLIGATORIAS)
-// =====================================================
-
 function validarCompletadoFotos() {
     let fotosConUrl = 0;
     let fotosDetalle = {};
-<<<<<<< HEAD
     
     console.log('📸 Validando fotos obligatorias...');
     
     // Solo validar fotos obligatorias (las primeras 7)
-=======
-    let fotosEliminadas = 0;
-    let fotosSubiendo = 0;
-    
-    console.log('📸 Validando fotos obligatorias...');
-    
-    // Solo validar fotos obligatorias (7)
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
     const fotosObligatorias = FOTOS_CONFIG.filter(f => f.required === true);
     
     for (const foto of fotosObligatorias) {
         const uploadDiv = document.getElementById(`upload-${foto.id}`);
         const hasImage = uploadDiv?.classList.contains('has-image') || false;
         
-<<<<<<< HEAD
         // PRIORIDAD: 1. data-drive-url, 2. dataset.driveUrl, 3. fotosSubidasLocal, 4. sesionActual
         let driveUrl = uploadDiv?.getAttribute('data-drive-url') || 
                        uploadDiv?.dataset?.driveUrl || 
                        fotosSubidasLocal[foto.campo];
         
         // Si no hay URL en el DOM, buscar en window.datosOriginalesRecepcion
-=======
-        // 1. Buscar URL en el DOM
-        let driveUrl = uploadDiv?.getAttribute('data-drive-url') || 
-                       uploadDiv?.dataset?.driveUrl || 
-                       null;
-        
-        // 2. Buscar en fotosSubidasLocal
-        if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
-            const localUrl = fotosSubidasLocal[foto.campo];
-            if (localUrl && localUrl !== 'null' && localUrl !== '' && localUrl !== 'undefined') {
-                driveUrl = localUrl;
-                if (uploadDiv) {
-                    uploadDiv.setAttribute('data-drive-url', driveUrl);
-                    uploadDiv.dataset.driveUrl = driveUrl;
-                }
-            }
-        }
-        
-        // 3. Buscar en datos originales de recepción (modo edición)
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
         if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
             if (window.datosOriginalesRecepcion?.fotos) {
                 const url = window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]];
@@ -1211,11 +1181,7 @@ function validarCompletadoFotos() {
             }
         }
         
-<<<<<<< HEAD
         // Si no hay URL, buscar en la sesión
-=======
-        // 4. Buscar en sesión actual
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
         if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
             if (sesionActual?.datos?.fotos) {
                 const url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
@@ -1230,7 +1196,6 @@ function validarCompletadoFotos() {
             }
         }
         
-<<<<<<< HEAD
         // VERIFICAR SI LA FOTO ES VÁLIDA
         const esValida = driveUrl && 
                          driveUrl !== 'null' && 
@@ -1239,58 +1204,6 @@ function validarCompletadoFotos() {
                          driveUrl !== 'None';
         
         if (esValida) {
-=======
-        // 5. Buscar en fotos originales (modo edición)
-        if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
-            if (window.fotosOriginalesRecepcion) {
-                const url = window.fotosOriginalesRecepcion[CAMPO_MAP[foto.campo]];
-                if (url && url !== 'null' && url !== '' && url !== 'undefined') {
-                    driveUrl = url;
-                    if (uploadDiv) {
-                        uploadDiv.setAttribute('data-drive-url', driveUrl);
-                        uploadDiv.dataset.driveUrl = driveUrl;
-                        fotosSubidasLocal[foto.campo] = driveUrl;
-                    }
-                }
-            }
-        }
-        
-        // VERIFICAR SI LA FOTO FUE ELIMINADA MANUALMENTE
-        const preview = uploadDiv?.querySelector('.upload-preview');
-        const tieneImagenPreview = preview && 
-                                   preview.style.backgroundImage && 
-                                   preview.style.backgroundImage !== '' && 
-                                   preview.style.backgroundImage !== 'none' &&
-                                   !preview.style.backgroundImage.includes('Sin imagen') &&
-                                   !preview.style.backgroundImage.includes('error');
-        
-        const esEliminada = !tieneImagenPreview && (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined');
-        
-        if (esEliminada) {
-            fotosEliminadas++;
-            if (uploadDiv) {
-                uploadDiv.removeAttribute('data-drive-url');
-                delete uploadDiv.dataset.driveUrl;
-                delete fotosSubidasLocal[foto.campo];
-            }
-            if (window.datosOriginalesRecepcion?.fotos) {
-                window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]] = null;
-            }
-            if (window.fotosOriginalesRecepcion) {
-                window.fotosOriginalesRecepcion[CAMPO_MAP[foto.campo]] = null;
-            }
-            fotosDetalle[foto.campo] = { 
-                url: null, 
-                estado: 'eliminada',
-                label: foto.label 
-            };
-            console.log(`📸 ${foto.campo}: ELIMINADA ❌`);
-            continue;
-        }
-        
-        // CONTAR SOLO SI TIENE URL VÁLIDA Y NO FUE ELIMINADA
-        if (driveUrl && driveUrl !== 'null' && driveUrl !== '' && driveUrl !== 'undefined') {
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
             fotosConUrl++;
             fotosDetalle[foto.campo] = { 
                 url: driveUrl, 
@@ -1298,14 +1211,8 @@ function validarCompletadoFotos() {
                 label: foto.label 
             };
             console.log(`📸 ${foto.campo}: URL válida ✅`);
-<<<<<<< HEAD
         } else if (hasImage) {
             // Tiene imagen en el preview pero no URL (subiendo o error)
-=======
-        } else if (tieneImagenPreview) {
-            // Tiene imagen en preview pero aún no tiene URL (subiendo)
-            fotosSubiendo++;
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
             fotosDetalle[foto.campo] = { 
                 url: null, 
                 estado: 'subiendo',
@@ -1322,11 +1229,7 @@ function validarCompletadoFotos() {
         }
     }
     
-<<<<<<< HEAD
     // COMPLETADO = TODAS LAS 7 FOTOS TIENEN URL VÁLIDA
-=======
-    // EL COMPLETADO ES CUANDO TENEMOS EXACTAMENTE 7 FOTOS CON URL VÁLIDA
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
     const completado = fotosConUrl === 7;
     
     // Actualizar badge de estado
@@ -1338,26 +1241,13 @@ function validarCompletadoFotos() {
         } else if (fotosConUrl > 0) {
             fotosBadge.textContent = `⏳ ${fotosConUrl}/7 en Drive`;
             fotosBadge.className = 'status-badge en-proceso';
-<<<<<<< HEAD
-=======
-        } else if (fotosSubiendo > 0) {
-            fotosBadge.textContent = `⏳ Subiendo ${fotosSubiendo}/7`;
-            fotosBadge.className = 'status-badge en-proceso';
-        } else if (fotosEliminadas > 0) {
-            fotosBadge.textContent = `⚠️ ${fotosEliminadas} fotos eliminadas`;
-            fotosBadge.className = 'status-badge en-proceso';
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
         } else {
             fotosBadge.textContent = `○ 0/7 fotos`;
             fotosBadge.className = 'status-badge en-proceso';
         }
     }
     
-<<<<<<< HEAD
     // ACTUALIZAR ESTADO GLOBAL
-=======
-    // ACTUALIZAR EL ESTADO GLOBAL
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
     if (seccionesCompletadasLocal.fotos !== completado) {
         seccionesCompletadasLocal.fotos = completado;
         actualizarBotonFinalizar();
@@ -1367,19 +1257,11 @@ function validarCompletadoFotos() {
     console.log('📸 Resumen final (obligatorias):', {
         total: fotosConUrl,
         completado: completado,
-<<<<<<< HEAD
-=======
-        eliminadas: fotosEliminadas,
-        subiendo: fotosSubiendo,
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
         detalle: fotosDetalle
     });
     
     return completado;
 }
-
-// En recepcion.js - Función guardarSeccion (CORREGIDA)
-
 async function guardarSeccion(seccion) {
     if (!codigoSesion) return;
     let datos = {};
@@ -1801,13 +1683,13 @@ function actualizarEstadoVisualSeccion(seccion, completada) {
 }
 
 // =====================================================
-// ACTUALIZAR BOTÓN FINALIZAR (COMPLETA)
+// ACTUALIZAR BOTÓN FINALIZAR
 // =====================================================
 
 function actualizarBotonFinalizar() {
     if (!btnFinalizar) return;
     
-    // ESTADO REAL DE CADA SECCIÓN (asegurar valores booleanos)
+    // Estado real de cada sección (asegurar valores booleanos)
     const clienteCompleto = seccionesCompletadasLocal.cliente === true;
     const vehiculoCompleto = seccionesCompletadasLocal.vehiculo === true;
     const fotosCompleto = seccionesCompletadasLocal.fotos === true;
@@ -1829,7 +1711,7 @@ function actualizarBotonFinalizar() {
         btnFinalizar.title = '✅ Todas las secciones completas';
     }
     
-    // Debug en consola
+    // Debug en consola (solo para desarrollo)
     console.log('📊 Estado secciones:', {
         cliente: clienteCompleto,
         vehiculo: vehiculoCompleto,
@@ -2005,11 +1887,7 @@ async function finalizarSesionConReporte() {
 
     try {
         // =============================================
-<<<<<<< HEAD
         // 1. FORZAR VALIDACIÓN DE TODAS LAS SECCIONES
-=======
-        // 1. RECOLECTAR TODAS LAS URLS DE FOTOS OBLIGATORIAS
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
         // =============================================
         updateProgressMessage('Verificando datos...');
         
@@ -2050,18 +1928,13 @@ async function finalizarSesionConReporte() {
                 }
             }
             
-<<<<<<< HEAD
             // Verificar en datos originales
-=======
-            // 3. Buscar en datos originales (modo edición)
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
             if (!url || url === 'null' || url === '' || url === 'undefined') {
                 if (window.datosOriginalesRecepcion?.fotos) {
                     url = window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]];
                 }
             }
             
-<<<<<<< HEAD
             if (url && url !== 'null' && url !== '' && url !== 'undefined') {
                 fotosParaGuardar[foto.campo] = url;
                 totalFotosConUrl++;
@@ -2069,40 +1942,6 @@ async function finalizarSesionConReporte() {
             } else {
                 fotosParaGuardar[foto.campo] = null;
                 console.log(`📸 ${foto.campo}: SIN URL`);
-=======
-            // 4. Buscar en fotos originales
-            if (!url || url === 'null' || url === '' || url === 'undefined') {
-                if (window.fotosOriginalesRecepcion) {
-                    url = window.fotosOriginalesRecepcion[CAMPO_MAP[foto.campo]];
-                }
-            }
-            
-            // VERIFICAR SI LA FOTO TIENE IMAGEN EN PREVIEW (subida pero sin URL)
-            const preview = uploadDiv?.querySelector('.upload-preview');
-            const hasImage = uploadDiv?.classList.contains('has-image') || 
-                            (preview && preview.style.backgroundImage && 
-                             preview.style.backgroundImage !== '' && 
-                             preview.style.backgroundImage !== 'none' &&
-                             !preview.style.backgroundImage.includes('Sin imagen'));
-            
-            // Si tiene imagen pero no URL, está subiendo
-            if (hasImage && (!url || url === 'null' || url === '' || url === 'undefined')) {
-                fotoTieneSubidaPendiente = true;
-                fotosFaltantes.push(`${foto.label} (subiendo...)`);
-                continue;
-            }
-            
-            // Si no tiene imagen y no tiene URL, está vacía
-            if (!hasImage && (!url || url === 'null' || url === '' || url === 'undefined')) {
-                fotosFaltantes.push(foto.label);
-                continue;
-            }
-            
-            // Si tiene URL válida
-            if (url && url !== 'null' && url !== '' && url !== 'undefined') {
-                fotosParaGuardar[foto.campo] = url;
-                totalFotosConUrl++;
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
             }
         }
 
@@ -2132,7 +1971,6 @@ async function finalizarSesionConReporte() {
 
         // Si faltan fotos, verificar nuevamente qué fotos faltan
         if (totalFotosConUrl < 7) {
-<<<<<<< HEAD
             // Intentar guardar las fotos en la sesión
             if (Object.keys(fotosParaGuardar).filter(k => fotosParaGuardar[k]).length > 0) {
                 updateProgressMessage('Guardando fotos en el servidor...');
@@ -2145,20 +1983,6 @@ async function finalizarSesionConReporte() {
                         datos: { fotos: fotosParaGuardar }
                     })
                 });
-=======
-            fotosFaltantes = [];
-            for (const foto of fotosObligatorias) {
-                const uploadDiv = document.getElementById(`upload-${foto.id}`);
-                let url = uploadDiv?.getAttribute('data-drive-url') || 
-                         uploadDiv?.dataset?.driveUrl || 
-                         fotosSubidasLocal[foto.campo];
-                
-                if (!url || url === 'null' || url === '' || url === 'undefined') {
-                    if (sesionActual?.datos?.fotos) {
-                        url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
-                    }
-                }
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
                 
                 if (!url || url === 'null' || url === '' || url === 'undefined') {
                     // Verificar si tiene imagen en el preview
@@ -2175,7 +1999,6 @@ async function finalizarSesionConReporte() {
                 }
             }
             
-<<<<<<< HEAD
             // VERIFICAR NUEVAMENTE DESPUÉS DE GUARDAR
             if (totalFotosConUrl < 7) {
                 // Contar fotos faltantes
@@ -2204,12 +2027,6 @@ async function finalizarSesionConReporte() {
                     mostrarNotificacion(`⚠️ Faltan fotos obligatorias: ${fotosFaltantes.join(', ')}`, 'warning');
                     return;
                 }
-=======
-            if (fotosFaltantes.length > 0) {
-                completeProgress(false);
-                mostrarNotificacion(`⚠️ Faltan fotos obligatorias: ${fotosFaltantes.join(', ')}`, 'warning');
-                return;
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
             }
         }
 
@@ -2223,10 +2040,6 @@ async function finalizarSesionConReporte() {
         const clienteTelefono = document.getElementById('clienteTelefono')?.value?.trim() || '';
         const clienteUbicacion = document.getElementById('clienteUbicacion')?.value?.trim() || '';
         seccionesCompletadasLocal.cliente = !!(clienteNombre && clienteTelefono && clienteUbicacion);
-<<<<<<< HEAD
-=======
-        actualizarEstadoVisualSeccion('cliente', seccionesCompletadasLocal.cliente);
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
         
         const placa = document.getElementById('vehiculoPlaca')?.value?.trim() || '';
         const marca = document.getElementById('vehiculoMarca')?.value?.trim() || '';
@@ -2234,10 +2047,6 @@ async function finalizarSesionConReporte() {
         const anio = document.getElementById('vehiculoAnio')?.value?.trim() || '';
         const kilometraje = document.getElementById('vehiculoKilometraje')?.value?.trim() || '';
         seccionesCompletadasLocal.vehiculo = !!(placa && marca && modelo && anio && kilometraje);
-<<<<<<< HEAD
-=======
-        actualizarEstadoVisualSeccion('vehiculo', seccionesCompletadasLocal.vehiculo);
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
         
         // Fotos - usar el valor validado
         seccionesCompletadasLocal.fotos = totalFotosConUrl === 7;
@@ -2277,11 +2086,7 @@ async function finalizarSesionConReporte() {
         }
 
         // =============================================
-<<<<<<< HEAD
         // 7. PREPARAR DATOS PARA ENVIAR
-=======
-        // 6. PREPARAR DATOS PARA ENVIAR - FORMATO CORREGIDO
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
         // =============================================
         updateProgressBar(50);
         updateProgressMessage('Preparando datos...');
@@ -2488,7 +2293,6 @@ async function finalizarSesionConReporte() {
         }
     }
 }
-<<<<<<< HEAD
 // =====================================================
 // FORZAR SINCRONIZACIÓN DE FOTOS (ÚTIL PARA DEBUG)
 // =====================================================
@@ -2570,8 +2374,6 @@ async function forzarSincronizacionFotos() {
         console.log(`⚠️ Faltan ${faltantes} fotos obligatorias`);
     }
 }
-=======
->>>>>>> d8168ff593496c2ea69c9ae30ec16e5380c1f48d
 // =====================================================
 // LIMPIAR SESIÓN COMPLETA
 // =====================================================
@@ -2881,10 +2683,6 @@ function mostrarConfirmacionCancelar() {
 // INICIALIZAR PANEL DE RECEPCIONES
 // =====================================================
 
-// =====================================================
-// INICIALIZAR PANEL DE RECEPCIONES
-// =====================================================
-
 function initRecepcionesPanel() {
     cargarRecepciones();
     
@@ -2954,75 +2752,95 @@ async function cargarRecepciones(append = false) {
     cargandoMas = true;
     
     const listDiv = document.getElementById('recepcionesList');
-    if (listDiv && !append) listDiv.innerHTML = `<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><p>Cargando recepciones...</p></div>`;
+    if (!listDiv) {
+        cargandoMas = false;
+        return;
+    }
+    
+    if (!append) {
+        listDiv.innerHTML = `<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><p>Cargando recepciones...</p></div>`;
+    }
     
     try {
-        // 🔥 OBTENER FILTROS
+        // OBTENER FILTROS
         const searchTerm = document.getElementById('searchRecepcion')?.value?.trim() || '';
         const estadoFiltro = document.getElementById('estadoFiltro')?.value || 'todos';
         
-        // 🔥 CONSTRUIR QUERY PARAMS
+        // CONSTRUIR QUERY PARAMS
         let url = `${API_URL}/jefe-operativo/listar-recepciones?limit=${LIMITE_RECEPCIONES}&offset=${offsetActual}`;
         
         if (searchTerm) {
             url += `&search=${encodeURIComponent(searchTerm)}`;
         }
-        if (estadoFiltro !== 'todos') {
+        if (estadoFiltro && estadoFiltro !== 'todos') {
             url += `&estado=${encodeURIComponent(estadoFiltro)}`;
         }
         
+        console.log('📋 Cargando recepciones:', url);
+        
         const response = await fetchWithToken(url, { method: 'GET' });
         
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
         
         if (data.success && data.recepciones) {
             if (data.paginacion) {
                 totalRecepciones = data.paginacion.total || 0;
                 noHayMasRecepciones = !data.paginacion.has_more;
+                
                 const paginaInfo = document.getElementById('paginaInfo');
                 if (paginaInfo) {
                     const paginaActual = Math.floor(offsetActual / LIMITE_RECEPCIONES) + 1;
                     const totalPaginas = Math.ceil(totalRecepciones / LIMITE_RECEPCIONES);
                     paginaInfo.textContent = `Página ${paginaActual} de ${totalPaginas || 1}`;
                 }
-                document.getElementById('btnPaginaAnterior').disabled = offsetActual === 0;
-                document.getElementById('btnPaginaSiguiente').disabled = noHayMasRecepciones;
+                
+                const btnAnterior = document.getElementById('btnPaginaAnterior');
+                const btnSiguiente = document.getElementById('btnPaginaSiguiente');
+                if (btnAnterior) btnAnterior.disabled = offsetActual === 0;
+                if (btnSiguiente) btnSiguiente.disabled = noHayMasRecepciones;
             }
             
             recepcionesActuales = append ? [...recepcionesActuales, ...data.recepciones] : data.recepciones;
             
-            // 🔥 ACTUALIZAR CONTADOR
+            // ACTUALIZAR CONTADOR
             const countSpan = document.getElementById('recepcionesCount');
             if (countSpan) {
-                if (searchTerm || estadoFiltro !== 'todos') {
+                if (searchTerm || (estadoFiltro && estadoFiltro !== 'todos')) {
                     const filtrosActivos = [];
                     if (searchTerm) filtrosActivos.push(`"${searchTerm}"`);
-                    if (estadoFiltro !== 'todos') filtrosActivos.push(estadoFiltro);
+                    if (estadoFiltro && estadoFiltro !== 'todos') filtrosActivos.push(estadoFiltro);
                     countSpan.textContent = `${totalRecepciones} (filtrado: ${filtrosActivos.join(' + ')})`;
                 } else {
-                    countSpan.textContent = totalRecepciones;
+                    countSpan.textContent = `${totalRecepciones}`;
                 }
             }
             
             renderizarRecepciones();
         } else {
-            if (!append) { 
-                recepcionesActuales = []; 
+            if (!append) {
+                recepcionesActuales = [];
                 renderizarRecepciones();
             }
         }
     } catch (error) {
-        console.error('Error cargando recepciones:', error);
+        console.error('❌ Error cargando recepciones:', error);
         if (listDiv && !append) {
-            listDiv.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Error al cargar</p><small>${error.message}</small></div>`;
+            listDiv.innerHTML = `<div class="empty-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Error al cargar</p>
+                <small>${error.message || 'Intenta de nuevo'}</small>
+            </div>`;
         }
-    } finally { 
-        cargandoMas = false; 
+    } finally {
+        cargandoMas = false;
     }
 }
 // =====================================================
-// RENDERIZAR RECEPCIONES (SEPARADO DEL FILTRADO)
+// RENDERIZAR RECEPCIONES
 // =====================================================
 
 function renderizarRecepciones() {
@@ -3037,11 +2855,11 @@ function renderizarRecepciones() {
         const estadoFiltro = document.getElementById('estadoFiltro')?.value || 'todos';
         
         let mensaje = 'No hay recepciones';
-        if (searchTerm && estadoFiltro !== 'todos') {
+        if (searchTerm && estadoFiltro && estadoFiltro !== 'todos') {
             mensaje = `No hay recepciones que coincidan con "${searchTerm}" y estado "${estadoFiltro}"`;
         } else if (searchTerm) {
             mensaje = `No hay recepciones que coincidan con "${searchTerm}"`;
-        } else if (estadoFiltro !== 'todos') {
+        } else if (estadoFiltro && estadoFiltro !== 'todos') {
             mensaje = `No hay recepciones con estado "${estadoFiltro}"`;
         }
         
@@ -3076,13 +2894,14 @@ function renderizarRecepciones() {
     // Renderizar tarjetas
     listDiv.innerHTML = recepciones.map(rec => {
         const estado = rec.estado_global || 'EnRecepcion';
-        const config = estadoConfig[estado] || { label: estado, color: '#8E8E93' };
+        const config = estadoConfig[estado] || { label: estado || 'Desconocido', color: '#8E8E93' };
         const fecha = rec.fecha_ingreso ? new Date(rec.fecha_ingreso).toLocaleDateString('es-ES', { 
             day: '2-digit', 
             month: '2-digit', 
             year: 'numeric' 
         }) : 'N/A';
         const vehiculo = `${rec.marca || ''} ${rec.modelo || ''}`.trim() || 'Vehículo sin especificar';
+        const esEditable = estado === 'EnRecepcion';
         
         return `<div class="recepcion-card" style="border-left: 4px solid ${config.color};">
             <div class="recepcion-header">
@@ -3113,12 +2932,16 @@ function renderizarRecepciones() {
                     <button class="btn-action btn-ver" onclick="verDetalleRecepcion(${rec.id})">
                         <i class="fas fa-eye"></i> Ver
                     </button>
-                    <button class="btn-action btn-editar" onclick="editarRecepcion(${rec.id})" ${estado !== 'EnRecepcion' ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
-                        <i class="fas fa-edit"></i> Editar
-                    </button>
-                    <button class="btn-action btn-eliminar" onclick="confirmarEliminarRecepcion(${rec.id})" ${estado !== 'EnRecepcion' ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
-                        <i class="fas fa-trash-alt"></i> Eliminar
-                    </button>
+                    ${esEditable ? `
+                        <button class="btn-action btn-editar" onclick="editarRecepcion(${rec.id})">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="btn-action btn-eliminar" onclick="confirmarEliminarRecepcion(${rec.id})">
+                            <i class="fas fa-trash-alt"></i> Eliminar
+                        </button>
+                    ` : `
+                        <span style="font-size:10px;color:#8E8E93;padding:4px 8px;">🔒 Bloqueado</span>
+                    `}
                 </div>
             </div>
         </div>`;
@@ -5122,9 +4945,7 @@ async function cargarAudioConToken(audioUrl) {
         return null;
     }
 }
-// =====================================================
-// EDITAR RECEPCIÓN (COMPLETO - CON AUDIO CORREGIDO)
-// =====================================================
+
 // =====================================================
 // EDITAR RECEPCIÓN
 // =====================================================
@@ -5806,9 +5627,6 @@ function setupUnirsePorCodigo() {
     modalUnirse?.addEventListener('click', (e) => { if (e.target === modalUnirse) cerrarModal(); });
 }
 
-// =====================================================
-// SETUP PHOTO UPLOADS (CON ELIMINACIÓN DE DRIVE CORREGIDA)
-// =====================================================
 // =====================================================
 // SETUP PHOTO UPLOADS (CON ELIMINACIÓN DE DRIVE CORREGIDA)
 // =====================================================

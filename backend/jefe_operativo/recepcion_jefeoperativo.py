@@ -827,32 +827,46 @@ def finalizar_sesion(current_user):
             if 'vehiculo' in datos_frontend:
                 sesion['datos']['vehiculo'] = datos_frontend['vehiculo']
             
-            # 🔥 ACTUALIZAR FOTOS - ESTO ES CRÍTICO
+            # 🔥 ACTUALIZAR FOTOS OBLIGATORIAS
             if 'fotos' in datos_frontend:
                 fotos_frontend = datos_frontend['fotos']
                 if 'fotos' not in sesion['datos']:
                     sesion['datos']['fotos'] = {}
                 
-                # 🔥 RECORRER TODAS LAS FOTOS OBLIGATORIAS
                 campos_obligatorios = ['lateral_izquierdo', 'lateral_derecho', 'frontal', 'trasera', 'superior', 'inferior', 'tablero']
                 fotos_validas = 0
                 
                 for campo in campos_obligatorios:
                     url = fotos_frontend.get(campo)
-                    # También verificar si viene con la clave mapeada (url_...)
-                    if not url:
-                        campo_mapeado = CAMPO_MAP.get(campo, campo)
-                        url = fotos_frontend.get(campo_mapeado)
-                    
                     if url and url != 'null' and url != '' and url != 'undefined' and url != 'None':
-                        # Guardar en la sesión
                         sesion['datos']['fotos'][campo] = url
                         fotos_validas += 1
-                        logger.info(f"📸 Sesión actualizada: {campo} -> {url[:50]}...")
                 
-                # 🔥 ACTUALIZAR SECCIONES COMPLETADAS
                 sesion['secciones_completadas']['fotos'] = fotos_validas == 7
-                logger.info(f"📸 Fotos válidas en sesión: {fotos_validas}/7")
+                logger.info(f"📸 Fotos obligatorias válidas: {fotos_validas}/7")
+            
+            # 🔥🔥🔥 NUEVO: GUARDAR FOTOS OPCIONALES
+            fotos_opcionales = datos_frontend.get('fotos_opcionales', {})
+            if fotos_opcionales:
+                if 'fotos' not in sesion['datos']:
+                    sesion['datos']['fotos'] = {}
+                
+                for campo, url in fotos_opcionales.items():
+                    if url and url != 'null' and url != '' and url != 'undefined' and url != 'None':
+                        sesion['datos']['fotos'][campo] = url
+                        logger.info(f"📸 Foto opcional guardada: {campo} -> {url[:50]}...")
+                
+                logger.info(f"📸 Total fotos opcionales guardadas: {len(fotos_opcionales)}")
+            
+            # 🔥 GUARDAR COMENTARIOS DE FOTOS OPCIONALES
+            comentarios = datos_frontend.get('comentarios', {})
+            if comentarios:
+                if 'comentarios' not in sesion['datos']:
+                    sesion['datos']['comentarios'] = {}
+                for campo, valor in comentarios.items():
+                    if valor and valor.strip():
+                        sesion['datos']['comentarios'][campo] = valor.strip()
+                        logger.info(f"📝 Comentario guardado: {campo} -> {valor}")
             
             # Actualizar descripción
             if 'descripcion' in datos_frontend:
@@ -865,10 +879,8 @@ def finalizar_sesion(current_user):
             sesiones_activas[codigo_sesion] = sesion
         
         # =============================================
-        # 🔥 2. RECALCULAR SECCIONES COMPLETADAS DESDE LA SESIÓN ACTUALIZADA
+        # 🔥 2. RECALCULAR SECCIONES COMPLETADAS
         # =============================================
-        
-        # Cliente
         cliente_data = sesion['datos'].get('cliente', {})
         cliente_completo = bool(
             cliente_data.get('nombre') and 
@@ -877,7 +889,6 @@ def finalizar_sesion(current_user):
         )
         sesion['secciones_completadas']['cliente'] = cliente_completo
         
-        # Vehículo
         vehiculo_data = sesion['datos'].get('vehiculo', {})
         vehiculo_completo = bool(
             vehiculo_data.get('placa') and 
@@ -888,14 +899,10 @@ def finalizar_sesion(current_user):
         )
         sesion['secciones_completadas']['vehiculo'] = vehiculo_completo
         
-        # Fotos - ya calculado arriba
-        # Descripción - ya calculado arriba
-        
-        # Guardar nuevamente
         guardar_sesion_en_db(sesion)
         
         # =============================================
-        # 🔥 3. VERIFICAR SECCIONES FALTANTES
+        # 3. VERIFICAR SECCIONES FALTANTES
         # =============================================
         secciones_faltantes = []
         if not sesion['secciones_completadas'].get('cliente', False):
@@ -915,7 +922,7 @@ def finalizar_sesion(current_user):
             }), 400
         
         # =============================================
-        # 4. CREAR ORDEN DE TRABAJO (el resto del código sigue igual)
+        # 4. CREAR ORDEN DE TRABAJO
         # =============================================
         try:
             cliente_data = sesion['datos'].get('cliente', {})
@@ -1093,14 +1100,14 @@ def finalizar_sesion(current_user):
                 'tablero': 'url_foto_tablero'
             }
             
-            # Construir datos de recepción
+            # Construir datos de recepción (solo obligatorias)
             recepcion_data = {
                 'id_orden_trabajo': id_orden,
                 'url_grabacion_problema': descripcion_data.get('audio_url'),
                 'transcripcion_problema': descripcion_data.get('texto', '')
             }
             
-            # Agregar fotos
+            # Agregar fotos obligatorias
             for campo, db_campo in MAPEO_FOTOS.items():
                 url = fotos.get(campo)
                 if url and url != 'null' and url != '' and url != 'undefined' and url != 'None':
@@ -1116,6 +1123,46 @@ def finalizar_sesion(current_user):
                     'id_orden_trabajo': id_orden
                 }).execute()
                 logger.info(f"✅ Recepción básica guardada")
+            
+            # 🔥🔥🔥 NUEVO: GUARDAR FOTOS OPCIONALES Y COMENTARIOS EN LA SESIÓN COLABORATIVA
+            # Extraer fotos opcionales (opcional1 a opcional10)
+            fotos_opcionales_guardar = {}
+            for i in range(1, 11):
+                campo = f'opcional{i}'
+                if campo in fotos and fotos[campo]:
+                    fotos_opcionales_guardar[campo] = fotos[campo]
+            
+            # Obtener comentarios de la sesión
+            comentarios_guardar = sesion.get('datos', {}).get('comentarios', {})
+            
+            # Guardar en la sesión colaborativa
+            if fotos_opcionales_guardar or comentarios_guardar:
+                try:
+                    datos_actualizados = sesion.get('datos', {})
+                    if 'fotos' not in datos_actualizados:
+                        datos_actualizados['fotos'] = {}
+                    
+                    # Agregar fotos opcionales
+                    for campo, url in fotos_opcionales_guardar.items():
+                        datos_actualizados['fotos'][campo] = url
+                    
+                    # Agregar comentarios
+                    if comentarios_guardar:
+                        datos_actualizados['comentarios'] = comentarios_guardar
+                    
+                    # Guardar en Supabase
+                    supabase.table('sesion_colaborativa') \
+                        .update({
+                            'datos': datos_actualizados,
+                            'comentarios': comentarios_guardar
+                        }) \
+                        .eq('codigo', codigo_sesion) \
+                        .execute()
+                    
+                    logger.info(f"✅ Fotos opcionales guardadas en sesión: {len(fotos_opcionales_guardar)}")
+                    logger.info(f"✅ Comentarios guardados en sesión: {len(comentarios_guardar)}")
+                except Exception as e:
+                    logger.error(f"❌ Error guardando fotos opcionales: {e}")
             
             # 6. Renombrar carpeta en Drive
             carpeta_renombrada = False
@@ -1164,7 +1211,6 @@ def finalizar_sesion(current_user):
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
-
 # =====================================================
 # ENDPOINT: SUBIR PDF A GOOGLE DRIVE DESDE FRONTEND
 # =====================================================

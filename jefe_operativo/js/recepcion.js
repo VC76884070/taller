@@ -1286,15 +1286,15 @@ async function guardarSeccion(seccion) {
             };
             break;
         case 'fotos':
-            // 🔥 RECOLECTAR TODAS LAS FOTOS (OBLIGATORIAS + OPCIONALES)
+            // RECOLECTAR TODAS LAS FOTOS (OBLIGATORIAS + OPCIONALES)
             const fotosData = {};
             const comentariosData = obtenerComentariosOpcionales();
             
             for (const foto of FOTOS_CONFIG) {
                 const uploadDiv = document.getElementById(`upload-${foto.id}`);
                 let url = uploadDiv?.getAttribute('data-drive-url') || 
-                          uploadDiv?.dataset?.driveUrl || 
-                          fotosSubidasLocal[foto.campo];
+                        uploadDiv?.dataset?.driveUrl || 
+                        fotosSubidasLocal[foto.campo];
                 
                 if (!url && sesionActual?.datos?.fotos) {
                     url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
@@ -1305,7 +1305,7 @@ async function guardarSeccion(seccion) {
                 }
             }
             
-            // 🔥 Enviar todas las fotos (incluyendo opcionales)
+            // Enviar todas las fotos (incluyendo opcionales)
             datos = {
                 fotos: fotosData,
                 comentarios: comentariosData

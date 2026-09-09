@@ -796,13 +796,14 @@ def finalizar_sesion(current_user):
         
         data = request.get_json()
         codigo_sesion = data.get('codigo')
-        datos_directos = data.get('datos', {})
+        datos_frontend = data.get('datos', {})
         
         if not codigo_sesion:
             return jsonify({'error': 'Código requerido'}), 400
         
         logger.info(f"📋 Finalizando sesión: {codigo_sesion}")
         
+        # Cargar sesión
         if codigo_sesion not in sesiones_activas:
             sesion = cargar_sesion_de_db(codigo_sesion)
             if not sesion:
@@ -815,64 +816,106 @@ def finalizar_sesion(current_user):
             return jsonify({'error': 'Sesión no activa'}), 400
         
         # =============================================
-        # 🔥 GUARDAR TODAS LAS FOTOS EN LA SESIÓN ANTES DE FINALIZAR
+        # 🔥 1. ACTUALIZAR SESIÓN CON DATOS DEL FRONTEND
         # =============================================
-        if datos_directos:
-            # Si vienen fotos del frontend, actualizar la sesión
-            if 'fotos' in datos_directos:
+        if datos_frontend:
+            # Actualizar cliente
+            if 'cliente' in datos_frontend:
+                sesion['datos']['cliente'] = datos_frontend['cliente']
+            
+            # Actualizar vehículo
+            if 'vehiculo' in datos_frontend:
+                sesion['datos']['vehiculo'] = datos_frontend['vehiculo']
+            
+            # 🔥 ACTUALIZAR FOTOS - ESTO ES CRÍTICO
+            if 'fotos' in datos_frontend:
+                fotos_frontend = datos_frontend['fotos']
                 if 'fotos' not in sesion['datos']:
                     sesion['datos']['fotos'] = {}
-                for campo, url in datos_directos.get('fotos', {}).items():
-                    if url and url != 'null' and url != '' and url != 'undefined':
+                
+                # 🔥 RECORRER TODAS LAS FOTOS OBLIGATORIAS
+                campos_obligatorios = ['lateral_izquierdo', 'lateral_derecho', 'frontal', 'trasera', 'superior', 'inferior', 'tablero']
+                fotos_validas = 0
+                
+                for campo in campos_obligatorios:
+                    url = fotos_frontend.get(campo)
+                    # También verificar si viene con la clave mapeada (url_...)
+                    if not url:
+                        campo_mapeado = CAMPO_MAP.get(campo, campo)
+                        url = fotos_frontend.get(campo_mapeado)
+                    
+                    if url and url != 'null' and url != '' and url != 'undefined' and url != 'None':
+                        # Guardar en la sesión
                         sesion['datos']['fotos'][campo] = url
-                        logger.info(f"📸 Guardando foto en sesión: {campo}")
+                        fotos_validas += 1
+                        logger.info(f"📸 Sesión actualizada: {campo} -> {url[:50]}...")
+                
+                # 🔥 ACTUALIZAR SECCIONES COMPLETADAS
+                sesion['secciones_completadas']['fotos'] = fotos_validas == 7
+                logger.info(f"📸 Fotos válidas en sesión: {fotos_validas}/7")
             
-            # Si vienen comentarios del frontend
-            if 'comentarios' in datos_directos:
-                if 'comentarios' not in sesion['datos']:
-                    sesion['datos']['comentarios'] = {}
-                for campo, texto in datos_directos.get('comentarios', {}).items():
-                    if texto and texto.strip():
-                        sesion['datos']['comentarios'][campo] = texto.strip()
-                        logger.info(f"📝 Guardando comentario en sesión: {campo}")
+            # Actualizar descripción
+            if 'descripcion' in datos_frontend:
+                sesion['datos']['descripcion'] = datos_frontend['descripcion']
+                if datos_frontend['descripcion'].get('texto') and datos_frontend['descripcion'].get('audio_url'):
+                    sesion['secciones_completadas']['descripcion'] = True
             
-            # Actualizar otros datos
-            if 'cliente' in datos_directos:
-                sesion['datos']['cliente'] = datos_directos['cliente']
-            if 'vehiculo' in datos_directos:
-                sesion['datos']['vehiculo'] = datos_directos['vehiculo']
-            if 'descripcion' in datos_directos:
-                sesion['datos']['descripcion'] = datos_directos['descripcion']
+            # Guardar sesión actualizada
+            guardar_sesion_en_db(sesion)
+            sesiones_activas[codigo_sesion] = sesion
         
-        # Guardar la sesión actualizada en la base de datos
+        # =============================================
+        # 🔥 2. RECALCULAR SECCIONES COMPLETADAS DESDE LA SESIÓN ACTUALIZADA
+        # =============================================
+        
+        # Cliente
+        cliente_data = sesion['datos'].get('cliente', {})
+        cliente_completo = bool(
+            cliente_data.get('nombre') and 
+            cliente_data.get('telefono') and 
+            cliente_data.get('ubicacion')
+        )
+        sesion['secciones_completadas']['cliente'] = cliente_completo
+        
+        # Vehículo
+        vehiculo_data = sesion['datos'].get('vehiculo', {})
+        vehiculo_completo = bool(
+            vehiculo_data.get('placa') and 
+            vehiculo_data.get('marca') and 
+            vehiculo_data.get('modelo') and 
+            vehiculo_data.get('anio') and 
+            vehiculo_data.get('kilometraje')
+        )
+        sesion['secciones_completadas']['vehiculo'] = vehiculo_completo
+        
+        # Fotos - ya calculado arriba
+        # Descripción - ya calculado arriba
+        
+        # Guardar nuevamente
         guardar_sesion_en_db(sesion)
         
-        # 🔥 FORZAR RECALCULO DE FOTOS
-        fotos = sesion.get('datos', {}).get('fotos', {})
-        fotos_validas = sum(1 for v in fotos.values() if v and v != 'null' and v != '' and v != 'undefined')
-        sesion['secciones_completadas']['fotos'] = fotos_validas == 7
-        
-        # Verificar secciones faltantes
+        # =============================================
+        # 🔥 3. VERIFICAR SECCIONES FALTANTES
+        # =============================================
         secciones_faltantes = []
-        if not sesion.get('secciones_completadas', {}).get('cliente', False):
+        if not sesion['secciones_completadas'].get('cliente', False):
             secciones_faltantes.append('cliente')
-        if not sesion.get('secciones_completadas', {}).get('vehiculo', False):
+        if not sesion['secciones_completadas'].get('vehiculo', False):
             secciones_faltantes.append('vehiculo')
-        if not sesion.get('secciones_completadas', {}).get('fotos', False):
+        if not sesion['secciones_completadas'].get('fotos', False):
             secciones_faltantes.append('fotos')
-        if not sesion.get('secciones_completadas', {}).get('descripcion', False):
+        if not sesion['secciones_completadas'].get('descripcion', False):
             secciones_faltantes.append('descripcion')
         
         if secciones_faltantes:
             logger.warning(f"⚠️ Secciones faltantes: {secciones_faltantes}")
             return jsonify({
                 'error': f'Faltan: {", ".join(secciones_faltantes)}',
-                'fotos_validas': fotos_validas,
                 'secciones': sesion.get('secciones_completadas', {})
             }), 400
         
         # =============================================
-        # CREAR ORDEN DE TRABAJO
+        # 4. CREAR ORDEN DE TRABAJO (el resto del código sigue igual)
         # =============================================
         try:
             cliente_data = sesion['datos'].get('cliente', {})
@@ -883,7 +926,6 @@ def finalizar_sesion(current_user):
             
             logger.info(f"📸 Total fotos en sesión al finalizar: {len(fotos)}")
             logger.info(f"📸 Fotos: {list(fotos.keys())}")
-            logger.info(f"📝 Comentarios: {list(comentarios.keys())}")
             
             # 1. Obtener o crear cliente
             id_cliente = None
@@ -1040,11 +1082,7 @@ def finalizar_sesion(current_user):
             
             id_orden = orden_result.data[0]['id']
             
-            # =============================================
-            # 5. Guardar recepción - MAPEO CORRECTO DE FOTOS
-            # =============================================
-            
-            # MAPEO DE CLAVES DE FOTOS OBLIGATORIAS
+            # 5. Guardar recepción
             MAPEO_FOTOS = {
                 'lateral_izquierdo': 'url_lateral_izquierda',
                 'lateral_derecho': 'url_lateral_derecha',
@@ -1052,121 +1090,34 @@ def finalizar_sesion(current_user):
                 'trasera': 'url_foto_trasera',
                 'superior': 'url_foto_superior',
                 'inferior': 'url_foto_inferior',
-                'tablero': 'url_foto_tablero',
-                'url_lateral_izquierda': 'url_lateral_izquierda',
-                'url_lateral_derecha': 'url_lateral_derecha',
-                'url_foto_frontal': 'url_foto_frontal',
-                'url_foto_trasera': 'url_foto_trasera',
-                'url_foto_superior': 'url_foto_superior',
-                'url_foto_inferior': 'url_foto_inferior',
-                'url_foto_tablero': 'url_foto_tablero'
+                'tablero': 'url_foto_tablero'
             }
             
-            # OBTENER TODAS LAS FOTOS DE LA SESIÓN
-            fotos_combinadas = {}
-            if datos_directos and 'fotos' in datos_directos:
-                fotos_combinadas.update(datos_directos.get('fotos', {}))
-            if sesion and 'datos' in sesion and 'fotos' in sesion['datos']:
-                fotos_combinadas.update(sesion['datos']['fotos'])
-            if fotos:
-                fotos_combinadas.update(fotos)
-            
-            logger.info(f"📸 Total fotos combinadas: {len(fotos_combinadas)}")
-            
-            # MAPEAR FOTOS OBLIGATORIAS
-            fotos_mapeadas = {}
-            for key, value in fotos_combinadas.items():
-                if value and value != 'null' and value != 'None' and value != '' and value != 'undefined':
-                    if key in MAPEO_FOTOS:
-                        nueva_key = MAPEO_FOTOS[key]
-                        fotos_mapeadas[nueva_key] = value
-            
-            # Construir datos de recepción (solo obligatorias)
+            # Construir datos de recepción
             recepcion_data = {
                 'id_orden_trabajo': id_orden,
-                'url_lateral_izquierda': fotos_mapeadas.get('url_lateral_izquierda'),
-                'url_lateral_derecha': fotos_mapeadas.get('url_lateral_derecha'),
-                'url_foto_frontal': fotos_mapeadas.get('url_foto_frontal'),
-                'url_foto_trasera': fotos_mapeadas.get('url_foto_trasera'),
-                'url_foto_superior': fotos_mapeadas.get('url_foto_superior'),
-                'url_foto_inferior': fotos_mapeadas.get('url_foto_inferior'),
-                'url_foto_tablero': fotos_mapeadas.get('url_foto_tablero'),
                 'url_grabacion_problema': descripcion_data.get('audio_url'),
                 'transcripcion_problema': descripcion_data.get('texto', '')
             }
             
-            # FILTRAR SOLO CAMPOS CON VALORES VÁLIDOS
-            recepcion_data_limpia = {}
-            for key, value in recepcion_data.items():
-                if value and value != 'null' and value != 'None' and value != '' and value != 'undefined':
-                    recepcion_data_limpia[key] = value
+            # Agregar fotos
+            for campo, db_campo in MAPEO_FOTOS.items():
+                url = fotos.get(campo)
+                if url and url != 'null' and url != '' and url != 'undefined' and url != 'None':
+                    recepcion_data[db_campo] = url
             
-            logger.info(f"📸 Datos a guardar en recepcion: {len(recepcion_data_limpia)} campos")
-            
-            # Insertar en la base de datos
-            if recepcion_data_limpia:
-                try:
-                    resultado = supabase.table('recepcion').insert(recepcion_data_limpia).execute()
-                    logger.info(f"✅ Recepción guardada exitosamente")
-                except Exception as e:
-                    logger.error(f"❌ Error guardando recepción: {e}")
-                    resultado = supabase.table('recepcion').insert({
-                        'id_orden_trabajo': id_orden
-                    }).execute()
-                    logger.info(f"✅ Recepción básica guardada")
-            else:
-                logger.warning("⚠️ No hay datos para guardar en recepción")
-                resultado = supabase.table('recepcion').insert({
+            # Insertar recepción
+            try:
+                resultado = supabase.table('recepcion').insert(recepcion_data).execute()
+                logger.info(f"✅ Recepción guardada exitosamente")
+            except Exception as e:
+                logger.error(f"❌ Error guardando recepción: {e}")
+                supabase.table('recepcion').insert({
                     'id_orden_trabajo': id_orden
                 }).execute()
                 logger.info(f"✅ Recepción básica guardada")
             
-            # =============================================
-            # 6. GUARDAR FOTOS OPCIONALES Y COMENTARIOS EN LA SESIÓN
-            # =============================================
-            
-            # Extraer fotos opcionales (opcional1 a opcional10)
-            fotos_opcionales = {}
-            for i in range(1, 11):
-                campo = f'opcional{i}'
-                if campo in fotos_combinadas and fotos_combinadas[campo]:
-                    fotos_opcionales[campo] = fotos_combinadas[campo]
-            
-            # Obtener comentarios de la sesión
-            comentarios_guardar = sesion.get('datos', {}).get('comentarios', {})
-            
-            # Guardar fotos opcionales y comentarios en la sesión colaborativa
-            if fotos_opcionales or comentarios_guardar:
-                try:
-                    datos_actualizados = sesion.get('datos', {})
-                    if 'fotos' not in datos_actualizados:
-                        datos_actualizados['fotos'] = {}
-                    
-                    # Agregar fotos opcionales
-                    for campo, url in fotos_opcionales.items():
-                        datos_actualizados['fotos'][campo] = url
-                    
-                    # Agregar comentarios
-                    if comentarios_guardar:
-                        datos_actualizados['comentarios'] = comentarios_guardar
-                    
-                    # Guardar en Supabase
-                    supabase.table('sesion_colaborativa') \
-                        .update({
-                            'datos': datos_actualizados,
-                            'comentarios': comentarios_guardar
-                        }) \
-                        .eq('codigo', codigo_sesion) \
-                        .execute()
-                    
-                    logger.info(f"✅ Fotos opcionales guardadas en sesión: {len(fotos_opcionales)}")
-                    logger.info(f"✅ Comentarios guardados en sesión: {len(comentarios_guardar)}")
-                except Exception as e:
-                    logger.error(f"❌ Error guardando fotos opcionales: {e}")
-            
-            # =============================================
-            # 7. Renombrar carpeta en Drive
-            # =============================================
+            # 6. Renombrar carpeta en Drive
             carpeta_renombrada = False
             try:
                 logger.info(f"📁 Intentando renombrar carpeta {codigo_sesion} a {codigo_unico}")
@@ -1185,11 +1136,10 @@ def finalizar_sesion(current_user):
             except Exception as e:
                 logger.error(f"❌ Error renombrando carpeta: {str(e)}")
             
-            # 8. Marcar sesión como finalizada
+            # 7. Marcar sesión como finalizada
             sesion['estado'] = 'finalizada'
             guardar_sesion_en_db(sesion)
             
-            # 9. Eliminar de memoria
             if codigo_sesion in sesiones_activas:
                 del sesiones_activas[codigo_sesion]
             

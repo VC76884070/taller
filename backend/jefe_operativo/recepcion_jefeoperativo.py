@@ -2254,25 +2254,28 @@ def eliminar_recepcion(current_user, id_orden):
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# ENDPOINT 25: GENERAR PDF
-# =====================================================
-
 @recepcion_jefe_bp.route('/generar-pdf-recepcion/<int:id_orden>', methods=['POST'])
 @jefe_operativo_required
 def generar_pdf_recepcion(current_user, id_orden):
     try:
         from google_drive import google_drive
-        from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib import colors
-        from reportlab.lib.units import cm
-        from reportlab.lib.enums import TA_CENTER
+        from reportlab.lib.units import cm, inch, mm
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+        from reportlab.pdfgen import canvas
         from datetime import datetime
+        import requests
+        from io import BytesIO
+        import base64
+        import os
+        import tempfile
         
         logger.info(f"📄 Generando PDF con ReportLab para orden {id_orden}")
         
+        # 1. OBTENER DETALLE DE LA RECEPCIÓN
         detalle_response = detalle_recepcion(current_user, id_orden)
         detalle_data = detalle_response.get_json()
         
@@ -2280,84 +2283,381 @@ def generar_pdf_recepcion(current_user, id_orden):
             return jsonify({'error': 'Error obteniendo datos de la recepción'}), 500
         
         detalle = detalle_data.get('detalle', {})
+        fotos = detalle.get('fotos', {})
+        comentarios = detalle.get('comentarios', {})
         
         fecha_actual = datetime.now().strftime('%d/%m/%Y %H:%M')
         fecha_ingreso = detalle.get('fecha_ingreso', 'No registrada')
+        codigo_unico = detalle.get('codigo_unico', 'OT-N/A')
         
+        # 2. CREAR ARCHIVO PDF TEMPORAL
         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_file:
             pdf_path = tmp_file.name
         
+        # 3. CONFIGURAR DOCUMENTO
         doc = SimpleDocTemplate(
             pdf_path,
-            pagesize=A4,
-            rightMargin=2*cm,
-            leftMargin=2*cm,
-            topMargin=2*cm,
-            bottomMargin=2*cm
+            pagesize=letter,
+            rightMargin=1.5*cm,
+            leftMargin=1.5*cm,
+            topMargin=1.5*cm,
+            bottomMargin=1.5*cm
         )
         
+        # 4. ESTILOS
         styles = getSampleStyleSheet()
+        
+        # Título principal
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontSize=20,
+            fontSize=22,
             textColor=colors.HexColor('#C1121F'),
             alignment=TA_CENTER,
-            spaceAfter=12
+            spaceAfter=10,
+            fontName='Helvetica-Bold'
         )
-        heading_style = ParagraphStyle(
-            'CustomHeading',
+        
+        # Subtítulo
+        subtitle_style = ParagraphStyle(
+            'CustomSubtitle',
             parent=styles['Heading2'],
             fontSize=14,
             textColor=colors.HexColor('#C1121F'),
-            spaceAfter=6,
-            spaceBefore=12
+            alignment=TA_CENTER,
+            spaceAfter=8,
+            fontName='Helvetica-Bold'
         )
+        
+        # Título de sección
+        section_title_style = ParagraphStyle(
+            'SectionTitle',
+            parent=styles['Heading3'],
+            fontSize=12,
+            textColor=colors.HexColor('#C1121F'),
+            spaceAfter=6,
+            spaceBefore=10,
+            fontName='Helvetica-Bold'
+        )
+        
+        # Texto normal
         normal_style = ParagraphStyle(
             'CustomNormal',
             parent=styles['Normal'],
-            fontSize=10,
-            spaceAfter=4
+            fontSize=9,
+            spaceAfter=3,
+            fontName='Helvetica'
         )
         
+        # Texto en negrita
+        bold_style = ParagraphStyle(
+            'CustomBold',
+            parent=styles['Normal'],
+            fontSize=9,
+            spaceAfter=3,
+            fontName='Helvetica-Bold'
+        )
+        
+        # Texto pequeño para footer
+        footer_style = ParagraphStyle(
+            'Footer',
+            parent=styles['Normal'],
+            fontSize=7,
+            textColor=colors.HexColor('#999999'),
+            alignment=TA_CENTER,
+            fontName='Helvetica'
+        )
+        
+        # 5. FUNCIÓN PARA OBTENER IMAGEN DESDE URL
+        def obtener_imagen_desde_url(url, max_width=120, max_height=100):
+            try:
+                if not url or url == 'null' or url == 'None' or url == '':
+                    return None
+                
+                # Extraer file_id
+                file_id = None
+                import re
+                match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', url)
+                if match:
+                    file_id = match.group(1)
+                else:
+                    match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', url)
+                    if match:
+                        file_id = match.group(1)
+                
+                if not file_id:
+                    return None
+                
+                # Descargar imagen
+                download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                response = requests.get(download_url, headers=headers, timeout=15)
+                
+                if response.status_code != 200:
+                    # Intentar con thumbnail
+                    thumbnail_url = f"https://drive.google.com/thumbnail?id={file_id}&sz=w800"
+                    response = requests.get(thumbnail_url, headers=headers, timeout=15)
+                    if response.status_code != 200:
+                        return None
+                
+                # Crear imagen con ReportLab
+                img = Image(BytesIO(response.content))
+                # Escalar manteniendo proporción
+                img.drawWidth = min(max_width, img.drawWidth)
+                img.drawHeight = min(max_height, img.drawHeight)
+                # Mantener proporción
+                if img.drawWidth > max_width or img.drawHeight > max_height:
+                    ratio = min(max_width / img.drawWidth, max_height / img.drawHeight)
+                    img.drawWidth = img.drawWidth * ratio
+                    img.drawHeight = img.drawHeight * ratio
+                
+                return img
+            except Exception as e:
+                logger.warning(f"⚠️ Error obteniendo imagen: {e}")
+                return None
+        
+        # 6. CONSTRUIR CONTENIDO DEL PDF
         story = []
         
+        # --- ENCABEZADO ---
         story.append(Paragraph("FURIA MOTOR COMPANY", title_style))
-        story.append(Paragraph("ORDEN DE TRABAJO - RECEPCIÓN", heading_style))
+        story.append(Paragraph("ORDEN DE TRABAJO - RECEPCIÓN", subtitle_style))
         story.append(Spacer(1, 0.3*cm))
         
-        story.append(Paragraph(f"<b>Código:</b> {detalle.get('codigo_unico', 'N/A')}", normal_style))
-        story.append(Paragraph(f"<b>Fecha de Ingreso:</b> {fecha_ingreso}", normal_style))
-        story.append(Paragraph(f"<b>Estado:</b> {detalle.get('estado_global', 'En Recepción')}", normal_style))
+        # --- CÓDIGO Y FECHA ---
+        codigo_style = ParagraphStyle(
+            'CodigoStyle',
+            parent=styles['Normal'],
+            fontSize=14,
+            textColor=colors.HexColor('#C1121F'),
+            alignment=TA_CENTER,
+            spaceAfter=8,
+            fontName='Helvetica-Bold'
+        )
+        story.append(Paragraph(f"Código: {codigo_unico}", codigo_style))
+        story.append(Spacer(1, 0.2*cm))
+        
+        # --- INFORMACIÓN GENERAL ---
+        story.append(Paragraph("INFORMACIÓN GENERAL", section_title_style))
+        
+        info_data = [
+            [f"<b>Fecha de Ingreso:</b> {fecha_ingreso}", f"<b>Estado:</b> {detalle.get('estado_global', 'En Recepción')}"],
+            [f"<b>ID Orden:</b> #{detalle.get('id', 'N/A')}", f"<b>Jefe Operativo:</b> {detalle.get('jefe_operativo', {}).get('nombre', 'No asignado')}"]
+        ]
+        
+        info_table = Table(info_data, colWidths=[7*cm, 7*cm])
+        info_table.setStyle(TableStyle([
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8f8f8')),
+            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#dddddd')),
+            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#eeeeee')),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        story.append(info_table)
         story.append(Spacer(1, 0.5*cm))
         
-        story.append(Paragraph("👤 DATOS DEL CLIENTE", heading_style))
-        story.append(Paragraph(f"<b>Nombre:</b> {detalle.get('cliente_nombre', 'No registrado')}", normal_style))
-        story.append(Paragraph(f"<b>Teléfono:</b> {detalle.get('cliente_telefono', 'No registrado')}", normal_style))
-        story.append(Paragraph(f"<b>Ubicación:</b> {detalle.get('cliente_ubicacion', 'No especificada')}", normal_style))
+        # --- DATOS DEL CLIENTE ---
+        story.append(Paragraph("DATOS DEL CLIENTE", section_title_style))
+        
+        cliente_data = [
+            [f"<b>Nombre:</b> {detalle.get('cliente_nombre', 'No registrado')}", f"<b>Teléfono:</b> {detalle.get('cliente_telefono', 'No registrado')}"],
+            [f"<b>Ubicación:</b> {detalle.get('cliente_ubicacion', 'No especificada')}", ""]
+        ]
+        
         if detalle.get('latitud') and detalle.get('longitud'):
-            story.append(Paragraph(f"<b>Coordenadas:</b> {detalle['latitud']}, {detalle['longitud']}", normal_style))
-        story.append(Spacer(1, 0.3*cm))
+            cliente_data[1][1] = f"<b>Coordenadas:</b> {detalle.get('latitud')}, {detalle.get('longitud')}"
         
-        story.append(Paragraph("🚗 DATOS DEL VEHÍCULO", heading_style))
-        story.append(Paragraph(f"<b>Placa:</b> {detalle.get('placa', 'No registrada')}", normal_style))
-        story.append(Paragraph(f"<b>Marca:</b> {detalle.get('marca', 'No registrada')}", normal_style))
-        story.append(Paragraph(f"<b>Modelo:</b> {detalle.get('modelo', 'No registrado')}", normal_style))
-        story.append(Paragraph(f"<b>Año:</b> {detalle.get('anio', 'No especificado')}", normal_style))
-        story.append(Paragraph(f"<b>Kilometraje:</b> {detalle.get('kilometraje', 0)} km", normal_style))
-        story.append(Spacer(1, 0.3*cm))
+        cliente_table = Table(cliente_data, colWidths=[7*cm, 7*cm])
+        cliente_table.setStyle(TableStyle([
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8f8f8')),
+            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#dddddd')),
+            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#eeeeee')),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        story.append(cliente_table)
+        story.append(Spacer(1, 0.5*cm))
         
-        story.append(Paragraph("📝 DESCRIPCIÓN DEL PROBLEMA", heading_style))
-        descripcion = detalle.get('transcripcion_problema', 'No se registró descripción')
-        story.append(Paragraph(descripcion, normal_style))
-        story.append(Spacer(1, 0.3*cm))
+        # --- DATOS DEL VEHÍCULO ---
+        story.append(Paragraph("DATOS DEL VEHÍCULO", section_title_style))
         
-        story.append(Paragraph("✍️ FIRMAS", heading_style))
-        story.append(Spacer(1, 0.3*cm))
+        vehiculo_data = [
+            [f"<b>Placa:</b> {detalle.get('placa', 'No registrada')}", f"<b>Marca:</b> {detalle.get('marca', 'No registrada')}"],
+            [f"<b>Modelo:</b> {detalle.get('modelo', 'No registrado')}", f"<b>Año:</b> {detalle.get('anio', 'No especificado')}"],
+            [f"<b>Kilometraje:</b> {detalle.get('kilometraje', 0)} km", ""]
+        ]
+        
+        vehiculo_table = Table(vehiculo_data, colWidths=[7*cm, 7*cm])
+        vehiculo_table.setStyle(TableStyle([
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8f8f8')),
+            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#dddddd')),
+            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#eeeeee')),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        story.append(vehiculo_table)
+        story.append(Spacer(1, 0.5*cm))
+        
+        # --- FOTOS OBLIGATORIAS ---
+        story.append(Paragraph("FOTOS OBLIGATORIAS", section_title_style))
+        
+        # Mapeo de campos para fotos obligatorias
+        campos_obligatorios = [
+            ('url_lateral_izquierda', 'Lateral Izquierdo'),
+            ('url_lateral_derecha', 'Lateral Derecho'),
+            ('url_foto_frontal', 'Frontal'),
+            ('url_foto_trasera', 'Trasera'),
+            ('url_foto_superior', 'Superior'),
+            ('url_foto_inferior', 'Inferior'),
+            ('url_foto_tablero', 'Tablero')
+        ]
+        
+        # Obtener imágenes obligatorias
+        imagenes_obligatorias = []
+        for campo, label in campos_obligatorios:
+            url = fotos.get(campo)
+            if url and url != 'null' and url != 'None' and url != '':
+                img = obtener_imagen_desde_url(url, max_width=100, max_height=80)
+                if img:
+                    imagenes_obligatorias.append((label, img))
+        
+        if imagenes_obligatorias:
+            # Crear tabla de fotos obligatorias (2 columnas)
+            foto_rows = []
+            row = []
+            for i, (label, img) in enumerate(imagenes_obligatorias):
+                # Crear celda con imagen y etiqueta
+                cell_content = []
+                cell_content.append(img)
+                cell_content.append(Paragraph(label, normal_style))
+                row.append(cell_content)
+                if len(row) == 2 or i == len(imagenes_obligatorias) - 1:
+                    foto_rows.append(row)
+                    row = []
+            
+            # Si quedó una fila incompleta, completar con celdas vacías
+            if row:
+                while len(row) < 2:
+                    row.append(Paragraph("", normal_style))
+                foto_rows.append(row)
+            
+            fotos_table = Table(foto_rows, colWidths=[6*cm, 6*cm])
+            fotos_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#dddddd')),
+                ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#eeeeee')),
+            ]))
+            story.append(fotos_table)
+        else:
+            story.append(Paragraph("No se registraron fotos obligatorias", normal_style))
+        
+        story.append(Spacer(1, 0.5*cm))
+        
+        # --- FOTOS OPCIONALES CON COMENTARIOS ---
+        # Verificar si hay fotos opcionales
+        fotos_opcionales = {}
+        for i in range(1, 11):
+            campo = f'opcional{i}'
+            # Buscar en diferentes formatos
+            url = fotos.get(campo)
+            if not url:
+                url = fotos.get(f'url_{campo}')
+            if url and url != 'null' and url != 'None' and url != '':
+                comentario = comentarios.get(campo, '')
+                fotos_opcionales[campo] = {'url': url, 'comentario': comentario}
+        
+        if fotos_opcionales:
+            story.append(Paragraph("FOTOS DE DETALLE (OPCIONALES)", section_title_style))
+            
+            # Mostrar fotos opcionales en filas de 2
+            opcional_rows = []
+            row = []
+            for campo, data in fotos_opcionales.items():
+                img = obtener_imagen_desde_url(data['url'], max_width=100, max_height=80)
+                if img:
+                    # Crear celda con imagen, etiqueta y comentario
+                    cell_content = []
+                    cell_content.append(img)
+                    label = f"Adicional {campo.replace('opcional', '')}"
+                    cell_content.append(Paragraph(f"<b>{label}</b>", normal_style))
+                    if data['comentario']:
+                        cell_content.append(Paragraph(f"<i>{data['comentario']}</i>", normal_style))
+                    row.append(cell_content)
+                    if len(row) == 2:
+                        opcional_rows.append(row)
+                        row = []
+            
+            if row:
+                while len(row) < 2:
+                    row.append(Paragraph("", normal_style))
+                opcional_rows.append(row)
+            
+            if opcional_rows:
+                opcional_table = Table(opcional_rows, colWidths=[6*cm, 6*cm])
+                opcional_table.setStyle(TableStyle([
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                    ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#dddddd')),
+                    ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#eeeeee')),
+                    ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#fafafa')),
+                ]))
+                story.append(opcional_table)
+        else:
+            story.append(Paragraph("No se registraron fotos de detalle adicionales", normal_style))
+        
+        story.append(Spacer(1, 0.5*cm))
+        
+        # --- DESCRIPCIÓN DEL PROBLEMA ---
+        story.append(Paragraph("DESCRIPCIÓN DEL PROBLEMA", section_title_style))
+        
+        descripcion_texto = detalle.get('transcripcion_problema', 'No se registró descripción')
+        descripcion_style = ParagraphStyle(
+            'DescripcionStyle',
+            parent=styles['Normal'],
+            fontSize=9,
+            spaceAfter=4,
+            fontName='Helvetica',
+            borderPadding=8,
+            backColor=colors.HexColor('#f8f8f8')
+        )
+        story.append(Paragraph(descripcion_texto, descripcion_style))
+        story.append(Spacer(1, 0.5*cm))
+        
+        # --- AUDIO ---
+        audio_url = detalle.get('audio_url')
+        if audio_url and audio_url != 'null' and audio_url != 'None' and audio_url != '':
+            story.append(Paragraph("AUDIO DE LA DESCRIPCIÓN", section_title_style))
+            audio_text = f"<i>Audio disponible en: {audio_url}</i>"
+            story.append(Paragraph(audio_text, normal_style))
+            story.append(Spacer(1, 0.5*cm))
+        
+        # --- FIRMAS ---
+        story.append(Spacer(1, 0.5*cm))
+        story.append(Paragraph("FIRMAS DE CONFORMIDAD", section_title_style))
         
         firma_data = [
             ['', ''],
-            ['Firma del Cliente', 'Firma del Jefe Operativo'],
+            [Paragraph("<b>Firma del Cliente</b>", normal_style), Paragraph("<b>Firma del Jefe Operativo</b>", normal_style)],
+            [Spacer(1, 0.5*cm), Spacer(1, 0.5*cm)],
+            ['', ''],
+            [Spacer(1, 0.5*cm), Spacer(1, 0.5*cm)],
             ['_________________________', '_________________________'],
             [detalle.get('cliente_nombre', '____________________'), 
              detalle.get('jefe_operativo', {}).get('nombre', '____________________')],
@@ -2367,29 +2667,34 @@ def generar_pdf_recepcion(current_user, id_orden):
         firma_table = Table(firma_data, colWidths=[7*cm, 7*cm])
         firma_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LINEABOVE', (0, 2), (-1, 2), 1, colors.black),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ]))
         story.append(firma_table)
         
+        # --- FOOTER ---
         story.append(Spacer(1, 0.5*cm))
-        story.append(Paragraph("Documento generado automáticamente por FURIA MOTOR COMPANY", 
-                              ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#999999'), alignment=TA_CENTER)))
+        story.append(Paragraph(
+            f"Documento generado automáticamente por FURIA MOTOR COMPANY - {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+            footer_style
+        ))
         
+        # 7. GENERAR PDF
         doc.build(story)
         logger.info(f"✅ PDF generado: {pdf_path}")
         
+        # 8. LEER PDF
         with open(pdf_path, 'rb') as f:
             pdf_data = f.read()
         
-        nombre_archivo = f"Recepcion_{detalle.get('codigo_unico', 'orden')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        # 9. SUBIR A GOOGLE DRIVE
+        nombre_archivo = f"Recepcion_{codigo_unico}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         
         folder_path = google_drive.generate_folder_path(
             modulo='recepcion',
-            referencia_id=detalle.get('codigo_unico', 'orden'),
+            referencia_id=codigo_unico,
             subcarpeta='documentos'
         )
         
@@ -2401,6 +2706,7 @@ def generar_pdf_recepcion(current_user, id_orden):
             public=True
         )
         
+        # 10. ACTUALIZAR BASE DE DATOS
         supabase.table('recepcion') \
             .update({
                 'url_pdf': result['url']
@@ -2408,6 +2714,7 @@ def generar_pdf_recepcion(current_user, id_orden):
             .eq('id_orden_trabajo', id_orden) \
             .execute()
         
+        # 11. LIMPIAR ARCHIVO TEMPORAL
         try:
             os.unlink(pdf_path)
         except:
@@ -2415,6 +2722,7 @@ def generar_pdf_recepcion(current_user, id_orden):
         
         logger.info(f"✅ PDF subido a Drive: {nombre_archivo} -> {result['url']}")
         
+        # 12. DEVOLVER URL
         return jsonify({
             'success': True,
             'url': result['url'],

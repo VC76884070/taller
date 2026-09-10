@@ -123,10 +123,6 @@ const btnAbrirModalUbicacion = document.getElementById('btnAbrirModalUbicacion')
 // CONFIGURACIÓN DE FOTOS - OBLIGATORIAS + OPCIONALES
 // =====================================================
 
-// =====================================================
-// CONFIGURACIÓN DE FOTOS - OBLIGATORIAS + OPCIONALES
-// =====================================================
-
 const FOTOS_CONFIG = [
     // FOTOS OBLIGATORIAS (7)
     { id: 'fotoLateralIzq', campo: 'lateral_izquierdo', label: 'Lateral Izquierdo', required: true },
@@ -181,570 +177,6 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
-}
-// =====================================================
-// GENERADOR DE PDF DE RECEPCIÓN EN FRONTEND
-// Usando html2pdf.js + jsPDF
-// =====================================================
-
-// Cargar html2pdf.js dinámicamente si no está
-async function cargarHtml2Pdf() {
-    if (typeof html2pdf !== 'undefined') return;
-    
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-        script.onload = resolve;
-        script.onerror = () => reject(new Error('No se pudo cargar html2pdf.js'));
-        document.head.appendChild(script);
-    });
-}
-
-// =====================================================
-// FUNCIÓN PRINCIPAL: GENERAR Y SUBIR PDF
-// =====================================================
-async function generarYSubirPDFRecepcion(idOrden) {
-    try {
-        mostrarLoading('Generando PDF...');
-        
-        // 1. Cargar librería
-        await cargarHtml2Pdf();
-        
-        // 2. Obtener detalle de la recepción (ya incluye fotos opcionales)
-        const token = localStorage.getItem('token');
-        const response = await fetch(`/api/jefe-operativo/detalle-recepcion/${idOrden}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (!response.ok) {
-            throw new Error('Error obteniendo detalle de la recepción');
-        }
-        
-        const data = await response.json();
-        if (!data.success) {
-            throw new Error(data.error || 'Error en la respuesta');
-        }
-        
-        const detalle = data.detalle;
-        
-        // 3. Convertir imágenes a base64 (para evitar problemas de CORS)
-        mostrarLoading('Procesando imágenes...');
-        const detalleConImagenes = await convertirImagenesABase64(detalle);
-        
-        // 4. Construir HTML del PDF
-        const html = construirHTMLRecepcion(detalleConImagenes);
-        
-        // 5. Crear contenedor temporal fuera de pantalla
-        const contenedor = document.createElement('div');
-        contenedor.innerHTML = html;
-        contenedor.style.position = 'fixed';
-        contenedor.style.left = '-9999px';
-        contenedor.style.top = '0';
-        contenedor.style.width = '210mm'; // A4 ancho
-        contenedor.style.background = 'white';
-        contenedor.style.padding = '0';
-        document.body.appendChild(contenedor);
-        
-        // 6. Esperar a que todas las imágenes carguen
-        await esperarImagenes(contenedor);
-        
-        // 7. Generar PDF como blob
-        mostrarLoading('Generando PDF...');
-        const opt = {
-            margin: [8, 8, 8, 8], // mm
-            filename: `Recepcion_${detalle.codigo_unico}.pdf`,
-            image: { type: 'jpeg', quality: 0.95 },
-            html2canvas: {
-                scale: 2,
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: '#ffffff',
-                logging: false,
-                windowWidth: 800, // ancho de render consistente
-            },
-            jsPDF: {
-                unit: 'mm',
-                format: 'a4',
-                orientation: 'portrait',
-                compress: true
-            },
-            pagebreak: {
-                mode: ['avoid-all', 'css', 'legacy'],
-                before: '.page-break-before',
-                after: '.page-break-after',
-                avoid: '.avoid-break'
-            }
-        };
-        
-        const pdfBlob = await html2pdf()
-            .set(opt)
-            .from(contenedor)
-            .outputPdf('blob');
-        
-        // 8. Limpiar contenedor
-        document.body.removeChild(contenedor);
-        
-        // 9. Convertir blob a base64
-        const pdfBase64 = await blobToBase64(pdfBlob);
-        
-        // 10. Subir a Drive
-        mostrarLoading('Subiendo a Drive...');
-        const uploadResponse = await fetch('/api/jefe-operativo/subir-pdf-recepcion', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                pdf_base64: pdfBase64,
-                id_orden: idOrden,
-                codigo_unico: detalle.codigo_unico
-            })
-        });
-        
-        const uploadData = await uploadResponse.json();
-        
-        if (!uploadData.success) {
-            throw new Error(uploadData.error || 'Error subiendo PDF');
-        }
-        
-        ocultarLoading();
-        mostrarNotificacion('✅ PDF generado y guardado correctamente', 'success');
-        
-        // 11. Abrir el PDF en nueva pestaña (opcional)
-        if (uploadData.url) {
-            window.open(uploadData.url, '_blank');
-        }
-        
-        return uploadData;
-        
-    } catch (error) {
-        ocultarLoading();
-        console.error('❌ Error generando PDF:', error);
-        mostrarNotificacion(`Error: ${error.message}`, 'error');
-        throw error;
-    }
-}
-
-// =====================================================
-// CONVERTIR IMÁGENES A BASE64 (evita CORS)
-// =====================================================
-async function convertirImagenesABase64(detalle) {
-    const detalleCopia = JSON.parse(JSON.stringify(detalle));
-    const fotos = detalleCopia.fotos || {};
-    
-    const token = localStorage.getItem('token');
-    const conversiones = [];
-    
-    for (const [campo, url] of Object.entries(fotos)) {
-        if (url && url !== 'null' && url !== 'None' && url !== '' && url !== 'undefined') {
-            conversiones.push(
-                (async () => {
-                    try {
-                        const resp = await fetch(
-                            `/api/jefe-operativo/proxy-imagen?url=${encodeURIComponent(url)}`,
-                            { headers: { 'Authorization': `Bearer ${token}` } }
-                        );
-                        const data = await resp.json();
-                        if (data.success && data.base64) {
-                            detalleCopia.fotos[campo] = data.base64;
-                        }
-                    } catch (e) {
-                        console.warn(`⚠️ No se pudo convertir ${campo}:`, e);
-                    }
-                })()
-            );
-        }
-    }
-    
-    await Promise.all(conversiones);
-    return detalleCopia;
-}
-
-// =====================================================
-// CONSTRUIR HTML DEL PDF
-// =====================================================
-function construirHTMLRecepcion(detalle) {
-    const FOTOS_OBLIGATORIAS = [
-        ['url_lateral_izquierda', 'Lateral Izquierdo'],
-        ['url_lateral_derecha', 'Lateral Derecho'],
-        ['url_foto_frontal', 'Frontal'],
-        ['url_foto_trasera', 'Trasera'],
-        ['url_foto_superior', 'Superior'],
-        ['url_foto_inferior', 'Inferior'],
-        ['url_foto_tablero', 'Tablero']
-    ];
-    
-    // --- Fotos obligatorias ---
-    let fotosObligatoriasHTML = '';
-    FOTOS_OBLIGATORIAS.forEach(([campo, label]) => {
-        const url = detalle.fotos?.[campo];
-        if (url && url !== 'null' && url !== 'None' && url !== '') {
-            fotosObligatoriasHTML += `
-                <div class="foto-item">
-                    <img src="${url}" alt="${label}">
-                    <div class="foto-label">${label}</div>
-                </div>`;
-        }
-    });
-    
-    // --- Fotos opcionales ---
-    let fotosOpcionalesHTML = '';
-    let contadorOpcionales = 0;
-    for (let i = 1; i <= 10; i++) {
-        const campo = `opcional${i}`;
-        const url = detalle.fotos?.[campo] || detalle.fotos?.[`url_${campo}`];
-        if (url && url !== 'null' && url !== 'None' && url !== '') {
-            contadorOpcionales++;
-            const comentario = detalle.comentarios?.[campo] || detalle.comentarios?.[`url_${campo}`] || '';
-            fotosOpcionalesHTML += `
-                <div class="foto-item">
-                    <img src="${url}" alt="Adicional ${i}">
-                    <div class="foto-label"><b>Adicional ${i}</b></div>
-                    ${comentario ? `<div class="foto-comentario">${escapeHtml(comentario)}</div>` : ''}
-                </div>`;
-        }
-    }
-    
-    // --- Audio ---
-    const audioHTML = detalle.audio_url ? `
-        <div class="audio-info">
-            <span class="audio-icon">🎵</span>
-            <span>Audio disponible en Google Drive</span>
-        </div>` : '';
-    
-    return `
-        <style>
-            .pdf-container {
-                font-family: 'Arial', 'Helvetica', sans-serif;
-                color: #333;
-                font-size: 11px;
-                line-height: 1.4;
-                padding: 15px;
-                background: white;
-                width: 100%;
-                box-sizing: border-box;
-            }
-            .pdf-header {
-                text-align: center;
-                border-bottom: 3px solid #C1121F;
-                padding-bottom: 10px;
-                margin-bottom: 15px;
-            }
-            .pdf-header h1 {
-                color: #C1121F;
-                margin: 0;
-                font-size: 22px;
-                font-weight: bold;
-            }
-            .pdf-header h2 {
-                color: #C1121F;
-                margin: 5px 0;
-                font-size: 13px;
-                font-weight: normal;
-            }
-            .pdf-codigo {
-                font-size: 18px;
-                font-weight: bold;
-                color: #C1121F;
-                margin-top: 8px;
-            }
-            .pdf-section-title {
-                color: #C1121F;
-                font-size: 12px;
-                font-weight: bold;
-                border-bottom: 1px solid #C1121F;
-                padding-bottom: 3px;
-                margin: 14px 0 8px 0;
-                text-transform: uppercase;
-            }
-            .pdf-table {
-                width: 100%;
-                border-collapse: collapse;
-                background: #f8f8f8;
-                margin-bottom: 10px;
-            }
-            .pdf-table td {
-                padding: 5px 8px;
-                border: 1px solid #e0e0e0;
-                font-size: 10px;
-                vertical-align: top;
-            }
-            .pdf-table td b {
-                color: #555;
-            }
-            .fotos-grid {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 8px;
-                margin-bottom: 10px;
-            }
-            .foto-item {
-                text-align: center;
-                page-break-inside: avoid;
-                break-inside: avoid;
-            }
-            .foto-item img {
-                width: 100%;
-                height: 110px;
-                object-fit: cover;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                display: block;
-            }
-            .foto-label {
-                font-size: 9px;
-                color: #666;
-                margin-top: 3px;
-            }
-            .foto-comentario {
-                font-size: 8px;
-                color: #888;
-                font-style: italic;
-                margin-top: 2px;
-                line-height: 1.2;
-            }
-            .descripcion-box {
-                background: #f8f8f8;
-                padding: 10px;
-                border-radius: 4px;
-                font-size: 10px;
-                min-height: 50px;
-                border-left: 3px solid #C1121F;
-            }
-            .audio-info {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                padding: 8px;
-                background: #f0f7ff;
-                border-radius: 4px;
-                font-size: 10px;
-                color: #0066cc;
-            }
-            .firmas-table {
-                width: 100%;
-                margin-top: 40px;
-                page-break-inside: avoid;
-                break-inside: avoid;
-            }
-            .firmas-table td {
-                text-align: center;
-                width: 50%;
-                padding: 0 20px;
-            }
-            .firma-linea {
-                border-top: 1px solid #333;
-                margin-top: 50px;
-                padding-top: 5px;
-                font-size: 10px;
-            }
-            .firma-nombre {
-                font-size: 9px;
-                color: #666;
-                margin-top: 2px;
-            }
-            .pdf-footer {
-                text-align: center;
-                font-size: 8px;
-                color: #999;
-                margin-top: 20px;
-                border-top: 1px solid #eee;
-                padding-top: 8px;
-            }
-            .page-break {
-                page-break-before: always;
-                break-before: page;
-            }
-        </style>
-        
-        <div class="pdf-container">
-            <!-- HEADER -->
-            <div class="pdf-header">
-                <h1>FURIA MOTOR COMPANY</h1>
-                <h2>ORDEN DE TRABAJO - RECEPCIÓN</h2>
-                <div class="pdf-codigo">Código: ${detalle.codigo_unico || 'N/A'}</div>
-            </div>
-            
-            <!-- INFO GENERAL -->
-            <div class="pdf-section-title">Información General</div>
-            <table class="pdf-table">
-                <tr>
-                    <td><b>Fecha Ingreso:</b> ${formatearFecha(detalle.fecha_ingreso)}</td>
-                    <td><b>Estado:</b> ${detalle.estado_global || 'N/A'}</td>
-                </tr>
-                <tr>
-                    <td><b>ID Orden:</b> #${detalle.id || 'N/A'}</td>
-                    <td><b>Jefe Operativo:</b> ${detalle.jefe_operativo?.nombre || 'N/A'}</td>
-                </tr>
-            </table>
-            
-            <!-- CLIENTE -->
-            <div class="pdf-section-title">Datos del Cliente</div>
-            <table class="pdf-table">
-                <tr>
-                    <td><b>Nombre:</b> ${detalle.cliente_nombre || 'N/A'}</td>
-                    <td><b>Teléfono:</b> ${detalle.cliente_telefono || 'N/A'}</td>
-                </tr>
-                <tr>
-                    <td colspan="2"><b>Ubicación:</b> ${detalle.cliente_ubicacion || 'No especificada'}</td>
-                </tr>
-            </table>
-            
-            <!-- VEHÍCULO -->
-            <div class="pdf-section-title">Datos del Vehículo</div>
-            <table class="pdf-table">
-                <tr>
-                    <td><b>Placa:</b> ${detalle.placa || 'N/A'}</td>
-                    <td><b>Marca:</b> ${detalle.marca || 'N/A'}</td>
-                </tr>
-                <tr>
-                    <td><b>Modelo:</b> ${detalle.modelo || 'N/A'}</td>
-                    <td><b>Año:</b> ${detalle.anio || 'N/A'}</td>
-                </tr>
-                <tr>
-                    <td colspan="2"><b>Kilometraje:</b> ${detalle.kilometraje || 0} km</td>
-                </tr>
-            </table>
-            
-            <!-- FOTOS OBLIGATORIAS -->
-            <div class="pdf-section-title">Fotos Obligatorias</div>
-            <div class="fotos-grid">
-                ${fotosObligatoriasHTML || '<p style="font-size:10px;color:#888;">No se registraron fotos obligatorias</p>'}
-            </div>
-            
-            <!-- FOTOS OPCIONALES -->
-            ${contadorOpcionales > 0 ? `
-                <div class="pdf-section-title">Fotos de Detalle (Opcionales)</div>
-                <div class="fotos-grid">
-                    ${fotosOpcionalesHTML}
-                </div>
-            ` : ''}
-            
-            <!-- DESCRIPCIÓN -->
-            <div class="pdf-section-title">Descripción del Problema</div>
-            <div class="descripcion-box">
-                ${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}
-            </div>
-            
-            ${audioHTML}
-            
-            <!-- FIRMAS -->
-            <div class="pdf-section-title">Firmas de Conformidad</div>
-            <table class="firmas-table">
-                <tr>
-                    <td>
-                        <div class="firma-linea">
-                            <b>Firma del Cliente</b>
-                            <div class="firma-nombre">${detalle.cliente_nombre || ''}</div>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="firma-linea">
-                            <b>Firma del Jefe Operativo</b>
-                            <div class="firma-nombre">${detalle.jefe_operativo?.nombre || ''}</div>
-                        </div>
-                    </td>
-                </tr>
-            </table>
-            
-            <!-- FOOTER -->
-            <div class="pdf-footer">
-                Documento generado automáticamente por FURIA MOTOR COMPANY - ${new Date().toLocaleString('es-ES')}
-            </div>
-        </div>
-    `;
-}
-
-// =====================================================
-// HELPERS
-// =====================================================
-
-function esperarImagenes(contenedor) {
-    const imgs = contenedor.querySelectorAll('img');
-    return Promise.all(Array.from(imgs).map(img => {
-        if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
-        return new Promise(resolve => {
-            img.onload = resolve;
-            img.onerror = resolve;
-            // Timeout por si alguna imagen se cuelga
-            setTimeout(resolve, 5000);
-        });
-    }));
-}
-
-function blobToBase64(blob) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-    });
-}
-
-function formatearFecha(fecha) {
-    if (!fecha) return 'N/A';
-    try {
-        return new Date(fecha).toLocaleString('es-ES', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-        });
-    } catch {
-        return fecha;
-    }
-}
-
-function escapeHtml(texto) {
-    if (!texto) return '';
-    const div = document.createElement('div');
-    div.textContent = texto;
-    return div.innerHTML;
-}
-
-function mostrarLoading(mensaje) {
-    // Implementa según tu sistema (o usa un spinner existente)
-    const el = document.getElementById('loading-pdf') || crearLoading();
-    el.querySelector('.loading-text').textContent = mensaje;
-    el.style.display = 'flex';
-}
-
-function ocultarLoading() {
-    const el = document.getElementById('loading-pdf');
-    if (el) el.style.display = 'none';
-}
-
-function crearLoading() {
-    const div = document.createElement('div');
-    div.id = 'loading-pdf';
-    div.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;';
-    div.innerHTML = `
-        <div style="background:white;padding:30px 40px;border-radius:12px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
-            <div style="border:4px solid #f3f3f3;border-top:4px solid #C1121F;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:0 auto 15px;"></div>
-            <div class="loading-text" style="color:#333;font-weight:bold;">Cargando...</div>
-        </div>
-        <style>@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style>
-    `;
-    document.body.appendChild(div);
-    return div;
-}
-function setupBotonGenerarPDF() {
-    const btn = document.getElementById('btn-generar-pdf');
-    if (!btn) {
-        console.log('ℹ️ No existe botón btn-generar-pdf (esto es normal si usas otro flujo)');
-        return;
-    }
-    btn.addEventListener('click', async () => {
-        const idOrden = datosReporteFinal?.id || recepcionEditandoId;
-        if (!idOrden) {
-            mostrarNotificacion('⚠️ No hay orden seleccionada', 'warning');
-            return;
-        }
-        try {
-            await generarYSubirPDFRecepcion(idOrden);
-        } catch (error) {
-            console.error('Error:', error);
-        }
-    });
 }
 
 function mostrarNotificacion(mensaje, tipo = 'info') {
@@ -958,9 +390,8 @@ function actualizarProgresoFoto(campo, progreso, estado = 'pending') {
 }
 
 // =====================================================
-// SUBIR FOTO A GOOGLE DRIVE
+// SUBIR FOTO A GOOGLE DRIVE (CORREGIDO)
 // =====================================================
-
 async function subirFotoGoogleDrive(file, carpeta, campo) {
     return new Promise(async (resolve, reject) => {
         if (subidasActivas[campo]) {
@@ -1012,17 +443,7 @@ async function subirFotoGoogleDrive(file, carpeta, campo) {
                             });
                             if (retryResponse.ok) {
                                 const data = await retryResponse.json();
-                                if (data.success && data.url) {
-                                    // Guardar la URL en el DOM inmediatamente
-                                    const uploadDiv = document.getElementById(`upload-${campo}`);
-                                    if (uploadDiv) {
-                                        uploadDiv.setAttribute('data-drive-url', data.url);
-                                        uploadDiv.dataset.driveUrl = data.url;
-                                        fotosSubidasLocal[campo] = data.url;
-                                    }
-                                    resolve(data.url);
-                                    return;
-                                }
+                                if (data.success && data.url) { resolve(data.url); return; }
                             }
                         }
                     }
@@ -1035,18 +456,8 @@ async function subirFotoGoogleDrive(file, carpeta, campo) {
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             
             const data = await response.json();
-            if (data.success && data.url) {
-                // Guardar la URL en el DOM inmediatamente
-                const uploadDiv = document.getElementById(`upload-${campo}`);
-                if (uploadDiv) {
-                    uploadDiv.setAttribute('data-drive-url', data.url);
-                    uploadDiv.dataset.driveUrl = data.url;
-                    fotosSubidasLocal[campo] = data.url;
-                }
-                resolve(data.url);
-            } else {
-                reject(new Error(data.error || 'Error subiendo foto'));
-            }
+            if (data.success && data.url) resolve(data.url);
+            else reject(new Error(data.error || 'Error subiendo foto'));
         } catch (error) {
             reject(error);
         } finally {
@@ -1354,9 +765,9 @@ async function procesarCola() {
     setTimeout(procesarCola, 500);
 }
 
-// =====================================================
-// PROCESAR FOTO (SUBIDA Y VALIDACIÓN)
-// =====================================================
+// En recepcion.js - Función procesarFoto (CORREGIDA)
+
+// En recepcion.js - Función procesarFoto (CORREGIDA)
 
 async function procesarFoto(input, foto) {
     const file = input.files[0];
@@ -1475,27 +886,20 @@ async function procesarFoto(input, foto) {
         // --- COMPLETAR PROGRESO ---
         actualizarProgresoFotoDirecto(foto.campo, 100);
 
-        // GUARDAR URL EN EL DOM - ESTO ES CRÍTICO
+        // --- GUARDAR URL EN EL DOM ---
         if (uploadDiv) {
             uploadDiv.setAttribute('data-drive-url', url);
             uploadDiv.dataset.driveUrl = url;
             fotosSubidasLocal[foto.campo] = url;
-            
-            // GUARDAR EN window.datosOriginalesRecepcion si existe
-            if (window.datosOriginalesRecepcion?.fotos) {
-                window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]] = url;
-            }
-            
-            console.log(`✅ URL guardada en DOM para ${foto.campo}: ${url.substring(0, 50)}...`);
         }
 
-        // ACTUALIZAR PREVIEW CON LA URL
+        // 🔥 ACTUALIZAR PREVIEW CON LA URL
         setTimeout(() => {
             actualizarPreviewConUrl(foto.campo, url);
             mostrarNotificacion(`✅ ${foto.label} subida exitosamente`, 'success');
         }, 300);
 
-        // ACTUALIZAR SESIÓN INMEDIATAMENTE
+        // 🔥 GUARDAR EN SESIÓN (PARA TODAS LAS FOTOS, INCLUIDAS OPCIONALES)
         try {
             // Recopilar todas las fotos actuales
             const fotosData = {};
@@ -1509,6 +913,9 @@ async function procesarFoto(input, foto) {
                 }
             }
             
+            // Recopilar comentarios
+            const comentariosData = obtenerComentariosOpcionales();
+            
             // Guardar en sesión
             await fetchWithToken(`${API_URL}/jefe-operativo/guardar-seccion`, {
                 method: 'POST',
@@ -1516,7 +923,8 @@ async function procesarFoto(input, foto) {
                     codigo: codigoSesion,
                     seccion: 'fotos',
                     datos: {
-                        fotos: fotosData
+                        fotos: fotosData,
+                        comentarios: comentariosData
                     }
                 })
             });
@@ -1524,12 +932,6 @@ async function procesarFoto(input, foto) {
         } catch (e) {
             console.warn('⚠️ Error guardando fotos en sesión:', e);
         }
-
-        // FORZAR VALIDACIÓN INMEDIATA
-        setTimeout(() => {
-            validarCompletadoFotos();
-            actualizarBotonFinalizar();
-        }, 500);
 
         console.log(`✅ Foto ${foto.campo} subida exitosamente`);
 
@@ -1559,7 +961,6 @@ async function procesarFoto(input, foto) {
 // =====================================================
 // ACTUALIZAR PROGRESO DE FOTO - VERSIÓN DIRECTA (MÁS RÁPIDA)
 // =====================================================
-
 function actualizarProgresoFotoDirecto(campo, progreso) {
     // Actualizar ring
     const ring = document.getElementById(`ring-${campo}`);
@@ -1597,9 +998,7 @@ function actualizarProgresoFotoDirecto(campo, progreso) {
         }
     }
 }
-// =====================================================
-// ACTUALIZAR PREVIEW CON URL (PROXY)
-// =====================================================
+// En recepcion.js - Función actualizarPreviewConUrl (CORREGIDA)
 
 function actualizarPreviewConUrl(campo, url) {
     // Buscar la configuración de la foto (obligatoria u opcional)
@@ -1623,7 +1022,7 @@ function actualizarPreviewConUrl(campo, url) {
     uploadDiv.dataset.driveUrl = url;
     fotosSubidasLocal[campo] = url;
 
-    // Cargar imagen con proxy (funciona para todas las fotos)
+    // 🔥 Cargar imagen con proxy (funciona para todas las fotos)
     cargarImagenProxy(url, preview, true).then((result) => {
         if (result) {
             uploadDiv.classList.add('has-image');
@@ -1638,12 +1037,6 @@ function actualizarPreviewConUrl(campo, url) {
 
             actualizarProgresoFoto(campo, 100, 'completed');
             console.log(`✅ Preview actualizado con proxy para ${campo} (${fotoConfig.label})`);
-            
-            // Forzar validación después de actualizar
-            setTimeout(() => {
-                validarCompletadoFotos();
-                actualizarBotonFinalizar();
-            }, 300);
         } else {
             uploadDiv.classList.add('error');
             mostrarErrorEnPreview(campo, 'No se pudo cargar la imagen');
@@ -1711,31 +1104,48 @@ function mostrarErrorEnPreview(campo, mensaje) {
 // VALIDAR COMPLETADO DE FOTOS (SOLO OBLIGATORIAS)
 // =====================================================
 
+// =====================================================
+// VALIDAR COMPLETADO DE FOTOS (SOLO OBLIGATORIAS)
+// =====================================================
+
 function validarCompletadoFotos() {
     let fotosConUrl = 0;
     let fotosDetalle = {};
+    let fotosEliminadas = 0;
+    let fotosSubiendo = 0;
     
     console.log('📸 Validando fotos obligatorias...');
     
-    // Solo validar fotos obligatorias (las primeras 7)
+    // Solo validar fotos obligatorias (7)
     const fotosObligatorias = FOTOS_CONFIG.filter(f => f.required === true);
     
     for (const foto of fotosObligatorias) {
         const uploadDiv = document.getElementById(`upload-${foto.id}`);
         const hasImage = uploadDiv?.classList.contains('has-image') || false;
         
-        // PRIORIDAD: 1. data-drive-url, 2. dataset.driveUrl, 3. fotosSubidasLocal, 4. sesionActual
+        // 1. Buscar URL en el DOM
         let driveUrl = uploadDiv?.getAttribute('data-drive-url') || 
                        uploadDiv?.dataset?.driveUrl || 
-                       fotosSubidasLocal[foto.campo];
+                       null;
         
-        // Si no hay URL en el DOM, buscar en window.datosOriginalesRecepcion
+        // 2. Buscar en fotosSubidasLocal
+        if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
+            const localUrl = fotosSubidasLocal[foto.campo];
+            if (localUrl && localUrl !== 'null' && localUrl !== '' && localUrl !== 'undefined') {
+                driveUrl = localUrl;
+                if (uploadDiv) {
+                    uploadDiv.setAttribute('data-drive-url', driveUrl);
+                    uploadDiv.dataset.driveUrl = driveUrl;
+                }
+            }
+        }
+        
+        // 3. Buscar en datos originales de recepción (modo edición)
         if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
             if (window.datosOriginalesRecepcion?.fotos) {
                 const url = window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]];
                 if (url && url !== 'null' && url !== '' && url !== 'undefined') {
                     driveUrl = url;
-                    // Guardar en el DOM para futuras referencias
                     if (uploadDiv) {
                         uploadDiv.setAttribute('data-drive-url', driveUrl);
                         uploadDiv.dataset.driveUrl = driveUrl;
@@ -1745,7 +1155,7 @@ function validarCompletadoFotos() {
             }
         }
         
-        // Si no hay URL, buscar en la sesión
+        // 4. Buscar en sesión actual
         if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
             if (sesionActual?.datos?.fotos) {
                 const url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
@@ -1760,14 +1170,56 @@ function validarCompletadoFotos() {
             }
         }
         
-        // VERIFICAR SI LA FOTO ES VÁLIDA
-        const esValida = driveUrl && 
-                         driveUrl !== 'null' && 
-                         driveUrl !== '' && 
-                         driveUrl !== 'undefined' &&
-                         driveUrl !== 'None';
+        // 5. Buscar en fotos originales (modo edición)
+        if (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined') {
+            if (window.fotosOriginalesRecepcion) {
+                const url = window.fotosOriginalesRecepcion[CAMPO_MAP[foto.campo]];
+                if (url && url !== 'null' && url !== '' && url !== 'undefined') {
+                    driveUrl = url;
+                    if (uploadDiv) {
+                        uploadDiv.setAttribute('data-drive-url', driveUrl);
+                        uploadDiv.dataset.driveUrl = driveUrl;
+                        fotosSubidasLocal[foto.campo] = driveUrl;
+                    }
+                }
+            }
+        }
         
-        if (esValida) {
+        // VERIFICAR SI LA FOTO FUE ELIMINADA MANUALMENTE
+        const preview = uploadDiv?.querySelector('.upload-preview');
+        const tieneImagenPreview = preview && 
+                                   preview.style.backgroundImage && 
+                                   preview.style.backgroundImage !== '' && 
+                                   preview.style.backgroundImage !== 'none' &&
+                                   !preview.style.backgroundImage.includes('Sin imagen') &&
+                                   !preview.style.backgroundImage.includes('error');
+        
+        const esEliminada = !tieneImagenPreview && (!driveUrl || driveUrl === 'null' || driveUrl === '' || driveUrl === 'undefined');
+        
+        if (esEliminada) {
+            fotosEliminadas++;
+            if (uploadDiv) {
+                uploadDiv.removeAttribute('data-drive-url');
+                delete uploadDiv.dataset.driveUrl;
+                delete fotosSubidasLocal[foto.campo];
+            }
+            if (window.datosOriginalesRecepcion?.fotos) {
+                window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]] = null;
+            }
+            if (window.fotosOriginalesRecepcion) {
+                window.fotosOriginalesRecepcion[CAMPO_MAP[foto.campo]] = null;
+            }
+            fotosDetalle[foto.campo] = { 
+                url: null, 
+                estado: 'eliminada',
+                label: foto.label 
+            };
+            console.log(`📸 ${foto.campo}: ELIMINADA ❌`);
+            continue;
+        }
+        
+        // CONTAR SOLO SI TIENE URL VÁLIDA Y NO FUE ELIMINADA
+        if (driveUrl && driveUrl !== 'null' && driveUrl !== '' && driveUrl !== 'undefined') {
             fotosConUrl++;
             fotosDetalle[foto.campo] = { 
                 url: driveUrl, 
@@ -1775,8 +1227,9 @@ function validarCompletadoFotos() {
                 label: foto.label 
             };
             console.log(`📸 ${foto.campo}: URL válida ✅`);
-        } else if (hasImage) {
-            // Tiene imagen en el preview pero no URL (subiendo o error)
+        } else if (tieneImagenPreview) {
+            // Tiene imagen en preview pero aún no tiene URL (subiendo)
+            fotosSubiendo++;
             fotosDetalle[foto.campo] = { 
                 url: null, 
                 estado: 'subiendo',
@@ -1793,7 +1246,7 @@ function validarCompletadoFotos() {
         }
     }
     
-    // COMPLETADO = TODAS LAS 7 FOTOS TIENEN URL VÁLIDA
+    // EL COMPLETADO ES CUANDO TENEMOS EXACTAMENTE 7 FOTOS CON URL VÁLIDA
     const completado = fotosConUrl === 7;
     
     // Actualizar badge de estado
@@ -1805,13 +1258,19 @@ function validarCompletadoFotos() {
         } else if (fotosConUrl > 0) {
             fotosBadge.textContent = `⏳ ${fotosConUrl}/7 en Drive`;
             fotosBadge.className = 'status-badge en-proceso';
+        } else if (fotosSubiendo > 0) {
+            fotosBadge.textContent = `⏳ Subiendo ${fotosSubiendo}/7`;
+            fotosBadge.className = 'status-badge en-proceso';
+        } else if (fotosEliminadas > 0) {
+            fotosBadge.textContent = `⚠️ ${fotosEliminadas} fotos eliminadas`;
+            fotosBadge.className = 'status-badge en-proceso';
         } else {
             fotosBadge.textContent = `○ 0/7 fotos`;
             fotosBadge.className = 'status-badge en-proceso';
         }
     }
     
-    // ACTUALIZAR ESTADO GLOBAL
+    // ACTUALIZAR EL ESTADO GLOBAL
     if (seccionesCompletadasLocal.fotos !== completado) {
         seccionesCompletadasLocal.fotos = completado;
         actualizarBotonFinalizar();
@@ -1821,11 +1280,16 @@ function validarCompletadoFotos() {
     console.log('📸 Resumen final (obligatorias):', {
         total: fotosConUrl,
         completado: completado,
+        eliminadas: fotosEliminadas,
+        subiendo: fotosSubiendo,
         detalle: fotosDetalle
     });
     
     return completado;
 }
+
+// En recepcion.js - Función guardarSeccion (CORREGIDA)
+
 async function guardarSeccion(seccion) {
     if (!codigoSesion) return;
     let datos = {};
@@ -1850,15 +1314,15 @@ async function guardarSeccion(seccion) {
             };
             break;
         case 'fotos':
-            // RECOLECTAR TODAS LAS FOTOS (OBLIGATORIAS + OPCIONALES)
+            // 🔥 RECOLECTAR TODAS LAS FOTOS (OBLIGATORIAS + OPCIONALES)
             const fotosData = {};
             const comentariosData = obtenerComentariosOpcionales();
             
             for (const foto of FOTOS_CONFIG) {
                 const uploadDiv = document.getElementById(`upload-${foto.id}`);
                 let url = uploadDiv?.getAttribute('data-drive-url') || 
-                        uploadDiv?.dataset?.driveUrl || 
-                        fotosSubidasLocal[foto.campo];
+                          uploadDiv?.dataset?.driveUrl || 
+                          fotosSubidasLocal[foto.campo];
                 
                 if (!url && sesionActual?.datos?.fotos) {
                     url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
@@ -1869,7 +1333,7 @@ async function guardarSeccion(seccion) {
                 }
             }
             
-            // Enviar todas las fotos (incluyendo opcionales)
+            // 🔥 Enviar todas las fotos (incluyendo opcionales)
             datos = {
                 fotos: fotosData,
                 comentarios: comentariosData
@@ -2247,13 +1711,13 @@ function actualizarEstadoVisualSeccion(seccion, completada) {
 }
 
 // =====================================================
-// ACTUALIZAR BOTÓN FINALIZAR
+// ACTUALIZAR BOTÓN FINALIZAR (COMPLETA)
 // =====================================================
 
 function actualizarBotonFinalizar() {
     if (!btnFinalizar) return;
     
-    // Estado real de cada sección (asegurar valores booleanos)
+    // ESTADO REAL DE CADA SECCIÓN (asegurar valores booleanos)
     const clienteCompleto = seccionesCompletadasLocal.cliente === true;
     const vehiculoCompleto = seccionesCompletadasLocal.vehiculo === true;
     const fotosCompleto = seccionesCompletadasLocal.fotos === true;
@@ -2275,7 +1739,7 @@ function actualizarBotonFinalizar() {
         btnFinalizar.title = '✅ Todas las secciones completas';
     }
     
-    // Debug en consola (solo para desarrollo)
+    // Debug en consola
     console.log('📊 Estado secciones:', {
         cliente: clienteCompleto,
         vehiculo: vehiculoCompleto,
@@ -2451,29 +1915,13 @@ async function finalizarSesionConReporte() {
 
     try {
         // =============================================
-        // 1. FORZAR VALIDACIÓN DE TODAS LAS SECCIONES
+        // 1. RECOLECTAR TODAS LAS URLS DE FOTOS OBLIGATORIAS
         // =============================================
-        updateProgressMessage('Verificando datos...');
-        
-        // Validar cliente
-        validarCompletadoCliente();
-        
-        // Validar vehículo
-        validarCompletadoVehiculo();
-        
-        // VALIDAR FOTOS - ESTO ES CRÍTICO
-        const fotosCompletas = validarCompletadoFotos();
-        
-        // Validar descripción
-        validarCompletadoDescripcion();
-        
-        // =============================================
-        // 2. RECOLECTAR TODAS LAS URLS DE FOTOS
-        // =============================================
-        updateProgressMessage('Recolectando fotos...');
+        updateProgressMessage('Verificando fotos...');
         
         const fotosObligatorias = FOTOS_CONFIG.filter(f => f.required === true);
         const fotosParaGuardar = {};
+        let fotosFaltantes = [];
         let totalFotosConUrl = 0;
         let fotoTieneSubidaPendiente = false;
 
@@ -2492,25 +1940,50 @@ async function finalizarSesionConReporte() {
                 }
             }
             
-            // Verificar en datos originales
+            // 3. Buscar en datos originales (modo edición)
             if (!url || url === 'null' || url === '' || url === 'undefined') {
                 if (window.datosOriginalesRecepcion?.fotos) {
                     url = window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]];
                 }
             }
             
+            // 4. Buscar en fotos originales
+            if (!url || url === 'null' || url === '' || url === 'undefined') {
+                if (window.fotosOriginalesRecepcion) {
+                    url = window.fotosOriginalesRecepcion[CAMPO_MAP[foto.campo]];
+                }
+            }
+            
+            // VERIFICAR SI LA FOTO TIENE IMAGEN EN PREVIEW (subida pero sin URL)
+            const preview = uploadDiv?.querySelector('.upload-preview');
+            const hasImage = uploadDiv?.classList.contains('has-image') || 
+                            (preview && preview.style.backgroundImage && 
+                             preview.style.backgroundImage !== '' && 
+                             preview.style.backgroundImage !== 'none' &&
+                             !preview.style.backgroundImage.includes('Sin imagen'));
+            
+            // Si tiene imagen pero no URL, está subiendo
+            if (hasImage && (!url || url === 'null' || url === '' || url === 'undefined')) {
+                fotoTieneSubidaPendiente = true;
+                fotosFaltantes.push(`${foto.label} (subiendo...)`);
+                continue;
+            }
+            
+            // Si no tiene imagen y no tiene URL, está vacía
+            if (!hasImage && (!url || url === 'null' || url === '' || url === 'undefined')) {
+                fotosFaltantes.push(foto.label);
+                continue;
+            }
+            
+            // Si tiene URL válida
             if (url && url !== 'null' && url !== '' && url !== 'undefined') {
                 fotosParaGuardar[foto.campo] = url;
                 totalFotosConUrl++;
-                console.log(`📸 ${foto.campo}: ${url.substring(0, 50)}...`);
-            } else {
-                fotosParaGuardar[foto.campo] = null;
-                console.log(`📸 ${foto.campo}: SIN URL`);
             }
         }
 
         // =============================================
-        // 3. VERIFICAR QUE TODAS LAS FOTOS TENGAN URL
+        // 2. VERIFICAR QUE TODAS LAS FOTOS TENGAN URL
         // =============================================
 
         // Si hay subidas pendientes, esperar un poco
@@ -2535,18 +2008,18 @@ async function finalizarSesionConReporte() {
 
         // Si faltan fotos, verificar nuevamente qué fotos faltan
         if (totalFotosConUrl < 7) {
-            // Intentar guardar las fotos en la sesión
-            if (Object.keys(fotosParaGuardar).filter(k => fotosParaGuardar[k]).length > 0) {
-                updateProgressMessage('Guardando fotos en el servidor...');
+            fotosFaltantes = [];
+            for (const foto of fotosObligatorias) {
+                const uploadDiv = document.getElementById(`upload-${foto.id}`);
+                let url = uploadDiv?.getAttribute('data-drive-url') || 
+                         uploadDiv?.dataset?.driveUrl || 
+                         fotosSubidasLocal[foto.campo];
                 
-                const guardarResponse = await fetchWithToken(`${API_URL}/jefe-operativo/guardar-seccion`, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        codigo: codigoSesion,
-                        seccion: 'fotos',
-                        datos: { fotos: fotosParaGuardar }
-                    })
-                });
+                if (!url || url === 'null' || url === '' || url === 'undefined') {
+                    if (sesionActual?.datos?.fotos) {
+                        url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
+                    }
+                }
                 
                 if (!url || url === 'null' || url === '' || url === 'undefined') {
                     // Verificar si tiene imagen en el preview
@@ -2563,71 +2036,46 @@ async function finalizarSesionConReporte() {
                 }
             }
             
-            // VERIFICAR NUEVAMENTE DESPUÉS DE GUARDAR
-            if (totalFotosConUrl < 7) {
-                // Contar fotos faltantes
-                const fotosFaltantes = [];
-                for (const foto of FOTOS_CONFIG) {
-                    if (foto.required) {
-                        const uploadDiv = document.getElementById(`upload-${foto.id}`);
-                        let url = uploadDiv?.getAttribute('data-drive-url') || 
-                                 uploadDiv?.dataset?.driveUrl || 
-                                 fotosSubidasLocal[foto.campo];
-                        
-                        if (!url || url === 'null' || url === '' || url === 'undefined') {
-                            if (sesionActual?.datos?.fotos) {
-                                url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
-                            }
-                        }
-                        
-                        if (!url || url === 'null' || url === '' || url === 'undefined') {
-                            fotosFaltantes.push(foto.label);
-                        }
-                    }
-                }
-                
-                if (fotosFaltantes.length > 0) {
-                    completeProgress(false);
-                    mostrarNotificacion(`⚠️ Faltan fotos obligatorias: ${fotosFaltantes.join(', ')}`, 'warning');
-                    return;
-                }
+            if (fotosFaltantes.length > 0) {
+                completeProgress(false);
+                mostrarNotificacion(`⚠️ Faltan fotos obligatorias: ${fotosFaltantes.join(', ')}`, 'warning');
+                return;
             }
         }
 
         // =============================================
-        // 4. VERIFICAR ESTADO FINAL DE SECCIONES
+        // 3. VALIDAR TODAS LAS SECCIONES
         // =============================================
         updateProgressBar(30);
+        updateProgressMessage('Validando datos...');
         
-        // Recargar estado desde el DOM
+        // Validar cliente
         const clienteNombre = document.getElementById('clienteNombre')?.value?.trim() || '';
         const clienteTelefono = document.getElementById('clienteTelefono')?.value?.trim() || '';
         const clienteUbicacion = document.getElementById('clienteUbicacion')?.value?.trim() || '';
         seccionesCompletadasLocal.cliente = !!(clienteNombre && clienteTelefono && clienteUbicacion);
+        actualizarEstadoVisualSeccion('cliente', seccionesCompletadasLocal.cliente);
         
+        // Validar vehículo
         const placa = document.getElementById('vehiculoPlaca')?.value?.trim() || '';
         const marca = document.getElementById('vehiculoMarca')?.value?.trim() || '';
         const modelo = document.getElementById('vehiculoModelo')?.value?.trim() || '';
         const anio = document.getElementById('vehiculoAnio')?.value?.trim() || '';
         const kilometraje = document.getElementById('vehiculoKilometraje')?.value?.trim() || '';
         seccionesCompletadasLocal.vehiculo = !!(placa && marca && modelo && anio && kilometraje);
-        
-        // Fotos - usar el valor validado
-        seccionesCompletadasLocal.fotos = totalFotosConUrl === 7;
-        
-        const descripcionTexto = descripcionProblema?.value?.trim() || '';
-        const tieneAudio = !!(audioDriveUrl && audioDriveUrl !== 'null' && audioDriveUrl !== '');
-        seccionesCompletadasLocal.descripcion = !!(descripcionTexto && descripcionTexto.length > 0 && tieneAudio);
-        
-        // Actualizar badges
-        actualizarEstadoVisualSeccion('cliente', seccionesCompletadasLocal.cliente);
         actualizarEstadoVisualSeccion('vehiculo', seccionesCompletadasLocal.vehiculo);
+        
+        // Validar fotos (usar totalFotosConUrl)
+        seccionesCompletadasLocal.fotos = totalFotosConUrl === 7;
         actualizarEstadoVisualSeccion('fotos', seccionesCompletadasLocal.fotos);
+        
+        // Validar descripción
+        const descripcionTexto = descripcionProblema?.value?.trim() || '';
+        seccionesCompletadasLocal.descripcion = !!(descripcionTexto && descripcionTexto.length > 0);
         actualizarEstadoVisualSeccion('descripcion', seccionesCompletadasLocal.descripcion);
-        actualizarBotonFinalizar();
         
         // =============================================
-        // 5. VERIFICAR SECCIONES FALTANTES
+        // 4. VERIFICAR ESTADO FINAL
         // =============================================
         const seccionesFaltantes = [];
         if (!seccionesCompletadasLocal.cliente) seccionesFaltantes.push('Cliente');
@@ -2642,7 +2090,7 @@ async function finalizarSesionConReporte() {
         }
 
         // =============================================
-        // 6. CONFIRMAR CON EL USUARIO
+        // 5. CONFIRMAR CON EL USUARIO
         // =============================================
         if (!confirm('✅ ¿Finalizar recepción?\n\nLos datos se guardarán permanentemente y se generará la orden de trabajo.')) {
             hideProgress();
@@ -2650,7 +2098,7 @@ async function finalizarSesionConReporte() {
         }
 
         // =============================================
-        // 7. PREPARAR DATOS PARA ENVIAR
+        // 6. PREPARAR DATOS PARA ENVIAR - FORMATO CORREGIDO
         // =============================================
         updateProgressBar(50);
         updateProgressMessage('Preparando datos...');
@@ -2780,7 +2228,7 @@ async function finalizarSesionConReporte() {
         console.log('📤 Total fotos con URL:', Object.values(fotosFinales).filter(v => v !== null).length);
 
         // =============================================
-        // 8. ENVIAR AL SERVIDOR PARA FINALIZAR
+        // 7. ENVIAR AL SERVIDOR PARA FINALIZAR
         // =============================================
         updateProgressBar(60);
         updateProgressMessage('Generando orden de trabajo...');
@@ -2811,7 +2259,7 @@ async function finalizarSesionConReporte() {
         }
 
         // =============================================
-        // 9. PROCESAR RESPUESTA EXITOSA
+        // 8. PROCESAR RESPUESTA EXITOSA
         // =============================================
         updateProgressBar(90);
         updateProgressMessage('¡Recepción finalizada con éxito!');
@@ -2820,7 +2268,7 @@ async function finalizarSesionConReporte() {
         mostrarNotificacion(`✅ Recepción finalizada: ${data.codigo || 'OT-N/A'}`, 'success');
         
         // =============================================
-        // 10. GENERAR REPORTE / PDF
+        // 9. GENERAR REPORTE / PDF
         // =============================================
         if (idOrden) {
             updateProgressMessage('Generando reporte...');
@@ -2830,7 +2278,7 @@ async function finalizarSesionConReporte() {
         }
         
         // =============================================
-        // 11. LIMPIAR SESIÓN
+        // 10. LIMPIAR SESIÓN
         // =============================================
         updateProgressBar(100);
         updateProgressMessage('¡Completado!');
@@ -2855,87 +2303,6 @@ async function finalizarSesionConReporte() {
                 window.location.href = `${window.API_BASE_URL}/`;
             }, 3000);
         }
-    }
-}
-// =====================================================
-// FORZAR SINCRONIZACIÓN DE FOTOS (ÚTIL PARA DEBUG)
-// =====================================================
-
-async function forzarSincronizacionFotos() {
-    if (!codigoSesion) {
-        mostrarNotificacion('⚠️ No hay sesión activa', 'warning');
-        return;
-    }
-    
-    console.log('🔄 Forzando sincronización de fotos...');
-    mostrarNotificacion('🔄 Sincronizando fotos...', 'info');
-    
-    // Recolectar todas las fotos actuales
-    const fotosData = {};
-    let totalFotos = 0;
-    
-    for (const foto of FOTOS_CONFIG) {
-        const uploadDiv = document.getElementById(`upload-${foto.id}`);
-        let url = uploadDiv?.getAttribute('data-drive-url') || 
-                 uploadDiv?.dataset?.driveUrl || 
-                 fotosSubidasLocal[foto.campo];
-        
-        if (!url || url === 'null' || url === '' || url === 'undefined') {
-            if (window.datosOriginalesRecepcion?.fotos) {
-                url = window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]];
-            }
-        }
-        
-        if (!url || url === 'null' || url === '' || url === 'undefined') {
-            if (sesionActual?.datos?.fotos) {
-                url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
-            }
-        }
-        
-        if (url && url !== 'null' && url !== '' && url !== 'undefined') {
-            fotosData[foto.campo] = url;
-            totalFotos++;
-            console.log(`📸 ${foto.campo}: ${url.substring(0, 50)}...`);
-        } else {
-            fotosData[foto.campo] = null;
-            console.log(`📸 ${foto.campo}: SIN URL`);
-        }
-    }
-    
-    console.log(`📸 Total fotos recolectadas: ${totalFotos}/7`);
-    
-    if (totalFotos === 7) {
-        try {
-            // Guardar en sesión
-            const response = await fetchWithToken(`${API_URL}/jefe-operativo/guardar-seccion`, {
-                method: 'POST',
-                body: JSON.stringify({
-                    codigo: codigoSesion,
-                    seccion: 'fotos',
-                    datos: { fotos: fotosData }
-                })
-            });
-            
-            const data = await response.json();
-            if (data.success) {
-                sesionActual = data.sesion;
-                seccionesCompletadasLocal.fotos = true;
-                actualizarEstadoVisualSeccion('fotos', true);
-                actualizarBotonFinalizar();
-                mostrarNotificacion('✅ Fotos sincronizadas correctamente', 'success');
-                console.log('✅ Fotos sincronizadas correctamente');
-                return;
-            } else {
-                throw new Error(data.error || 'Error guardando fotos');
-            }
-        } catch (error) {
-            console.error('Error guardando fotos:', error);
-            mostrarNotificacion('❌ Error sincronizando fotos: ' + error.message, 'error');
-        }
-    } else {
-        const faltantes = 7 - totalFotos;
-        mostrarNotificacion(`⚠️ Faltan ${faltantes} fotos obligatorias`, 'warning');
-        console.log(`⚠️ Faltan ${faltantes} fotos obligatorias`);
     }
 }
 // =====================================================
@@ -3247,6 +2614,10 @@ function mostrarConfirmacionCancelar() {
 // INICIALIZAR PANEL DE RECEPCIONES
 // =====================================================
 
+// =====================================================
+// INICIALIZAR PANEL DE RECEPCIONES
+// =====================================================
+
 function initRecepcionesPanel() {
     cargarRecepciones();
     
@@ -3316,95 +2687,75 @@ async function cargarRecepciones(append = false) {
     cargandoMas = true;
     
     const listDiv = document.getElementById('recepcionesList');
-    if (!listDiv) {
-        cargandoMas = false;
-        return;
-    }
-    
-    if (!append) {
-        listDiv.innerHTML = `<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><p>Cargando recepciones...</p></div>`;
-    }
+    if (listDiv && !append) listDiv.innerHTML = `<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><p>Cargando recepciones...</p></div>`;
     
     try {
-        // OBTENER FILTROS
+        // 🔥 OBTENER FILTROS
         const searchTerm = document.getElementById('searchRecepcion')?.value?.trim() || '';
         const estadoFiltro = document.getElementById('estadoFiltro')?.value || 'todos';
         
-        // CONSTRUIR QUERY PARAMS
+        // 🔥 CONSTRUIR QUERY PARAMS
         let url = `${API_URL}/jefe-operativo/listar-recepciones?limit=${LIMITE_RECEPCIONES}&offset=${offsetActual}`;
         
         if (searchTerm) {
             url += `&search=${encodeURIComponent(searchTerm)}`;
         }
-        if (estadoFiltro && estadoFiltro !== 'todos') {
+        if (estadoFiltro !== 'todos') {
             url += `&estado=${encodeURIComponent(estadoFiltro)}`;
         }
         
-        console.log('📋 Cargando recepciones:', url);
-        
         const response = await fetchWithToken(url, { method: 'GET' });
         
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         
         if (data.success && data.recepciones) {
             if (data.paginacion) {
                 totalRecepciones = data.paginacion.total || 0;
                 noHayMasRecepciones = !data.paginacion.has_more;
-                
                 const paginaInfo = document.getElementById('paginaInfo');
                 if (paginaInfo) {
                     const paginaActual = Math.floor(offsetActual / LIMITE_RECEPCIONES) + 1;
                     const totalPaginas = Math.ceil(totalRecepciones / LIMITE_RECEPCIONES);
                     paginaInfo.textContent = `Página ${paginaActual} de ${totalPaginas || 1}`;
                 }
-                
-                const btnAnterior = document.getElementById('btnPaginaAnterior');
-                const btnSiguiente = document.getElementById('btnPaginaSiguiente');
-                if (btnAnterior) btnAnterior.disabled = offsetActual === 0;
-                if (btnSiguiente) btnSiguiente.disabled = noHayMasRecepciones;
+                document.getElementById('btnPaginaAnterior').disabled = offsetActual === 0;
+                document.getElementById('btnPaginaSiguiente').disabled = noHayMasRecepciones;
             }
             
             recepcionesActuales = append ? [...recepcionesActuales, ...data.recepciones] : data.recepciones;
             
-            // ACTUALIZAR CONTADOR
+            // 🔥 ACTUALIZAR CONTADOR
             const countSpan = document.getElementById('recepcionesCount');
             if (countSpan) {
-                if (searchTerm || (estadoFiltro && estadoFiltro !== 'todos')) {
+                if (searchTerm || estadoFiltro !== 'todos') {
                     const filtrosActivos = [];
                     if (searchTerm) filtrosActivos.push(`"${searchTerm}"`);
-                    if (estadoFiltro && estadoFiltro !== 'todos') filtrosActivos.push(estadoFiltro);
+                    if (estadoFiltro !== 'todos') filtrosActivos.push(estadoFiltro);
                     countSpan.textContent = `${totalRecepciones} (filtrado: ${filtrosActivos.join(' + ')})`;
                 } else {
-                    countSpan.textContent = `${totalRecepciones}`;
+                    countSpan.textContent = totalRecepciones;
                 }
             }
             
             renderizarRecepciones();
         } else {
-            if (!append) {
-                recepcionesActuales = [];
+            if (!append) { 
+                recepcionesActuales = []; 
                 renderizarRecepciones();
             }
         }
     } catch (error) {
-        console.error('❌ Error cargando recepciones:', error);
+        console.error('Error cargando recepciones:', error);
         if (listDiv && !append) {
-            listDiv.innerHTML = `<div class="empty-state">
-                <i class="fas fa-exclamation-triangle"></i>
-                <p>Error al cargar</p>
-                <small>${error.message || 'Intenta de nuevo'}</small>
-            </div>`;
+            listDiv.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Error al cargar</p><small>${error.message}</small></div>`;
         }
-    } finally {
-        cargandoMas = false;
+    } finally { 
+        cargandoMas = false; 
     }
 }
 // =====================================================
-// RENDERIZAR RECEPCIONES
+// RENDERIZAR RECEPCIONES (SEPARADO DEL FILTRADO)
 // =====================================================
 
 function renderizarRecepciones() {
@@ -3419,11 +2770,11 @@ function renderizarRecepciones() {
         const estadoFiltro = document.getElementById('estadoFiltro')?.value || 'todos';
         
         let mensaje = 'No hay recepciones';
-        if (searchTerm && estadoFiltro && estadoFiltro !== 'todos') {
+        if (searchTerm && estadoFiltro !== 'todos') {
             mensaje = `No hay recepciones que coincidan con "${searchTerm}" y estado "${estadoFiltro}"`;
         } else if (searchTerm) {
             mensaje = `No hay recepciones que coincidan con "${searchTerm}"`;
-        } else if (estadoFiltro && estadoFiltro !== 'todos') {
+        } else if (estadoFiltro !== 'todos') {
             mensaje = `No hay recepciones con estado "${estadoFiltro}"`;
         }
         
@@ -3458,14 +2809,13 @@ function renderizarRecepciones() {
     // Renderizar tarjetas
     listDiv.innerHTML = recepciones.map(rec => {
         const estado = rec.estado_global || 'EnRecepcion';
-        const config = estadoConfig[estado] || { label: estado || 'Desconocido', color: '#8E8E93' };
+        const config = estadoConfig[estado] || { label: estado, color: '#8E8E93' };
         const fecha = rec.fecha_ingreso ? new Date(rec.fecha_ingreso).toLocaleDateString('es-ES', { 
             day: '2-digit', 
             month: '2-digit', 
             year: 'numeric' 
         }) : 'N/A';
         const vehiculo = `${rec.marca || ''} ${rec.modelo || ''}`.trim() || 'Vehículo sin especificar';
-        const esEditable = estado === 'EnRecepcion';
         
         return `<div class="recepcion-card" style="border-left: 4px solid ${config.color};">
             <div class="recepcion-header">
@@ -3496,16 +2846,12 @@ function renderizarRecepciones() {
                     <button class="btn-action btn-ver" onclick="verDetalleRecepcion(${rec.id})">
                         <i class="fas fa-eye"></i> Ver
                     </button>
-                    ${esEditable ? `
-                        <button class="btn-action btn-editar" onclick="editarRecepcion(${rec.id})">
-                            <i class="fas fa-edit"></i> Editar
-                        </button>
-                        <button class="btn-action btn-eliminar" onclick="confirmarEliminarRecepcion(${rec.id})">
-                            <i class="fas fa-trash-alt"></i> Eliminar
-                        </button>
-                    ` : `
-                        <span style="font-size:10px;color:#8E8E93;padding:4px 8px;">🔒 Bloqueado</span>
-                    `}
+                    <button class="btn-action btn-editar" onclick="editarRecepcion(${rec.id})" ${estado !== 'EnRecepcion' ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
+                        <i class="fas fa-edit"></i> Editar
+                    </button>
+                    <button class="btn-action btn-eliminar" onclick="confirmarEliminarRecepcion(${rec.id})" ${estado !== 'EnRecepcion' ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
+                        <i class="fas fa-trash-alt"></i> Eliminar
+                    </button>
                 </div>
             </div>
         </div>`;
@@ -4336,482 +3682,787 @@ async function descargarPDFFinal() {
 
     if (btnDescargar) {
         btnDescargar.disabled = true;
-        btnDescargar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
+        btnDescargar.innerHTML =
+            '<i class="fas fa-spinner fa-spin"></i> Generando...';
     }
 
-    showProgress('Generando PDF', 'Preparando el documento...');
+    showProgress(
+        'Generando PDF',
+        'Preparando el documento...'
+    );
+
     updateProgressBar(10);
 
     let container = null;
 
     try {
+
         // ============================================================
         // 1. PREPARAR DATOS
         // ============================================================
-        const detalleParaPDF = JSON.parse(JSON.stringify(datosReporteFinal));
-        const fotos = datosReporteFinal.fotos || {};
 
-        updateProgressMessage('Convirtiendo fotos...');
+        const detalleParaPDF =
+            JSON.parse(JSON.stringify(datosReporteFinal));
+
+        const fotos =
+            datosReporteFinal.fotos || {};
+
+        const camposFotos = [
+            'url_lateral_izquierda',
+            'url_lateral_derecha',
+            'url_foto_frontal',
+            'url_foto_trasera',
+            'url_foto_superior',
+            'url_foto_inferior',
+            'url_foto_tablero'
+        ];
+
+        updateProgressMessage(
+            'Convirtiendo fotos...'
+        );
+
 
         // ============================================================
-        // 2. CONVERTIR **TODAS** LAS FOTOS A BASE64
-        //    (OBLIGATORIAS + OPCIONALES) - ESTO ES CLAVE
+        // 2. CONVERTIR FOTOS
         // ============================================================
-        // Recopilar TODAS las claves de fotos que tengan URL válida
-        const todasLasClaves = Object.keys(fotos).filter(key => {
-            const url = fotos[key];
-            return url &&
-                   url !== 'null' &&
-                   url !== 'None' &&
-                   url !== '' &&
-                   url !== 'undefined' &&
-                   !url.startsWith('data:image');
-        });
 
-        console.log(`📸 Fotos a convertir a base64: ${todasLasClaves.length}`);
-        console.log(`📸 Claves: ${todasLasClaves.join(', ')}`);
+        const fotosNecesitanConversion =
+            camposFotos.filter(c => {
 
-        const fotosBase64 = {};
+                const url = fotos[c];
 
-        // Convertir en lotes para no saturar
-        for (const campo of todasLasClaves) {
+                return (
+                    url &&
+                    url !== 'null' &&
+                    url !== 'None' &&
+                    url !== '' &&
+                    url !== null &&
+                    url !== 'undefined' &&
+                    !url.startsWith('data:image')
+                );
+            });
+
+
+        for (const campo of fotosNecesitanConversion) {
+
             const url = fotos[campo];
+
             try {
-                const base64 = await convertirImagenABase64(url);
-                if (base64 && base64.startsWith('data:image')) {
-                    fotosBase64[campo] = base64;
-                    console.log(`✅ ${campo} convertida`);
-                } else {
-                    // Si falla la conversión, dejamos la URL original (por si acaso)
-                    fotosBase64[campo] = url;
-                    console.warn(`⚠️ ${campo} no se pudo convertir, se usa URL original`);
+
+                const base64 =
+                    await convertirImagenABase64(url);
+
+                if (
+                    base64 &&
+                    base64.startsWith('data:image')
+                ) {
+                    detalleParaPDF.fotos[campo] =
+                        base64;
                 }
+
             } catch (error) {
-                console.warn(`⚠️ Error convirtiendo ${campo}:`, error);
-                fotosBase64[campo] = url;
+
+                console.warn(
+                    `Error convirtiendo ${campo}:`,
+                    error
+                );
             }
         }
 
-        // Reemplazar TODAS las fotos con sus versiones base64
-        detalleParaPDF.fotos = { ...fotos, ...fotosBase64 };
-        detalleParaPDF.fotos_base64 = detalleParaPDF.fotos;
 
-        console.log(`📸 Fotos convertidas: ${Object.keys(fotosBase64).length}`);
-        console.log(`📸 Total fotos en detalleParaPDF: ${Object.keys(detalleParaPDF.fotos).length}`);
+        detalleParaPDF.fotos_base64 =
+            detalleParaPDF.fotos;
 
         updateProgressBar(40);
+
 
         // ============================================================
         // 3. GENERAR HTML
         // ============================================================
-        updateProgressMessage('Generando contenido del reporte...');
-        const reporteHTML = generarHTMLReporte(detalleParaPDF);
+
+        updateProgressMessage(
+            'Generando contenido del reporte...'
+        );
+
+        const reporteHTML =
+            generarHTMLReporte(
+                detalleParaPDF
+            );
+
 
         // ============================================================
         // 4. CREAR CONTENEDOR TEMPORAL
         // ============================================================
-        container = document.createElement('div');
-        container.id = 'pdfContainer';
+
+        container =
+            document.createElement('div');
+
+        container.id =
+            'pdfContainer';
+
         container.style.cssText = `
             position: fixed;
             left: -9999px;
             top: 0;
+
             width: 780px;
+
             padding: 0 !important;
             margin: 0 !important;
+
             background: white;
+
             font-family: Arial, sans-serif;
+
             z-index: -1;
+
             opacity: 0;
             pointer-events: none;
+
             overflow: visible;
         `;
-        container.innerHTML = reporteHTML;
-        document.body.appendChild(container);
+
+        container.innerHTML =
+            reporteHTML;
+
+        document.body.appendChild(
+            container
+        );
+
 
         updateProgressBar(50);
-        updateProgressMessage('Renderizando PDF...');
 
-        await new Promise(resolve => setTimeout(resolve, 800));
+        updateProgressMessage(
+            'Renderizando PDF...'
+        );
+
+        await new Promise(resolve =>
+            setTimeout(resolve, 800)
+        );
+
 
         // ============================================================
         // 5. CARGAR html2canvas
         // ============================================================
-        if (typeof html2canvas === 'undefined') {
-            await new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
+
+        if (
+            typeof html2canvas ===
+            'undefined'
+        ) {
+
+            await new Promise(
+                (resolve, reject) => {
+
+                    const script =
+                        document.createElement(
+                            'script'
+                        );
+
+                    script.src =
+                        'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+
+                    script.onload =
+                        resolve;
+
+                    script.onerror =
+                        reject;
+
+                    document.head.appendChild(
+                        script
+                    );
+                }
+            );
         }
+
 
         // ============================================================
         // 6. CARGAR jsPDF
         // ============================================================
-        if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
-            await new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
+
+        if (
+            typeof jspdf ===
+                'undefined' &&
+            typeof window.jspdf ===
+                'undefined'
+        ) {
+
+            await new Promise(
+                (resolve, reject) => {
+
+                    const script =
+                        document.createElement(
+                            'script'
+                        );
+
+                    script.src =
+                        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+
+                    script.onload =
+                        resolve;
+
+                    script.onerror =
+                        reject;
+
+                    document.head.appendChild(
+                        script
+                    );
+                }
+            );
         }
 
+
         updateProgressBar(60);
-        updateProgressMessage('Generando archivo PDF...');
+
+        updateProgressMessage(
+            'Generando archivo PDF...'
+        );
+
 
         // ============================================================
         // 7. OBTENER REPORTE
         // ============================================================
-        const elemento = container.querySelector('.reporte-container');
+
+        const elemento =
+            container.querySelector(
+                '.reporte-container'
+            );
+
         if (!elemento) {
-            throw new Error('No se encontró el contenido del reporte');
+            throw new Error(
+                'No se encontró el contenido del reporte'
+            );
         }
+
 
         // ============================================================
         // 8. ASEGURAR QUE SE MUESTRE COMPLETO
         // ============================================================
-        elemento.style.width = '100%';
-        elemento.style.padding = '0';
-        elemento.style.margin = '0';
-        elemento.style.boxSizing = 'border-box';
-        elemento.style.height = 'auto';
-        elemento.style.overflow = 'visible';
-        elemento.style.maxHeight = 'none';
 
-        await new Promise(resolve => setTimeout(resolve, 300));
+        elemento.style.width =
+            '100%';
+
+        elemento.style.padding =
+            '0';
+
+        elemento.style.margin =
+            '0';
+
+        elemento.style.boxSizing =
+            'border-box';
+
+        elemento.style.height =
+            'auto';
+
+        elemento.style.overflow =
+            'visible';
+
+        elemento.style.maxHeight =
+            'none';
+
+
+        await new Promise(resolve =>
+            setTimeout(resolve, 300)
+        );
+
 
         // ============================================================
         // 9. DIMENSIONES
         // ============================================================
-        const anchoContenido = 780;
-        const alturaContenido = elemento.scrollHeight;
 
-        console.log(`📄 Ancho contenido: ${anchoContenido}px`);
-        console.log(`📄 Alto contenido: ${alturaContenido}px`);
+        const anchoContenido =
+            780;
+
+        const alturaContenido =
+            elemento.scrollHeight;
+
+
+        console.log(
+            `📄 Ancho contenido: ${anchoContenido}px`
+        );
+
+        console.log(
+            `📄 Alto contenido: ${alturaContenido}px`
+        );
+
 
         // ============================================================
         // 10. GENERAR CANVAS
         // ============================================================
-        const canvas = await html2canvas(elemento, {
-            scale: 2,
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: '#ffffff',
-            logging: false,
-            width: anchoContenido,
-            height: alturaContenido + 10,
-            scrollY: 0,
-            scrollX: 0,
-            windowHeight: alturaContenido + 10,
-            windowWidth: anchoContenido,
-            onclone: (clonedDoc, clonedElement) => {
-                clonedElement.style.height = 'auto';
-                clonedElement.style.overflow = 'visible';
-                clonedElement.style.maxHeight = 'none';
-                clonedElement.style.width = '100%';
-                clonedElement.style.margin = '0';
-                clonedElement.style.padding = '0';
-            }
-        });
 
-        console.log(`📸 Canvas generado: ${canvas.width}x${canvas.height}px`);
+        const canvas =
+            await html2canvas(
+                elemento,
+                {
+                    scale: 2,
+
+                    useCORS: true,
+
+                    allowTaint: true,
+
+                    backgroundColor:
+                        '#ffffff',
+
+                    logging: false,
+
+                    width:
+                        anchoContenido,
+
+                    height:
+                        alturaContenido + 10,
+
+                    scrollY: 0,
+
+                    scrollX: 0,
+
+                    windowHeight:
+                        alturaContenido + 10,
+
+                    windowWidth:
+                        anchoContenido,
+
+                    onclone: (
+                        clonedDoc,
+                        clonedElement
+                    ) => {
+
+                        clonedElement.style.height =
+                            'auto';
+
+                        clonedElement.style.overflow =
+                            'visible';
+
+                        clonedElement.style.maxHeight =
+                            'none';
+
+                        clonedElement.style.width =
+                            '100%';
+
+                        clonedElement.style.margin =
+                            '0';
+
+                        clonedElement.style.padding =
+                            '0';
+                    }
+                }
+            );
+
+
+        console.log(
+            `📸 Canvas generado: ` +
+            `${canvas.width}x${canvas.height}px`
+        );
+
 
         updateProgressBar(80);
-        updateProgressMessage('Convirtiendo a PDF...');
+
+        updateProgressMessage(
+            'Convirtiendo a PDF...'
+        );
+
 
         // ============================================================
         // 11. CONFIGURACIÓN CARTA
         // ============================================================
-        const { jsPDF } = window.jspdf || jspdf;
 
-        const CARTA_WIDTH_MM = 215.9;
-        const CARTA_HEIGHT_MM = 279.4;
+        const { jsPDF } =
+            window.jspdf || jspdf;
 
-        const MARGEN_LATERAL_MM = 7;
-        const MARGEN_SUPERIOR_MM = 7;
-        const MARGEN_INFERIOR_MM = 7;
 
-        const ANCHO_UTIL_MM = CARTA_WIDTH_MM - (MARGEN_LATERAL_MM * 2);
-        const ALTO_UTIL_MM = CARTA_HEIGHT_MM - MARGEN_SUPERIOR_MM - MARGEN_INFERIOR_MM;
+        // Carta = 215.9 x 279.4 mm
+        const CARTA_WIDTH_MM =
+            215.9;
+
+        const CARTA_HEIGHT_MM =
+            279.4;
+
+
+        // Márgenes pequeños
+        const MARGEN_LATERAL_MM =
+            7;
+
+        const MARGEN_SUPERIOR_MM =
+            7;
+
+        const MARGEN_INFERIOR_MM =
+            7;
+
+
+        // Área útil
+        const ANCHO_UTIL_MM =
+            CARTA_WIDTH_MM -
+            (MARGEN_LATERAL_MM * 2);
+
+        const ALTO_UTIL_MM =
+            CARTA_HEIGHT_MM -
+            MARGEN_SUPERIOR_MM -
+            MARGEN_INFERIOR_MM;
+
 
         // ============================================================
         // 12. CREAR PDF CARTA
         // ============================================================
-        const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'letter',
-            compress: true
-        });
+
+        const pdf =
+            new jsPDF({
+                orientation: 'portrait',
+
+                unit: 'mm',
+
+                format: 'letter',
+
+                compress: true
+            });
+
 
         // ============================================================
         // 13. IMAGEN
         // ============================================================
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+        const imgData =
+            canvas.toDataURL(
+                'image/jpeg',
+                0.95
+            );
+
 
         // ============================================================
-        // 14. CALCULAR DIMENSIONES MANTENIENDO PROPORCIÓN
+        // 14. AJUSTAR EL REPORTE AL RECTÁNGULO CARTA
         // ============================================================
-        // 🔥 ESTA ES LA CORRECCIÓN CLAVE PARA EL "ESTIRADO"
-        // Calculamos el aspect ratio real del canvas y ajustamos
-        // la imagen respetando esa proporción.
+        //
+        // IMPORTANTE:
+        //
+        // NO usamos 1.35x.
+        //
+        // El reporte debe entrar completamente en el ancho
+        // de la hoja.
+        //
+        // Como tú confirmaste que este reporte siempre tendrá
+        // la misma cantidad de información y debe ocupar una
+        // sola hoja, ajustamos el contenido al área completa.
+        //
+        // Esto evita:
+        //
+        // ❌ que se corte a los lados
+        // ❌ que aparezca fuera de la página
+        // ❌ que se genere una segunda página
+        //
         // ============================================================
 
-        const aspectRatio = canvas.height / canvas.width;
+        const imgWidthMm =
+            ANCHO_UTIL_MM;
 
-        // Ancho disponible en la hoja
-        const anchoDisponibleMm = ANCHO_UTIL_MM;
+        const imgHeightMm =
+            ALTO_UTIL_MM;
 
-        // Altura proporcional que tendría la imagen
-        const alturaProporcionalMm = anchoDisponibleMm * aspectRatio;
-
-        let imgWidthMm, imgHeightMm;
-
-        if (alturaProporcionalMm <= ALTO_UTIL_MM) {
-            // Cabe completo en una hoja respetando proporción
-            imgWidthMm = anchoDisponibleMm;
-            imgHeightMm = alturaProporcionalMm;
-        } else {
-            // Es más alto que la hoja → ajustar por altura
-            imgHeightMm = ALTO_UTIL_MM;
-            imgWidthMm = ALTO_UTIL_MM / aspectRatio;
-        }
-
-        // Centrar horizontalmente si es más angosto que el área útil
-        const offsetX = MARGEN_LATERAL_MM + (ANCHO_UTIL_MM - imgWidthMm) / 2;
-        const offsetY = MARGEN_SUPERIOR_MM;
-
-        console.log('====================================');
-        console.log('📄 GENERANDO PDF CARTA (CON PROPORCIÓN)');
-        console.log(`📐 Hoja: ${CARTA_WIDTH_MM} x ${CARTA_HEIGHT_MM} mm`);
-        console.log(`📏 Área útil: ${ANCHO_UTIL_MM.toFixed(2)} x ${ALTO_UTIL_MM.toFixed(2)} mm`);
-        console.log(`📊 Aspect ratio: ${aspectRatio.toFixed(4)}`);
-        console.log(`🖼️ Reporte: ${imgWidthMm.toFixed(2)} x ${imgHeightMm.toFixed(2)} mm`);
-        console.log(`📍 Posición: X=${offsetX.toFixed(2)}, Y=${offsetY.toFixed(2)}`);
-        console.log('====================================');
 
         // ============================================================
-        // 15. AGREGAR REPORTE AL PDF
+        // 15. POSICIÓN
         // ============================================================
-        pdf.addImage(imgData, 'JPEG', offsetX, offsetY, imgWidthMm, imgHeightMm);
+
+        const offsetX =
+            MARGEN_LATERAL_MM;
+
+        const offsetY =
+            MARGEN_SUPERIOR_MM;
+
 
         // ============================================================
-        // 16. OBTENER PDF COMO BLOB
+        // 16. INFORMACIÓN DEBUG
         // ============================================================
-        const pdfBlob = pdf.output('blob');
 
-        updateProgressBar(90);
-        updateProgressMessage('Preparando para descargar...');
-
-        // ============================================================
-        // 17. DESCARGAR PDF
-        // ============================================================
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(pdfBlob);
-        link.download = `Recepcion_${detalleParaPDF.codigo_unico || 'orden'}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
-
-        mostrarNotificacion('📥 PDF descargado', 'success');
-
-        // ============================================================
-        // 18. SUBIR A GOOGLE DRIVE
-        // ============================================================
-        updateProgressBar(95);
-        updateProgressMessage('Subiendo PDF a Google Drive...');
-
-        const reader = new FileReader();
-        const pdfBase64 = await new Promise((resolve) => {
-            reader.onload = () => resolve(reader.result);
-            reader.readAsDataURL(pdfBlob);
-        });
-
-        const response = await fetchWithToken(
-            `${API_URL}/jefe-operativo/subir-pdf-recepcion`,
-            {
-                method: 'POST',
-                body: JSON.stringify({
-                    pdf_base64: pdfBase64,
-                    id_orden: detalleParaPDF.id || detalleParaPDF.id_orden,
-                    codigo_unico: detalleParaPDF.codigo_unico || 'orden'
-                })
-            }
+        console.log(
+            '===================================='
         );
 
+        console.log(
+            '📄 GENERANDO PDF CARTA'
+        );
+
+        console.log(
+            `📐 Hoja: ${CARTA_WIDTH_MM} x ${CARTA_HEIGHT_MM} mm`
+        );
+
+        console.log(
+            `📏 Área útil: ${ANCHO_UTIL_MM} x ${ALTO_UTIL_MM} mm`
+        );
+
+        console.log(
+            `🖼️ Reporte: ${imgWidthMm} x ${imgHeightMm} mm`
+        );
+
+        console.log(
+            `📍 Posición: X=${offsetX}, Y=${offsetY}`
+        );
+
+        console.log(
+            '===================================='
+        );
+
+
+        // ============================================================
+        // 17. AGREGAR REPORTE
+        // ============================================================
+
+        pdf.addImage(
+            imgData,
+            'JPEG',
+
+            offsetX,
+            offsetY,
+
+            imgWidthMm,
+            imgHeightMm
+        );
+
+
+        // ============================================================
+        // 18. OBTENER PDF COMO BLOB
+        // ============================================================
+
+        const pdfBlob =
+            pdf.output('blob');
+
+
+        updateProgressBar(90);
+
+        updateProgressMessage(
+            'Preparando para descargar...'
+        );
+
+
+        // ============================================================
+        // 19. DESCARGAR PDF
+        // ============================================================
+
+        const link =
+            document.createElement('a');
+
+        link.href =
+            URL.createObjectURL(
+                pdfBlob
+            );
+
+        link.download =
+            `Recepcion_${
+                detalleParaPDF.codigo_unico ||
+                'orden'
+            }.pdf`;
+
+        document.body.appendChild(
+            link
+        );
+
+        link.click();
+
+        document.body.removeChild(
+            link
+        );
+
+        URL.revokeObjectURL(
+            link.href
+        );
+
+
+        mostrarNotificacion(
+            '📥 PDF descargado',
+            'success'
+        );
+
+
+        // ============================================================
+        // 20. SUBIR A GOOGLE DRIVE
+        // ============================================================
+
+        updateProgressBar(95);
+
+        updateProgressMessage(
+            'Subiendo PDF a Google Drive...'
+        );
+
+
+        const reader =
+            new FileReader();
+
+
+        const pdfBase64 =
+            await new Promise(
+                (resolve) => {
+
+                    reader.onload =
+                        () => resolve(
+                            reader.result
+                        );
+
+                    reader.readAsDataURL(
+                        pdfBlob
+                    );
+                }
+            );
+
+
+        const response =
+            await fetchWithToken(
+                `${API_URL}/jefe-operativo/subir-pdf-recepcion`,
+                {
+                    method: 'POST',
+
+                    body:
+                        JSON.stringify({
+                            pdf_base64:
+                                pdfBase64,
+
+                            id_orden:
+                                detalleParaPDF.id ||
+                                detalleParaPDF.id_orden,
+
+                            codigo_unico:
+                                detalleParaPDF.codigo_unico ||
+                                'orden'
+                        })
+                }
+            );
+
+
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Error al subir PDF a Drive');
+
+            const errorData =
+                await response.json();
+
+            throw new Error(
+                errorData.error ||
+                'Error al subir PDF a Drive'
+            );
         }
 
-        await response.json();
+
+        const data =
+            await response.json();
+
 
         // ============================================================
-        // 19. FINALIZAR
+        // 21. FINALIZAR
         // ============================================================
+
         updateProgressBar(100);
-        updateProgressMessage('¡PDF guardado en Google Drive!');
+
+        updateProgressMessage(
+            '¡PDF guardado en Google Drive!'
+        );
+
+
+        // ============================================================
+        // 22. LIMPIAR CONTENEDOR
+        // ============================================================
 
         setTimeout(() => {
-            if (container && document.body.contains(container)) {
-                document.body.removeChild(container);
+
+            if (
+                container &&
+                document.body.contains(
+                    container
+                )
+            ) {
+
+                document.body.removeChild(
+                    container
+                );
             }
+
         }, 1000);
 
-        mostrarNotificacion('✅ PDF guardado en Google Drive', 'success');
 
-        setTimeout(() => completeProgress(true), 500);
+        mostrarNotificacion(
+            '✅ PDF guardado en Google Drive',
+            'success'
+        );
+
+
+        setTimeout(
+            () => completeProgress(true),
+            500
+        );
+
 
     } catch (error) {
-        console.error('Error generando PDF:', error);
-        completeProgress(false);
-        mostrarNotificacion('❌ Error al generar PDF: ' + error.message, 'error');
 
-        if (container && document.body.contains(container)) {
-            document.body.removeChild(container);
+        console.error(
+            'Error generando PDF:',
+            error
+        );
+
+
+        completeProgress(false);
+
+
+        mostrarNotificacion(
+            '❌ Error al generar PDF: ' +
+            error.message,
+            'error'
+        );
+
+
+        // Limpiar si ocurrió un error
+        if (
+            container &&
+            document.body.contains(
+                container
+            )
+        ) {
+
+            document.body.removeChild(
+                container
+            );
         }
     }
 
+
+    // ============================================================
+    // 23. RESTAURAR BOTÓN
+    // ============================================================
+
     if (btnDescargar) {
-        btnDescargar.disabled = false;
-        btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
+
+        btnDescargar.disabled =
+            false;
+
+        btnDescargar.innerHTML =
+            '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
     }
+
 
     descargandoPDF = false;
 }
+
 function generarHTMLReporte(detalle) {
     if (!detalle) return '<div class="loading-preview"><i class="fas fa-exclamation-triangle"></i><p>No hay datos</p></div>';
 
-    // 🔥 Usar fotos_base64 si existe, sino fotos
     const fotos = detalle.fotos_base64 || detalle.fotos || {};
-
-    // ============================================================
-    // SEPARAR FOTOS OBLIGATORIAS Y OPCIONALES
-    // ============================================================
-    const MAPEO_OBLIGATORIAS = {
-        'url_lateral_izquierda': 'Lateral Izq.',
-        'url_lateral_derecha': 'Lateral Der.',
-        'url_foto_frontal': 'Frontal',
-        'url_foto_trasera': 'Trasera',
-        'url_foto_superior': 'Superior',
-        'url_foto_inferior': 'Inferior',
-        'url_foto_tablero': 'Tablero'
-    };
-
-    const fotosObligatorias = [];
-    const fotosOpcionales = [];
-
-    Object.entries(fotos).forEach(([key, url]) => {
-        if (!url || url === 'null' || url === 'None' || url === '' || url === 'undefined') return;
-
-        // Detectar si es opcional (url_opcionalN)
-        if (key.startsWith('url_opcional') || key.startsWith('opcional')) {
-            const num = key.replace('url_opcional', '').replace('opcional', '');
-            fotosOpcionales.push({
-                campo: key,
-                label: `Adicional ${num}`,
-                url: url
-            });
-        } else if (MAPEO_OBLIGATORIAS[key]) {
-            fotosObligatorias.push({
-                campo: key,
-                label: MAPEO_OBLIGATORIAS[key],
-                url: url
-            });
-        } else if (key.startsWith('url_')) {
-            // Cualquier otra url_ se considera obligatoria con label limpio
-            const label = key.replace('url_', '').replace(/_/g, ' ');
-            fotosObligatorias.push({
-                campo: key,
-                label: label.charAt(0).toUpperCase() + label.slice(1),
-                url: url
-            });
-        }
-    });
-
-    const totalObligatorias = fotosObligatorias.length;
-    const totalOpcionales = fotosOpcionales.length;
-
-    console.log(`📸 Fotos obligatorias: ${totalObligatorias}/7`);
-    console.log(`📸 Fotos opcionales: ${totalOpcionales}`);
+    
+    const fotosArray = Object.entries(fotos)
+        .filter(([key, url]) => url && url !== 'null' && url !== 'None' && url !== '')
+        .map(([key, url]) => {
+            let label = key.replace(/url_/g, '').replace(/_/g, ' ').toUpperCase();
+            const labelsMap = {
+                'LATERAL IZQUIERDA': 'Lateral Izq.',
+                'LATERAL DERECHA': 'Lateral Der.',
+                'FOTO FRONTAL': 'Frontal',
+                'FOTO TRASERA': 'Trasera',
+                'FOTO SUPERIOR': 'Superior',
+                'FOTO INFERIOR': 'Inferior',
+                'FOTO TABLERO': 'Tablero'
+            };
+            label = labelsMap[label] || label;
+            return { campo: key, label, url };
+        });
 
     const fechaActual = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const fechaIngreso = detalle.fecha_ingreso ? new Date(detalle.fecha_ingreso).toLocaleString('es-ES') : 'No registrada';
-
+    
     const jefeNombre1 = detalle.jefe_operativo?.nombre || 'No asignado';
     const jefeNombre2 = detalle.jefe_operativo_2?.nombre || null;
 
     // ============================================================
-    // HTML - FOTOS OBLIGATORIAS (2 filas: 4 + 3)
-    // 🔥 CAMBIO: height:auto en lugar de height:65px fijo
-    // ============================================================
-    const generarFotosObligatoriasHTML = () => {
-        if (totalObligatorias === 0) {
-            return '<p style="color:#999; font-style:italic; font-size:9px; text-align:center; padding:4px;">No se registraron fotos obligatorias</p>';
-        }
-
-        const primeraFila = fotosObligatorias.slice(0, 4);
-        const segundaFila = fotosObligatorias.slice(4, 7);
-
-        const renderFoto = (f) => `
-            <div style="border:1px solid #ddd; border-radius:4px; overflow:hidden; background:#f5f5f5; text-align:center;">
-                <img src="${f.url}" alt="${f.label}" style="width:100%; height:auto; display:block; background:#eee; border-bottom:1px solid #ddd;" onerror="this.style.display='none'">
-                <div style="padding:2px; font-size:6px; font-weight:bold; color:#555; background:#f9f9f9;">${f.label}</div>
-            </div>
-        `;
-
-        let html = `<div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:4px; margin-bottom:3px;">`;
-        html += primeraFila.map(renderFoto).join('');
-        // Rellenar con placeholders si faltan
-        for (let i = primeraFila.length; i < 4; i++) {
-            html += `<div style="border:1px dashed #ddd; border-radius:4px; background:#fafafa; min-height:65px; display:flex; align-items:center; justify-content:center; color:#ccc; font-size:7px;"><span>Sin foto</span></div>`;
-        }
-        html += `</div>`;
-
-        if (segundaFila.length > 0) {
-            html += `<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; max-width:75%; margin:0 auto;">`;
-            html += segundaFila.map(renderFoto).join('');
-            html += `</div>`;
-        }
-
-        return html;
-    };
-
-    // ============================================================
-    // HTML - FOTOS OPCIONALES (grid de 4 columnas)
-    // 🔥 CAMBIO: height:auto en lugar de height:60px fijo
-    // ============================================================
-    const generarFotosOpcionalesHTML = () => {
-        if (totalOpcionales === 0) {
-            return '';
-        }
-
-        const renderFotoOpcional = (f) => `
-            <div style="border:1px solid #ddd; border-radius:4px; overflow:hidden; background:#f5f5f5; text-align:center;">
-                <img src="${f.url}" alt="${f.label}" style="width:100%; height:auto; display:block; background:#eee; border-bottom:1px solid #ddd;" onerror="this.style.display='none'">
-                <div style="padding:2px; font-size:6px; font-weight:bold; color:#555; background:#f0f0f0;">${f.label}</div>
-            </div>
-        `;
-
-        return `
-            <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; margin-bottom:6px; border:1px solid #eee;">
-                <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:4px; border-bottom:1px solid #ddd; padding-bottom:2px;">
-                    📸 Fotos Adicionales (${totalOpcionales})
-                </div>
-                <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:4px;">
-                    ${fotosOpcionales.map(renderFotoOpcional).join('')}
-                </div>
-            </div>
-        `;
-    };
-
-    // ============================================================
-    // RETORNAR HTML COMPLETO
+    // HTML MEJORADO - 2 LINEAS DE FOTOS Y FIRMAS CON MÁS ESPACIO
     // ============================================================
     return `<div class="reporte-container" style="
         width: 100%;
@@ -4836,7 +4487,7 @@ function generarHTMLReporte(detalle) {
                 <span style="font-size:6px; color:#999;">Tel: +591 4 1234567</span>
             </div>
         </div>
-
+        
         <!-- TÍTULO -->
         <div style="text-align:center; margin-bottom:8px;">
             <h2 style="font-size:12px; color:#C1121F; margin:0; letter-spacing:2px; text-transform:uppercase;">Orden de Trabajo - Recepción</h2>
@@ -4844,7 +4495,7 @@ function generarHTMLReporte(detalle) {
                 # ${detalle.codigo_unico || 'OT-N/A'}
             </div>
         </div>
-
+        
         <!-- INFORMACIÓN GENERAL -->
         <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; margin-bottom:6px; border:1px solid #eee;">
             <div style="display:flex; flex-wrap:wrap; gap:3px 14px; font-size:8.5px;">
@@ -4855,9 +4506,10 @@ function generarHTMLReporte(detalle) {
                 ${jefeNombre2 ? `<span><strong>👨‍💼 Jefe Op. 2:</strong> ${jefeNombre2}</span>` : ''}
             </div>
         </div>
-
-        <!-- CLIENTE + VEHÍCULO -->
+        
+        <!-- CLIENTE + VEHÍCULO (2 COLUMNAS) -->
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:6px;">
+            <!-- CLIENTE -->
             <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; border:1px solid #eee;">
                 <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:3px; border-bottom:1px solid #ddd; padding-bottom:2px;">👤 Datos del Cliente</div>
                 <div style="font-size:8.5px; line-height:1.6;">
@@ -4866,6 +4518,8 @@ function generarHTMLReporte(detalle) {
                     <div><strong>Ubicación:</strong> ${detalle.cliente_ubicacion || 'No especificada'}</div>
                 </div>
             </div>
+            
+            <!-- VEHÍCULO -->
             <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; border:1px solid #eee;">
                 <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:3px; border-bottom:1px solid #ddd; padding-bottom:2px;">🚗 Datos del Vehículo</div>
                 <div style="font-size:8.5px; line-height:1.6;">
@@ -4876,34 +4530,92 @@ function generarHTMLReporte(detalle) {
                 </div>
             </div>
         </div>
-
-        <!-- FOTOS OBLIGATORIAS -->
+        
+        <!-- 🔥 FOTOS - 2 LÍNEAS: 4 + 3 CENTRADAS -->
         <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; margin-bottom:6px; border:1px solid #eee;">
-            <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:4px; border-bottom:1px solid #ddd; padding-bottom:2px;">
-                📸 Fotos Obligatorias (${totalObligatorias}/7)
-            </div>
-            ${generarFotosObligatoriasHTML()}
+            <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:4px; border-bottom:1px solid #ddd; padding-bottom:2px;">📸 Fotos (${fotosArray.length}/7)</div>
+            ${fotosArray.length > 0 ? `
+                <!-- PRIMERA FILA: 4 FOTOS -->
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:4px; margin-bottom:3px;">
+                    ${fotosArray.slice(0, 4).map(f => `
+                        <div style="
+                            border:1px solid #ddd; 
+                            border-radius:4px; 
+                            overflow:hidden; 
+                            background:#f5f5f5; 
+                            text-align:center;
+                        ">
+                            <img src="${f.url}" alt="${f.label}" style="
+                                width:100%; 
+                                height:65px; 
+                                object-fit:cover; 
+                                display:block; 
+                                background:#eee;
+                                border-bottom:1px solid #ddd;
+                            " onerror="this.style.display='none'">
+                            <div style="padding:2px; font-size:6px; font-weight:bold; color:#555; background:#f9f9f9;">${f.label}</div>
+                        </div>
+                    `).join('')}
+                    ${fotosArray.length < 4 ? Array(4 - fotosArray.length).fill(`
+                        <div style="border:1px dashed #ddd; border-radius:4px; background:#fafafa; min-height:65px; display:flex; align-items:center; justify-content:center; color:#ccc; font-size:7px;">
+                            <span>Sin foto</span>
+                        </div>
+                    `).join('') : ''}
+                </div>
+                <!-- SEGUNDA FILA: 3 FOTOS CENTRADAS -->
+                ${fotosArray.length > 4 ? `
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; max-width:75%; margin:0 auto;">
+                        ${fotosArray.slice(4, 7).map(f => `
+                            <div style="
+                                border:1px solid #ddd; 
+                                border-radius:4px; 
+                                overflow:hidden; 
+                                background:#f5f5f5; 
+                                text-align:center;
+                            ">
+                                <img src="${f.url}" alt="${f.label}" style="
+                                    width:100%; 
+                                    height:65px; 
+                                    object-fit:cover; 
+                                    display:block; 
+                                    background:#eee;
+                                    border-bottom:1px solid #ddd;
+                                " onerror="this.style.display='none'">
+                                <div style="padding:2px; font-size:6px; font-weight:bold; color:#555; background:#f9f9f9;">${f.label}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            ` : '<p style="color:#999; font-style:italic; font-size:9px; text-align:center; padding:4px;">No se registraron fotos</p>'}
         </div>
-
-        <!-- FOTOS OPCIONALES (solo si hay) -->
-        ${generarFotosOpcionalesHTML()}
-
+        
         <!-- DESCRIPCIÓN -->
         <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; margin-bottom:6px; border:1px solid #eee;">
             <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:3px; border-bottom:1px solid #ddd; padding-bottom:2px;">📝 Descripción del Problema</div>
-            <div style="background:white; padding:5px 8px; border-radius:4px; font-size:8.5px; min-height:22px; border:1px solid #e8e8e8; white-space:pre-wrap; line-height:1.5;">${detalle.transcripcion_problema || 'No se registró descripción'}</div>
+            <div style="
+                background:white; 
+                padding:5px 8px; 
+                border-radius:4px; 
+                font-size:8.5px; 
+                min-height:22px; 
+                border:1px solid #e8e8e8; 
+                white-space:pre-wrap; 
+                line-height:1.5;
+            ">${detalle.transcripcion_problema || 'No se registró descripción'}</div>
         </div>
-
-        <!-- FIRMAS -->
+        
+        <!-- 🔥 FIRMAS - CON MÁS ESPACIO Y MEJOR PRESENTACIÓN -->
         <div style="margin-top:10px; padding-top:8px; border-top:2px solid #ddd;">
             <div style="font-weight:700; font-size:10px; color:#C1121F; text-align:center; margin-bottom:10px; letter-spacing:2px; text-transform:uppercase;">✍️ Firmas de Conformidad</div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:50px;">
+                <!-- FIRMA CLIENTE -->
                 <div style="text-align:center; padding:0 5px;">
                     <div style="font-weight:600; color:#333; margin-bottom:8px; font-size:8.5px; text-transform:uppercase; letter-spacing:1px;">Firma del Cliente</div>
                     <div style="border-bottom:2px solid #333; height:60px; margin-bottom:5px;"></div>
                     <div style="font-size:9px; color:#555; font-weight:600; margin-top:4px;">${detalle.cliente_nombre || '____________________'}</div>
                     <div style="font-size:7px; color:#999; margin-top:2px;">${fechaActual}</div>
                 </div>
+                <!-- FIRMA JEFE OPERATIVO -->
                 <div style="text-align:center; padding:0 5px;">
                     <div style="font-weight:600; color:#333; margin-bottom:8px; font-size:8.5px; text-transform:uppercase; letter-spacing:1px;">Firma del Jefe Operativo</div>
                     <div style="border-bottom:2px solid #333; height:60px; margin-bottom:5px;"></div>
@@ -4912,104 +4624,26 @@ function generarHTMLReporte(detalle) {
                 </div>
             </div>
         </div>
-
+        
         <!-- FOOTER -->
         <div style="text-align:center; margin-top:12px; padding-top:5px; border-top:1px solid #eee; font-size:6px; color:#bbb; line-height:1.3;">
-            <span>Documento generado automáticamente por <strong style="color:#C1121F;">FURIA MOTOR</strong></span> |
-            <span>Código: <strong>${detalle.codigo_unico || 'N/A'}</strong></span> |
+            <span>Documento generado automáticamente por <strong style="color:#C1121F;">FURIA MOTOR</strong></span> | 
+            <span>Código: <strong>${detalle.codigo_unico || 'N/A'}</strong></span> | 
             <span>${new Date().toLocaleString('es-ES')}</span>
         </div>
     </div>`;
 }
 
-// =====================================================
-// CONVERTIR IMAGEN A BASE64 NORMALIZADA (4:3)
-// Redimensiona con canvas para evitar estiramiento en html2canvas
-// =====================================================
 async function convertirImagenABase64(url) {
     try {
-        // 1. Obtener base64 original desde el backend (sin thumbnail = imagen completa)
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/imagen-base64`, {
             method: 'POST',
-            body: JSON.stringify({ url, thumbnail: false })
+            body: JSON.stringify({ url })
         });
         const data = await response.json();
-
-        if (!data.success || !data.base64) {
-            throw new Error(data.error || 'Error convirtiendo imagen');
-        }
-
-        // 2. Normalizar la imagen con canvas a un aspect ratio fijo (4:3)
-        const base64Normalizado = await normalizarImagen(data.base64, 4 / 3);
-
-        return base64Normalizado;
-    } catch (error) {
-        console.warn('⚠️ Error convirtiendo imagen:', error);
-        return url; // Fallback: devolver URL original
-    }
-}
-
-// =====================================================
-// NORMALIZAR IMAGEN A UN ASPECT RATIO FIJO
-// Recorta el centro (cover style) sin deformar
-// =====================================================
-function normalizarImagen(base64Data, targetRatio = 4 / 3) {
-    return new Promise((resolve) => {
-        const img = new Image();
-
-        img.onload = function () {
-            const imgRatio = img.width / img.height;
-
-            let sourceX = 0, sourceY = 0, sourceWidth = img.width, sourceHeight = img.height;
-
-            // Calcular recorte tipo "cover" para llegar al targetRatio
-            if (imgRatio > targetRatio) {
-                // Imagen más ancha → recortar a los lados
-                sourceWidth = img.height * targetRatio;
-                sourceX = (img.width - sourceWidth) / 2;
-            } else if (imgRatio < targetRatio) {
-                // Imagen más alta → recortar arriba/abajo
-                sourceHeight = img.width / targetRatio;
-                sourceY = (img.height - sourceHeight) / 2;
-            }
-
-            // Tamaño de salida (calidad fija para el PDF)
-            const outputWidth = 600;
-            const outputHeight = Math.round(600 / targetRatio); // 450 para 4:3
-
-            const canvas = document.createElement('canvas');
-            canvas.width = outputWidth;
-            canvas.height = outputHeight;
-            const ctx = canvas.getContext('2d');
-
-            // Fondo blanco por si hay transparencia
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, outputWidth, outputHeight);
-
-            // Dibujar la porción recortada escalada al tamaño de salida
-            ctx.drawImage(
-                img,
-                sourceX, sourceY, sourceWidth, sourceHeight,
-                0, 0, outputWidth, outputHeight
-            );
-
-            // Convertir a JPEG (más liviano que PNG)
-            try {
-                const resultado = canvas.toDataURL('image/jpeg', 0.88);
-                resolve(resultado);
-            } catch (e) {
-                console.warn('⚠️ Error al normalizar, usando original:', e);
-                resolve(base64Data);
-            }
-        };
-
-        img.onerror = function () {
-            console.warn('⚠️ No se pudo cargar la imagen para normalizar');
-            resolve(base64Data);
-        };
-
-        img.src = base64Data;
-    });
+        if (data.success && data.base64) return data.base64;
+        throw new Error(data.error || 'Error convirtiendo imagen');
+    } catch (error) { return url; }
 }
 
 // =====================================================
@@ -5094,7 +4728,19 @@ async function cargarDatosOrdenCompleta(idOrden) {
         if (data.success && data.detalle) {
             datosReporteFinal = data.detalle;
             datosReporteFinal.id_orden = idOrden;
-            // 🔥 NO convertir aquí: descargarPDFFinal lo hará por todas
+            const fotos = datosReporteFinal.fotos || {};
+            const fotosBase64 = {};
+            const camposFotos = ['url_lateral_izquierda', 'url_lateral_derecha', 'url_foto_frontal', 'url_foto_trasera', 'url_foto_superior', 'url_foto_inferior', 'url_foto_tablero'];
+            const fotosValidas = camposFotos.filter(c => fotos[c] && fotos[c] !== 'null' && fotos[c] !== 'None' && fotos[c] !== '');
+            for (const campo of fotosValidas) {
+                const url = fotos[campo];
+                try {
+                    const base64 = await convertirImagenABase64(url);
+                    fotosBase64[campo] = base64;
+                } catch (error) { fotosBase64[campo] = url; }
+            }
+            datosReporteFinal.fotos_base64 = fotosBase64;
+            datosReporteFinal.fotos = fotosBase64;
             return datosReporteFinal;
         }
         throw new Error(data.error || 'No se pudieron obtener los datos');
@@ -5209,7 +4855,9 @@ async function cargarAudioConToken(audioUrl) {
         return null;
     }
 }
-
+// =====================================================
+// EDITAR RECEPCIÓN (COMPLETO - CON AUDIO CORREGIDO)
+// =====================================================
 // =====================================================
 // EDITAR RECEPCIÓN
 // =====================================================
@@ -5894,6 +5542,9 @@ function setupUnirsePorCodigo() {
 // =====================================================
 // SETUP PHOTO UPLOADS (CON ELIMINACIÓN DE DRIVE CORREGIDA)
 // =====================================================
+// =====================================================
+// SETUP PHOTO UPLOADS (CON ELIMINACIÓN DE DRIVE CORREGIDA)
+// =====================================================
 
 function setupPhotoUploads() {
     // Configurar todas las fotos (obligatorias y opcionales)
@@ -6304,9 +5955,7 @@ async function cargarFotosExistentes(fotos) {
     console.log(`📸 ${fotosCargadas}/7 fotos cargadas`);
     return fotosCargadas;
 }
-// =====================================================
-// CARGAR IMAGEN CON PROXY
-// =====================================================
+// En recepcion.js - Función cargarImagenProxy
 
 async function cargarImagenProxy(url, contenedor, mostrarError = true) {
     if (!url || url === 'null' || url === 'None' || url === '' || url === 'undefined') {
@@ -6327,7 +5976,7 @@ async function cargarImagenProxy(url, contenedor, mostrarError = true) {
     }
 
     try {
-        // Usar el proxy para obtener la imagen en Base64
+        // 🔥 Usar el proxy para obtener la imagen en Base64
         const proxyUrl = `${API_URL}/jefe-operativo/proxy-imagen?url=${encodeURIComponent(url)}`;
         const token = localStorage.getItem('furia_token');
 

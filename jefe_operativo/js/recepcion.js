@@ -4748,6 +4748,7 @@ function generarHTMLReporte(detalle) {
 
     // ============================================================
     // HTML - FOTOS OBLIGATORIAS (2 filas: 4 + 3)
+    // 🔥 CAMBIO: height:auto en lugar de height:65px fijo
     // ============================================================
     const generarFotosObligatoriasHTML = () => {
         if (totalObligatorias === 0) {
@@ -4759,7 +4760,7 @@ function generarHTMLReporte(detalle) {
 
         const renderFoto = (f) => `
             <div style="border:1px solid #ddd; border-radius:4px; overflow:hidden; background:#f5f5f5; text-align:center;">
-                <img src="${f.url}" alt="${f.label}" style="width:100%; height:65px; object-fit:cover; display:block; background:#eee; border-bottom:1px solid #ddd;" onerror="this.style.display='none'">
+                <img src="${f.url}" alt="${f.label}" style="width:100%; height:auto; display:block; background:#eee; border-bottom:1px solid #ddd;" onerror="this.style.display='none'">
                 <div style="padding:2px; font-size:6px; font-weight:bold; color:#555; background:#f9f9f9;">${f.label}</div>
             </div>
         `;
@@ -4783,6 +4784,7 @@ function generarHTMLReporte(detalle) {
 
     // ============================================================
     // HTML - FOTOS OPCIONALES (grid de 4 columnas)
+    // 🔥 CAMBIO: height:auto en lugar de height:60px fijo
     // ============================================================
     const generarFotosOpcionalesHTML = () => {
         if (totalOpcionales === 0) {
@@ -4791,7 +4793,7 @@ function generarHTMLReporte(detalle) {
 
         const renderFotoOpcional = (f) => `
             <div style="border:1px solid #ddd; border-radius:4px; overflow:hidden; background:#f5f5f5; text-align:center;">
-                <img src="${f.url}" alt="${f.label}" style="width:100%; height:60px; object-fit:cover; display:block; background:#eee; border-bottom:1px solid #ddd;" onerror="this.style.display='none'">
+                <img src="${f.url}" alt="${f.label}" style="width:100%; height:auto; display:block; background:#eee; border-bottom:1px solid #ddd;" onerror="this.style.display='none'">
                 <div style="padding:2px; font-size:6px; font-weight:bold; color:#555; background:#f0f0f0;">${f.label}</div>
             </div>
         `;
@@ -4920,16 +4922,94 @@ function generarHTMLReporte(detalle) {
     </div>`;
 }
 
+// =====================================================
+// CONVERTIR IMAGEN A BASE64 NORMALIZADA (4:3)
+// Redimensiona con canvas para evitar estiramiento en html2canvas
+// =====================================================
 async function convertirImagenABase64(url) {
     try {
+        // 1. Obtener base64 original desde el backend (sin thumbnail = imagen completa)
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/imagen-base64`, {
             method: 'POST',
-            body: JSON.stringify({ url })
+            body: JSON.stringify({ url, thumbnail: false })
         });
         const data = await response.json();
-        if (data.success && data.base64) return data.base64;
-        throw new Error(data.error || 'Error convirtiendo imagen');
-    } catch (error) { return url; }
+
+        if (!data.success || !data.base64) {
+            throw new Error(data.error || 'Error convirtiendo imagen');
+        }
+
+        // 2. Normalizar la imagen con canvas a un aspect ratio fijo (4:3)
+        const base64Normalizado = await normalizarImagen(data.base64, 4 / 3);
+
+        return base64Normalizado;
+    } catch (error) {
+        console.warn('⚠️ Error convirtiendo imagen:', error);
+        return url; // Fallback: devolver URL original
+    }
+}
+
+// =====================================================
+// NORMALIZAR IMAGEN A UN ASPECT RATIO FIJO
+// Recorta el centro (cover style) sin deformar
+// =====================================================
+function normalizarImagen(base64Data, targetRatio = 4 / 3) {
+    return new Promise((resolve) => {
+        const img = new Image();
+
+        img.onload = function () {
+            const imgRatio = img.width / img.height;
+
+            let sourceX = 0, sourceY = 0, sourceWidth = img.width, sourceHeight = img.height;
+
+            // Calcular recorte tipo "cover" para llegar al targetRatio
+            if (imgRatio > targetRatio) {
+                // Imagen más ancha → recortar a los lados
+                sourceWidth = img.height * targetRatio;
+                sourceX = (img.width - sourceWidth) / 2;
+            } else if (imgRatio < targetRatio) {
+                // Imagen más alta → recortar arriba/abajo
+                sourceHeight = img.width / targetRatio;
+                sourceY = (img.height - sourceHeight) / 2;
+            }
+
+            // Tamaño de salida (calidad fija para el PDF)
+            const outputWidth = 600;
+            const outputHeight = Math.round(600 / targetRatio); // 450 para 4:3
+
+            const canvas = document.createElement('canvas');
+            canvas.width = outputWidth;
+            canvas.height = outputHeight;
+            const ctx = canvas.getContext('2d');
+
+            // Fondo blanco por si hay transparencia
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, outputWidth, outputHeight);
+
+            // Dibujar la porción recortada escalada al tamaño de salida
+            ctx.drawImage(
+                img,
+                sourceX, sourceY, sourceWidth, sourceHeight,
+                0, 0, outputWidth, outputHeight
+            );
+
+            // Convertir a JPEG (más liviano que PNG)
+            try {
+                const resultado = canvas.toDataURL('image/jpeg', 0.88);
+                resolve(resultado);
+            } catch (e) {
+                console.warn('⚠️ Error al normalizar, usando original:', e);
+                resolve(base64Data);
+            }
+        };
+
+        img.onerror = function () {
+            console.warn('⚠️ No se pudo cargar la imagen para normalizar');
+            resolve(base64Data);
+        };
+
+        img.src = base64Data;
+    });
 }
 
 // =====================================================
